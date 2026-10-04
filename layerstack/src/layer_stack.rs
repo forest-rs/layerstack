@@ -18,6 +18,57 @@ use crate::{
     expression_variables::{VariableReads, evaluate, expression_error},
 };
 
+/// The root and optional session layer identifying a local layer stack.
+/// Session opinions precede root opinions, including each root's sublayers.
+/// External reference and payload stacks have no session layer, even when
+/// their root also identifies the stage. Identities are local to a `LayerStore`.
+///
+/// OpenUSD: `PcpLayerStackIdentifier`; AOUSD Core §9 (layer stacks).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct LayerStackIdentifier {
+    /// Persistent root layer.
+    pub root: LayerId,
+    /// Optional, stronger session root. The host owns its storage and lifetime.
+    pub session: Option<LayerId>,
+}
+impl From<LayerId> for LayerStackIdentifier {
+    fn from(root: LayerId) -> Self {
+        Self {
+            root,
+            session: None,
+        }
+    }
+}
+impl LayerStackIdentifier {
+    /// The effective time-code rate of this stack. An authored session
+    /// `timeCodesPerSecond` wins, then root `timeCodesPerSecond`, session
+    /// `framesPerSecond`, root `framesPerSecond`, and the USD default of 24.
+    /// OpenUSD: `PcpLayerStack::_ShouldUseSessionTcps` and `_Build`.
+    #[must_use]
+    pub fn time_codes_per_second(self, store: &dyn LayerStore) -> f64 {
+        let authored = |layer: &crate::Layer, name: &str| {
+            store
+                .tokens()
+                .lookup(name)
+                .is_some_and(|t| layer.metadata.iter().any(|entry| entry.name == t))
+        };
+        let root = store.layer(self.root);
+        let session = self.session.and_then(|id| store.layer(id));
+        if let Some(session) = session
+            && (authored(session, "timeCodesPerSecond")
+                || (!root.is_some_and(|l| authored(l, "timeCodesPerSecond"))
+                    && authored(session, "framesPerSecond")))
+        {
+            return session.time_codes_per_second(store.tokens());
+        }
+        root.map_or(24.0, |l| l.time_codes_per_second(store.tokens()))
+    }
+
+    pub(crate) fn variable_layers(self) -> impl Iterator<Item = LayerId> {
+        self.session.into_iter().chain(core::iter::once(self.root))
+    }
+}
+
 /// An ordered set of layers gathered recursively from sublayers.
 ///
 /// The order is strongest → weakest, and a layer is always stronger than any of
@@ -27,7 +78,8 @@ pub struct LayerStack {
     /// Ordered strongest → weakest.
     pub layers: Vec<LayerId>,
     /// Accumulated time offset for each layer in `layers` (same length,
-    /// parallel indexing). The root layer always has [`LayerOffset::IDENTITY`].
+    /// parallel indexing). Without a session root, the root layer has
+    /// [`LayerOffset::IDENTITY`]; session/root rate conversion can retime it.
     ///
     /// Spec: §12.3.2.1 (sublayer offsets compose when nested).
     pub offsets: Vec<LayerOffset>,
@@ -36,14 +88,14 @@ pub struct LayerStack {
     /// first: the context its variable expressions evaluate in (see
     /// [`LayerStack::chain_of`]). Every layer of a gathered stack shares
     /// one chain; a stack composition joins from two has each part's.
-    pub(crate) chains: Vec<Rc<[LayerId]>>,
+    pub(crate) chains: Vec<Rc<[LayerStackIdentifier]>>,
 }
 
 impl LayerStack {
     /// The chain of layer stacks that reaches `layer` in this stack
     /// ([`LayerStack::chains`]), outermost first; empty for a layer not in
     /// it.
-    pub(crate) fn chain_of(&self, layer: LayerId) -> &[LayerId] {
+    pub(crate) fn chain_of(&self, layer: LayerId) -> &[LayerStackIdentifier] {
         self.layers
             .iter()
             .position(|id| *id == layer)
@@ -64,6 +116,13 @@ impl LayerStack {
                 .collect(),
             chains: self.chains.iter().chain(&weaker.chains).cloned().collect(),
         }
+    }
+
+    /// Gathers a stack with an optional session root. Missing or muted layers
+    /// are governed by the supplied store view; composition performs no I/O.
+    #[must_use]
+    pub fn gather_identifier(store: &dyn LayerStore, identifier: LayerStackIdentifier) -> Self {
+        Self::gather_recording(store, &[identifier], &mut Vec::new(), None)
     }
 
     /// Gathers the layer stack rooted at `root`.
@@ -108,7 +167,7 @@ impl LayerStack {
         root: LayerId,
         errors: &mut Vec<CompositionError>,
     ) -> Self {
-        Self::gather_recording(store, &[root], errors, None)
+        Self::gather_recording(store, &[root.into()], errors, None)
     }
 
     /// Gathers the layer stack rooted at the last layer of `chain`, as
@@ -138,13 +197,13 @@ impl LayerStack {
     /// [`SublayerEntry::is_expression`]: crate::SublayerEntry::is_expression
     pub(crate) fn gather_recording(
         store: &dyn LayerStore,
-        chain: &[LayerId],
+        chain: &[LayerStackIdentifier],
         errors: &mut Vec<CompositionError>,
         mut reads: Option<&mut VariableReads>,
     ) -> Self {
         struct Gather<'a, 'r> {
             store: &'a dyn LayerStore,
-            chain: &'a [LayerId],
+            chain: &'a [LayerStackIdentifier],
             visiting: HashSet<LayerId>,
             layers: Vec<LayerId>,
             offsets: Vec<LayerOffset>,
@@ -247,8 +306,34 @@ impl LayerStack {
             errors,
             reads: reads.take(),
         };
-        gather.visit(root, LayerOffset::IDENTITY);
-        let shared: Rc<[LayerId]> = Rc::from(chain);
+        // OpenUSD PcpLayerStack::_Build: authored session TCPS wins, then
+        // root TCPS, session FPS, root FPS, then 24. Each stack is mapped
+        // from its own time domain into this common stage domain.
+        let root_rate = store
+            .layer(root.root)
+            .map_or(24.0, |l| l.time_codes_per_second(store.tokens()));
+        let stage_rate = root.time_codes_per_second(store);
+        let session_rate = root
+            .session
+            .and_then(|id| store.layer(id))
+            .map(|l| l.time_codes_per_second(store.tokens()));
+        if let (Some(session), Some(rate)) = (root.session, session_rate) {
+            gather.visit(
+                session,
+                LayerOffset {
+                    offset: 0.0,
+                    scale: stage_rate / rate,
+                },
+            );
+        }
+        gather.visit(
+            root.root,
+            LayerOffset {
+                offset: 0.0,
+                scale: stage_rate / root_rate,
+            },
+        );
+        let shared: Rc<[LayerStackIdentifier]> = Rc::from(chain);
         Self {
             chains: alloc::vec![shared; gather.layers.len()],
             layers: gather.layers,

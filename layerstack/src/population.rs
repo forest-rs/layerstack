@@ -24,7 +24,7 @@ use crate::{
     doc::LayerStore,
     doc::{LayerId, Reference, ReferenceTarget},
     expression_variables::{ArcAnchor, ExpressionScope, composed_variables},
-    layer_stack::LayerStack,
+    layer_stack::{LayerStack, LayerStackIdentifier},
     path::{Path, PathId, PathInterner},
     relocates::{LiftedSet, Relocations, Walk},
     stage::PopulationMask,
@@ -34,7 +34,7 @@ use crate::{
 /// A reference or payload population followed: the destination, the
 /// target layer stack's root layer and path, and the expression variables
 /// that layer stack is reached with.
-type VisitedArc = (PathId, LayerId, PathId, ExpressionVariables);
+type VisitedArc = (PathId, LayerStackIdentifier, PathId, ExpressionVariables);
 
 /// An inherit or specializes population followed: the destination, the
 /// class path and the expression variables of its layer stack.
@@ -633,7 +633,16 @@ fn expand_reference_paths(
     let Some(reference_path) = reference.target_path(store) else {
         return;
     };
-    if chain.closes_cycle(store.paths(), dest_root, reference.layer, reference_path) {
+    let target_stack = if reference.asset.is_none() {
+        *chain
+            .arcs
+            .expression_stacks()
+            .last()
+            .expect("stack context")
+    } else {
+        reference.layer.into()
+    };
+    if chain.closes_cycle(store.paths(), dest_root, target_stack, reference_path) {
         return;
     }
     // Each occurrence of a site is a node of its own (AOUSD Core §10.4;
@@ -645,10 +654,10 @@ fn expand_reference_paths(
     // target layer stack reached with other variables may gather other
     // sublayers and follow other arcs (OpenUSD identifies it with its
     // `PcpLayerStackIdentifier::expressionVariablesOverrideSource`).
-    let stacks = chain.arcs.stacks_for(reference.layer);
+    let stacks = chain.arcs.stacks_for(target_stack);
     let variables = composed_variables(store, &stacks);
     if !chain.lifts_relocations()
-        && !visited.insert((dest_root, reference.layer, reference_path, variables))
+        && !visited.insert((dest_root, target_stack, reference_path, variables))
     {
         return;
     }
@@ -1116,7 +1125,7 @@ struct Chain<'r> {
 
 impl<'r> Chain<'r> {
     fn new(
-        layer_stack: LayerId,
+        layer_stack: LayerStackIdentifier,
         prim: PathId,
         relocations: &'r mut Relocations,
         inventory: &'r mut SourceInventory,
@@ -1136,7 +1145,7 @@ impl<'r> Chain<'r> {
         &self,
         paths: &PathInterner,
         dest: PathId,
-        layer_stack: LayerId,
+        layer_stack: LayerStackIdentifier,
         target: PathId,
     ) -> bool {
         self.arcs.closes_cycle(paths, dest, layer_stack, target)
@@ -1318,12 +1327,10 @@ fn propagation_closes_cycle(
 }
 
 /// Returns the root layer that identifies `stack` for arc cycle detection.
-fn layer_stack_root(stack: &LayerStack) -> LayerId {
-    stack
-        .layers
-        .first()
-        .copied()
-        .expect("a gathered layer stack contains its root layer")
+fn layer_stack_root(stack: &LayerStack) -> LayerStackIdentifier {
+    *stack.chains[0]
+        .last()
+        .expect("a gathered stack has an identity")
 }
 
 fn add_ancestor_paths(store: &mut dyn LayerStore, paths: &mut BTreeSet<PathId>) {

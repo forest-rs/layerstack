@@ -59,6 +59,9 @@
 //!
 //! Spec: AOUSD Core §10 (composition arcs), §10.4 (strength ordering).
 
+use crate::layer_stack::LayerStackIdentifier;
+
+use alloc::sync::Arc;
 use alloc::{borrow::Cow, vec::Vec};
 use core::cmp::Ordering;
 
@@ -106,7 +109,7 @@ pub(crate) struct NodeArc {
     /// for the root.
     pub(crate) arc_kind: ArcKind,
     /// Root layer of the layer stack the site is in.
-    pub(crate) layer_stack: LayerId,
+    pub(crate) layer_stack: LayerStackIdentifier,
     /// The site's prim spec path in that layer stack, with the variant
     /// selections of a variant node.
     pub(crate) site: SpecPath,
@@ -138,6 +141,7 @@ pub struct PrimNode {
     /// The offset from the layers of the node's layer stack to the stage,
     /// before their sublayer offsets; `None` until composition records it.
     layer_offset: Option<LayerOffset>,
+    stack_offsets: Arc<[(LayerId, LayerOffset)]>,
 }
 
 impl PrimNode {
@@ -180,14 +184,21 @@ impl PrimNode {
 
     /// The root layer of the layer stack this node's site is in.
     ///
-    /// The node reads every layer of that stack: the root layer and its
-    /// sublayers, as [`crate::LayerStack::gather`] composes them. A node
+    /// The node reads the optional session root, the persistent root and their
+    /// sublayers, as [`crate::LayerStack::gather_identifier`] composes them. A node
     /// reached through an internal reference or payload is in the layer stack
     /// of its parent node, whichever layer of that stack authors the arc.
     ///
     /// OpenUSD: `PcpNodeRef::GetLayerStack`.
     #[must_use]
     pub fn layer_stack(&self) -> LayerId {
+        self.arc.layer_stack.root
+    }
+
+    /// The complete stack identity, including a stage-local session root.
+    /// External references retain a session-free identity.
+    #[must_use]
+    pub fn layer_stack_identifier(&self) -> LayerStackIdentifier {
         self.arc.layer_stack
     }
 
@@ -229,8 +240,27 @@ impl PrimNode {
         self.arc.implied
     }
 
-    /// The offset that maps times in the root layer of this node's layer
-    /// stack to stage times: the offsets of every arc from the root down to
+    /// The persistent root layer's time offset to the stage. Unlike the
+    /// stack-domain offset, this includes session/root time-rate conversion.
+    #[must_use]
+    pub fn root_layer_offset(&self) -> LayerOffset {
+        self.layer_offset_for_layer(self.layer_stack())
+            .unwrap_or_else(|| self.layer_offset())
+    }
+
+    /// Maps a contributing layer's time domain into stage time, as captured
+    /// by composition. Muted layers and unresolved expression targets are
+    /// absent. This includes sublayer and session/root rate conversion.
+    #[must_use]
+    pub fn layer_offset_for_layer(&self, layer: LayerId) -> Option<LayerOffset> {
+        self.stack_offsets
+            .iter()
+            .find(|(id, _)| *id == layer)
+            .map(|(_, offset)| self.layer_offset().compose(*offset))
+    }
+
+    /// The offset that maps this node's layer-stack time domain to stage
+    /// times: the offsets of every arc from the root down to
     /// this node, composed, each after the offset of the sublayer that
     /// authors it (an arc is read on its authoring layer's timeline). A layer of the stack is read with this offset
     /// composed with its own sublayer offset
@@ -246,6 +276,9 @@ impl PrimNode {
     }
 }
 
+pub(crate) type LayerOffsetCache =
+    hashbrown::HashMap<Vec<LayerStackIdentifier>, Arc<[(LayerId, LayerOffset)]>>;
+
 /// The composition graph of one composed prim.
 ///
 /// See the [module docs](self) for how it relates to strength order.
@@ -259,6 +292,29 @@ pub struct PrimIndexGraph {
 }
 
 impl PrimIndexGraph {
+    pub(crate) fn prepare_layer_offsets(
+        &mut self,
+        store: &dyn crate::LayerStore,
+        cache: &mut LayerOffsetCache,
+    ) {
+        for at in 0..self.nodes.len() {
+            let chain = crate::expression_variables::node_chain(self, NodeId::from_index(at));
+            let offsets = cache.entry(chain).or_insert_with_key(|chain| {
+                let stack =
+                    crate::LayerStack::gather_recording(store, chain, &mut Vec::new(), None);
+                Arc::from(
+                    stack
+                        .layers
+                        .into_iter()
+                        .zip(stack.offsets)
+                        .filter(|(id, _)| store.layer(*id).is_some())
+                        .collect::<Vec<_>>(),
+                )
+            });
+            self.nodes[at].stack_offsets = offsets.clone();
+        }
+    }
+
     /// A graph holding only a root node reached by `arc`.
     pub(crate) fn new(arc: NodeArc) -> Self {
         Self {
@@ -268,6 +324,7 @@ impl PrimIndexGraph {
                 children: Vec::new(),
                 arc,
                 layer_offset: Some(LayerOffset::IDENTITY),
+                stack_offsets: Arc::from([]),
             }],
             ranks: Vec::new(),
         }
@@ -296,6 +353,7 @@ impl PrimIndexGraph {
             children: Vec::new(),
             arc,
             layer_offset: None,
+            stack_offsets: Arc::from([]),
         });
         self.nodes[parent.index()].children.push(id);
         id
@@ -860,7 +918,7 @@ impl PrimIndexGraph {
     ) -> Self {
         let arc = |arc_kind, namespace_depth| NodeArc {
             arc_kind,
-            layer_stack: LayerId(1),
+            layer_stack: LayerId(1).into(),
             site: site.clone(),
             namespace_depth,
             sibling_index: 0,
@@ -876,6 +934,7 @@ impl PrimIndexGraph {
                 children: Vec::new(),
                 arc: arc(arc_kind, namespace_depth),
                 layer_offset: None,
+                stack_offsets: Arc::from([]),
             });
             graph.nodes[parent.index()].children.push(id);
         }
@@ -903,7 +962,7 @@ mod tests {
     fn arc(arc_kind: ArcKind, namespace_depth: u16, sibling_index: u16) -> NodeArc {
         NodeArc {
             arc_kind,
-            layer_stack: LayerId(1),
+            layer_stack: LayerId(1).into(),
             site: spec_path("/A"),
             namespace_depth,
             sibling_index,
@@ -965,7 +1024,7 @@ mod tests {
     fn equal_siblings_share_a_rank_and_their_children() {
         // The branches of two variant sets hosted at one site.
         let other_set = NodeArc {
-            layer_stack: LayerId(2),
+            layer_stack: LayerId(2).into(),
             ..arc(ArcKind::Variants, 1, 0)
         };
         let graph = graph(vec![
@@ -998,14 +1057,14 @@ mod tests {
             (
                 0,
                 NodeArc {
-                    layer_stack: LayerId(2),
+                    layer_stack: LayerId(2).into(),
                     ..implied
                 },
             ),
             (
                 0,
                 NodeArc {
-                    layer_stack: LayerId(3),
+                    layer_stack: LayerId(3).into(),
                     ..arc(ArcKind::Inherits, 1, 0)
                 },
             ),
@@ -1028,7 +1087,7 @@ mod tests {
         // comes before its implied class `5` and everything beneath it,
         // except the variant branch `8`, which is selected last.
         let in_stack = |layer_stack, arc_kind| NodeArc {
-            layer_stack: LayerId(layer_stack),
+            layer_stack: LayerId(layer_stack).into(),
             ..arc(arc_kind, 1, 0)
         };
         let mut graph = graph(vec![
@@ -1181,7 +1240,7 @@ mod tests {
     /// `arc` in the layer stack `layer_stack`.
     fn in_stack(layer_stack: u64, arc: NodeArc) -> NodeArc {
         NodeArc {
-            layer_stack: LayerId(layer_stack),
+            layer_stack: LayerId(layer_stack).into(),
             ..arc
         }
     }

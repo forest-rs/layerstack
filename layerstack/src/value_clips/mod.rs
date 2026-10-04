@@ -535,7 +535,7 @@ impl Catalog {
             };
             instance_boundary.is_none_or(|depth| {
                 node != crate::NodeId::ROOT && target.namespace_depth() >= depth
-            }) && target.layer_stack() == anchor_node.layer_stack()
+            }) && target.layer_stack_identifier() == anchor_node.layer_stack_identifier()
                 // C++ _ClipsApplyToNode compares variant-qualified paths. A
                 // variant clip belongs at that arc, below local layer opinions.
                 && target.site().components().starts_with(source_spec.components())

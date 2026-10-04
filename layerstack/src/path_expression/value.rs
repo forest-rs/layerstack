@@ -207,7 +207,7 @@ fn node_maps(
             target.truncate(target.len().checked_sub(below)?);
             let root_identity =
                 matches!(cursor.arc_kind(), ArcKind::Inherits | ArcKind::Specializes)
-                    || cursor.layer_stack() == parent.layer_stack();
+                    || cursor.layer_stack_identifier() == parent.layer_stack_identifier();
             maps.push(ArcMap {
                 source,
                 target,

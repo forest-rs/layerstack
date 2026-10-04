@@ -282,6 +282,13 @@ impl PopulationMask {
 /// Options for stage composition and population.
 #[derive(Clone, Debug, Default)]
 pub struct StageOptions {
+    /// Optional host-owned session root, stronger than the persistent root and
+    /// its sublayers. Shared live-edit layers may be sublayers of this root;
+    /// private overrides belong on the session root itself. Each stage chooses
+    /// its session independently. This supplies composition, not networking,
+    /// persistence, conflict resolution or globally stable layer identities.
+    /// OpenUSD: `UsdStage::Open(rootLayer, sessionLayer)`.
+    pub session_layer: Option<LayerId>,
     /// Optional population mask.
     pub mask: Option<PopulationMask>,
     /// Stage-local payload inclusion rules. Default construction loads all.
@@ -452,6 +459,10 @@ impl Stage {
         stage.options = captured.clone();
         stage.root_layer = Some(root);
         stage.schemas = schemas;
+        let mut offsets = HashMap::new();
+        for index in stage.prims.values_mut() {
+            index.graph.prepare_layer_offsets(store, &mut offsets);
+        }
         stage.prepare_type_info(store);
         stage.prepare_clips(store);
         stage.prepare_prototypes(store);
@@ -470,6 +481,10 @@ impl Stage {
         stage.options = captured;
         stage.root_layer = Some(root);
         stage.schemas = schemas;
+        let mut offsets = HashMap::new();
+        for index in stage.prims.values_mut() {
+            index.graph.prepare_layer_offsets(store, &mut offsets);
+        }
         stage.prepare_type_info(store);
         stage.prepare_clips(store);
         stage.prepare_prototypes(store);
@@ -606,7 +621,7 @@ impl Stage {
         self.root_layer
     }
 
-    /// Reads root-layer metadata, using a registered layer default when absent.
+    /// Reads session/root metadata, using a registered layer default when absent.
     /// Sublayer metadata does not participate. Blocks and incompatible field
     /// representations do not resolve to a registered default.
     ///
@@ -615,18 +630,47 @@ impl Stage {
     #[must_use]
     pub fn layer_metadata(&self, key: TokenId, store: &dyn LayerStore) -> Option<Value> {
         let root = store.layer(self.root_layer?)?;
-        if let Some(field) = root.metadata(key) {
-            return match field {
-                FieldValue::Value(Value::Blocked) => None,
-                FieldValue::Value(value) => Some(value.clone()),
-                _ => None,
-            };
+        let session = self
+            .session_layer()
+            .filter(|id| !self.is_layer_muted(*id))
+            .and_then(|id| store.layer(id));
+        if store.tokens().resolve(key) == "defaultPrim" {
+            return session
+                .and_then(|l| l.default_prim)
+                .or(root.default_prim)
+                .map(Value::Token);
         }
-        let definition = self.schemas()?.metadata(key)?;
-        definition
-            .applies_to(crate::MetadataTarget::Layer)
-            .then(|| definition.default.clone())
-            .flatten()
+        if store.tokens().resolve(key) == "timeCodesPerSecond" {
+            return Some(Value::Double(self.time_codes_per_second(store)));
+        }
+        let fields = session
+            .and_then(|l| l.metadata(key))
+            .into_iter()
+            .chain(root.metadata(key));
+        let mut dictionaries = Vec::new();
+        for field in fields {
+            match field {
+                FieldValue::Value(Value::Dictionary(entries)) => {
+                    dictionaries.push(entries.as_slice());
+                }
+                FieldValue::Value(Value::Blocked) if dictionaries.is_empty() => return None,
+                FieldValue::Value(value) if dictionaries.is_empty() => return Some(value.clone()),
+                _ if dictionaries.is_empty() => return None,
+                _ => break,
+            }
+        }
+        let fallback = self
+            .schemas()
+            .and_then(|s| s.metadata(key))
+            .filter(|d| d.applies_to(crate::MetadataTarget::Layer))
+            .and_then(|d| d.default.as_ref());
+        if dictionaries.is_empty() {
+            return fallback.cloned();
+        }
+        if let Some(Value::Dictionary(entries)) = fallback {
+            dictionaries.push(entries.as_slice());
+        }
+        Some(Value::Dictionary(combine_dictionary_chain(dictionaries)))
     }
 
     /// The schemas the stage was composed with ([`StageOptions::schemas`]).

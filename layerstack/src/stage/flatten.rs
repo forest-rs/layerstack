@@ -65,7 +65,7 @@
 //!   flatten anchors them, when the requirements ask for it
 //!   ([`AssetPaths::Anchored`]); either way every asset path the layer
 //!   names is reported as an external dependency.
-//! - The layer metadata is the root layer's: `defaultPrim`, `upAxis`,
+//! - The layer metadata composes the session root over the persistent root: `defaultPrim`, `upAxis`,
 //!   `metersPerUnit`, `timeCodesPerSecond`, `startTimeCode`,
 //!   `endTimeCode`, `documentation`, `reorder rootPrims` and the rest
 //!   (AOUSD Core §12.2.7).
@@ -76,8 +76,6 @@
 //!
 //! Where it differs from OpenUSD:
 //!
-//! - OpenUSD also reads the session layer's metadata; a [`Stage`] has no
-//!   session layer.
 //! - OpenUSD's flatten drops metadata no schema registers, which it cannot
 //!   set on a spec; this keeps it.
 //!
@@ -154,7 +152,7 @@ impl Stage {
     /// `requirements`.
     ///
     /// `root` is the root layer the stage was composed from, whose layer
-    /// metadata the flattened layer takes; `id` is the flattened layer's
+    /// metadata, beneath any session opinions, the flattened layer takes; `id` is the flattened layer's
     /// own id, which the internal references of instances name. See the
     /// [module docs](crate::stage::flatten) for what is written and
     /// reported.
@@ -203,13 +201,23 @@ impl Stage {
         let mut out = Layer::new(id);
         out.default_prim = root_layer.default_prim;
         out.metadata = root_layer.metadata.clone();
+        let session = self.session_layer().filter(|id| !self.is_layer_muted(*id));
+        if let Some(layer) = session.and_then(|id| store.layer(id)) {
+            out.default_prim = layer.default_prim.or(out.default_prim);
+        }
         let pseudo_root = store.paths_mut().intern(Path::root());
         // `reorder rootPrims`, which OpenUSD copies with the rest of the
         // pseudo-root's metadata.
-        let root_order = store
-            .layer(root)
+        let root_order = session
+            .and_then(|id| store.layer(id))
             .and_then(|layer| layer.prims.get(&pseudo_root))
-            .and_then(|spec| spec.prim_order.clone());
+            .and_then(|spec| spec.prim_order.clone())
+            .or_else(|| {
+                store
+                    .layer(root)
+                    .and_then(|layer| layer.prims.get(&pseudo_root))
+                    .and_then(|spec| spec.prim_order.clone())
+            });
         let mut flattener = Flattener {
             stage: self,
             store,
@@ -224,14 +232,45 @@ impl Stage {
         // The layer metadata's asset paths are anchored to the root layer.
         let mut metadata = core::mem::take(&mut flattener.out.metadata);
         for entry in &mut metadata {
-            if let FieldValue::Value(value) = &mut entry.value {
-                if let Some(anchored) = flattener.anchor_value(value, root) {
-                    *value = anchored;
+            if let FieldValue::Value(value) = &mut entry.value
+                && let Some(anchored) = flattener.anchor_value(value, root)
+            {
+                *value = anchored;
+            }
+        }
+        // Anchor each metadata opinion in its authoring layer before merging
+        // dictionaries, so weak leaves keep their own asset-resolution base.
+        if let Some(session) = session {
+            let entries = flattener
+                .store
+                .layer(session)
+                .map_or_else(Vec::new, |l| l.metadata.clone());
+            for mut entry in entries {
+                if let FieldValue::Value(value) = &mut entry.value {
+                    if let Some(anchored) = flattener.anchor_value(value, session) {
+                        *value = anchored;
+                    }
+                    if let Value::Dictionary(strong) = value
+                        && let Some(FieldEntry {
+                            value: FieldValue::Value(Value::Dictionary(weak)),
+                            ..
+                        }) = metadata.iter().find(|e| e.name == entry.name)
+                    {
+                        *strong = crate::combine_dictionaries(strong, weak);
+                    }
                 }
+                crate::doc::set_field_vec(&mut metadata, entry.name, entry.value);
+            }
+            let tcps = flattener.store.tokens_mut().intern("timeCodesPerSecond");
+            let rate = self.time_codes_per_second(flattener.store);
+            crate::doc::set_field_vec(&mut metadata, tcps, FieldValue::Value(Value::Double(rate)));
+        }
+        for entry in &metadata {
+            if let FieldValue::Value(value) = &entry.value {
                 flattener.note_assets("/", value, None);
             }
-            flattener.report.preserved.metadata_fields += 1;
         }
+        flattener.report.preserved.metadata_fields = metadata.len();
         flattener.out.metadata = metadata;
         let prototypes = match requirements.instancing {
             Instancing::Preserve => flattener.find_prototypes(pseudo_root),

@@ -6,7 +6,6 @@
 use crate::{
     doc::{LayerId, LayerOffset, LayerStore},
     interner::TokenId,
-    layer_stack::LayerStack,
     path::{PathId, PathInterner, PropertyPath, TargetPath},
     prim_index::ArcKind,
     prim_index_graph::{NodeId, PrimIndexGraph, PrimNode},
@@ -170,7 +169,7 @@ impl EditTarget {
             graph,
             node_ref,
             node_ref.layer_stack(),
-            node_ref.layer_offset(),
+            node_ref.root_layer_offset(),
         ))
     }
 
@@ -193,9 +192,8 @@ impl EditTarget {
         layer: LayerId,
     ) -> Option<Self> {
         let (graph, node_ref) = editable_node(stage, prim, node)?;
-        let stack = LayerStack::gather(store, node_ref.layer_stack());
-        let index = stack.layers.iter().position(|id| *id == layer)?;
-        let offset = node_ref.layer_offset().compose(stack.offset_at(index));
+        store.layer(layer)?;
+        let offset = node_ref.layer_offset_for_layer(layer)?;
         Some(Self::from_node(prim, graph, node_ref, layer, offset))
     }
 

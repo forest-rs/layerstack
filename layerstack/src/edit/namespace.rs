@@ -508,7 +508,7 @@ fn validate_authored_subtree(
     if let Some(graph) = stage.explain_prim_graph(from.prim_path()) {
         for (_, node) in graph.nodes() {
             if node.site().prim_path() == source.prim_path() {
-                let stack = LayerStack::gather(store, node.layer_stack());
+                let stack = LayerStack::gather_identifier(store, node.layer_stack_identifier());
                 if stack.layers.contains(&layer) {
                     source_layers.extend(stack.layers);
                 }
@@ -580,7 +580,7 @@ fn alias_preserves_namespace(
                     node.arc_kind() != crate::ArcKind::Local
                         && usize::from(node.namespace_depth()) == path.segments().len()
                         && node.site().prim_path() == source.prim_path()
-                        && LayerStack::gather(store, node.layer_stack())
+                        && LayerStack::gather_identifier(store, node.layer_stack_identifier())
                             .layers
                             .contains(&layer)
                 })

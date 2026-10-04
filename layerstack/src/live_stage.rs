@@ -155,12 +155,11 @@ fn participating_layers(
     // the variables of each layer stack reaching them.
     if expressions {
         for walked in crate::expression_variables::walk(store, root).stacks {
-            if walked
-                .stack
-                .chains
-                .iter()
-                .any(|chain| chain.iter().any(|id| muted.contains(id)))
-            {
+            if walked.stack.chains.iter().any(|chain| {
+                chain.iter().any(|id| {
+                    muted.contains(&id.root) || id.session.is_some_and(|s| muted.contains(&s))
+                })
+            }) {
                 continue;
             }
             seen.extend(
@@ -302,6 +301,18 @@ impl LiveStage {
     pub fn unmute_layer(&mut self, layer: LayerId) -> bool {
         self.mute_and_unmute_layers(&[], &[layer])
             .expect("unmuting cannot fail")
+    }
+
+    /// Select a different host-owned session root, or detach it with `None`.
+    /// Synchronization is explicit, as for other stage controls. Switching a
+    /// session changes the local stack globally and requires a full rebuild.
+    pub fn set_session_layer(&mut self, session: Option<LayerId>) -> bool {
+        if self.options.session_layer == session {
+            return false;
+        }
+        self.options.session_layer = session;
+        self.notify_structural_change();
+        true
     }
 
     /// Queue a new subtree population mask. None includes the full namespace.
@@ -730,6 +741,40 @@ impl LiveStage {
     /// Records the generations of every layer the stage reads.
     fn record_generations(&mut self, store: &dyn LayerStore) {
         let mut layers = participating_layers(store, self.root, &self.options.muted_layers);
+        if let Some(session) = self.options.session_layer {
+            layers.extend(participating_layers(
+                store,
+                session,
+                &self.options.muted_layers,
+            ));
+            for walked in crate::expression_variables::walk_identifier(
+                store,
+                crate::LayerStackIdentifier {
+                    root: self.root,
+                    session: Some(session),
+                },
+            )
+            .stacks
+            {
+                if walked.stack.chains.iter().any(|chain| {
+                    chain.iter().any(|id| {
+                        self.options.muted_layers.contains(&id.root)
+                            || id
+                                .session
+                                .is_some_and(|s| self.options.muted_layers.contains(&s))
+                    })
+                }) {
+                    continue;
+                }
+                layers.extend(
+                    walked
+                        .stack
+                        .layers
+                        .into_iter()
+                        .filter(|id| !self.options.muted_layers.contains(id)),
+                );
+            }
+        }
         layers.extend(self.stage.clip_layers());
         self.generations = layers
             .into_iter()
@@ -1239,6 +1284,7 @@ impl LiveStage {
         }
         let mask_vec: Vec<PathId> = mask_set.into_iter().collect();
         let scoped_opts = StageOptions {
+            session_layer: self.options.session_layer,
             mask: Some(PopulationMask { include: mask_vec }),
             with_provenance: self.options.with_provenance,
             with_dependencies: true,

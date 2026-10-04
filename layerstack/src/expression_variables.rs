@@ -42,6 +42,8 @@
 //! `_EvalRefOrPayloadArcs` (`pxr/usd/pcp/primIndex.cpp`) and
 //! `Pcp_EvaluateVariableExpression` (`pxr/usd/pcp/utils.cpp`).
 
+use crate::layer_stack::LayerStackIdentifier;
+
 use alloc::{borrow::Cow, collections::BTreeSet, string::String, vec::Vec};
 use core::cell::{OnceCell, RefCell};
 
@@ -188,15 +190,15 @@ fn value_type_name(value: &Value) -> &'static str {
 /// layer stack that introduces the next.
 pub(crate) fn composed_variables(
     store: &dyn LayerStore,
-    stacks: &[LayerId],
+    stacks: &[LayerStackIdentifier],
 ) -> ExpressionVariables {
     let mut variables = ExpressionVariables::new();
     if store.tokens().lookup(EXPRESSION_VARIABLES).is_none() {
         // No layer authors `expressionVariables`.
         return variables;
     }
-    for root in stacks {
-        if let Some(layer) = store.layer(*root) {
+    for root in stacks.iter().flat_map(|s| s.variable_layers()) {
+        if let Some(layer) = store.layer(root) {
             variables.compose_over(&layer_expression_variables(layer, store.tokens()));
         }
     }
@@ -218,16 +220,21 @@ pub(crate) struct VariableReads {
 
 impl VariableReads {
     /// Records the lookups of `used` along `stacks`.
-    fn record(&mut self, store: &dyn LayerStore, stacks: &[LayerId], used: &BTreeSet<String>) {
+    fn record(
+        &mut self,
+        store: &dyn LayerStore,
+        stacks: &[LayerStackIdentifier],
+        used: &BTreeSet<String>,
+    ) {
         for name in used {
-            for root in stacks {
-                let value = store.layer(*root).and_then(|layer| {
+            for root in stacks.iter().flat_map(|s| s.variable_layers()) {
+                let value = store.layer(root).and_then(|layer| {
                     layer_expression_variables(layer, store.tokens())
                         .get(name)
                         .cloned()
                 });
                 let found = value.is_some();
-                self.reads.insert((*root, name.clone()), value);
+                self.reads.insert((root, name.clone()), value);
                 if found {
                     break;
                 }
@@ -267,7 +274,7 @@ impl VariableReads {
 /// string, or the errors joined.
 pub(crate) fn evaluate(
     store: &dyn LayerStore,
-    stacks: &[LayerId],
+    stacks: &[LayerStackIdentifier],
     expression: &str,
     reads: Option<&mut VariableReads>,
 ) -> Result<Option<String>, String> {
@@ -287,7 +294,7 @@ pub(crate) fn evaluate(
 pub(crate) struct ExpressionScope {
     /// The root layers of the layer stacks on the chain, outermost first,
     /// ending with the one whose arcs are read.
-    stacks: Vec<LayerId>,
+    stacks: Vec<LayerStackIdentifier>,
     variables: OnceCell<ExpressionVariables>,
     findings: RefCell<ScopeFindings>,
 }
@@ -305,7 +312,7 @@ pub(crate) struct ScopeFindings {
 impl ExpressionScope {
     /// A scope for the chain of layer stacks `stacks` (see
     /// [`composed_variables`]).
-    pub(crate) fn new(stacks: Vec<LayerId>) -> Self {
+    pub(crate) fn new(stacks: Vec<LayerStackIdentifier>) -> Self {
         Self {
             stacks,
             variables: OnceCell::new(),
@@ -337,9 +344,12 @@ pub(crate) struct ArcAnchor<'a> {
 impl<'a> ArcAnchor<'a> {
     /// The anchor of the layer stack rooted at `layer`, evaluating in
     /// `scope`.
-    pub(crate) fn new(layer: LayerId, scope: Option<&'a ExpressionScope>) -> Self {
+    pub(crate) fn new(
+        layer: impl Into<LayerStackIdentifier>,
+        scope: Option<&'a ExpressionScope>,
+    ) -> Self {
         Self {
-            layer,
+            layer: layer.into().root,
             scope,
             payloads: false,
         }
@@ -445,7 +455,10 @@ pub(crate) struct Walk {
 /// variant branch, breadth first, evaluating the asset path expressions
 /// with each layer stack's variables.
 pub(crate) fn walk(store: &dyn LayerStore, root: LayerId) -> Walk {
-    let mut seen: HashSet<(LayerId, ExpressionVariables)> = HashSet::new();
+    walk_identifier(store, root.into())
+}
+pub(crate) fn walk_identifier(store: &dyn LayerStore, root: LayerStackIdentifier) -> Walk {
+    let mut seen: HashSet<(LayerStackIdentifier, ExpressionVariables)> = HashSet::new();
     let mut unresolved: BTreeSet<ExpressionAssetPath> = BTreeSet::new();
     let mut stacks = Vec::new();
     let mut queue = alloc::collections::VecDeque::new();
@@ -505,7 +518,7 @@ pub(crate) fn walk(store: &dyn LayerStore, root: LayerId) -> Walk {
                     arc.layer
                 };
                 let mut target_chain = chain.clone();
-                target_chain.push(target);
+                target_chain.push(target.into());
                 queue.push_back(target_chain);
             }
         }
@@ -535,7 +548,7 @@ pub(crate) struct WalkedStack {
 pub(crate) enum SiteContext<'a> {
     /// A site of a layer stack reached through the chain of layer stacks,
     /// outermost first (see [`LayerStack::chain_of`]).
-    Chain(&'a [LayerId]),
+    Chain(&'a [LayerStackIdentifier]),
     /// A site of the layer stack of `node` in a prim index's graph.
     Node(&'a PrimIndexGraph, NodeId),
 }
@@ -548,7 +561,7 @@ impl SiteContext<'_> {
 
     /// The root layers of the layer stacks whose variables apply,
     /// outermost first.
-    fn chain(self) -> Vec<LayerId> {
+    fn chain(self) -> Vec<LayerStackIdentifier> {
         match self {
             Self::Chain(chain) => chain.to_vec(),
             Self::Node(graph, node) => node_chain(graph, node),
@@ -560,18 +573,18 @@ impl SiteContext<'_> {
 /// `node`, outermost first, up to the first node of `node`'s layer stack:
 /// the chain whose variables `node`'s layer stack composes (see
 /// [`composed_variables`]).
-pub(crate) fn node_chain(graph: &PrimIndexGraph, node: NodeId) -> Vec<LayerId> {
+pub(crate) fn node_chain(graph: &PrimIndexGraph, node: NodeId) -> Vec<LayerStackIdentifier> {
     let mut stacks = Vec::new();
     let mut cursor = Some(node);
     while let Some(id) = cursor {
         let Some(current) = graph.node(id) else {
             break;
         };
-        stacks.push(current.layer_stack());
+        stacks.push(current.layer_stack_identifier());
         cursor = current.parent();
     }
     stacks.reverse();
-    let own = graph.node(node).map(PrimNode::layer_stack);
+    let own = graph.node(node).map(PrimNode::layer_stack_identifier);
     if let Some(end) = stacks.iter().position(|stack| Some(*stack) == own) {
         stacks.truncate(end + 1);
     }

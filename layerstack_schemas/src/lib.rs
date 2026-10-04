@@ -68,6 +68,12 @@
 //! `as_slice()` or explicitly copy with `as_ref().clone()` for a mutable vector.
 //! Half and matrix representation conversions still materialize vectors.
 //! Slice setters copy; `_owned` and `_shared` setters transfer numeric buffers.
+//! Array getters also offer `try_*` methods taking [`Time`]: `Ok(None)` means
+//! absent, blocked or incompatible, while `Err` preserves retained decode failure.
+//! Geometry importers can use `Primvar::validated_values` to consume indexed
+//! data directly and `PointInstancer::prepare_instance_transforms` for bounded
+//! output. With geometry and shading enabled, material subset queries combine
+//! validation and binding resolution without allocating renderer draw ranges.
 //!
 //! With `usd-proc`, `procedural::Procedural` binds a `UsdProc` recipe to a
 //! caller-supplied evaluator, tracks composed input reads and retains its result.

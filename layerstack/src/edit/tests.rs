@@ -2030,3 +2030,131 @@ fn live_value_refresh_respects_pending_and_unnotified_edits() {
         assert_live_matches_fresh(&live, &mut store, "pending/unnotified slot");
     }
 }
+
+#[test]
+fn appended_transactions_keep_order_and_one_atomic_inverse() {
+    let mut store = rocks();
+    let size = Address::spec(ROCK, spec(&mut store, "/Rock.size"));
+    let spin = Address::spec(ROCK, spec(&mut store, "/Rock.spin"));
+    let original = layers(&store);
+    let generation = store.layers[&ROCK].generation();
+    let mut batch = Transaction::new();
+    batch.set_default(size.clone(), Value::Double(2.));
+    batch.expect_unchanged(&mut store);
+    let mut other = Transaction::new();
+    other.set_default(size, Value::Double(3.));
+    other.set_time_sample(spin, 5., Value::Double(50.));
+    other.expect_unchanged(&mut store);
+    batch.append(other).append(Transaction::new());
+    assert_eq!(batch.len(), 3);
+    let inverse = batch.apply(&mut store).unwrap();
+    assert_eq!(
+        authored_default(&mut store, ROCK, "/Rock.size"),
+        Some(Value::Double(3.))
+    );
+    assert_eq!(store.layers[&ROCK].generation(), generation + 1);
+    inverse.apply(&mut store).unwrap();
+    // Undo advances generations, but restores authored content.
+    for layer in original {
+        let actual = &store.layers[&layer.id];
+        assert_eq!(actual.prims, layer.prims);
+    }
+}
+
+#[test]
+fn appended_transactions_roll_back_edits_across_layers() {
+    let mut store = rocks();
+    let original = layers(&store);
+    let mut batch = Transaction::new();
+    batch.set_default(
+        Address::spec(ROCK, spec(&mut store, "/Rock.size")),
+        Value::Double(2.),
+    );
+    let mut other = Transaction::new();
+    other.create_prim(
+        Address::spec(SCENE_SUB, spec(&mut store, "/New")),
+        Specifier::Def,
+        None,
+    );
+    other.set_default(
+        Address::spec(ROCK, spec(&mut store, "/Rock.spin")),
+        Value::string("wrong type"),
+    );
+    batch.append(other);
+    assert!(batch.apply(&mut store).is_err());
+    assert_eq!(layers(&store), original);
+}
+
+#[test]
+fn appended_transactions_preserve_generation_and_value_guards() {
+    let mut store = rocks();
+    let size = Address::spec(ROCK, spec(&mut store, "/Rock.size"));
+    let spin = Address::spec(ROCK, spec(&mut store, "/Rock.spin"));
+    let mut batch = Transaction::new();
+    batch.set_default(spin.clone(), Value::Double(10.));
+    let mut guarded = Transaction::new();
+    guarded
+        .set_default(size.clone(), Value::Double(2.))
+        .expect_unchanged(&mut store);
+    batch.append(guarded);
+    let mut later = Transaction::new();
+    later.set_time_sample(spin.clone(), 6., Value::Double(60.));
+    later.apply(&mut store).unwrap();
+    let original = layers(&store);
+    assert!(matches!(
+        batch.apply(&mut store),
+        Err(EditError::StaleGeneration { .. })
+    ));
+    assert_eq!(layers(&store), original);
+
+    let mut batch = Transaction::new();
+    batch.set_default(size.clone(), Value::Double(2.));
+    // A guard-only transaction must survive append, and sees initial state.
+    let mut guarded = Transaction::new();
+    guarded.expect_default(size, Some(Value::Double(2.)));
+    batch.append(guarded);
+    assert!(matches!(
+        batch.apply(&mut store),
+        Err(EditError::StaleValue { .. })
+    ));
+    assert_eq!(layers(&store), original);
+
+    // Guards already in the receiving transaction also survive.
+    let mut batch = Transaction::new();
+    batch.expect_generation(ROCK, store.layers[&ROCK].generation() + 1);
+    let mut other = Transaction::new();
+    other.set_default(spin, Value::Double(20.));
+    batch.append(other);
+    assert!(matches!(
+        batch.apply(&mut store),
+        Err(EditError::StaleGeneration { .. })
+    ));
+    assert_eq!(layers(&store), original);
+}
+
+#[test]
+fn appended_inverses_keep_their_written_value_guards() {
+    let mut store = rocks();
+    let size = Address::spec(ROCK, spec(&mut store, "/Rock.size"));
+    let spin = Address::spec(ROCK, spec(&mut store, "/Rock.spin"));
+    let mut first = Transaction::new();
+    first.set_default(size.clone(), Value::Double(2.));
+    let undo_first = first.apply(&mut store).unwrap();
+    let mut second = Transaction::new();
+    second.set_default(spin, Value::Double(5.));
+    let mut undo = second.apply(&mut store).unwrap();
+    undo.append(undo_first);
+    let mut later = Transaction::new();
+    later.set_default(size, Value::Double(3.));
+    later.apply(&mut store).unwrap();
+    let original = layers(&store);
+    assert!(matches!(
+        undo.apply(&mut store),
+        Err(EditError::StaleValue { .. })
+    ));
+    assert_eq!(
+        layers(&store),
+        original,
+        "a failed later inverse rolls back earlier inverses"
+    );
+}

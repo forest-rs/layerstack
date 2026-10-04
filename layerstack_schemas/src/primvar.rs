@@ -12,7 +12,8 @@ use alloc::{
     sync::Arc,
     vec::Vec,
 };
-use layerstack::{PathId, PropertyPath, PropertyType, TargetPath, Value};
+use core::ops::Range;
+use layerstack::{ArrayReadError, PathId, PropertyPath, PropertyType, TargetPath, Value};
 
 /// A composed `primvars:*` attribute, excluding the `:indices` sidecar.
 #[derive(Clone, Copy, Debug)]
@@ -43,6 +44,13 @@ pub enum PrimvarError {
         /// The invalid authored index.
         index: i32,
     },
+    /// Retained values or indices failed to decode; no flattened result is emitted.
+    Decode {
+        /// The failed attribute path.
+        property: PropertyPath,
+        /// The original source error.
+        error: ArrayReadError,
+    },
     /// Reserved legacy error; ID-target reads are now supported.
     IdTargetUnsupported,
 }
@@ -52,6 +60,78 @@ impl core::fmt::Display for PrimvarError {
     }
 }
 impl core::error::Error for PrimvarError {}
+
+/// Validated immutable primvar values and their optional index mapping.
+/// Native values and indices retain shared storage. Validation allocates no
+/// expanded value array; `element_range` maps an output element to source values.
+/// Nonindexed arrays and scalars pass through as individual source values.
+#[derive(Clone, Debug)]
+pub struct PrimvarValues {
+    values: Value,
+    indices: Option<Arc<Vec<i32>>>,
+    width: usize,
+    len: usize,
+}
+impl PrimvarValues {
+    /// Source values, before indexed expansion. Use checked/shared conversions
+    /// from `value` to borrow or retain matching native numeric storage.
+    #[must_use]
+    pub fn values(&self) -> &Value {
+        &self.values
+    }
+    /// Validated index storage; absent for scalars and nonindexed arrays.
+    #[must_use]
+    pub fn indices(&self) -> Option<&Arc<Vec<i32>>> {
+        self.indices.as_ref()
+    }
+    /// Values selected per output element. Nonindexed data has width one.
+    #[must_use]
+    pub fn element_size(&self) -> usize {
+        self.width
+    }
+    /// Number of output elements before element-size expansion.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.len
+    }
+    /// Whether no output elements exist.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+    /// Validated source range for an output element. None means `element` is
+    /// outside the output mapping; indexed ranges always fit the source array.
+    /// A scalar has one range, `0..1`, selecting the scalar itself.
+    #[must_use]
+    pub fn element_range(&self, element: usize) -> Option<Range<usize>> {
+        if element >= self.len {
+            return None;
+        }
+        let index = self.indices.as_ref().map_or(element, |indices| {
+            usize::try_from(indices[element]).expect("validated index")
+        });
+        let start = index * self.width;
+        Some(start..start + self.width)
+    }
+    /// Materializes the expanded indexed array. Nonindexed data retains its
+    /// existing storage; native kinds survive empty indexed results.
+    #[must_use]
+    pub fn compute_flattened(&self) -> Value {
+        if self.indices.is_none() {
+            return self.values.clone();
+        }
+        let array = self.values.array_ref().expect("validated indexed array");
+        let kind = array
+            .typed()
+            .map(layerstack::TypedArray::element_kind)
+            .or_else(|| array.get(0).map(|v| v.into_owned()));
+        let values = (0..self.len)
+            .flat_map(|i| self.element_range(i).expect("valid element"))
+            .map(|i| array.get(i).expect("validated source range").into_owned())
+            .collect();
+        Value::array_with_element(values, kind.as_ref())
+    }
+}
 
 fn full_name(name: &str) -> String {
     if name.starts_with("primvars:") {
@@ -261,38 +341,75 @@ impl<'a> Primvar<'a> {
                             .property_might_be_time_varying(p.prim_path(), p.property())
                     }))
     }
-    /// Expands each index into `element_size` consecutive values. Scalars and
-    /// nonindexed arrays pass through. Invalid indices return no partial array.
-    /// Native element kinds are retained even for an empty result.
-    pub fn compute_flattened(&self, time: Time) -> Result<Option<Value>, PrimvarError> {
-        let Some(value) = self.value(time)? else {
+    /// Captures values and optional indices, validating every index before any
+    /// consumer expands vertices. No flattened array is allocated. Numeric
+    /// storage remains shared; interpolation or legacy conversions may allocate.
+    /// ID-target reads, scalar passthrough and blocked indices match flattening.
+    /// Decode failures retain the original property path and error.
+    /// OpenUSD: `UsdGeomPrimvar::ComputeFlattened`; AOUSD Core §12.3–12.5.
+    pub fn validated_values(&self, time: Time) -> Result<Option<PrimvarValues>, PrimvarError> {
+        let property = self.property();
+        let mut value = if self.is_id_target() {
+            self.value(time)?
+        } else {
+            self.prim
+                .try_read_value(self.name, time, |v, _| Some(v.clone()))
+                .map_err(|error| PrimvarError::Decode { property, error })?
+        };
+        if let Some(Value::TypedArray(array)) = &mut value {
+            *array = array
+                .try_materialize()
+                .map_err(|error| PrimvarError::Decode {
+                    property,
+                    error: error.clone(),
+                })?
+                .clone();
+        }
+        let Some(value) = value else {
             return Ok(None);
         };
         let Some(array) = value.array_ref().filter(|_| self.is_indexed()) else {
-            return Ok(Some(value));
+            let len = value.array_ref().map_or(1, |array| array.len());
+            return Ok(Some(PrimvarValues {
+                values: value,
+                indices: None,
+                width: 1,
+                len,
+            }));
         };
         let size = self.element_size();
         let width = usize::try_from(size)
             .ok()
             .filter(|&v| v > 0)
             .ok_or(PrimvarError::InvalidElementSize(size))?;
-        let indices = self.indices(time).ok_or(PrimvarError::MissingIndices)?;
-        let kind = array
-            .typed()
-            .map(layerstack::TypedArray::element_kind)
-            .or_else(|| array.get(0).map(|v| v.into_owned()));
-        let mut result = Vec::new();
+        let name = format!("{}:indices", self.name);
+        let property = self.prim.property_path(&name).expect("indexed sidecar");
+        let indices = self
+            .prim
+            .try_read_value(&name, time, crate::value::read_int_array_shared)
+            .map_err(|error| PrimvarError::Decode { property, error })?
+            .ok_or(PrimvarError::MissingIndices)?;
         for (position, index) in indices.iter().copied().enumerate() {
-            let start = usize::try_from(index)
+            usize::try_from(index)
                 .ok()
                 .and_then(|i| i.checked_mul(width))
                 .filter(|&i| i.checked_add(width).is_some_and(|end| end <= array.len()))
                 .ok_or(PrimvarError::InvalidIndex { position, index })?;
-            result.extend(
-                (start..start + width).map(|i| array.get(i).expect("validated index").into_owned()),
-            );
         }
-        Ok(Some(Value::array_with_element(result, kind.as_ref())))
+        let len = indices.len();
+        Ok(Some(PrimvarValues {
+            values: value,
+            indices: Some(indices),
+            width,
+            len,
+        }))
+    }
+    /// Expands each index into `element_size` consecutive values. Scalars and
+    /// nonindexed arrays pass through. Invalid indices or decode errors return
+    /// no partial array. Use `validated_values` to consume the mapping directly.
+    pub fn compute_flattened(&self, time: Time) -> Result<Option<Value>, PrimvarError> {
+        self.validated_values(time)
+            .map(|value| value.map(|v| v.compute_flattened()))
     }
     /// An edit handle retaining this primvar's name and declared type.
     #[must_use]

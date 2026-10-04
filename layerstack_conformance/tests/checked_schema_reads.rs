@@ -133,6 +133,48 @@ fn checked_schema_reads_share_native_arrays_and_keep_typed_default_selection() {
 }
 
 #[test]
+fn validated_primvars_preserve_value_and_index_decode_errors() {
+    use layerstack_schemas::primvar::{Primvar, PrimvarError};
+    for name in ["primvars:x", "primvars:x:indices"] {
+        let (mut store, _) = support::scene(
+            "#usda 1.0\ndef Mesh \"M\" { point3f[] primvars:x = [(1,2,3)] int[] primvars:x:indices = [0] }",
+        );
+        let path = store.path("/M");
+        let token = store.tokens.lookup(name).unwrap();
+        let error = ArrayReadError::InvalidData("bad retained primvar buffer".into());
+        store
+            .layers
+            .get_mut(&LayerId(1))
+            .unwrap()
+            .prims
+            .get_mut(&path)
+            .unwrap()
+            .property_mut(token)
+            .unwrap()
+            .default = Some(Value::TypedArray(TypedArray::Deferred(Arc::new(Failed(
+            error.clone(),
+        )))));
+        let schemas = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+        let live = layerstack::LiveStage::compose(
+            &mut store,
+            LayerId(1),
+            layerstack::StageOptions {
+                schemas: Some(schemas),
+                ..Default::default()
+            },
+        );
+        let scene = Scene::new(live.stage(), &store);
+        let var = Primvar::new(&scene, path, "x").unwrap();
+        let expected = PrimvarError::Decode {
+            property: layerstack::PropertyPath::new(path, token),
+            error,
+        };
+        assert_eq!(var.validated_values(Time::Default).unwrap_err(), expected);
+        assert_eq!(var.compute_flattened(Time::Default).unwrap_err(), expected);
+    }
+}
+
+#[test]
 fn checked_typed_reads_preserve_deferred_schema_fallback_failure() {
     use layerstack::{
         InMemoryStore, Layer, PrimSpec, PropertyDefinition, PropertyType, SchemaDefinition,

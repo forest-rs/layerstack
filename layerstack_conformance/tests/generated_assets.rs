@@ -19,6 +19,12 @@ use layerstack_schemas::{
 };
 use std::{path::Path, process::Command, sync::Arc};
 
+#[test]
+fn retained_producers_recover_and_reject_delayed_work() {
+    let mut generated = support::GeneratedScene::new(100);
+    generated.prove_durability();
+}
+
 fn height(cache: &mut BoundsCache, scene: &Scene<'_>, scatter: layerstack::PathId) -> f64 {
     cache
         .world_bound(scene, scatter)
@@ -700,7 +706,7 @@ fn report(stage: &Stage, store: &InMemoryStore) -> serde_json::Value {
     let uv = Primvar::new(&scene, proxy, "st").unwrap();
     let normals = Primvar::new(&scene, proxy, "normals").unwrap();
     let recipe = GenerativeProcedural::new(&scene, find("/Recipes/Tree")).unwrap();
-    let mut evaluator = support::asset_generator(recipe.path());
+    let mut evaluator = support::asset_generator(store, recipe.path());
     let generated = evaluator.evaluate(&scene, time).unwrap();
     let texture_shader = find("/Assets/Tree/Material/Texture");
     let source_material = Material::new(&scene, find("/Assets/Tree/Material")).unwrap();
@@ -744,8 +750,8 @@ fn report(stage: &Stage, store: &InMemoryStore) -> serde_json::Value {
         "userTag": mesh.read_value("user:tag", layerstack_schemas::value::read_int),
         "proceduralSystem": recipe.procedural_system(),
         "recipeHeight": recipe.read_value_at("primvars:height", 13., layerstack::InterpolationType::Linear, layerstack_schemas::value::read_float),
-        "recipeGeneratedPoints": &**generated.geometry.points,
-        "recipeGeneratedCounts": &**generated.geometry.face_vertex_counts,
+        "recipeGeneratedPoints": &**generated.geometry.mesh().points,
+        "recipeGeneratedCounts": &**generated.geometry.mesh().face_vertex_counts,
         "recipeTexture": generated.texture.as_deref(),
         "textureAsset": layerstack_schemas::value::read_asset(&texture, &store.tokens).unwrap().as_ref(),
         "sourceSurface": store.paths.display(source_material.compute_surface_source(&[]).shader.unwrap(), &store.tokens).to_string(),
@@ -923,7 +929,7 @@ fn authored_layers_round_trip_in_both_formats_and_match_openusd() {
         .unwrap();
     assert!(
         Arc::ptr_eq(
-            &output.geometry.points,
+            &output.geometry.mesh().points,
             &Mesh::new(
                 &Scene::new(generated.live.stage(), &generated.store),
                 generated.terrain
@@ -943,6 +949,7 @@ fn authored_layers_round_trip_in_both_formats_and_match_openusd() {
             )
             .unwrap()
             .geometry
+            .mesh()
             .points[2][1],
         2.
     );

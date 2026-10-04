@@ -4,9 +4,21 @@
 
 Initial release.
 
+- Producer bindings capture store affinity at construction. Migration:
+  `Procedural::new(recipe, evaluator)` becomes
+  `Procedural::new(&store, recipe, evaluator)`. Different interners are rejected
+  before resolving store-local paths; invalidation does not rebind a producer.
 - `GeneratedMesh::into_validated` retains an immutable snapshot and derived
   extent for repeated preparation without geometry rescans. `MeshPublication`
   adds a `work` field; struct literals must supply its planning counters.
+- Producer input queries skip resolution on unchanged records and retain
+  relationship-forwarding dependencies. `snapshot` shares a detached output with
+  input evidence; guarded application synchronizes and rejects stale consumed
+  inputs before authoring. Explicit invalidation also retires delayed evidence.
+  `ProceduralWork` adds `query_cache_hits`; struct literals must supply this counter.
+- `producer_durability` demonstrates two producers, output repair, source-layer
+  replacement, delayed-work rejection and budgeted history recovery. Scheduling,
+  generator/resource concurrency and output lifecycle remain application-owned.
 
 - Numeric schema array getters and `Primvar::indices` retain `Arc<Vec<T>>`
   storage. Migration: borrow with `as_slice()` / `iter()` or explicitly copy

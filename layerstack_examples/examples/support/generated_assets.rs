@@ -3,14 +3,15 @@
 
 //! The runnable publication fixture is also exercised by conformance tests and benchmarks.
 use layerstack::{
-    AssetResolveError, AssetResolver, EditTarget, InMemoryStore, LayerId, LiveStage, PathId,
-    PathInterner, PropertyKind, PropertySpec, PropertyType, ResolvedAsset, StageOptions,
+    AssetResolveError, AssetResolver, EditTarget, InMemoryStore, LayerId, LayerStore, LiveStage,
+    PathId, PathInterner, PropertyKind, PropertySpec, PropertyType, ResolvedAsset, StageOptions,
     TargetPath, Time, TokenInterner, TypedArray, Value,
 };
 use layerstack_schemas::{
-    GeneratedMesh, MeshPrimvar, MeshPublication, Scene, SchemaEdit,
+    GeneratedMesh, MeshPrimvar, MeshPublication, Scene, SchemaEdit, ValidatedMesh,
     procedural::{
-        Procedural, ProceduralError, ProceduralEvaluator, ProceduralInputError, ProceduralInputs,
+        EvidenceApplyError, Procedural, ProceduralError, ProceduralEvaluator, ProceduralInputError,
+        ProceduralInputs,
     },
     usd_geom::PointInstancer,
 };
@@ -108,7 +109,7 @@ pub(crate) fn mesh() -> GeneratedMesh {
 /// Geometry and a texture asset reference, evaluated without stage/file side effects.
 #[derive(Clone, Debug)]
 pub(crate) struct GeneratedAsset {
-    pub(crate) geometry: GeneratedMesh,
+    pub(crate) geometry: ValidatedMesh,
     pub(crate) texture: Option<Arc<str>>,
 }
 
@@ -120,8 +121,12 @@ pub(crate) struct AssetGenerator {
     external_points: bool,
 }
 /// Binds the example asset evaluator after reopening a stage too.
-pub(crate) fn asset_generator(recipe: PathId) -> Procedural<AssetGenerator> {
+pub(crate) fn asset_generator(
+    store: &dyn LayerStore,
+    recipe: PathId,
+) -> Procedural<AssetGenerator> {
     Procedural::new(
+        store,
         recipe,
         AssetGenerator {
             system: "example:asset",
@@ -135,6 +140,7 @@ pub(crate) fn asset_generator(recipe: PathId) -> Procedural<AssetGenerator> {
 pub(crate) enum GeneratorError {
     Input(ProceduralInputError),
     Parameter(&'static str),
+    Validation(layerstack_schemas::MeshPublicationError),
 }
 impl From<ProceduralInputError> for GeneratorError {
     fn from(error: ProceduralInputError) -> Self {
@@ -146,6 +152,7 @@ impl std::fmt::Display for GeneratorError {
         match self {
             Self::Input(error) => error.fmt(f),
             Self::Parameter(name) => write!(f, "invalid procedural parameter {name}"),
+            Self::Validation(error) => write!(f, "generated geometry: {error}"),
         }
     }
 }
@@ -223,9 +230,9 @@ impl ProceduralEvaluator for AssetGenerator {
                     .collect(),
             );
         }
-        geometry
-            .validate()
-            .map_err(|_| GeneratorError::Parameter("generated geometry"))?;
+        let geometry = geometry
+            .into_validated()
+            .map_err(GeneratorError::Validation)?;
         Ok(GeneratedAsset { geometry, texture })
     }
 }
@@ -235,7 +242,7 @@ impl ProceduralEvaluator for AssetGenerator {
 pub(crate) enum RecipeError {
     Evaluation(ProceduralError<GeneratorError>),
     Publication(layerstack_schemas::MeshPublicationError),
-    Apply(layerstack::edit::EditError),
+    Apply(EvidenceApplyError),
 }
 impl std::fmt::Display for RecipeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -271,6 +278,211 @@ pub(crate) struct GeneratedScene {
     pub(crate) terrain_publication: MeshPublication,
 }
 impl GeneratedScene {
+    /// Exercises durability boundaries using the same two producers and shared asset.
+    #[allow(
+        dead_code,
+        reason = "shared fixture used by the focused durability example"
+    )]
+    pub(crate) fn prove_durability(&mut self) {
+        use layerstack::{ChangeHistoryBudget, ChangeHistoryError, Transaction};
+        use layerstack_schemas::{
+            bounds::{BoundsCache, BoundsOptions},
+            procedural::{EvidenceApplyError, EvidenceError},
+        };
+        let original = self.geometry.points.clone();
+        let topology = self.geometry.face_vertex_indices.clone();
+        let before = self.asset_generator.work();
+        assert_eq!(
+            self.evaluate_terrain(Time::Default).unwrap(),
+            layerstack::Changes::default(),
+            "unchanged terrain authors no opinions"
+        );
+        assert_eq!(
+            self.evaluate_asset(Time::Default).unwrap(),
+            layerstack::Changes::default(),
+            "unchanged asset authors no opinions"
+        );
+        assert_eq!(
+            self.asset_generator.work().input_reads,
+            before.input_reads,
+            "unchanged requests skip resolution"
+        );
+        assert_eq!(
+            self.publication.work.geometry_validations, 0,
+            "retained snapshots skip validation"
+        );
+        assert_eq!(
+            self.publication.work.extent_points, 0,
+            "retained extent skips point visits"
+        );
+
+        let unrelated = self.store.property_path("/World.user:label");
+        let mut edit = Transaction::new();
+        edit.create_property(
+            EditTarget::for_layer(ROOT).property(unrelated),
+            PropertySpec::typed_attribute(PropertyType::new("int", false, Value::Int(0)))
+                .with_default(Value::Int(1)),
+        );
+        self.live.apply(&mut self.store, &edit).unwrap();
+        assert_eq!(
+            self.evaluate_asset(Time::Default).unwrap(),
+            layerstack::Changes::default(),
+            "unrelated edits do not republish"
+        );
+        assert_eq!(
+            self.asset_generator.work().input_reads,
+            before.input_reads,
+            "other prim edits do not resolve inputs"
+        );
+
+        // Detect output loss independently of the recipe's unchanged consumed inputs.
+        let points = self.store.property_path("/Assets/Tree/Geometry.points");
+        let mut delete = Transaction::new();
+        delete.remove_spec(EditTarget::for_layer(ASSET).property(points));
+        self.live.apply(&mut self.store, &delete).unwrap();
+        self.evaluate_asset(Time::Default).unwrap();
+        assert_eq!(
+            self.asset_generator.work().evaluations,
+            before.evaluations,
+            "output repair reuses evaluation"
+        );
+        assert!(
+            Arc::ptr_eq(&original, &self.geometry.points),
+            "output repair preserves owners"
+        );
+
+        let delayed = self
+            .asset_generator
+            .snapshot(&Scene::new(self.live.stage(), &self.store), Time::Default)
+            .unwrap();
+        let publication = delayed
+            .output()
+            .geometry
+            .prepare(
+                self.live.stage(),
+                &mut self.store,
+                &EditTarget::for_layer(ASSET),
+                self.source,
+                &self.publication.properties,
+            )
+            .unwrap();
+        let output_generation = self.store.layers[&ASSET].generation();
+        let terrain_points = self.store.property_path("/World/Terrain.points");
+        // Replace an entire source layer behind the live stage, keeping its LayerId.
+        let mut replacement = self.store.layers[&TERRAIN].clone();
+        replacement.set_property(
+            terrain_points,
+            PropertySpec::typed_attribute(PropertyType::new(
+                "point3f",
+                true,
+                Value::Vec3f([0.; 3]),
+            ))
+            .with_default(Value::TypedArray(TypedArray::Vec3f(Arc::new(
+                original.iter().map(|p| [p[0], p[1] * 2., p[2]]).collect(),
+            )))),
+        );
+        self.store.insert_layer(replacement);
+        assert_eq!(
+            self.store.layers[&ASSET].generation(),
+            output_generation,
+            "source replacement does not touch output layer"
+        );
+        assert!(
+            matches!(
+                delayed
+                    .evidence()
+                    .apply(&mut self.live, &mut self.store, &publication.transaction),
+                Err(EvidenceApplyError::Evidence(EvidenceError::Changed { .. }))
+            ),
+            "input evidence rejects stale work independently of the target guard"
+        );
+        self.evaluate_asset(Time::Default).unwrap();
+        assert_eq!(
+            self.geometry.points[2][1], 2.,
+            "source replacement refreshes dependent geometry"
+        );
+        assert_eq!(
+            self.publication.work.geometry_validations, 0,
+            "new output is already validated"
+        );
+
+        let mut bounds = BoundsCache::new(Time::Default, BoundsOptions::default());
+        bounds
+            .world_bound(&Scene::new(self.live.stage(), &self.store), self.scatter)
+            .unwrap();
+        let mut cursor = self.live.change_cursor();
+        self.live.set_change_history_budget(ChangeHistoryBudget {
+            max_batches: 1,
+            max_retained_bytes: 4096,
+        });
+        self.store
+            .layers
+            .get_mut(&TERRAIN)
+            .unwrap()
+            .set_change_history_budget(ChangeHistoryBudget {
+                max_batches: 0,
+                max_retained_bytes: 0,
+            });
+        for value in [3., 4.] {
+            let height = self.store.property_path("/Recipes/Terrain.primvars:height");
+            let mut edit = Transaction::new();
+            edit.set_default(
+                EditTarget::for_layer(TERRAIN).property(height),
+                Value::Float(value),
+            );
+            self.live.apply(&mut self.store, &edit).unwrap();
+        }
+        assert!(
+            matches!(
+                self.live.changes_since(&mut cursor),
+                Err(ChangeHistoryError::Expired)
+            ),
+            "lagging consumers receive explicit history expiry"
+        );
+        self.live
+            .set_change_history_budget(ChangeHistoryBudget::default());
+        // Cursors advance on expiry. Notice-dependent consumers rebuild explicitly.
+        bounds.clear();
+        // Query-backed producers inspect current records and need no notice replay.
+        let terrain = self.evaluate_terrain(Time::Default).unwrap();
+        let asset = self.evaluate_asset(Time::Default).unwrap();
+        let scene = Scene::new(self.live.stage(), &self.store);
+        bounds.apply_changes(&scene, &terrain);
+        bounds.apply_changes(&scene, &asset);
+        assert_eq!(
+            bounds
+                .world_bound(&scene, self.scatter)
+                .unwrap()
+                .aligned_range()
+                .max[1],
+            4.,
+            "recovered bounds observe current upstream geometry"
+        );
+        assert!(
+            self.live.change_history_stats().evicted_batches > 0,
+            "composed evictions are measurable"
+        );
+        assert!(
+            self.store.layers[&TERRAIN]
+                .change_history_stats()
+                .discarded_batches
+                > 0,
+            "authored discards are measurable"
+        );
+        self.live
+            .changes_since(&mut cursor)
+            .unwrap()
+            .for_each(|change| bounds.apply_changes(&scene, change));
+        assert_eq!(
+            self.evaluate_asset(Time::Default).unwrap(),
+            layerstack::Changes::default(),
+            "recovered producer settles to unchanged work"
+        );
+        assert!(
+            Arc::ptr_eq(&topology, &self.geometry.face_vertex_indices),
+            "untouched topology remains shared through recovery"
+        );
+    }
     /// Builds reusable geometry, native references and a point instancer.
     /// Root sublayer offsets exercise stage-time authoring and serialization.
     pub(crate) fn new(count: usize) -> Self {
@@ -348,6 +560,7 @@ def Scope "Recipes" {
         let terrain_recipe = store.path("/Recipes/Terrain");
         let asset_recipe = store.path("/Recipes/Tree");
         let mut terrain_generator = Procedural::new(
+            &store,
             terrain_recipe,
             AssetGenerator {
                 system: "example:terrain",
@@ -374,7 +587,7 @@ def Scope "Recipes" {
             .unwrap();
         live.apply(&mut store, &terrain_publication.transaction)
             .unwrap();
-        let mut asset_generator = asset_generator(asset_recipe);
+        let mut asset_generator = asset_generator(&store, asset_recipe);
         let geometry = asset_generator
             .evaluate(&Scene::new(live.stage(), &store), Time::Default)
             .unwrap()
@@ -432,7 +645,7 @@ def Scope "Recipes" {
             source,
             terrain,
             scatter,
-            geometry,
+            geometry: geometry.mesh().clone(),
             publication,
             asset_generator,
             terrain_generator,
@@ -469,11 +682,11 @@ def Scope "Recipes" {
     ) -> Result<layerstack::Changes, RecipeError> {
         let output = self
             .asset_generator
-            .evaluate(&Scene::new(self.live.stage(), &self.store), time)
-            .map_err(RecipeError::Evaluation)?
-            .clone();
+            .snapshot(&Scene::new(self.live.stage(), &self.store), time)
+            .map_err(RecipeError::Evaluation)?;
         let target = EditTarget::for_layer(ASSET);
         let mut update = output
+            .output()
             .geometry
             .prepare(
                 self.live.stage(),
@@ -488,7 +701,9 @@ def Scope "Recipes" {
             .property_path("/Assets/Tree/Material/Texture.inputs:file");
         let desired = Value::Asset(
             output
+                .output()
                 .texture
+                .clone()
                 .expect("asset generator supplies a texture reference"),
         );
         // Compare this producer's authored site, even when a stronger opinion masks it.
@@ -534,11 +749,11 @@ def Scope "Recipes" {
                 .transaction
                 .expect_generation(ASSET, self.store.layers[&ASSET].generation());
         }
-        let applied = self
-            .live
-            .apply(&mut self.store, &update.transaction)
+        let applied = output
+            .evidence()
+            .apply(&mut self.live, &mut self.store, &update.transaction)
             .map_err(RecipeError::Apply)?;
-        self.geometry = output.geometry;
+        self.geometry = output.output().geometry.mesh().clone();
         self.publication = update;
         Ok(applied.changes)
     }
@@ -550,9 +765,10 @@ def Scope "Recipes" {
     ) -> Result<layerstack::Changes, RecipeError> {
         let output = self
             .terrain_generator
-            .evaluate(&Scene::new(self.live.stage(), &self.store), time)
+            .snapshot(&Scene::new(self.live.stage(), &self.store), time)
             .map_err(RecipeError::Evaluation)?;
         let update = output
+            .output()
             .geometry
             .prepare(
                 self.live.stage(),
@@ -562,9 +778,9 @@ def Scope "Recipes" {
                 &self.terrain_publication.properties,
             )
             .map_err(RecipeError::Publication)?;
-        let applied = self
-            .live
-            .apply(&mut self.store, &update.transaction)
+        let applied = output
+            .evidence()
+            .apply(&mut self.live, &mut self.store, &update.transaction)
             .map_err(RecipeError::Apply)?;
         self.terrain_publication = update;
         Ok(applied.changes)

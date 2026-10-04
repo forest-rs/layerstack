@@ -77,13 +77,98 @@ fn setup() -> (InMemoryStore, LiveStage, Procedural<Pick>) {
         ..Default::default()
     };
     let live = LiveStage::compose(&mut store, ROOT, options);
-    (store, live, Procedural::new(recipe, Pick { factor: 1 }))
+    let binding = Procedural::new(&store, recipe, Pick { factor: 1 });
+    (store, live, binding)
 }
 fn set(store: &mut InMemoryStore, live: &mut LiveStage, property: &str, value: Value) {
     let path = store.property_path(property);
     let mut txn = Transaction::new();
     txn.set_default(EditTarget::for_layer(ROOT).property(path), value);
     live.apply(store, &txn).unwrap();
+}
+#[test]
+fn bindings_and_detached_results_reject_foreign_domains_even_with_equal_ids() {
+    let (store, live, mut binding) = setup();
+    let (other, other_live, _) = setup();
+    assert!(matches!(
+        binding.evaluate(&Scene::new(other_live.stage(), &other), Time::Default),
+        Err(ProceduralError::DifferentStore)
+    ));
+    assert!(matches!(
+        binding.evaluate(&Scene::new(live.stage(), &other), Time::Default),
+        Err(ProceduralError::DifferentStore)
+    ));
+    let result = binding
+        .snapshot(&Scene::new(live.stage(), &store), Time::Default)
+        .unwrap();
+    assert!(matches!(
+        result
+            .evidence()
+            .verify(&Scene::new(other_live.stage(), &other)),
+        Err(EvidenceError::DifferentStore)
+    ));
+    let moved = store;
+    assert!(
+        result
+            .evidence()
+            .verify(&Scene::new(live.stage(), &moved))
+            .is_ok()
+    );
+}
+#[test]
+fn unchanged_queries_skip_resolution_and_detached_work_tracks_source_and_epoch() {
+    let (mut store, mut live, mut binding) = setup();
+    let result = binding
+        .snapshot(&Scene::new(live.stage(), &store), Time::Default)
+        .unwrap();
+    let before = binding.work();
+    let repeated = binding
+        .snapshot(&Scene::new(live.stage(), &store), Time::Default)
+        .unwrap();
+    assert!(Arc::ptr_eq(
+        &result.shared_output(),
+        &repeated.shared_output()
+    ));
+    assert_eq!(binding.work().input_reads, before.input_reads);
+    assert_eq!(binding.work().query_cache_hits - before.query_cache_hits, 4);
+
+    // Bypass the LiveStage: guarded application must synchronize before checking.
+    let a = store.property_path("/Inputs.a");
+    store.layers.get_mut(&ROOT).unwrap().set_property(
+        a,
+        PropertySpec::typed_attribute(PropertyType::new("int", false, Value::Int(0)))
+            .with_default(Value::Int(9)),
+    );
+    let published = store.property_path("/Published.value");
+    let mut transaction = Transaction::new();
+    transaction.create_prim(
+        EditTarget::for_layer(ROOT).prim(published.prim_path()),
+        layerstack::Specifier::Def,
+        None,
+    );
+    transaction.create_property(
+        EditTarget::for_layer(ROOT).property(published),
+        PropertySpec::typed_attribute(PropertyType::new("int", false, Value::Int(0)))
+            .with_default(Value::Int(1)),
+    );
+    assert!(matches!(
+        result.evidence().apply(&mut live, &mut store, &transaction),
+        Err(EvidenceApplyError::Evidence(EvidenceError::Changed { .. }))
+    ));
+    assert!(store.layers[&ROOT].property(published).is_none());
+    let fresh = binding
+        .snapshot(&Scene::new(live.stage(), &store), Time::Default)
+        .unwrap();
+    assert_eq!(*fresh.output(), Some(9));
+    fresh
+        .evidence()
+        .apply(&mut live, &mut store, &transaction)
+        .unwrap();
+    binding.invalidate();
+    assert!(matches!(
+        fresh.evidence().verify(&Scene::new(live.stage(), &store)),
+        Err(EvidenceError::Invalidated)
+    ));
 }
 #[test]
 fn composed_reads_track_absence_and_replace_dynamic_dependencies() {
@@ -312,7 +397,7 @@ fn ignored_input_errors_cannot_produce_a_cached_success() {
         }
     }
     let (store, live, binding) = setup();
-    let mut procedural = Procedural::new(binding.recipe(), Ignoring);
+    let mut procedural = Procedural::new(&store, binding.recipe(), Ignoring);
     for _ in 0..2 {
         assert!(matches!(
             procedural.evaluate(&Scene::new(live.stage(), &store), Time::Default),
@@ -348,7 +433,7 @@ fn api_schema_system_fallback_dispatches_without_an_authored_token() {
     crate::usd_hydra::HydraGenerativeProceduralApi::apply(&mut edit, binding.recipe()).unwrap();
     let transaction = edit.finish();
     live.apply(&mut store, &transaction).unwrap();
-    let mut procedural = Procedural::new(binding.recipe(), Hydra);
+    let mut procedural = Procedural::new(&store, binding.recipe(), Hydra);
     assert_eq!(
         *procedural
             .evaluate(&Scene::new(live.stage(), &store), Time::Default)

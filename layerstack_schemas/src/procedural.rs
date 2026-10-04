@@ -15,9 +15,18 @@
 //! Inputs use AOUSD Core §12.3 (value resolution), §12.4 (relationships), §12.5
 //! (interpolation), and §13.3.2.4 (schema fallbacks).
 
-use alloc::{format, string::String, vec::Vec};
-use core::fmt;
-use layerstack::{ArrayReadError, PathId, PropertyKind, TargetPath, Time, TokenInterner, Value};
+use alloc::{format, string::String, sync::Arc, vec::Vec};
+use core::{
+    fmt,
+    sync::atomic::{AtomicBool, Ordering},
+};
+use layerstack::{
+    ArrayReadError, AttributeQuery, LayerStore, PathId, PrimSnapshot, PropertyKind, PropertyPath,
+    RelationshipQuery, StoreIdentity, TargetPath, Time, TokenInterner, Value,
+};
+
+mod evidence;
+pub use evidence::{Evaluated, EvaluationEvidence, EvidenceApplyError, EvidenceError};
 
 use crate::{Scene, usd_proc::GenerativeProcedural};
 
@@ -89,6 +98,8 @@ impl core::error::Error for ProceduralInputError {}
 /// Failure to evaluate a procedural recipe; no output is published implicitly.
 #[derive(Debug)]
 pub enum ProceduralError<E> {
+    /// The supplied store or stage has different token/path domain affinity.
+    DifferentStore,
     /// The recipe is absent or is not a `GenerativeProcedural`.
     NotProcedural(PathId),
     /// The recipe selects a system this evaluator does not understand.
@@ -106,6 +117,9 @@ pub enum ProceduralError<E> {
 impl<E: fmt::Display> fmt::Display for ProceduralError<E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::DifferentStore => {
+                f.write_str("procedural binding belongs to different store interners")
+            }
             Self::NotProcedural(path) => write!(f, "no procedural recipe at {path:?}"),
             Self::System { expected, actual } => {
                 write!(f, "procedural system {actual:?}, expected {expected}")
@@ -155,45 +169,94 @@ struct Input {
     prim: PathId,
     property: String,
     value: InputValue,
+    query: InputQuery,
 }
-fn read(
-    scene: &Scene<'_>,
-    time: Time,
-    prim: PathId,
-    property: &str,
-    kind: PropertyKind,
-) -> Result<InputValue, ProceduralInputError> {
-    let view = scene.stage().prim(prim, scene.store());
-    if let Some(token) = scene.store().tokens().lookup(property)
-        && let Some(actual) = scene
-            .stage()
-            .property_kind(layerstack::PropertyPath::new(prim, token))
-        && actual != kind
-    {
-        return Err(ProceduralInputError::WrongKind {
+#[derive(Clone, Debug)]
+enum InputQuery {
+    Attribute(AttributeQuery),
+    Relationship(RelationshipQuery),
+    Missing(PrimSnapshot),
+}
+impl Input {
+    fn query(scene: &Scene<'_>, prim: PathId, property: &str, kind: PropertyKind) -> InputQuery {
+        match scene.store().tokens().lookup(property) {
+            Some(token) => {
+                let path = PropertyPath::new(prim, token);
+                match kind {
+                    PropertyKind::Attribute => InputQuery::Attribute(AttributeQuery::new(path)),
+                    PropertyKind::Relationship => {
+                        InputQuery::Relationship(RelationshipQuery::new(path))
+                    }
+                }
+            }
+            None => InputQuery::Missing(scene.stage().prim_snapshot(prim)),
+        }
+    }
+    fn new(
+        scene: &Scene<'_>,
+        time: Time,
+        prim: PathId,
+        property: &str,
+        kind: PropertyKind,
+    ) -> Result<Self, ProceduralInputError> {
+        let mut input = Self {
             prim,
             property: property.into(),
-            expected: kind,
-            actual,
-        });
+            value: match kind {
+                PropertyKind::Attribute => InputValue::Attribute(None),
+                PropertyKind::Relationship => InputValue::Targets(None),
+            },
+            query: Self::query(scene, prim, property, kind),
+        };
+        input.refresh(scene, time)?;
+        Ok(input)
     }
-    match kind {
-        PropertyKind::Attribute => Ok(InputValue::Attribute(
-            view.and_then(|p| p.attribute(property))
-                .map(|a| a.try_get(time))
-                .transpose()
-                .map_err(|error| ProceduralInputError::Array {
-                    prim,
-                    property: property.into(),
-                    error,
-                })?
-                .flatten()
-                .map(|r| r.value),
-        )),
-        PropertyKind::Relationship => Ok(InputValue::Targets(
-            view.and_then(|p| p.relationship(property))
-                .map(|r| r.forwarded_targets()),
-        )),
+    fn is_current(&self, scene: &Scene<'_>, time: Time) -> bool {
+        match &self.query {
+            InputQuery::Attribute(query) => query.is_current(scene.stage(), time),
+            InputQuery::Relationship(query) => query.is_current(scene.stage()),
+            InputQuery::Missing(snapshot) => {
+                snapshot.is_current(scene.stage())
+                    && scene.store().tokens().lookup(&self.property).is_none()
+            }
+        }
+    }
+    fn refresh(&mut self, scene: &Scene<'_>, time: Time) -> Result<(), ProceduralInputError> {
+        let kind = self.value.kind();
+        if let Some(token) = scene.store().tokens().lookup(&self.property)
+            && let Some(actual) = scene
+                .stage()
+                .property_kind(PropertyPath::new(self.prim, token))
+            && actual != kind
+        {
+            return Err(ProceduralInputError::WrongKind {
+                prim: self.prim,
+                property: self.property.clone(),
+                expected: kind,
+                actual,
+            });
+        }
+        if matches!(self.query, InputQuery::Missing(_)) {
+            self.query = Self::query(scene, self.prim, &self.property, kind);
+        }
+        self.value = match &mut self.query {
+            InputQuery::Attribute(query) => InputValue::Attribute(
+                query
+                    .try_get(scene.stage(), time)
+                    .map_err(|error| ProceduralInputError::Array {
+                        prim: self.prim,
+                        property: self.property.clone(),
+                        error,
+                    })?
+                    .map(|r| r.value),
+            ),
+            InputQuery::Relationship(query) => InputValue::Targets(query.get(scene.stage())),
+            InputQuery::Missing(_) => match kind {
+                PropertyKind::Attribute => InputValue::Attribute(None),
+                PropertyKind::Relationship => InputValue::Targets(None),
+            },
+        };
+        Ok(())
     }
 }
 
@@ -271,23 +334,20 @@ impl ProceduralInputs<'_> {
         kind: PropertyKind,
     ) -> Result<InputValue, ProceduralInputError> {
         self.reads = self.reads.saturating_add(1);
-        let value = match read(&self.scene, self.time, prim, property, kind) {
-            Ok(value) => value,
+        let input = match Input::new(&self.scene, self.time, prim, property, kind) {
+            Ok(input) => input,
             Err(error) => {
                 self.failure = Some(error.clone());
                 return Err(error);
             }
         };
+        let value = input.value.clone();
         if !self
             .inputs
             .iter()
             .any(|i| i.prim == prim && i.property == property && i.value.kind() == kind)
         {
-            self.inputs.push(Input {
-                prim,
-                property: property.into(),
-                value: value.clone(),
-            });
+            self.inputs.push(input);
         }
         Ok(value)
     }
@@ -302,29 +362,35 @@ pub struct ProceduralWork {
     pub cache_hits: u64,
     /// Composed input reads during evaluation and dependency revalidation.
     pub input_reads: u64,
+    /// Input reads skipped because retained query identities are still current.
+    pub query_cache_hits: u64,
 }
 
 /// Caller-owned evaluator and one retained result for a concrete `UsdProc` recipe.
 ///
-/// Each call checks the recipe's schema/system and re-reads previously consumed
-/// inputs. Equal composed values reuse the output even after unrelated edits;
+/// Each call checks captured schema/input query identities; only changed inputs
+/// need composed resolution. Equal values reuse the output after unrelated edits;
 /// there is no requirement to deliver every change notice. Dynamic dependencies
 /// are replaced on successful evaluation. Native owner equality avoids element
 /// comparisons; different owners can require O(elements) comparison. Storage is
 /// bounded to one output plus the values/targets read by that evaluation.
 ///
-/// Use within one store; create a new binding for another store. Invalidate after
+/// Construction captures store affinity; another store is rejected before path
+/// lookup. Create a new binding for another store. Invalidate after
 /// external resource changes. A result at numeric time is an evaluation snapshot, not an authored
 /// time sample: the publisher must explicitly choose defaults or time samples.
 /// If a recipe disappears or evaluation fails, no previous output is returned;
 /// the caller chooses whether to retain or remove previously published content.
 pub struct Procedural<E: ProceduralEvaluator> {
+    store: StoreIdentity,
     recipe: PathId,
     evaluator: E,
-    output: Option<E::Output>,
+    output: Option<Arc<E::Output>>,
     time: Option<Time>,
     inputs: Vec<Input>,
     work: ProceduralWork,
+    recipe_snapshot: Option<PrimSnapshot>,
+    epoch: Arc<AtomicBool>,
 }
 impl<E: ProceduralEvaluator + fmt::Debug> fmt::Debug for Procedural<E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -335,30 +401,41 @@ impl<E: ProceduralEvaluator + fmt::Debug> fmt::Debug for Procedural<E> {
             .field("time", &self.time)
             .field("inputs", &self.inputs)
             .field("work", &self.work)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 impl<E: ProceduralEvaluator> Procedural<E> {
     /// Binds a caller-supplied evaluator to a store-local recipe path.
-    pub fn new(recipe: PathId, evaluator: E) -> Self {
+    pub fn new(store: &dyn LayerStore, recipe: PathId, evaluator: E) -> Self {
         Self {
+            store: store.identity(),
             recipe,
             evaluator,
             output: None,
             time: None,
             inputs: Vec::new(),
             work: ProceduralWork::default(),
+            recipe_snapshot: None,
+            epoch: Arc::new(AtomicBool::new(true)),
         }
     }
     /// Recipe path; changing stores requires a new binding.
     pub fn recipe(&self) -> PathId {
         self.recipe
     }
-    /// Drops result/dependency state, preserving cumulative work counters.
+    /// Drops result/dependency state and invalidates detached evidence, preserving
+    /// store affinity and cumulative work counters. Use after external resources
+    /// or generator code change; old delayed results must not be published.
     pub fn invalidate(&mut self) {
+        self.epoch.store(false, Ordering::Release);
+        self.epoch = Arc::new(AtomicBool::new(true));
+        self.clear_result();
+    }
+    fn clear_result(&mut self) {
         self.output = None;
         self.time = None;
         self.inputs.clear();
+        self.recipe_snapshot = None;
     }
     /// Mutates evaluator configuration after dropping its retained result.
     pub fn evaluator_mut(&mut self) -> &mut E {
@@ -384,8 +461,30 @@ impl<E: ProceduralEvaluator> Procedural<E> {
         scene: &Scene<'_>,
         time: Time,
     ) -> Result<&E::Output, ProceduralError<E::Error>> {
+        let identity = scene.store().identity();
+        if self.store != identity || scene.stage().store_identity() != Some(&identity) {
+            return Err(ProceduralError::DifferentStore);
+        }
+        if self.output.is_some()
+            && self.time == Some(time)
+            && self
+                .recipe_snapshot
+                .as_ref()
+                .is_some_and(|s| s.is_current(scene.stage()))
+            && self
+                .inputs
+                .iter()
+                .all(|input| input.is_current(scene, time))
+        {
+            self.work.cache_hits = self.work.cache_hits.saturating_add(1);
+            self.work.query_cache_hits = self
+                .work
+                .query_cache_hits
+                .saturating_add(u64::try_from(self.inputs.len()).unwrap_or(u64::MAX));
+            return Ok(self.output.as_deref().expect("retained output"));
+        }
         if GenerativeProcedural::new(scene, self.recipe).is_none() {
-            self.invalidate();
+            self.clear_result();
             return Err(ProceduralError::NotProcedural(self.recipe));
         }
         let mut inputs = ProceduralInputs {
@@ -405,7 +504,7 @@ impl<E: ProceduralEvaluator> Procedural<E> {
             .and_then(|v| crate::value::read_token(v, inputs.tokens()))
             .map(String::from);
         if actual.as_deref() != Some(self.evaluator.system()) {
-            self.invalidate();
+            self.clear_result();
             return Err(ProceduralError::System {
                 expected: self.evaluator.system().into(),
                 actual,
@@ -413,18 +512,26 @@ impl<E: ProceduralEvaluator> Procedural<E> {
         }
         let mut unchanged = self.output.is_some() && self.time == Some(time);
         if unchanged {
-            for input in &self.inputs {
+            for input in &mut self.inputs {
+                if input.is_current(scene, time) {
+                    self.work.query_cache_hits = self.work.query_cache_hits.saturating_add(1);
+                    continue;
+                }
                 self.work.input_reads = self.work.input_reads.saturating_add(1);
-                let value = read(scene, time, input.prim, &input.property, input.value.kind())
+                let mut refreshed = input.clone();
+                refreshed
+                    .refresh(scene, time)
                     .map_err(ProceduralError::Input)?;
-                if !input.value.matches(&value) {
+                if !input.value.matches(&refreshed.value) {
                     unchanged = false;
                     break;
                 }
+                *input = refreshed;
             }
         }
         if unchanged {
             self.work.cache_hits = self.work.cache_hits.saturating_add(1);
+            self.recipe_snapshot = Some(scene.stage().prim_snapshot(self.recipe));
         } else {
             self.work.evaluations = self.work.evaluations.saturating_add(1);
             let output = self.evaluator.evaluate(&mut inputs);
@@ -432,23 +539,49 @@ impl<E: ProceduralEvaluator> Procedural<E> {
             match output {
                 Ok(output) => {
                     if let Some(error) = inputs.failure {
-                        self.invalidate();
+                        self.clear_result();
                         return Err(ProceduralError::Input(error));
                     }
-                    self.output = Some(output);
+                    self.output = Some(Arc::new(output));
                     self.time = Some(time);
                     self.inputs = inputs.inputs;
+                    self.recipe_snapshot = Some(scene.stage().prim_snapshot(self.recipe));
                 }
                 Err(error) => {
-                    self.invalidate();
+                    self.clear_result();
                     return Err(ProceduralError::Evaluation(error));
                 }
             }
         }
         Ok(self
             .output
-            .as_ref()
+            .as_deref()
             .expect("successful evaluation or retained output"))
+    }
+
+    /// Evaluates and detaches a shared result with evidence of its consumed USD
+    /// inputs. Use its evidence to apply delayed publication immediately after
+    /// checking the current synchronized scene. No output copy is required.
+    pub fn snapshot(
+        &mut self,
+        scene: &Scene<'_>,
+        time: Time,
+    ) -> Result<Evaluated<E::Output>, ProceduralError<E::Error>> {
+        self.evaluate(scene, time)?;
+        Ok(Evaluated::new(
+            self.output.as_ref().expect("successful evaluation").clone(),
+            EvaluationEvidence::capture(
+                self.store.clone(),
+                self.recipe,
+                time,
+                self.recipe_snapshot
+                    .as_ref()
+                    .expect("successful recipe snapshot")
+                    .clone(),
+                self.inputs.clone(),
+                self.epoch.clone(),
+            ),
+        ))
     }
 }
 

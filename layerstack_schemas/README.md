@@ -53,6 +53,110 @@ explicit copy (`array.as_ref().clone()`). Assertions can use
 `Some(vec![...].into())`. Existing slice setters remain source compatible.
 Generated shader-node numeric array defaults also return shared owners.
 
+## Publishing generated meshes
+
+`GeneratedMesh::prepare` is the complete polygon-mesh publication path through
+a caller-owned stage and explicit `EditTarget`. It creates a new authored `Mesh`
+or updates an existing mesh, with `subdivisionScheme = "none"` and a derived
+extent. Points, topology and numeric primvars retain their shared buffers.
+It rejects nonfinite points, polygons with fewer than three corners, bad topology,
+incompatible declarations, bad interpolation, element sizes, indices and cardinality
+before returning a transaction. Live publication and file export use the same
+primvar cardinality and index validators. Indices retain separately indexed UV
+and normal seams even when the selected values happen to be equal.
+
+```rust,ignore
+let publication = generated_mesh.prepare(
+    live.stage(), &mut store, &edit_target, mesh_path, &owned_properties,
+)?;
+let applied = live.apply(&mut store, &publication.transaction)?;
+bounds.apply_changes(&Scene::new(live.stage(), &store), &applied.changes);
+owned_properties = publication.properties; // Only after successful application.
+```
+
+Each producer owns its property manifest at one authored site. Keep the manifest
+with that producer's state and pass it to subsequent preparations at that same
+site. Omitted owned properties, including obsolete `:indices` sidecars, are
+removed from the target layer; weaker opinions can become visible again.
+Unrelated attributes, material relationships and other layers are preserved.
+An existing local declaration with a different type is rejected. A target-layer
+generation guard prevents a prepared update from overwriting intervening edits.
+An explicit type at the mapped authored site governs validation; an unselected
+Mesh branch remains editable while a Cube sibling is selected. Untyped existing
+sites require a composed Mesh. Publication leaves the selected sibling unchanged.
+An unchanged publication has an empty transaction. After reloading producer state,
+restore its manifest or explicitly supply its known owned names before pruning.
+
+Preparation validates the entire snapshot and scans its points/topology/indices,
+even for unchanged updates. It allocates small transaction/property records and
+a derived extent buffer (at most two points). Native owner equality avoids
+element comparison; independently allocated buffers can require O(elements)
+comparison. Producer evaluation, immutable geometry-content hashing and buffer
+pooling remain caller responsibilities.
+
+Publish reusable geometry at its authored source and reference the asset root
+with `instanceable = true`, or place that root through `PointInstancer`.
+Instance-root material overrides and per-instance primvars remain separate from
+shared geometry. Native-instance descendants are read-only proxies and are
+rejected by publication. LayerStack's runtime prototype inventory is read-only;
+it does not expose editable synthetic prototype paths. An authored source site
+is identified by layer and spec path; a `PrototypeId` identifies only the current
+composed snapshot; a producer's geometry-content identity is a separate key it
+defines and maintains. Never persist prototype IDs as asset addresses or hashes.
+
+Feed complete `Changes` reports to bounds and retained consumers. Point-instancer
+prototype dependencies include masked and missing prototypes, so edits, deletion
+and recreation can invalidate them. Clear consumers after losing change history
+or changing scenes. Unchanged source and placement buffers remain shared.
+
+The publisher handles complete **default-time polygon mesh snapshots** and native
+numeric primvars. It removes existing samples on retained owned properties when
+replacing a snapshot. Use schema `_owned_at` / `_shared_at` setters for animation,
+including matching extent samples, and validate cardinality at each sampled time;
+topology-changing intervals require a consumer policy for discontinuities.
+Edit targets map referenced/variant sites and time offsets. The publisher does
+not evaluate Substance graphs, execute `UsdProc` plugins, infer producer ownership
+from composition, deduplicate geometry by content or run renderer adapters.
+
+Run the complete two-producer workflow with:
+
+```sh
+cargo run -p layerstack_examples --example generated_assets -- ./generated-output
+LAYERSTACK_USD_PYTHON=/path/to/usd-python cargo test -p layerstack_conformance --test generated_assets
+cargo bench -p wind_tunnel --bench geometry_publication
+```
+
+The example keeps an editable source under `/Assets` and placements under `/World`;
+consumers select `/World` for placed scene content. Tests reopen all three authored
+layers as USDA and USDC and compare materials, seams, IDs/masks, transforms, bounds
+and offset samples with OpenUSD 26.8. The benchmark measures a 4,096-point,
+7,938-triangle mesh with 100 native references and 100 / 10,000 / 100,000 point
+instances. On the development Apple silicon host, a short Criterion run measured:
+
+| Point instances | Initial publication | Unchanged | Points | Topology | Prototype edit + scatter bounds |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 100 | 3.85 ms | 35.4 µs | 68.2 µs | 53.5 µs | 88.5 µs |
+| 10,000 | 3.85 ms | 34.9 µs | 68.1 µs | 53.4 µs | 357 µs |
+| 100,000 | 3.92 ms | 34.9 µs | 68.2 µs | 53.3 µs | 3.46 ms |
+
+Native references have a different cost. The `native_geometry_publication`
+group holds point instances at 100 and varies native references. At 10,000
+native references, recreating the source measured 2.61 s, unchanged publication
+415 µs, point edits 19.1 ms, topology edits 17.1 ms and prototype edits with bounds
+20.4 ms. This is an explicit initial-release scaling limit: source creation or
+structural replacement can recompose many native occurrences. Prefer
+`PointInstancer` for large scatter populations, and budget native-asset structural
+updates separately. Buffer sharing does not eliminate composition work.
+
+These include validation, planning and live application. Initial publication means
+recreating an absent source in an already populated stage; fixture setup, producer
+evaluation and buffer construction are excluded. Bounds evaluation is included
+only in the last column. The short run used 10 samples, 0.1 s warmup and 1 s target
+measurement per case; these are reference measurements, not latency guarantees.
+The existing `numeric_arrays/schema_points` benchmark fell from about 179 µs to
+22 ns for a million-point dense getter, with pointer-identity tests establishing
+that the improvement comes from retaining storage.
+
 ```rust
 let mut tokens = layerstack::TokenInterner::default();
 let schemas = layerstack_schemas::openusd(&mut tokens);

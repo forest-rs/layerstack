@@ -567,20 +567,6 @@ struct Sites {
     corners: usize,
 }
 
-impl Sites {
-    /// Spec: `pxr/usd/usdGeom/mesh.h:75` — constant: 1; uniform: one
-    /// per face; varying/vertex: one per point; faceVarying: one per face
-    /// corner (<https://openusd.org/dev/api/class_usd_geom_primvar.html>).
-    fn count(self, interpolation: Interpolation) -> usize {
-        match interpolation {
-            Interpolation::Constant => 1,
-            Interpolation::Uniform => self.faces,
-            Interpolation::Varying | Interpolation::Vertex => self.points,
-            Interpolation::FaceVarying => self.corners,
-        }
-    }
-}
-
 fn mesh_prim(mesh: &Mesh<'_>, parent: &str, cx: &Context<'_, '_>) -> Result<Prim, ExportError> {
     let path = format!("{parent}/{}", mesh.name);
     let fail = |problem| ExportError::InvalidMesh {
@@ -949,30 +935,43 @@ fn check_primvar<V>(
     primvar: &Primvar<'_, V>,
     sites: Sites,
 ) -> Result<(), MeshProblem> {
-    let expected = sites.count(primvar.interpolation);
-    let Some(indices) = &primvar.indices else {
-        if value_count != expected {
-            return Err(MeshProblem::PrimvarLength {
-                name: name.into(),
+    let elements = layerstack_schemas::validate_mesh_primvar_cardinality(
+        value_count,
+        1,
+        primvar.interpolation.token(),
+        layerstack_schemas::MeshSites {
+            points: sites.points,
+            faces: sites.faces,
+            corners: sites.corners,
+        },
+        primvar.indices.as_ref().map(|i| i.len()),
+    )
+    .map_err(|error| match error {
+        layerstack_schemas::MeshPublicationError::Cardinality { expected, actual } => {
+            MeshProblem::PrimvarLength {
+                name: if primvar.indices.is_some() {
+                    format!("{name}:indices")
+                } else {
+                    name.into()
+                },
                 expected,
-                actual: value_count,
-            });
+                actual,
+            }
         }
-        return Ok(());
-    };
-    if indices.len() != expected {
-        return Err(MeshProblem::PrimvarLength {
-            name: format!("{name}:indices"),
-            expected,
-            actual: indices.len(),
-        });
-    }
-    if let Some(&index) = indices.iter().find(|&&i| i as usize >= value_count) {
-        return Err(MeshProblem::PrimvarIndexOutOfRange {
-            name: name.into(),
-            index,
-            values: value_count,
-        });
+        _ => unreachable!("known interpolation and element size one"),
+    })?;
+    if let Some(indices) = &primvar.indices {
+        layerstack_schemas::validate_mesh_primvar_indices(indices.iter().copied(), elements)
+            .map_err(|error| match error {
+                layerstack_schemas::MeshPublicationError::Index { index, .. } => {
+                    MeshProblem::PrimvarIndexOutOfRange {
+                        name: name.into(),
+                        index: u32::try_from(index).expect("unsigned input"),
+                        values: value_count,
+                    }
+                }
+                _ => unreachable!("index validation returns index errors"),
+            })?;
     }
     Ok(())
 }

@@ -162,6 +162,15 @@ Recomposition can be scoped to affected prims; edits outside the supported local
 paths can require a full rebuild. Change reports expose the work performed.
 Callbacks and independent change cursors let consumers observe reported edits;
 changes to host storage do not notify the stage automatically.
+[`Layer::set_change_history_budget`] and [`LiveStage::set_change_history_budget`]
+bound authored and composed evidence independently (default: 64 batches and
+1 MiB each). Their `change_history_stats` methods expose retained/allocated
+bytes and cumulative record, eviction and discard work. Oversized reports
+still reach callbacks, but cursor replay returns [`ChangeHistoryError::Expired`].
+That read advances the cursor; rebuild notice-dependent derived state before
+consuming later reports. Missing authored history automatically makes source
+synchronization conservative. Retained queries check current composition
+records independently of cursor replay.
 
 [repo]: https://github.com/forest-rs/layerstack
 [conformance]: https://github.com/forest-rs/layerstack/tree/main/layerstack_conformance

@@ -210,6 +210,25 @@ pub struct PrimPropertyChanges {
 }
 
 impl Changes {
+    pub(crate) fn history_vector_bytes(&self, allocated: bool) -> usize {
+        fn bytes<T>(values: &Vec<T>, allocated: bool) -> usize {
+            (if allocated {
+                values.capacity()
+            } else {
+                values.len()
+            }) * size_of::<T>()
+        }
+        bytes(&self.created, allocated)
+            + bytes(&self.removed, allocated)
+            + bytes(&self.resynced, allocated)
+            + bytes(&self.changed_info_only, allocated)
+            + bytes(&self.property_changes, allocated)
+            + self
+                .property_changes
+                .iter()
+                .map(|p| bytes(&p.fields, allocated))
+                .sum::<usize>()
+    }
     /// Complete changed property fields, or `None` when precision is unknown.
     #[must_use]
     pub fn properties_for(&self, prim: PathId) -> Option<&[PropertyChange]> {

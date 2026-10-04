@@ -3,7 +3,7 @@
 
 //! Bounded, stage-owned composed change evidence.
 
-use alloc::{boxed::Box, collections::VecDeque, sync::Arc, vec::Vec};
+use alloc::{boxed::Box, sync::Arc, vec::Vec};
 
 use crate::{Changes, LayerStore, Stage};
 
@@ -24,7 +24,7 @@ impl ChangeCursor {
 /// Why incremental evidence cannot be replayed for an observer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ChangeHistoryError {
-    /// More batches have passed than the stage retains. Rebuild derived state.
+    /// Required evidence was evicted or exceeded the budget. Rebuild derived state.
     Expired,
     /// The cursor belongs to a different live stage.
     DifferentStage,
@@ -70,7 +70,7 @@ pub(super) struct Journal {
     identity: Arc<()>,
     revision: u64,
     enabled: bool,
-    reports: VecDeque<(u64, Changes)>,
+    reports: crate::change_history::History<(u64, Changes)>,
     callbacks: Vec<(u64, Callback)>,
     next_subscription: u64,
 }
@@ -86,6 +86,15 @@ impl core::fmt::Debug for Journal {
 }
 
 impl Journal {
+    pub(super) fn budget(&self) -> crate::ChangeHistoryBudget {
+        self.reports.budget()
+    }
+    pub(super) fn set_budget(&mut self, budget: crate::ChangeHistoryBudget) {
+        self.reports.set_budget(budget);
+    }
+    pub(super) fn stats(&self) -> crate::ChangeHistoryStats {
+        self.reports.stats()
+    }
     pub(super) fn subscribe(
         &mut self,
         callback: impl FnMut(ChangeNotice<'_>) + Send + Sync + 'static,
@@ -136,10 +145,10 @@ impl Journal {
             .checked_add(1)
             .expect("stage revision exhausted");
         if self.enabled {
-            if self.reports.len() == 64 {
-                self.reports.pop_front();
-            }
-            self.reports.push_back((self.revision, changes.clone()));
+            let revision = self.revision;
+            let bytes = size_of::<(u64, Changes)>() + changes.history_vector_bytes(false);
+            self.reports
+                .record_with(revision, bytes, || (revision, changes.clone()));
         }
         for (_, callback) in &mut self.callbacks {
             callback(ChangeNotice {
@@ -160,11 +169,7 @@ impl Journal {
         }
         let previous = cursor.revision;
         cursor.revision = self.revision;
-        if self
-            .reports
-            .front()
-            .is_some_and(|(first, _)| previous < first - 1)
-        {
+        if previous < self.reports.floor() {
             return Err(ChangeHistoryError::Expired);
         }
         let unread = usize::try_from(self.revision - previous).unwrap_or(usize::MAX);
@@ -172,3 +177,27 @@ impl Journal {
         Ok(self.reports.iter().skip(skip).map(|(_, changes)| changes))
     }
 }
+
+impl crate::change_history::Record for (u64, Changes) {
+    fn revision(&self) -> u64 {
+        self.0
+    }
+    fn bytes(&self) -> usize {
+        size_of::<Self>() + self.1.history_vector_bytes(true)
+    }
+    fn items(&self) -> usize {
+        self.1.created.len()
+            + self.1.removed.len()
+            + self.1.resynced.len()
+            + self.1.changed_info_only.len()
+            + self
+                .1
+                .property_changes
+                .iter()
+                .map(|p| p.fields.len())
+                .sum::<usize>()
+    }
+}
+
+#[cfg(test)]
+mod tests;

@@ -44,7 +44,6 @@ use crate::{
     interner::TokenId,
     layer_stack::LayerStack,
     path::PathId,
-    population::populate,
     prim_index::{ArcKind, FieldKey, Opinion, OpinionKey, OpinionValue, PrimIndex},
     prim_index_graph::{NodeArc, NodeId, PrimIndexGraph, PrimNode},
     relocates::{LiftedSet, Relocations, Walk},
@@ -60,6 +59,8 @@ type SiteSelections = HashMap<PathId, HashMap<TokenId, TokenId>>;
 struct SelectionResolver<'a> {
     fallbacks: &'a VariantFallbacks,
     authored: RefCell<HashMap<StackContext, SiteSelections>>,
+    load_rules: crate::PayloadLoadRules,
+    loadable: RefCell<HashSet<PathId>>,
 }
 
 impl<'a> SelectionResolver<'a> {
@@ -67,7 +68,16 @@ impl<'a> SelectionResolver<'a> {
         Self {
             fallbacks,
             authored: RefCell::new(HashMap::new()),
+            load_rules: crate::PayloadLoadRules::default(),
+            loadable: RefCell::new(HashSet::new()),
         }
+    }
+
+    fn include_payloads(&self, store: &dyn LayerStore, path: PathId, present: bool) -> bool {
+        if present {
+            self.loadable.borrow_mut().insert(path);
+        }
+        self.load_rules.is_loaded(store.paths().resolve(path))
     }
 }
 
@@ -165,20 +175,6 @@ fn normalized_variant_spec_path(
     normalize_forwarded_spec_path(store, &raw, provenance_remap)
 }
 
-/// Composes a stage from a root layer.
-///
-/// This implements:
-/// - Layer stack gathering (layer is stronger than its sublayers)
-/// - Stage population (including prims introduced via references)
-/// - Value resolution (scalar + `ListOp`)
-pub(crate) fn compose_stage(
-    store: &mut dyn LayerStore,
-    root: LayerId,
-    options: StageOptions,
-) -> Stage {
-    compose_stage_with_paths(store, root, options, None)
-}
-
 /// Shares opinion composition and finalization with local namespace updates.
 /// `Some` requires the generation-checked `LocalNamespace` contract: one layer,
 /// no arcs, variants, relocates or instances, and complete authored ancestors.
@@ -189,9 +185,23 @@ pub(crate) fn compose_stage_with_paths(
     options: StageOptions,
     populated: Option<BTreeSet<PathId>>,
 ) -> Stage {
+    compose_stage_selected(store, root, options, populated, false)
+}
+
+/// Exact masks are internal recomposition selections, not USD population masks.
+pub(crate) fn compose_stage_selected(
+    store: &mut dyn LayerStore,
+    root: LayerId,
+    options: StageOptions,
+    populated: Option<BTreeSet<PathId>>,
+    exact_mask: bool,
+) -> Stage {
     // The variant fallbacks every selection is resolved with, passed
     // explicitly to each function that resolves selections.
-    let resolver = &SelectionResolver::new(&options.variant_fallbacks);
+    let resolver = &SelectionResolver {
+        load_rules: options.load_rules.clone(),
+        ..SelectionResolver::new(&options.variant_fallbacks)
+    };
     let local_only = populated.is_some();
     let mut cycles = CycleDetector::new(root);
     let layer_stack = cycles.gather_layer_stack(store, root);
@@ -206,12 +216,14 @@ pub(crate) fn compose_stage_with_paths(
         }
         None => {
             let (relocations, inventory) = cycles.population_state();
-            populate(
+            inventory.load_rules = options.load_rules.clone();
+            crate::population::populate_selected(
                 store,
                 &layer_stack,
                 options.mask.as_ref(),
                 relocations,
                 inventory,
+                exact_mask,
             )
         }
     };
@@ -397,7 +409,7 @@ pub(crate) fn compose_stage_with_paths(
         )
     };
 
-    prune_deactivated(store, &mut prims, &mut children);
+    let (mut inactive, inactive_children) = prune_deactivated(store, &mut prims, &mut children);
 
     // Runs last so the ordering passes above see the populated child lists;
     // removal only drops entries.
@@ -405,7 +417,8 @@ pub(crate) fn compose_stage_with_paths(
         cycles.relocations().is_target(path)
     });
     remove_relocation_sources(store, cycles.relocations(), &mut prims, &mut children);
-    instances.retain(|instance| prims.contains_key(instance));
+    inactive.retain(|prim| prims.contains_key(prim));
+    instances.retain(|instance| prims.contains_key(instance) && !inactive.contains(instance));
     crate::path_expression::anchor_opinions(store, &mut prims);
 
     for (path, prim) in &mut prims {
@@ -429,6 +442,13 @@ pub(crate) fn compose_stage_with_paths(
     let dependencies = dep_builder.map(DependencyBuilder::finish);
     // Only prims of the composed stage report arc errors: population
     // over-approximates, and pruned prims are not part of the stage.
+    let used_layers = cycles.used_layers().iter().copied().collect();
+    let local_layers = layer_stack
+        .layers
+        .iter()
+        .copied()
+        .filter(|id| store.layer(*id).is_some())
+        .collect();
     let errors = cycles
         .into_errors()
         .into_iter()
@@ -437,6 +457,9 @@ pub(crate) fn compose_stage_with_paths(
         .filter(|error| target_error_applies(error, &prims))
         .collect();
     Stage::from_parts(prims, children, options.with_provenance, dependencies)
+        .with_loadable(resolver.loadable.take())
+        .with_layer_inventory(local_layers, used_layers)
+        .with_inactive(inactive, inactive_children)
         .with_composition_errors(errors)
         .with_instances(instances)
         .with_variant_fallbacks(options.variant_fallbacks.clone())
@@ -2420,19 +2443,21 @@ fn is_identity_descendant(
     false
 }
 
-/// Removes deactivated prims and their namespace descendants from the stage.
+/// Retains inactive prims for inspection while removing their descendants.
+/// Active traversal excludes the inactive roots; all traversal can visit them.
+/// OpenUSD `UsdStage::_ComposeSubtreeImpl`; AOUSD Core §11.3.1.
 ///
 /// A prim is deactivated when its strongest `active` opinion across all
 /// contributing sources resolves to `false`. When a prim is deactivated,
-/// both it and all its namespace descendants are removed from the prim index
-/// and children map.
+/// its namespace descendants are removed from the prim index and child map.
+/// The inactive prim itself remains in the index and all-child traversal.
 ///
 /// Spec: AOUSD Core §7.6 (active metadata), §11 (stage population).
 fn prune_deactivated(
     store: &dyn LayerStore,
     prims: &mut HashMap<PathId, PrimIndex>,
     children: &mut HashMap<PathId, Vec<PathId>>,
-) {
+) -> (HashSet<PathId>, HashMap<PathId, Vec<PathId>>) {
     let mut deactivated: Vec<PathId> = Vec::new();
 
     let all_paths: Vec<PathId> = prims.keys().copied().collect();
@@ -2467,7 +2492,7 @@ fn prune_deactivated(
     // and remove them all.
     let mut to_remove: HashSet<PathId> = HashSet::new();
     for &deact_path in &deactivated {
-        to_remove.insert(deact_path);
+        children.remove(&deact_path);
         let deact_resolved = store.paths().resolve(deact_path);
         for &path in &all_paths {
             if path != deact_path && deact_resolved.is_prefix_of(store.paths().resolve(path)) {
@@ -2482,10 +2507,20 @@ fn prune_deactivated(
         children.remove(path);
     }
 
-    // Remove deactivated paths from parent children lists.
-    for child_list in children.values_mut() {
+    let inactive: HashSet<_> = deactivated
+        .into_iter()
+        .filter(|p| prims.contains_key(p))
+        .collect();
+    let mut all_children = HashMap::new();
+    for (&parent, child_list) in children.iter_mut() {
         child_list.retain(|c| !to_remove.contains(c));
+        if child_list.iter().any(|c| inactive.contains(c)) {
+            all_children.insert(parent, child_list.clone());
+            child_list.retain(|c| !inactive.contains(c));
+        }
     }
+    children.retain(|_, list| !list.is_empty());
+    (inactive, all_children)
 }
 
 /// Resolves variant selections considering both the local layer stack and
@@ -2894,6 +2929,7 @@ fn admitted_arcs(
         resolver,
         data_stack,
         remote_path,
+        dest_path,
         &enclosing,
         ArcAnchor::new(anchor, Some(&scope)),
     );
@@ -2909,6 +2945,7 @@ fn arcs_admitted_by(
     resolver: &SelectionResolver<'_>,
     data_stack: &LayerStack,
     remote_path: PathId,
+    dest_path: PathId,
     enclosing: &HashMap<PathId, HashMap<TokenId, TokenId>>,
     anchor: ArcAnchor<'_>,
 ) -> AdmittedArcs {
@@ -2980,6 +3017,9 @@ fn arcs_admitted_by(
     // of each kind; an arc of one node is one arc.
     references = unique(references);
     payloads = unique(payloads);
+    if !resolver.include_payloads(store, dest_path, !payloads.is_empty()) {
+        payloads.clear();
+    }
     let authoring = ArcAuthoring {
         store,
         stack: data_stack,
@@ -5295,6 +5335,8 @@ impl AncestralArcs<'_> {
             self.resolver,
             self.data_stack,
             ancestor,
+            self.stage_host(store, nodes, out, ancestor)
+                .unwrap_or(self.dest_root),
             &enclosing,
             ArcAnchor::new(self.arc_stack, Some(&scope)),
         );
@@ -7581,6 +7623,7 @@ impl LateBranches {
             resolver,
             &arc.remote_stack,
             remote_path,
+            dest,
             &enclosing,
             ArcAnchor::new(arc.anchor, Some(&scope)),
         );
@@ -7693,6 +7736,9 @@ fn add_payload_opinions(
             &selections,
         );
         let all_payloads = unique(payloads.into_iter().chain(branch_payloads).collect());
+        if !resolver.include_payloads(store, dest_root, !all_payloads.is_empty()) {
+            continue;
+        }
         for (arc_list_index, payload) in all_payloads.into_iter().enumerate() {
             let arc_list_index = u16::try_from(arc_list_index).unwrap_or(u16::MAX);
             let namespace_depth =

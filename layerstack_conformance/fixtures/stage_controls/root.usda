@@ -1,0 +1,16 @@
+#usda 1.0
+(
+    subLayers = [@overlay.usda@]
+    defaultPrim = "World"
+)
+def "World" (
+    prepend payload = @payload.usda@</Asset>
+) {
+    def "Local" {}
+}
+def "Reference" (
+    prepend references = @library.usda@</Lib>
+) {}
+def "Other" {
+    def "Child" {}
+}

@@ -1477,11 +1477,11 @@ fn dependency_map_records_specializes_arc() {
     assert_eq!(spec_arc.source, base);
 }
 
-/// Deactivated prims (`active = false`) are excluded from the stage.
+/// Deactivated prims remain inspectable but are excluded from active traversal.
 ///
 /// Spec: AOUSD Core §7.6 (active metadata), §11 (stage population).
 #[test]
-fn deactivated_prim_excluded_from_stage() {
+fn deactivated_prim_retained_but_excluded_from_active_traversal() {
     let mut store = InMemoryStore::default();
 
     let root = store.path("/");
@@ -1503,7 +1503,10 @@ fn deactivated_prim_excluded_from_stage() {
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
 
     assert!(stage.has_prim(p), "active prim should be present");
-    assert!(!stage.has_prim(q), "deactivated prim should be excluded");
+    assert!(stage.has_prim(q), "deactivated prim remains inspectable");
+    assert!(!stage.is_active(q));
+    assert!(!stage.traverse(root).any(|path| path == q));
+    assert!(stage.traverse_all(root).any(|path| path == q));
 }
 
 /// Descendants of a deactivated prim are also excluded.
@@ -1536,7 +1539,11 @@ fn deactivated_prim_descendants_excluded() {
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
 
-    assert!(!stage.has_prim(parent), "deactivated parent excluded");
+    assert!(
+        stage.has_prim(parent),
+        "deactivated parent remains inspectable"
+    );
+    assert!(!stage.is_active(parent));
     assert!(
         !stage.has_prim(child),
         "child of deactivated parent excluded"
@@ -1631,9 +1638,10 @@ fn weaker_active_false_deactivates() {
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
 
+    assert!(stage.has_prim(p), "inactive root remains inspectable");
     assert!(
-        !stage.has_prim(p),
-        "only opinion is active=false; prim should be excluded"
+        !stage.is_active(p),
+        "weaker false remains the strongest active opinion"
     );
 }
 

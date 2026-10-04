@@ -98,7 +98,11 @@ fn include_resyncs(store: &dyn LayerStore, changes: &mut Changes, paths: &[PathI
 ///
 /// Spec: AOUSD Core §9 (layer stacks), §10.3.2.1 and §10.3.2.2
 /// (references and payloads).
-fn participating_layers(store: &dyn LayerStore, root: LayerId) -> HashSet<LayerId> {
+fn participating_layers(
+    store: &dyn LayerStore,
+    root: LayerId,
+    muted: &BTreeSet<LayerId>,
+) -> HashSet<LayerId> {
     fn arc_layers(
         references: &crate::ListOp<crate::Reference>,
         payloads: &crate::ListOp<crate::Reference>,
@@ -116,7 +120,7 @@ fn participating_layers(store: &dyn LayerStore, root: LayerId) -> HashSet<LayerI
     let mut expressions = false;
     let mut pending = alloc::vec![root];
     while let Some(id) = pending.pop() {
-        if id == LayerId::UNRESOLVED || !seen.insert(id) {
+        if id == LayerId::UNRESOLVED || muted.contains(&id) || !seen.insert(id) {
             continue;
         }
         let Some(layer) = store.layer(id) else {
@@ -151,7 +155,21 @@ fn participating_layers(store: &dyn LayerStore, root: LayerId) -> HashSet<LayerI
     // the variables of each layer stack reaching them.
     if expressions {
         for walked in crate::expression_variables::walk(store, root).stacks {
-            seen.extend(walked.stack.layers);
+            if walked
+                .stack
+                .chains
+                .iter()
+                .any(|chain| chain.iter().any(|id| muted.contains(id)))
+            {
+                continue;
+            }
+            seen.extend(
+                walked
+                    .stack
+                    .layers
+                    .into_iter()
+                    .filter(|id| !muted.contains(id)),
+            );
         }
     }
     seen
@@ -205,7 +223,8 @@ pub struct LiveStage {
 
 impl LiveStage {
     /// Performs an initial full composition and builds the dependency graph.
-    pub fn compose(store: &mut dyn LayerStore, root: LayerId, options: StageOptions) -> Self {
+    pub fn compose(store: &mut dyn LayerStore, root: LayerId, mut options: StageOptions) -> Self {
+        options.muted_layers.remove(&root);
         let opts = StageOptions {
             with_dependencies: true,
             ..options.clone()
@@ -237,6 +256,121 @@ impl LiveStage {
         live.reindex_all_sources();
         live.record_generations(store);
         live
+    }
+
+    /// Pending stage-local controls, reflected in the snapshot after
+    /// [`Self::synchronize`] or [`Self::recompose_changes`].
+    #[must_use]
+    pub fn options(&self) -> &StageOptions {
+        &self.options
+    }
+
+    /// Queue an atomic mute/unmute batch. Muting never edits or evicts a layer.
+    /// Root muting and conflicting requests fail without changing any controls.
+    /// A changed batch queues a structural recomposition and its usual notices.
+    /// OpenUSD: `UsdStage::MuteAndUnmuteLayers`.
+    pub fn mute_and_unmute_layers(
+        &mut self,
+        mute: &[LayerId],
+        unmute: &[LayerId],
+    ) -> Result<bool, crate::LayerMuteError> {
+        if mute.contains(&self.root) {
+            return Err(crate::LayerMuteError::RootLayer);
+        }
+        if mute.iter().any(|l| unmute.contains(l)) {
+            return Err(crate::LayerMuteError::ConflictingRequest);
+        }
+        let mut changed = false;
+        for &layer in mute {
+            changed |= self.options.muted_layers.insert(layer);
+        }
+        for layer in unmute {
+            changed |= self.options.muted_layers.remove(layer);
+        }
+        if changed {
+            self.notify_structural_change();
+        }
+        Ok(changed)
+    }
+
+    /// Queue exclusion of a layer and its sublayers from this stage.
+    pub fn mute_layer(&mut self, layer: LayerId) -> Result<bool, crate::LayerMuteError> {
+        self.mute_and_unmute_layers(&[layer], &[])
+    }
+
+    /// Queue restoring a muted layer. Returns false for an already unmuted layer.
+    pub fn unmute_layer(&mut self, layer: LayerId) -> bool {
+        self.mute_and_unmute_layers(&[], &[layer])
+            .expect("unmuting cannot fail")
+    }
+
+    /// Queue a new subtree population mask. None includes the full namespace.
+    pub fn set_population_mask(&mut self, mask: Option<PopulationMask>) -> bool {
+        if self.options.mask == mask {
+            return false;
+        }
+        self.options.mask = mask;
+        self.notify_structural_change();
+        true
+    }
+
+    /// Queue replacement payload inclusion rules without changing stored assets.
+    pub fn set_load_rules(&mut self, rules: crate::PayloadLoadRules) -> bool {
+        if self.options.load_rules == rules {
+            return false;
+        }
+        self.options.load_rules = rules;
+        self.notify_structural_change();
+        true
+    }
+
+    /// Queue loading a payload prim with or without its descendants.
+    /// Required ancestor payloads are included by the effective-rule fold.
+    pub fn load(
+        &mut self,
+        store: &dyn LayerStore,
+        path: PathId,
+        policy: crate::LoadPolicy,
+    ) -> bool {
+        let mut rules = self.options.load_rules.clone();
+        let path = store.paths().resolve(path).clone();
+        if policy == crate::LoadPolicy::WithDescendants {
+            rules.load_with_descendants(path);
+        } else {
+            rules.load_without_descendants(path);
+        }
+        self.set_load_rules(rules)
+    }
+
+    /// Queue unloading payloads at and beneath the composed path.
+    pub fn unload(&mut self, store: &dyn LayerStore, path: PathId) -> bool {
+        let mut rules = self.options.load_rules.clone();
+        rules.unload(store.paths().resolve(path).clone());
+        self.set_load_rules(rules)
+    }
+
+    /// Queue one batch, applying unloads before loads as in OpenUSD.
+    /// Recomposition occurs once when the caller synchronizes the stage.
+    pub fn load_and_unload(
+        &mut self,
+        store: &dyn LayerStore,
+        load: &[PathId],
+        unload: &[PathId],
+        policy: crate::LoadPolicy,
+    ) -> bool {
+        let mut rules = self.options.load_rules.clone();
+        for p in unload {
+            rules.unload(store.paths().resolve(*p).clone());
+        }
+        for p in load {
+            let path = store.paths().resolve(*p).clone();
+            if policy == crate::LoadPolicy::WithDescendants {
+                rules.load_with_descendants(path);
+            } else {
+                rules.load_without_descendants(path);
+            }
+        }
+        self.set_load_rules(rules)
     }
 
     /// Applies `txn` to the layers of `store` (see [`Transaction::apply`])
@@ -595,7 +729,7 @@ impl LiveStage {
 
     /// Records the generations of every layer the stage reads.
     fn record_generations(&mut self, store: &dyn LayerStore) {
-        let mut layers = participating_layers(store, self.root);
+        let mut layers = participating_layers(store, self.root, &self.options.muted_layers);
         layers.extend(self.stage.clip_layers());
         self.generations = layers
             .into_iter()
@@ -617,6 +751,9 @@ impl LiveStage {
     /// Spec: AOUSD Core §12.3.2.1 (sublayer offsets apply to the arcs the
     /// layer authors).
     pub fn notify_layer_edit(&mut self, layer: LayerId) {
+        if self.options.muted_layers.contains(&layer) {
+            return;
+        }
         if let Some(prims) = self.layer_to_prims.get(&layer) {
             for &prim in prims {
                 self.tracker.mark(prim, OPINION_EDIT);
@@ -641,6 +778,9 @@ impl LiveStage {
     /// change and must be reported with
     /// [`notify_structural_change`](Self::notify_structural_change).
     pub fn notify_layer_prim_edits(&mut self, layer: LayerId, prims: &[PathId]) {
+        if self.options.muted_layers.contains(&layer) {
+            return;
+        }
         for &source in prims {
             if let Some(dests) = self.source_to_prims.get(&(layer, source)) {
                 for &prim in dests {
@@ -1104,8 +1244,10 @@ impl LiveStage {
             with_dependencies: true,
             variant_fallbacks: self.options.variant_fallbacks.clone(),
             schemas: self.options.schemas.clone(),
+            load_rules: self.options.load_rules.clone(),
+            muted_layers: self.options.muted_layers.clone(),
         };
-        Stage::compose(store, self.root, scoped_opts)
+        Stage::compose_selected(store, self.root, scoped_opts, true)
     }
 
     /// Recomposes the whole stage and returns every path in the new stage

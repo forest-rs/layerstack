@@ -1,0 +1,5 @@
+#usda 1.0
+over "World" {
+    int detail = 9
+}
+def "FromNested" {}

@@ -1,0 +1,5 @@
+#usda 1.0
+def "A" (
+    active = false
+    prepend payload = @payload.usda@</Asset>
+) {}

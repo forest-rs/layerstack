@@ -6,6 +6,8 @@
 //! Spec: AOUSD Core §11–§12 (stage population and value resolution).
 
 mod explain;
+pub(crate) mod loading;
+pub use loading::{LayerMuteError, LoadPolicy, PayloadLoadRules, PayloadRule};
 mod prototypes;
 pub use prototypes::{CompositionStorage, Prototype, PrototypeId, PrototypePrim};
 pub mod flatten;
@@ -245,10 +247,36 @@ pub struct PropertyDeclaration {
 }
 
 /// Controls partial population.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct PopulationMask {
-    /// Include these prim paths (and their ancestors).
+    /// Include the subtrees rooted at these prim paths, and their ancestors.
+    /// An empty mask includes only the pseudo-root. Selecting `/` includes
+    /// the entire stage. Redundant descendant entries do not change the result.
+    ///
+    /// OpenUSD: `UsdStagePopulationMask::Includes` and `IncludesSubtree`.
     pub include: Vec<PathId>,
+}
+
+impl PopulationMask {
+    /// Whether a path belongs to a selected subtree or is one of its ancestors.
+    /// The pseudo-root is inspectable even for the empty mask.
+    #[must_use]
+    pub fn includes(&self, path: PathId, paths: &crate::PathInterner) -> bool {
+        let path = paths.resolve(path);
+        path.depth() == 0
+            || self.include.iter().any(|p| {
+                let root = paths.resolve(*p);
+                path.is_prefix_of(root) || root.is_prefix_of(path)
+            })
+    }
+
+    /// Whether the complete subtree at this path is selected.
+    #[must_use]
+    pub fn includes_subtree(&self, path: PathId, paths: &crate::PathInterner) -> bool {
+        self.include
+            .iter()
+            .any(|p| paths.resolve(*p).is_prefix_of(paths.resolve(path)))
+    }
 }
 
 /// Options for stage composition and population.
@@ -256,6 +284,14 @@ pub struct PopulationMask {
 pub struct StageOptions {
     /// Optional population mask.
     pub mask: Option<PopulationMask>,
+    /// Stage-local payload inclusion rules. Default construction loads all.
+    /// The host still owns asset loading; composition never performs I/O.
+    pub load_rules: PayloadLoadRules,
+    /// Loaded layer identities whose content and sublayers are excluded.
+    /// The store retains them; other stages remain unaffected. The root layer
+    /// cannot be muted and a root entry here is ignored. Hosts resolve external
+    /// identifiers to stable `LayerId`s before changing these controls.
+    pub muted_layers: alloc::collections::BTreeSet<LayerId>,
     /// Whether resolution APIs return provenance.
     pub with_provenance: bool,
     /// Whether to record dependency edges during composition.
@@ -313,6 +349,12 @@ pub struct StageOptions {
 /// ```
 #[derive(Debug)]
 pub struct Stage {
+    options: StageOptions,
+    loadable: HashSet<PathId>,
+    local_layers: Vec<LayerId>,
+    used_layers: alloc::collections::BTreeSet<LayerId>,
+    inactive: HashSet<PathId>,
+    inactive_children: HashMap<PathId, Vec<PathId>>,
     root_layer: Option<LayerId>,
     clips: crate::value_clips::Catalog,
     prototypes: prototypes::PrototypeTable,
@@ -386,8 +428,27 @@ impl Stage {
     /// the schema queries read the store without mutating it. A masked
     /// composition does this for the prims it composes only.
     pub fn compose(store: &mut dyn LayerStore, root: LayerId, options: StageOptions) -> Self {
+        Self::compose_selected(store, root, options, false)
+    }
+
+    pub(crate) fn compose_selected(
+        store: &mut dyn LayerStore,
+        root: LayerId,
+        mut options: StageOptions,
+        exact_mask: bool,
+    ) -> Self {
+        options.muted_layers.remove(&root);
+        let captured = options.clone();
         let schemas = options.schemas.clone();
-        let mut stage = crate::compose::compose_stage(store, root, options);
+        let mut controlled = loading::ControlledStore {
+            inner: store,
+            root,
+            muted: &captured.muted_layers,
+        };
+        let store: &mut dyn LayerStore = &mut controlled;
+        let mut stage =
+            crate::compose::compose_stage_selected(store, root, options, None, exact_mask);
+        stage.options = captured.clone();
         stage.root_layer = Some(root);
         stage.schemas = schemas;
         stage.prepare_type_info(store);
@@ -402,8 +463,10 @@ impl Stage {
         options: StageOptions,
         paths: alloc::collections::BTreeSet<PathId>,
     ) -> Self {
+        let captured = options.clone();
         let schemas = options.schemas.clone();
         let mut stage = crate::compose::compose_stage_with_paths(store, root, options, Some(paths));
+        stage.options = captured;
         stage.root_layer = Some(root);
         stage.schemas = schemas;
         stage.prepare_type_info(store);
@@ -429,6 +492,14 @@ impl Stage {
             }
         }
         for path in hierarchy {
+            match partial.inactive_children.remove(path) {
+                Some(children) => {
+                    self.inactive_children.insert(*path, children);
+                }
+                None => {
+                    self.inactive_children.remove(path);
+                }
+            }
             match partial.children.remove(path) {
                 Some(children) => {
                     self.children.insert(*path, children);
@@ -452,7 +523,17 @@ impl Stage {
             // Ordinary composition orders before pruning inactive children:
             // invisible names can delimit reorder groups of visible names.
             children.retain(|child| self.prims.contains_key(child));
-            self.children.insert(parent, children);
+            if children.iter().any(|child| self.inactive.contains(child)) {
+                self.inactive_children.insert(parent, children.clone());
+                children.retain(|child| !self.inactive.contains(child));
+            } else {
+                self.inactive_children.remove(&parent);
+            }
+            if children.is_empty() {
+                self.children.remove(&parent);
+            } else {
+                self.children.insert(parent, children);
+            }
         }
         self.prepare_prototypes(store);
     }
@@ -554,7 +635,13 @@ impl Stage {
     }
 
     fn prepare_clips(&mut self, store: &mut dyn LayerStore) {
-        self.clips = crate::value_clips::Catalog::prepare(store, &self.prims, &self.instances);
+        let mut controlled = loading::ControlledStore {
+            inner: store,
+            root: self.root_layer.unwrap_or(LayerId(0)),
+            muted: &self.options.muted_layers,
+        };
+        self.clips =
+            crate::value_clips::Catalog::prepare(&mut controlled, &self.prims, &self.instances);
         if let Some(deps) = &mut self.deps {
             for prim in self.prims.keys().copied() {
                 for (layer, _) in self.clips.source_sites(prim) {
@@ -985,6 +1072,12 @@ impl Stage {
             prims
         };
         Self {
+            options: StageOptions::default(),
+            loadable: HashSet::new(),
+            local_layers: Vec::new(),
+            used_layers: alloc::collections::BTreeSet::new(),
+            inactive: HashSet::new(),
+            inactive_children: HashMap::new(),
             prototypes: prototypes::PrototypeTable::default(),
             root_layer: None,
             clips: crate::value_clips::Catalog::default(),
@@ -998,6 +1091,31 @@ impl Stage {
             schemas: None,
             type_infos: HashMap::new(),
         }
+    }
+
+    pub(crate) fn with_layer_inventory(
+        mut self,
+        local: Vec<LayerId>,
+        used: alloc::collections::BTreeSet<LayerId>,
+    ) -> Self {
+        self.local_layers = local;
+        self.used_layers = used;
+        self
+    }
+
+    pub(crate) fn with_inactive(
+        mut self,
+        inactive: HashSet<PathId>,
+        children: HashMap<PathId, Vec<PathId>>,
+    ) -> Self {
+        self.inactive = inactive;
+        self.inactive_children = children;
+        self
+    }
+
+    pub(crate) fn with_loadable(mut self, loadable: HashSet<PathId>) -> Self {
+        self.loadable = loadable;
+        self
     }
 
     /// Records the variant fallbacks the stage was composed with.
@@ -1052,6 +1170,11 @@ impl Stage {
     ) {
         self.clips.merge_from(partial.clips, recomposed);
         for path in recomposed {
+            if partial.inactive.contains(path) {
+                self.inactive.insert(*path);
+            } else {
+                self.inactive.remove(path);
+            }
             if let Some(mut index) = partial.prims.remove(path) {
                 if let Some(info) = &mut index.type_info {
                     if let Some(shared) =
@@ -2194,7 +2317,69 @@ impl Stage {
     /// Traverses prims in a deterministic preorder.
     /// Borrows child lists lazily; auxiliary storage grows with depth, not fan-out.
     pub fn traverse(&self, root: PathId) -> Traverse<'_> {
-        Traverse::new(self, root)
+        Traverse::new(self, root, false)
+    }
+
+    /// Traverses the populated namespace including inactive prim roots.
+    /// Inactive descendants are unpopulated, so this does not traverse them.
+    /// Spec: AOUSD Core §11.3.1; OpenUSD `UsdStage::TraverseAll`.
+    pub fn traverse_all(&self, root: PathId) -> Traverse<'_> {
+        Traverse::new(self, root, true)
+    }
+
+    /// Whether a populated prim is active. Inactive prim roots remain
+    /// inspectable; their descendants are absent from the snapshot.
+    #[must_use]
+    pub fn is_active(&self, prim: PathId) -> bool {
+        self.has_prim(prim) && !self.inactive.contains(&prim)
+    }
+
+    /// Whether a populated active prim has every ancestor payload included.
+    /// An unloaded payload prim can remain inspectable alongside local children;
+    /// neither is loaded until their required payloads are included.
+    /// Spec: AOUSD Core §10.3.2.7, §11.3; OpenUSD `UsdPrim::IsLoaded`.
+    #[must_use]
+    pub fn is_loaded(&self, prim: PathId, paths: &crate::PathInterner) -> bool {
+        if !self.is_active(prim) {
+            return false;
+        }
+        let mut path = Some(paths.resolve(prim).clone());
+        while let Some(current) = path {
+            if let Some(id) = paths.lookup(&current)
+                && self.loadable.contains(&id)
+                && !self.options.load_rules.is_loaded(&current)
+            {
+                return false;
+            }
+            path = current.parent();
+        }
+        true
+    }
+
+    /// Traversal with the USD default active, loaded, defined and non-abstract
+    /// predicate. Includes the supplied root when it matches, as `traverse` does.
+    /// Use `traverse_all` for inspection and ordinary iterator filtering for
+    /// custom predicates. Spec: AOUSD Core §11; `UsdPrimDefaultPredicate`.
+    pub fn traverse_default<'a>(
+        &'a self,
+        root: PathId,
+        store: &'a dyn LayerStore,
+    ) -> impl Iterator<Item = PathId> + 'a {
+        self.traverse(root).filter(move |p| {
+            self.is_loaded(*p, store.paths())
+                && self.is_defined(*p, store)
+                && !self.is_abstract(*p, store)
+        })
+    }
+
+    /// All direct populated children, including inactive roots, in composed
+    /// order. Instance-proxy traversal follows the same policy as `children_of`.
+    #[must_use]
+    pub fn all_children_of(&self, prim: PathId) -> Option<&[PathId]> {
+        self.inactive_children
+            .get(&prim)
+            .map(|v| v.as_slice())
+            .or_else(|| self.children_of(prim))
     }
 
     /// Borrows the direct children of `prim` in composed traversal order.
@@ -2375,6 +2560,10 @@ impl Stage {
     pub fn resolve_specifier(&self, prim: PathId, store: &dyn LayerStore) -> Option<Specifier> {
         let index = self.prims.get(&prim)?;
         let depth = store.paths().resolve(prim).depth();
+        // The pseudo-root is always defining (OpenUSD `UsdPrim::GetSpecifier`).
+        if depth == 0 {
+            return Some(Specifier::Def);
+        }
         // Whether `node` is reached through an inherit authored at this
         // prim rather than at one of its ancestors (OpenUSD's
         // `PcpIsInheritArc` and `!PcpNodeRef::IsDueToAncestor`).
@@ -2417,20 +2606,48 @@ impl Stage {
 
     /// Returns `true` if the prim is *defined* per §11.5.
     ///
-    /// A prim is defined if its resolved specifier is `def` or `class`
-    /// (i.e. not purely `over`).
+    /// A prim is defined when it and all its ancestors have resolved specifiers
+    /// `def` or `class`. A defined child under an undefining parent is undefining.
+    /// OpenUSD `Usd_PrimData::IsDefined`; AOUSD Core §11.5.
     #[must_use]
     pub fn is_defined(&self, prim: PathId, store: &dyn LayerStore) -> bool {
-        matches!(
-            self.resolve_specifier(prim, store),
-            Some(Specifier::Def) | Some(Specifier::Class)
-        )
+        if !self.has_prim(prim) {
+            return false;
+        }
+        let mut path = Some(store.paths().resolve(prim).clone());
+        while let Some(current) = path {
+            let Some(id) = store.paths().lookup(&current) else {
+                return false;
+            };
+            if !matches!(
+                self.resolve_specifier(id, store),
+                Some(Specifier::Def | Specifier::Class)
+            ) {
+                return false;
+            }
+            path = current.parent();
+        }
+        true
     }
 
-    /// Returns `true` if the prim is *abstract* (specifier resolves to `class`).
+    /// Returns `true` when this prim or one of its ancestors is abstract
+    /// (its resolved specifier is `class`). OpenUSD `Usd_PrimData::IsAbstract`;
+    /// AOUSD Core §11.5.
     #[must_use]
     pub fn is_abstract(&self, prim: PathId, store: &dyn LayerStore) -> bool {
-        matches!(self.resolve_specifier(prim, store), Some(Specifier::Class))
+        if !self.has_prim(prim) {
+            return false;
+        }
+        let mut path = Some(store.paths().resolve(prim).clone());
+        while let Some(current) = path {
+            if let Some(id) = store.paths().lookup(&current)
+                && self.resolve_specifier(id, store) == Some(Specifier::Class)
+            {
+                return true;
+            }
+            path = current.parent();
+        }
+        false
     }
 
     /// Resolves the type name for a composed prim.
@@ -3087,14 +3304,17 @@ pub(crate) fn dictionary_cmp(a: &str, b: &str) -> core::cmp::Ordering {
 pub struct Traverse<'a> {
     stage: &'a Stage,
     root: Option<PathId>,
+    include_inactive: bool,
     stack: Vec<core::slice::Iter<'a, PathId>>,
 }
 
 impl<'a> Traverse<'a> {
-    fn new(stage: &'a Stage, root: PathId) -> Self {
+    fn new(stage: &'a Stage, root: PathId, include_inactive: bool) -> Self {
         Self {
             stage,
-            root: Some(root),
+            root: (stage.has_prim(root) && (include_inactive || stage.is_active(root)))
+                .then_some(root),
+            include_inactive,
             stack: Vec::new(),
         }
     }
@@ -3117,7 +3337,12 @@ impl Iterator for Traverse<'_> {
                 self.stack.pop();
             }
         };
-        if let Some(children) = self.stage.children_of(next)
+        let children = if self.include_inactive {
+            self.stage.all_children_of(next)
+        } else {
+            self.stage.children_of(next)
+        };
+        if let Some(children) = children
             && !children.is_empty()
         {
             self.stack.push(children.iter());
@@ -3232,7 +3457,7 @@ mod tests {
         let root = PathId::from_raw(0);
         let children: Vec<_> = (1..=100_000).map(PathId::from_raw).collect();
         let stage = Stage::from_parts(
-            HashMap::new(),
+            HashMap::from([(root, PrimIndex::new(PrimIndexGraph::default()))]),
             HashMap::from([
                 (root, children.clone()),
                 (PathId::from_raw(1), vec![PathId::from_raw(100_001)]),

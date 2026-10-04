@@ -125,6 +125,23 @@ jobs:
       - name: check layerstack README
         run: cargo rdme --workspace-project=layerstack --heading-base-level=0 --check
 
+  packages:
+    name: release archives
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: install stable toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_STABLE_VER }}
+
+      - name: build and verify release archives
+        run: cargo package ${{ env.RUST_MIN_VER_PKGS }} --locked --all-features
+
+      - name: check archive metadata and license files
+        run: python3 .github/check_packages.py target/package
+
   clippy-stable:
     name: cargo clippy
     runs-on: ${{ matrix.os }}

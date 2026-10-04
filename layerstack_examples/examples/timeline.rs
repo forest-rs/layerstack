@@ -91,6 +91,9 @@ fn main() {
     // Opacity fade-in: a 2-knot Bézier spline from 0.0 to 1.0 over 12 frames.
     // The Bézier tangent handles create a smooth ease (not a linear ramp).
     let fade_in = SplineData {
+        pre_loop_boundary: None,
+        post_loop_boundary: None,
+
         data_type: SplineDataType::Float,
         default_curve_type: CurveType::Bezier,
         // "Held" extrapolation: before the first knot, hold its value (0.0);
@@ -101,6 +104,10 @@ fn main() {
         loop_params: None,
         knots: vec![
             Knot {
+                custom_data: Vec::new(),
+                pre_tan_algorithm: layerstack::spline::TangentAlgorithm::None,
+                post_tan_algorithm: layerstack::spline::TangentAlgorithm::None,
+
                 time: 0.0,
                 value: 0.0, // fully transparent at the start
                 pre_value: None,
@@ -114,6 +121,10 @@ fn main() {
                 post_tan_slope: 0.05, // gentle start (ease-out of zero)
             },
             Knot {
+                custom_data: Vec::new(),
+                pre_tan_algorithm: layerstack::spline::TangentAlgorithm::None,
+                post_tan_algorithm: layerstack::spline::TangentAlgorithm::None,
+
                 time: 12.0,
                 value: 1.0, // fully opaque by frame 12
                 pre_value: None,

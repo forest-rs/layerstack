@@ -196,6 +196,9 @@ fn unmet(result: Result<Flattened, FlattenError>) -> Vec<(Requirement, String, L
 
 fn add_spline(store: &mut InMemoryStore, spec: &mut PrimSpec) {
     let spline = SplineData {
+        pre_loop_boundary: None,
+        post_loop_boundary: None,
+
         data_type: SplineDataType::Double,
         default_curve_type: CurveType::Bezier,
         pre_extrapolation: Extrapolation::Held,
@@ -373,6 +376,10 @@ fn a_spline_through_an_offset_is_retimed() {
             .and_then(|p| Arc::make_mut(&mut p.spec).spline.as_mut())
             .unwrap();
         spline.knots.push(Knot {
+            custom_data: Vec::new(),
+            pre_tan_algorithm: crate::spline::TangentAlgorithm::None,
+            post_tan_algorithm: crate::spline::TangentAlgorithm::None,
+
             time: 2.0,
             value: 1.0,
             pre_value: None,

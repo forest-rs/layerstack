@@ -3400,6 +3400,7 @@ fn spline_to_value(spline: &SplineData, val: f64) -> Value {
         SplineDataType::Double | SplineDataType::Unspecified => Value::Double(val),
         SplineDataType::Float => Value::Float(val as f32),
         SplineDataType::Half => Value::Half(crate::half::from_f64(val)),
+        SplineDataType::TimeCode => Value::TimeCode(val),
     }
 }
 

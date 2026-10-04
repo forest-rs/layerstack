@@ -1052,6 +1052,9 @@ fn auto_manifest_declaration(spec: &PropertySpec, samples: bool) -> PropertySpec
         spec.spline
             .as_ref()
             .map(|spline| crate::spline::SplineData {
+                pre_loop_boundary: None,
+                post_loop_boundary: None,
+
                 data_type: spline.data_type,
                 default_curve_type: crate::spline::CurveType::Bezier,
                 pre_extrapolation: crate::spline::Extrapolation::Held,
@@ -1240,12 +1243,19 @@ mod tests {
             CurveType, Extrapolation, Knot, KnotInterp, SplineData, SplineDataType,
         };
         let source = Arc::new(PropertySpec::attribute().with_spline(SplineData {
+            pre_loop_boundary: None,
+            post_loop_boundary: None,
+
             data_type: SplineDataType::Float,
             default_curve_type: CurveType::Bezier,
             pre_extrapolation: Extrapolation::Held,
             post_extrapolation: Extrapolation::Held,
             loop_params: None,
             knots: vec![Knot {
+                custom_data: Vec::new(),
+                pre_tan_algorithm: crate::spline::TangentAlgorithm::None,
+                post_tan_algorithm: crate::spline::TangentAlgorithm::None,
+
                 time: 0.,
                 value: 7.,
                 pre_value: None,

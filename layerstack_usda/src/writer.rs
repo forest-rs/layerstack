@@ -414,6 +414,10 @@ impl Prim {
                     validate_prim_path(target, &path)?;
                 }
                 validate_layer_offset(arc.offset, &path)?;
+                if key == "payload" && !arc.custom_data.is_empty() {
+                    return Err(WriteError::PayloadCustomData { path: path.clone() });
+                }
+                validate_value(&Value::Dictionary(arc.custom_data.clone()), &path)?;
             }
         }
         validate_order(self.property_order.as_deref(), &path, is_property_name)?;
@@ -634,6 +638,8 @@ pub struct Attribute {
     ///
     /// Spec: AOUSD Core §12.3.3 (spline opinions).
     pub spline: Option<Box<SplineData>>,
+    /// Authored knot dictionaries converted to this writer's value types.
+    pub spline_custom_data: Vec<(f64, Vec<(String, Value)>)>,
     /// Connections (the `connectionPaths` field): a list op of absolute
     /// property paths such as `/Root/Materials/M/Tex.outputs:rgb`. `None`
     /// authors no connections; an explicit empty list blocks weaker ones
@@ -654,6 +660,7 @@ impl Attribute {
             value: Some(value),
             time_samples: None,
             spline: None,
+            spline_custom_data: Vec::new(),
             connections: None,
             metadata: Vec::new(),
         }
@@ -671,6 +678,7 @@ impl Attribute {
             value: None,
             time_samples: None,
             spline: None,
+            spline_custom_data: Vec::new(),
             connections: None,
             metadata: Vec::new(),
         }
@@ -747,7 +755,28 @@ impl Attribute {
             }
         }
         if let Some(spline) = self.spline.as_deref() {
-            let scalar = matches!(self.type_name.as_str(), "double" | "float" | "half");
+            if self
+                .spline_custom_data
+                .iter()
+                .enumerate()
+                .any(|(i, (time, _))| {
+                    !spline.knots.iter().any(|k| k.time == *time)
+                        || self.spline_custom_data[..i].iter().any(|(t, _)| t == time)
+                })
+                || spline.knots.iter().any(|k| {
+                    !k.custom_data.is_empty()
+                        && !self.spline_custom_data.iter().any(|(t, _)| *t == k.time)
+                })
+            {
+                return Err(WriteError::InvalidSplineCustomData { path: path.into() });
+            }
+            for (_, entries) in &self.spline_custom_data {
+                validate_value(&Value::Dictionary(entries.clone()), path)?;
+            }
+            let scalar = matches!(
+                self.type_name.as_str(),
+                "double" | "float" | "half" | "timecode"
+            );
             let increasing = spline
                 .knots
                 .windows(2)
@@ -863,8 +892,7 @@ pub struct SubLayer {
     pub offset: LayerOffset,
 }
 
-/// A reference or payload arc, as authored (`SdfReference` without
-/// `customData`, `SdfPayload`).
+/// A reference or payload arc, as authored (`SdfReference`, `SdfPayload`).
 ///
 /// Written `@asset@<prim path> (offset = ...; scale = ...)`: an internal
 /// arc (no asset) is `<prim path>`, and one that targets the `defaultPrim`
@@ -873,6 +901,8 @@ pub struct SubLayer {
 /// Spec: AOUSD Core §10.3.2.1 (references), §10.3.2.2 (payloads).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Reference {
+    /// Authored reference custom data. Payload arcs require an empty dictionary.
+    pub custom_data: Vec<(String, Value)>,
     /// The asset path, as authored (never a resolved location); `None` for
     /// an internal arc into this layer. When set it is not empty, and has
     /// no `@` or line breaks.
@@ -1203,6 +1233,21 @@ impl<T> ListOp<T> {
 /// Why a [`Document`] could not be written.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum WriteError {
+    /// USDA would regenerate an `AutoEase` tangent and change its stored data.
+    StaleAutoEaseTangent {
+        /// Attribute path.
+        path: String,
+    },
+    /// Payloads cannot carry reference custom data.
+    PayloadCustomData {
+        /// Path of the owning prim.
+        path: String,
+    },
+    /// Knot metadata has duplicate/orphan times or was not converted to writer values.
+    InvalidSplineCustomData {
+        /// Attribute path.
+        path: String,
+    },
     /// A prim name, property name, type name or metadata key is not a valid
     /// identifier (§7.3.3).
     InvalidName {
@@ -1375,6 +1420,16 @@ impl fmt::Display for WriteError {
                     f,
                     "{path}: arc path {target:?} is not an absolute prim path"
                 )
+            }
+            Self::StaleAutoEaseTangent { path } => write!(
+                f,
+                "{path}: USDA would regenerate an authored AutoEase tangent"
+            ),
+            Self::PayloadCustomData { path } => {
+                write!(f, "{path}: payloads cannot carry custom data")
+            }
+            Self::InvalidSplineCustomData { path } => {
+                write!(f, "{path}: invalid or unconverted spline knot metadata")
             }
             Self::InvalidLayerOffset { path } => write!(f, "{path}: layer offset is not finite"),
             Self::EmptyVariantSet { path } => write!(f, "{path}: variant set has no variants"),
@@ -1616,6 +1671,21 @@ fn validate_text_body(body: &Prim, path: &str) -> Result<(), WriteError> {
         {
             return Err(WriteError::KnotCurveType { path: location });
         }
+        if let Some(spline) = attribute.spline.as_deref() {
+            let mut recomputed = spline.clone();
+            crate::spline_text::apply_auto_ease(&mut recomputed);
+            if spline.knots.iter().zip(&recomputed.knots).any(|(a, b)| {
+                (a.pre_tan_algorithm == layerstack::spline::TangentAlgorithm::AutoEase
+                    && (a.pre_tan_width.to_bits() != b.pre_tan_width.to_bits()
+                        || a.pre_tan_slope.to_bits() != b.pre_tan_slope.to_bits()))
+                    || (a.post_tan_algorithm == layerstack::spline::TangentAlgorithm::AutoEase
+                        && (a.post_tan_width.to_bits() != b.post_tan_width.to_bits()
+                            || a.post_tan_slope.to_bits() != b.post_tan_slope.to_bits()))
+            }) {
+                return Err(WriteError::StaleAutoEaseTangent { path: location });
+            }
+        }
+
         for value in attribute.value.iter().chain(
             attribute
                 .time_samples
@@ -2137,8 +2207,51 @@ impl Value {
 
 // ── Text emission ───────────────────────────────────────────────────────
 
-/// Infallible text sink over a validated document. `fmt::Write` for
-/// `String` never fails, so results are discarded deliberately.
+/// Minimum USDA version for authored spline features.
+fn spline_text_version(prim: &Prim) -> u8 {
+    let own = prim
+        .properties
+        .iter()
+        .filter_map(|p| match p {
+            Property::Attribute(a) => a.spline.as_deref(),
+            _ => None,
+        })
+        .map(|s| {
+            if s.pre_loop_boundary.is_some()
+                || s.post_loop_boundary.is_some()
+                || s.data_type == layerstack::spline::SplineDataType::TimeCode
+            {
+                3
+            } else if s.knots.iter().any(|k| {
+                k.pre_tan_algorithm != layerstack::spline::TangentAlgorithm::None
+                    || k.post_tan_algorithm != layerstack::spline::TangentAlgorithm::None
+            }) {
+                1
+            } else {
+                0
+            }
+        })
+        .max()
+        .unwrap_or(0);
+    prim.children
+        .iter()
+        .chain(prim.variant_sets.iter().flat_map(|v| &v.variants))
+        .map(spline_text_version)
+        .fold(own, u8::max)
+}
+
+fn canonical_custom_dictionary(entries: &[(String, Value)]) -> Value {
+    let mut entries = entries.to_vec();
+    entries.sort_by(|a, b| a.0.cmp(&b.0));
+    for (_, value) in &mut entries {
+        if let Value::Dictionary(nested) = value {
+            *value = canonical_custom_dictionary(nested);
+        }
+    }
+    Value::Dictionary(entries)
+}
+
+/// Infallible text sink over a validated document.
 struct Writer<'o> {
     out: &'o mut String,
 }
@@ -2146,7 +2259,8 @@ struct Writer<'o> {
 impl Writer<'_> {
     fn document(&mut self, doc: &Document) {
         // §16.2.18.1: the layer header.
-        self.out.push_str("#usda 1.0\n");
+        let minor = doc.prims.iter().map(spline_text_version).max().unwrap_or(0);
+        self.out.push_str(&alloc::format!("#usda 1.{minor}\n"));
         if doc.default_prim.is_some()
             || !doc.metadata.is_empty()
             || !doc.sublayers.is_empty()
@@ -2427,7 +2541,17 @@ impl Writer<'_> {
             (None, None) => self.out.push_str("<>"),
             (Some(_), None) => {}
         }
-        self.layer_offset(arc.offset);
+        if arc.custom_data.is_empty() {
+            self.layer_offset(arc.offset);
+        } else {
+            self.out.push_str(" (offset = ");
+            self.f64(arc.offset.offset);
+            self.out.push_str("; scale = ");
+            self.f64(arc.offset.scale);
+            self.out.push_str("; customData = ");
+            self.value(&canonical_custom_dictionary(&arc.custom_data), 1);
+            self.out.push(')');
+        }
     }
 
     /// ` (offset = 10; scale = 2)`, leaving out identity parts; nothing for
@@ -2529,7 +2653,17 @@ impl Writer<'_> {
                     _ => Writer { out }.f64(v),
                 }
             };
-            crate::spline_text::write(self.out, &indent, spline, &time, &value);
+            let custom = |out: &mut String, time: f64| {
+                if let Some((_, entries)) = attribute
+                    .spline_custom_data
+                    .iter()
+                    .find(|(t, _)| *t == time)
+                {
+                    out.push_str("; ");
+                    Writer { out }.value(&canonical_custom_dictionary(entries), depth + 1);
+                }
+            };
+            crate::spline_text::write(self.out, &indent, spline, &time, &value, &custom);
             self.indent(depth);
             self.out.push_str("}\n");
         }
@@ -3916,6 +4050,7 @@ over "P" (
                 asset: asset.map(Into::into),
                 prim_path: prim_path.map(Into::into),
                 offset: LayerOffset { offset, scale },
+                custom_data: Vec::new(),
             }
         }
         let mut prim = Prim::def("Xform", "P");
@@ -4066,6 +4201,7 @@ class "C"
                     asset: Some(String::new()),
                     prim_path: None,
                     offset: LayerOffset::IDENTITY,
+                    custom_data: Vec::new(),
                 }]));
             }),
             WriteError::InvalidAssetPath {
@@ -4097,6 +4233,7 @@ class "C"
             asset: Some("./leaves.usda".into()),
             prim_path: None,
             offset: LayerOffset::IDENTITY,
+            custom_data: Vec::new(),
         }]));
         summer.variant_selections = vec![("size".into(), "tall".into())];
         summer.variant_set_names = Some(ListOp::prepend(vec!["size".into()]));

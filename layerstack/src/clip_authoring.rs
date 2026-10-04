@@ -134,6 +134,9 @@ fn animated(property: &PropertySpec) -> bool {
 fn empty_spline(source: &crate::spline::SplineData) -> crate::spline::SplineData {
     use crate::spline::{CurveType, Extrapolation, SplineData};
     SplineData {
+        pre_loop_boundary: None,
+        post_loop_boundary: None,
+
         data_type: source.data_type,
         default_curve_type: CurveType::Bezier,
         pre_extrapolation: Extrapolation::Held,
@@ -1056,6 +1059,9 @@ mod tests {
         let property = a.prims.get_mut(&path).unwrap().property_mut(name).unwrap();
         property.time_samples = None;
         property.spline = Some(crate::spline::SplineData {
+            pre_loop_boundary: None,
+            post_loop_boundary: None,
+
             data_type: crate::spline::SplineDataType::Float,
             default_curve_type: crate::spline::CurveType::Hermite,
             pre_extrapolation: crate::spline::Extrapolation::Linear,

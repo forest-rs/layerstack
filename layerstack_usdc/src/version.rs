@@ -22,9 +22,9 @@
 //! | 0.10 | `pathExpression` values | yes |
 //! | 0.11 | relocates in layer metadata | yes |
 //! | 0.12 | splines (Ts binary format 1) | yes |
-//! | 0.13 | spline tangent algorithms (Ts binary format 2) | yes; the algorithms are validated and dropped, and the tangents OpenUSD stored with them are kept |
+//! | 0.13 | spline tangent algorithms (Ts binary format 2) | yes; algorithms and stored tangents are preserved |
 //! | 0.14 | native array edits (`VtArrayEdit`) | yes, as [`Value::TypedArrayEdit`] |
-//! | 0.15 | spline `loopBoundaryTime` and `GfTimeCode`-valued splines (Ts binary format 3) | the format is read; those two features fail with [`UsdcError::UnsupportedFeature`] |
+//! | 0.15 | spline `loopBoundaryTime` and `GfTimeCode`-valued splines (Ts binary format 3) | yes; boundary times and `TimeCode` values are preserved |
 //!
 //! Value type 60 (`SdfAnimationBlock`) is not tied to a version: OpenUSD
 //! v26.08 writes it without raising the file version. It is read

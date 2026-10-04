@@ -635,6 +635,22 @@ impl EmitCtx<'_> {
                 ctx.convert_attribute_value(value, attr.type_name, (attr.span.start, None))
             })
         });
+        let mut spline = attr.spline.clone();
+        if let Some(data) = &mut spline {
+            for (time, entries) in &attr.spline_custom_data {
+                if let Some(knot) = data.knots.iter_mut().find(|k| k.time == *time) {
+                    knot.custom_data = entries
+                        .iter()
+                        .map(|e| {
+                            (
+                                Arc::from(&*e.key),
+                                self.convert_value(&e.value, e.type_name.unwrap_or("")),
+                            )
+                        })
+                        .collect();
+                }
+            }
+        }
         let mut metadata = Vec::new();
         for entry in &attr.metadata {
             self.emit_metadata_entry(entry, &mut metadata);
@@ -668,8 +684,8 @@ impl EmitCtx<'_> {
         if let Some(samples) = time_samples {
             *spec = core::mem::take(spec).with_time_samples(samples);
         }
-        if let Some(spline) = &attr.spline {
-            spec.spline = Some(spline.clone());
+        if let Some(spline) = spline {
+            spec.spline = Some(*spline);
         }
         if let Some(value) = default {
             spec.default = Some(value);
@@ -980,6 +996,16 @@ impl EmitCtx<'_> {
     }
 
     fn emit_arc_ref(&mut self, arc_ref: &ast::ArcRef<'_>, arc: &str) -> Option<Reference> {
+        let custom_data = arc_ref
+            .custom_data
+            .iter()
+            .map(|e| {
+                (
+                    Arc::from(&*e.key),
+                    self.convert_value(&e.value, e.type_name.unwrap_or("")),
+                )
+            })
+            .collect::<Vec<_>>();
         // Spec: `SdfSchema::IsValidReference` and `IsValidPayload`.
         if let Some(path) = arc_ref.prim_path
             && has_variant_selection(path)
@@ -1020,20 +1046,21 @@ impl EmitCtx<'_> {
                 target,
                 asset: None,
                 layer_offset,
+                custom_data,
             });
         };
         // An asset path that is a variable expression is evaluated during
         // composition, relative to this layer.
         if is_expression(asset) {
-            return Some(Reference::expression(
-                self.layer_id,
-                asset,
-                target,
-                layer_offset,
-            ));
+            return Some(
+                Reference::expression(self.layer_id, asset, target, layer_offset)
+                    .with_custom_data(custom_data),
+            );
         }
         let Some(resolved) = self.resolve_asset(asset) else {
-            return Some(Reference::unresolved(asset, target, layer_offset));
+            return Some(
+                Reference::unresolved(asset, target, layer_offset).with_custom_data(custom_data),
+            );
         };
         if let Some(layer) = resolved.layer {
             self.resolved_layers.push(layer);
@@ -1043,6 +1070,7 @@ impl EmitCtx<'_> {
             target,
             asset: Some(String::from(asset)),
             layer_offset,
+            custom_data,
         })
     }
 

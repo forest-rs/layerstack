@@ -430,6 +430,7 @@ fn reference_prim(name: &str, target: String, attrs: Vec<Attribute>, cx: &Contex
             .push(Metadatum::new("instanceable", Value::Bool(true)));
     }
     prim.references = Some(ListOp::prepend(vec![Reference {
+        custom_data: Vec::new(),
         asset: None,
         prim_path: Some(target),
         offset: LayerOffset::default(),

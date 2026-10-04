@@ -31,20 +31,7 @@ const ROOTS: &[&str] = &[
 
 /// Files that must fail, with the error they report: features of readable
 /// versions that layerstack cannot represent.
-const EXPECTED_ERRORS: &[(&str, UsdcError)] = &[
-    (
-        "layerstack_conformance/fixtures/usdc_versions/spline_loop_boundary.usdc",
-        UsdcError::UnsupportedFeature {
-            feature: "spline loopBoundaryTime",
-        },
-    ),
-    (
-        "layerstack_conformance/fixtures/usdc_versions/spline_time_valued.usdc",
-        UsdcError::UnsupportedFeature {
-            feature: "time-valued spline",
-        },
-    ),
-];
+const EXPECTED_ERRORS: &[(&str, UsdcError)] = &[];
 
 /// A resolver that resolves nothing, so each file is read on its own.
 struct NoAssets;

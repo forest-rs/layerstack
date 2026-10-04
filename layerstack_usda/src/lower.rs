@@ -8,6 +8,7 @@
 //! lives here rather than in the parser.
 
 use alloc::borrow::Cow;
+use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
@@ -458,6 +459,7 @@ impl<'a> LowerCtx<'a> {
         let mut default = None;
         let mut time_samples = None;
         let mut spline = None;
+        let mut spline_custom_data = Vec::new();
         let mut connection = None;
         let mut metadata = Vec::new();
         let mut list_op = ListOpKind::Explicit;
@@ -543,7 +545,17 @@ impl<'a> LowerCtx<'a> {
                     time_samples = Some(self.lower_time_samples(self.node_from(tree, id)));
                 }
                 SyntaxKind::SplineSuffix => {
-                    spline = self.lower_spline(self.node_from(tree, id), type_name, is_array);
+                    let node = self.node_from(tree, id);
+                    if let Some((data, times)) = self.lower_spline(node, type_name, is_array) {
+                        let dictionaries = node
+                            .children_no_trivia()
+                            .filter(|c| c.kind() == SyntaxKind::DictionaryValue)
+                            .collect::<Vec<_>>();
+                        for (time, dictionary) in times.into_iter().zip(dictionaries) {
+                            spline_custom_data.push((time, self.lower_dictionary(dictionary)));
+                        }
+                        spline = Some(Box::new(data));
+                    }
                 }
                 SyntaxKind::ConnectionSuffix => {
                     let targets = self.lower_connection(self.node_from(tree, id));
@@ -569,6 +581,7 @@ impl<'a> LowerCtx<'a> {
             name,
             default,
             time_samples,
+            spline_custom_data,
             spline,
             connection,
             metadata,
@@ -584,13 +597,14 @@ impl<'a> LowerCtx<'a> {
         node: SyntaxNode<'_>,
         type_name: &str,
         is_array: bool,
-    ) -> Option<layerstack::spline::SplineData> {
+    ) -> Option<(layerstack::spline::SplineData, Vec<f64>)> {
         use layerstack::spline::SplineDataType;
         let span = node.span();
         let data_type = match (type_name, is_array) {
             ("double", false) => SplineDataType::Double,
             ("float", false) => SplineDataType::Float,
             ("half", false) => SplineDataType::Half,
+            ("timecode", false) => SplineDataType::TimeCode,
             _ => {
                 self.error(
                     span,
@@ -865,6 +879,7 @@ impl<'a> LowerCtx<'a> {
         let mut asset = None;
         let mut prim_path = None;
         let (mut offset, mut scale) = (None, None);
+        let mut custom_data = Vec::new();
 
         for (kind, id) in &sig {
             match *kind {
@@ -878,12 +893,20 @@ impl<'a> LowerCtx<'a> {
                     let (o, s) = self.lower_layer_offset_params(self.node_from(tree, *id));
                     offset = o;
                     scale = s;
+                    let params = self.node_from(tree, *id);
+                    if let Some(dict) = params
+                        .children_no_trivia()
+                        .find(|c| c.kind() == SyntaxKind::DictionaryValue)
+                    {
+                        custom_data = self.lower_dictionary(dict);
+                    }
                 }
                 _ => {}
             }
         }
 
         ArcRef {
+            custom_data,
             span: node.span(),
             asset,
             prim_path,

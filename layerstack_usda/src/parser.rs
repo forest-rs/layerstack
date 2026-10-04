@@ -466,7 +466,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
                 self.expect(TokenKind::Equals);
                 self.parse_number_tokens();
             } else if self.peek() == Some(TokenKind::Ident) && self.current_text() == "customData" {
-                // Parse and discard per §16.2.17.5.
+                // Retain the typed reference dictionary per §16.2.17.5.
                 self.bump();
                 self.expect(TokenKind::Equals);
                 self.parse_dictionary_value();
@@ -1140,7 +1140,24 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
         self.expect(TokenKind::Equals);
         self.eat_trivia();
         if self.peek() == Some(TokenKind::LeftBrace) {
-            self.skip_value_tokens();
+            self.bump();
+            loop {
+                self.eat_trivia();
+                match self.peek() {
+                    Some(TokenKind::RightBrace) => {
+                        self.bump();
+                        break;
+                    }
+                    Some(TokenKind::LeftBrace) => self.parse_dictionary_value(),
+                    None => {
+                        self.error(self.current_span(), "unterminated spline");
+                        break;
+                    }
+                    _ => {
+                        self.bump();
+                    }
+                }
+            }
         } else {
             let span = self.current_span();
             self.error(span, "expected `{` to begin a spline");

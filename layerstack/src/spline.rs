@@ -10,7 +10,8 @@
 //! Spec: AOUSD Core §12.3.3 (spline opinions), §12.5 (interpolation methods),
 //! §16.3.10.33 (binary encoding).
 
-use alloc::vec::Vec;
+use crate::doc::Value;
+use alloc::{sync::Arc, vec::Vec};
 use core::fmt;
 
 mod queries;
@@ -67,6 +68,8 @@ pub enum Extrapolation {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum SplineDataType {
+    /// Timecode values; values retime with the timeline, slopes remain unchanged.
+    TimeCode = 4,
     /// Not specified (empty spline).
     Unspecified = 0,
     /// 64-bit double.
@@ -81,7 +84,8 @@ pub enum SplineDataType {
 // Loop parameters
 // ---------------------------------------------------------------------------
 
-/// Loop parameters for repeating extrapolation modes (§12.5).
+/// Authored inner-loop parameters (§12.5). These are independent of
+/// extrapolation loops. Numerical queries require inner loops to be baked.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LoopParams {
     /// Start of the prototype region (in time).
@@ -100,12 +104,33 @@ pub struct LoopParams {
 // Knot
 // ---------------------------------------------------------------------------
 
+/// Authored tangent generation algorithm (OpenUSD `TsTangentAlgorithm`).
+/// Evaluation uses the stored tangent; changing an algorithm alone does not
+/// regenerate it. AOUSD Core §12.3.3.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[repr(u8)]
+pub enum TangentAlgorithm {
+    /// No algorithm was authored.
+    #[default]
+    None = 0,
+    /// Manually authored tangent.
+    Custom = 1,
+    /// OpenUSD automatic ease tangent, with its computed tangent stored.
+    AutoEase = 2,
+}
+
 /// A single knot on a spline curve.
 ///
 /// Each knot specifies a time/value pair plus tangent information that
 /// controls the shape of the curve segment to the *next* knot.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Knot {
+    /// Authored knot metadata; it does not affect numerical evaluation.
+    pub custom_data: Vec<(Arc<str>, Value)>,
+    /// Authored incoming tangent algorithm.
+    pub pre_tan_algorithm: TangentAlgorithm,
+    /// Authored outgoing tangent algorithm.
+    pub post_tan_algorithm: TangentAlgorithm,
     /// Time position of this knot.
     pub time: f64,
     /// Value at this knot (approaching from the right, or single-valued).
@@ -143,6 +168,10 @@ pub struct Knot {
 /// plus extrapolation behavior outside the knot range.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SplineData {
+    /// Optional knot time ending the pre-extrapolation loop prototype.
+    pub pre_loop_boundary: Option<f64>,
+    /// Optional knot time starting the post-extrapolation loop prototype.
+    pub post_loop_boundary: Option<f64>,
     /// Numeric precision of knot values.
     pub data_type: SplineDataType,
     /// Default curve type for segments.
@@ -151,10 +180,29 @@ pub struct SplineData {
     pub pre_extrapolation: Extrapolation,
     /// Extrapolation mode after the last knot.
     pub post_extrapolation: Extrapolation,
-    /// Optional loop parameters for repeating extrapolation.
+    /// Optional inner-loop parameters; preserved but require baking to evaluate.
     pub loop_params: Option<LoopParams>,
     /// Knots sorted by time.
     pub knots: Vec<Knot>,
+}
+
+pub(super) struct LoopMapping {
+    pub time: f64,
+    pub pre: bool,
+    pub offset: f64,
+    pub sign: f64,
+    pub held: bool,
+}
+impl LoopMapping {
+    fn identity(time: f64, pre: bool) -> Self {
+        Self {
+            time,
+            pre,
+            offset: 0.,
+            sign: 1.,
+            held: false,
+        }
+    }
 }
 
 impl SplineData {
@@ -163,7 +211,8 @@ impl SplineData {
     /// the retimed spline at that time. Knot times and inner-loop
     /// prototype times are mapped; tangent widths scale; slopes, of the
     /// knots and of sloped extrapolation, divide by the scale. Values are
-    /// unchanged. `None` for a scale that is not positive, which would
+    /// unchanged, except `TimeCode` values also scale and shift; their slopes do
+    /// not change. Metadata and tangent algorithms remain authored. `None` for a scale that is not positive, which would
     /// reverse the spline.
     ///
     /// OpenUSD: `Ts_TypedSplineData::ApplyOffsetAndScale`
@@ -175,12 +224,14 @@ impl SplineData {
     #[must_use]
     pub fn retimed(&self, offset: crate::doc::LayerOffset) -> Option<Self> {
         let (shift, scale) = (offset.offset, offset.scale);
-        if scale <= 0.0 || !scale.is_finite() {
+        if scale <= 0.0 || !scale.is_finite() || !shift.is_finite() {
             return None;
         }
         let time = |t: f64| t * scale + shift;
         let slope = |e: Extrapolation| match e {
-            Extrapolation::Sloped(s) => Extrapolation::Sloped(s / scale),
+            Extrapolation::Sloped(s) if self.data_type != SplineDataType::TimeCode => {
+                Extrapolation::Sloped(s / scale)
+            }
             other => other,
         };
         let loop_params = self.loop_params.map(|mut lp| {
@@ -197,12 +248,34 @@ impl SplineData {
                 time: time(knot.time),
                 pre_tan_width: knot.pre_tan_width * scale,
                 post_tan_width: knot.post_tan_width * scale,
-                pre_tan_slope: knot.pre_tan_slope / scale,
-                post_tan_slope: knot.post_tan_slope / scale,
+                value: if self.data_type == SplineDataType::TimeCode {
+                    time(knot.value)
+                } else {
+                    knot.value
+                },
+                pre_value: knot.pre_value.map(|v| {
+                    if self.data_type == SplineDataType::TimeCode {
+                        time(v)
+                    } else {
+                        v
+                    }
+                }),
+                pre_tan_slope: if self.data_type == SplineDataType::TimeCode {
+                    knot.pre_tan_slope
+                } else {
+                    knot.pre_tan_slope / scale
+                },
+                post_tan_slope: if self.data_type == SplineDataType::TimeCode {
+                    knot.post_tan_slope
+                } else {
+                    knot.post_tan_slope / scale
+                },
                 ..knot.clone()
             })
             .collect();
         Some(Self {
+            pre_loop_boundary: self.pre_loop_boundary.map(time),
+            post_loop_boundary: self.post_loop_boundary.map(time),
             pre_extrapolation: slope(self.pre_extrapolation),
             post_extrapolation: slope(self.post_extrapolation),
             loop_params,
@@ -213,15 +286,44 @@ impl SplineData {
 
     /// Evaluate the spline at the given time, returning the interpolated value.
     ///
-    /// Returns `None` for empty splines or `Block` extrapolation regions.
+    /// Returns `None` for empty/blocked regions, inner loops, regressive Bézier
+    /// segments, nonfinite queries, or 2^53 or more extrapolation periods.
+    /// Use [`Self::evaluate_checked`] for errors.
     ///
     /// Spec: §12.5 (interpolation methods).
     #[must_use]
     pub fn evaluate(&self, time: f64) -> Option<f64> {
-        if self.knots.is_empty() || !time.is_finite() {
+        if self.knots.is_empty()
+            || !time.is_finite()
+            || self
+                .loop_params
+                .is_some_and(|lp| lp.proto_end > lp.proto_start)
+        {
             return None;
         }
+        let mapping = self.map_extrapolation(time, false).ok()??;
+        self.evaluate_mapped(mapping)
+    }
 
+    pub(super) fn evaluate_mapped(&self, mapping: LoopMapping) -> Option<f64> {
+        let value = if mapping.held {
+            Some(if mapping.pre {
+                self.knots[0].pre_value.unwrap_or(self.knots[0].value)
+            } else {
+                self.knots.last()?.value
+            })
+        } else if mapping.pre {
+            self.pre_value_unlooped(mapping.time)
+        } else {
+            self.evaluate_unlooped(mapping.time)
+        };
+        value.map(|v| v + mapping.offset)
+    }
+
+    pub(super) fn evaluate_unlooped(&self, time: f64) -> Option<f64> {
+        if self.knots.is_empty() {
+            return None;
+        }
         let first = &self.knots[0];
         let last = &self.knots[self.knots.len() - 1];
 
@@ -283,6 +385,11 @@ impl SplineData {
             // OpenUSD evaluates every segment with the spline's curve type
             // (`_Interpolate` in `pxr/base/ts/eval.cpp`); a knot's own curve
             // type is deprecated and never read.
+            KnotInterp::Curve
+                if self.default_curve_type == CurveType::Bezier && queries::regressive(k0, k1) =>
+            {
+                None
+            }
             KnotInterp::Curve => match self.default_curve_type {
                 CurveType::Bezier => self.eval_bezier(k0, k1, time),
                 CurveType::Hermite => Some(self.eval_hermite(k0, k1, time)),
@@ -418,7 +525,7 @@ impl SplineData {
                 Some(first.pre_value.unwrap_or(first.value) + slope * dt)
             }
             Extrapolation::LoopRepeat | Extrapolation::LoopReset | Extrapolation::LoopOscillate => {
-                self.extrapolate_loop_pre(time)
+                None // Mapping is resolved before unlooped evaluation.
             }
         }
     }
@@ -439,95 +546,108 @@ impl SplineData {
                 Some(last.value + slope * dt)
             }
             Extrapolation::LoopRepeat | Extrapolation::LoopReset | Extrapolation::LoopOscillate => {
-                self.extrapolate_loop_post(time)
+                None // Mapping is resolved before unlooped evaluation.
             }
         }
     }
 
-    /// Loop-based pre-extrapolation.
-    fn extrapolate_loop_pre(&self, time: f64) -> Option<f64> {
-        let params = self.loop_params.as_ref()?;
-        let period = params.proto_end - params.proto_start;
-        if period <= 0.0 {
-            return Some(self.knots[0].pre_value.unwrap_or(self.knots[0].value));
-        }
-
-        let dt = params.proto_start - time;
-        let cycles = ceil_f64(dt / period);
-        let loop_count = if params.num_pre_loops > 0 {
-            cycles.min(params.num_pre_loops as f64)
+    /// Resolves an extrapolation loop without copying knots or expanding loops.
+    /// AOUSD Core §12.5; OpenUSD `ts/eval.cpp::_LoopResolver::_DoExtrap`.
+    pub(super) fn map_extrapolation(
+        &self,
+        time: f64,
+        pre: bool,
+    ) -> Result<Option<LoopMapping>, SplineQueryError> {
+        let Some(first) = self.knots.first() else {
+            return Ok(None);
+        };
+        let last = self.knots.last().expect("nonempty");
+        let is_pre = time < first.time || (time == first.time && pre);
+        let is_post = time > last.time || (time == last.time && !pre);
+        let (mode, boundary) = if is_pre {
+            (self.pre_extrapolation, self.pre_loop_boundary)
+        } else if is_post {
+            (self.post_extrapolation, self.post_loop_boundary)
         } else {
-            cycles
+            return Ok(Some(LoopMapping::identity(time, pre)));
         };
-
-        let (mapped_time, value_offset) = match self.pre_extrapolation {
-            Extrapolation::LoopRepeat => {
-                let rem = ((time - params.proto_start) % period + period) % period;
-                (params.proto_start + rem, -loop_count * params.value_offset)
-            }
-            Extrapolation::LoopReset => {
-                let rem = ((time - params.proto_start) % period + period) % period;
-                (params.proto_start + rem, 0.0)
-            }
-            Extrapolation::LoopOscillate => {
-                let full_cycle = period * 2.0;
-                let rem = ((time - params.proto_start) % full_cycle + full_cycle) % full_cycle;
-                if rem > period {
-                    (
-                        params.proto_end - (rem - period),
-                        -loop_count * params.value_offset,
-                    )
-                } else {
-                    (params.proto_start + rem, -loop_count * params.value_offset)
-                }
-            }
-            _ => return None,
-        };
-
-        self.evaluate_inner(mapped_time).map(|v| v + value_offset)
-    }
-
-    /// Loop-based post-extrapolation.
-    fn extrapolate_loop_post(&self, time: f64) -> Option<f64> {
-        let params = self.loop_params.as_ref()?;
-        let period = params.proto_end - params.proto_start;
-        if period <= 0.0 {
-            return Some(self.knots[self.knots.len() - 1].value);
+        if !matches!(
+            mode,
+            Extrapolation::LoopRepeat | Extrapolation::LoopReset | Extrapolation::LoopOscillate
+        ) {
+            return Ok(Some(LoopMapping::identity(time, pre)));
         }
-
-        let dt = time - params.proto_end;
-        let cycles = ceil_f64(dt / period);
-        let loop_count = if params.num_post_loops > 0 {
-            cycles.min(params.num_post_loops as f64)
+        let boundary_index = match boundary
+            .map(|b| self.knots.binary_search_by(|k| k.time.total_cmp(&b)))
+            .transpose()
+        {
+            Ok(index) => index,
+            Err(_) => return Ok(None),
+        };
+        let (start, end) = if is_pre {
+            (first, boundary_index.map_or(last, |i| &self.knots[i]))
         } else {
-            cycles
+            (boundary_index.map_or(first, |i| &self.knots[i]), last)
         };
-
-        let (mapped_time, value_offset) = match self.post_extrapolation {
-            Extrapolation::LoopRepeat => {
-                let rem = (time - params.proto_start) % period;
-                (params.proto_start + rem, loop_count * params.value_offset)
-            }
-            Extrapolation::LoopReset => {
-                let rem = (time - params.proto_start) % period;
-                (params.proto_start + rem, 0.0)
-            }
-            Extrapolation::LoopOscillate => {
-                let full_cycle = period * 2.0;
-                let rem = (time - params.proto_start) % full_cycle;
-                if rem > period {
-                    (
-                        params.proto_end - (rem - period),
-                        loop_count * params.value_offset,
-                    )
+        let period = end.time - start.time;
+        if period == 0. {
+            return Ok(Some(LoopMapping {
+                time: if is_pre { first.time } else { last.time },
+                pre: is_pre,
+                held: true,
+                offset: 0.,
+                sign: 1.,
+            }));
+        }
+        if period < 0. || !period.is_finite() {
+            return Err(SplineQueryError::InvalidInput);
+        }
+        let distance = if is_pre {
+            first.time - time
+        } else {
+            time - last.time
+        };
+        let ratio = distance / period;
+        if !ratio.is_finite() || ratio >= 9_007_199_254_740_992. {
+            // f64 cannot distinguish adjacent cycles beyond this range.
+            return Err(SplineQueryError::UnsupportedLoopRange);
+        }
+        let rounded = ceil_f64(ratio);
+        let boundary = rounded == ratio;
+        let short = boundary && ((is_pre && !pre) || (is_post && pre));
+        let iterations = if short {
+            rounded
+        } else if boundary {
+            rounded + 1.
+        } else {
+            rounded
+        };
+        let hop = if is_pre { iterations } else { -iterations };
+        let mut mapped = time + hop * period;
+        let mut location_pre = pre;
+        let mut sign = 1.;
+        let mut offset = 0.;
+        if mode == Extrapolation::LoopRepeat {
+            let value = |k: &Knot| {
+                if is_pre {
+                    k.pre_value.unwrap_or(k.value)
                 } else {
-                    (params.proto_start + rem, loop_count * params.value_offset)
+                    k.value
                 }
-            }
-            _ => return None,
-        };
-
-        self.evaluate_inner(mapped_time).map(|v| v + value_offset)
+            };
+            offset = -hop * (value(end) - value(start));
+        } else if mode == Extrapolation::LoopOscillate && iterations % 2. != 0. {
+            mapped = start.time + (end.time - mapped);
+            location_pre = !pre;
+            sign = -1.;
+        }
+        Ok(Some(LoopMapping {
+            time: mapped.clamp(start.time, end.time),
+            pre: location_pre,
+            offset,
+            sign,
+            held: false,
+        }))
     }
 }
 
@@ -547,6 +667,7 @@ impl fmt::Display for SplineDataType {
             Self::Double => f.write_str("Double"),
             Self::Float => f.write_str("Float"),
             Self::Half => f.write_str("Half"),
+            Self::TimeCode => f.write_str("TimeCode"),
         }
     }
 }
@@ -618,6 +739,9 @@ mod tests {
     #[test]
     fn retimed_splines_evaluate_at_mapped_times() {
         let spline = SplineData {
+            pre_loop_boundary: None,
+            post_loop_boundary: None,
+
             data_type: SplineDataType::Double,
             default_curve_type: CurveType::Bezier,
             pre_extrapolation: Extrapolation::Sloped(0.5),
@@ -625,6 +749,10 @@ mod tests {
             loop_params: None,
             knots: vec![
                 Knot {
+                    custom_data: Vec::new(),
+                    pre_tan_algorithm: TangentAlgorithm::None,
+                    post_tan_algorithm: TangentAlgorithm::None,
+
                     time: 0.0,
                     value: 1.0,
                     pre_value: None,
@@ -638,6 +766,10 @@ mod tests {
                     post_tan_slope: 1.0,
                 },
                 Knot {
+                    custom_data: Vec::new(),
+                    pre_tan_algorithm: TangentAlgorithm::None,
+                    post_tan_algorithm: TangentAlgorithm::None,
+
                     time: 8.0,
                     value: 3.0,
                     pre_value: None,
@@ -681,6 +813,9 @@ mod tests {
     /// Helper to build a simple spline with given knots.
     fn simple_spline(knots: Vec<Knot>) -> SplineData {
         SplineData {
+            pre_loop_boundary: None,
+            post_loop_boundary: None,
+
             data_type: SplineDataType::Double,
             default_curve_type: CurveType::Bezier,
             pre_extrapolation: Extrapolation::Held,
@@ -692,6 +827,10 @@ mod tests {
 
     fn linear_knot(time: f64, value: f64) -> Knot {
         Knot {
+            custom_data: Vec::new(),
+            pre_tan_algorithm: TangentAlgorithm::None,
+            post_tan_algorithm: TangentAlgorithm::None,
+
             time,
             value,
             pre_value: None,
@@ -708,6 +847,10 @@ mod tests {
 
     fn held_knot(time: f64, value: f64) -> Knot {
         Knot {
+            custom_data: Vec::new(),
+            pre_tan_algorithm: TangentAlgorithm::None,
+            post_tan_algorithm: TangentAlgorithm::None,
+
             time,
             value,
             pre_value: None,
@@ -819,6 +962,10 @@ mod tests {
         // Hermite with zero slopes → should still interpolate linearly
         // when slopes are set to match the linear slope.
         let k0 = Knot {
+            custom_data: Vec::new(),
+            pre_tan_algorithm: TangentAlgorithm::None,
+            post_tan_algorithm: TangentAlgorithm::None,
+
             time: 0.0,
             value: 0.0,
             pre_value: None,
@@ -832,6 +979,10 @@ mod tests {
             post_tan_slope: 1.0,
         };
         let k1 = Knot {
+            custom_data: Vec::new(),
+            pre_tan_algorithm: TangentAlgorithm::None,
+            post_tan_algorithm: TangentAlgorithm::None,
+
             time: 10.0,
             value: 10.0,
             pre_value: None,
@@ -854,6 +1005,10 @@ mod tests {
         // Bézier with tangent widths set to 1/3 of the span and slope=1
         // should produce a straight line y=x.
         let k0 = Knot {
+            custom_data: Vec::new(),
+            pre_tan_algorithm: TangentAlgorithm::None,
+            post_tan_algorithm: TangentAlgorithm::None,
+
             time: 0.0,
             value: 0.0,
             pre_value: None,
@@ -867,6 +1022,10 @@ mod tests {
             post_tan_slope: 1.0,
         };
         let k1 = Knot {
+            custom_data: Vec::new(),
+            pre_tan_algorithm: TangentAlgorithm::None,
+            post_tan_algorithm: TangentAlgorithm::None,
+
             time: 10.0,
             value: 10.0,
             pre_value: None,
@@ -894,6 +1053,10 @@ mod tests {
         let s = simple_spline(vec![
             linear_knot(0.0, 0.0),
             Knot {
+                custom_data: Vec::new(),
+                pre_tan_algorithm: TangentAlgorithm::None,
+                post_tan_algorithm: TangentAlgorithm::None,
+
                 time: 5.0,
                 value: 10.0,
                 pre_value: Some(5.0),

@@ -201,12 +201,14 @@ impl<T> ListOp<T> {
 
 /// An `SdfReference` or `SdfPayload`: an authored asset path (empty for an
 /// internal arc), a prim path (empty for the `defaultPrim`) and a layer
-/// offset. A reference's `customData` is written empty.
+/// offset and a reference's authored `customData`. Payloads have no custom data.
 ///
 /// Spec: AOUSD Core §10.3.2.1 (references), §10.3.2.2 (payloads),
 /// §16.3.10 (reference and payload encoding).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Reference {
+    /// Authored reference custom data; payload arcs require an empty dictionary.
+    pub custom_data: Vec<(String, Value)>,
     /// The asset path as authored; empty for an internal arc.
     pub asset: String,
     /// An absolute prim path, or empty for the target layer's
@@ -363,7 +365,10 @@ pub enum Value {
     /// `TsSpline` (the `spline` field); requires crate version 0.12.0.
     ///
     /// Spec: AOUSD Core §16.3.10.33 (spline encoding).
-    Spline(layerstack::spline::SplineData),
+    Spline(
+        layerstack::spline::SplineData,
+        Vec<(f64, Vec<(String, Self)>)>,
+    ),
 }
 
 /// Serializes `specs` as a USDC file.

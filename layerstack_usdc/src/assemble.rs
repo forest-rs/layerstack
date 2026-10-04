@@ -1116,7 +1116,7 @@ impl<'a> AssembleCtx<'a> {
                 Value::array(vals)
             }
             CrateValue::RelocatesMap(_) => Value::Null,
-            CrateValue::Spline(_) => {
+            CrateValue::Spline(..) => {
                 // Splines are handled as FieldValue::Spline, not plain values.
                 Value::Null
             }
@@ -1280,7 +1280,7 @@ impl<'a> AssembleCtx<'a> {
                 self.tokens.intern("private"),
             ))),
             CrateValue::TimeSamples(_)
-            | CrateValue::Spline(_)
+            | CrateValue::Spline(..)
             | CrateValue::VariantSelectionMap(_)
             | CrateValue::RelocatesMap(_)
             | CrateValue::Specifier(_)
@@ -1318,7 +1318,24 @@ impl<'a> AssembleCtx<'a> {
                         .collect();
                     spec.time_samples = Some(samples);
                 }
-                ("spline", Some(CrateValue::Spline(spline))) => spec.spline = Some(spline.clone()),
+                ("spline", Some(CrateValue::Spline(spline, dictionaries))) => {
+                    let mut spline = spline.clone();
+                    for (time, entries) in dictionaries {
+                        if let Some(knot) = spline.knots.iter_mut().find(|k| k.time == *time) {
+                            knot.custom_data = entries
+                                .iter()
+                                .map(|(key, value)| {
+                                    (Arc::from(key.as_str()), self.convert_crate_value(value))
+                                })
+                                .collect();
+                        } else {
+                            return Err(UsdcError::Inconsistent {
+                                message: "custom data for a missing spline knot",
+                            });
+                        }
+                    }
+                    spec.spline = Some(spline);
+                }
                 ("connectionPaths", _) => {
                     spec.targets = Some(self.convert_connection_value(value)?);
                 }
@@ -1638,6 +1655,7 @@ impl<'a> AssembleCtx<'a> {
             let mut prim_path = String::new();
             let mut layer_offset_val = 0.0_f64;
             let mut layer_scale_val = 1.0_f64;
+            let mut custom_data = Vec::new();
 
             for (key, val) in entries {
                 match key.as_str() {
@@ -1654,6 +1672,11 @@ impl<'a> AssembleCtx<'a> {
                     "layerOffset" => {
                         if let CrateValue::Double(v) = val {
                             layer_offset_val = *v;
+                        }
+                    }
+                    "customData" => {
+                        if let Value::Dictionary(entries) = self.convert_crate_value(val) {
+                            custom_data = entries;
                         }
                     }
                     "layerScale" => {
@@ -1688,20 +1711,22 @@ impl<'a> AssembleCtx<'a> {
                     target,
                     asset: None,
                     layer_offset,
+                    custom_data,
                 });
             }
             // An asset path that is a variable expression is evaluated
             // during composition, relative to this layer.
             if is_expression(&asset_path) {
-                return Some(Reference::expression(
-                    self.layer_id,
-                    asset_path,
-                    target,
-                    layer_offset,
-                ));
+                return Some(
+                    Reference::expression(self.layer_id, asset_path, target, layer_offset)
+                        .with_custom_data(custom_data),
+                );
             }
             let Some(resolved) = self.resolve_asset(&asset_path) else {
-                return Some(Reference::unresolved(asset_path, target, layer_offset));
+                return Some(
+                    Reference::unresolved(asset_path, target, layer_offset)
+                        .with_custom_data(custom_data),
+                );
             };
             if let Some(layer) = resolved.layer {
                 self.resolved_layers.push(layer);
@@ -1711,6 +1736,7 @@ impl<'a> AssembleCtx<'a> {
                 target,
                 asset: Some(asset_path),
                 layer_offset,
+                custom_data,
             })
         } else {
             None

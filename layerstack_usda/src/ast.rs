@@ -13,6 +13,7 @@
 //! [`PrimSpec`](layerstack::PrimSpec) values.
 
 use alloc::borrow::Cow;
+use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
 
@@ -175,7 +176,9 @@ pub struct Attribute<'a> {
     /// `.timeSamples = { ... }`
     pub time_samples: Option<Vec<TimeSample<'a>>>,
     /// `.spline = { ... }`
-    pub spline: Option<layerstack::spline::SplineData>,
+    pub spline: Option<Box<layerstack::spline::SplineData>>,
+    /// Authored typed dictionaries keyed by knot time.
+    pub spline_custom_data: Vec<(f64, Vec<DictionaryEntry<'a>>)>,
     /// `.connect = ...` / `prepend ... .connect = ...`
     pub connection: Option<Connection<'a>>,
     /// Attribute metadata block.
@@ -402,6 +405,8 @@ pub struct ListOpArc<'a> {
 /// A composition arc reference (used by references and payloads).
 #[derive(Debug)]
 pub struct ArcRef<'a> {
+    /// Authored reference custom data.
+    pub custom_data: Vec<DictionaryEntry<'a>>,
     /// Source span of the arc entry.
     pub span: Span,
     /// Optional asset path.

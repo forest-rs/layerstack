@@ -141,7 +141,7 @@ impl OpinionValue {
             Self::Property(spec) => spec
                 .default
                 .as_ref()
-                .filter(|value| **value != Value::AnimationBlock),
+                .filter(|value| !matches!(value, Value::AnimationBlock)),
         }
     }
 

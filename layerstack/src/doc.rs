@@ -221,7 +221,10 @@ pub enum Value {
 
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
-        if let (Some(a), Some(b)) = (self.array_ref(), other.array_ref()) {
+        if matches!(self, Self::Array(_) | Self::TypedArray(_))
+            && matches!(other, Self::Array(_) | Self::TypedArray(_))
+            && let (Some(a), Some(b)) = (self.array_ref(), other.array_ref())
+        {
             // No elements carry a logical kind in content equality. Storage
             // kind still matters for typed reads, writing and authored guards.
             if a.is_empty() && b.is_empty() {
@@ -492,7 +495,7 @@ impl Value {
     pub fn array_ref(&self) -> Option<crate::ArrayRef<'_>> {
         match self {
             Self::Array(values) => Some(crate::ArrayRef::Values(values)),
-            Self::TypedArray(values) => Some(crate::ArrayRef::Typed(values)),
+            Self::TypedArray(values) => values.try_materialize().ok().map(crate::ArrayRef::Typed),
             _ => None,
         }
     }

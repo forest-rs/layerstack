@@ -169,6 +169,13 @@ pub enum SaveError {
     },
     /// The writers' shared validation rejects the lowered document.
     Document(WriteError),
+    /// A selected retained array could not decode; no output was written.
+    ArrayRead {
+        /// Authored value location.
+        path: String,
+        /// Cached source failure.
+        error: layerstack::ArrayReadError,
+    },
 }
 
 impl fmt::Display for SaveError {
@@ -179,6 +186,7 @@ impl fmt::Display for SaveError {
             }
             Self::Invalid { path, problem } => write!(f, "{path}: {problem}"),
             Self::Document(e) => write!(f, "{e}"),
+            Self::ArrayRead { path, error } => write!(f, "{path}: {error}"),
         }
     }
 }
@@ -907,7 +915,16 @@ impl Lowering<'_> {
                     .collect::<Result<_, SaveError>>()?,
             ),
             L::Array(items) => self.array(items, site, path)?,
-            L::TypedArray(items) => typed_array(items),
+            L::TypedArray(items) => {
+                typed_array(
+                    items
+                        .try_materialize()
+                        .map_err(|error| SaveError::ArrayRead {
+                            path: path.into(),
+                            error: error.clone(),
+                        })?,
+                )
+            }
             L::ArrayEdit(edit) => self.array_edit(edit, None, site, path)?,
             L::TypedArrayEdit(edit) => self.array_edit(
                 edit.edit(),
@@ -1006,6 +1023,7 @@ impl Lowering<'_> {
 fn typed_array(array: &layerstack::TypedArray) -> Value {
     use layerstack::TypedArray as A;
     match array {
+        A::Deferred(_) => unreachable!("save preflight materializes retained arrays"),
         A::Bool(items) => Value::BoolArray(items.as_ref().clone()),
         A::UChar(items) => Value::UCharArray(items.as_ref().clone()),
         A::Int(items) => Value::IntArray(items.as_ref().clone()),

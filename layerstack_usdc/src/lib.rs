@@ -14,8 +14,8 @@
 //!
 //! The reader operates on a byte slice (`&[u8]`), making it suitable for both
 //! file reads and memory-mapped I/O. The crate uses `no_std` with `alloc` and
-//! requires Rust 1.89 or later. The declared `std` feature currently adds no
-//! APIs; file I/O belongs to the caller.
+//! requires Rust 1.89 or later. The `std` feature adds no
+//! file I/O; it enables retained, thread-safe lazy numeric arrays.
 //!
 //! For selective access, [`CrateFile`] opens the structural tables and lets
 //! callers inspect specs and decode individual fields on demand. It does not
@@ -35,6 +35,15 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 extern crate alloc;
+#[cfg(feature = "std")]
+extern crate std;
+
+#[cfg(feature = "std")]
+mod lazy;
+#[cfg(feature = "std")]
+pub use lazy::{
+    LazyReadResult, RetainedValueStats, RetainedValues, read_usdc_lazy, read_usdc_lazy_within,
+};
 
 pub mod compression;
 pub mod error;

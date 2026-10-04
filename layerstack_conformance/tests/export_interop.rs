@@ -711,6 +711,10 @@ fn saved_layers_round_trip_through_openusd() {
         }
 
         let imports = [
+            (
+                "retained-usdc",
+                Imported::usdc_retained(std::fs::read(&source_usdc).unwrap().into()),
+            ),
             ("usda", Imported::usda(case.source)),
             (
                 "usdc",

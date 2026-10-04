@@ -2055,6 +2055,41 @@ impl Stage {
         )
     }
 
+    /// Resolves a default and materializes its selected numeric array.
+    /// Decode failures remain distinct from an absent value or value block.
+    pub fn try_resolve_property_path(
+        &self,
+        path: PropertyPath,
+    ) -> Result<Option<Resolved<ResolvedValue>>, crate::ArrayReadError> {
+        let mut resolved = self.resolve_property_path(path);
+        if let Some(Resolved {
+            value: ResolvedValue::Scalar(Value::TypedArray(array)),
+            ..
+        }) = &mut resolved
+        {
+            *array = array.try_materialize().map_err(Clone::clone)?.clone();
+        }
+        Ok(resolved)
+    }
+    /// Resolves at time and materializes only selected numeric endpoints.
+    /// A malformed selected endpoint is an error, never a weaker fallback.
+    pub fn try_resolve_property_path_at_time(
+        &self,
+        path: PropertyPath,
+        time: f64,
+        interp: InterpolationType,
+    ) -> Result<Option<Resolved<Value>>, crate::ArrayReadError> {
+        let mut resolved = self.resolve_property_path_at_time(path, time, interp);
+        if let Some(Resolved {
+            value: Value::TypedArray(array),
+            ..
+        }) = &mut resolved
+        {
+            *array = array.try_materialize().map_err(Clone::clone)?.clone();
+        }
+        Ok(resolved)
+    }
+
     /// Returns the sorted opinion stack for a concrete property path.
     #[must_use]
     pub fn explain_property_path(&self, property_path: PropertyPath) -> Option<&[Opinion]> {
@@ -2627,6 +2662,11 @@ impl Stage {
                 let Some(value) = opinion.value.default_value() else {
                     continue;
                 };
+                if let Value::TypedArray(array) = value
+                    && array.try_materialize().is_err()
+                {
+                    return None;
+                }
                 if matches!(value, Value::Blocked) {
                     break;
                 }

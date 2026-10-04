@@ -142,6 +142,34 @@ impl Imported {
         }
     }
 
+    /// Imports an owned USDC file with retained numeric sources.
+    ///
+    /// # Panics
+    /// Panics on structural errors or assembly diagnostics; payload errors
+    /// remain observable when saving or querying the imported layer.
+    pub fn usdc_retained(bytes: Arc<[u8]>) -> Self {
+        let mut tokens = TokenInterner::default();
+        let mut paths = PathInterner::default();
+        let read = layerstack_usdc::read_usdc_lazy(
+            bytes,
+            LayerId(1),
+            &mut tokens,
+            &mut paths,
+            &mut AnyAsset::default(),
+        )
+        .expect("retained USDC reads");
+        assert!(
+            read.assembled.diagnostics.is_empty(),
+            "{:?}",
+            read.assembled.diagnostics
+        );
+        Self {
+            layer: read.assembled.layer,
+            tokens,
+            paths,
+        }
+    }
+
     /// Saves the layer as USDA.
     ///
     /// # Errors

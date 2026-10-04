@@ -19,7 +19,7 @@ layerstack = { workspace = true }
 layerstack_mesh_export = { workspace = true }
 layerstack_schemas = { features = ["all"], workspace = true }
 layerstack_usda = { workspace = true }
-layerstack_usdc = { workspace = true }
+layerstack_usdc = { features = ["std"], workspace = true }
 layerstack_usdz = { workspace = true }
 serde = { features = ["derive"], version = "1.0" }
 # `float_roundtrip` parses the bit-exact vectors exactly.

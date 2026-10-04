@@ -6,7 +6,9 @@
 //! Spec: AOUSD Core §11–§12 (stage population and value resolution).
 
 mod explain;
+mod objects;
 mod relationships;
+pub use objects::{Attribute, AttributeQuery, AttributeQueryWork, Object, Prim, Relationship};
 mod traversal;
 pub use traversal::{PrimPredicate, PrimRange, PrimStatus, PrimVisit, PrimVisits};
 pub(crate) mod metadata;

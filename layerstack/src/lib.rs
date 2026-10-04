@@ -220,12 +220,12 @@ pub use schema::{
 pub use spec_path::{SpecComponent, SpecPath, SpecPathError};
 pub use spline::SplineData;
 pub use stage::{
-    Contribution, DictionaryMerge, ExplainedOpinion, FlattenError, FlattenReport,
-    FlattenRequirements, FlattenVerification, Flattened, IgnoreCause, KeyPath, LayerMuteError,
-    LoadPolicy, OpinionRole, PayloadLoadRules, PayloadRule, PopulationMask, PrimPredicate,
-    PrimRange, PrimStatus, PrimVisit, PrimVisits, PropertyDeclaration, Provenance, Resolved,
-    ResolvedValue, SampleUse, Stage, StageMetadataError, StageOptions, Traverse, ValueExplanation,
-    ValueSource,
+    Attribute, AttributeQuery, AttributeQueryWork, Contribution, DictionaryMerge, ExplainedOpinion,
+    FlattenError, FlattenReport, FlattenRequirements, FlattenVerification, Flattened, IgnoreCause,
+    KeyPath, LayerMuteError, LoadPolicy, Object, OpinionRole, PayloadLoadRules, PayloadRule,
+    PopulationMask, Prim, PrimPredicate, PrimRange, PrimStatus, PrimVisit, PrimVisits,
+    PropertyDeclaration, Provenance, Relationship, Resolved, ResolvedValue, SampleUse, Stage,
+    StageMetadataError, StageOptions, Traverse, ValueExplanation, ValueSource,
 };
 pub use variant_fallbacks::VariantFallbacks;
 

@@ -1,0 +1,24 @@
+[package]
+name = "layerstack_io"
+description = "Explicit stage loading, saving and reload orchestration for Layerstack."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+keywords = ["usd", "scene-description", "io"]
+categories = ["encoding", "no-std"]
+
+[features]
+default = ["std"]
+std = []
+
+[dependencies]
+layerstack = { workspace = true }
+layerstack_usda = { workspace = true }
+layerstack_usdc = { workspace = true }
+layerstack_usdz = { workspace = true }
+
+[lints]
+workspace = true

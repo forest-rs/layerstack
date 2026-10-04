@@ -106,7 +106,8 @@ impl UsdzResult {
 /// those diagnostics or [`UsdzResult::has_errors`] before using it. A hard
 /// decoding failure in the root or any loaded package member returns
 /// [`UsdzError::LayerRead`] with the member and original typed cause. Missing
-/// assets retain the format reader's existing unresolved-arc behavior.
+/// assets retain unresolved arcs; missing layer-relative members also retain
+/// typed resolver evidence in `diagnostics`.
 /// This reads reachable layers, not every unused layer member in the archive.
 ///
 /// A relative asset path authored in a package layer names a member of the
@@ -169,6 +170,21 @@ pub fn read_usdz(
     paths: &mut PathInterner,
     resolver: &mut dyn AssetResolver,
 ) -> Result<UsdzResult, UsdzError> {
+    read_usdz_with_members(data, layer_id, tokens, paths, resolver, &[])
+}
+
+/// Reads a package and explicit additional resident members, even if its root
+/// no longer references them. Selected missing members fail atomically. Used
+/// by hosts retaining package layer identities across reloads; ordinary import
+/// uses `read_usdz`. AOUSD Core §9.7, §16.4.
+pub fn read_usdz_with_members(
+    data: &[u8],
+    layer_id: LayerId,
+    tokens: &mut TokenInterner,
+    paths: &mut PathInterner,
+    resolver: &mut dyn AssetResolver,
+    members: &[&str],
+) -> Result<UsdzResult, UsdzError> {
     // 1. Parse ZIP archive with USDZ constraint validation.
     let archive = zip::ZipArchive::parse(data)?;
 
@@ -211,6 +227,10 @@ pub fn read_usdz(
         paths,
         &mut usdz_resolver,
     )?;
+
+    for member in members {
+        usdz_resolver.load_selected_member(member, tokens, paths)?;
+    }
 
     // 6. Collect every resolved layer once: those the root layer resolved,
     //    and those resolved beneath them.

@@ -83,15 +83,49 @@ impl<'a> UsdzResolver<'a> {
         root: LayerId,
         outer: &'a mut dyn AssetResolver,
     ) -> Self {
+        let distinct_member = outer
+            .existing_package_layer_id(root, &root_member)
+            .is_some_and(|id| id != root);
         Self {
             archive,
             root,
-            by_member: BTreeMap::from([(root_member.clone(), root)]),
+            by_member: if distinct_member {
+                BTreeMap::new()
+            } else {
+                BTreeMap::from([(root_member.clone(), root)])
+            },
             member_paths: BTreeMap::from([(root, root_member)]),
             descendants: Vec::new(),
             failure: None,
             diagnostics: Vec::new(),
             outer,
+        }
+    }
+
+    pub(crate) fn load_selected_member(
+        &mut self,
+        member: &str,
+        tokens: &mut TokenInterner,
+        paths: &mut PathInterner,
+    ) -> Result<(), UsdzError> {
+        let resolved =
+            self.load_member(member, tokens, paths)
+                .ok_or_else(|| UsdzError::MissingMember {
+                    member: Arc::from(member),
+                })?;
+        match resolved {
+            Ok(resolved) => {
+                if let Some(layer) = resolved.layer {
+                    self.descendants.push(layer);
+                }
+                Ok(())
+            }
+            Err(_) => Err(self
+                .failure
+                .clone()
+                .unwrap_or_else(|| UsdzError::MissingMember {
+                    member: Arc::from(member),
+                })),
         }
     }
 
@@ -130,7 +164,7 @@ impl<'a> UsdzResolver<'a> {
 
         // The outer resolver owns the ID space the members share with the
         // layers it loads.
-        let Some(layer_id) = self.outer.allocate_layer_id() else {
+        let Some(layer_id) = self.outer.allocate_package_layer_id(self.root, &name) else {
             let failure = UsdzError::LayerIdUnavailable {
                 member: name.clone(),
             };
@@ -213,6 +247,16 @@ impl AssetResolver for UsdzResolver<'_> {
             return resolved;
         }
         if layer_relative {
+            // Parsers retain unresolved arcs; keep member-scoped evidence so
+            // strict consumers can reject them. AOUSD Core §9.4, §9.7.
+            self.diagnostics.push(MemberDiagnostic {
+                member: authoring,
+                layer_id: anchor.unwrap_or(self.root),
+                diagnostic: ImportDiagnostic::AssetResolve {
+                    asset: Arc::from(asset_path),
+                    error: AssetResolveError::NotFound,
+                },
+            });
             return Err(AssetResolveError::NotFound);
         }
         let root_member = self.member_paths[&self.root].clone();
@@ -231,6 +275,14 @@ impl AssetResolver for UsdzResolver<'_> {
 
     fn allocate_layer_id(&mut self) -> Option<LayerId> {
         self.outer.allocate_layer_id()
+    }
+
+    fn existing_package_layer_id(&self, package: LayerId, member: &str) -> Option<LayerId> {
+        self.outer.existing_package_layer_id(package, member)
+    }
+
+    fn allocate_package_layer_id(&mut self, package: LayerId, member: &str) -> Option<LayerId> {
+        self.outer.allocate_package_layer_id(package, member)
     }
 }
 

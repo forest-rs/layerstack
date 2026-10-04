@@ -1,11 +1,13 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! Two producers publish into a caller-owned stage; Sylva places a shared authored asset.
+//! Two `UsdProc` recipes evaluate and publish into a caller-owned stage.
+//! Sylva places the shared authored asset through native and point instances.
 //! Run with `cargo run -p layerstack_examples --example generated_assets`.
 //! The optional output directory receives the three authored USDA layers.
 #[path = "support/generated_assets.rs"]
 mod support;
+use layerstack::{EditTarget, Transaction, Value};
 use layerstack_schemas::{
     Scene, Time,
     bounds::{BoundsCache, BoundsOptions},
@@ -35,10 +37,26 @@ fn main() {
         .unwrap()
         .aligned_range();
     let untouched_topology = generated.geometry.face_vertex_indices.clone();
-    let mut points = generated.geometry.points.as_ref().clone(); // Explicit materialization for editing.
-    points[2][1] = 3.;
-    generated.geometry.points = Arc::new(points);
-    let changes = generated.publish();
+    let height = generated
+        .store
+        .property_path("/Recipes/Tree.primvars:height");
+    let mut edit = Transaction::new();
+    edit.set_default(
+        EditTarget::for_layer(support::ASSET).property(height),
+        Value::Float(3.),
+    );
+    let changed = generated.live.apply(&mut generated.store, &edit).unwrap();
+    bounds.apply_changes(
+        &Scene::new(generated.live.stage(), &generated.store),
+        &changed.changes,
+    );
+    // Host-owned ordering: evaluate the upstream producer, then the dependent asset.
+    assert_eq!(
+        generated.evaluate_terrain(Time::Default).unwrap(),
+        layerstack::Changes::default(),
+        "unchanged terrain inputs reuse their output without authoring"
+    );
+    let changes = generated.evaluate_asset(Time::Default).unwrap();
     let scene = Scene::new(generated.live.stage(), &generated.store);
     bounds.apply_changes(&scene, &changes);
     let after = bounds
@@ -60,7 +78,7 @@ fn main() {
         "point updates preserve topology storage"
     );
     println!(
-        "Two producers, {} native prototypes, 100 native instances and 99 visible point instances; scatter height {} -> {}.",
+        "Two procedural producers, {} native prototypes, 100 native instances and 99 visible point instances; recipe height {} -> {}.",
         generated.live.stage().prototypes().count(),
         before.max[1],
         after.max[1]
@@ -68,6 +86,21 @@ fn main() {
     assert!(
         Mesh::new(&scene, generated.terrain).is_some(),
         "the independent terrain producer remains published"
+    );
+    assert_eq!(
+        generated.evaluate_asset(Time::Default).unwrap(),
+        layerstack::Changes::default(),
+        "unchanged recipe inputs reuse the generated asset"
+    );
+    assert_eq!(
+        generated.publish(),
+        layerstack::Changes::default(),
+        "unchanged geometry publication authors no opinions"
+    );
+    println!(
+        "Asset evaluation work: {:?}; tracked inputs: {}.",
+        generated.asset_generator.work(),
+        generated.asset_generator.dependencies().count()
     );
     let directory = std::env::args_os()
         .nth(1)

@@ -21,3 +21,12 @@ Initial release.
 - The runnable `generated_assets` example and OpenUSD conformance tests cover
   shared authored assets, native and point instances, material overrides,
   indexed seams, masking, source changes, recreation and offset time samples.
+- The `usd-proc` feature adds `procedural::Procedural<E>` and application-supplied
+  evaluators with tracked composed inputs, dynamic dependency replacement,
+  retained generic outputs and work counters. Adoption is additive: existing
+  publishers can evaluate a recipe before their existing `GeneratedMesh::prepare`
+  call. Evaluation never implicitly authors results or loads Hydra plugins.
+- `generated_assets` now evaluates two authored `UsdProc` recipes before
+  publication, carries texture references into a material network, and proves
+  recipe edits, upstream changes, failed evaluation and sampled/offset inputs
+  through USDA/USDC and an independent OpenUSD oracle.

@@ -53,6 +53,79 @@ explicit copy (`array.as_ref().clone()`). Assertions can use
 `Some(vec![...].into())`. Existing slice setters remain source compatible.
 Generated shader-node numeric array defaults also return shared owners.
 
+## Evaluating `UsdProc` recipes
+
+`UsdProc` describes a procedural recipe, not an execution engine. A
+`GenerativeProcedural` prim names its `proceduralSystem` and supplies inputs in
+the `primvars:` namespace. Opening or composing a stage does not evaluate it.
+OpenUSD's additional execution machinery lives in Hydra's `HdGp`: plugin
+registration, dependency updates and generated child prims in a Hydra scene
+index. Those children do not automatically become authored USD layer content.
+
+With the `usd-proc` feature, `procedural::Procedural<E>` binds one recipe to an
+application-supplied `ProceduralEvaluator`. `ProceduralInputs` reads composed
+attribute values and forwarded relationship targets, including schema fallbacks,
+time samples and layer offsets. It records missing inputs too. Reads retain
+native array owners; deferred decoding and interpolation can materialize storage.
+Wrong property kinds and decoding failures are explicit errors. The system token
+must match the evaluator, including when supplied by an applied schema fallback.
+
+```rust,ignore
+let mut recipe = procedural::Procedural::new(recipe_path, application_evaluator);
+let generated = recipe.evaluate(&Scene::new(live.stage(), &store), Time::Default)?;
+let publication = generated.geometry.prepare(
+    live.stage(), &mut store, &edit_target, mesh_path, &owned_properties,
+)?;
+let applied = live.apply(&mut store, &publication.transaction)?;
+bounds.apply_changes(&Scene::new(live.stage(), &store), &applied.changes);
+owned_properties = publication.properties;
+```
+
+Evaluation and publication are separate. Outputs are generic: the example's
+evaluator returns a mesh and a texture asset reference; an application can return
+model descriptions, material descriptions or image-generation results instead.
+The helper owns input reads and one retained result. The host owns generator
+selection, invocation order, files, output ownership and publication. No mutable
+stage is supplied to the evaluator, and evaluation must have no publication side
+effects. If evaluation or validation fails, the example preserves its previous
+published asset. Deleting a recipe likewise requires an explicit host policy for
+retaining or removing that output.
+
+Every evaluation request checks the schema/system and re-reads consumed inputs.
+Equal composed values reuse the result without invoking the evaluator, even
+after masked or unrelated edits; callers need not deliver change notices to this
+helper. Successful evaluation replaces dynamic dependencies. Native owner
+equality avoids element comparison; distinct owners can require O(elements)
+comparison. Memory consists of one generated result and its consumed values and
+targets. `dependencies()` exposes those inputs; `work()` counts evaluations,
+cache hits and composed reads. Timing belongs to the host. Publication still
+validates the snapshot when evaluation is reused.
+
+This adapter remains in `layerstack_schemas`: its responsibility is composed
+schema input access and retained evaluation state. A future execution runtime
+with its own plugins, scheduling or resource management would have a separate
+responsibility and can consume this contract.
+
+Retain the helper within one store. Changing evaluation time conservatively
+reevaluates; it does not author a time sample. Use `evaluator_mut()` to change
+configuration, or `invalidate()` after generator code or external resources
+change. Asset paths are tracked as values; replacing image bytes at an unchanged
+path is not a USD value change. The helper does not track file contents,
+attribute connections, metadata or arbitrary child traversal, discover a producer
+graph, schedule work, load C++ plugins, or implement Hydra's runtime. Evaluators
+must use tracked reads and explicitly invalidate for other dependencies. Hosts
+must reevaluate against the current scene before publishing delayed results.
+
+The runnable example authors terrain and asset recipes under `/Recipes`, then
+evaluates upstream terrain before the asset. The asset reads terrain points
+through `primvars:source`, shares unchanged topology/UV/normal buffers and updates
+its authored source and material's texture reference atomically. Native and point
+instances consume that source under `/World`. Editing `primvars:height` changes
+geometry only after explicit evaluation and publication. The material includes
+`UsdPreviewSurface`, `UsdUVTexture` and a UV reader; the example publishes texture
+references, not generated image files or a Substance implementation. Supply the
+referenced images when rendering it.
+
 ## Publishing generated meshes
 
 `GeneratedMesh::prepare` is the complete polygon-mesh publication path through
@@ -117,6 +190,8 @@ topology-changing intervals require a consumer policy for discontinuities.
 Edit targets map referenced/variant sites and time offsets. The publisher does
 not evaluate Substance graphs, execute `UsdProc` plugins, infer producer ownership
 from composition, deduplicate geometry by content or run renderer adapters.
+The `procedural` helper above invokes application evaluators; C++ `HdGp` plugins
+and their runtime remain outside this publication path.
 
 Run the complete two-producer workflow with:
 
@@ -126,33 +201,64 @@ LAYERSTACK_USD_PYTHON=/path/to/usd-python cargo test -p layerstack_conformance -
 cargo bench -p wind_tunnel --bench geometry_publication
 ```
 
-The example keeps an editable source under `/Assets` and placements under `/World`;
+The example keeps recipes under `/Recipes`, an editable source under `/Assets`
+and placements under `/World`;
 consumers select `/World` for placed scene content. Tests reopen all three authored
 layers as USDA and USDC and compare materials, seams, IDs/masks, transforms, bounds
-and offset samples with OpenUSD 26.8. The benchmark measures a 4,096-point,
+and offset samples with OpenUSD 26.8. The oracle also resolves sampled recipes,
+independently evaluates the example generator, and compares generated points,
+topology and material texture references. This proves the authored recipe and
+publication contract, not parity with Hydra's procedural execution runtime.
+The benchmark measures a 4,096-point,
 7,938-triangle mesh with 100 native references and 100 / 10,000 / 100,000 point
 instances. On the development Apple silicon host, a short Criterion run measured:
 
 | Point instances | Initial publication | Unchanged | Points | Topology | Prototype edit + scatter bounds |
 | ---: | ---: | ---: | ---: | ---: | ---: |
-| 100 | 3.85 ms | 35.4 µs | 68.2 µs | 53.5 µs | 88.5 µs |
-| 10,000 | 3.85 ms | 34.9 µs | 68.1 µs | 53.4 µs | 357 µs |
-| 100,000 | 3.92 ms | 34.9 µs | 68.2 µs | 53.3 µs | 3.46 ms |
+| 100 | 4.38 ms | 21.9 µs | 77.4 µs | 67.9 µs | 100 µs |
+| 10,000 | 4.42 ms | 21.0 µs | 77.6 µs | 68.6 µs | 396 µs |
+| 100,000 | 4.53 ms | 21.1 µs | 77.9 µs | 68.5 µs | 3.84 ms |
 
 Native references have a different cost. The `native_geometry_publication`
 group holds point instances at 100 and varies native references. At 10,000
-native references, recreating the source measured 2.61 s, unchanged publication
-415 µs, point edits 19.1 ms, topology edits 17.1 ms and prototype edits with bounds
-20.4 ms. This is an explicit initial-release scaling limit: source creation or
+native references, recreating the source measured 2.81 s, unchanged publication
+21.1 µs, point edits 25.0 ms, topology edits 24.1 ms and prototype edits with bounds
+31.3 ms. This is an explicit initial-release scaling limit: source creation or
 structural replacement can recompose many native occurrences. Prefer
 `PointInstancer` for large scatter populations, and budget native-asset structural
 updates separately. Buffer sharing does not eliminate composition work.
+
+Material networks have occurrence-relative shader connections. Prototype record
+sharing buckets source identities and mapped paths before exact comparison, so
+different targets do not compare against every earlier occurrence. Hashes are
+only candidate filters, never identities; numeric buffers are not hashed.
+Value refreshes revisit changed member groups only, and empty refreshes skip
+resharing. This preserves the exact sharing contract without repeated work on
+unrelated material records.
 
 These include validation, planning and live application. Initial publication means
 recreating an absent source in an already populated stage; fixture setup, producer
 evaluation and buffer construction are excluded. Bounds evaluation is included
 only in the last column. The short run used 10 samples, 0.1 s warmup and 1 s target
 measurement per case; these are reference measurements, not latency guarantees.
+The current fixture includes the material network described above.
+
+The `procedural_publication` group includes input revalidation, application
+evaluation and validated publication for the same mesh and placement counts:
+
+| Point instances | Unchanged | Recipe point update | Upstream point update | Recipe update + scatter bounds |
+| ---: | ---: | ---: | ---: | ---: |
+| 100 | 23.0 µs | 98.8 µs | 98.9 µs | 121 µs |
+| 10,000 | 23.0 µs | 98.4 µs | 98.5 µs | 409 µs |
+| 100,000 | 23.0 µs | 98.2 µs | 98.7 µs | 4.02 ms |
+
+Each case has 100 native references. Recipe edits and upstream terrain
+evaluation/publication are excluded from these timings; the upstream column
+measures the dependent asset after terrain changes. Unchanged requests reuse
+evaluation but still revalidate input reads and the mesh snapshot. Only the last
+column includes bounds consumption. Initial publication and topology workloads
+are covered by the direct publication groups above.
+
 The existing `numeric_arrays/schema_points` benchmark fell from about 179 µs to
 22 ns for a million-point dense getter, with pointer-identity tests establishing
 that the improvement comes from retaining storage.

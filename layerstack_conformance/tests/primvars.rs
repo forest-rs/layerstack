@@ -858,3 +858,58 @@ fn removed_primvar_ui_labels_do_not_leak_into_recreated_properties() {
         assert_eq!(store.layers[&LayerId(1)], before);
     }
 }
+
+#[test]
+fn validated_primvar_mapping_shares_sources_without_expanding_values() {
+    let (mut store, live) = scene();
+    let path = store.path("/Root/Group/Mesh");
+    let scene = Scene::new(live.stage(), &store);
+    for name in ["packed", "scalar", "animated", "blockedIndices", "empty"] {
+        let var = Primvar::new(&scene, path, name).unwrap();
+        let time = if name == "animated" {
+            Time::at(1.)
+        } else {
+            Time::Default
+        };
+        let view = var.validated_values(time).unwrap().unwrap();
+        assert_eq!(
+            view.compute_flattened(),
+            var.compute_flattened(time).unwrap().unwrap()
+        );
+        if name == "packed" {
+            assert_eq!(view.len(), 3);
+            assert_eq!(view.element_size(), 2);
+            assert_eq!(view.element_range(0), Some(4..6));
+            assert_eq!(view.element_range(1), Some(0..2));
+            let source = var.value(time).unwrap().unwrap();
+            let a =
+                layerstack_schemas::value::read_float_array_shared(&source, &store.tokens).unwrap();
+            let b =
+                layerstack_schemas::value::read_float_array_shared(view.values(), &store.tokens)
+                    .unwrap();
+            assert!(std::sync::Arc::ptr_eq(&a, &b));
+            assert!(std::sync::Arc::ptr_eq(
+                &var.indices(time).unwrap(),
+                view.indices().unwrap()
+            ));
+        }
+        if name == "empty" {
+            assert!(view.is_empty());
+            assert_eq!(view.compute_flattened().array_ref().unwrap().len(), 0);
+        }
+        if matches!(name, "scalar" | "blockedIndices") {
+            assert!(view.indices().is_none());
+        }
+        assert_eq!(view.element_range(view.len()), None);
+    }
+    assert_eq!(
+        Primvar::new(&scene, path, "invalid")
+            .unwrap()
+            .validated_values(Time::Default)
+            .unwrap_err(),
+        PrimvarError::InvalidIndex {
+            position: 0,
+            index: -1
+        }
+    );
+}

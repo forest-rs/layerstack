@@ -146,3 +146,97 @@ fn ordered_batches_match_cpp_motion_fixture_and_reject_partial_results() {
             .is_empty()
     );
 }
+
+#[test]
+fn prepared_instance_outputs_stream_in_chunks_and_reuse_caller_storage() {
+    use core::num::NonZeroUsize;
+    let source = r#"#usda 1.0
+        def PointInstancer "I" {
+            int[] protoIndices = [0, 0, 0, 0, 0]
+            int64[] ids = [10, 20, 30, 40, 50]
+            point3f[] positions = [(1,0,0), (2,0,0), (3,0,0), (4,0,0), (5,0,0)]
+            int64[] invisibleIds = [20, 40]
+        }
+    "#;
+    let (mut store, mut live) = support::scene(source);
+    let path = store.path("/I");
+    let options = InstanceTransformOptions {
+        include_prototype_transform: false,
+        apply_mask: true,
+    };
+    let scene = Scene::new(live.stage(), &store);
+    let q = PointInstancer::new(&scene, path).unwrap();
+    let prepared = q
+        .prepare_instance_transforms(Time::Default, Time::Default, options)
+        .unwrap();
+    assert_eq!(prepared.source_len(), 5);
+    assert_eq!(prepared.len(), 3);
+    assert!(!prepared.is_empty());
+    let expected = q
+        .compute_instance_transforms(Time::Default, Time::Default, options)
+        .unwrap();
+    assert_eq!(
+        expected.iter().map(|v| (v.index, v.id)).collect::<Vec<_>>(),
+        [(0, 10), (2, 30), (4, 50)]
+    );
+    let mut reused = Vec::with_capacity(16);
+    let pointer = reused.as_ptr();
+    prepared.write_into(&mut reused);
+    assert_eq!(reused, expected);
+    assert_eq!(reused.as_ptr(), pointer);
+    q.compute_instance_transforms_into(Time::Default, Time::Default, options, &mut reused)
+        .unwrap();
+    assert_eq!(reused, expected);
+    assert_eq!(reused.as_ptr(), pointer);
+    for width in [1, 2, 3, 4] {
+        let mut scratch = Vec::with_capacity(width);
+        let pointer = scratch.as_ptr();
+        let mut emitted = Vec::new();
+        prepared.for_each_chunk(NonZeroUsize::new(width).unwrap(), &mut scratch, |chunk| {
+            assert!(!chunk.is_empty() && chunk.len() <= width);
+            emitted.extend_from_slice(chunk);
+        });
+        assert_eq!(emitted, expected);
+        assert_eq!(scratch.as_ptr(), pointer);
+    }
+    let positions = store.tokens.lookup("positions").unwrap();
+    let mut tx = layerstack::edit::Transaction::new();
+    tx.set_default(
+        layerstack::edit::EditTarget::for_layer(layerstack::LayerId(1))
+            .property(layerstack::PropertyPath::new(path, positions)),
+        layerstack::Value::from(vec![[99_f32; 3]; 5]),
+    );
+    live.apply(&mut store, &tx).unwrap();
+    // Captured inputs remain a usable immutable snapshot after recomposition.
+    assert_eq!(prepared.iter().collect::<Vec<_>>(), expected);
+}
+
+#[test]
+fn invalid_instance_inputs_leave_reusable_output_unchanged() {
+    let (mut store, live) = support::scene(
+        r#"#usda 1.0
+        def PointInstancer "I" {
+            int[] protoIndices = [0, -1]
+            point3f[] positions = [(1,0,0), (2,0,0)]
+        }
+    "#,
+    );
+    let path = store.path("/I");
+    let scene = Scene::new(live.stage(), &store);
+    let q = PointInstancer::new(&scene, path).unwrap();
+    let mut output = vec![layerstack_schemas::point_instancer::InstanceTransform {
+        index: 99,
+        id: 42,
+        prototype_index: 0,
+        matrix: [[0.; 4]; 4],
+    }];
+    let before = output.clone();
+    assert_eq!(
+        q.compute_instance_transforms_into(Time::Default, Time::Default, OPTIONS, &mut output),
+        Err(PointInstancerError::InvalidPrototypeIndex {
+            instance: 1,
+            index: -1
+        })
+    );
+    assert_eq!(output, before);
+}

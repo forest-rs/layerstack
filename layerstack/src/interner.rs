@@ -38,6 +38,7 @@ impl TokenId {
 /// ```
 #[derive(Debug, Default)]
 pub struct TokenInterner {
+    pub(crate) affinity: Arc<()>,
     by_str: HashMap<Arc<str>, TokenId>,
     strings: Vec<Arc<str>>,
     /// Whether some interned string is a variable expression, so a variant

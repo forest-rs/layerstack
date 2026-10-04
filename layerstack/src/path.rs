@@ -7,7 +7,7 @@
 //!
 //! Spec: AOUSD Core §8 (paths and namespace ordering).
 
-use alloc::{boxed::Box, string::String, vec::Vec};
+use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
 
 use core::{borrow::Borrow, cmp::Ordering};
 
@@ -362,6 +362,7 @@ impl Path {
 /// ```
 #[derive(Debug, Default)]
 pub struct PathInterner {
+    pub(crate) affinity: Arc<()>,
     by_path: HashMap<Path, PathId>,
     paths: Vec<Path>,
 }

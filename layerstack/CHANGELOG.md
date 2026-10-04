@@ -4,6 +4,10 @@
 
 Initial release.
 
+- `LayerStore::identity` retains token/path domain affinity. `Stage` captures it;
+  `PrimSnapshot`, `AttributeQuery::is_current` and `RelationshipQuery` expose
+  current composition evidence without resolving unchanged inputs.
+
 - `Layer::prim_at` reads an exact authored prim site, including variant-branch
   prims, without substituting selected or composed prims. This additive API
   supports validation of caller-owned publication targets.

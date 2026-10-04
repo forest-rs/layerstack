@@ -45,6 +45,11 @@ pub struct Relationship<'a> {
     path: PropertyPath,
 }
 impl Stage {
+    /// Captured token/path domain affinity. Public composition always supplies
+    /// this identity; internal synthetic snapshots may have no source store.
+    pub fn store_identity(&self) -> Option<&crate::StoreIdentity> {
+        self.store_identity.as_ref()
+    }
     /// Views a populated prim in this immutable snapshot.
     pub fn prim<'a>(&'a self, path: PathId, store: &'a dyn LayerStore) -> Option<Prim<'a>> {
         self.has_prim(path).then_some(Prim {
@@ -193,8 +198,47 @@ pub struct AttributeQueryWork {
     /// Same-time evaluations reused from an unchanged snapshot identity.
     pub cache_hits: u64,
 }
+
+/// Retained composition identity of one prim, including absence and schema data.
+///
+/// Comparing this evidence never resolves values or scans geometry. A change to
+/// any opinion on this prim invalidates it conservatively. Use store-local paths
+/// only with their original store's interners. This is neither authored identity
+/// nor geometry-content identity. AOUSD Core §10 (composition), §13.3 (schemas).
+#[derive(Clone, Debug)]
+pub struct PrimSnapshot {
+    store_identity: Option<crate::StoreIdentity>,
+    path: PathId,
+    index: Option<Arc<crate::prim_index::PrimIndexData>>,
+    type_info: Option<Arc<PrimTypeInfo>>,
+}
+impl Stage {
+    /// Retains the immutable records currently describing this prim or absence.
+    pub fn prim_snapshot(&self, path: PathId) -> PrimSnapshot {
+        let current = self.prims.get(&path);
+        PrimSnapshot {
+            store_identity: self.store_identity.clone(),
+            path,
+            index: current.map(|i| i.data.clone()),
+            type_info: current.and_then(|i| i.type_info.clone()),
+        }
+    }
+}
+impl PrimSnapshot {
+    /// Whether this current stage still has the captured records and schema data.
+    pub fn is_current(&self, stage: &Stage) -> bool {
+        let current = stage.prims.get(&self.path);
+        self.store_identity.as_ref() == stage.store_identity()
+            && same_arc(self.index.as_ref(), current.map(|i| &i.data))
+            && same_arc(
+                self.type_info.as_ref(),
+                current.and_then(|i| i.type_info.as_ref()),
+            )
+    }
+}
 #[derive(Clone, Debug)]
 struct QueryStamp {
+    store_identity: Option<crate::StoreIdentity>,
     index: Option<Arc<crate::prim_index::PrimIndexData>>,
     type_info: Option<Arc<PrimTypeInfo>>,
     clips: crate::value_clips::ClipQueryIdentity,
@@ -203,7 +247,8 @@ struct QueryStamp {
 impl QueryStamp {
     fn matches(&self, stage: &Stage, path: PropertyPath) -> bool {
         let current = stage.prims.get(&path.prim_path());
-        same_arc(self.index.as_ref(), current.map(|i| &i.data))
+        self.store_identity.as_ref() == stage.store_identity()
+            && same_arc(self.index.as_ref(), current.map(|i| &i.data))
             && same_arc(
                 self.type_info.as_ref(),
                 current.and_then(|i| i.type_info.as_ref()),
@@ -253,6 +298,18 @@ impl AttributeQuery {
     pub fn path(&self) -> PropertyPath {
         self.path
     }
+    /// Whether a checked read at this time can reuse its captured snapshot.
+    /// This checks immutable identities, including clip dependencies, without
+    /// resolving an attribute or materializing its numeric storage.
+    pub fn is_current(&self, stage: &Stage, time: Time) -> bool {
+        self.stamp
+            .as_ref()
+            .is_some_and(|s| s.matches(stage, self.path))
+            && self
+                .cached
+                .as_ref()
+                .is_some_and(|c| c.time == time && c.checked)
+    }
     /// Evaluates against the supplied current snapshot, refreshing as needed.
     /// The caller synchronizes `LiveStage` before passing its snapshot.
     pub fn get(&mut self, stage: &Stage, time: Time) -> Option<Resolved<Value>> {
@@ -286,6 +343,7 @@ impl AttributeQuery {
         }
         let current = stage.prims.get(&self.path.prim_path());
         self.stamp = Some(QueryStamp {
+            store_identity: stage.store_identity.clone(),
             index: current.map(|i| i.data.clone()),
             type_info: current.and_then(|i| i.type_info.clone()),
             clips: stage

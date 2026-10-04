@@ -2450,6 +2450,17 @@ pub enum AssetAvailability {
 
 /// A store for accessing layers and shared interners.
 pub trait LayerStore {
+    /// Retains affinity of the shared token/path domains. Moving this store or
+    /// adding names preserves it; replacing either interner invalidates it.
+    /// Adapters exposing these same interners share affinity. No layer content
+    /// or generation is represented by this identity.
+    fn identity(&self) -> crate::StoreIdentity {
+        crate::StoreIdentity {
+            tokens: self.tokens().affinity.clone(),
+            paths: self.paths().affinity.clone(),
+        }
+    }
+
     /// Returns a layer, if present.
     fn layer(&self, id: LayerId) -> Option<&Layer>;
 

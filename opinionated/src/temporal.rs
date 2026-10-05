@@ -2,18 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 //! Plans sparse temporal composition without inspecting or cloning host values.
-//!
-//! The host supplies each source's bracketing samples, strongest source first,
-//! at the time requested by [`TemporalPlanner::query`]. The planner merges their
-//! times and classifications, retaining recipes for materializing the composed
-//! brackets. Materialization uses the ordinary opinion-family fold; interpolation
-//! happens afterward in the host.
-//!
-//! The merge follows `SdfComposeTimeSampleSeries` and the sparse-array-edits
-//! proposal's "Composing and Evaluating Time-Varying Sparse Opinions". No USD
-//! sampling rules are built in: hosts choose time keys, equivalence during merge,
-//! sample discovery, value classification, and interpolation. In particular, a
-//! default can be represented by a host-defined earliest time key.
+//! User-facing docs live on [`TemporalPlanner`], since this module is private.
 
 use alloc::{vec, vec::Vec};
 use core::fmt;
@@ -27,7 +16,8 @@ pub enum SamplePick {
     Upper,
 }
 
-/// A host sample's time and whether it needs weaker contributions.
+/// One key from a layer, as the planner sees it: its time, and whether it is
+/// an edit that needs a value from a weaker layer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TemporalSample<T> {
     /// Time in the common domain of this query, after any host time mapping.
@@ -59,43 +49,175 @@ pub struct TemporalSelection<T> {
     pub picks: Vec<SamplePick>,
 }
 
-/// Incremental planner for one query over an already ordered source chain.
+/// Works out which keyframes from each layer make up an animated value at one
+/// time.
 ///
-/// Ask [`Self::query`] before reading each weaker source. If that source has no
-/// value, skip it without calling [`Self::push`]. Retain accepted source brackets
-/// alongside the planner: selection index `i` identifies the `i`th accepted
-/// source, not necessarily the `i`th source visited.
+/// Use this when layers hold keyframes rather than single values, and some
+/// keys are edits (an offset, an [`ArrayEdit`](crate::ArrayEdit)) rather than
+/// whole values. Resolve the layers first and interpolate afterwards: an
+/// edit has no value of its own to interpolate, and each layer's keys can sit
+/// at different times. The planner lines the layers up so that each
+/// interpolation endpoint can be resolved with
+/// [`resolve_family_chain`](crate::resolve_family_chain).
 ///
-/// A terminal lower bracket can move the requested source time to the composed
-/// upper bracket. Once the needed brackets are terminal, `query()` returns
-/// `None`, so hidden weaker sources need not be read at all. If the sources run
-/// out first, materialize remaining sparse recipes over the host's fallback.
+/// The planner never sees your values, only key times and whether each key
+/// is an edit. You keep the keys, decide how times compare, and interpolate.
 ///
-/// Time keys must have a consistent ordering. Brackets must be ordered, with
-/// identical times denoting one sample. A non-reflexive query such as floating
-/// point NaN has no meaningful interpolation result; it does not cause a panic.
+/// # Using it
 ///
-/// `equivalent` decides when samples from different sources count as the same
-/// key, and which sample is held when they merge. It is fixed for the whole
-/// query. It may use a tolerance and need not be transitive. Bracketing the
-/// merged series at the query time uses exact ordering instead.
+/// 1. Create a planner for the time you want.
+/// 2. Walk your layers strongest first. Before reading each one, ask
+///    [`query`](Self::query) which time to read it at; stop when it says
+///    `None`, because nothing weaker can affect the result. Find the keys on
+///    either side of that time and [`push`](Self::push) them as
+///    [`TemporalSample`]s. Skip layers with no keys without pushing, and
+///    remember which layers you pushed.
+/// 3. Read [`samples`](Self::samples): at most two [`TemporalSelection`]s,
+///    in time order. Each one's `picks` says which of the two keys to take
+///    from each layer you pushed, in order. Resolve those keys with your family:
+///    - No selections: there is no composed sample; use your host's absence
+///      policy. [`samples`](Self::samples) explains when this can happen.
+///    - One selection: use its resolved value directly, including at an exact
+///      key time or outside the keyed interval. There is nothing to interpolate.
+///    - Two selections: in [`TemporalMode::Held`], resolve only the lower one.
+///      In [`TemporalMode::Bracketing`], resolve both and interpolate their values.
+///
+/// A selected block can resolve to [`FamilyResolution::Blocked`](crate::FamilyResolution::Blocked).
+/// The host decides how to represent that missing value rather than treating
+/// it as an interpolation endpoint. The example below returns `None` for
+/// absence or a blocked endpoint.
+///
+/// If the layers run out while a selection still `composes`, its edits
+/// apply to your fallback, as the family's [`seed`](crate::OpinionFamily::seed).
 ///
 /// ```
-/// use opinionated::{TemporalMode, TemporalPlanner, TemporalSample};
-/// let mut plan = TemporalPlanner::new(5_u64, TemporalMode::Bracketing, |a, b| a == b);
-/// assert_eq!(plan.query(), Some(5));
-/// plan.push(
-///     TemporalSample { time: 0, composes: false },
-///     TemporalSample { time: 10, composes: true },
-/// );
-/// assert_eq!(plan.query(), Some(10)); // only the upper bracket needs a base
-/// plan.push(
-///     TemporalSample { time: 10, composes: false },
-///     TemporalSample { time: 10, composes: false },
-/// );
-/// assert_eq!(plan.query(), None);
-/// assert_eq!(plan.samples().len(), 2);
+/// use opinionated::{
+///     FamilyMember, OpinionFamily, SamplePick, TemporalMode, TemporalPlanner, TemporalSample,
+///     TemporalSelection, resolve_family_chain,
+/// };
+///
+/// // A keyframe holds a height, or an offset added to whatever is below it.
+/// enum Key {
+///     Height(f32),
+///     Offset(f32),
+///     Block,
+/// }
+///
+/// struct Heights;
+///
+/// impl OpinionFamily<Key> for Heights {
+///     type Value = f32;
+///     type Edit<'op> = f32;
+///     fn classify<'op>(&self, key: &'op Key) -> FamilyMember<f32, f32> {
+///         match *key {
+///             Key::Height(height) => FamilyMember::Dense(height),
+///             Key::Offset(offset) => FamilyMember::Sparse(offset),
+///             Key::Block => FamilyMember::Block,
+///         }
+///     }
+///     fn apply<'op>(&self, offset: f32, base: f32) -> f32
+///     where
+///         Key: 'op,
+///     {
+///         base + offset
+///     }
+///     fn seed(&self) -> f32 {
+///         0.0
+///     }
+/// }
+///
+/// // The keys on either side of `frame`, or one key twice at either end.
+/// // The caller skips empty layers before calling this helper.
+/// fn bracket(keys: &[(u32, Key)], frame: u32) -> (usize, usize) {
+///     let upper = keys
+///         .iter()
+///         .position(|(time, _)| *time >= frame)
+///         .unwrap_or(keys.len() - 1);
+///     let lower = if keys[upper].0 > frame && upper > 0 { upper - 1 } else { upper };
+///     (lower, upper)
+/// }
+///
+/// fn height_at(layers: &[&[(u32, Key)]], frame: u32, mode: TemporalMode) -> Option<f32> {
+///     let mut plan = TemporalPlanner::new(frame, mode, |a, b| a == b);
+///     let mut pushed = Vec::new(); // (layer, lower key, upper key)
+///     for (layer, keys) in layers.iter().enumerate() {
+///         let Some(query) = plan.query() else { break };
+///         if keys.is_empty() {
+///             continue;
+///         }
+///         let (lower, upper) = bracket(keys, query);
+///         let sample = |i: usize| TemporalSample {
+///             time: keys[i].0,
+///             composes: matches!(keys[i].1, Key::Offset(_)),
+///         };
+///         plan.push(sample(lower), sample(upper));
+///         pushed.push((layer, lower, upper));
+///     }
+///
+///     let resolve = |selection: &TemporalSelection<u32>| {
+///         let chain = selection.picks.iter().zip(&pushed).map(|(pick, entry)| {
+///             let (layer, lower, upper) = *entry;
+///             let key = match pick {
+///                 SamplePick::Lower => lower,
+///                 SamplePick::Upper => upper,
+///             };
+///             (&layers[layer][key].1, &entry.0)
+///         });
+///         resolve_family_chain(&Heights, chain).resolved().map(|(height, _)| height)
+///     };
+///
+///     match plan.samples() {
+///         [] => None,
+///         [only] => resolve(only),
+///         [lower, upper] => {
+///             let h0 = resolve(lower)?;
+///             if mode == TemporalMode::Held {
+///                 return Some(h0);
+///             }
+///             let h1 = resolve(upper)?;
+///             let s = (frame - lower.time) as f32 / (upper.time - lower.time) as f32;
+///             Some(h0 + (h1 - h0) * s)
+///         }
+///         _ => unreachable!("the planner returns at most two selections"),
+///     }
+/// }
+///
+/// // Each layer's keys by frame, strongest layer first. Empty layers are skipped.
+/// let layers: [&[(u32, Key)]; 3] = [
+///     &[],
+///     &[(0, Key::Offset(1.0)), (10, Key::Offset(3.0))],
+///     &[(0, Key::Height(0.0)), (10, Key::Height(10.0))],
+/// ];
+/// assert_eq!(height_at(&layers, 5, TemporalMode::Bracketing), Some(7.0));
+/// assert_eq!(height_at(&layers, 5, TemporalMode::Held), Some(1.0));
+/// assert_eq!(height_at(&layers, 0, TemporalMode::Bracketing), Some(1.0));
+/// assert_eq!(height_at(&layers, 20, TemporalMode::Bracketing), Some(13.0));
+/// let single: [&[(u32, Key)]; 1] = [&[(4, Key::Height(9.0))]];
+/// assert_eq!(height_at(&single, 0, TemporalMode::Bracketing), Some(9.0));
+/// assert_eq!(height_at(&[], 5, TemporalMode::Bracketing), None);
+/// assert_eq!(height_at(&[&[]], 5, TemporalMode::Bracketing), None);
+/// // Sparse edits without a dense base use Heights::seed().
+/// assert_eq!(height_at(&layers[..2], 5, TemporalMode::Bracketing), Some(2.0));
+/// // This host treats a blocked endpoint as no height.
+/// let blocked: [&[(u32, Key)]; 1] = [&[(0, Key::Height(1.0)), (10, Key::Block)]];
+/// assert_eq!(height_at(&blocked, 5, TemporalMode::Bracketing), None);
+/// assert_eq!(height_at(&blocked, 5, TemporalMode::Held), Some(1.0));
 /// ```
+///
+/// # Rules
+///
+/// A layer's keys must be in time order. Pushing the same key as both lower
+/// and upper means a single key. Times only need [`PartialOrd`]; a query at a
+/// NaN time gives no meaningful result but does not panic.
+///
+/// `equivalent` decides when keys from different layers count as the same
+/// time, and which key is kept when they merge. It may use a tolerance and
+/// need not be transitive. Choosing the endpoints around the query time uses
+/// exact ordering.
+///
+/// The merge follows OpenUSD's `SdfComposeTimeSampleSeries` and the
+/// sparse-array-edits proposal ("Composing and Evaluating Time-Varying Sparse
+/// Opinions"), without USD's time tolerance or sampling rules.
 #[derive(Clone)]
 pub struct TemporalPlanner<T, E> {
     time: T,

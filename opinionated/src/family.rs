@@ -1,28 +1,8 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! A family-generic chain kernel for folding ordered opinions.
-//!
-//! [`OpinionOp`]'s closed enum covers scalar, list, and dictionary families,
-//! but domains such as `layerstack` carry value families the enum cannot
-//! express (sparse array edits, time-sampled values, schema fallback seeds).
-//! This module extracts the one fold shape every family already follows into a
-//! reusable kernel, so a domain can add its own family without forking the
-//! crate.
-//!
-//! A family is exactly three operations ([`OpinionFamily`]): classify one
-//! authored operation into a [`FamilyMember`], apply one sparse edit over a
-//! weaker base value, and provide the weakest [`OpinionFamily::seed`] value.
-//! [`resolve_family_chain`] folds a strongest-to-weakest chain over one family;
-//! [`resolve_family_chain_report`] additionally records family-agnostic
-//! [`FamilyEvent`]s for diagnostics.
-//!
-//! The in-crate adapters [`ScalarFamily`], [`ListFamily`], and
-//! [`DictionaryFamily`] express the existing [`OpinionOp`] semantics over this
-//! kernel and are proven identical to [`resolve_ordered_chain`] by parity
-//! tests.
-//!
-//! [`resolve_ordered_chain`]: crate::resolve_ordered_chain
+//! The family-generic chain kernel. User-facing docs live on
+//! [`OpinionFamily`] and [`resolve_family_chain`], since this module is private.
 
 use alloc::vec::Vec;
 use core::convert::Infallible;
@@ -43,20 +23,94 @@ pub enum FamilyMember<D, S> {
     Sparse(S),
     /// Blocks all weaker opinions.
     Block,
-    /// Another family's operation; skipped, with the reason reported.
+    /// An operation this family does not handle. It is skipped and reported
+    /// with the given reason; it does not stop the walk.
+    ///
+    /// A host family usually returns [`IgnoreReason::OtherFamily`].
     Foreign(IgnoreReason),
 }
 
-/// A value family that folds over an ordered opinion chain.
+/// Describes how one kind of value resolves, for operation types the crate
+/// doesn't define.
 ///
-/// Implementors describe one family's behavior over an arbitrary authored
-/// operation type `Op`. Family selection is the caller's responsibility; the
-/// kernel folds exactly one family per chain.
+/// Implement this when [`OpinionOp`] can't express your values, for example
+/// numbers adjusted by relative offsets or arrays patched with [`ArrayEdit`].
+/// `Op` is your own authored operation type. You say which operations are
+/// complete values, which are edits and which are blocks, and how an edit
+/// applies to a value. [`resolve_family_chain`] does the walk, stops early,
+/// and tracks provenance.
+///
+/// Each chain resolves with one family. If a chain can mix kinds of value,
+/// pick the family from the strongest opinion and let the family mark the
+/// others [`FamilyMember::Foreign`].
+///
+/// ```
+/// use opinionated::{FamilyMember, IgnoreReason, OpinionFamily, resolve_family_chain};
+///
+/// // A stat in a game: a base value, with buffs and debuffs layered on top.
+/// enum StatOp {
+///     Base(i32),
+///     Modifier(i32),
+///     Disabled,
+///     Label(&'static str),
+/// }
+///
+/// struct Stat;
+///
+/// impl OpinionFamily<StatOp> for Stat {
+///     type Value = i32;
+///     type Edit<'op> = i32;
+///
+///     fn classify<'op>(&self, op: &'op StatOp) -> FamilyMember<i32, i32> {
+///         match op {
+///             StatOp::Base(value) => FamilyMember::Dense(*value),
+///             StatOp::Modifier(delta) => FamilyMember::Sparse(*delta),
+///             StatOp::Disabled => FamilyMember::Block,
+///             StatOp::Label(_) => FamilyMember::Foreign(IgnoreReason::OtherFamily),
+///         }
+///     }
+///
+///     fn apply<'op>(&self, delta: i32, base: i32) -> i32
+///     where
+///         StatOp: 'op,
+///     {
+///         base + delta
+///     }
+///
+///     // What modifiers apply to when no layer sets a base.
+///     fn seed(&self) -> i32 {
+///         10
+///     }
+/// }
+///
+/// let chain = [
+///     (StatOp::Modifier(5), "potion"),
+///     (StatOp::Label("hero"), "profile"),
+///     (StatOp::Base(100), "class"),
+///     (StatOp::Base(50), "defaults"), // hidden by the class base; never read
+/// ];
+/// let (value, from) = resolve_family_chain(&Stat, chain.iter().map(|(op, p)| (op, p)))
+///     .resolved()
+///     .unwrap();
+/// assert_eq!(value, 105);
+/// assert_eq!(from, "potion");
+/// ```
+///
+/// [`ScalarFamily`], [`ListFamily`] and [`DictionaryFamily`] implement this
+/// trait for [`OpinionOp`], giving the same results as
+/// [`resolve_ordered_chain`].
+///
+/// [`OpinionOp`]: crate::OpinionOp
+/// [`ArrayEdit`]: crate::ArrayEdit
+/// [`resolve_ordered_chain`]: crate::resolve_ordered_chain
 pub trait OpinionFamily<Op> {
     /// The dense resolved value this family produces.
     type Value;
-    /// The sparse edit representation this family folds. It may borrow from
-    /// the classified operation for its lifetime, or own synthesized data.
+    /// The sparse edit representation this family folds.
+    ///
+    /// Most families use an owned type and ignore `'op`. To avoid copying a
+    /// large edit out of the operation, borrow it instead:
+    /// `type Edit<'op> = &'op ArrayEdit<T>;`.
     type Edit<'op>
     where
         Op: 'op;

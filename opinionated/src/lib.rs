@@ -3,31 +3,104 @@
 
 //! Layered sparse opinion resolution over typed addresses.
 //!
-//! `opinionated` resolves authored opinions keyed by `(address, field)` across
-//! an explicit layer-strength order. It intentionally does not model
-//! namespaces, schemas, references, variants, or storage backends.
+//! Often several sources have a say in the same value: built-in defaults, a
+//! project file, a user's override. Merging them into one map loses
+//! information. You can no longer remove the override and get the default
+//! back, or ask why a value is what it is. `opinionated` keeps each source's
+//! input separate and computes the result when you ask for it. Removing an
+//! opinion uncovers whatever was under it, and any result can be explained
+//! source by source.
+//!
+//! The crate knows nothing about what your values mean. Addresses, fields,
+//! values and provenance are your own types. It does not model namespaces,
+//! schemas, references, variants or storage formats.
 //!
 //! The crate requires Rust **1.89** or later and is always `no_std` with
 //! `alloc`. It has no dependencies or feature flags; callers need an allocator.
 //!
+//! # Concepts
+//!
+//! An **opinion** is what one source says about one value: "set it to
+//! `dark`", "append these items", "overwrite element 3", or "there is no
+//! value". A **layer** is a source of opinions. Layers have a fixed
+//! **strength** order, and when opinions disagree the stronger one wins.
+//!
+//! A **chain** is all the opinions about one value, strongest first. Every
+//! resolve function in the crate folds a chain, and every one of them expects
+//! the strongest opinion first.
+//!
+//! A **dense** opinion is a complete value. A **sparse** opinion is an edit
+//! that needs a value underneath it: a list append, an array write. Resolution
+//! walks the chain from the strongest end, collecting sparse edits until it
+//! reaches a dense value, then applies the edits to that value, weakest edit
+//! first. Opinions below the dense value do not contribute. The plain chain
+//! resolvers stop reading there; [`resolve_ordered_chain_report`] (also used by
+//! [`SparseComposer::explain`]) reads the whole chain to explain hidden opinions.
+//!
+//! A **block** says the value is deliberately unset. The walk stops there.
+//! Sparse edits stronger than the block still apply, to the seed.
+//!
+//! The **seed** (or **fallback**) is what sparse edits apply to when the chain
+//! has no dense value: an empty list, or a default your schema supplies. It is
+//! not an opinion and carries no provenance.
+//!
+//! **Provenance** is whatever you attach to an opinion so you can find it again:
+//! a file path, a layer id, an index into your own storage. The crate copies
+//! it into results and reports and never inspects it.
+//!
 //! # Choosing an API
 //!
-//! - [`SparseComposer`] stores sparse opinions with a fixed layer order.
-//! - [`resolve_ordered_chain`] resolves the same [`OpinionOp`] operations
-//!   when the caller already owns an ordered stack. Use
-//!   [`resolve_ordered_chain_report`] for explanation events.
-//! - [`OpinionFamily`] and [`resolve_family_chain`] fold host-defined dense
-//!   values and sparse edits. The caller selects the family; the kernel
-//!   applies accumulated edits weakest-first over a dense value or seed.
-//! - [`DictionaryAdapter`] and [`combine_dictionary_chain`] combine nested
-//!   dictionaries in host values. This uses a strongest-first fold;
-//!   [`OpinionOp::Dictionary`] and [`DictionaryFamily`] instead use the
-//!   distinct [`ShallowOverlay`] policy.
-//! - [`ArrayEdit<T>`] executes sparse array edit programs with a host-supplied
-//!   [`ArrayFill`] policy; it can be used independently of opinion storage.
+//! - [`SparseComposer`] holds opinions for you, keyed by layer and
+//!   `(address, field)`. Use it when you don't already store opinions
+//!   somewhere else.
+//! - [`resolve_ordered_chain`] resolves [`OpinionOp`] chains you already store,
+//!   for example opinions read from files. Use
+//!   [`resolve_ordered_chain_report`] when you need to explain the result.
+//! - [`OpinionFamily`] and [`resolve_family_chain`] resolve values the
+//!   built-in [`OpinionOp`] can't express. You describe which of your
+//!   operations are dense, sparse or blocks, and how an edit applies; the
+//!   crate does the walk.
+//! - [`DictionaryAdapter`] and [`combine_dictionary_chain`] merge nested
+//!   dictionaries stored in your own value type. [`OpinionOp::Dictionary`]
+//!   and [`DictionaryFamily`] only merge the top level ([`ShallowOverlay`]).
+//! - [`ArrayEdit<T>`] patches arrays by index without restating them. It works
+//!   on its own or as the sparse edit of an [`OpinionFamily`].
+//! - [`TemporalPlanner`] lines up sources that each have keys at different
+//!   times, so animated values can be resolved before they are interpolated.
+//! - [`ListOp`], [`resolve_list_chain`] and [`apply_list_order`] are the list
+//!   editing pieces on their own.
 //!
-//! All chain entry points take opinions **strongest-to-weakest**. Layer order,
-//! family selection, and the meaning of provenance remain the caller's policy.
+//! Each resolve function has a `_report` variant that also returns events
+//! saying how each opinion was used. The plain variants skip that work.
+//! On [`SparseComposer`], use [`explain`](SparseComposer::explain) alongside
+//! [`resolve`](SparseComposer::resolve), or
+//! [`explain_with_fallback`](SparseComposer::explain_with_fallback) alongside
+//! [`resolve_with_fallback`](SparseComposer::resolve_with_fallback).
+//!
+//! | Entry point | Result | Report |
+//! | --- | --- | --- |
+//! | [`SparseComposer::resolve`], [`resolve_ordered_chain`] | [`Resolution`] | [`ResolutionReport`] |
+//! | [`resolve_family_chain`] | [`FamilyResolution`] | [`FamilyReport`] |
+//! | [`resolve_list_chain`] | `Vec<T>` | [`ListReport`] |
+//! | [`combine_dictionary_chain`] | `Vec<(K, V)>` | [`DictionaryReport`] |
+//!
+//! Layer order, the choice of family and the meaning of provenance are always
+//! yours to decide.
+//!
+//! # More examples
+//!
+//! The crate's integration tests are written as small applications and are a
+//! good place to see the pieces used together:
+//!
+//! - [`settings_profiles.rs`] layers application settings and explains them.
+//! - [`document_metadata.rs`] uses the same composer for document metadata.
+//! - [`custom_family.rs`] implements an [`OpinionFamily`] from scratch.
+//! - [`dictionary_combine.rs`] merges nested dictionaries through an adapter.
+//!
+//! [`settings_profiles.rs`]: https://github.com/forest-rs/layerstack/blob/main/opinionated/tests/settings_profiles.rs
+//! [`document_metadata.rs`]: https://github.com/forest-rs/layerstack/blob/main/opinionated/tests/document_metadata.rs
+//! [`custom_family.rs`]: https://github.com/forest-rs/layerstack/blob/main/opinionated/tests/custom_family.rs
+//! [`dictionary_combine.rs`]: https://github.com/forest-rs/layerstack/blob/main/opinionated/tests/dictionary_combine.rs
 //!
 //! # Stored opinions
 //!
@@ -988,9 +1061,36 @@ where
 
     /// Resolves one field on one address over a fallback seed.
     ///
-    /// The fallback participates as the weakest dense seed without being
-    /// modeled as an extra layer; see [`resolve_ordered_chain_with_fallback`]
-    /// for the exact semantics.
+    /// Use this when sparse opinions should edit a default that lives outside
+    /// the composer, such as a schema default. The fallback acts as the weakest
+    /// dense value without being stored as a layer; see
+    /// [`resolve_ordered_chain_with_fallback`] for the exact rules.
+    ///
+    /// The fallback is not an opinion. If no layer has an opinion for the key,
+    /// this returns [`Resolution::Absent`], not the fallback, so that callers
+    /// can tell "nobody said anything" from "somebody edited the default".
+    /// [`Self::explain_with_fallback`] explains the same seeded resolution.
+    ///
+    /// ```
+    /// use opinionated::{ListOp, OpinionOp, ResolvedValue, SparseComposer};
+    ///
+    /// type Composer = SparseComposer<&'static str, &'static str, &'static str, (), &'static str>;
+    /// let mut composer = Composer::try_new(["user"]).unwrap();
+    /// let plugins = ResolvedValue::List(vec!["core"]);
+    ///
+    /// // Nobody has an opinion yet, so the caller decides to use the default.
+    /// let resolution = composer.resolve_with_fallback("app", "plugins", &plugins);
+    /// assert!(resolution.is_absent());
+    ///
+    /// // An append edits the default rather than replacing it.
+    /// let append = OpinionOp::List(ListOp::appended(vec!["spell-check"]));
+    /// composer.set_opinion("user", "app", "plugins", append, ()).unwrap();
+    /// let resolved = composer
+    ///     .resolve_with_fallback("app", "plugins", &plugins)
+    ///     .resolved()
+    ///     .unwrap();
+    /// assert_eq!(resolved.value.as_list(), Some(&["core", "spell-check"][..]));
+    /// ```
     #[must_use]
     pub fn resolve_with_fallback(
         &self,
@@ -1010,11 +1110,42 @@ where
         }
     }
 
-    /// Resolves one field and returns an explanation report.
+    /// Resolves one field and says how each opinion was used.
     ///
-    /// The report includes contributing opinions, incompatible mixed operation
-    /// kinds, and block cutoffs. It is intended for diagnostics and authoring
-    /// tools; [`SparseComposer::resolve`] remains the compact value API.
+    /// The report has one event per opinion, strongest first: it contributed,
+    /// it blocked everything weaker, or it was ignored and why. Use it for
+    /// diagnostics and editing tools. [`SparseComposer::resolve`] gives the
+    /// same value without the bookkeeping.
+    ///
+    /// ```
+    /// use opinionated::{IgnoreReason, OpinionOp, ResolutionEvent, SparseComposer};
+    ///
+    /// // Layer, address, field, value, list item, dictionary key, provenance.
+    /// type Composer =
+    ///     SparseComposer<&'static str, &'static str, &'static str, u8, u8, String, &'static str>;
+    /// let mut composer = Composer::try_new(["project", "defaults"]).unwrap();
+    /// composer
+    ///     .set_opinion("defaults", "editor", "tab-width", OpinionOp::Set(4), "defaults.toml")
+    ///     .unwrap();
+    /// composer
+    ///     .set_opinion("project", "editor", "tab-width", OpinionOp::Set(2), "project.toml")
+    ///     .unwrap();
+    ///
+    /// let report = composer.explain("editor", "tab-width");
+    /// assert_eq!(
+    ///     report.events,
+    ///     [
+    ///         ResolutionEvent::Contributed {
+    ///             provenance: "project.toml",
+    ///             kind: opinionated::OpinionKind::Set,
+    ///         },
+    ///         ResolutionEvent::Ignored {
+    ///             provenance: "defaults.toml",
+    ///             reason: IgnoreReason::WeakerThanSet,
+    ///         },
+    ///     ]
+    /// );
+    /// ```
     #[must_use]
     pub fn explain(&self, address: A, field: F) -> ResolutionReport<V, I, K, P> {
         match self.opinions.get(&OpinionKey::new(address, field)) {
@@ -1029,6 +1160,44 @@ where
                 events: Vec::new(),
             },
         }
+    }
+
+    /// Resolves one field over a fallback seed and explains each opinion.
+    ///
+    /// The report's resolution is exactly [`Self::resolve_with_fallback`] for
+    /// the same inputs. Events describe authored opinions, including those
+    /// hidden by a stronger value or block. The fallback carries no provenance
+    /// and adds no event; absence and block semantics are unchanged.
+    ///
+    /// ```
+    /// use opinionated::{ListOp, OpinionOp, ResolvedValue, SparseComposer};
+    ///
+    /// type Settings = SparseComposer<&'static str, &'static str, &'static str, (), &'static str>;
+    /// let mut settings = Settings::try_new(["user"]).unwrap();
+    /// settings.set_opinion(
+    ///     "user", "editor", "plugins", OpinionOp::List(ListOp::appended(vec!["lint"])), (),
+    /// ).unwrap();
+    /// let fallback = ResolvedValue::List(vec!["core"]);
+    /// let report = settings.explain_with_fallback("editor", "plugins", &fallback);
+    /// assert_eq!(report.resolution, settings.resolve_with_fallback("editor", "plugins", &fallback));
+    /// assert_eq!(report.resolution.resolved().unwrap().value.as_list(), Some(&["core", "lint"][..]));
+    /// assert_eq!(report.events.len(), 1); // the authored append, not the seed
+    /// ```
+    #[must_use]
+    pub fn explain_with_fallback(
+        &self,
+        address: A,
+        field: F,
+        fallback: &ResolvedValue<V, I, K>,
+    ) -> ResolutionReport<V, I, K, P> {
+        let opinions = self.opinions.get(&OpinionKey::new(address, field));
+        resolve_ordered_chain_with_fallback_report(
+            opinions.into_iter().flatten().map(|opinion| ChainOpinion {
+                op: &opinion.op,
+                provenance: &opinion.provenance,
+            }),
+            fallback,
+        )
     }
 }
 
@@ -1181,10 +1350,54 @@ where
     K: Clone + Ord + 'a,
     P: Clone + 'a,
 {
+    fold_ordered_chain_report(opinions_strong_to_weak, None)
+}
+
+/// Resolves an ordered chain over a fallback seed and explains each opinion.
+///
+/// The resolution is exactly [`resolve_ordered_chain_with_fallback`] for the
+/// same inputs, including its absence, block, and mismatched-fallback rules.
+/// As in [`resolve_ordered_chain_report`], the entire chain is read to report
+/// hidden and incompatible opinions. Events describe only authored opinions;
+/// the fallback is a seed with no provenance and adds no event.
+#[must_use]
+pub fn resolve_ordered_chain_with_fallback_report<'a, V, I, K, P>(
+    opinions_strong_to_weak: impl IntoIterator<Item = ChainOpinion<'a, V, I, K, P>>,
+    fallback: &ResolvedValue<V, I, K>,
+) -> ResolutionReport<V, I, K, P>
+where
+    V: Clone + 'a,
+    I: Clone + Eq + 'a,
+    K: Clone + Ord + 'a,
+    P: Clone + 'a,
+{
+    fold_ordered_chain_report(opinions_strong_to_weak, Some(fallback))
+}
+
+// Resolution and reporting share the value fold (AOUSD Core §12.4 for list
+// edits, §6.6.2.1 for dictionaries). Diagnostics additionally visit hidden
+// opinions, but cannot change which values or fallback entries participate.
+fn fold_ordered_chain_report<'a, V, I, K, P>(
+    opinions_strong_to_weak: impl IntoIterator<Item = ChainOpinion<'a, V, I, K, P>>,
+    fallback: Option<&ResolvedValue<V, I, K>>,
+) -> ResolutionReport<V, I, K, P>
+where
+    V: Clone + 'a,
+    I: Clone + Eq + 'a,
+    K: Clone + Ord + 'a,
+    P: Clone + 'a,
+{
     let opinions: Vec<_> = opinions_strong_to_weak.into_iter().collect();
+    let resolution = fold_ordered_chain(
+        opinions.iter().map(|opinion| ChainOpinion {
+            op: opinion.op,
+            provenance: opinion.provenance,
+        }),
+        fallback,
+    );
     let Some(strongest) = opinions.first() else {
         return ResolutionReport {
-            resolution: Resolution::Absent,
+            resolution,
             events: Vec::new(),
         };
     };
@@ -1205,14 +1418,8 @@ where
                         reason: IgnoreReason::WeakerThanBlock,
                     }),
             );
-            ResolutionReport {
-                resolution: Resolution::Blocked {
-                    provenance: strongest.provenance.clone(),
-                },
-                events,
-            }
         }
-        OpinionOp::Set(value) => {
+        OpinionOp::Set(_) => {
             events.push(ResolutionEvent::Contributed {
                 provenance: strongest.provenance.clone(),
                 kind: OpinionKind::Set,
@@ -1226,45 +1433,19 @@ where
                         reason: IgnoreReason::WeakerThanSet,
                     }),
             );
-            ResolutionReport {
-                resolution: Resolution::Resolved(Resolved {
-                    value: ResolvedValue::Scalar(value.clone()),
-                    provenance: strongest.provenance.clone(),
-                }),
-                events,
-            }
         }
         OpinionOp::List(_) => {
-            let mut ops = Vec::new();
-            record_list_events(&opinions, &mut ops, &mut events);
-            ResolutionReport {
-                resolution: Resolution::Resolved(Resolved {
-                    value: ResolvedValue::List(resolve_list_chain(&[], ops)),
-                    provenance: strongest.provenance.clone(),
-                }),
-                events,
-            }
+            record_list_events(&opinions, &mut events);
         }
         OpinionOp::Dictionary(_) => {
-            let mut dicts = Vec::new();
-            record_dictionary_events(&opinions, &mut dicts, &mut events);
-            ResolutionReport {
-                resolution: Resolution::Resolved(Resolved {
-                    value: ResolvedValue::Dictionary(combine_dictionary_chain(
-                        &ShallowOverlay,
-                        dicts,
-                    )),
-                    provenance: strongest.provenance.clone(),
-                }),
-                events,
-            }
+            record_dictionary_events(&opinions, &mut events);
         }
     }
+    ResolutionReport { resolution, events }
 }
 
 fn record_list_events<'a, V, I, K, P>(
     opinions: &[ChainOpinion<'a, V, I, K, P>],
-    ops: &mut Vec<&'a ListOp<I>>,
     events: &mut Vec<ResolutionEvent<P>>,
 ) where
     P: Clone,
@@ -1281,7 +1462,6 @@ fn record_list_events<'a, V, I, K, P>(
         match opinion.op {
             OpinionOp::List(op) => {
                 explicit = op.explicit.is_some();
-                ops.push(op);
                 events.push(ResolutionEvent::Contributed {
                     provenance: opinion.provenance.clone(),
                     kind: OpinionKind::List,
@@ -1306,15 +1486,13 @@ fn record_list_events<'a, V, I, K, P>(
 
 fn record_dictionary_events<'a, V, I, K, P>(
     opinions: &[ChainOpinion<'a, V, I, K, P>],
-    dicts: &mut Vec<&'a [(K, V)]>,
     events: &mut Vec<ResolutionEvent<P>>,
 ) where
     P: Clone,
 {
     for (index, opinion) in opinions.iter().enumerate() {
         match opinion.op {
-            OpinionOp::Dictionary(entries) => {
-                dicts.push(entries.as_slice());
+            OpinionOp::Dictionary(_) => {
                 events.push(ResolutionEvent::Contributed {
                     provenance: opinion.provenance.clone(),
                     kind: OpinionKind::Dictionary,

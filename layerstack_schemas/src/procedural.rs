@@ -28,6 +28,9 @@ use layerstack::{
 mod evidence;
 pub use evidence::{Evaluated, EvaluationEvidence, EvidenceApplyError, EvidenceError};
 
+/// Explicit producer dependencies, resource revisions and guarded publication.
+pub mod graph;
+
 use crate::{Scene, usd_proc::GenerativeProcedural};
 
 /// Application-supplied evaluator for one procedural system.

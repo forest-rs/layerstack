@@ -8,9 +8,12 @@
 //! and the typed views built from the same schemas: each schema's kind,
 //! parent, built-ins, auto-applies, documentation and properties, and each
 //! property's declared type, variability, fallback, runtime metadata, `allowedTokens`,
-//! documentation and `apiName`. Only `apiName` comes from the source
-//! (`pxr/usd/*/schema.usda`), since usdGenSchema consumes it; everything
-//! else comes from the wheel.
+//! documentation and `apiName`. Property `apiName` comes from source
+//! `pxr/usd/*/schema.usda`, since usdGenSchema consumes it; runtime definitions
+//! come from the wheel. C++ documentation aliases use registered native type
+//! names only when the matching class and accessor declarations exist in source
+//! headers. Codeless schemas retain their native schema spelling without
+//! invented C++ classes or methods.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -62,6 +65,8 @@ pub(crate) struct Domain {
 /// A schema, as its plugin defines it.
 #[derive(Debug)]
 pub(crate) struct Schema {
+    /// Registered native class and its verified header, when it has C++ code.
+    pub(crate) cpp: Option<(String, String)>,
     /// Its identifier (`Mesh`, `CollectionAPI`).
     pub(crate) name: String,
     /// Its kind.
@@ -330,6 +335,22 @@ pub(crate) fn read(pxr: &Path, source: &Path) -> Result<Model, String> {
         let mut schemas = Vec::new();
         for definition in definitions {
             let name = String::from(store.tokens.resolve(definition.name));
+            let cpp = types
+                .iter()
+                .find(|(_, info)| info.identifier.as_deref() == Some(&name))
+                .and_then(|(cpp_name, _)| {
+                    let stem = cpp_name.strip_prefix(variant)?;
+                    let mut chars = stem.chars();
+                    let header_name =
+                        chars.next()?.to_ascii_lowercase().to_string() + chars.as_str() + ".h";
+                    let header = source.join("pxr/usd").join(plugin).join(header_name);
+                    let text = fs::read_to_string(&header).ok()?;
+                    if !text.contains(&format!("class {cpp_name}")) {
+                        return None;
+                    }
+                    files.push(relative(&header));
+                    Some((cpp_name.clone(), text))
+                });
             let spec = store
                 .paths
                 .lookup(&layerstack::Path::root().join(&[definition.name]))
@@ -389,6 +410,7 @@ pub(crate) fn read(pxr: &Path, source: &Path) -> Result<Model, String> {
                 ));
             }
             schemas.push(Schema {
+                cpp,
                 doc: class_doc,
                 can_only_apply_to: names(&definition.can_only_apply_to, &store.tokens),
                 allowed_instance_names: names(&definition.allowed_instance_names, &store.tokens),

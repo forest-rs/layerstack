@@ -17,6 +17,7 @@ use layerstack::{ArrayReadError, PathId, PropertyPath, PropertyType, TargetPath,
 
 /// A composed `primvars:*` attribute, excluding the `:indices` sidecar.
 #[derive(Clone, Copy, Debug)]
+#[doc(alias = "UsdGeomPrimvar")]
 pub struct Primvar<'a> {
     prim: PrimView<'a>,
     name: &'a str,
@@ -185,6 +186,8 @@ impl<'a> Primvar<'a> {
     }
     /// Composed interpolation; unauthored interpolation is `constant`.
     #[must_use]
+    #[doc(alias = "UsdGeomPrimvar::GetInterpolation")]
+    #[doc(alias = "GetInterpolation")]
     pub fn interpolation(&self) -> &'a str {
         self.prim
             .property_metadata(self.name)
@@ -193,6 +196,8 @@ impl<'a> Primvar<'a> {
     }
     /// Values per indexed element; unauthored element size is one.
     #[must_use]
+    #[doc(alias = "UsdGeomPrimvar::GetElementSize")]
+    #[doc(alias = "GetElementSize")]
     pub fn element_size(&self) -> i32 {
         self.prim
             .property_metadata(self.name)
@@ -216,6 +221,8 @@ impl<'a> Primvar<'a> {
     }
     /// Whether the indices attribute has an effective authored value.
     #[must_use]
+    #[doc(alias = "UsdGeomPrimvar::IsIndexed")]
+    #[doc(alias = "IsIndexed")]
     pub fn is_indexed(&self) -> bool {
         self.prim
             .has_authored_value(&format!("{}:indices", self.name))
@@ -224,6 +231,8 @@ impl<'a> Primvar<'a> {
     /// Legacy storage or sparse composition can materialize; `as_ref().clone()`
     /// makes an explicit mutable copy.
     #[must_use]
+    #[doc(alias = "UsdGeomPrimvar::GetIndices")]
+    #[doc(alias = "GetIndices")]
     pub fn indices(&self, time: Time) -> Option<Arc<Vec<i32>>> {
         let value = self
             .prim
@@ -262,6 +271,8 @@ impl<'a> Primvar<'a> {
     /// Empty or ambiguous targets return `None`, without retrying the local value.
     ///
     /// OpenUSD: `UsdGeomPrimvar::Get`; AOUSD Core §12.4 (relationship resolution).
+    #[doc(alias = "UsdGeomPrimvar::Get")]
+    #[doc(alias = "Get")]
     pub fn value(&self, time: Time) -> Result<Option<Value>, PrimvarError> {
         if self.is_id_target() {
             let scene = self.prim.scene();
@@ -294,6 +305,8 @@ impl<'a> Primvar<'a> {
     /// Includes effective clip samples and sparse contributions from the core.
     /// OpenUSD: `UsdGeomPrimvar::GetTimeSamples`; AOUSD Core §12.3.2.
     #[must_use]
+    #[doc(alias = "UsdGeomPrimvar::GetTimeSamples")]
+    #[doc(alias = "GetTimeSamples")]
     pub fn sample_times(&self) -> Vec<f64> {
         let scene = self.prim.scene();
         let path = self.property();
@@ -325,6 +338,8 @@ impl<'a> Primvar<'a> {
     /// Whether effective values or indexed indices might vary at numeric times.
     /// Multiple samples or a spline count even when their values agree.
     #[must_use]
+    #[doc(alias = "UsdGeomPrimvar::ValueMightBeTimeVarying")]
+    #[doc(alias = "ValueMightBeTimeVarying")]
     pub fn might_be_time_varying(&self) -> bool {
         let scene = self.prim.scene();
         let path = self.property();
@@ -417,6 +432,8 @@ impl<'a> Primvar<'a> {
     /// Expands each index into `element_size` consecutive values. Scalars and
     /// nonindexed arrays pass through. Invalid indices or decode errors return
     /// no partial array. Use `validated_values` to consume the mapping directly.
+    #[doc(alias = "UsdGeomPrimvar::ComputeFlattened")]
+    #[doc(alias = "ComputeFlattened")]
     pub fn compute_flattened(&self, time: Time) -> Result<Option<Value>, PrimvarError> {
         self.validated_values(time)
             .map(|value| value.map(|v| v.compute_flattened()))

@@ -26,6 +26,9 @@ use crate::{PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "MaterialXConfigAPI is an API schema that provides an interface for storing information about the MaterialX environment."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's single-apply API schema `MaterialXConfigAPI`. Get it with [`MaterialXConfigApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdMtlxMaterialXConfigAPI`."]
+#[doc(alias = "UsdMtlxMaterialXConfigAPI")]
+#[doc(alias = "MaterialXConfigAPI")]
 #[derive(Clone, Copy, Debug)]
 pub struct MaterialXConfigApi<'a> {
     base: PrimView<'a>,
@@ -46,6 +49,8 @@ impl<'a> MaterialXConfigApi<'a> {
     /// A view of the schema on the prim at `path`, if the prim has it
     /// applied.
     #[must_use]
+    #[doc(alias = "UsdMtlxMaterialXConfigAPI::Get")]
+    #[doc(alias = "Get")]
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
@@ -70,6 +75,8 @@ impl<'a> MaterialXConfigApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there.
+    #[doc(alias = "UsdMtlxMaterialXConfigAPI::Apply")]
+    #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
@@ -85,6 +92,9 @@ impl<'a> MaterialXConfigApi<'a> {
         #[doc = "MaterialX library version that the data has been authored against."]
         #[doc = ""]
         #[doc = "USD attribute `config:mtlx:version` (`string`; fallback `\"1.38\"`)."]
+        #[doc = "C++ read: `UsdMtlxMaterialXConfigAPI::GetConfigMtlxVersionAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdMtlxMaterialXConfigAPI::GetConfigMtlxVersionAttr")]
+        #[doc(alias = "GetConfigMtlxVersionAttr")]
         config_mtlx_version, config_mtlx_version_at, "config:mtlx:version", ::alloc::sync::Arc<str>, crate::value::read_string
     }
 }
@@ -122,6 +132,9 @@ impl MaterialXConfigApiEdit {
         #[doc = "MaterialX library version that the data has been authored against."]
         #[doc = ""]
         #[doc = "USD attribute `config:mtlx:version` (`string`; fallback `\"1.38\"`)."]
+        #[doc = "C++ authoring: `UsdMtlxMaterialXConfigAPI::CreateConfigMtlxVersionAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdMtlxMaterialXConfigAPI::CreateConfigMtlxVersionAttr")]
+        #[doc(alias = "CreateConfigMtlxVersionAttr")]
         set_config_mtlx_version, set_config_mtlx_version_at, "config:mtlx:version", &str, crate::value::write_string
     }
 }

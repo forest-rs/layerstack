@@ -156,6 +156,8 @@ pub struct Applied {
 /// OpenUSD: `UsdNotice::ObjectsChanged::GetResyncedPaths` and
 /// `GetChangedInfoOnlyPaths` use the same subtree versus exact-path distinction.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[doc(alias = "UsdNotice::ObjectsChanged")]
+#[doc(alias = "ObjectsChanged")]
 pub struct Changes {
     /// Prim paths present after the transaction but absent before it.
     pub created: Vec<PathId>,

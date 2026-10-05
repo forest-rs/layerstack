@@ -26,6 +26,9 @@ use crate::{PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "\\\\deprecated Materials should use UsdShadeMaterial instead."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's single-apply API schema `RiMaterialAPI`. Get it with [`RiMaterialApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdRiMaterialAPI`."]
+#[doc(alias = "UsdRiMaterialAPI")]
+#[doc(alias = "RiMaterialAPI")]
 #[derive(Clone, Copy, Debug)]
 pub struct RiMaterialApi<'a> {
     base: PrimView<'a>,
@@ -46,6 +49,8 @@ impl<'a> RiMaterialApi<'a> {
     /// A view of the schema on the prim at `path`, if the prim has it
     /// applied.
     #[must_use]
+    #[doc(alias = "UsdRiMaterialAPI::Get")]
+    #[doc(alias = "Get")]
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
@@ -70,6 +75,8 @@ impl<'a> RiMaterialApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there.
+    #[doc(alias = "UsdRiMaterialAPI::Apply")]
+    #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
@@ -83,6 +90,9 @@ impl<'a> RiMaterialApi<'a> {
 
     attribute! {
         #[doc = "USD attribute `outputs:ri:displacement` (`token`)."]
+        #[doc = "C++ read: `UsdRiMaterialAPI::GetDisplacementAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdRiMaterialAPI::GetDisplacementAttr")]
+        #[doc(alias = "GetDisplacementAttr")]
         displacement, displacement_at, "outputs:ri:displacement", &'a str, crate::value::read_token
     }
     /// The USD name of [`Self::surface`].
@@ -90,6 +100,9 @@ impl<'a> RiMaterialApi<'a> {
 
     attribute! {
         #[doc = "USD attribute `outputs:ri:surface` (`token`)."]
+        #[doc = "C++ read: `UsdRiMaterialAPI::GetSurfaceAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdRiMaterialAPI::GetSurfaceAttr")]
+        #[doc(alias = "GetSurfaceAttr")]
         surface, surface_at, "outputs:ri:surface", &'a str, crate::value::read_token
     }
     /// The USD name of [`Self::volume`].
@@ -97,6 +110,9 @@ impl<'a> RiMaterialApi<'a> {
 
     attribute! {
         #[doc = "USD attribute `outputs:ri:volume` (`token`)."]
+        #[doc = "C++ read: `UsdRiMaterialAPI::GetVolumeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdRiMaterialAPI::GetVolumeAttr")]
+        #[doc(alias = "GetVolumeAttr")]
         volume, volume_at, "outputs:ri:volume", &'a str, crate::value::read_token
     }
 }
@@ -132,14 +148,23 @@ impl RiMaterialApiEdit {
 
     set_attribute! {
         #[doc = "USD attribute `outputs:ri:displacement` (`token`)."]
+        #[doc = "C++ authoring: `UsdRiMaterialAPI::CreateDisplacementAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdRiMaterialAPI::CreateDisplacementAttr")]
+        #[doc(alias = "CreateDisplacementAttr")]
         set_displacement, set_displacement_at, "outputs:ri:displacement", &str, crate::value::write_token
     }
     set_attribute! {
         #[doc = "USD attribute `outputs:ri:surface` (`token`)."]
+        #[doc = "C++ authoring: `UsdRiMaterialAPI::CreateSurfaceAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdRiMaterialAPI::CreateSurfaceAttr")]
+        #[doc(alias = "CreateSurfaceAttr")]
         set_surface, set_surface_at, "outputs:ri:surface", &str, crate::value::write_token
     }
     set_attribute! {
         #[doc = "USD attribute `outputs:ri:volume` (`token`)."]
+        #[doc = "C++ authoring: `UsdRiMaterialAPI::CreateVolumeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdRiMaterialAPI::CreateVolumeAttr")]
+        #[doc(alias = "CreateVolumeAttr")]
         set_volume, set_volume_at, "outputs:ri:volume", &str, crate::value::write_token
     }
 }
@@ -147,6 +172,9 @@ impl RiMaterialApiEdit {
 #[doc = "\\\\deprecated This API schema will be removed in a future release."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's single-apply API schema `RiSplineAPI`. Get it with [`RiSplineApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdRiSplineAPI`."]
+#[doc(alias = "UsdRiSplineAPI")]
+#[doc(alias = "RiSplineAPI")]
 #[derive(Clone, Copy, Debug)]
 pub struct RiSplineApi<'a> {
     base: PrimView<'a>,
@@ -167,6 +195,8 @@ impl<'a> RiSplineApi<'a> {
     /// A view of the schema on the prim at `path`, if the prim has it
     /// applied.
     #[must_use]
+    #[doc(alias = "UsdRiSplineAPI::Get")]
+    #[doc(alias = "Get")]
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
@@ -191,6 +221,8 @@ impl<'a> RiSplineApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there.
+    #[doc(alias = "UsdRiSplineAPI::Apply")]
+    #[doc(alias = "Apply")]
     pub fn apply(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<RiSplineApiEdit, CannotApply> {
         edit.apply(path, Self::SCHEMA, None)?;
         Ok(RiSplineApiEdit::from_path(path))
@@ -230,6 +262,9 @@ impl RiSplineApiEdit {
 #[doc = "Container namespace schema for all renderman statements."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's single-apply API schema `StatementsAPI`. Get it with [`StatementsApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdRiStatementsAPI`."]
+#[doc(alias = "UsdRiStatementsAPI")]
+#[doc(alias = "StatementsAPI")]
 #[derive(Clone, Copy, Debug)]
 pub struct StatementsApi<'a> {
     base: PrimView<'a>,
@@ -250,6 +285,8 @@ impl<'a> StatementsApi<'a> {
     /// A view of the schema on the prim at `path`, if the prim has it
     /// applied.
     #[must_use]
+    #[doc(alias = "UsdRiStatementsAPI::Get")]
+    #[doc(alias = "Get")]
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
@@ -274,6 +311,8 @@ impl<'a> StatementsApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there.
+    #[doc(alias = "UsdRiStatementsAPI::Apply")]
+    #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,

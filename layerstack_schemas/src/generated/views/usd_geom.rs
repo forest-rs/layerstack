@@ -39,6 +39,9 @@ token_enum! {
 #[doc = "This schema specifies a back plate i.e."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's multiple-apply API schema `BackPlateAPI`. Get it with [`BackPlateApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdGeomBackPlateAPI`."]
+#[doc(alias = "UsdGeomBackPlateAPI")]
+#[doc(alias = "BackPlateAPI")]
 #[derive(Clone, Copy, Debug)]
 pub struct BackPlateApi<'a> {
     base: InstanceView<'a>,
@@ -59,6 +62,8 @@ impl<'a> BackPlateApi<'a> {
     /// A view of the instance `instance` of the schema on the prim at `path`,
     /// if the prim has it applied.
     #[must_use]
+    #[doc(alias = "UsdGeomBackPlateAPI::Get")]
+    #[doc(alias = "Get")]
     pub fn get(scene: &Scene<'a>, path: PathId, instance: &str) -> Option<Self> {
         if !scene.has_api(path, Self::SCHEMA, Some(instance)) {
             return None;
@@ -70,6 +75,8 @@ impl<'a> BackPlateApi<'a> {
     /// Every instance of the schema the prim at `path` has applied, in the
     /// order its definition applies them.
     #[must_use]
+    #[doc(alias = "UsdGeomBackPlateAPI::GetAll")]
+    #[doc(alias = "GetAll")]
     pub fn instances(scene: &Scene<'a>, path: PathId) -> ::alloc::vec::Vec<Self> {
         scene
             .instances(path, Self::SCHEMA)
@@ -98,6 +105,8 @@ impl<'a> BackPlateApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there.
+    #[doc(alias = "UsdGeomBackPlateAPI::Apply")]
+    #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
@@ -111,48 +120,78 @@ impl<'a> BackPlateApi<'a> {
         #[doc = "Asset path to the file containing a texture or sequence of textures."]
         #[doc = ""]
         #[doc = "USD attribute `backPlate:&lt;instance&gt;:alpha:image` (`asset`; fallback `\"\"`)."]
+        #[doc = "C++ read: `UsdGeomBackPlateAPI::GetAlphaImageAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomBackPlateAPI::GetAlphaImageAttr")]
+        #[doc(alias = "GetAlphaImageAttr")]
         alpha_image, alpha_image_at, "backPlate:__INSTANCE_NAME__:alpha:image", ::alloc::sync::Arc<str>, crate::value::read_asset
     }
     attribute! {
         #[doc = "USD attribute `backPlate:&lt;instance&gt;:depth:cameraSpaceOffset` (`float`; fallback `0.0`)."]
+        #[doc = "C++ read: `UsdGeomBackPlateAPI::GetDepthCameraSpaceOffsetAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomBackPlateAPI::GetDepthCameraSpaceOffsetAttr")]
+        #[doc(alias = "GetDepthCameraSpaceOffsetAttr")]
         depth_camera_space_offset, depth_camera_space_offset_at, "backPlate:__INSTANCE_NAME__:depth:cameraSpaceOffset", f32, crate::value::read_float
     }
     attribute! {
         #[doc = "Asset path to the file containing a texture or sequence of textures."]
         #[doc = ""]
         #[doc = "USD attribute `backPlate:&lt;instance&gt;:depth:image` (`asset`; fallback `\"\"`)."]
+        #[doc = "C++ read: `UsdGeomBackPlateAPI::GetDepthImageAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomBackPlateAPI::GetDepthImageAttr")]
+        #[doc(alias = "GetDepthImageAttr")]
         depth_image, depth_image_at, "backPlate:__INSTANCE_NAME__:depth:image", ::alloc::sync::Arc<str>, crate::value::read_asset
     }
     attribute! {
         #[doc = "USD attribute `backPlate:&lt;instance&gt;:depth:minOffset` (`float`; fallback `0.0`)."]
+        #[doc = "C++ read: `UsdGeomBackPlateAPI::GetDepthMinOffsetAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomBackPlateAPI::GetDepthMinOffsetAttr")]
+        #[doc(alias = "GetDepthMinOffsetAttr")]
         depth_min_offset, depth_min_offset_at, "backPlate:__INSTANCE_NAME__:depth:minOffset", f32, crate::value::read_float
     }
     attribute! {
         #[doc = "USD attribute `backPlate:&lt;instance&gt;:depth:normalizingFactor` (`float`; fallback `1.0`)."]
+        #[doc = "C++ read: `UsdGeomBackPlateAPI::GetDepthNormalizingFactorAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomBackPlateAPI::GetDepthNormalizingFactorAttr")]
+        #[doc(alias = "GetDepthNormalizingFactorAttr")]
         depth_normalizing_factor, depth_normalizing_factor_at, "backPlate:__INSTANCE_NAME__:depth:normalizingFactor", f32, crate::value::read_float
     }
     attribute! {
         #[doc = "Asset path to the file containing a texture or sequence of textures."]
         #[doc = ""]
         #[doc = "USD attribute `backPlate:&lt;instance&gt;:image` (`asset`; fallback `\"\"`)."]
+        #[doc = "C++ read: `UsdGeomBackPlateAPI::GetImageAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomBackPlateAPI::GetImageAttr")]
+        #[doc(alias = "GetImageAttr")]
         image, image_at, "backPlate:__INSTANCE_NAME__:image", ::alloc::sync::Arc<str>, crate::value::read_asset
     }
     attribute! {
         #[doc = "USD attribute `backPlate:&lt;instance&gt;:luma:gain` (`float3`; fallback `(1.0, 1.0, 1.0)`)."]
+        #[doc = "C++ read: `UsdGeomBackPlateAPI::GetLumaGainAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomBackPlateAPI::GetLumaGainAttr")]
+        #[doc(alias = "GetLumaGainAttr")]
         luma_gain, luma_gain_at, "backPlate:__INSTANCE_NAME__:luma:gain", [f32; 3], crate::value::read_float3
     }
     attribute! {
         #[doc = "USD attribute `backPlate:&lt;instance&gt;:luma:gamma` (`float3`; fallback `(1.0, 1.0, 1.0)`)."]
+        #[doc = "C++ read: `UsdGeomBackPlateAPI::GetLumaGammaAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomBackPlateAPI::GetLumaGammaAttr")]
+        #[doc(alias = "GetLumaGammaAttr")]
         luma_gamma, luma_gamma_at, "backPlate:__INSTANCE_NAME__:luma:gamma", [f32; 3], crate::value::read_float3
     }
     attribute! {
         #[doc = "USD attribute `backPlate:&lt;instance&gt;:luma:lift` (`float3`; fallback `(0.0, 0.0, 0.0)`)."]
+        #[doc = "C++ read: `UsdGeomBackPlateAPI::GetLumaLiftAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomBackPlateAPI::GetLumaLiftAttr")]
+        #[doc(alias = "GetLumaLiftAttr")]
         luma_lift, luma_lift_at, "backPlate:__INSTANCE_NAME__:luma:lift", [f32; 3], crate::value::read_float3
     }
     attribute! {
         #[doc = "Toggles the visibility of the back plate to all cameras, only the owning camera, or no cameras."]
         #[doc = ""]
         #[doc = "USD attribute `backPlate:&lt;instance&gt;:plateVisibility` (`token`; fallback `\"solo\"`)."]
+        #[doc = "C++ read: `UsdGeomBackPlateAPI::GetPlateVisibilityAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomBackPlateAPI::GetPlateVisibilityAttr")]
+        #[doc(alias = "GetPlateVisibilityAttr")]
         plate_visibility, plate_visibility_at, "backPlate:__INSTANCE_NAME__:plateVisibility", BackPlateApiPlateVisibility, BackPlateApiPlateVisibility::read
     }
     attribute! {
@@ -161,10 +200,16 @@ impl<'a> BackPlateApi<'a> {
     }
     attribute! {
         #[doc = "USD attribute `backPlate:&lt;instance&gt;:scale:tweak` (`float2`; fallback `(1.0, 1.0)`)."]
+        #[doc = "C++ read: `UsdGeomBackPlateAPI::GetScaleTweakAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomBackPlateAPI::GetScaleTweakAttr")]
+        #[doc(alias = "GetScaleTweakAttr")]
         scale_tweak, scale_tweak_at, "backPlate:__INSTANCE_NAME__:scale:tweak", [f32; 2], crate::value::read_float2
     }
     attribute! {
         #[doc = "USD attribute `backPlate:&lt;instance&gt;:translate:tweak` (`float3`; fallback `(0.0, 0.0, 0.0)`)."]
+        #[doc = "C++ read: `UsdGeomBackPlateAPI::GetTranslateTweakAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomBackPlateAPI::GetTranslateTweakAttr")]
+        #[doc(alias = "GetTranslateTweakAttr")]
         translate_tweak, translate_tweak_at, "backPlate:__INSTANCE_NAME__:translate:tweak", [f32; 3], crate::value::read_float3
     }
 }
@@ -202,48 +247,78 @@ impl BackPlateApiEdit {
         #[doc = "Asset path to the file containing a texture or sequence of textures."]
         #[doc = ""]
         #[doc = "USD attribute `backPlate:&lt;instance&gt;:alpha:image` (`asset`; fallback `\"\"`)."]
+        #[doc = "C++ authoring: `UsdGeomBackPlateAPI::CreateAlphaImageAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomBackPlateAPI::CreateAlphaImageAttr")]
+        #[doc(alias = "CreateAlphaImageAttr")]
         set_alpha_image, set_alpha_image_at, "backPlate:__INSTANCE_NAME__:alpha:image", &str, crate::value::write_asset
     }
     set_attribute! {
         #[doc = "USD attribute `backPlate:&lt;instance&gt;:depth:cameraSpaceOffset` (`float`; fallback `0.0`)."]
+        #[doc = "C++ authoring: `UsdGeomBackPlateAPI::CreateDepthCameraSpaceOffsetAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomBackPlateAPI::CreateDepthCameraSpaceOffsetAttr")]
+        #[doc(alias = "CreateDepthCameraSpaceOffsetAttr")]
         set_depth_camera_space_offset, set_depth_camera_space_offset_at, "backPlate:__INSTANCE_NAME__:depth:cameraSpaceOffset", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "Asset path to the file containing a texture or sequence of textures."]
         #[doc = ""]
         #[doc = "USD attribute `backPlate:&lt;instance&gt;:depth:image` (`asset`; fallback `\"\"`)."]
+        #[doc = "C++ authoring: `UsdGeomBackPlateAPI::CreateDepthImageAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomBackPlateAPI::CreateDepthImageAttr")]
+        #[doc(alias = "CreateDepthImageAttr")]
         set_depth_image, set_depth_image_at, "backPlate:__INSTANCE_NAME__:depth:image", &str, crate::value::write_asset
     }
     set_attribute! {
         #[doc = "USD attribute `backPlate:&lt;instance&gt;:depth:minOffset` (`float`; fallback `0.0`)."]
+        #[doc = "C++ authoring: `UsdGeomBackPlateAPI::CreateDepthMinOffsetAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomBackPlateAPI::CreateDepthMinOffsetAttr")]
+        #[doc(alias = "CreateDepthMinOffsetAttr")]
         set_depth_min_offset, set_depth_min_offset_at, "backPlate:__INSTANCE_NAME__:depth:minOffset", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "USD attribute `backPlate:&lt;instance&gt;:depth:normalizingFactor` (`float`; fallback `1.0`)."]
+        #[doc = "C++ authoring: `UsdGeomBackPlateAPI::CreateDepthNormalizingFactorAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomBackPlateAPI::CreateDepthNormalizingFactorAttr")]
+        #[doc(alias = "CreateDepthNormalizingFactorAttr")]
         set_depth_normalizing_factor, set_depth_normalizing_factor_at, "backPlate:__INSTANCE_NAME__:depth:normalizingFactor", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "Asset path to the file containing a texture or sequence of textures."]
         #[doc = ""]
         #[doc = "USD attribute `backPlate:&lt;instance&gt;:image` (`asset`; fallback `\"\"`)."]
+        #[doc = "C++ authoring: `UsdGeomBackPlateAPI::CreateImageAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomBackPlateAPI::CreateImageAttr")]
+        #[doc(alias = "CreateImageAttr")]
         set_image, set_image_at, "backPlate:__INSTANCE_NAME__:image", &str, crate::value::write_asset
     }
     set_attribute! {
         #[doc = "USD attribute `backPlate:&lt;instance&gt;:luma:gain` (`float3`; fallback `(1.0, 1.0, 1.0)`)."]
+        #[doc = "C++ authoring: `UsdGeomBackPlateAPI::CreateLumaGainAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomBackPlateAPI::CreateLumaGainAttr")]
+        #[doc(alias = "CreateLumaGainAttr")]
         set_luma_gain, set_luma_gain_at, "backPlate:__INSTANCE_NAME__:luma:gain", [f32; 3], crate::value::write_float3
     }
     set_attribute! {
         #[doc = "USD attribute `backPlate:&lt;instance&gt;:luma:gamma` (`float3`; fallback `(1.0, 1.0, 1.0)`)."]
+        #[doc = "C++ authoring: `UsdGeomBackPlateAPI::CreateLumaGammaAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomBackPlateAPI::CreateLumaGammaAttr")]
+        #[doc(alias = "CreateLumaGammaAttr")]
         set_luma_gamma, set_luma_gamma_at, "backPlate:__INSTANCE_NAME__:luma:gamma", [f32; 3], crate::value::write_float3
     }
     set_attribute! {
         #[doc = "USD attribute `backPlate:&lt;instance&gt;:luma:lift` (`float3`; fallback `(0.0, 0.0, 0.0)`)."]
+        #[doc = "C++ authoring: `UsdGeomBackPlateAPI::CreateLumaLiftAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomBackPlateAPI::CreateLumaLiftAttr")]
+        #[doc(alias = "CreateLumaLiftAttr")]
         set_luma_lift, set_luma_lift_at, "backPlate:__INSTANCE_NAME__:luma:lift", [f32; 3], crate::value::write_float3
     }
     set_attribute! {
         #[doc = "Toggles the visibility of the back plate to all cameras, only the owning camera, or no cameras."]
         #[doc = ""]
         #[doc = "USD attribute `backPlate:&lt;instance&gt;:plateVisibility` (`token`; fallback `\"solo\"`)."]
+        #[doc = "C++ authoring: `UsdGeomBackPlateAPI::CreatePlateVisibilityAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomBackPlateAPI::CreatePlateVisibilityAttr")]
+        #[doc(alias = "CreatePlateVisibilityAttr")]
         set_plate_visibility, set_plate_visibility_at, "backPlate:__INSTANCE_NAME__:plateVisibility", BackPlateApiPlateVisibility, BackPlateApiPlateVisibility::write
     }
     set_attribute! {
@@ -252,10 +327,16 @@ impl BackPlateApiEdit {
     }
     set_attribute! {
         #[doc = "USD attribute `backPlate:&lt;instance&gt;:scale:tweak` (`float2`; fallback `(1.0, 1.0)`)."]
+        #[doc = "C++ authoring: `UsdGeomBackPlateAPI::CreateScaleTweakAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomBackPlateAPI::CreateScaleTweakAttr")]
+        #[doc(alias = "CreateScaleTweakAttr")]
         set_scale_tweak, set_scale_tweak_at, "backPlate:__INSTANCE_NAME__:scale:tweak", [f32; 2], crate::value::write_float2
     }
     set_attribute! {
         #[doc = "USD attribute `backPlate:&lt;instance&gt;:translate:tweak` (`float3`; fallback `(0.0, 0.0, 0.0)`)."]
+        #[doc = "C++ authoring: `UsdGeomBackPlateAPI::CreateTranslateTweakAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomBackPlateAPI::CreateTranslateTweakAttr")]
+        #[doc(alias = "CreateTranslateTweakAttr")]
         set_translate_tweak, set_translate_tweak_at, "backPlate:__INSTANCE_NAME__:translate:tweak", [f32; 3], crate::value::write_float3
     }
 }
@@ -297,6 +378,8 @@ token_enum! {
 #[doc = "BasisCurves are a batched curve representation analogous to the classic RIB definition via Basis and Curves statements."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `BasisCurves`, inheriting [`Curves`]. Construct it with [`BasisCurves::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdGeomBasisCurves`."]
+#[doc(alias = "UsdGeomBasisCurves")]
 #[derive(Clone, Copy, Debug)]
 pub struct BasisCurves<'a> {
     base: Curves<'a>,
@@ -315,6 +398,8 @@ impl<'a> BasisCurves<'a> {
     pub const SCHEMA: &'static str = "BasisCurves";
 
     #[doc = "A view of the prim at `path`, if it is a `BasisCurves` or of a schema derived from it."]
+    #[doc(alias = "UsdGeomBasisCurves::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -339,6 +424,8 @@ impl<'a> BasisCurves<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdGeomBasisCurves::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> BasisCurvesEdit {
         edit.define(path, Self::SCHEMA);
         BasisCurvesEdit::from_path(path)
@@ -351,6 +438,9 @@ impl<'a> BasisCurves<'a> {
         #[doc = "The basis specifies the vstep and matrix used for cubic interpolation."]
         #[doc = ""]
         #[doc = "USD attribute `basis` (`token`, uniform; fallback `\"bezier\"`)."]
+        #[doc = "C++ read: `UsdGeomBasisCurves::GetBasisAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomBasisCurves::GetBasisAttr")]
+        #[doc(alias = "GetBasisAttr")]
         basis, "basis", BasisCurvesBasis, BasisCurvesBasis::read
     }
     /// The USD name of [`Self::curve_type`].
@@ -360,6 +450,9 @@ impl<'a> BasisCurves<'a> {
         #[doc = "Linear curves interpolate linearly between two vertices."]
         #[doc = ""]
         #[doc = "USD attribute `type` (`token`, uniform; fallback `\"cubic\"`)."]
+        #[doc = "C++ read: `UsdGeomBasisCurves::GetTypeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomBasisCurves::GetTypeAttr")]
+        #[doc(alias = "GetTypeAttr")]
         curve_type, "type", BasisCurvesCurveType, BasisCurvesCurveType::read
     }
     /// The USD name of [`Self::wrap`].
@@ -369,6 +462,9 @@ impl<'a> BasisCurves<'a> {
         #[doc = "If wrap is set to periodic, the curve when rendered will repeat the initial vertices (dependent on the vstep) to close the curve."]
         #[doc = ""]
         #[doc = "USD attribute `wrap` (`token`, uniform; fallback `\"nonperiodic\"`)."]
+        #[doc = "C++ read: `UsdGeomBasisCurves::GetWrapAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomBasisCurves::GetWrapAttr")]
+        #[doc(alias = "GetWrapAttr")]
         wrap, "wrap", BasisCurvesWrap, BasisCurvesWrap::read
     }
 }
@@ -406,18 +502,27 @@ impl BasisCurvesEdit {
         #[doc = "The basis specifies the vstep and matrix used for cubic interpolation."]
         #[doc = ""]
         #[doc = "USD attribute `basis` (`token`, uniform; fallback `\"bezier\"`)."]
+        #[doc = "C++ authoring: `UsdGeomBasisCurves::CreateBasisAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomBasisCurves::CreateBasisAttr")]
+        #[doc(alias = "CreateBasisAttr")]
         set_basis, "basis", BasisCurvesBasis, BasisCurvesBasis::write
     }
     set_uniform_attribute! {
         #[doc = "Linear curves interpolate linearly between two vertices."]
         #[doc = ""]
         #[doc = "USD attribute `type` (`token`, uniform; fallback `\"cubic\"`)."]
+        #[doc = "C++ authoring: `UsdGeomBasisCurves::CreateTypeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomBasisCurves::CreateTypeAttr")]
+        #[doc(alias = "CreateTypeAttr")]
         set_curve_type, "type", BasisCurvesCurveType, BasisCurvesCurveType::write
     }
     set_uniform_attribute! {
         #[doc = "If wrap is set to periodic, the curve when rendered will repeat the initial vertices (dependent on the vstep) to close the curve."]
         #[doc = ""]
         #[doc = "USD attribute `wrap` (`token`, uniform; fallback `\"nonperiodic\"`)."]
+        #[doc = "C++ authoring: `UsdGeomBasisCurves::CreateWrapAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomBasisCurves::CreateWrapAttr")]
+        #[doc(alias = "CreateWrapAttr")]
         set_wrap, "wrap", BasisCurvesWrap, BasisCurvesWrap::write
     }
 }
@@ -425,6 +530,8 @@ impl BasisCurvesEdit {
 #[doc = "Boundable introduces the ability for a prim to persistently cache a rectilinear, local-space, extent."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's abstract typed schema `Boundable`, inheriting [`Xformable`]. Construct it with [`Boundable::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdGeomBoundable`."]
+#[doc(alias = "UsdGeomBoundable")]
 #[derive(Clone, Copy, Debug)]
 pub struct Boundable<'a> {
     base: Xformable<'a>,
@@ -443,6 +550,8 @@ impl<'a> Boundable<'a> {
     pub const SCHEMA: &'static str = "Boundable";
 
     #[doc = "A view of the prim at `path`, if it is a `Boundable` or of a schema derived from it."]
+    #[doc(alias = "UsdGeomBoundable::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -471,6 +580,9 @@ impl<'a> Boundable<'a> {
         #[doc = "USD attribute `extent` (`float3\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdGeomBoundable::GetExtentAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomBoundable::GetExtentAttr")]
+        #[doc(alias = "GetExtentAttr")]
         extent, extent_at, "extent", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::read_float3_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -518,6 +630,9 @@ impl BoundableEdit {
         #[doc = "USD attribute `extent` (`float3\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdGeomBoundable::CreateExtentAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomBoundable::CreateExtentAttr")]
+        #[doc(alias = "CreateExtentAttr")]
         set_extent, set_extent_at, "extent", &[[f32; 3]], crate::value::write_float3_array
     }
     set_attribute! {
@@ -555,6 +670,8 @@ token_enum! {
 #[doc = "Transformable camera."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `Camera`, inheriting [`Xformable`]. Construct it with [`Camera::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdGeomCamera`."]
+#[doc(alias = "UsdGeomCamera")]
 #[derive(Clone, Copy, Debug)]
 pub struct Camera<'a> {
     base: Xformable<'a>,
@@ -573,6 +690,8 @@ impl<'a> Camera<'a> {
     pub const SCHEMA: &'static str = "Camera";
 
     #[doc = "A view of the prim at `path`, if it is a `Camera` or of a schema derived from it."]
+    #[doc(alias = "UsdGeomCamera::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -597,6 +716,8 @@ impl<'a> Camera<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdGeomCamera::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> CameraEdit {
         edit.define(path, Self::SCHEMA);
         CameraEdit::from_path(path)
@@ -611,6 +732,9 @@ impl<'a> Camera<'a> {
         #[doc = "USD attribute `clippingPlanes` (`float4\\[\\]`; fallback `\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdGeomCamera::GetClippingPlanesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomCamera::GetClippingPlanesAttr")]
+        #[doc(alias = "GetClippingPlanesAttr")]
         clipping_planes, clipping_planes_at, "clippingPlanes", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 4]>>, crate::value::read_float4_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -632,6 +756,9 @@ impl<'a> Camera<'a> {
         #[doc = "Near and far clipping distances in scene units; see ."]
         #[doc = ""]
         #[doc = "USD attribute `clippingRange` (`float2`; fallback `(1.0, 1000000.0)`)."]
+        #[doc = "C++ read: `UsdGeomCamera::GetClippingRangeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomCamera::GetClippingRangeAttr")]
+        #[doc(alias = "GetClippingRangeAttr")]
         clipping_range, clipping_range_at, "clippingRange", [f32; 2], crate::value::read_float2
     }
     /// The USD name of [`Self::exposure`].
@@ -641,6 +768,9 @@ impl<'a> Camera<'a> {
         #[doc = "Exposure compensation, as a log base-2 value."]
         #[doc = ""]
         #[doc = "USD attribute `exposure` (`float`; fallback `0.0`)."]
+        #[doc = "C++ read: `UsdGeomCamera::GetExposureAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomCamera::GetExposureAttr")]
+        #[doc(alias = "GetExposureAttr")]
         exposure, exposure_at, "exposure", f32, crate::value::read_float
     }
     /// The USD name of [`Self::exposure_f_stop`].
@@ -650,6 +780,9 @@ impl<'a> Camera<'a> {
         #[doc = "f-stop of the aperture when calculating exposure."]
         #[doc = ""]
         #[doc = "USD attribute `exposure:fStop` (`float`; fallback `1.0`)."]
+        #[doc = "C++ read: `UsdGeomCamera::GetExposureFStopAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomCamera::GetExposureFStopAttr")]
+        #[doc(alias = "GetExposureFStopAttr")]
         exposure_f_stop, exposure_f_stop_at, "exposure:fStop", f32, crate::value::read_float
     }
     /// The USD name of [`Self::exposure_iso`].
@@ -659,6 +792,9 @@ impl<'a> Camera<'a> {
         #[doc = "The speed rating of the sensor or film when calculating exposure."]
         #[doc = ""]
         #[doc = "USD attribute `exposure:iso` (`float`; fallback `100.0`)."]
+        #[doc = "C++ read: `UsdGeomCamera::GetExposureIsoAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomCamera::GetExposureIsoAttr")]
+        #[doc(alias = "GetExposureIsoAttr")]
         exposure_iso, exposure_iso_at, "exposure:iso", f32, crate::value::read_float
     }
     /// The USD name of [`Self::exposure_responsivity`].
@@ -668,6 +804,9 @@ impl<'a> Camera<'a> {
         #[doc = "Scalar multiplier representing overall responsivity of the sensor system to light when calculating exposure."]
         #[doc = ""]
         #[doc = "USD attribute `exposure:responsivity` (`float`; fallback `1.0`)."]
+        #[doc = "C++ read: `UsdGeomCamera::GetExposureResponsivityAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomCamera::GetExposureResponsivityAttr")]
+        #[doc(alias = "GetExposureResponsivityAttr")]
         exposure_responsivity, exposure_responsivity_at, "exposure:responsivity", f32, crate::value::read_float
     }
     /// The USD name of [`Self::exposure_time`].
@@ -677,6 +816,9 @@ impl<'a> Camera<'a> {
         #[doc = "Time in seconds that the sensor is exposed to light when calculating exposure."]
         #[doc = ""]
         #[doc = "USD attribute `exposure:time` (`float`; fallback `1.0`)."]
+        #[doc = "C++ read: `UsdGeomCamera::GetExposureTimeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomCamera::GetExposureTimeAttr")]
+        #[doc(alias = "GetExposureTimeAttr")]
         exposure_time, exposure_time_at, "exposure:time", f32, crate::value::read_float
     }
     /// The USD name of [`Self::focal_length`].
@@ -686,6 +828,9 @@ impl<'a> Camera<'a> {
         #[doc = "Perspective focal length in tenths of a scene unit; see ."]
         #[doc = ""]
         #[doc = "USD attribute `focalLength` (`float`; fallback `50.0`)."]
+        #[doc = "C++ read: `UsdGeomCamera::GetFocalLengthAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomCamera::GetFocalLengthAttr")]
+        #[doc(alias = "GetFocalLengthAttr")]
         focal_length, focal_length_at, "focalLength", f32, crate::value::read_float
     }
     /// The USD name of [`Self::focus_distance`].
@@ -695,6 +840,9 @@ impl<'a> Camera<'a> {
         #[doc = "Distance from the camera to the focus plane in scene units; see ."]
         #[doc = ""]
         #[doc = "USD attribute `focusDistance` (`float`; fallback `0.0`)."]
+        #[doc = "C++ read: `UsdGeomCamera::GetFocusDistanceAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomCamera::GetFocusDistanceAttr")]
+        #[doc(alias = "GetFocusDistanceAttr")]
         focus_distance, focus_distance_at, "focusDistance", f32, crate::value::read_float
     }
     /// The USD name of [`Self::f_stop`].
@@ -704,6 +852,9 @@ impl<'a> Camera<'a> {
         #[doc = "Lens aperture."]
         #[doc = ""]
         #[doc = "USD attribute `fStop` (`float`; fallback `0.0`)."]
+        #[doc = "C++ read: `UsdGeomCamera::GetFStopAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomCamera::GetFStopAttr")]
+        #[doc(alias = "GetFStopAttr")]
         f_stop, f_stop_at, "fStop", f32, crate::value::read_float
     }
     /// The USD name of [`Self::horizontal_aperture`].
@@ -713,6 +864,9 @@ impl<'a> Camera<'a> {
         #[doc = "Horizontal aperture in tenths of a scene unit; see \\\\ref UsdGeom_CameraUnits."]
         #[doc = ""]
         #[doc = "USD attribute `horizontalAperture` (`float`; fallback `20.955`)."]
+        #[doc = "C++ read: `UsdGeomCamera::GetHorizontalApertureAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomCamera::GetHorizontalApertureAttr")]
+        #[doc(alias = "GetHorizontalApertureAttr")]
         horizontal_aperture, horizontal_aperture_at, "horizontalAperture", f32, crate::value::read_float
     }
     /// The USD name of [`Self::horizontal_aperture_offset`].
@@ -722,6 +876,9 @@ impl<'a> Camera<'a> {
         #[doc = "Horizontal aperture offset in the same units as horizontalAperture."]
         #[doc = ""]
         #[doc = "USD attribute `horizontalApertureOffset` (`float`; fallback `0.0`)."]
+        #[doc = "C++ read: `UsdGeomCamera::GetHorizontalApertureOffsetAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomCamera::GetHorizontalApertureOffsetAttr")]
+        #[doc(alias = "GetHorizontalApertureOffsetAttr")]
         horizontal_aperture_offset, horizontal_aperture_offset_at, "horizontalApertureOffset", f32, crate::value::read_float
     }
     /// The USD name of [`Self::projection`].
@@ -729,6 +886,9 @@ impl<'a> Camera<'a> {
 
     attribute! {
         #[doc = "USD attribute `projection` (`token`; fallback `\"perspective\"`)."]
+        #[doc = "C++ read: `UsdGeomCamera::GetProjectionAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomCamera::GetProjectionAttr")]
+        #[doc(alias = "GetProjectionAttr")]
         projection, projection_at, "projection", CameraProjection, CameraProjection::read
     }
     /// The USD name of [`Self::shutter_close`].
@@ -738,6 +898,9 @@ impl<'a> Camera<'a> {
         #[doc = "Frame relative shutter close time, analogous comments from shutter:open apply."]
         #[doc = ""]
         #[doc = "USD attribute `shutter:close` (`double`; fallback `0.0`)."]
+        #[doc = "C++ read: `UsdGeomCamera::GetShutterCloseAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomCamera::GetShutterCloseAttr")]
+        #[doc(alias = "GetShutterCloseAttr")]
         shutter_close, shutter_close_at, "shutter:close", f64, crate::value::read_double
     }
     /// The USD name of [`Self::shutter_open`].
@@ -747,6 +910,9 @@ impl<'a> Camera<'a> {
         #[doc = "Frame relative shutter open time in UsdTimeCode units (negative value indicates that the shutter opens before the current frame time)."]
         #[doc = ""]
         #[doc = "USD attribute `shutter:open` (`double`; fallback `0.0`)."]
+        #[doc = "C++ read: `UsdGeomCamera::GetShutterOpenAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomCamera::GetShutterOpenAttr")]
+        #[doc(alias = "GetShutterOpenAttr")]
         shutter_open, shutter_open_at, "shutter:open", f64, crate::value::read_double
     }
     /// The USD name of [`Self::stereo_role`].
@@ -756,6 +922,9 @@ impl<'a> Camera<'a> {
         #[doc = "If different from mono, the camera is intended to be the left or right camera of a stereo setup."]
         #[doc = ""]
         #[doc = "USD attribute `stereoRole` (`token`, uniform; fallback `\"mono\"`)."]
+        #[doc = "C++ read: `UsdGeomCamera::GetStereoRoleAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomCamera::GetStereoRoleAttr")]
+        #[doc(alias = "GetStereoRoleAttr")]
         stereo_role, "stereoRole", CameraStereoRole, CameraStereoRole::read
     }
     /// The USD name of [`Self::vertical_aperture`].
@@ -765,6 +934,9 @@ impl<'a> Camera<'a> {
         #[doc = "Vertical aperture in tenths of a scene unit; see \\\\ref UsdGeom_CameraUnits."]
         #[doc = ""]
         #[doc = "USD attribute `verticalAperture` (`float`; fallback `15.2908`)."]
+        #[doc = "C++ read: `UsdGeomCamera::GetVerticalApertureAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomCamera::GetVerticalApertureAttr")]
+        #[doc(alias = "GetVerticalApertureAttr")]
         vertical_aperture, vertical_aperture_at, "verticalAperture", f32, crate::value::read_float
     }
     /// The USD name of [`Self::vertical_aperture_offset`].
@@ -774,6 +946,9 @@ impl<'a> Camera<'a> {
         #[doc = "Vertical aperture offset in the same units as verticalAperture."]
         #[doc = ""]
         #[doc = "USD attribute `verticalApertureOffset` (`float`; fallback `0.0`)."]
+        #[doc = "C++ read: `UsdGeomCamera::GetVerticalApertureOffsetAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomCamera::GetVerticalApertureOffsetAttr")]
+        #[doc(alias = "GetVerticalApertureOffsetAttr")]
         vertical_aperture_offset, vertical_aperture_offset_at, "verticalApertureOffset", f32, crate::value::read_float
     }
 }
@@ -813,6 +988,9 @@ impl CameraEdit {
         #[doc = "USD attribute `clippingPlanes` (`float4\\[\\]`; fallback `\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdGeomCamera::CreateClippingPlanesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomCamera::CreateClippingPlanesAttr")]
+        #[doc(alias = "CreateClippingPlanesAttr")]
         set_clipping_planes, set_clipping_planes_at, "clippingPlanes", &[[f32; 4]], crate::value::write_float4_array
     }
     set_attribute! {
@@ -827,100 +1005,151 @@ impl CameraEdit {
         #[doc = "Near and far clipping distances in scene units; see ."]
         #[doc = ""]
         #[doc = "USD attribute `clippingRange` (`float2`; fallback `(1.0, 1000000.0)`)."]
+        #[doc = "C++ authoring: `UsdGeomCamera::CreateClippingRangeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomCamera::CreateClippingRangeAttr")]
+        #[doc(alias = "CreateClippingRangeAttr")]
         set_clipping_range, set_clipping_range_at, "clippingRange", [f32; 2], crate::value::write_float2
     }
     set_attribute! {
         #[doc = "Exposure compensation, as a log base-2 value."]
         #[doc = ""]
         #[doc = "USD attribute `exposure` (`float`; fallback `0.0`)."]
+        #[doc = "C++ authoring: `UsdGeomCamera::CreateExposureAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomCamera::CreateExposureAttr")]
+        #[doc(alias = "CreateExposureAttr")]
         set_exposure, set_exposure_at, "exposure", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "f-stop of the aperture when calculating exposure."]
         #[doc = ""]
         #[doc = "USD attribute `exposure:fStop` (`float`; fallback `1.0`)."]
+        #[doc = "C++ authoring: `UsdGeomCamera::CreateExposureFStopAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomCamera::CreateExposureFStopAttr")]
+        #[doc(alias = "CreateExposureFStopAttr")]
         set_exposure_f_stop, set_exposure_f_stop_at, "exposure:fStop", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "The speed rating of the sensor or film when calculating exposure."]
         #[doc = ""]
         #[doc = "USD attribute `exposure:iso` (`float`; fallback `100.0`)."]
+        #[doc = "C++ authoring: `UsdGeomCamera::CreateExposureIsoAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomCamera::CreateExposureIsoAttr")]
+        #[doc(alias = "CreateExposureIsoAttr")]
         set_exposure_iso, set_exposure_iso_at, "exposure:iso", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "Scalar multiplier representing overall responsivity of the sensor system to light when calculating exposure."]
         #[doc = ""]
         #[doc = "USD attribute `exposure:responsivity` (`float`; fallback `1.0`)."]
+        #[doc = "C++ authoring: `UsdGeomCamera::CreateExposureResponsivityAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomCamera::CreateExposureResponsivityAttr")]
+        #[doc(alias = "CreateExposureResponsivityAttr")]
         set_exposure_responsivity, set_exposure_responsivity_at, "exposure:responsivity", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "Time in seconds that the sensor is exposed to light when calculating exposure."]
         #[doc = ""]
         #[doc = "USD attribute `exposure:time` (`float`; fallback `1.0`)."]
+        #[doc = "C++ authoring: `UsdGeomCamera::CreateExposureTimeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomCamera::CreateExposureTimeAttr")]
+        #[doc(alias = "CreateExposureTimeAttr")]
         set_exposure_time, set_exposure_time_at, "exposure:time", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "Perspective focal length in tenths of a scene unit; see ."]
         #[doc = ""]
         #[doc = "USD attribute `focalLength` (`float`; fallback `50.0`)."]
+        #[doc = "C++ authoring: `UsdGeomCamera::CreateFocalLengthAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomCamera::CreateFocalLengthAttr")]
+        #[doc(alias = "CreateFocalLengthAttr")]
         set_focal_length, set_focal_length_at, "focalLength", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "Distance from the camera to the focus plane in scene units; see ."]
         #[doc = ""]
         #[doc = "USD attribute `focusDistance` (`float`; fallback `0.0`)."]
+        #[doc = "C++ authoring: `UsdGeomCamera::CreateFocusDistanceAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomCamera::CreateFocusDistanceAttr")]
+        #[doc(alias = "CreateFocusDistanceAttr")]
         set_focus_distance, set_focus_distance_at, "focusDistance", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "Lens aperture."]
         #[doc = ""]
         #[doc = "USD attribute `fStop` (`float`; fallback `0.0`)."]
+        #[doc = "C++ authoring: `UsdGeomCamera::CreateFStopAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomCamera::CreateFStopAttr")]
+        #[doc(alias = "CreateFStopAttr")]
         set_f_stop, set_f_stop_at, "fStop", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "Horizontal aperture in tenths of a scene unit; see \\\\ref UsdGeom_CameraUnits."]
         #[doc = ""]
         #[doc = "USD attribute `horizontalAperture` (`float`; fallback `20.955`)."]
+        #[doc = "C++ authoring: `UsdGeomCamera::CreateHorizontalApertureAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomCamera::CreateHorizontalApertureAttr")]
+        #[doc(alias = "CreateHorizontalApertureAttr")]
         set_horizontal_aperture, set_horizontal_aperture_at, "horizontalAperture", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "Horizontal aperture offset in the same units as horizontalAperture."]
         #[doc = ""]
         #[doc = "USD attribute `horizontalApertureOffset` (`float`; fallback `0.0`)."]
+        #[doc = "C++ authoring: `UsdGeomCamera::CreateHorizontalApertureOffsetAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomCamera::CreateHorizontalApertureOffsetAttr")]
+        #[doc(alias = "CreateHorizontalApertureOffsetAttr")]
         set_horizontal_aperture_offset, set_horizontal_aperture_offset_at, "horizontalApertureOffset", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "USD attribute `projection` (`token`; fallback `\"perspective\"`)."]
+        #[doc = "C++ authoring: `UsdGeomCamera::CreateProjectionAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomCamera::CreateProjectionAttr")]
+        #[doc(alias = "CreateProjectionAttr")]
         set_projection, set_projection_at, "projection", CameraProjection, CameraProjection::write
     }
     set_attribute! {
         #[doc = "Frame relative shutter close time, analogous comments from shutter:open apply."]
         #[doc = ""]
         #[doc = "USD attribute `shutter:close` (`double`; fallback `0.0`)."]
+        #[doc = "C++ authoring: `UsdGeomCamera::CreateShutterCloseAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomCamera::CreateShutterCloseAttr")]
+        #[doc(alias = "CreateShutterCloseAttr")]
         set_shutter_close, set_shutter_close_at, "shutter:close", f64, crate::value::write_double
     }
     set_attribute! {
         #[doc = "Frame relative shutter open time in UsdTimeCode units (negative value indicates that the shutter opens before the current frame time)."]
         #[doc = ""]
         #[doc = "USD attribute `shutter:open` (`double`; fallback `0.0`)."]
+        #[doc = "C++ authoring: `UsdGeomCamera::CreateShutterOpenAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomCamera::CreateShutterOpenAttr")]
+        #[doc(alias = "CreateShutterOpenAttr")]
         set_shutter_open, set_shutter_open_at, "shutter:open", f64, crate::value::write_double
     }
     set_uniform_attribute! {
         #[doc = "If different from mono, the camera is intended to be the left or right camera of a stereo setup."]
         #[doc = ""]
         #[doc = "USD attribute `stereoRole` (`token`, uniform; fallback `\"mono\"`)."]
+        #[doc = "C++ authoring: `UsdGeomCamera::CreateStereoRoleAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomCamera::CreateStereoRoleAttr")]
+        #[doc(alias = "CreateStereoRoleAttr")]
         set_stereo_role, "stereoRole", CameraStereoRole, CameraStereoRole::write
     }
     set_attribute! {
         #[doc = "Vertical aperture in tenths of a scene unit; see \\\\ref UsdGeom_CameraUnits."]
         #[doc = ""]
         #[doc = "USD attribute `verticalAperture` (`float`; fallback `15.2908`)."]
+        #[doc = "C++ authoring: `UsdGeomCamera::CreateVerticalApertureAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomCamera::CreateVerticalApertureAttr")]
+        #[doc(alias = "CreateVerticalApertureAttr")]
         set_vertical_aperture, set_vertical_aperture_at, "verticalAperture", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "Vertical aperture offset in the same units as verticalAperture."]
         #[doc = ""]
         #[doc = "USD attribute `verticalApertureOffset` (`float`; fallback `0.0`)."]
+        #[doc = "C++ authoring: `UsdGeomCamera::CreateVerticalApertureOffsetAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomCamera::CreateVerticalApertureOffsetAttr")]
+        #[doc(alias = "CreateVerticalApertureOffsetAttr")]
         set_vertical_aperture_offset, set_vertical_aperture_offset_at, "verticalApertureOffset", f32, crate::value::write_float
     }
 }
@@ -940,6 +1169,8 @@ token_enum! {
 #[doc = "Defines a primitive capsule, i.e."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `Capsule`, inheriting [`Gprim`]. Construct it with [`Capsule::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdGeomCapsule`."]
+#[doc(alias = "UsdGeomCapsule")]
 #[derive(Clone, Copy, Debug)]
 pub struct Capsule<'a> {
     base: Gprim<'a>,
@@ -958,6 +1189,8 @@ impl<'a> Capsule<'a> {
     pub const SCHEMA: &'static str = "Capsule";
 
     #[doc = "A view of the prim at `path`, if it is a `Capsule` or of a schema derived from it."]
+    #[doc(alias = "UsdGeomCapsule::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -982,6 +1215,8 @@ impl<'a> Capsule<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdGeomCapsule::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> CapsuleEdit {
         edit.define(path, Self::SCHEMA);
         CapsuleEdit::from_path(path)
@@ -994,6 +1229,9 @@ impl<'a> Capsule<'a> {
         #[doc = "The axis along which the spine of the capsule is aligned."]
         #[doc = ""]
         #[doc = "USD attribute `axis` (`token`, uniform; fallback `\"Z\"`)."]
+        #[doc = "C++ read: `UsdGeomCapsule::GetAxisAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomCapsule::GetAxisAttr")]
+        #[doc(alias = "GetAxisAttr")]
         axis, "axis", CapsuleAxis, CapsuleAxis::read
     }
     /// The USD name of [`Self::height`].
@@ -1003,6 +1241,9 @@ impl<'a> Capsule<'a> {
         #[doc = "The length of the capsule's spine along the specified axis excluding the size of the two half spheres, i.e."]
         #[doc = ""]
         #[doc = "USD attribute `height` (`double`; fallback `1.0`)."]
+        #[doc = "C++ read: `UsdGeomCapsule::GetHeightAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomCapsule::GetHeightAttr")]
+        #[doc(alias = "GetHeightAttr")]
         height, height_at, "height", f64, crate::value::read_double
     }
     /// The USD name of [`Self::radius`].
@@ -1012,6 +1253,9 @@ impl<'a> Capsule<'a> {
         #[doc = "The radius of the capsule."]
         #[doc = ""]
         #[doc = "USD attribute `radius` (`double`; fallback `0.5`)."]
+        #[doc = "C++ read: `UsdGeomCapsule::GetRadiusAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomCapsule::GetRadiusAttr")]
+        #[doc(alias = "GetRadiusAttr")]
         radius, radius_at, "radius", f64, crate::value::read_double
     }
 }
@@ -1049,18 +1293,27 @@ impl CapsuleEdit {
         #[doc = "The axis along which the spine of the capsule is aligned."]
         #[doc = ""]
         #[doc = "USD attribute `axis` (`token`, uniform; fallback `\"Z\"`)."]
+        #[doc = "C++ authoring: `UsdGeomCapsule::CreateAxisAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomCapsule::CreateAxisAttr")]
+        #[doc(alias = "CreateAxisAttr")]
         set_axis, "axis", CapsuleAxis, CapsuleAxis::write
     }
     set_attribute! {
         #[doc = "The length of the capsule's spine along the specified axis excluding the size of the two half spheres, i.e."]
         #[doc = ""]
         #[doc = "USD attribute `height` (`double`; fallback `1.0`)."]
+        #[doc = "C++ authoring: `UsdGeomCapsule::CreateHeightAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomCapsule::CreateHeightAttr")]
+        #[doc(alias = "CreateHeightAttr")]
         set_height, set_height_at, "height", f64, crate::value::write_double
     }
     set_attribute! {
         #[doc = "The radius of the capsule."]
         #[doc = ""]
         #[doc = "USD attribute `radius` (`double`; fallback `0.5`)."]
+        #[doc = "C++ authoring: `UsdGeomCapsule::CreateRadiusAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomCapsule::CreateRadiusAttr")]
+        #[doc(alias = "CreateRadiusAttr")]
         set_radius, set_radius_at, "radius", f64, crate::value::write_double
     }
 }
@@ -1080,6 +1333,9 @@ token_enum! {
 #[doc = "Defines a primitive capsule, i.e."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `Capsule_1`, inheriting [`Gprim`]. Construct it with [`Capsule1::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdGeomCapsule_1`."]
+#[doc(alias = "UsdGeomCapsule_1")]
+#[doc(alias = "Capsule_1")]
 #[derive(Clone, Copy, Debug)]
 pub struct Capsule1<'a> {
     base: Gprim<'a>,
@@ -1098,6 +1354,8 @@ impl<'a> Capsule1<'a> {
     pub const SCHEMA: &'static str = "Capsule_1";
 
     #[doc = "A view of the prim at `path`, if it is a `Capsule_1` or of a schema derived from it."]
+    #[doc(alias = "UsdGeomCapsule_1::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -1122,6 +1380,8 @@ impl<'a> Capsule1<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdGeomCapsule_1::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Capsule1Edit {
         edit.define(path, Self::SCHEMA);
         Capsule1Edit::from_path(path)
@@ -1134,6 +1394,9 @@ impl<'a> Capsule1<'a> {
         #[doc = "The axis along which the spine of the capsule is aligned."]
         #[doc = ""]
         #[doc = "USD attribute `axis` (`token`, uniform; fallback `\"Z\"`)."]
+        #[doc = "C++ read: `UsdGeomCapsule_1::GetAxisAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomCapsule_1::GetAxisAttr")]
+        #[doc(alias = "GetAxisAttr")]
         axis, "axis", Capsule1Axis, Capsule1Axis::read
     }
     /// The USD name of [`Self::height`].
@@ -1143,6 +1406,9 @@ impl<'a> Capsule1<'a> {
         #[doc = "The length of the capsule's spine along the specified axis excluding the size of the two half spheres, i.e."]
         #[doc = ""]
         #[doc = "USD attribute `height` (`double`; fallback `1.0`)."]
+        #[doc = "C++ read: `UsdGeomCapsule_1::GetHeightAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomCapsule_1::GetHeightAttr")]
+        #[doc(alias = "GetHeightAttr")]
         height, height_at, "height", f64, crate::value::read_double
     }
     /// The USD name of [`Self::radius_bottom`].
@@ -1152,6 +1418,9 @@ impl<'a> Capsule1<'a> {
         #[doc = "The radius of the capping sphere at the bottom of the capsule - i.e."]
         #[doc = ""]
         #[doc = "USD attribute `radiusBottom` (`double`; fallback `0.5`)."]
+        #[doc = "C++ read: `UsdGeomCapsule_1::GetRadiusBottomAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomCapsule_1::GetRadiusBottomAttr")]
+        #[doc(alias = "GetRadiusBottomAttr")]
         radius_bottom, radius_bottom_at, "radiusBottom", f64, crate::value::read_double
     }
     /// The USD name of [`Self::radius_top`].
@@ -1161,6 +1430,9 @@ impl<'a> Capsule1<'a> {
         #[doc = "The radius of the capping sphere at the top of the capsule - i.e."]
         #[doc = ""]
         #[doc = "USD attribute `radiusTop` (`double`; fallback `0.5`)."]
+        #[doc = "C++ read: `UsdGeomCapsule_1::GetRadiusTopAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomCapsule_1::GetRadiusTopAttr")]
+        #[doc(alias = "GetRadiusTopAttr")]
         radius_top, radius_top_at, "radiusTop", f64, crate::value::read_double
     }
 }
@@ -1198,24 +1470,36 @@ impl Capsule1Edit {
         #[doc = "The axis along which the spine of the capsule is aligned."]
         #[doc = ""]
         #[doc = "USD attribute `axis` (`token`, uniform; fallback `\"Z\"`)."]
+        #[doc = "C++ authoring: `UsdGeomCapsule_1::CreateAxisAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomCapsule_1::CreateAxisAttr")]
+        #[doc(alias = "CreateAxisAttr")]
         set_axis, "axis", Capsule1Axis, Capsule1Axis::write
     }
     set_attribute! {
         #[doc = "The length of the capsule's spine along the specified axis excluding the size of the two half spheres, i.e."]
         #[doc = ""]
         #[doc = "USD attribute `height` (`double`; fallback `1.0`)."]
+        #[doc = "C++ authoring: `UsdGeomCapsule_1::CreateHeightAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomCapsule_1::CreateHeightAttr")]
+        #[doc(alias = "CreateHeightAttr")]
         set_height, set_height_at, "height", f64, crate::value::write_double
     }
     set_attribute! {
         #[doc = "The radius of the capping sphere at the bottom of the capsule - i.e."]
         #[doc = ""]
         #[doc = "USD attribute `radiusBottom` (`double`; fallback `0.5`)."]
+        #[doc = "C++ authoring: `UsdGeomCapsule_1::CreateRadiusBottomAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomCapsule_1::CreateRadiusBottomAttr")]
+        #[doc(alias = "CreateRadiusBottomAttr")]
         set_radius_bottom, set_radius_bottom_at, "radiusBottom", f64, crate::value::write_double
     }
     set_attribute! {
         #[doc = "The radius of the capping sphere at the top of the capsule - i.e."]
         #[doc = ""]
         #[doc = "USD attribute `radiusTop` (`double`; fallback `0.5`)."]
+        #[doc = "C++ authoring: `UsdGeomCapsule_1::CreateRadiusTopAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomCapsule_1::CreateRadiusTopAttr")]
+        #[doc(alias = "CreateRadiusTopAttr")]
         set_radius_top, set_radius_top_at, "radiusTop", f64, crate::value::write_double
     }
 }
@@ -1235,6 +1519,8 @@ token_enum! {
 #[doc = "Defines a primitive cone, centered at the origin, whose spine is along the specified axis, with the apex of the cone pointing in the direction of the positive axis."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `Cone`, inheriting [`Gprim`]. Construct it with [`Cone::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdGeomCone`."]
+#[doc(alias = "UsdGeomCone")]
 #[derive(Clone, Copy, Debug)]
 pub struct Cone<'a> {
     base: Gprim<'a>,
@@ -1253,6 +1539,8 @@ impl<'a> Cone<'a> {
     pub const SCHEMA: &'static str = "Cone";
 
     #[doc = "A view of the prim at `path`, if it is a `Cone` or of a schema derived from it."]
+    #[doc(alias = "UsdGeomCone::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -1277,6 +1565,8 @@ impl<'a> Cone<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdGeomCone::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> ConeEdit {
         edit.define(path, Self::SCHEMA);
         ConeEdit::from_path(path)
@@ -1289,6 +1579,9 @@ impl<'a> Cone<'a> {
         #[doc = "The axis along which the spine of the cone is aligned."]
         #[doc = ""]
         #[doc = "USD attribute `axis` (`token`, uniform; fallback `\"Z\"`)."]
+        #[doc = "C++ read: `UsdGeomCone::GetAxisAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomCone::GetAxisAttr")]
+        #[doc(alias = "GetAxisAttr")]
         axis, "axis", ConeAxis, ConeAxis::read
     }
     /// The USD name of [`Self::height`].
@@ -1298,6 +1591,9 @@ impl<'a> Cone<'a> {
         #[doc = "The length of the cone's spine along the specified axis."]
         #[doc = ""]
         #[doc = "USD attribute `height` (`double`; fallback `2.0`)."]
+        #[doc = "C++ read: `UsdGeomCone::GetHeightAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomCone::GetHeightAttr")]
+        #[doc(alias = "GetHeightAttr")]
         height, height_at, "height", f64, crate::value::read_double
     }
     /// The USD name of [`Self::radius`].
@@ -1307,6 +1603,9 @@ impl<'a> Cone<'a> {
         #[doc = "The radius of the cone."]
         #[doc = ""]
         #[doc = "USD attribute `radius` (`double`; fallback `1.0`)."]
+        #[doc = "C++ read: `UsdGeomCone::GetRadiusAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomCone::GetRadiusAttr")]
+        #[doc(alias = "GetRadiusAttr")]
         radius, radius_at, "radius", f64, crate::value::read_double
     }
 }
@@ -1344,18 +1643,27 @@ impl ConeEdit {
         #[doc = "The axis along which the spine of the cone is aligned."]
         #[doc = ""]
         #[doc = "USD attribute `axis` (`token`, uniform; fallback `\"Z\"`)."]
+        #[doc = "C++ authoring: `UsdGeomCone::CreateAxisAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomCone::CreateAxisAttr")]
+        #[doc(alias = "CreateAxisAttr")]
         set_axis, "axis", ConeAxis, ConeAxis::write
     }
     set_attribute! {
         #[doc = "The length of the cone's spine along the specified axis."]
         #[doc = ""]
         #[doc = "USD attribute `height` (`double`; fallback `2.0`)."]
+        #[doc = "C++ authoring: `UsdGeomCone::CreateHeightAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomCone::CreateHeightAttr")]
+        #[doc(alias = "CreateHeightAttr")]
         set_height, set_height_at, "height", f64, crate::value::write_double
     }
     set_attribute! {
         #[doc = "The radius of the cone."]
         #[doc = ""]
         #[doc = "USD attribute `radius` (`double`; fallback `1.0`)."]
+        #[doc = "C++ authoring: `UsdGeomCone::CreateRadiusAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomCone::CreateRadiusAttr")]
+        #[doc(alias = "CreateRadiusAttr")]
         set_radius, set_radius_at, "radius", f64, crate::value::write_double
     }
 }
@@ -1363,6 +1671,8 @@ impl ConeEdit {
 #[doc = "Defines a primitive rectilinear cube centered at the origin."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `Cube`, inheriting [`Gprim`]. Construct it with [`Cube::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdGeomCube`."]
+#[doc(alias = "UsdGeomCube")]
 #[derive(Clone, Copy, Debug)]
 pub struct Cube<'a> {
     base: Gprim<'a>,
@@ -1381,6 +1691,8 @@ impl<'a> Cube<'a> {
     pub const SCHEMA: &'static str = "Cube";
 
     #[doc = "A view of the prim at `path`, if it is a `Cube` or of a schema derived from it."]
+    #[doc(alias = "UsdGeomCube::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -1405,6 +1717,8 @@ impl<'a> Cube<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdGeomCube::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> CubeEdit {
         edit.define(path, Self::SCHEMA);
         CubeEdit::from_path(path)
@@ -1417,6 +1731,9 @@ impl<'a> Cube<'a> {
         #[doc = "Indicates the length of each edge of the cube."]
         #[doc = ""]
         #[doc = "USD attribute `size` (`double`; fallback `2.0`)."]
+        #[doc = "C++ read: `UsdGeomCube::GetSizeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomCube::GetSizeAttr")]
+        #[doc(alias = "GetSizeAttr")]
         size, size_at, "size", f64, crate::value::read_double
     }
 }
@@ -1454,6 +1771,9 @@ impl CubeEdit {
         #[doc = "Indicates the length of each edge of the cube."]
         #[doc = ""]
         #[doc = "USD attribute `size` (`double`; fallback `2.0`)."]
+        #[doc = "C++ authoring: `UsdGeomCube::CreateSizeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomCube::CreateSizeAttr")]
+        #[doc(alias = "CreateSizeAttr")]
         set_size, set_size_at, "size", f64, crate::value::write_double
     }
 }
@@ -1461,6 +1781,8 @@ impl CubeEdit {
 #[doc = "Base class for UsdGeomBasisCurves, UsdGeomNurbsCurves, and UsdGeomHermiteCurves."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's abstract typed schema `Curves`, inheriting [`PointBased`]. Construct it with [`Curves::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdGeomCurves`."]
+#[doc(alias = "UsdGeomCurves")]
 #[derive(Clone, Copy, Debug)]
 pub struct Curves<'a> {
     base: PointBased<'a>,
@@ -1479,6 +1801,8 @@ impl<'a> Curves<'a> {
     pub const SCHEMA: &'static str = "Curves";
 
     #[doc = "A view of the prim at `path`, if it is a `Curves` or of a schema derived from it."]
+    #[doc(alias = "UsdGeomCurves::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -1507,6 +1831,9 @@ impl<'a> Curves<'a> {
         #[doc = "USD attribute `curveVertexCounts` (`int\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdGeomCurves::GetCurveVertexCountsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomCurves::GetCurveVertexCountsAttr")]
+        #[doc(alias = "GetCurveVertexCountsAttr")]
         curve_vertex_counts, curve_vertex_counts_at, "curveVertexCounts", ::alloc::sync::Arc<::alloc::vec::Vec<i32>>, crate::value::read_int_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -1530,6 +1857,9 @@ impl<'a> Curves<'a> {
         #[doc = "USD attribute `widths` (`float\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdGeomCurves::GetWidthsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomCurves::GetWidthsAttr")]
+        #[doc(alias = "GetWidthsAttr")]
         widths, widths_at, "widths", ::alloc::sync::Arc<::alloc::vec::Vec<f32>>, crate::value::read_float_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -1577,6 +1907,9 @@ impl CurvesEdit {
         #[doc = "USD attribute `curveVertexCounts` (`int\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdGeomCurves::CreateCurveVertexCountsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomCurves::CreateCurveVertexCountsAttr")]
+        #[doc(alias = "CreateCurveVertexCountsAttr")]
         set_curve_vertex_counts, set_curve_vertex_counts_at, "curveVertexCounts", &[i32], crate::value::write_int_array
     }
     set_attribute! {
@@ -1593,6 +1926,9 @@ impl CurvesEdit {
         #[doc = "USD attribute `widths` (`float\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdGeomCurves::CreateWidthsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomCurves::CreateWidthsAttr")]
+        #[doc(alias = "CreateWidthsAttr")]
         set_widths, set_widths_at, "widths", &[f32], crate::value::write_float_array
     }
     set_attribute! {
@@ -1620,6 +1956,8 @@ token_enum! {
 #[doc = "Defines a primitive cylinder with closed ends, centered at the origin, whose spine is along the specified axis."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `Cylinder`, inheriting [`Gprim`]. Construct it with [`Cylinder::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdGeomCylinder`."]
+#[doc(alias = "UsdGeomCylinder")]
 #[derive(Clone, Copy, Debug)]
 pub struct Cylinder<'a> {
     base: Gprim<'a>,
@@ -1638,6 +1976,8 @@ impl<'a> Cylinder<'a> {
     pub const SCHEMA: &'static str = "Cylinder";
 
     #[doc = "A view of the prim at `path`, if it is a `Cylinder` or of a schema derived from it."]
+    #[doc(alias = "UsdGeomCylinder::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -1662,6 +2002,8 @@ impl<'a> Cylinder<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdGeomCylinder::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> CylinderEdit {
         edit.define(path, Self::SCHEMA);
         CylinderEdit::from_path(path)
@@ -1674,6 +2016,9 @@ impl<'a> Cylinder<'a> {
         #[doc = "The axis along which the spine of the cylinder is aligned."]
         #[doc = ""]
         #[doc = "USD attribute `axis` (`token`, uniform; fallback `\"Z\"`)."]
+        #[doc = "C++ read: `UsdGeomCylinder::GetAxisAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomCylinder::GetAxisAttr")]
+        #[doc(alias = "GetAxisAttr")]
         axis, "axis", CylinderAxis, CylinderAxis::read
     }
     /// The USD name of [`Self::height`].
@@ -1683,6 +2028,9 @@ impl<'a> Cylinder<'a> {
         #[doc = "The size of the cylinder's spine along the specified axis."]
         #[doc = ""]
         #[doc = "USD attribute `height` (`double`; fallback `2.0`)."]
+        #[doc = "C++ read: `UsdGeomCylinder::GetHeightAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomCylinder::GetHeightAttr")]
+        #[doc(alias = "GetHeightAttr")]
         height, height_at, "height", f64, crate::value::read_double
     }
     /// The USD name of [`Self::radius`].
@@ -1692,6 +2040,9 @@ impl<'a> Cylinder<'a> {
         #[doc = "The radius of the cylinder."]
         #[doc = ""]
         #[doc = "USD attribute `radius` (`double`; fallback `1.0`)."]
+        #[doc = "C++ read: `UsdGeomCylinder::GetRadiusAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomCylinder::GetRadiusAttr")]
+        #[doc(alias = "GetRadiusAttr")]
         radius, radius_at, "radius", f64, crate::value::read_double
     }
 }
@@ -1729,18 +2080,27 @@ impl CylinderEdit {
         #[doc = "The axis along which the spine of the cylinder is aligned."]
         #[doc = ""]
         #[doc = "USD attribute `axis` (`token`, uniform; fallback `\"Z\"`)."]
+        #[doc = "C++ authoring: `UsdGeomCylinder::CreateAxisAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomCylinder::CreateAxisAttr")]
+        #[doc(alias = "CreateAxisAttr")]
         set_axis, "axis", CylinderAxis, CylinderAxis::write
     }
     set_attribute! {
         #[doc = "The size of the cylinder's spine along the specified axis."]
         #[doc = ""]
         #[doc = "USD attribute `height` (`double`; fallback `2.0`)."]
+        #[doc = "C++ authoring: `UsdGeomCylinder::CreateHeightAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomCylinder::CreateHeightAttr")]
+        #[doc(alias = "CreateHeightAttr")]
         set_height, set_height_at, "height", f64, crate::value::write_double
     }
     set_attribute! {
         #[doc = "The radius of the cylinder."]
         #[doc = ""]
         #[doc = "USD attribute `radius` (`double`; fallback `1.0`)."]
+        #[doc = "C++ authoring: `UsdGeomCylinder::CreateRadiusAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomCylinder::CreateRadiusAttr")]
+        #[doc(alias = "CreateRadiusAttr")]
         set_radius, set_radius_at, "radius", f64, crate::value::write_double
     }
 }
@@ -1760,6 +2120,9 @@ token_enum! {
 #[doc = "Defines a primitive cylinder with closed ends, centered at the origin, whose spine is along the specified axis, with a pair of radii describing the size of the end points."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `Cylinder_1`, inheriting [`Gprim`]. Construct it with [`Cylinder1::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdGeomCylinder_1`."]
+#[doc(alias = "UsdGeomCylinder_1")]
+#[doc(alias = "Cylinder_1")]
 #[derive(Clone, Copy, Debug)]
 pub struct Cylinder1<'a> {
     base: Gprim<'a>,
@@ -1778,6 +2141,8 @@ impl<'a> Cylinder1<'a> {
     pub const SCHEMA: &'static str = "Cylinder_1";
 
     #[doc = "A view of the prim at `path`, if it is a `Cylinder_1` or of a schema derived from it."]
+    #[doc(alias = "UsdGeomCylinder_1::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -1802,6 +2167,8 @@ impl<'a> Cylinder1<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdGeomCylinder_1::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Cylinder1Edit {
         edit.define(path, Self::SCHEMA);
         Cylinder1Edit::from_path(path)
@@ -1814,6 +2181,9 @@ impl<'a> Cylinder1<'a> {
         #[doc = "The axis along which the spine of the cylinder is aligned."]
         #[doc = ""]
         #[doc = "USD attribute `axis` (`token`, uniform; fallback `\"Z\"`)."]
+        #[doc = "C++ read: `UsdGeomCylinder_1::GetAxisAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomCylinder_1::GetAxisAttr")]
+        #[doc(alias = "GetAxisAttr")]
         axis, "axis", Cylinder1Axis, Cylinder1Axis::read
     }
     /// The USD name of [`Self::height`].
@@ -1823,6 +2193,9 @@ impl<'a> Cylinder1<'a> {
         #[doc = "The length of the cylinder's spine along the specified axis."]
         #[doc = ""]
         #[doc = "USD attribute `height` (`double`; fallback `2.0`)."]
+        #[doc = "C++ read: `UsdGeomCylinder_1::GetHeightAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomCylinder_1::GetHeightAttr")]
+        #[doc(alias = "GetHeightAttr")]
         height, height_at, "height", f64, crate::value::read_double
     }
     /// The USD name of [`Self::radius_bottom`].
@@ -1832,6 +2205,9 @@ impl<'a> Cylinder1<'a> {
         #[doc = "The radius of the bottom of the cylinder - i.e."]
         #[doc = ""]
         #[doc = "USD attribute `radiusBottom` (`double`; fallback `1.0`)."]
+        #[doc = "C++ read: `UsdGeomCylinder_1::GetRadiusBottomAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomCylinder_1::GetRadiusBottomAttr")]
+        #[doc(alias = "GetRadiusBottomAttr")]
         radius_bottom, radius_bottom_at, "radiusBottom", f64, crate::value::read_double
     }
     /// The USD name of [`Self::radius_top`].
@@ -1841,6 +2217,9 @@ impl<'a> Cylinder1<'a> {
         #[doc = "The radius of the top of the cylinder - i.e."]
         #[doc = ""]
         #[doc = "USD attribute `radiusTop` (`double`; fallback `1.0`)."]
+        #[doc = "C++ read: `UsdGeomCylinder_1::GetRadiusTopAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomCylinder_1::GetRadiusTopAttr")]
+        #[doc(alias = "GetRadiusTopAttr")]
         radius_top, radius_top_at, "radiusTop", f64, crate::value::read_double
     }
 }
@@ -1878,24 +2257,36 @@ impl Cylinder1Edit {
         #[doc = "The axis along which the spine of the cylinder is aligned."]
         #[doc = ""]
         #[doc = "USD attribute `axis` (`token`, uniform; fallback `\"Z\"`)."]
+        #[doc = "C++ authoring: `UsdGeomCylinder_1::CreateAxisAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomCylinder_1::CreateAxisAttr")]
+        #[doc(alias = "CreateAxisAttr")]
         set_axis, "axis", Cylinder1Axis, Cylinder1Axis::write
     }
     set_attribute! {
         #[doc = "The length of the cylinder's spine along the specified axis."]
         #[doc = ""]
         #[doc = "USD attribute `height` (`double`; fallback `2.0`)."]
+        #[doc = "C++ authoring: `UsdGeomCylinder_1::CreateHeightAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomCylinder_1::CreateHeightAttr")]
+        #[doc(alias = "CreateHeightAttr")]
         set_height, set_height_at, "height", f64, crate::value::write_double
     }
     set_attribute! {
         #[doc = "The radius of the bottom of the cylinder - i.e."]
         #[doc = ""]
         #[doc = "USD attribute `radiusBottom` (`double`; fallback `1.0`)."]
+        #[doc = "C++ authoring: `UsdGeomCylinder_1::CreateRadiusBottomAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomCylinder_1::CreateRadiusBottomAttr")]
+        #[doc(alias = "CreateRadiusBottomAttr")]
         set_radius_bottom, set_radius_bottom_at, "radiusBottom", f64, crate::value::write_double
     }
     set_attribute! {
         #[doc = "The radius of the top of the cylinder - i.e."]
         #[doc = ""]
         #[doc = "USD attribute `radiusTop` (`double`; fallback `1.0`)."]
+        #[doc = "C++ authoring: `UsdGeomCylinder_1::CreateRadiusTopAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomCylinder_1::CreateRadiusTopAttr")]
+        #[doc(alias = "CreateRadiusTopAttr")]
         set_radius_top, set_radius_top_at, "radiusTop", f64, crate::value::write_double
     }
 }
@@ -1943,6 +2334,9 @@ token_enum! {
 #[doc = "UsdGeomModelAPI extends the generic UsdModelAPI schema with geometry specific concepts such as cached extents for the entire model, constraint targets, and geometry-inspired extensions to the payload lofting process."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's single-apply API schema `GeomModelAPI`. Get it with [`GeomModelApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdGeomModelAPI`."]
+#[doc(alias = "UsdGeomModelAPI")]
+#[doc(alias = "GeomModelAPI")]
 #[derive(Clone, Copy, Debug)]
 pub struct GeomModelApi<'a> {
     base: PrimView<'a>,
@@ -1963,6 +2357,8 @@ impl<'a> GeomModelApi<'a> {
     /// A view of the schema on the prim at `path`, if the prim has it
     /// applied.
     #[must_use]
+    #[doc(alias = "UsdGeomModelAPI::Get")]
+    #[doc(alias = "Get")]
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
@@ -1987,6 +2383,8 @@ impl<'a> GeomModelApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there.
+    #[doc(alias = "UsdGeomModelAPI::Apply")]
+    #[doc(alias = "Apply")]
     pub fn apply(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<GeomModelApiEdit, CannotApply> {
         edit.apply(path, Self::SCHEMA, None)?;
         Ok(GeomModelApiEdit::from_path(path))
@@ -1999,6 +2397,9 @@ impl<'a> GeomModelApi<'a> {
         #[doc = "If true, and the resolved value of model:drawMode is non-default, apply an alternate imaging mode to this prim."]
         #[doc = ""]
         #[doc = "USD attribute `model:applyDrawMode` (`bool`, uniform; fallback `false`)."]
+        #[doc = "C++ read: `UsdGeomModelAPI::GetModelApplyDrawModeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomModelAPI::GetModelApplyDrawModeAttr")]
+        #[doc(alias = "GetModelApplyDrawModeAttr")]
         model_apply_draw_mode, "model:applyDrawMode", bool, crate::value::read_bool
     }
     /// The USD name of [`Self::model_card_geometry`].
@@ -2008,6 +2409,9 @@ impl<'a> GeomModelApi<'a> {
         #[doc = "The geometry to generate for imaging prims inserted for \\\\em cards imaging mode."]
         #[doc = ""]
         #[doc = "USD attribute `model:cardGeometry` (`token`, uniform; fallback `\"cross\"`)."]
+        #[doc = "C++ read: `UsdGeomModelAPI::GetModelCardGeometryAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomModelAPI::GetModelCardGeometryAttr")]
+        #[doc(alias = "GetModelCardGeometryAttr")]
         model_card_geometry, "model:cardGeometry", GeomModelApiModelCardGeometry, GeomModelApiModelCardGeometry::read
     }
     /// The USD name of [`Self::model_card_texture_x_neg`].
@@ -2017,6 +2421,9 @@ impl<'a> GeomModelApi<'a> {
         #[doc = "In cards imaging mode, the texture applied to the X- quad."]
         #[doc = ""]
         #[doc = "USD attribute `model:cardTextureXNeg` (`asset`)."]
+        #[doc = "C++ read: `UsdGeomModelAPI::GetModelCardTextureXNegAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomModelAPI::GetModelCardTextureXNegAttr")]
+        #[doc(alias = "GetModelCardTextureXNegAttr")]
         model_card_texture_x_neg, model_card_texture_x_neg_at, "model:cardTextureXNeg", ::alloc::sync::Arc<str>, crate::value::read_asset
     }
     /// The USD name of [`Self::model_card_texture_x_pos`].
@@ -2026,6 +2433,9 @@ impl<'a> GeomModelApi<'a> {
         #[doc = "In cards imaging mode, the texture applied to the X+ quad."]
         #[doc = ""]
         #[doc = "USD attribute `model:cardTextureXPos` (`asset`)."]
+        #[doc = "C++ read: `UsdGeomModelAPI::GetModelCardTextureXPosAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomModelAPI::GetModelCardTextureXPosAttr")]
+        #[doc(alias = "GetModelCardTextureXPosAttr")]
         model_card_texture_x_pos, model_card_texture_x_pos_at, "model:cardTextureXPos", ::alloc::sync::Arc<str>, crate::value::read_asset
     }
     /// The USD name of [`Self::model_card_texture_y_neg`].
@@ -2035,6 +2445,9 @@ impl<'a> GeomModelApi<'a> {
         #[doc = "In cards imaging mode, the texture applied to the Y- quad."]
         #[doc = ""]
         #[doc = "USD attribute `model:cardTextureYNeg` (`asset`)."]
+        #[doc = "C++ read: `UsdGeomModelAPI::GetModelCardTextureYNegAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomModelAPI::GetModelCardTextureYNegAttr")]
+        #[doc(alias = "GetModelCardTextureYNegAttr")]
         model_card_texture_y_neg, model_card_texture_y_neg_at, "model:cardTextureYNeg", ::alloc::sync::Arc<str>, crate::value::read_asset
     }
     /// The USD name of [`Self::model_card_texture_y_pos`].
@@ -2044,6 +2457,9 @@ impl<'a> GeomModelApi<'a> {
         #[doc = "In cards imaging mode, the texture applied to the Y+ quad."]
         #[doc = ""]
         #[doc = "USD attribute `model:cardTextureYPos` (`asset`)."]
+        #[doc = "C++ read: `UsdGeomModelAPI::GetModelCardTextureYPosAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomModelAPI::GetModelCardTextureYPosAttr")]
+        #[doc(alias = "GetModelCardTextureYPosAttr")]
         model_card_texture_y_pos, model_card_texture_y_pos_at, "model:cardTextureYPos", ::alloc::sync::Arc<str>, crate::value::read_asset
     }
     /// The USD name of [`Self::model_card_texture_z_neg`].
@@ -2053,6 +2469,9 @@ impl<'a> GeomModelApi<'a> {
         #[doc = "In cards imaging mode, the texture applied to the Z- quad."]
         #[doc = ""]
         #[doc = "USD attribute `model:cardTextureZNeg` (`asset`)."]
+        #[doc = "C++ read: `UsdGeomModelAPI::GetModelCardTextureZNegAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomModelAPI::GetModelCardTextureZNegAttr")]
+        #[doc(alias = "GetModelCardTextureZNegAttr")]
         model_card_texture_z_neg, model_card_texture_z_neg_at, "model:cardTextureZNeg", ::alloc::sync::Arc<str>, crate::value::read_asset
     }
     /// The USD name of [`Self::model_card_texture_z_pos`].
@@ -2062,6 +2481,9 @@ impl<'a> GeomModelApi<'a> {
         #[doc = "In cards imaging mode, the texture applied to the Z+ quad."]
         #[doc = ""]
         #[doc = "USD attribute `model:cardTextureZPos` (`asset`)."]
+        #[doc = "C++ read: `UsdGeomModelAPI::GetModelCardTextureZPosAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomModelAPI::GetModelCardTextureZPosAttr")]
+        #[doc(alias = "GetModelCardTextureZPosAttr")]
         model_card_texture_z_pos, model_card_texture_z_pos_at, "model:cardTextureZPos", ::alloc::sync::Arc<str>, crate::value::read_asset
     }
     /// The USD name of [`Self::model_card_visibility`].
@@ -2071,6 +2493,9 @@ impl<'a> GeomModelApi<'a> {
         #[doc = "When using the cards imaging mode, determines if cards in the upAxis direction should be visible."]
         #[doc = ""]
         #[doc = "USD attribute `model:cardVisibility` (`token`, uniform; fallback `\"inherited\"`)."]
+        #[doc = "C++ read: `UsdGeomModelAPI::GetModelCardVisibilityAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomModelAPI::GetModelCardVisibilityAttr")]
+        #[doc(alias = "GetModelCardVisibilityAttr")]
         model_card_visibility, "model:cardVisibility", GeomModelApiModelCardVisibility, GeomModelApiModelCardVisibility::read
     }
     /// The USD name of [`Self::model_draw_mode`].
@@ -2080,6 +2505,9 @@ impl<'a> GeomModelApi<'a> {
         #[doc = "Alternate imaging mode; applied to this prim or child prims where model:applyDrawMode is true, or where the prim has kind component and model:applyDrawMode is not authored."]
         #[doc = ""]
         #[doc = "USD attribute `model:drawMode` (`token`, uniform; fallback `\"inherited\"`)."]
+        #[doc = "C++ read: `UsdGeomModelAPI::GetModelDrawModeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomModelAPI::GetModelDrawModeAttr")]
+        #[doc(alias = "GetModelDrawModeAttr")]
         model_draw_mode, "model:drawMode", GeomModelApiModelDrawMode, GeomModelApiModelDrawMode::read
     }
     /// The USD name of [`Self::model_draw_mode_color`].
@@ -2089,6 +2517,9 @@ impl<'a> GeomModelApi<'a> {
         #[doc = "The base color of imaging prims inserted for alternate imaging modes."]
         #[doc = ""]
         #[doc = "USD attribute `model:drawModeColor` (`float3`, uniform; fallback `(0.18, 0.18, 0.18)`)."]
+        #[doc = "C++ read: `UsdGeomModelAPI::GetModelDrawModeColorAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomModelAPI::GetModelDrawModeColorAttr")]
+        #[doc(alias = "GetModelDrawModeColorAttr")]
         model_draw_mode_color, "model:drawModeColor", [f32; 3], crate::value::read_float3
     }
 }
@@ -2126,66 +2557,99 @@ impl GeomModelApiEdit {
         #[doc = "If true, and the resolved value of model:drawMode is non-default, apply an alternate imaging mode to this prim."]
         #[doc = ""]
         #[doc = "USD attribute `model:applyDrawMode` (`bool`, uniform; fallback `false`)."]
+        #[doc = "C++ authoring: `UsdGeomModelAPI::CreateModelApplyDrawModeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomModelAPI::CreateModelApplyDrawModeAttr")]
+        #[doc(alias = "CreateModelApplyDrawModeAttr")]
         set_model_apply_draw_mode, "model:applyDrawMode", bool, crate::value::write_bool
     }
     set_uniform_attribute! {
         #[doc = "The geometry to generate for imaging prims inserted for \\\\em cards imaging mode."]
         #[doc = ""]
         #[doc = "USD attribute `model:cardGeometry` (`token`, uniform; fallback `\"cross\"`)."]
+        #[doc = "C++ authoring: `UsdGeomModelAPI::CreateModelCardGeometryAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomModelAPI::CreateModelCardGeometryAttr")]
+        #[doc(alias = "CreateModelCardGeometryAttr")]
         set_model_card_geometry, "model:cardGeometry", GeomModelApiModelCardGeometry, GeomModelApiModelCardGeometry::write
     }
     set_attribute! {
         #[doc = "In cards imaging mode, the texture applied to the X- quad."]
         #[doc = ""]
         #[doc = "USD attribute `model:cardTextureXNeg` (`asset`)."]
+        #[doc = "C++ authoring: `UsdGeomModelAPI::CreateModelCardTextureXNegAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomModelAPI::CreateModelCardTextureXNegAttr")]
+        #[doc(alias = "CreateModelCardTextureXNegAttr")]
         set_model_card_texture_x_neg, set_model_card_texture_x_neg_at, "model:cardTextureXNeg", &str, crate::value::write_asset
     }
     set_attribute! {
         #[doc = "In cards imaging mode, the texture applied to the X+ quad."]
         #[doc = ""]
         #[doc = "USD attribute `model:cardTextureXPos` (`asset`)."]
+        #[doc = "C++ authoring: `UsdGeomModelAPI::CreateModelCardTextureXPosAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomModelAPI::CreateModelCardTextureXPosAttr")]
+        #[doc(alias = "CreateModelCardTextureXPosAttr")]
         set_model_card_texture_x_pos, set_model_card_texture_x_pos_at, "model:cardTextureXPos", &str, crate::value::write_asset
     }
     set_attribute! {
         #[doc = "In cards imaging mode, the texture applied to the Y- quad."]
         #[doc = ""]
         #[doc = "USD attribute `model:cardTextureYNeg` (`asset`)."]
+        #[doc = "C++ authoring: `UsdGeomModelAPI::CreateModelCardTextureYNegAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomModelAPI::CreateModelCardTextureYNegAttr")]
+        #[doc(alias = "CreateModelCardTextureYNegAttr")]
         set_model_card_texture_y_neg, set_model_card_texture_y_neg_at, "model:cardTextureYNeg", &str, crate::value::write_asset
     }
     set_attribute! {
         #[doc = "In cards imaging mode, the texture applied to the Y+ quad."]
         #[doc = ""]
         #[doc = "USD attribute `model:cardTextureYPos` (`asset`)."]
+        #[doc = "C++ authoring: `UsdGeomModelAPI::CreateModelCardTextureYPosAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomModelAPI::CreateModelCardTextureYPosAttr")]
+        #[doc(alias = "CreateModelCardTextureYPosAttr")]
         set_model_card_texture_y_pos, set_model_card_texture_y_pos_at, "model:cardTextureYPos", &str, crate::value::write_asset
     }
     set_attribute! {
         #[doc = "In cards imaging mode, the texture applied to the Z- quad."]
         #[doc = ""]
         #[doc = "USD attribute `model:cardTextureZNeg` (`asset`)."]
+        #[doc = "C++ authoring: `UsdGeomModelAPI::CreateModelCardTextureZNegAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomModelAPI::CreateModelCardTextureZNegAttr")]
+        #[doc(alias = "CreateModelCardTextureZNegAttr")]
         set_model_card_texture_z_neg, set_model_card_texture_z_neg_at, "model:cardTextureZNeg", &str, crate::value::write_asset
     }
     set_attribute! {
         #[doc = "In cards imaging mode, the texture applied to the Z+ quad."]
         #[doc = ""]
         #[doc = "USD attribute `model:cardTextureZPos` (`asset`)."]
+        #[doc = "C++ authoring: `UsdGeomModelAPI::CreateModelCardTextureZPosAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomModelAPI::CreateModelCardTextureZPosAttr")]
+        #[doc(alias = "CreateModelCardTextureZPosAttr")]
         set_model_card_texture_z_pos, set_model_card_texture_z_pos_at, "model:cardTextureZPos", &str, crate::value::write_asset
     }
     set_uniform_attribute! {
         #[doc = "When using the cards imaging mode, determines if cards in the upAxis direction should be visible."]
         #[doc = ""]
         #[doc = "USD attribute `model:cardVisibility` (`token`, uniform; fallback `\"inherited\"`)."]
+        #[doc = "C++ authoring: `UsdGeomModelAPI::CreateModelCardVisibilityAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomModelAPI::CreateModelCardVisibilityAttr")]
+        #[doc(alias = "CreateModelCardVisibilityAttr")]
         set_model_card_visibility, "model:cardVisibility", GeomModelApiModelCardVisibility, GeomModelApiModelCardVisibility::write
     }
     set_uniform_attribute! {
         #[doc = "Alternate imaging mode; applied to this prim or child prims where model:applyDrawMode is true, or where the prim has kind component and model:applyDrawMode is not authored."]
         #[doc = ""]
         #[doc = "USD attribute `model:drawMode` (`token`, uniform; fallback `\"inherited\"`)."]
+        #[doc = "C++ authoring: `UsdGeomModelAPI::CreateModelDrawModeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomModelAPI::CreateModelDrawModeAttr")]
+        #[doc(alias = "CreateModelDrawModeAttr")]
         set_model_draw_mode, "model:drawMode", GeomModelApiModelDrawMode, GeomModelApiModelDrawMode::write
     }
     set_uniform_attribute! {
         #[doc = "The base color of imaging prims inserted for alternate imaging modes."]
         #[doc = ""]
         #[doc = "USD attribute `model:drawModeColor` (`float3`, uniform; fallback `(0.18, 0.18, 0.18)`)."]
+        #[doc = "C++ authoring: `UsdGeomModelAPI::CreateModelDrawModeColorAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomModelAPI::CreateModelDrawModeColorAttr")]
+        #[doc(alias = "CreateModelDrawModeColorAttr")]
         set_model_draw_mode_color, "model:drawModeColor", [f32; 3], crate::value::write_float3
     }
 }
@@ -2209,6 +2673,8 @@ token_enum! {
 #[doc = "Encodes a subset of a piece of geometry (i.e."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `GeomSubset`, inheriting [`crate::usd::Typed`]. Construct it with [`GeomSubset::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdGeomSubset`."]
+#[doc(alias = "UsdGeomSubset")]
 #[derive(Clone, Copy, Debug)]
 pub struct GeomSubset<'a> {
     base: crate::usd::Typed<'a>,
@@ -2227,6 +2693,8 @@ impl<'a> GeomSubset<'a> {
     pub const SCHEMA: &'static str = "GeomSubset";
 
     #[doc = "A view of the prim at `path`, if it is a `GeomSubset` or of a schema derived from it."]
+    #[doc(alias = "UsdGeomSubset::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -2251,6 +2719,8 @@ impl<'a> GeomSubset<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdGeomSubset::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> GeomSubsetEdit {
         edit.define(path, Self::SCHEMA);
         GeomSubsetEdit::from_path(path)
@@ -2263,6 +2733,9 @@ impl<'a> GeomSubset<'a> {
         #[doc = "The type of element that the indices target."]
         #[doc = ""]
         #[doc = "USD attribute `elementType` (`token`, uniform; fallback `\"face\"`)."]
+        #[doc = "C++ read: `UsdGeomSubset::GetElementTypeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomSubset::GetElementTypeAttr")]
+        #[doc(alias = "GetElementTypeAttr")]
         element_type, "elementType", GeomSubsetElementType, GeomSubsetElementType::read
     }
     /// The USD name of [`Self::family_name`].
@@ -2272,6 +2745,9 @@ impl<'a> GeomSubset<'a> {
         #[doc = "The name of the family of subsets that this subset belongs to."]
         #[doc = ""]
         #[doc = "USD attribute `familyName` (`token`, uniform; fallback `\"\"`)."]
+        #[doc = "C++ read: `UsdGeomSubset::GetFamilyNameAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomSubset::GetFamilyNameAttr")]
+        #[doc(alias = "GetFamilyNameAttr")]
         family_name, "familyName", &'a str, crate::value::read_token
     }
     /// The USD name of [`Self::indices`].
@@ -2283,6 +2759,9 @@ impl<'a> GeomSubset<'a> {
         #[doc = "USD attribute `indices` (`int\\[\\]`; fallback `\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdGeomSubset::GetIndicesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomSubset::GetIndicesAttr")]
+        #[doc(alias = "GetIndicesAttr")]
         indices, indices_at, "indices", ::alloc::sync::Arc<::alloc::vec::Vec<i32>>, crate::value::read_int_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -2328,12 +2807,18 @@ impl GeomSubsetEdit {
         #[doc = "The type of element that the indices target."]
         #[doc = ""]
         #[doc = "USD attribute `elementType` (`token`, uniform; fallback `\"face\"`)."]
+        #[doc = "C++ authoring: `UsdGeomSubset::CreateElementTypeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomSubset::CreateElementTypeAttr")]
+        #[doc(alias = "CreateElementTypeAttr")]
         set_element_type, "elementType", GeomSubsetElementType, GeomSubsetElementType::write
     }
     set_uniform_attribute! {
         #[doc = "The name of the family of subsets that this subset belongs to."]
         #[doc = ""]
         #[doc = "USD attribute `familyName` (`token`, uniform; fallback `\"\"`)."]
+        #[doc = "C++ authoring: `UsdGeomSubset::CreateFamilyNameAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomSubset::CreateFamilyNameAttr")]
+        #[doc(alias = "CreateFamilyNameAttr")]
         set_family_name, "familyName", &str, crate::value::write_token
     }
     set_attribute! {
@@ -2342,6 +2827,9 @@ impl GeomSubsetEdit {
         #[doc = "USD attribute `indices` (`int\\[\\]`; fallback `\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdGeomSubset::CreateIndicesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomSubset::CreateIndicesAttr")]
+        #[doc(alias = "CreateIndicesAttr")]
         set_indices, set_indices_at, "indices", &[i32], crate::value::write_int_array
     }
     set_attribute! {
@@ -2367,6 +2855,8 @@ token_enum! {
 #[doc = "Base class for all geometric primitives."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's abstract typed schema `Gprim`, inheriting [`Boundable`]. Construct it with [`Gprim::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdGeomGprim`."]
+#[doc(alias = "UsdGeomGprim")]
 #[derive(Clone, Copy, Debug)]
 pub struct Gprim<'a> {
     base: Boundable<'a>,
@@ -2385,6 +2875,8 @@ impl<'a> Gprim<'a> {
     pub const SCHEMA: &'static str = "Gprim";
 
     #[doc = "A view of the prim at `path`, if it is a `Gprim` or of a schema derived from it."]
+    #[doc(alias = "UsdGeomGprim::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -2411,6 +2903,9 @@ impl<'a> Gprim<'a> {
         #[doc = "Although some renderers treat all parametric or polygonal surfaces as if they were effectively laminae with outward-facing normals on both sides, some renderers derive significant optimizations by considering these surfaces to have only a single outward side, typically determined by control-point winding order and/or orientation."]
         #[doc = ""]
         #[doc = "USD attribute `doubleSided` (`bool`, uniform; fallback `false`)."]
+        #[doc = "C++ read: `UsdGeomGprim::GetDoubleSidedAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomGprim::GetDoubleSidedAttr")]
+        #[doc(alias = "GetDoubleSidedAttr")]
         double_sided, "doubleSided", bool, crate::value::read_bool
     }
     /// The USD name of [`Self::orientation`].
@@ -2420,6 +2915,9 @@ impl<'a> Gprim<'a> {
         #[doc = "Orientation specifies whether the gprim's surface normal should be computed using the right hand rule, or the left hand rule."]
         #[doc = ""]
         #[doc = "USD attribute `orientation` (`token`, uniform; fallback `\"rightHanded\"`)."]
+        #[doc = "C++ read: `UsdGeomGprim::GetOrientationAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomGprim::GetOrientationAttr")]
+        #[doc(alias = "GetOrientationAttr")]
         orientation, "orientation", GprimOrientation, GprimOrientation::read
     }
     /// The USD name of [`Self::display_color`].
@@ -2431,6 +2929,9 @@ impl<'a> Gprim<'a> {
         #[doc = "USD attribute `primvars:displayColor` (`color3f\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdGeomGprim::GetDisplayColorAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomGprim::GetDisplayColorAttr")]
+        #[doc(alias = "GetDisplayColorAttr")]
         display_color, display_color_at, "primvars:displayColor", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::read_float3_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -2454,6 +2955,9 @@ impl<'a> Gprim<'a> {
         #[doc = "USD attribute `primvars:displayOpacity` (`float\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdGeomGprim::GetDisplayOpacityAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomGprim::GetDisplayOpacityAttr")]
+        #[doc(alias = "GetDisplayOpacityAttr")]
         display_opacity, display_opacity_at, "primvars:displayOpacity", ::alloc::sync::Arc<::alloc::vec::Vec<f32>>, crate::value::read_float_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -2503,12 +3007,18 @@ impl GprimEdit {
         #[doc = "Although some renderers treat all parametric or polygonal surfaces as if they were effectively laminae with outward-facing normals on both sides, some renderers derive significant optimizations by considering these surfaces to have only a single outward side, typically determined by control-point winding order and/or orientation."]
         #[doc = ""]
         #[doc = "USD attribute `doubleSided` (`bool`, uniform; fallback `false`)."]
+        #[doc = "C++ authoring: `UsdGeomGprim::CreateDoubleSidedAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomGprim::CreateDoubleSidedAttr")]
+        #[doc(alias = "CreateDoubleSidedAttr")]
         set_double_sided, "doubleSided", bool, crate::value::write_bool
     }
     set_uniform_attribute! {
         #[doc = "Orientation specifies whether the gprim's surface normal should be computed using the right hand rule, or the left hand rule."]
         #[doc = ""]
         #[doc = "USD attribute `orientation` (`token`, uniform; fallback `\"rightHanded\"`)."]
+        #[doc = "C++ authoring: `UsdGeomGprim::CreateOrientationAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomGprim::CreateOrientationAttr")]
+        #[doc(alias = "CreateOrientationAttr")]
         set_orientation, "orientation", GprimOrientation, GprimOrientation::write
     }
     set_attribute! {
@@ -2517,6 +3027,9 @@ impl GprimEdit {
         #[doc = "USD attribute `primvars:displayColor` (`color3f\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdGeomGprim::CreateDisplayColorAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomGprim::CreateDisplayColorAttr")]
+        #[doc(alias = "CreateDisplayColorAttr")]
         set_display_color, set_display_color_at, "primvars:displayColor", &[[f32; 3]], crate::value::write_float3_array
     }
     set_attribute! {
@@ -2533,6 +3046,9 @@ impl GprimEdit {
         #[doc = "USD attribute `primvars:displayOpacity` (`float\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdGeomGprim::CreateDisplayOpacityAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomGprim::CreateDisplayOpacityAttr")]
+        #[doc(alias = "CreateDisplayOpacityAttr")]
         set_display_opacity, set_display_opacity_at, "primvars:displayOpacity", &[f32], crate::value::write_float_array
     }
     set_attribute! {
@@ -2548,6 +3064,8 @@ impl GprimEdit {
 #[doc = "This schema specifies a cubic hermite interpolated curve batch as sometimes used for defining guides for animation."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `HermiteCurves`, inheriting [`Curves`]. Construct it with [`HermiteCurves::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdGeomHermiteCurves`."]
+#[doc(alias = "UsdGeomHermiteCurves")]
 #[derive(Clone, Copy, Debug)]
 pub struct HermiteCurves<'a> {
     base: Curves<'a>,
@@ -2566,6 +3084,8 @@ impl<'a> HermiteCurves<'a> {
     pub const SCHEMA: &'static str = "HermiteCurves";
 
     #[doc = "A view of the prim at `path`, if it is a `HermiteCurves` or of a schema derived from it."]
+    #[doc(alias = "UsdGeomHermiteCurves::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -2590,6 +3110,8 @@ impl<'a> HermiteCurves<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdGeomHermiteCurves::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> HermiteCurvesEdit {
         edit.define(path, Self::SCHEMA);
         HermiteCurvesEdit::from_path(path)
@@ -2604,6 +3126,9 @@ impl<'a> HermiteCurves<'a> {
         #[doc = "USD attribute `tangents` (`vector3f\\[\\]`; fallback `\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdGeomHermiteCurves::GetTangentsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomHermiteCurves::GetTangentsAttr")]
+        #[doc(alias = "GetTangentsAttr")]
         tangents, tangents_at, "tangents", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::read_float3_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -2651,6 +3176,9 @@ impl HermiteCurvesEdit {
         #[doc = "USD attribute `tangents` (`vector3f\\[\\]`; fallback `\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdGeomHermiteCurves::CreateTangentsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomHermiteCurves::CreateTangentsAttr")]
+        #[doc(alias = "CreateTangentsAttr")]
         set_tangents, set_tangents_at, "tangents", &[[f32; 3]], crate::value::write_float3_array
     }
     set_attribute! {
@@ -2690,6 +3218,8 @@ token_enum! {
 #[doc = "Base class for all prims that may require rendering or visualization of some sort."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's abstract typed schema `Imageable`, inheriting [`crate::usd::Typed`]. Construct it with [`Imageable::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdGeomImageable`."]
+#[doc(alias = "UsdGeomImageable")]
 #[derive(Clone, Copy, Debug)]
 pub struct Imageable<'a> {
     base: crate::usd::Typed<'a>,
@@ -2708,6 +3238,8 @@ impl<'a> Imageable<'a> {
     pub const SCHEMA: &'static str = "Imageable";
 
     #[doc = "A view of the prim at `path`, if it is a `Imageable` or of a schema derived from it."]
+    #[doc(alias = "UsdGeomImageable::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -2734,6 +3266,9 @@ impl<'a> Imageable<'a> {
         #[doc = "The proxyPrim relationship allows us to link a prim whose purpose is \"render\" to its (single target) purpose=\"proxy\" prim."]
         #[doc = ""]
         #[doc = "USD relationship `proxyPrim` (`rel`)."]
+        #[doc = "C++ read: `UsdGeomImageable::GetProxyPrimRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomImageable::GetProxyPrimRel")]
+        #[doc(alias = "GetProxyPrimRel")]
         proxy_prim, "proxyPrim"
     }
     /// The USD name of [`Self::purpose`].
@@ -2743,6 +3278,9 @@ impl<'a> Imageable<'a> {
         #[doc = "Purpose is a classification of geometry into categories that can each be independently included or excluded from traversals of prims on a stage, such as rendering or bounding-box computation traversals."]
         #[doc = ""]
         #[doc = "USD attribute `purpose` (`token`, uniform; fallback `\"default\"`)."]
+        #[doc = "C++ read: `UsdGeomImageable::GetPurposeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomImageable::GetPurposeAttr")]
+        #[doc(alias = "GetPurposeAttr")]
         purpose, "purpose", ImageablePurpose, ImageablePurpose::read
     }
     /// The USD name of [`Self::visibility`].
@@ -2752,6 +3290,9 @@ impl<'a> Imageable<'a> {
         #[doc = "Visibility is meant to be the simplest form of \"pruning\" visibility that is supported by most DCC apps."]
         #[doc = ""]
         #[doc = "USD attribute `visibility` (`token`; fallback `\"inherited\"`)."]
+        #[doc = "C++ read: `UsdGeomImageable::GetVisibilityAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomImageable::GetVisibilityAttr")]
+        #[doc(alias = "GetVisibilityAttr")]
         visibility, visibility_at, "visibility", ImageableVisibility, ImageableVisibility::read
     }
 }
@@ -2789,18 +3330,27 @@ impl ImageableEdit {
         #[doc = "The proxyPrim relationship allows us to link a prim whose purpose is \"render\" to its (single target) purpose=\"proxy\" prim."]
         #[doc = ""]
         #[doc = "USD relationship `proxyPrim` (`rel`)."]
+        #[doc = "C++ authoring: `UsdGeomImageable::CreateProxyPrimRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomImageable::CreateProxyPrimRel")]
+        #[doc(alias = "CreateProxyPrimRel")]
         set_proxy_prim, "proxyPrim"
     }
     set_uniform_attribute! {
         #[doc = "Purpose is a classification of geometry into categories that can each be independently included or excluded from traversals of prims on a stage, such as rendering or bounding-box computation traversals."]
         #[doc = ""]
         #[doc = "USD attribute `purpose` (`token`, uniform; fallback `\"default\"`)."]
+        #[doc = "C++ authoring: `UsdGeomImageable::CreatePurposeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomImageable::CreatePurposeAttr")]
+        #[doc(alias = "CreatePurposeAttr")]
         set_purpose, "purpose", ImageablePurpose, ImageablePurpose::write
     }
     set_attribute! {
         #[doc = "Visibility is meant to be the simplest form of \"pruning\" visibility that is supported by most DCC apps."]
         #[doc = ""]
         #[doc = "USD attribute `visibility` (`token`; fallback `\"inherited\"`)."]
+        #[doc = "C++ authoring: `UsdGeomImageable::CreateVisibilityAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomImageable::CreateVisibilityAttr")]
+        #[doc(alias = "CreateVisibilityAttr")]
         set_visibility, set_visibility_at, "visibility", ImageableVisibility, ImageableVisibility::write
     }
 }
@@ -2862,6 +3412,8 @@ token_enum! {
 #[doc = "Encodes a mesh with optional subdivision properties and features."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `Mesh`, inheriting [`PointBased`]. Construct it with [`Mesh::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdGeomMesh`."]
+#[doc(alias = "UsdGeomMesh")]
 #[derive(Clone, Copy, Debug)]
 pub struct Mesh<'a> {
     base: PointBased<'a>,
@@ -2880,6 +3432,8 @@ impl<'a> Mesh<'a> {
     pub const SCHEMA: &'static str = "Mesh";
 
     #[doc = "A view of the prim at `path`, if it is a `Mesh` or of a schema derived from it."]
+    #[doc(alias = "UsdGeomMesh::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -2904,6 +3458,8 @@ impl<'a> Mesh<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdGeomMesh::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> MeshEdit {
         edit.define(path, Self::SCHEMA);
         MeshEdit::from_path(path)
@@ -2918,6 +3474,9 @@ impl<'a> Mesh<'a> {
         #[doc = "USD attribute `cornerIndices` (`int\\[\\]`; fallback `\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdGeomMesh::GetCornerIndicesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomMesh::GetCornerIndicesAttr")]
+        #[doc(alias = "GetCornerIndicesAttr")]
         corner_indices, corner_indices_at, "cornerIndices", ::alloc::sync::Arc<::alloc::vec::Vec<i32>>, crate::value::read_int_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -2937,6 +3496,9 @@ impl<'a> Mesh<'a> {
         #[doc = "USD attribute `cornerSharpnesses` (`float\\[\\]`; fallback `\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdGeomMesh::GetCornerSharpnessesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomMesh::GetCornerSharpnessesAttr")]
+        #[doc(alias = "GetCornerSharpnessesAttr")]
         corner_sharpnesses, corner_sharpnesses_at, "cornerSharpnesses", ::alloc::sync::Arc<::alloc::vec::Vec<f32>>, crate::value::read_float_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -2960,6 +3522,9 @@ impl<'a> Mesh<'a> {
         #[doc = "USD attribute `creaseIndices` (`int\\[\\]`; fallback `\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdGeomMesh::GetCreaseIndicesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomMesh::GetCreaseIndicesAttr")]
+        #[doc(alias = "GetCreaseIndicesAttr")]
         crease_indices, crease_indices_at, "creaseIndices", ::alloc::sync::Arc<::alloc::vec::Vec<i32>>, crate::value::read_int_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -2979,6 +3544,9 @@ impl<'a> Mesh<'a> {
         #[doc = "USD attribute `creaseLengths` (`int\\[\\]`; fallback `\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdGeomMesh::GetCreaseLengthsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomMesh::GetCreaseLengthsAttr")]
+        #[doc(alias = "GetCreaseLengthsAttr")]
         crease_lengths, crease_lengths_at, "creaseLengths", ::alloc::sync::Arc<::alloc::vec::Vec<i32>>, crate::value::read_int_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -2998,6 +3566,9 @@ impl<'a> Mesh<'a> {
         #[doc = "USD attribute `creaseSharpnesses` (`float\\[\\]`; fallback `\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdGeomMesh::GetCreaseSharpnessesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomMesh::GetCreaseSharpnessesAttr")]
+        #[doc(alias = "GetCreaseSharpnessesAttr")]
         crease_sharpnesses, crease_sharpnesses_at, "creaseSharpnesses", ::alloc::sync::Arc<::alloc::vec::Vec<f32>>, crate::value::read_float_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -3019,6 +3590,9 @@ impl<'a> Mesh<'a> {
         #[doc = "Specifies how elements of a primvar of interpolation type \"faceVarying\" are interpolated for subdivision surfaces."]
         #[doc = ""]
         #[doc = "USD attribute `faceVaryingLinearInterpolation` (`token`; fallback `\"cornersPlus1\"`)."]
+        #[doc = "C++ read: `UsdGeomMesh::GetFaceVaryingLinearInterpolationAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomMesh::GetFaceVaryingLinearInterpolationAttr")]
+        #[doc(alias = "GetFaceVaryingLinearInterpolationAttr")]
         face_varying_linear_interpolation, face_varying_linear_interpolation_at, "faceVaryingLinearInterpolation", MeshFaceVaryingLinearInterpolation, MeshFaceVaryingLinearInterpolation::read
     }
     /// The USD name of [`Self::face_vertex_counts`].
@@ -3030,6 +3604,9 @@ impl<'a> Mesh<'a> {
         #[doc = "USD attribute `faceVertexCounts` (`int\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdGeomMesh::GetFaceVertexCountsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomMesh::GetFaceVertexCountsAttr")]
+        #[doc(alias = "GetFaceVertexCountsAttr")]
         face_vertex_counts, face_vertex_counts_at, "faceVertexCounts", ::alloc::sync::Arc<::alloc::vec::Vec<i32>>, crate::value::read_int_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -3053,6 +3630,9 @@ impl<'a> Mesh<'a> {
         #[doc = "USD attribute `faceVertexIndices` (`int\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdGeomMesh::GetFaceVertexIndicesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomMesh::GetFaceVertexIndicesAttr")]
+        #[doc(alias = "GetFaceVertexIndicesAttr")]
         face_vertex_indices, face_vertex_indices_at, "faceVertexIndices", ::alloc::sync::Arc<::alloc::vec::Vec<i32>>, crate::value::read_int_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -3076,6 +3656,9 @@ impl<'a> Mesh<'a> {
         #[doc = "USD attribute `holeIndices` (`int\\[\\]`; fallback `\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdGeomMesh::GetHoleIndicesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomMesh::GetHoleIndicesAttr")]
+        #[doc(alias = "GetHoleIndicesAttr")]
         hole_indices, hole_indices_at, "holeIndices", ::alloc::sync::Arc<::alloc::vec::Vec<i32>>, crate::value::read_int_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -3093,6 +3676,9 @@ impl<'a> Mesh<'a> {
         #[doc = "Specifies how subdivision is applied for faces adjacent to boundary edges and boundary points."]
         #[doc = ""]
         #[doc = "USD attribute `interpolateBoundary` (`token`; fallback `\"edgeAndCorner\"`)."]
+        #[doc = "C++ read: `UsdGeomMesh::GetInterpolateBoundaryAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomMesh::GetInterpolateBoundaryAttr")]
+        #[doc(alias = "GetInterpolateBoundaryAttr")]
         interpolate_boundary, interpolate_boundary_at, "interpolateBoundary", MeshInterpolateBoundary, MeshInterpolateBoundary::read
     }
     /// The USD name of [`Self::subdivision_scheme`].
@@ -3102,6 +3688,9 @@ impl<'a> Mesh<'a> {
         #[doc = "The subdivision scheme to be applied to the surface."]
         #[doc = ""]
         #[doc = "USD attribute `subdivisionScheme` (`token`, uniform; fallback `\"catmullClark\"`)."]
+        #[doc = "C++ read: `UsdGeomMesh::GetSubdivisionSchemeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomMesh::GetSubdivisionSchemeAttr")]
+        #[doc(alias = "GetSubdivisionSchemeAttr")]
         subdivision_scheme, "subdivisionScheme", MeshSubdivisionScheme, MeshSubdivisionScheme::read
     }
     /// The USD name of [`Self::triangle_subdivision_rule`].
@@ -3111,6 +3700,9 @@ impl<'a> Mesh<'a> {
         #[doc = "Specifies an option to the subdivision rules for the Catmull-Clark scheme to try and improve undesirable artifacts when subdividing triangles."]
         #[doc = ""]
         #[doc = "USD attribute `triangleSubdivisionRule` (`token`; fallback `\"catmullClark\"`)."]
+        #[doc = "C++ read: `UsdGeomMesh::GetTriangleSubdivisionRuleAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomMesh::GetTriangleSubdivisionRuleAttr")]
+        #[doc(alias = "GetTriangleSubdivisionRuleAttr")]
         triangle_subdivision_rule, triangle_subdivision_rule_at, "triangleSubdivisionRule", MeshTriangleSubdivisionRule, MeshTriangleSubdivisionRule::read
     }
 }
@@ -3150,6 +3742,9 @@ impl MeshEdit {
         #[doc = "USD attribute `cornerIndices` (`int\\[\\]`; fallback `\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdGeomMesh::CreateCornerIndicesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomMesh::CreateCornerIndicesAttr")]
+        #[doc(alias = "CreateCornerIndicesAttr")]
         set_corner_indices, set_corner_indices_at, "cornerIndices", &[i32], crate::value::write_int_array
     }
     set_attribute! {
@@ -3166,6 +3761,9 @@ impl MeshEdit {
         #[doc = "USD attribute `cornerSharpnesses` (`float\\[\\]`; fallback `\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdGeomMesh::CreateCornerSharpnessesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomMesh::CreateCornerSharpnessesAttr")]
+        #[doc(alias = "CreateCornerSharpnessesAttr")]
         set_corner_sharpnesses, set_corner_sharpnesses_at, "cornerSharpnesses", &[f32], crate::value::write_float_array
     }
     set_attribute! {
@@ -3182,6 +3780,9 @@ impl MeshEdit {
         #[doc = "USD attribute `creaseIndices` (`int\\[\\]`; fallback `\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdGeomMesh::CreateCreaseIndicesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomMesh::CreateCreaseIndicesAttr")]
+        #[doc(alias = "CreateCreaseIndicesAttr")]
         set_crease_indices, set_crease_indices_at, "creaseIndices", &[i32], crate::value::write_int_array
     }
     set_attribute! {
@@ -3198,6 +3799,9 @@ impl MeshEdit {
         #[doc = "USD attribute `creaseLengths` (`int\\[\\]`; fallback `\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdGeomMesh::CreateCreaseLengthsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomMesh::CreateCreaseLengthsAttr")]
+        #[doc(alias = "CreateCreaseLengthsAttr")]
         set_crease_lengths, set_crease_lengths_at, "creaseLengths", &[i32], crate::value::write_int_array
     }
     set_attribute! {
@@ -3214,6 +3818,9 @@ impl MeshEdit {
         #[doc = "USD attribute `creaseSharpnesses` (`float\\[\\]`; fallback `\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdGeomMesh::CreateCreaseSharpnessesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomMesh::CreateCreaseSharpnessesAttr")]
+        #[doc(alias = "CreateCreaseSharpnessesAttr")]
         set_crease_sharpnesses, set_crease_sharpnesses_at, "creaseSharpnesses", &[f32], crate::value::write_float_array
     }
     set_attribute! {
@@ -3228,6 +3835,9 @@ impl MeshEdit {
         #[doc = "Specifies how elements of a primvar of interpolation type \"faceVarying\" are interpolated for subdivision surfaces."]
         #[doc = ""]
         #[doc = "USD attribute `faceVaryingLinearInterpolation` (`token`; fallback `\"cornersPlus1\"`)."]
+        #[doc = "C++ authoring: `UsdGeomMesh::CreateFaceVaryingLinearInterpolationAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomMesh::CreateFaceVaryingLinearInterpolationAttr")]
+        #[doc(alias = "CreateFaceVaryingLinearInterpolationAttr")]
         set_face_varying_linear_interpolation, set_face_varying_linear_interpolation_at, "faceVaryingLinearInterpolation", MeshFaceVaryingLinearInterpolation, MeshFaceVaryingLinearInterpolation::write
     }
     set_attribute! {
@@ -3236,6 +3846,9 @@ impl MeshEdit {
         #[doc = "USD attribute `faceVertexCounts` (`int\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdGeomMesh::CreateFaceVertexCountsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomMesh::CreateFaceVertexCountsAttr")]
+        #[doc(alias = "CreateFaceVertexCountsAttr")]
         set_face_vertex_counts, set_face_vertex_counts_at, "faceVertexCounts", &[i32], crate::value::write_int_array
     }
     set_attribute! {
@@ -3252,6 +3865,9 @@ impl MeshEdit {
         #[doc = "USD attribute `faceVertexIndices` (`int\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdGeomMesh::CreateFaceVertexIndicesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomMesh::CreateFaceVertexIndicesAttr")]
+        #[doc(alias = "CreateFaceVertexIndicesAttr")]
         set_face_vertex_indices, set_face_vertex_indices_at, "faceVertexIndices", &[i32], crate::value::write_int_array
     }
     set_attribute! {
@@ -3268,6 +3884,9 @@ impl MeshEdit {
         #[doc = "USD attribute `holeIndices` (`int\\[\\]`; fallback `\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdGeomMesh::CreateHoleIndicesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomMesh::CreateHoleIndicesAttr")]
+        #[doc(alias = "CreateHoleIndicesAttr")]
         set_hole_indices, set_hole_indices_at, "holeIndices", &[i32], crate::value::write_int_array
     }
     set_attribute! {
@@ -3282,18 +3901,27 @@ impl MeshEdit {
         #[doc = "Specifies how subdivision is applied for faces adjacent to boundary edges and boundary points."]
         #[doc = ""]
         #[doc = "USD attribute `interpolateBoundary` (`token`; fallback `\"edgeAndCorner\"`)."]
+        #[doc = "C++ authoring: `UsdGeomMesh::CreateInterpolateBoundaryAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomMesh::CreateInterpolateBoundaryAttr")]
+        #[doc(alias = "CreateInterpolateBoundaryAttr")]
         set_interpolate_boundary, set_interpolate_boundary_at, "interpolateBoundary", MeshInterpolateBoundary, MeshInterpolateBoundary::write
     }
     set_uniform_attribute! {
         #[doc = "The subdivision scheme to be applied to the surface."]
         #[doc = ""]
         #[doc = "USD attribute `subdivisionScheme` (`token`, uniform; fallback `\"catmullClark\"`)."]
+        #[doc = "C++ authoring: `UsdGeomMesh::CreateSubdivisionSchemeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomMesh::CreateSubdivisionSchemeAttr")]
+        #[doc(alias = "CreateSubdivisionSchemeAttr")]
         set_subdivision_scheme, "subdivisionScheme", MeshSubdivisionScheme, MeshSubdivisionScheme::write
     }
     set_attribute! {
         #[doc = "Specifies an option to the subdivision rules for the Catmull-Clark scheme to try and improve undesirable artifacts when subdividing triangles."]
         #[doc = ""]
         #[doc = "USD attribute `triangleSubdivisionRule` (`token`; fallback `\"catmullClark\"`)."]
+        #[doc = "C++ authoring: `UsdGeomMesh::CreateTriangleSubdivisionRuleAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomMesh::CreateTriangleSubdivisionRuleAttr")]
+        #[doc(alias = "CreateTriangleSubdivisionRuleAttr")]
         set_triangle_subdivision_rule, set_triangle_subdivision_rule_at, "triangleSubdivisionRule", MeshTriangleSubdivisionRule, MeshTriangleSubdivisionRule::write
     }
 }
@@ -3301,6 +3929,9 @@ impl MeshEdit {
 #[doc = "UsdGeomMotionAPI encodes data that can live on any prim that may affect computations involving: - computed motion for motion blur - sampling for motion blur The \"motion:blurScale\" attribute allows artists to scale the __amount__ of motion blur to be rendered for parts of the scene without changing the recorded animation."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's single-apply API schema `MotionAPI`. Get it with [`MotionApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdGeomMotionAPI`."]
+#[doc(alias = "UsdGeomMotionAPI")]
+#[doc(alias = "MotionAPI")]
 #[derive(Clone, Copy, Debug)]
 pub struct MotionApi<'a> {
     base: PrimView<'a>,
@@ -3321,6 +3952,8 @@ impl<'a> MotionApi<'a> {
     /// A view of the schema on the prim at `path`, if the prim has it
     /// applied.
     #[must_use]
+    #[doc(alias = "UsdGeomMotionAPI::Get")]
+    #[doc(alias = "Get")]
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
@@ -3345,6 +3978,8 @@ impl<'a> MotionApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there.
+    #[doc(alias = "UsdGeomMotionAPI::Apply")]
+    #[doc(alias = "Apply")]
     pub fn apply(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<MotionApiEdit, CannotApply> {
         edit.apply(path, Self::SCHEMA, None)?;
         Ok(MotionApiEdit::from_path(path))
@@ -3357,6 +3992,9 @@ impl<'a> MotionApi<'a> {
         #[doc = "BlurScale is an __inherited__ float attribute that stipulates the rendered motion blur (as typically specified via UsdGeomCamera's _shutter:open_ and _shutter:close_ properties) should be scaled for __all objects__ at and beneath the prim in namespace on which the _motion:blurScale_ value is specified."]
         #[doc = ""]
         #[doc = "USD attribute `motion:blurScale` (`float`; fallback `1.0`)."]
+        #[doc = "C++ read: `UsdGeomMotionAPI::GetMotionBlurScaleAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomMotionAPI::GetMotionBlurScaleAttr")]
+        #[doc(alias = "GetMotionBlurScaleAttr")]
         motion_blur_scale, motion_blur_scale_at, "motion:blurScale", f32, crate::value::read_float
     }
     /// The USD name of [`Self::nonlinear_sample_count`].
@@ -3366,6 +4004,9 @@ impl<'a> MotionApi<'a> {
         #[doc = "Determines the number of position or transformation samples created when motion is described by attributes contributing non-linear terms."]
         #[doc = ""]
         #[doc = "USD attribute `motion:nonlinearSampleCount` (`int`; fallback `3`)."]
+        #[doc = "C++ read: `UsdGeomMotionAPI::GetNonlinearSampleCountAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomMotionAPI::GetNonlinearSampleCountAttr")]
+        #[doc(alias = "GetNonlinearSampleCountAttr")]
         nonlinear_sample_count, nonlinear_sample_count_at, "motion:nonlinearSampleCount", i32, crate::value::read_int
     }
     /// The USD name of [`Self::velocity_scale`].
@@ -3375,6 +4016,9 @@ impl<'a> MotionApi<'a> {
         #[doc = "\\\\deprecated VelocityScale is an \\*\\*inherited\\*\\* float attribute that velocity-based schemas (e.g."]
         #[doc = ""]
         #[doc = "USD attribute `motion:velocityScale` (`float`; fallback `1.0`)."]
+        #[doc = "C++ read: `UsdGeomMotionAPI::GetVelocityScaleAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomMotionAPI::GetVelocityScaleAttr")]
+        #[doc(alias = "GetVelocityScaleAttr")]
         velocity_scale, velocity_scale_at, "motion:velocityScale", f32, crate::value::read_float
     }
 }
@@ -3412,18 +4056,27 @@ impl MotionApiEdit {
         #[doc = "BlurScale is an __inherited__ float attribute that stipulates the rendered motion blur (as typically specified via UsdGeomCamera's _shutter:open_ and _shutter:close_ properties) should be scaled for __all objects__ at and beneath the prim in namespace on which the _motion:blurScale_ value is specified."]
         #[doc = ""]
         #[doc = "USD attribute `motion:blurScale` (`float`; fallback `1.0`)."]
+        #[doc = "C++ authoring: `UsdGeomMotionAPI::CreateMotionBlurScaleAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomMotionAPI::CreateMotionBlurScaleAttr")]
+        #[doc(alias = "CreateMotionBlurScaleAttr")]
         set_motion_blur_scale, set_motion_blur_scale_at, "motion:blurScale", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "Determines the number of position or transformation samples created when motion is described by attributes contributing non-linear terms."]
         #[doc = ""]
         #[doc = "USD attribute `motion:nonlinearSampleCount` (`int`; fallback `3`)."]
+        #[doc = "C++ authoring: `UsdGeomMotionAPI::CreateNonlinearSampleCountAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomMotionAPI::CreateNonlinearSampleCountAttr")]
+        #[doc(alias = "CreateNonlinearSampleCountAttr")]
         set_nonlinear_sample_count, set_nonlinear_sample_count_at, "motion:nonlinearSampleCount", i32, crate::value::write_int
     }
     set_attribute! {
         #[doc = "\\\\deprecated VelocityScale is an \\*\\*inherited\\*\\* float attribute that velocity-based schemas (e.g."]
         #[doc = ""]
         #[doc = "USD attribute `motion:velocityScale` (`float`; fallback `1.0`)."]
+        #[doc = "C++ authoring: `UsdGeomMotionAPI::CreateVelocityScaleAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomMotionAPI::CreateVelocityScaleAttr")]
+        #[doc(alias = "CreateVelocityScaleAttr")]
         set_velocity_scale, set_velocity_scale_at, "motion:velocityScale", f32, crate::value::write_float
     }
 }
@@ -3431,6 +4084,8 @@ impl MotionApiEdit {
 #[doc = "This schema is analagous to NURBS Curves in packages like Maya and Houdini, often used for interchange of rigging and modeling curves."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `NurbsCurves`, inheriting [`Curves`]. Construct it with [`NurbsCurves::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdGeomNurbsCurves`."]
+#[doc(alias = "UsdGeomNurbsCurves")]
 #[derive(Clone, Copy, Debug)]
 pub struct NurbsCurves<'a> {
     base: Curves<'a>,
@@ -3449,6 +4104,8 @@ impl<'a> NurbsCurves<'a> {
     pub const SCHEMA: &'static str = "NurbsCurves";
 
     #[doc = "A view of the prim at `path`, if it is a `NurbsCurves` or of a schema derived from it."]
+    #[doc(alias = "UsdGeomNurbsCurves::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -3473,6 +4130,8 @@ impl<'a> NurbsCurves<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdGeomNurbsCurves::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> NurbsCurvesEdit {
         edit.define(path, Self::SCHEMA);
         NurbsCurvesEdit::from_path(path)
@@ -3487,6 +4146,9 @@ impl<'a> NurbsCurves<'a> {
         #[doc = "USD attribute `knots` (`double\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdGeomNurbsCurves::GetKnotsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomNurbsCurves::GetKnotsAttr")]
+        #[doc(alias = "GetKnotsAttr")]
         knots, knots_at, "knots", ::alloc::sync::Arc<::alloc::vec::Vec<f64>>, crate::value::read_double_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -3506,6 +4168,9 @@ impl<'a> NurbsCurves<'a> {
         #[doc = "USD attribute `order` (`int\\[\\]`; fallback `\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdGeomNurbsCurves::GetOrderAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomNurbsCurves::GetOrderAttr")]
+        #[doc(alias = "GetOrderAttr")]
         order, order_at, "order", ::alloc::sync::Arc<::alloc::vec::Vec<i32>>, crate::value::read_int_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -3525,6 +4190,9 @@ impl<'a> NurbsCurves<'a> {
         #[doc = "USD attribute `pointWeights` (`double\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdGeomNurbsCurves::GetPointWeightsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomNurbsCurves::GetPointWeightsAttr")]
+        #[doc(alias = "GetPointWeightsAttr")]
         point_weights, point_weights_at, "pointWeights", ::alloc::sync::Arc<::alloc::vec::Vec<f64>>, crate::value::read_double_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -3544,6 +4212,9 @@ impl<'a> NurbsCurves<'a> {
         #[doc = "USD attribute `ranges` (`double2\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdGeomNurbsCurves::GetRangesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomNurbsCurves::GetRangesAttr")]
+        #[doc(alias = "GetRangesAttr")]
         ranges, ranges_at, "ranges", ::alloc::sync::Arc<::alloc::vec::Vec<[f64; 2]>>, crate::value::read_double2_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -3591,6 +4262,9 @@ impl NurbsCurvesEdit {
         #[doc = "USD attribute `knots` (`double\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdGeomNurbsCurves::CreateKnotsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomNurbsCurves::CreateKnotsAttr")]
+        #[doc(alias = "CreateKnotsAttr")]
         set_knots, set_knots_at, "knots", &[f64], crate::value::write_double_array
     }
     set_attribute! {
@@ -3607,6 +4281,9 @@ impl NurbsCurvesEdit {
         #[doc = "USD attribute `order` (`int\\[\\]`; fallback `\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdGeomNurbsCurves::CreateOrderAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomNurbsCurves::CreateOrderAttr")]
+        #[doc(alias = "CreateOrderAttr")]
         set_order, set_order_at, "order", &[i32], crate::value::write_int_array
     }
     set_attribute! {
@@ -3623,6 +4300,9 @@ impl NurbsCurvesEdit {
         #[doc = "USD attribute `pointWeights` (`double\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdGeomNurbsCurves::CreatePointWeightsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomNurbsCurves::CreatePointWeightsAttr")]
+        #[doc(alias = "CreatePointWeightsAttr")]
         set_point_weights, set_point_weights_at, "pointWeights", &[f64], crate::value::write_double_array
     }
     set_attribute! {
@@ -3639,6 +4319,9 @@ impl NurbsCurvesEdit {
         #[doc = "USD attribute `ranges` (`double2\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdGeomNurbsCurves::CreateRangesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomNurbsCurves::CreateRangesAttr")]
+        #[doc(alias = "CreateRangesAttr")]
         set_ranges, set_ranges_at, "ranges", &[[f64; 2]], crate::value::write_double2_array
     }
     set_attribute! {
@@ -3678,6 +4361,8 @@ token_enum! {
 #[doc = "Encodes a rational or polynomial non-uniform B-spline surface, with optional trim curves."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `NurbsPatch`, inheriting [`PointBased`]. Construct it with [`NurbsPatch::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdGeomNurbsPatch`."]
+#[doc(alias = "UsdGeomNurbsPatch")]
 #[derive(Clone, Copy, Debug)]
 pub struct NurbsPatch<'a> {
     base: PointBased<'a>,
@@ -3696,6 +4381,8 @@ impl<'a> NurbsPatch<'a> {
     pub const SCHEMA: &'static str = "NurbsPatch";
 
     #[doc = "A view of the prim at `path`, if it is a `NurbsPatch` or of a schema derived from it."]
+    #[doc(alias = "UsdGeomNurbsPatch::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -3720,6 +4407,8 @@ impl<'a> NurbsPatch<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdGeomNurbsPatch::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> NurbsPatchEdit {
         edit.define(path, Self::SCHEMA);
         NurbsPatchEdit::from_path(path)
@@ -3734,6 +4423,9 @@ impl<'a> NurbsPatch<'a> {
         #[doc = "USD attribute `pointWeights` (`double\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdGeomNurbsPatch::GetPointWeightsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomNurbsPatch::GetPointWeightsAttr")]
+        #[doc(alias = "GetPointWeightsAttr")]
         point_weights, point_weights_at, "pointWeights", ::alloc::sync::Arc<::alloc::vec::Vec<f64>>, crate::value::read_double_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -3753,6 +4445,9 @@ impl<'a> NurbsPatch<'a> {
         #[doc = "USD attribute `trimCurve:counts` (`int\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdGeomNurbsPatch::GetTrimCurveCountsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomNurbsPatch::GetTrimCurveCountsAttr")]
+        #[doc(alias = "GetTrimCurveCountsAttr")]
         trim_curve_counts, trim_curve_counts_at, "trimCurve:counts", ::alloc::sync::Arc<::alloc::vec::Vec<i32>>, crate::value::read_int_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -3776,6 +4471,9 @@ impl<'a> NurbsPatch<'a> {
         #[doc = "USD attribute `trimCurve:knots` (`double\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdGeomNurbsPatch::GetTrimCurveKnotsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomNurbsPatch::GetTrimCurveKnotsAttr")]
+        #[doc(alias = "GetTrimCurveKnotsAttr")]
         trim_curve_knots, trim_curve_knots_at, "trimCurve:knots", ::alloc::sync::Arc<::alloc::vec::Vec<f64>>, crate::value::read_double_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -3799,6 +4497,9 @@ impl<'a> NurbsPatch<'a> {
         #[doc = "USD attribute `trimCurve:orders` (`int\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdGeomNurbsPatch::GetTrimCurveOrdersAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomNurbsPatch::GetTrimCurveOrdersAttr")]
+        #[doc(alias = "GetTrimCurveOrdersAttr")]
         trim_curve_orders, trim_curve_orders_at, "trimCurve:orders", ::alloc::sync::Arc<::alloc::vec::Vec<i32>>, crate::value::read_int_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -3822,6 +4523,9 @@ impl<'a> NurbsPatch<'a> {
         #[doc = "USD attribute `trimCurve:points` (`double3\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdGeomNurbsPatch::GetTrimCurvePointsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomNurbsPatch::GetTrimCurvePointsAttr")]
+        #[doc(alias = "GetTrimCurvePointsAttr")]
         trim_curve_points, trim_curve_points_at, "trimCurve:points", ::alloc::sync::Arc<::alloc::vec::Vec<[f64; 3]>>, crate::value::read_double3_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -3845,6 +4549,9 @@ impl<'a> NurbsPatch<'a> {
         #[doc = "USD attribute `trimCurve:ranges` (`double2\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdGeomNurbsPatch::GetTrimCurveRangesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomNurbsPatch::GetTrimCurveRangesAttr")]
+        #[doc(alias = "GetTrimCurveRangesAttr")]
         trim_curve_ranges, trim_curve_ranges_at, "trimCurve:ranges", ::alloc::sync::Arc<::alloc::vec::Vec<[f64; 2]>>, crate::value::read_double2_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -3868,6 +4575,9 @@ impl<'a> NurbsPatch<'a> {
         #[doc = "USD attribute `trimCurve:vertexCounts` (`int\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdGeomNurbsPatch::GetTrimCurveVertexCountsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomNurbsPatch::GetTrimCurveVertexCountsAttr")]
+        #[doc(alias = "GetTrimCurveVertexCountsAttr")]
         trim_curve_vertex_counts, trim_curve_vertex_counts_at, "trimCurve:vertexCounts", ::alloc::sync::Arc<::alloc::vec::Vec<i32>>, crate::value::read_int_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -3889,6 +4599,9 @@ impl<'a> NurbsPatch<'a> {
         #[doc = "Interpret the control grid and knot vectors as representing an open, geometrically closed, or geometrically closed and C2 continuous surface along the U dimension."]
         #[doc = ""]
         #[doc = "USD attribute `uForm` (`token`, uniform; fallback `\"open\"`)."]
+        #[doc = "C++ read: `UsdGeomNurbsPatch::GetUFormAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomNurbsPatch::GetUFormAttr")]
+        #[doc(alias = "GetUFormAttr")]
         u_form, "uForm", NurbsPatchUForm, NurbsPatchUForm::read
     }
     /// The USD name of [`Self::u_knots`].
@@ -3900,6 +4613,9 @@ impl<'a> NurbsPatch<'a> {
         #[doc = "USD attribute `uKnots` (`double\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdGeomNurbsPatch::GetUKnotsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomNurbsPatch::GetUKnotsAttr")]
+        #[doc(alias = "GetUKnotsAttr")]
         u_knots, u_knots_at, "uKnots", ::alloc::sync::Arc<::alloc::vec::Vec<f64>>, crate::value::read_double_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -3917,6 +4633,9 @@ impl<'a> NurbsPatch<'a> {
         #[doc = "Order in the U direction."]
         #[doc = ""]
         #[doc = "USD attribute `uOrder` (`int`)."]
+        #[doc = "C++ read: `UsdGeomNurbsPatch::GetUOrderAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomNurbsPatch::GetUOrderAttr")]
+        #[doc(alias = "GetUOrderAttr")]
         u_order, u_order_at, "uOrder", i32, crate::value::read_int
     }
     /// The USD name of [`Self::u_range`].
@@ -3926,6 +4645,9 @@ impl<'a> NurbsPatch<'a> {
         #[doc = "Provides the minimum and maximum parametric values (as defined by uKnots) over which the surface is actually defined."]
         #[doc = ""]
         #[doc = "USD attribute `uRange` (`double2`)."]
+        #[doc = "C++ read: `UsdGeomNurbsPatch::GetURangeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomNurbsPatch::GetURangeAttr")]
+        #[doc(alias = "GetURangeAttr")]
         u_range, u_range_at, "uRange", [f64; 2], crate::value::read_double2
     }
     /// The USD name of [`Self::u_vertex_count`].
@@ -3935,6 +4657,9 @@ impl<'a> NurbsPatch<'a> {
         #[doc = "Number of vertices in the U direction."]
         #[doc = ""]
         #[doc = "USD attribute `uVertexCount` (`int`)."]
+        #[doc = "C++ read: `UsdGeomNurbsPatch::GetUVertexCountAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomNurbsPatch::GetUVertexCountAttr")]
+        #[doc(alias = "GetUVertexCountAttr")]
         u_vertex_count, u_vertex_count_at, "uVertexCount", i32, crate::value::read_int
     }
     /// The USD name of [`Self::v_form`].
@@ -3944,6 +4669,9 @@ impl<'a> NurbsPatch<'a> {
         #[doc = "Interpret the control grid and knot vectors as representing an open, geometrically closed, or geometrically closed and C2 continuous surface along the V dimension."]
         #[doc = ""]
         #[doc = "USD attribute `vForm` (`token`, uniform; fallback `\"open\"`)."]
+        #[doc = "C++ read: `UsdGeomNurbsPatch::GetVFormAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomNurbsPatch::GetVFormAttr")]
+        #[doc(alias = "GetVFormAttr")]
         v_form, "vForm", NurbsPatchVForm, NurbsPatchVForm::read
     }
     /// The USD name of [`Self::v_knots`].
@@ -3955,6 +4683,9 @@ impl<'a> NurbsPatch<'a> {
         #[doc = "USD attribute `vKnots` (`double\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdGeomNurbsPatch::GetVKnotsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomNurbsPatch::GetVKnotsAttr")]
+        #[doc(alias = "GetVKnotsAttr")]
         v_knots, v_knots_at, "vKnots", ::alloc::sync::Arc<::alloc::vec::Vec<f64>>, crate::value::read_double_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -3972,6 +4703,9 @@ impl<'a> NurbsPatch<'a> {
         #[doc = "Order in the V direction."]
         #[doc = ""]
         #[doc = "USD attribute `vOrder` (`int`)."]
+        #[doc = "C++ read: `UsdGeomNurbsPatch::GetVOrderAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomNurbsPatch::GetVOrderAttr")]
+        #[doc(alias = "GetVOrderAttr")]
         v_order, v_order_at, "vOrder", i32, crate::value::read_int
     }
     /// The USD name of [`Self::v_range`].
@@ -3981,6 +4715,9 @@ impl<'a> NurbsPatch<'a> {
         #[doc = "Provides the minimum and maximum parametric values (as defined by vKnots) over which the surface is actually defined."]
         #[doc = ""]
         #[doc = "USD attribute `vRange` (`double2`)."]
+        #[doc = "C++ read: `UsdGeomNurbsPatch::GetVRangeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomNurbsPatch::GetVRangeAttr")]
+        #[doc(alias = "GetVRangeAttr")]
         v_range, v_range_at, "vRange", [f64; 2], crate::value::read_double2
     }
     /// The USD name of [`Self::v_vertex_count`].
@@ -3990,6 +4727,9 @@ impl<'a> NurbsPatch<'a> {
         #[doc = "Number of vertices in the V direction."]
         #[doc = ""]
         #[doc = "USD attribute `vVertexCount` (`int`)."]
+        #[doc = "C++ read: `UsdGeomNurbsPatch::GetVVertexCountAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomNurbsPatch::GetVVertexCountAttr")]
+        #[doc(alias = "GetVVertexCountAttr")]
         v_vertex_count, v_vertex_count_at, "vVertexCount", i32, crate::value::read_int
     }
 }
@@ -4029,6 +4769,9 @@ impl NurbsPatchEdit {
         #[doc = "USD attribute `pointWeights` (`double\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdGeomNurbsPatch::CreatePointWeightsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomNurbsPatch::CreatePointWeightsAttr")]
+        #[doc(alias = "CreatePointWeightsAttr")]
         set_point_weights, set_point_weights_at, "pointWeights", &[f64], crate::value::write_double_array
     }
     set_attribute! {
@@ -4045,6 +4788,9 @@ impl NurbsPatchEdit {
         #[doc = "USD attribute `trimCurve:counts` (`int\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdGeomNurbsPatch::CreateTrimCurveCountsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomNurbsPatch::CreateTrimCurveCountsAttr")]
+        #[doc(alias = "CreateTrimCurveCountsAttr")]
         set_trim_curve_counts, set_trim_curve_counts_at, "trimCurve:counts", &[i32], crate::value::write_int_array
     }
     set_attribute! {
@@ -4061,6 +4807,9 @@ impl NurbsPatchEdit {
         #[doc = "USD attribute `trimCurve:knots` (`double\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdGeomNurbsPatch::CreateTrimCurveKnotsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomNurbsPatch::CreateTrimCurveKnotsAttr")]
+        #[doc(alias = "CreateTrimCurveKnotsAttr")]
         set_trim_curve_knots, set_trim_curve_knots_at, "trimCurve:knots", &[f64], crate::value::write_double_array
     }
     set_attribute! {
@@ -4077,6 +4826,9 @@ impl NurbsPatchEdit {
         #[doc = "USD attribute `trimCurve:orders` (`int\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdGeomNurbsPatch::CreateTrimCurveOrdersAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomNurbsPatch::CreateTrimCurveOrdersAttr")]
+        #[doc(alias = "CreateTrimCurveOrdersAttr")]
         set_trim_curve_orders, set_trim_curve_orders_at, "trimCurve:orders", &[i32], crate::value::write_int_array
     }
     set_attribute! {
@@ -4093,6 +4845,9 @@ impl NurbsPatchEdit {
         #[doc = "USD attribute `trimCurve:points` (`double3\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdGeomNurbsPatch::CreateTrimCurvePointsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomNurbsPatch::CreateTrimCurvePointsAttr")]
+        #[doc(alias = "CreateTrimCurvePointsAttr")]
         set_trim_curve_points, set_trim_curve_points_at, "trimCurve:points", &[[f64; 3]], crate::value::write_double3_array
     }
     set_attribute! {
@@ -4109,6 +4864,9 @@ impl NurbsPatchEdit {
         #[doc = "USD attribute `trimCurve:ranges` (`double2\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdGeomNurbsPatch::CreateTrimCurveRangesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomNurbsPatch::CreateTrimCurveRangesAttr")]
+        #[doc(alias = "CreateTrimCurveRangesAttr")]
         set_trim_curve_ranges, set_trim_curve_ranges_at, "trimCurve:ranges", &[[f64; 2]], crate::value::write_double2_array
     }
     set_attribute! {
@@ -4125,6 +4883,9 @@ impl NurbsPatchEdit {
         #[doc = "USD attribute `trimCurve:vertexCounts` (`int\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdGeomNurbsPatch::CreateTrimCurveVertexCountsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomNurbsPatch::CreateTrimCurveVertexCountsAttr")]
+        #[doc(alias = "CreateTrimCurveVertexCountsAttr")]
         set_trim_curve_vertex_counts, set_trim_curve_vertex_counts_at, "trimCurve:vertexCounts", &[i32], crate::value::write_int_array
     }
     set_attribute! {
@@ -4139,6 +4900,9 @@ impl NurbsPatchEdit {
         #[doc = "Interpret the control grid and knot vectors as representing an open, geometrically closed, or geometrically closed and C2 continuous surface along the U dimension."]
         #[doc = ""]
         #[doc = "USD attribute `uForm` (`token`, uniform; fallback `\"open\"`)."]
+        #[doc = "C++ authoring: `UsdGeomNurbsPatch::CreateUFormAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomNurbsPatch::CreateUFormAttr")]
+        #[doc(alias = "CreateUFormAttr")]
         set_u_form, "uForm", NurbsPatchUForm, NurbsPatchUForm::write
     }
     set_attribute! {
@@ -4147,6 +4911,9 @@ impl NurbsPatchEdit {
         #[doc = "USD attribute `uKnots` (`double\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdGeomNurbsPatch::CreateUKnotsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomNurbsPatch::CreateUKnotsAttr")]
+        #[doc(alias = "CreateUKnotsAttr")]
         set_u_knots, set_u_knots_at, "uKnots", &[f64], crate::value::write_double_array
     }
     set_attribute! {
@@ -4161,24 +4928,36 @@ impl NurbsPatchEdit {
         #[doc = "Order in the U direction."]
         #[doc = ""]
         #[doc = "USD attribute `uOrder` (`int`)."]
+        #[doc = "C++ authoring: `UsdGeomNurbsPatch::CreateUOrderAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomNurbsPatch::CreateUOrderAttr")]
+        #[doc(alias = "CreateUOrderAttr")]
         set_u_order, set_u_order_at, "uOrder", i32, crate::value::write_int
     }
     set_attribute! {
         #[doc = "Provides the minimum and maximum parametric values (as defined by uKnots) over which the surface is actually defined."]
         #[doc = ""]
         #[doc = "USD attribute `uRange` (`double2`)."]
+        #[doc = "C++ authoring: `UsdGeomNurbsPatch::CreateURangeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomNurbsPatch::CreateURangeAttr")]
+        #[doc(alias = "CreateURangeAttr")]
         set_u_range, set_u_range_at, "uRange", [f64; 2], crate::value::write_double2
     }
     set_attribute! {
         #[doc = "Number of vertices in the U direction."]
         #[doc = ""]
         #[doc = "USD attribute `uVertexCount` (`int`)."]
+        #[doc = "C++ authoring: `UsdGeomNurbsPatch::CreateUVertexCountAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomNurbsPatch::CreateUVertexCountAttr")]
+        #[doc(alias = "CreateUVertexCountAttr")]
         set_u_vertex_count, set_u_vertex_count_at, "uVertexCount", i32, crate::value::write_int
     }
     set_uniform_attribute! {
         #[doc = "Interpret the control grid and knot vectors as representing an open, geometrically closed, or geometrically closed and C2 continuous surface along the V dimension."]
         #[doc = ""]
         #[doc = "USD attribute `vForm` (`token`, uniform; fallback `\"open\"`)."]
+        #[doc = "C++ authoring: `UsdGeomNurbsPatch::CreateVFormAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomNurbsPatch::CreateVFormAttr")]
+        #[doc(alias = "CreateVFormAttr")]
         set_v_form, "vForm", NurbsPatchVForm, NurbsPatchVForm::write
     }
     set_attribute! {
@@ -4187,6 +4966,9 @@ impl NurbsPatchEdit {
         #[doc = "USD attribute `vKnots` (`double\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdGeomNurbsPatch::CreateVKnotsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomNurbsPatch::CreateVKnotsAttr")]
+        #[doc(alias = "CreateVKnotsAttr")]
         set_v_knots, set_v_knots_at, "vKnots", &[f64], crate::value::write_double_array
     }
     set_attribute! {
@@ -4201,18 +4983,27 @@ impl NurbsPatchEdit {
         #[doc = "Order in the V direction."]
         #[doc = ""]
         #[doc = "USD attribute `vOrder` (`int`)."]
+        #[doc = "C++ authoring: `UsdGeomNurbsPatch::CreateVOrderAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomNurbsPatch::CreateVOrderAttr")]
+        #[doc(alias = "CreateVOrderAttr")]
         set_v_order, set_v_order_at, "vOrder", i32, crate::value::write_int
     }
     set_attribute! {
         #[doc = "Provides the minimum and maximum parametric values (as defined by vKnots) over which the surface is actually defined."]
         #[doc = ""]
         #[doc = "USD attribute `vRange` (`double2`)."]
+        #[doc = "C++ authoring: `UsdGeomNurbsPatch::CreateVRangeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomNurbsPatch::CreateVRangeAttr")]
+        #[doc(alias = "CreateVRangeAttr")]
         set_v_range, set_v_range_at, "vRange", [f64; 2], crate::value::write_double2
     }
     set_attribute! {
         #[doc = "Number of vertices in the V direction."]
         #[doc = ""]
         #[doc = "USD attribute `vVertexCount` (`int`)."]
+        #[doc = "C++ authoring: `UsdGeomNurbsPatch::CreateVVertexCountAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomNurbsPatch::CreateVVertexCountAttr")]
+        #[doc(alias = "CreateVVertexCountAttr")]
         set_v_vertex_count, set_v_vertex_count_at, "vVertexCount", i32, crate::value::write_int
     }
 }
@@ -4232,6 +5023,8 @@ token_enum! {
 #[doc = "Defines a primitive plane, centered at the origin, and is defined by a cardinal axis, width, and length."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `Plane`, inheriting [`Gprim`]. Construct it with [`Plane::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdGeomPlane`."]
+#[doc(alias = "UsdGeomPlane")]
 #[derive(Clone, Copy, Debug)]
 pub struct Plane<'a> {
     base: Gprim<'a>,
@@ -4250,6 +5043,8 @@ impl<'a> Plane<'a> {
     pub const SCHEMA: &'static str = "Plane";
 
     #[doc = "A view of the prim at `path`, if it is a `Plane` or of a schema derived from it."]
+    #[doc(alias = "UsdGeomPlane::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -4274,6 +5069,8 @@ impl<'a> Plane<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdGeomPlane::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> PlaneEdit {
         edit.define(path, Self::SCHEMA);
         PlaneEdit::from_path(path)
@@ -4286,6 +5083,9 @@ impl<'a> Plane<'a> {
         #[doc = "The axis along which the surface of the plane is aligned."]
         #[doc = ""]
         #[doc = "USD attribute `axis` (`token`, uniform; fallback `\"Z\"`)."]
+        #[doc = "C++ read: `UsdGeomPlane::GetAxisAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomPlane::GetAxisAttr")]
+        #[doc(alias = "GetAxisAttr")]
         axis, "axis", PlaneAxis, PlaneAxis::read
     }
     /// The USD name of [`Self::length`].
@@ -4295,6 +5095,9 @@ impl<'a> Plane<'a> {
         #[doc = "The length of the plane, which aligns to the y-axis when axis is 'Z' or 'X', or to the z-axis when axis is 'Y'."]
         #[doc = ""]
         #[doc = "USD attribute `length` (`double`; fallback `2.0`)."]
+        #[doc = "C++ read: `UsdGeomPlane::GetLengthAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomPlane::GetLengthAttr")]
+        #[doc(alias = "GetLengthAttr")]
         length, length_at, "length", f64, crate::value::read_double
     }
     /// The USD name of [`Self::width`].
@@ -4304,6 +5107,9 @@ impl<'a> Plane<'a> {
         #[doc = "The width of the plane, which aligns to the x-axis when axis is 'Z' or 'Y', or to the z-axis when axis is 'X'."]
         #[doc = ""]
         #[doc = "USD attribute `width` (`double`; fallback `2.0`)."]
+        #[doc = "C++ read: `UsdGeomPlane::GetWidthAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomPlane::GetWidthAttr")]
+        #[doc(alias = "GetWidthAttr")]
         width, width_at, "width", f64, crate::value::read_double
     }
 }
@@ -4341,18 +5147,27 @@ impl PlaneEdit {
         #[doc = "The axis along which the surface of the plane is aligned."]
         #[doc = ""]
         #[doc = "USD attribute `axis` (`token`, uniform; fallback `\"Z\"`)."]
+        #[doc = "C++ authoring: `UsdGeomPlane::CreateAxisAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomPlane::CreateAxisAttr")]
+        #[doc(alias = "CreateAxisAttr")]
         set_axis, "axis", PlaneAxis, PlaneAxis::write
     }
     set_attribute! {
         #[doc = "The length of the plane, which aligns to the y-axis when axis is 'Z' or 'X', or to the z-axis when axis is 'Y'."]
         #[doc = ""]
         #[doc = "USD attribute `length` (`double`; fallback `2.0`)."]
+        #[doc = "C++ authoring: `UsdGeomPlane::CreateLengthAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomPlane::CreateLengthAttr")]
+        #[doc(alias = "CreateLengthAttr")]
         set_length, set_length_at, "length", f64, crate::value::write_double
     }
     set_attribute! {
         #[doc = "The width of the plane, which aligns to the x-axis when axis is 'Z' or 'Y', or to the z-axis when axis is 'X'."]
         #[doc = ""]
         #[doc = "USD attribute `width` (`double`; fallback `2.0`)."]
+        #[doc = "C++ authoring: `UsdGeomPlane::CreateWidthAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomPlane::CreateWidthAttr")]
+        #[doc(alias = "CreateWidthAttr")]
         set_width, set_width_at, "width", f64, crate::value::write_double
     }
 }
@@ -4360,6 +5175,8 @@ impl PlaneEdit {
 #[doc = "Base class for all UsdGeomGprims that possess points, providing common attributes such as normals and velocities."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's abstract typed schema `PointBased`, inheriting [`Gprim`]. Construct it with [`PointBased::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdGeomPointBased`."]
+#[doc(alias = "UsdGeomPointBased")]
 #[derive(Clone, Copy, Debug)]
 pub struct PointBased<'a> {
     base: Gprim<'a>,
@@ -4378,6 +5195,8 @@ impl<'a> PointBased<'a> {
     pub const SCHEMA: &'static str = "PointBased";
 
     #[doc = "A view of the prim at `path`, if it is a `PointBased` or of a schema derived from it."]
+    #[doc(alias = "UsdGeomPointBased::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -4406,6 +5225,9 @@ impl<'a> PointBased<'a> {
         #[doc = "USD attribute `accelerations` (`vector3f\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdGeomPointBased::GetAccelerationsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomPointBased::GetAccelerationsAttr")]
+        #[doc(alias = "GetAccelerationsAttr")]
         accelerations, accelerations_at, "accelerations", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::read_float3_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -4429,6 +5251,9 @@ impl<'a> PointBased<'a> {
         #[doc = "USD attribute `normals` (`normal3f\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdGeomPointBased::GetNormalsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomPointBased::GetNormalsAttr")]
+        #[doc(alias = "GetNormalsAttr")]
         normals, normals_at, "normals", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::read_float3_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -4448,6 +5273,9 @@ impl<'a> PointBased<'a> {
         #[doc = "USD attribute `points` (`point3f\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdGeomPointBased::GetPointsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomPointBased::GetPointsAttr")]
+        #[doc(alias = "GetPointsAttr")]
         points, points_at, "points", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::read_float3_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -4467,6 +5295,9 @@ impl<'a> PointBased<'a> {
         #[doc = "USD attribute `velocities` (`vector3f\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdGeomPointBased::GetVelocitiesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomPointBased::GetVelocitiesAttr")]
+        #[doc(alias = "GetVelocitiesAttr")]
         velocities, velocities_at, "velocities", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::read_float3_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -4514,6 +5345,9 @@ impl PointBasedEdit {
         #[doc = "USD attribute `accelerations` (`vector3f\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdGeomPointBased::CreateAccelerationsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomPointBased::CreateAccelerationsAttr")]
+        #[doc(alias = "CreateAccelerationsAttr")]
         set_accelerations, set_accelerations_at, "accelerations", &[[f32; 3]], crate::value::write_float3_array
     }
     set_attribute! {
@@ -4530,6 +5364,9 @@ impl PointBasedEdit {
         #[doc = "USD attribute `normals` (`normal3f\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdGeomPointBased::CreateNormalsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomPointBased::CreateNormalsAttr")]
+        #[doc(alias = "CreateNormalsAttr")]
         set_normals, set_normals_at, "normals", &[[f32; 3]], crate::value::write_float3_array
     }
     set_attribute! {
@@ -4546,6 +5383,9 @@ impl PointBasedEdit {
         #[doc = "USD attribute `points` (`point3f\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdGeomPointBased::CreatePointsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomPointBased::CreatePointsAttr")]
+        #[doc(alias = "CreatePointsAttr")]
         set_points, set_points_at, "points", &[[f32; 3]], crate::value::write_float3_array
     }
     set_attribute! {
@@ -4562,6 +5402,9 @@ impl PointBasedEdit {
         #[doc = "USD attribute `velocities` (`vector3f\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdGeomPointBased::CreateVelocitiesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomPointBased::CreateVelocitiesAttr")]
+        #[doc(alias = "CreateVelocitiesAttr")]
         set_velocities, set_velocities_at, "velocities", &[[f32; 3]], crate::value::write_float3_array
     }
     set_attribute! {
@@ -4577,6 +5420,8 @@ impl PointBasedEdit {
 #[doc = "Encodes vectorized instancing of multiple, potentially animated, prototypes (object/instance masters), which can be arbitrary prims/subtrees on a UsdStage."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `PointInstancer`, inheriting [`Boundable`]. Construct it with [`PointInstancer::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdGeomPointInstancer`."]
+#[doc(alias = "UsdGeomPointInstancer")]
 #[derive(Clone, Copy, Debug)]
 pub struct PointInstancer<'a> {
     base: Boundable<'a>,
@@ -4595,6 +5440,8 @@ impl<'a> PointInstancer<'a> {
     pub const SCHEMA: &'static str = "PointInstancer";
 
     #[doc = "A view of the prim at `path`, if it is a `PointInstancer` or of a schema derived from it."]
+    #[doc(alias = "UsdGeomPointInstancer::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -4619,6 +5466,8 @@ impl<'a> PointInstancer<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdGeomPointInstancer::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> PointInstancerEdit {
         edit.define(path, Self::SCHEMA);
         PointInstancerEdit::from_path(path)
@@ -4633,6 +5482,9 @@ impl<'a> PointInstancer<'a> {
         #[doc = "USD attribute `accelerations` (`vector3f\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdGeomPointInstancer::GetAccelerationsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomPointInstancer::GetAccelerationsAttr")]
+        #[doc(alias = "GetAccelerationsAttr")]
         accelerations, accelerations_at, "accelerations", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::read_float3_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -4656,6 +5508,9 @@ impl<'a> PointInstancer<'a> {
         #[doc = "USD attribute `angularVelocities` (`vector3f\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdGeomPointInstancer::GetAngularVelocitiesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomPointInstancer::GetAngularVelocitiesAttr")]
+        #[doc(alias = "GetAngularVelocitiesAttr")]
         angular_velocities, angular_velocities_at, "angularVelocities", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::read_float3_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -4679,6 +5534,9 @@ impl<'a> PointInstancer<'a> {
         #[doc = "USD attribute `ids` (`int64\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdGeomPointInstancer::GetIdsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomPointInstancer::GetIdsAttr")]
+        #[doc(alias = "GetIdsAttr")]
         ids, ids_at, "ids", ::alloc::sync::Arc<::alloc::vec::Vec<i64>>, crate::value::read_int64_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -4698,6 +5556,9 @@ impl<'a> PointInstancer<'a> {
         #[doc = "USD attribute `invisibleIds` (`int64\\[\\]`; fallback `\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdGeomPointInstancer::GetInvisibleIdsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomPointInstancer::GetInvisibleIdsAttr")]
+        #[doc(alias = "GetInvisibleIdsAttr")]
         invisible_ids, invisible_ids_at, "invisibleIds", ::alloc::sync::Arc<::alloc::vec::Vec<i64>>, crate::value::read_int64_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -4715,6 +5576,9 @@ impl<'a> PointInstancer<'a> {
         #[doc = "If authored, per-instance orientation of each instance about its prototype's origin, represented as a unit length quaternion, which allows us to encode it with sufficient precision in a compact GfQuath."]
         #[doc = ""]
         #[doc = "USD attribute `orientations` (`quath\\[\\]`)."]
+        #[doc = "C++ read: `UsdGeomPointInstancer::GetOrientationsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomPointInstancer::GetOrientationsAttr")]
+        #[doc(alias = "GetOrientationsAttr")]
         orientations, orientations_at, "orientations", ::alloc::vec::Vec<[f32; 4]>, crate::value::read_quath_array
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -4733,6 +5597,9 @@ impl<'a> PointInstancer<'a> {
         #[doc = "USD attribute `orientationsf` (`quatf\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdGeomPointInstancer::GetOrientationsfAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomPointInstancer::GetOrientationsfAttr")]
+        #[doc(alias = "GetOrientationsfAttr")]
         orientationsf, orientationsf_at, "orientationsf", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 4]>>, crate::value::read_quatf_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -4752,6 +5619,9 @@ impl<'a> PointInstancer<'a> {
         #[doc = "USD attribute `positions` (`point3f\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdGeomPointInstancer::GetPositionsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomPointInstancer::GetPositionsAttr")]
+        #[doc(alias = "GetPositionsAttr")]
         positions, positions_at, "positions", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::read_float3_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -4771,6 +5641,9 @@ impl<'a> PointInstancer<'a> {
         #[doc = "USD attribute `protoIndices` (`int\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdGeomPointInstancer::GetProtoIndicesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomPointInstancer::GetProtoIndicesAttr")]
+        #[doc(alias = "GetProtoIndicesAttr")]
         proto_indices, proto_indices_at, "protoIndices", ::alloc::sync::Arc<::alloc::vec::Vec<i32>>, crate::value::read_int_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -4788,6 +5661,9 @@ impl<'a> PointInstancer<'a> {
         #[doc = "&lt;b&gt;Required property&lt;/b&gt;."]
         #[doc = ""]
         #[doc = "USD relationship `prototypes` (`rel`)."]
+        #[doc = "C++ read: `UsdGeomPointInstancer::GetPrototypesRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomPointInstancer::GetPrototypesRel")]
+        #[doc(alias = "GetPrototypesRel")]
         prototypes, "prototypes"
     }
     /// The USD name of [`Self::scales`].
@@ -4799,6 +5675,9 @@ impl<'a> PointInstancer<'a> {
         #[doc = "USD attribute `scales` (`float3\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdGeomPointInstancer::GetScalesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomPointInstancer::GetScalesAttr")]
+        #[doc(alias = "GetScalesAttr")]
         scales, scales_at, "scales", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::read_float3_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -4818,6 +5697,9 @@ impl<'a> PointInstancer<'a> {
         #[doc = "USD attribute `velocities` (`vector3f\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdGeomPointInstancer::GetVelocitiesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomPointInstancer::GetVelocitiesAttr")]
+        #[doc(alias = "GetVelocitiesAttr")]
         velocities, velocities_at, "velocities", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::read_float3_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -4865,6 +5747,9 @@ impl PointInstancerEdit {
         #[doc = "USD attribute `accelerations` (`vector3f\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdGeomPointInstancer::CreateAccelerationsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomPointInstancer::CreateAccelerationsAttr")]
+        #[doc(alias = "CreateAccelerationsAttr")]
         set_accelerations, set_accelerations_at, "accelerations", &[[f32; 3]], crate::value::write_float3_array
     }
     set_attribute! {
@@ -4881,6 +5766,9 @@ impl PointInstancerEdit {
         #[doc = "USD attribute `angularVelocities` (`vector3f\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdGeomPointInstancer::CreateAngularVelocitiesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomPointInstancer::CreateAngularVelocitiesAttr")]
+        #[doc(alias = "CreateAngularVelocitiesAttr")]
         set_angular_velocities, set_angular_velocities_at, "angularVelocities", &[[f32; 3]], crate::value::write_float3_array
     }
     set_attribute! {
@@ -4897,6 +5785,9 @@ impl PointInstancerEdit {
         #[doc = "USD attribute `ids` (`int64\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdGeomPointInstancer::CreateIdsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomPointInstancer::CreateIdsAttr")]
+        #[doc(alias = "CreateIdsAttr")]
         set_ids, set_ids_at, "ids", &[i64], crate::value::write_int64_array
     }
     set_attribute! {
@@ -4913,6 +5804,9 @@ impl PointInstancerEdit {
         #[doc = "USD attribute `invisibleIds` (`int64\\[\\]`; fallback `\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdGeomPointInstancer::CreateInvisibleIdsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomPointInstancer::CreateInvisibleIdsAttr")]
+        #[doc(alias = "CreateInvisibleIdsAttr")]
         set_invisible_ids, set_invisible_ids_at, "invisibleIds", &[i64], crate::value::write_int64_array
     }
     set_attribute! {
@@ -4927,6 +5821,9 @@ impl PointInstancerEdit {
         #[doc = "If authored, per-instance orientation of each instance about its prototype's origin, represented as a unit length quaternion, which allows us to encode it with sufficient precision in a compact GfQuath."]
         #[doc = ""]
         #[doc = "USD attribute `orientations` (`quath\\[\\]`)."]
+        #[doc = "C++ authoring: `UsdGeomPointInstancer::CreateOrientationsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomPointInstancer::CreateOrientationsAttr")]
+        #[doc(alias = "CreateOrientationsAttr")]
         set_orientations, set_orientations_at, "orientations", &[[f32; 4]], crate::value::write_quath_array
     }
     set_attribute! {
@@ -4935,6 +5832,9 @@ impl PointInstancerEdit {
         #[doc = "USD attribute `orientationsf` (`quatf\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdGeomPointInstancer::CreateOrientationsfAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomPointInstancer::CreateOrientationsfAttr")]
+        #[doc(alias = "CreateOrientationsfAttr")]
         set_orientationsf, set_orientationsf_at, "orientationsf", &[[f32; 4]], crate::value::write_quatf_array
     }
     set_attribute! {
@@ -4951,6 +5851,9 @@ impl PointInstancerEdit {
         #[doc = "USD attribute `positions` (`point3f\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdGeomPointInstancer::CreatePositionsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomPointInstancer::CreatePositionsAttr")]
+        #[doc(alias = "CreatePositionsAttr")]
         set_positions, set_positions_at, "positions", &[[f32; 3]], crate::value::write_float3_array
     }
     set_attribute! {
@@ -4967,6 +5870,9 @@ impl PointInstancerEdit {
         #[doc = "USD attribute `protoIndices` (`int\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdGeomPointInstancer::CreateProtoIndicesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomPointInstancer::CreateProtoIndicesAttr")]
+        #[doc(alias = "CreateProtoIndicesAttr")]
         set_proto_indices, set_proto_indices_at, "protoIndices", &[i32], crate::value::write_int_array
     }
     set_attribute! {
@@ -4981,6 +5887,9 @@ impl PointInstancerEdit {
         #[doc = "&lt;b&gt;Required property&lt;/b&gt;."]
         #[doc = ""]
         #[doc = "USD relationship `prototypes` (`rel`)."]
+        #[doc = "C++ authoring: `UsdGeomPointInstancer::CreatePrototypesRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomPointInstancer::CreatePrototypesRel")]
+        #[doc(alias = "CreatePrototypesRel")]
         set_prototypes, "prototypes"
     }
     set_attribute! {
@@ -4989,6 +5898,9 @@ impl PointInstancerEdit {
         #[doc = "USD attribute `scales` (`float3\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdGeomPointInstancer::CreateScalesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomPointInstancer::CreateScalesAttr")]
+        #[doc(alias = "CreateScalesAttr")]
         set_scales, set_scales_at, "scales", &[[f32; 3]], crate::value::write_float3_array
     }
     set_attribute! {
@@ -5005,6 +5917,9 @@ impl PointInstancerEdit {
         #[doc = "USD attribute `velocities` (`vector3f\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdGeomPointInstancer::CreateVelocitiesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomPointInstancer::CreateVelocitiesAttr")]
+        #[doc(alias = "CreateVelocitiesAttr")]
         set_velocities, set_velocities_at, "velocities", &[[f32; 3]], crate::value::write_float3_array
     }
     set_attribute! {
@@ -5020,6 +5935,8 @@ impl PointInstancerEdit {
 #[doc = "Points are analogous to the &lt;A `HREF=\"https://renderman.pixar.com/resources/RenderMan_20/appnote.18.html\">RiPoints` spec&lt;/A&gt;."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `Points`, inheriting [`PointBased`]. Construct it with [`Points::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdGeomPoints`."]
+#[doc(alias = "UsdGeomPoints")]
 #[derive(Clone, Copy, Debug)]
 pub struct Points<'a> {
     base: PointBased<'a>,
@@ -5038,6 +5955,8 @@ impl<'a> Points<'a> {
     pub const SCHEMA: &'static str = "Points";
 
     #[doc = "A view of the prim at `path`, if it is a `Points` or of a schema derived from it."]
+    #[doc(alias = "UsdGeomPoints::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -5062,6 +5981,8 @@ impl<'a> Points<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdGeomPoints::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> PointsEdit {
         edit.define(path, Self::SCHEMA);
         PointsEdit::from_path(path)
@@ -5076,6 +5997,9 @@ impl<'a> Points<'a> {
         #[doc = "USD attribute `ids` (`int64\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdGeomPoints::GetIdsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomPoints::GetIdsAttr")]
+        #[doc(alias = "GetIdsAttr")]
         ids, ids_at, "ids", ::alloc::sync::Arc<::alloc::vec::Vec<i64>>, crate::value::read_int64_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -5095,6 +6019,9 @@ impl<'a> Points<'a> {
         #[doc = "USD attribute `widths` (`float\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdGeomPoints::GetWidthsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomPoints::GetWidthsAttr")]
+        #[doc(alias = "GetWidthsAttr")]
         widths, widths_at, "widths", ::alloc::sync::Arc<::alloc::vec::Vec<f32>>, crate::value::read_float_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -5142,6 +6069,9 @@ impl PointsEdit {
         #[doc = "USD attribute `ids` (`int64\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdGeomPoints::CreateIdsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomPoints::CreateIdsAttr")]
+        #[doc(alias = "CreateIdsAttr")]
         set_ids, set_ids_at, "ids", &[i64], crate::value::write_int64_array
     }
     set_attribute! {
@@ -5158,6 +6088,9 @@ impl PointsEdit {
         #[doc = "USD attribute `widths` (`float\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdGeomPoints::CreateWidthsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomPoints::CreateWidthsAttr")]
+        #[doc(alias = "CreateWidthsAttr")]
         set_widths, set_widths_at, "widths", &[f32], crate::value::write_float_array
     }
     set_attribute! {
@@ -5173,6 +6106,8 @@ impl PointsEdit {
 #[doc = "Scope is the simplest grouping primitive, and does not carry the baggage of transformability."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `Scope`, inheriting [`Imageable`]. Construct it with [`Scope::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdGeomScope`."]
+#[doc(alias = "UsdGeomScope")]
 #[derive(Clone, Copy, Debug)]
 pub struct Scope<'a> {
     base: Imageable<'a>,
@@ -5191,6 +6126,8 @@ impl<'a> Scope<'a> {
     pub const SCHEMA: &'static str = "Scope";
 
     #[doc = "A view of the prim at `path`, if it is a `Scope` or of a schema derived from it."]
+    #[doc(alias = "UsdGeomScope::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -5215,6 +6152,8 @@ impl<'a> Scope<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdGeomScope::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> ScopeEdit {
         edit.define(path, Self::SCHEMA);
         ScopeEdit::from_path(path)
@@ -5254,6 +6193,8 @@ impl ScopeEdit {
 #[doc = "Defines a primitive sphere centered at the origin."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `Sphere`, inheriting [`Gprim`]. Construct it with [`Sphere::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdGeomSphere`."]
+#[doc(alias = "UsdGeomSphere")]
 #[derive(Clone, Copy, Debug)]
 pub struct Sphere<'a> {
     base: Gprim<'a>,
@@ -5272,6 +6213,8 @@ impl<'a> Sphere<'a> {
     pub const SCHEMA: &'static str = "Sphere";
 
     #[doc = "A view of the prim at `path`, if it is a `Sphere` or of a schema derived from it."]
+    #[doc(alias = "UsdGeomSphere::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -5296,6 +6239,8 @@ impl<'a> Sphere<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdGeomSphere::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> SphereEdit {
         edit.define(path, Self::SCHEMA);
         SphereEdit::from_path(path)
@@ -5308,6 +6253,9 @@ impl<'a> Sphere<'a> {
         #[doc = "Indicates the sphere's radius."]
         #[doc = ""]
         #[doc = "USD attribute `radius` (`double`; fallback `1.0`)."]
+        #[doc = "C++ read: `UsdGeomSphere::GetRadiusAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomSphere::GetRadiusAttr")]
+        #[doc(alias = "GetRadiusAttr")]
         radius, radius_at, "radius", f64, crate::value::read_double
     }
 }
@@ -5345,6 +6293,9 @@ impl SphereEdit {
         #[doc = "Indicates the sphere's radius."]
         #[doc = ""]
         #[doc = "USD attribute `radius` (`double`; fallback `1.0`)."]
+        #[doc = "C++ authoring: `UsdGeomSphere::CreateRadiusAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomSphere::CreateRadiusAttr")]
+        #[doc(alias = "CreateRadiusAttr")]
         set_radius, set_radius_at, "radius", f64, crate::value::write_double
     }
 }
@@ -5352,6 +6303,8 @@ impl SphereEdit {
 #[doc = "Encodes a tetrahedral mesh."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `TetMesh`, inheriting [`PointBased`]. Construct it with [`TetMesh::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdGeomTetMesh`."]
+#[doc(alias = "UsdGeomTetMesh")]
 #[derive(Clone, Copy, Debug)]
 pub struct TetMesh<'a> {
     base: PointBased<'a>,
@@ -5370,6 +6323,8 @@ impl<'a> TetMesh<'a> {
     pub const SCHEMA: &'static str = "TetMesh";
 
     #[doc = "A view of the prim at `path`, if it is a `TetMesh` or of a schema derived from it."]
+    #[doc(alias = "UsdGeomTetMesh::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -5394,6 +6349,8 @@ impl<'a> TetMesh<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdGeomTetMesh::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> TetMeshEdit {
         edit.define(path, Self::SCHEMA);
         TetMeshEdit::from_path(path)
@@ -5408,6 +6365,9 @@ impl<'a> TetMesh<'a> {
         #[doc = "USD attribute `surfaceFaceVertexIndices` (`int3\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdGeomTetMesh::GetSurfaceFaceVertexIndicesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomTetMesh::GetSurfaceFaceVertexIndicesAttr")]
+        #[doc(alias = "GetSurfaceFaceVertexIndicesAttr")]
         surface_face_vertex_indices, surface_face_vertex_indices_at, "surfaceFaceVertexIndices", ::alloc::sync::Arc<::alloc::vec::Vec<[i32; 3]>>, crate::value::read_int3_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -5431,6 +6391,9 @@ impl<'a> TetMesh<'a> {
         #[doc = "USD attribute `tetVertexIndices` (`int4\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdGeomTetMesh::GetTetVertexIndicesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomTetMesh::GetTetVertexIndicesAttr")]
+        #[doc(alias = "GetTetVertexIndicesAttr")]
         tet_vertex_indices, tet_vertex_indices_at, "tetVertexIndices", ::alloc::sync::Arc<::alloc::vec::Vec<[i32; 4]>>, crate::value::read_int4_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -5482,6 +6445,9 @@ impl TetMeshEdit {
         #[doc = "USD attribute `surfaceFaceVertexIndices` (`int3\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdGeomTetMesh::CreateSurfaceFaceVertexIndicesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomTetMesh::CreateSurfaceFaceVertexIndicesAttr")]
+        #[doc(alias = "CreateSurfaceFaceVertexIndicesAttr")]
         set_surface_face_vertex_indices, set_surface_face_vertex_indices_at, "surfaceFaceVertexIndices", &[[i32; 3]], crate::value::write_int3_array
     }
     set_attribute! {
@@ -5498,6 +6464,9 @@ impl TetMeshEdit {
         #[doc = "USD attribute `tetVertexIndices` (`int4\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdGeomTetMesh::CreateTetVertexIndicesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomTetMesh::CreateTetVertexIndicesAttr")]
+        #[doc(alias = "CreateTetVertexIndicesAttr")]
         set_tet_vertex_indices, set_tet_vertex_indices_at, "tetVertexIndices", &[[i32; 4]], crate::value::write_int4_array
     }
     set_attribute! {
@@ -5549,6 +6518,9 @@ token_enum! {
 #[doc = "UsdGeomVisibilityAPI introduces properties that can be used to author visibility opinions."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's single-apply API schema `VisibilityAPI`. Get it with [`VisibilityApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdGeomVisibilityAPI`."]
+#[doc(alias = "UsdGeomVisibilityAPI")]
+#[doc(alias = "VisibilityAPI")]
 #[derive(Clone, Copy, Debug)]
 pub struct VisibilityApi<'a> {
     base: PrimView<'a>,
@@ -5569,6 +6541,8 @@ impl<'a> VisibilityApi<'a> {
     /// A view of the schema on the prim at `path`, if the prim has it
     /// applied.
     #[must_use]
+    #[doc(alias = "UsdGeomVisibilityAPI::Get")]
+    #[doc(alias = "Get")]
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
@@ -5593,6 +6567,8 @@ impl<'a> VisibilityApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there.
+    #[doc(alias = "UsdGeomVisibilityAPI::Apply")]
+    #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
@@ -5608,6 +6584,9 @@ impl<'a> VisibilityApi<'a> {
         #[doc = "This attribute controls visibility for geometry with purpose \"guide\"."]
         #[doc = ""]
         #[doc = "USD attribute `guideVisibility` (`token`, uniform; fallback `\"invisible\"`)."]
+        #[doc = "C++ read: `UsdGeomVisibilityAPI::GetGuideVisibilityAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomVisibilityAPI::GetGuideVisibilityAttr")]
+        #[doc(alias = "GetGuideVisibilityAttr")]
         guide_visibility, "guideVisibility", VisibilityApiGuideVisibility, VisibilityApiGuideVisibility::read
     }
     /// The USD name of [`Self::proxy_visibility`].
@@ -5617,6 +6596,9 @@ impl<'a> VisibilityApi<'a> {
         #[doc = "This attribute controls visibility for geometry with purpose \"proxy\"."]
         #[doc = ""]
         #[doc = "USD attribute `proxyVisibility` (`token`, uniform; fallback `\"inherited\"`)."]
+        #[doc = "C++ read: `UsdGeomVisibilityAPI::GetProxyVisibilityAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomVisibilityAPI::GetProxyVisibilityAttr")]
+        #[doc(alias = "GetProxyVisibilityAttr")]
         proxy_visibility, "proxyVisibility", VisibilityApiProxyVisibility, VisibilityApiProxyVisibility::read
     }
     /// The USD name of [`Self::render_visibility`].
@@ -5626,6 +6608,9 @@ impl<'a> VisibilityApi<'a> {
         #[doc = "This attribute controls visibility for geometry with purpose \"render\"."]
         #[doc = ""]
         #[doc = "USD attribute `renderVisibility` (`token`, uniform; fallback `\"inherited\"`)."]
+        #[doc = "C++ read: `UsdGeomVisibilityAPI::GetRenderVisibilityAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomVisibilityAPI::GetRenderVisibilityAttr")]
+        #[doc(alias = "GetRenderVisibilityAttr")]
         render_visibility, "renderVisibility", VisibilityApiRenderVisibility, VisibilityApiRenderVisibility::read
     }
 }
@@ -5663,18 +6648,27 @@ impl VisibilityApiEdit {
         #[doc = "This attribute controls visibility for geometry with purpose \"guide\"."]
         #[doc = ""]
         #[doc = "USD attribute `guideVisibility` (`token`, uniform; fallback `\"invisible\"`)."]
+        #[doc = "C++ authoring: `UsdGeomVisibilityAPI::CreateGuideVisibilityAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomVisibilityAPI::CreateGuideVisibilityAttr")]
+        #[doc(alias = "CreateGuideVisibilityAttr")]
         set_guide_visibility, "guideVisibility", VisibilityApiGuideVisibility, VisibilityApiGuideVisibility::write
     }
     set_uniform_attribute! {
         #[doc = "This attribute controls visibility for geometry with purpose \"proxy\"."]
         #[doc = ""]
         #[doc = "USD attribute `proxyVisibility` (`token`, uniform; fallback `\"inherited\"`)."]
+        #[doc = "C++ authoring: `UsdGeomVisibilityAPI::CreateProxyVisibilityAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomVisibilityAPI::CreateProxyVisibilityAttr")]
+        #[doc(alias = "CreateProxyVisibilityAttr")]
         set_proxy_visibility, "proxyVisibility", VisibilityApiProxyVisibility, VisibilityApiProxyVisibility::write
     }
     set_uniform_attribute! {
         #[doc = "This attribute controls visibility for geometry with purpose \"render\"."]
         #[doc = ""]
         #[doc = "USD attribute `renderVisibility` (`token`, uniform; fallback `\"inherited\"`)."]
+        #[doc = "C++ authoring: `UsdGeomVisibilityAPI::CreateRenderVisibilityAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomVisibilityAPI::CreateRenderVisibilityAttr")]
+        #[doc(alias = "CreateRenderVisibilityAttr")]
         set_render_visibility, "renderVisibility", VisibilityApiRenderVisibility, VisibilityApiRenderVisibility::write
     }
 }
@@ -5682,6 +6676,8 @@ impl VisibilityApiEdit {
 #[doc = "Concrete prim schema for a transform, which implements Xformable."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `Xform`, inheriting [`Xformable`]. Construct it with [`Xform::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdGeomXform`."]
+#[doc(alias = "UsdGeomXform")]
 #[derive(Clone, Copy, Debug)]
 pub struct Xform<'a> {
     base: Xformable<'a>,
@@ -5700,6 +6696,8 @@ impl<'a> Xform<'a> {
     pub const SCHEMA: &'static str = "Xform";
 
     #[doc = "A view of the prim at `path`, if it is a `Xform` or of a schema derived from it."]
+    #[doc(alias = "UsdGeomXform::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -5724,6 +6722,8 @@ impl<'a> Xform<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdGeomXform::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> XformEdit {
         edit.define(path, Self::SCHEMA);
         XformEdit::from_path(path)
@@ -5763,6 +6763,8 @@ impl XformEdit {
 #[doc = "Base class for all transformable prims, which allows arbitrary sequences of component affine transformations to be encoded."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's abstract typed schema `Xformable`, inheriting [`Imageable`]. Construct it with [`Xformable::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdGeomXformable`."]
+#[doc(alias = "UsdGeomXformable")]
 #[derive(Clone, Copy, Debug)]
 pub struct Xformable<'a> {
     base: Imageable<'a>,
@@ -5781,6 +6783,8 @@ impl<'a> Xformable<'a> {
     pub const SCHEMA: &'static str = "Xformable";
 
     #[doc = "A view of the prim at `path`, if it is a `Xformable` or of a schema derived from it."]
+    #[doc(alias = "UsdGeomXformable::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -5807,6 +6811,9 @@ impl<'a> Xformable<'a> {
         #[doc = "Encodes the sequence of transformation operations in the order in which they should be pushed onto a transform stack while visiting a UsdStage's prims in a graph traversal that will effect the desired positioning for this prim and its descendant prims."]
         #[doc = ""]
         #[doc = "USD attribute `xformOpOrder` (`token\\[\\]`, uniform)."]
+        #[doc = "C++ read: `UsdGeomXformable::GetXformOpOrderAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdGeomXformable::GetXformOpOrderAttr")]
+        #[doc(alias = "GetXformOpOrderAttr")]
         xform_op_order, "xformOpOrder", ::alloc::vec::Vec<&'a str>, |v, t| crate::value::read_array(v, t, crate::value::read_token)
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -5853,6 +6860,9 @@ impl XformableEdit {
         #[doc = "Encodes the sequence of transformation operations in the order in which they should be pushed onto a transform stack while visiting a UsdStage's prims in a graph traversal that will effect the desired positioning for this prim and its descendant prims."]
         #[doc = ""]
         #[doc = "USD attribute `xformOpOrder` (`token\\[\\]`, uniform)."]
+        #[doc = "C++ authoring: `UsdGeomXformable::CreateXformOpOrderAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdGeomXformable::CreateXformOpOrderAttr")]
+        #[doc(alias = "CreateXformOpOrderAttr")]
         set_xform_op_order, "xformOpOrder", &[&str], |v, t| crate::value::write_array(v, t, crate::value::write_token)
     }
 }

@@ -938,6 +938,7 @@ pub enum ReferenceTarget {
 
 /// A composition reference or payload arc.
 #[derive(Clone, Debug)]
+#[doc(alias = "SdfReference")]
 pub struct Reference {
     /// The root layer of the referenced layer stack.
     ///
@@ -1430,6 +1431,7 @@ pub struct VariantSetSpec {
 
 /// Opinions for a prim at a path.
 #[derive(Clone, Debug, Default, PartialEq)]
+#[doc(alias = "SdfPrimSpec")]
 pub struct PrimSpec {
     /// The prim specifier (`def`, `over`, or `class`).
     ///
@@ -1873,6 +1875,7 @@ pub fn remove_field(fields: &mut Vec<FieldEntry>, name: TokenId) -> Option<Field
 /// Two layers are equal when their content is: the [`Layer::generation`]
 /// and [`Layer::structural_generation`] counters are not compared.
 #[derive(Clone, Debug)]
+#[doc(alias = "SdfLayer")]
 pub struct Layer {
     /// Stable identifier for this layer.
     pub id: LayerId,

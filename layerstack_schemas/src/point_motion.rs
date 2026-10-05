@@ -164,6 +164,8 @@ impl PointBased<'_> {
     /// Without valid velocities, interpolates points with the requested time's
     /// interpolation mode; mismatched topology falls back to the anchored points.
     /// Returns errors for invalid times or missing required data.
+    #[doc(alias = "UsdGeomPointBased::ComputePointsAtTime")]
+    #[doc(alias = "ComputePointsAtTime")]
     pub fn compute_points_at_time(
         &self,
         time: Time,
@@ -180,6 +182,8 @@ impl PointBased<'_> {
     /// In the interpolation fallback, a successful sample becomes the fallback
     /// for later samples whose topology differs, matching OpenUSD's batch method.
     /// No partial outputs are returned on error.
+    #[doc(alias = "UsdGeomPointBased::ComputePointsAtTimes")]
+    #[doc(alias = "ComputePointsAtTimes")]
     pub fn compute_points_at_times(
         &self,
         times: &[Time],

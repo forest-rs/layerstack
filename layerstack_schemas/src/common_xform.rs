@@ -126,6 +126,8 @@ impl XformableEdit {
     /// # Errors
     /// No operations are authored when the stack, rotation order or attribute
     /// types are incompatible. Repair malformed ordered attributes explicitly.
+    #[doc(alias = "UsdGeomXformCommonAPI::SetXformVectors")]
+    #[doc(alias = "SetXformVectors")]
     pub fn set_common_transform(
         &self,
         edit: &mut SchemaEdit<'_>,
@@ -139,6 +141,8 @@ impl XformableEdit {
     ///
     /// # Errors
     /// As for [`Self::set_common_transform`], before authoring anything.
+    #[doc(alias = "UsdGeomXformCommonAPI::SetXformVectors")]
+    #[doc(alias = "SetXformVectors")]
     pub fn set_common_transform_at(
         &self,
         edit: &mut SchemaEdit<'_>,

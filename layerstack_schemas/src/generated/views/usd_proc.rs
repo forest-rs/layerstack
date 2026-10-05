@@ -26,6 +26,8 @@ use crate::{PrimView, Scene, SchemaEdit};
 #[doc = "Represents an abstract generative procedural prim which delivers its input parameters via properties (including relationships) within the \"primvars:\" namespace."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `GenerativeProcedural`, inheriting [`crate::usd_geom::Boundable`]. Construct it with [`GenerativeProcedural::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdProcGenerativeProcedural`."]
+#[doc(alias = "UsdProcGenerativeProcedural")]
 #[derive(Clone, Copy, Debug)]
 pub struct GenerativeProcedural<'a> {
     base: crate::usd_geom::Boundable<'a>,
@@ -44,6 +46,8 @@ impl<'a> GenerativeProcedural<'a> {
     pub const SCHEMA: &'static str = "GenerativeProcedural";
 
     #[doc = "A view of the prim at `path`, if it is a `GenerativeProcedural` or of a schema derived from it."]
+    #[doc(alias = "UsdProcGenerativeProcedural::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -68,6 +72,8 @@ impl<'a> GenerativeProcedural<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdProcGenerativeProcedural::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> GenerativeProceduralEdit {
         edit.define(path, Self::SCHEMA);
         GenerativeProceduralEdit::from_path(path)
@@ -80,6 +86,9 @@ impl<'a> GenerativeProcedural<'a> {
         #[doc = "The name or convention of the system responsible for evaluating the procedural."]
         #[doc = ""]
         #[doc = "USD attribute `proceduralSystem` (`token`)."]
+        #[doc = "C++ read: `UsdProcGenerativeProcedural::GetProceduralSystemAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdProcGenerativeProcedural::GetProceduralSystemAttr")]
+        #[doc(alias = "GetProceduralSystemAttr")]
         procedural_system, procedural_system_at, "proceduralSystem", &'a str, crate::value::read_token
     }
 }
@@ -117,6 +126,9 @@ impl GenerativeProceduralEdit {
         #[doc = "The name or convention of the system responsible for evaluating the procedural."]
         #[doc = ""]
         #[doc = "USD attribute `proceduralSystem` (`token`)."]
+        #[doc = "C++ authoring: `UsdProcGenerativeProcedural::CreateProceduralSystemAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdProcGenerativeProcedural::CreateProceduralSystemAttr")]
+        #[doc(alias = "CreateProceduralSystemAttr")]
         set_procedural_system, set_procedural_system_at, "proceduralSystem", &str, crate::value::write_token
     }
 }

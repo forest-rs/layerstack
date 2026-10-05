@@ -387,6 +387,7 @@ jobs:
           sparse-checkout: |
             cmake/defaults/Version.cmake
             pxr/usd/*/schema.usda
+            pxr/usd/*/*.h
             pxr/usd/usdMtlx/generatedSchema.usda
             pxr/usd/usdMtlx/plugInfo.json
 

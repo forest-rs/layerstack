@@ -256,6 +256,8 @@ impl Camera<'_> {
     /// apertures, negative focal length and invalid near/far intervals error. Both caches/readers must
     /// use the same scene; pass scene edits to `xforms` before recomputing.
     /// AOUSD Core §6.3, §12.3–12.5; OpenUSD `usdGeom/camera.cpp`, `gf/camera.cpp`.
+    #[doc(alias = "UsdGeomCamera::GetCamera")]
+    #[doc(alias = "GetCamera")]
     pub fn compute_camera(&self, xforms: &mut XformCache) -> Result<ComputedCamera, CameraError> {
         let time = xforms.time();
         if matches!(time,Time::At {code,..} if !code.is_finite()) {

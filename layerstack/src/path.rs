@@ -200,6 +200,7 @@ impl TargetPath {
 ///
 /// v0.1 supports prim-style absolute paths like `/A/B/C`.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[doc(alias = "SdfPath")]
 pub struct Path {
     segments: Box<[TokenId]>,
 }

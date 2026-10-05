@@ -259,6 +259,7 @@ pub struct PropertyDeclaration {
 
 /// Controls partial population.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[doc(alias = "UsdStagePopulationMask")]
 pub struct PopulationMask {
     /// Include the subtrees rooted at these prim paths, and their ancestors.
     /// An empty mask includes only the pseudo-root. Selecting `/` includes
@@ -366,6 +367,7 @@ pub struct StageOptions {
 /// assert_eq!(resolved.value, Value::string("red"));
 /// ```
 #[derive(Debug)]
+#[doc(alias = "UsdStage")]
 pub struct Stage {
     options: StageOptions,
     store_identity: Option<crate::StoreIdentity>,
@@ -690,6 +692,8 @@ impl Stage {
 
     /// The root layer this stage was composed from, when it has one.
     #[must_use]
+    #[doc(alias = "UsdStage::GetRootLayer")]
+    #[doc(alias = "GetRootLayer")]
     pub fn root_layer(&self) -> Option<LayerId> {
         self.root_layer
     }
@@ -2495,6 +2499,8 @@ impl Stage {
     /// traversal visits this root but does not descend into instance proxies.
     /// Spec: AOUSD Core §11.3.3 (scene-graph instancing).
     #[must_use]
+    #[doc(alias = "UsdPrim::IsInstance")]
+    #[doc(alias = "IsInstance")]
     pub fn is_instance(&self, prim: PathId) -> bool {
         self.instances.contains(&prim)
     }
@@ -2515,6 +2521,8 @@ impl Stage {
     /// Whether a populated prim is active. Inactive prim roots remain
     /// inspectable; their descendants are absent from the snapshot.
     #[must_use]
+    #[doc(alias = "UsdPrim::IsActive")]
+    #[doc(alias = "IsActive")]
     pub fn is_active(&self, prim: PathId) -> bool {
         self.has_prim(prim) && !self.inactive.contains(&prim)
     }
@@ -2524,6 +2532,8 @@ impl Stage {
     /// neither is loaded until their required payloads are included.
     /// Spec: AOUSD Core §10.3.2.7, §11.3; OpenUSD `UsdPrim::IsLoaded`.
     #[must_use]
+    #[doc(alias = "UsdPrim::IsLoaded")]
+    #[doc(alias = "IsLoaded")]
     pub fn is_loaded(&self, prim: PathId, paths: &crate::PathInterner) -> bool {
         if !self.is_active(prim) {
             return false;
@@ -2620,6 +2630,8 @@ impl Stage {
     ///
     /// Spec: AOUSD Core §11 (stage population) and §10.4 (strength ordering).
     #[must_use]
+    #[doc(alias = "UsdPrim::GetPrimStack")]
+    #[doc(alias = "GetPrimStack")]
     pub fn prim_stack(&self, prim: PathId) -> Option<Vec<(LayerId, SpecPath)>> {
         use hashbrown::HashSet;
 
@@ -2795,6 +2807,8 @@ impl Stage {
     /// `def` or `class`. A defined child under an undefining parent is undefining.
     /// OpenUSD `Usd_PrimData::IsDefined`; AOUSD Core §11.5.
     #[must_use]
+    #[doc(alias = "UsdPrim::IsDefined")]
+    #[doc(alias = "IsDefined")]
     pub fn is_defined(&self, prim: PathId, store: &dyn LayerStore) -> bool {
         if !self.has_prim(prim) {
             return false;
@@ -2819,6 +2833,8 @@ impl Stage {
     /// (its resolved specifier is `class`). OpenUSD `Usd_PrimData::IsAbstract`;
     /// AOUSD Core §11.5.
     #[must_use]
+    #[doc(alias = "UsdPrim::IsAbstract")]
+    #[doc(alias = "IsAbstract")]
     pub fn is_abstract(&self, prim: PathId, store: &dyn LayerStore) -> bool {
         if !self.has_prim(prim) {
             return false;

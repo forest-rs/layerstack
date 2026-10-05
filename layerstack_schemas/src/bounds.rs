@@ -23,6 +23,7 @@ use layerstack::{HashMap, HashSet, PathId};
 
 /// An axis-aligned double-precision range. A reversed axis denotes emptiness.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[doc(alias = "GfRange3d")]
 pub struct Range3d {
     /// Minimum coordinates.
     pub min: [f64; 3],
@@ -56,6 +57,7 @@ impl Range3d {
 
 /// An oriented bound: `range` transformed by the row-vector `matrix`.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[doc(alias = "GfBBox3d")]
 pub struct BoundingBox {
     /// Range before transformation.
     pub range: Range3d,
@@ -73,6 +75,8 @@ impl Default for BoundingBox {
 impl BoundingBox {
     /// The aligned enclosing range after applying the matrix.
     #[must_use]
+    #[doc(alias = "GfBBox3d::ComputeAlignedRange")]
+    #[doc(alias = "ComputeAlignedRange")]
     pub fn aligned_range(&self) -> Range3d {
         if self.range.is_empty() {
             return self.range;
@@ -235,6 +239,7 @@ impl<T> Entry<T> {
 /// type traversal and local visibility. A query includes its root even when
 /// invisible. Authored boundable extents and model hints prune descendants.
 #[derive(Clone, Debug)]
+#[doc(alias = "UsdGeomBBoxCache")]
 pub struct BoundsCache {
     time: Time,
     options: BoundsOptions,
@@ -358,6 +363,8 @@ impl BoundsCache {
         self.len() == 0
     }
     /// Drop every result and reset counters.
+    #[doc(alias = "UsdGeomBBoxCache::Clear")]
+    #[doc(alias = "Clear")]
     pub fn clear(&mut self) {
         self.extent_dependencies.clear();
         self.prototype_cache = None;
@@ -377,6 +384,8 @@ impl BoundsCache {
     /// Sampled bounds and inclusion decisions are reevaluated on demand;
     /// counters and cache occupancy are retained. Single samples count as
     /// dependencies because numeric time can differ from default time.
+    #[doc(alias = "UsdGeomBBoxCache::SetTime")]
+    #[doc(alias = "SetTime")]
     pub fn set_time(&mut self, time: Time) {
         if self.time != time {
             if let Some(epoch) = self.epoch.checked_add(1) {
@@ -597,6 +606,8 @@ impl BoundsCache {
         }
     }
     /// Bound in the queried prim's own coordinates, retaining its orientation.
+    #[doc(alias = "UsdGeomBBoxCache::ComputeUntransformedBound")]
+    #[doc(alias = "ComputeUntransformedBound")]
     pub fn untransformed_bound(
         &mut self,
         scene: &Scene<'_>,
@@ -618,6 +629,8 @@ impl BoundsCache {
         Ok(result)
     }
     /// Bound with the queried prim's local transform applied (even with reset).
+    #[doc(alias = "UsdGeomBBoxCache::ComputeLocalBound")]
+    #[doc(alias = "ComputeLocalBound")]
     pub fn local_bound(
         &mut self,
         scene: &Scene<'_>,
@@ -631,6 +644,8 @@ impl BoundsCache {
         Ok(bbox.transformed(&local.matrix))
     }
     /// Bound in world coordinates, retaining component-space orientation.
+    #[doc(alias = "UsdGeomBBoxCache::ComputeWorldBound")]
+    #[doc(alias = "ComputeWorldBound")]
     pub fn world_bound(
         &mut self,
         scene: &Scene<'_>,
@@ -646,6 +661,8 @@ impl BoundsCache {
     /// including across reset boundaries. The target need not be an ancestor.
     /// Unlike `XformCache::relative_transform`, this always converts frames.
     /// Missing prims and singular target transforms return explicit errors.
+    #[doc(alias = "UsdGeomBBoxCache::ComputeRelativeBound")]
+    #[doc(alias = "ComputeRelativeBound")]
     pub fn relative_bound(
         &mut self,
         scene: &Scene<'_>,

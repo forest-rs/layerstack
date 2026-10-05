@@ -26,6 +26,9 @@ use crate::{PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "An applied API schema that records a prim's profile compatibility claims and per-capability usage declarations."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's single-apply API schema `ClaimsAPI`. Get it with [`ClaimsApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdProfilesClaimsAPI`."]
+#[doc(alias = "UsdProfilesClaimsAPI")]
+#[doc(alias = "ClaimsAPI")]
 #[derive(Clone, Copy, Debug)]
 pub struct ClaimsApi<'a> {
     base: PrimView<'a>,
@@ -46,6 +49,8 @@ impl<'a> ClaimsApi<'a> {
     /// A view of the schema on the prim at `path`, if the prim has it
     /// applied.
     #[must_use]
+    #[doc(alias = "UsdProfilesClaimsAPI::Get")]
+    #[doc(alias = "Get")]
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
@@ -70,6 +75,8 @@ impl<'a> ClaimsApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there.
+    #[doc(alias = "UsdProfilesClaimsAPI::Apply")]
+    #[doc(alias = "Apply")]
     pub fn apply(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<ClaimsApiEdit, CannotApply> {
         edit.apply(path, Self::SCHEMA, None)?;
         Ok(ClaimsApiEdit::from_path(path))

@@ -260,6 +260,7 @@ impl Binding {
 /// Time changes are O(1); static results survive and temporal work is lazy.
 /// Missing/unbound bindings and failed definitions are retried, not retained.
 /// AOUSD Core §12.3–12.5; OpenUSD `UsdSkelCache`/`UsdSkelSkeletonQuery` semantics.
+#[doc(alias = "UsdSkelCache")]
 pub struct SkelCache {
     time: Time,
     epoch: u64,

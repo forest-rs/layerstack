@@ -9,6 +9,14 @@ time, and as typed views over a composed stage: `usd_geom::Mesh`,
 getter per property (its fallback applied), enums for `allowedTokens`, and
 edit handles whose setters author through a `SchemaEdit` transaction.
 
+Search rustdoc with C++ names such as `UsdGeomMesh`,
+`UsdGeomMesh::GetFaceVertexCountsAttr`, `UsdGeomXformCache` or
+`UsdGeomPrimvar::ComputeFlattened`. Generated views, getters and setters retain
+verified native aliases; core stage APIs and computed helpers have corresponding
+aliases too. Read the nearby semantic notes: typed getters return resolved values
+rather than C++ property handles, authoring is transactional, and cache controls
+remain explicit.
+
 ## Runtime API schemas
 
 `SchemaEdit::apply_api(path, "PipelineTintAPI", None)` applies a registered API

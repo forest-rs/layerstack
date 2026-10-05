@@ -3,10 +3,19 @@
 `opinionated` is a small `no_std` crate for resolving layered sparse opinions
 over typed addresses.
 
-The crate intentionally does not model any particular domain. Addresses can be
-settings scopes, document sections, game items, or any other stable typed key.
-The resolver only knows layer strength, address/field identity, authored
-operations, and provenance.
+Often several sources have a say in the same value: built-in defaults, a
+project file, a user's override. Merging them into one map loses information.
+You can no longer remove the override and get the default back, or ask why a
+value is what it is. `opinionated` keeps each source's input separate and
+computes the result when you ask for it. Removing an opinion uncovers whatever
+was under it, and any result can be explained source by source.
+
+The crate does not model any particular domain. Addresses can be settings
+scopes, document sections, game items, or any other stable typed key. The
+resolver only knows layer strength, address/field identity, authored
+operations, and provenance. The [API documentation](https://docs.rs/opinionated)
+starts with the concepts: opinions, layers, dense and sparse values, blocks
+and seeds.
 
 [API documentation](https://docs.rs/opinionated) ·
 [Source](https://github.com/forest-rs/layerstack/tree/main/opinionated)
@@ -64,9 +73,11 @@ or prescribe what a provenance value identifies.
 | Resolve an already ordered stack of scalar, list, or shallow dictionary opinions | `resolve_ordered_chain` |
 | Resolve borrowed list opinions with a fallback seed | `resolve_list_chain` |
 | Explain that resolution | `SparseComposer::explain` or `resolve_ordered_chain_report` |
+| Resolve and explain edits over an external default | `resolve_with_fallback` / `explain_with_fallback`, or `resolve_ordered_chain_with_fallback` / `resolve_ordered_chain_with_fallback_report` |
 | Fold a host-defined value/edit family | `OpinionFamily` and `resolve_family_chain` |
 | Merge nested dictionaries represented by host values | `DictionaryAdapter` and `combine_dictionary_chain` |
 | Execute or compose sparse array edit programs | `ArrayEdit<T>` |
+| Resolve layered keyframes before interpolating | `TemporalPlanner` |
 
 `OpinionFamily` classifies operations as dense values, sparse edits, blocks,
 or foreign operations. The caller selects the family; the kernel accumulates
@@ -120,6 +131,15 @@ use `resolve_ordered_chain` or `resolve_ordered_chain_report` directly. This
 keeps the resolver reusable for systems that have their own storage, indexing,
 or materialization pipeline. The plain resolver does no diagnostic bookkeeping;
 the report variant records how every opinion in the chain was interpreted.
+
+When defaults live outside your authored layers, use `resolve_with_fallback`
+and `explain_with_fallback` with the same seed. Their resolutions agree; the
+explanation also records authored contributions and ignored opinions. The
+fallback carries no provenance and adds no event. An unauthored key remains
+`Absent`, and a strongest block remains `Blocked`, even with a fallback.
+The corresponding storage-independent functions are
+`resolve_ordered_chain_with_fallback` and
+`resolve_ordered_chain_with_fallback_report`.
 
 Mixed operation families are intentionally not coerced. The strongest
 non-block operation selects the resolved value family; weaker incompatible
@@ -203,7 +223,8 @@ provenance reported by the diagnostic entry point.
 
 `TemporalPlanner` accepts already ordered sources, one bracket at a time. It
 requests the time at which to sample the next source and stops when weaker
-sources are hidden. `TemporalSelection` recipes identify the source samples to
+sources are hidden. The host's time-equivalence policy is fixed when the
+planner is created. `TemporalSelection` recipes identify the source samples to
 fold with `resolve_family_chain`; interpolation happens after that fold.
 
 The planner reads no values. Hosts retain source brackets and own time mapping,
@@ -211,9 +232,25 @@ sample discovery, time-equivalence policy, fallback seeds, and interpolation.
 Time keys can be integer animation ticks or floating-point times. `TemporalMode`
 selects held or two-bracket planning without imposing a numeric value type.
 
-## License
+Skip empty sources and retain brackets only for sources pushed into the plan.
+After planning, handle the selection count: zero means no composed sample;
+one is used directly; two are interpolated in bracketing mode, while held mode
+uses only the lower selection. Blocks follow your host's missing-value policy.
+The [`TemporalPlanner` example](https://docs.rs/opinionated/latest/opinionated/struct.TemporalPlanner.html)
+shows the full loop, including exact keys, times outside the keyed interval,
+empty sources, sparse edits over a seed, and blocked endpoints.
+
+## Examples
+
+The integration tests are written as small applications:
+[settings profiles](tests/settings_profiles.rs),
+[document metadata](tests/document_metadata.rs),
+[a custom value family](tests/custom_family.rs) and
+[nested dictionaries](tests/dictionary_combine.rs).
 
 See [CHANGELOG.md](CHANGELOG.md) for release status.
+
+## License
 
 Licensed under either [Apache License, Version 2.0](LICENSE-APACHE) or
 [MIT license](LICENSE-MIT), at your option.

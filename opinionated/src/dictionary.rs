@@ -1,63 +1,62 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! Recursive dictionary combination over host value types.
-//!
-//! Dictionaries combine key by key: a key present on one side only is kept,
-//! and when both sides hold a value for the same key the stronger value wins,
-//! unless both values are themselves dictionaries, in which case they combine
-//! recursively. This is AOUSD Core §6.6.2.1 (combining) and OpenUSD's
-//! `VtDictionaryOverRecursive`.
-//!
-//! `opinionated` does not own a value type, so a host exposes the nested
-//! structure of its own values through a small [`DictionaryAdapter`]: "is this
-//! value a dictionary, and what are its entries?" plus a way to wrap combined
-//! entries back into a value. No universal value enum or serialization model
-//! is involved.
-//!
-//! # Fold direction
-//!
-//! Recursive combination is **not associative** once a key holds a dictionary
-//! in one opinion and a non-dictionary in another. With opinions, strongest
-//! first, `{s: {a: 1}}`, `{s: 0}`, `{s: {b: 2}}`:
-//!
-//! - folding strongest-first, `(S ∪ M) ∪ W`, keeps `{s: {a: 1, b: 2}}`;
-//! - folding weakest-first, `S ∪ (M ∪ W)`, keeps only `{s: {a: 1}}`.
-//!
-//! AOUSD Core §6.6.2.1 calls combining associative, which holds only while
-//! colliding values agree on being dictionaries. The spec states the pairwise
-//! operation but not how a chain is folded, so
-//! OpenUSD's behavior governs (AOUSD Core §4.2). OpenUSD folds
-//! strongest-first: `MetadataValueComposer::ConsumeAuthored` in
-//! `pxr/usd/usd/stage.cpp` composes the accumulated stronger partial over each
-//! weaker opinion in turn, and `usdcat --flatten` on the three-layer case above
-//! yields `{s: {a: 1, b: 2}}`. [`combine_dictionary_chain`] therefore folds
-//! strongest-first; it is deliberately not expressed through the weakest-first
-//! [`resolve_family_chain`](crate::resolve_family_chain) kernel.
-//!
-//! # Output order
-//!
-//! The result is ordered by key at every nesting level, whether a level was
-//! merged or contributed by a single opinion, matching OpenUSD's
-//! `VtDictionary` (a `std::map`). Within one dictionary, the first occurrence
-//! of a duplicate key wins.
-//!
-//! Cost: every contributed dictionary level is checked with one linear scan
-//! for strictly increasing keys. Levels that are already ordered are cloned
-//! as-is; only unordered (or duplicate-keyed) levels are rebuilt through a
-//! `BTreeMap`, `O(n log n)` in that level's size. Merging accumulates into a
-//! `BTreeMap`, `O(log n)` per inserted key.
+//! Recursive dictionary combination over host value types. User-facing docs
+//! live on [`combine_dictionary_chain`], since this module is private.
 
 use alloc::{
     collections::{BTreeMap, BTreeSet},
     vec::Vec,
 };
 
-/// Structural access to nested dictionaries inside a host value type `V`.
+/// Tells the dictionary functions which of your values are dictionaries.
 ///
-/// Implement this once per host value type. The kernel consults it for every
-/// contributed value, to merge colliding dictionaries and to key-order nested
-/// dictionaries; opaque values are cloned through untouched.
+/// The crate has no value type of its own, so it can't see that one of your
+/// values holds a nested dictionary. Implement this once for your value type
+/// so [`combine_dictionary_chain`] can merge nested dictionaries instead of
+/// letting the stronger one replace the weaker one. Values that aren't
+/// dictionaries are cloned through untouched.
+///
+/// ```
+/// use opinionated::{DictionaryAdapter, combine_dictionary_chain};
+///
+/// #[derive(Clone, Debug, PartialEq)]
+/// enum Value {
+///     Text(&'static str),
+///     Map(Vec<(&'static str, Value)>),
+/// }
+///
+/// struct Maps;
+///
+/// impl DictionaryAdapter<&'static str, Value> for Maps {
+///     fn entries<'v>(&self, value: &'v Value) -> Option<&'v [(&'static str, Value)]> {
+///         match value {
+///             Value::Map(entries) => Some(entries),
+///             Value::Text(_) => None,
+///         }
+///     }
+///
+///     fn dictionary(&self, entries: Vec<(&'static str, Value)>) -> Value {
+///         Value::Map(entries)
+///     }
+/// }
+///
+/// let user = vec![("font", Value::Map(vec![("size", Value::Text("14"))]))];
+/// let defaults = vec![(
+///     "font",
+///     Value::Map(vec![("family", Value::Text("mono")), ("size", Value::Text("12"))]),
+/// )];
+///
+/// // The user's `font.size` wins; `font.family` comes through from the defaults.
+/// let merged = combine_dictionary_chain(&Maps, [&user, &defaults]);
+/// assert_eq!(
+///     merged,
+///     [(
+///         "font",
+///         Value::Map(vec![("family", Value::Text("mono")), ("size", Value::Text("14"))]),
+///     )]
+/// );
+/// ```
 pub trait DictionaryAdapter<K, V> {
     /// Returns the entries of `value` when it is itself a dictionary, or
     /// `None` when it is an opaque (non-dictionary) value.
@@ -113,13 +112,37 @@ where
 
 /// Combines a chain of dictionaries supplied strongest-to-weakest.
 ///
-/// The chain folds strongest-first, `((d0 ∪ d1) ∪ d2) ∪ …`, which is the
-/// order OpenUSD uses and differs from a weakest-first fold when a key holds a
-/// dictionary in one opinion and a non-dictionary in another (see the module
-/// docs). A caller-supplied fallback seed is simply the last, weakest element
-/// of the chain. An empty chain yields an empty dictionary. The result is
-/// ordered by key at every nesting level, including for a single-opinion
-/// chain.
+/// Every key from every dictionary is kept. When two dictionaries have the
+/// same key, the stronger value wins, unless both values are themselves
+/// dictionaries, in which case they are combined the same way. `adapter`
+/// says which of your values are dictionaries; see [`DictionaryAdapter`] for
+/// an example. This is AOUSD Core §6.6.2.1 and OpenUSD's
+/// `VtDictionaryOverRecursive`.
+///
+/// To combine over a default, pass it as the last, weakest dictionary. An
+/// empty chain gives an empty dictionary. Within one dictionary, the first
+/// occurrence of a repeated key wins.
+///
+/// The result is sorted by key at every level, as OpenUSD's `VtDictionary`
+/// is. Levels that are already sorted are copied as they are; only unsorted
+/// levels are rebuilt.
+///
+/// # Order matters
+///
+/// The chain is folded from the strongest end. That is not the same as
+/// folding from the weakest end when one opinion holds a dictionary under a
+/// key and another holds a plain value. With `{s: {a: 1}}`, `{s: 0}`,
+/// `{s: {b: 2}}`, strongest first:
+///
+/// - strongest end first, `(S ∪ M) ∪ W`, gives `{s: {a: 1, b: 2}}`;
+/// - weakest end first, `S ∪ (M ∪ W)`, gives `{s: {a: 1}}`.
+///
+/// The spec doesn't say which order to fold a chain in, so OpenUSD's
+/// behavior decides (AOUSD Core §4.2). OpenUSD folds from the strongest end
+/// (`MetadataValueComposer::ConsumeAuthored` in `pxr/usd/usd/stage.cpp`).
+/// This is also why recursive dictionaries don't go through
+/// [`resolve_family_chain`](crate::resolve_family_chain), which applies edits
+/// from the weakest end.
 #[must_use]
 pub fn combine_dictionary_chain<K, V, A>(
     adapter: &A,

@@ -9,9 +9,109 @@
 //! block.
 
 use opinionated::{
-    ChainOpinion, ListOp, OpinionOp, Resolution, ResolvedValue, SparseComposer,
-    resolve_ordered_chain_with_fallback,
+    ChainOpinion, ListOp, OpinionKind, OpinionOp, Resolution, ResolutionEvent, ResolvedValue,
+    SparseComposer, resolve_ordered_chain_report, resolve_ordered_chain_with_fallback,
+    resolve_ordered_chain_with_fallback_report,
 };
+
+#[test]
+fn composer_explanation_matches_seeded_resolution() {
+    let mut composer: SparseComposer<&str, &str, &str, &str, &str, &str, &str> =
+        SparseComposer::try_new(["user"]).unwrap();
+    composer
+        .set_opinion(
+            "user",
+            "editor",
+            "plugins",
+            OpinionOp::List(ListOp::appended(vec!["lint"])),
+            "user.toml",
+        )
+        .unwrap();
+    let fallback = ResolvedValue::List(vec!["core"]);
+    let resolution = composer.resolve_with_fallback("editor", "plugins", &fallback);
+    let report = composer.explain_with_fallback("editor", "plugins", &fallback);
+    assert_eq!(
+        report.resolution, resolution,
+        "explaining a seeded resolution must retain its fallback contribution"
+    );
+    assert_eq!(
+        report.events,
+        [ResolutionEvent::Contributed {
+            provenance: "user.toml",
+            kind: OpinionKind::List,
+        }],
+        "the fallback must not masquerade as an authored opinion"
+    );
+    let missing = composer.explain_with_fallback("editor", "missing", &fallback);
+    assert!(missing.resolution.is_absent());
+    assert!(missing.events.is_empty());
+}
+
+// Exercise both public report paths with mixed families, explicit lists,
+// blocks at every strength, and empty or shape-mismatched fallback seeds.
+#[test]
+fn seeded_reports_match_resolution_across_short_chains() {
+    let ops: [OpinionOp<&str, &str, &str>; 8] = [
+        OpinionOp::Set("dark"),
+        OpinionOp::Block,
+        OpinionOp::List(ListOp::appended(vec!["lint"])),
+        OpinionOp::List(ListOp::deleted(vec!["core"])),
+        OpinionOp::List(ListOp::explicit(vec!["standalone"])),
+        OpinionOp::List(ListOp::explicit(vec![])),
+        OpinionOp::Dictionary(vec![("theme", "dark")]),
+        OpinionOp::Dictionary(vec![("layout", "wide")]),
+    ];
+    let fallbacks = [
+        ResolvedValue::Scalar("light"),
+        ResolvedValue::List(vec!["core"]),
+        ResolvedValue::List(vec![]),
+        ResolvedValue::Dictionary(vec![("theme", "light"), ("font", "mono")]),
+    ];
+    for count in 0..=3 {
+        for mut code in 0..ops.len().pow(count) {
+            let mut authored = Vec::new();
+            for _ in 0..count {
+                authored.push(&ops[code % ops.len()]);
+                code /= ops.len();
+            }
+            let layers: Vec<_> = (0..authored.len()).collect();
+            let chain = || {
+                authored
+                    .iter()
+                    .zip(&layers)
+                    .map(|(op, provenance)| ChainOpinion { op, provenance })
+            };
+            let plain_report = resolve_ordered_chain_report(chain());
+            let mut composer = SparseComposer::try_new(layers.iter().copied()).unwrap();
+            for (&op, &layer) in authored.iter().zip(&layers) {
+                composer
+                    .set_opinion(layer, "editor", "field", op.clone(), layer)
+                    .unwrap();
+            }
+            for fallback in &fallbacks {
+                let resolution = resolve_ordered_chain_with_fallback(chain(), fallback);
+                let report = resolve_ordered_chain_with_fallback_report(chain(), fallback);
+                assert_eq!(
+                    report.resolution, resolution,
+                    "chain {authored:?}, seed {fallback:?}"
+                );
+                assert_eq!(
+                    report.events, plain_report.events,
+                    "seeds add no events or cutoffs"
+                );
+                assert_eq!(report.events.len(), authored.len());
+                assert_eq!(
+                    composer.resolve_with_fallback("editor", "field", fallback),
+                    resolution
+                );
+                assert_eq!(
+                    composer.explain_with_fallback("editor", "field", fallback),
+                    report
+                );
+            }
+        }
+    }
+}
 
 #[test]
 fn list_chain_folds_over_fallback_seed() {

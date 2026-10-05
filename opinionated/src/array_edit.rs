@@ -1,27 +1,8 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! Sparse array edits over any element type.
-//!
-//! An [`ArrayEdit`] is a program of [`ArrayEditOp`] instructions that rewrites
-//! a dense array in order. Each instruction sees the array as edited so far:
-//! a [`ArrayEditOperand::CopyFrom`] operand reads the destination after every
-//! earlier instruction, not the original input. Instructions whose indices
-//! fall outside the current array are skipped, so a program is total over
-//! every input.
-//!
-//! The instruction set and its index rules follow OpenUSD's `VtArrayEdit`
-//! (`pxr/base/vt/arrayEdit.h` and `pxr/base/vt/arrayEditOps.h`), which the
-//! OpenUSD sparse-array-edits proposal introduces for attribute values. The
-//! crate does not know about attributes: the element type is the host's, and
-//! so is the element that fills growth when an instruction does not carry
-//! one ([`ArrayFill`]).
-//!
-//! Edits compose by concatenation. [`ArrayEdit::compose_over`] places a weaker
-//! program before a stronger one, and applying the result equals applying the
-//! weaker program and then the stronger one. A host folding an opinion chain
-//! can therefore keep edits sparse until a dense value or block ends the
-//! chain, then apply the composed program once.
+//! Sparse array edits over any element type. User-facing docs live on
+//! [`ArrayEdit`], since this module is private.
 
 use alloc::vec::Vec;
 use core::fmt;
@@ -179,6 +160,58 @@ impl<T, F: FnMut() -> Option<T>> ArrayFill<T> for FillWith<F> {
 }
 
 /// A sparse array edit: an instruction program applied in order.
+///
+/// Use an array edit when a layer needs to change a few elements of a long
+/// array without restating the rest: move one point of a path, insert a
+/// column, trim a list to ten entries. A weaker layer can then change the
+/// array underneath, and the edit still applies to whatever it finds.
+///
+/// ```
+/// use opinionated::{ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex};
+///
+/// // Overwrite the last element and append a copy of the first.
+/// let edit = ArrayEdit {
+///     ops: vec![
+///         ArrayEditOp::Write {
+///             src: ArrayEditOperand::Literal(99),
+///             index: ArrayIndex::Position(-1),
+///         },
+///         ArrayEditOp::Insert {
+///             src: ArrayEditOperand::CopyFrom(ArrayIndex::Position(0)),
+///             index: ArrayIndex::End,
+///         },
+///     ],
+/// };
+///
+/// let mut weights = vec![1, 2, 3];
+/// edit.apply_in_place(&mut weights, None);
+/// assert_eq!(weights, [1, 2, 99, 1]);
+///
+/// // The same edit applies to a different base.
+/// assert_eq!(edit.compose_over_array(&[7], None), [99, 99]);
+/// ```
+///
+/// Build one from a list of [`ArrayEditOp`]s, or start from
+/// [`ArrayEdit::default`], which changes nothing. Apply it with
+/// [`ArrayEdit::apply_in_place`] or [`ArrayEdit::compose_over_array`].
+///
+/// Instructions run in order, and each one sees the array as the earlier
+/// ones left it. A [`ArrayEditOperand::CopyFrom`] reads the edited array, not
+/// the original. An instruction whose index doesn't exist in the array it
+/// sees is skipped, so an edit never fails, whatever it is applied to.
+///
+/// Edits that grow an array without saying what to fill it with
+/// ([`ArrayEditOp::MinSize`], [`ArrayEditOp::Resize`]) ask for a fill element
+/// through [`ArrayFill`]. Pass `None` if there is no sensible fill value, and
+/// those instructions are skipped. The crate never makes one up.
+///
+/// To combine edits from two layers, use [`ArrayEdit::compose_over`]: the
+/// result runs the weaker edit, then the stronger one. That lets an
+/// [`OpinionFamily`](crate::OpinionFamily) keep collecting edits until it
+/// reaches a full array, then apply them in one pass.
+///
+/// The instructions and index rules match OpenUSD's `VtArrayEdit`
+/// (`pxr/base/vt/arrayEdit.h`, `pxr/base/vt/arrayEditOps.h`).
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct ArrayEdit<T> {
     /// Instructions, applied first to last.

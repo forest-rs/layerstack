@@ -88,6 +88,7 @@ pub enum SplineDataType {
 /// Authored inner-loop parameters (§12.5). These are independent of
 /// extrapolation loops. Evaluation uses virtual echoes; baking is explicitly bounded.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[doc(alias = "TsLoopParams")]
 pub struct LoopParams {
     /// Start of the prototype region (in time).
     pub proto_start: f64,
@@ -125,6 +126,7 @@ pub enum TangentAlgorithm {
 /// Each knot specifies a time/value pair plus tangent information that
 /// controls the shape of the curve segment to the *next* knot.
 #[derive(Clone, Debug, PartialEq)]
+#[doc(alias = "TsKnot")]
 pub struct Knot {
     /// Authored knot metadata; it does not affect numerical evaluation.
     pub custom_data: Vec<(Arc<str>, Value)>,
@@ -168,6 +170,7 @@ pub struct Knot {
 /// A spline consists of an ordered set of [`Knot`]s with tangent information,
 /// plus extrapolation behavior outside the knot range.
 #[derive(Clone, Debug, PartialEq)]
+#[doc(alias = "TsSpline")]
 pub struct SplineData {
     /// Optional knot time ending the pre-extrapolation loop prototype.
     pub pre_loop_boundary: Option<f64>,

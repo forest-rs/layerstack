@@ -94,6 +94,7 @@ impl NamespaceMap {
 /// Spec: AOUSD Core §8 (spec paths, including variant selections),
 /// §10.3.1.1 and §12.3.2.1 (layer offsets).
 #[derive(Clone, Debug, PartialEq)]
+#[doc(alias = "UsdEditTarget")]
 pub struct EditTarget {
     layer: LayerId,
     map: NamespaceMap,

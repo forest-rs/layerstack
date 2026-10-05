@@ -1,5 +1,12 @@
 # Schema generation
 
+Generated views retain native schema identifiers and searchable C++ class and
+accessor names. Native aliases are verified against registered types and matching
+source headers. Getters return values (`Get*Attr().Get()`), while setters queue
+authoring until transaction application (`Create*Attr().Set()`). Codeless schemas
+get their native schema spelling without invented C++ declarations. Regeneration
+preserves the aliases and their semantic notes.
+
 Regenerate the bundled OpenUSD schemas with the matching wheel and source:
 
 ```sh

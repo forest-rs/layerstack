@@ -52,6 +52,8 @@ impl<'a> Volume<'a> {
     ///
     /// OpenUSD: `UsdVolVolume::HasFieldRelationship`.
     #[must_use]
+    #[doc(alias = "UsdVolVolume::HasFieldRelationship")]
+    #[doc(alias = "HasFieldRelationship")]
     pub fn has_field_relationship(&self, name: &str) -> bool {
         self.property_path(&field_name(name))
             .is_some_and(|path| is_relationship(&self.scene(), path))
@@ -63,6 +65,8 @@ impl<'a> Volume<'a> {
     ///
     /// OpenUSD: `UsdVolVolume::GetFieldPath`.
     #[must_use]
+    #[doc(alias = "UsdVolVolume::GetFieldPath")]
+    #[doc(alias = "GetFieldPath")]
     pub fn field_path(&self, name: &str) -> Option<PathId> {
         let property = self.property_path(&field_name(name))?;
         match forwarded_targets(&self.scene(), property).as_slice() {
@@ -87,6 +91,8 @@ impl<'a> Volume<'a> {
     ///
     /// OpenUSD: `UsdVolVolume::GetFieldPaths` (`GetBaseName`, `std::map::emplace`).
     #[must_use]
+    #[doc(alias = "UsdVolVolume::GetFieldPaths")]
+    #[doc(alias = "GetFieldPaths")]
     pub fn field_paths(&self) -> BTreeMap<&'a str, PathId> {
         let scene = self.scene();
         let mut fields = BTreeMap::new();
@@ -128,6 +134,8 @@ impl VolumeEdit {
     /// Both bare and already namespaced names are accepted.
     ///
     /// OpenUSD: `UsdVolVolume::CreateFieldRelationship`.
+    #[doc(alias = "UsdVolVolume::CreateFieldRelationship")]
+    #[doc(alias = "CreateFieldRelationship")]
     pub fn create_field_relationship(
         &self,
         edit: &mut SchemaEdit<'_>,
@@ -148,6 +156,8 @@ impl VolumeEdit {
     /// Relationships created earlier in this edit can also be blocked.
     ///
     /// OpenUSD: `UsdVolVolume::BlockFieldRelationship`.
+    #[doc(alias = "UsdVolVolume::BlockFieldRelationship")]
+    #[doc(alias = "BlockFieldRelationship")]
     pub fn block_field_relationship(
         &self,
         edit: &mut SchemaEdit<'_>,

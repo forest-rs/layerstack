@@ -94,6 +94,8 @@ impl<'a> PhysicsCollisionGroup<'a> {
 /// (OpenUSD 26.8 behavior). Inversion allows only the listed merged groups.
 /// Default traversal excludes abstract/undefined subtrees and instance proxies.
 /// Invalid targets return an error without exposing a partial table.
+#[doc(alias = "UsdPhysicsCollisionGroup::ComputeCollisionGroupTable")]
+#[doc(alias = "ComputeCollisionGroupTable")]
 pub fn compute_collision_group_table(
     scene: &Scene<'_>,
 ) -> Result<CollisionGroupTable, CollisionGroupError> {

@@ -268,6 +268,8 @@ impl<'a> Imageable<'a> {
     /// `None` or an empty filter matches every element type or family.
     /// OpenUSD: `UsdGeomSubset::GetGeomSubsets` (no recursive descendant search).
     #[must_use]
+    #[doc(alias = "UsdGeomSubset::GetGeomSubsets")]
+    #[doc(alias = "GetGeomSubsets")]
     pub fn geom_subsets(
         &self,
         element: Option<&SubsetElementType>,
@@ -304,6 +306,8 @@ impl<'a> Imageable<'a> {
     /// The family's type, defaulting to `unrestricted` for an absent or empty token.
     /// OpenUSD: `UsdGeomSubset::GetFamilyType`.
     #[must_use]
+    #[doc(alias = "UsdGeomSubset::GetFamilyType")]
+    #[doc(alias = "GetFamilyType")]
     pub fn subset_family_type(&self, family: &str) -> String {
         self.read_value(
             &format!("subsetFamily:{family}:familyType"),
@@ -321,6 +325,8 @@ impl<'a> Imageable<'a> {
     /// Deferred decode failures become one `InvalidTopology` problem; use
     /// [`Self::try_validate_subset_family`] to retain their property and error.
     #[must_use]
+    #[doc(alias = "UsdGeomSubset::ValidateFamily")]
+    #[doc(alias = "ValidateFamily")]
     pub fn validate_subset_family(
         &self,
         element: &SubsetElementType,
@@ -369,6 +375,8 @@ impl<'a> Imageable<'a> {
     /// Ordinary missing or malformed geometry remains in the returned problems.
     /// Typed default selection and numeric interpolation follow attribute getters.
     /// OpenUSD: `UsdGeomSubset::ValidateFamily`; AOUSD Core §12.3–12.5.
+    #[doc(alias = "UsdGeomSubset::ValidateFamily")]
+    #[doc(alias = "ValidateFamily")]
     pub fn try_validate_subset_family(
         &self,
         element: &SubsetElementType,
@@ -534,6 +542,8 @@ impl<'a> Imageable<'a> {
     /// Pair set subtraction sorts both inputs, including unsorted authored arrays.
     /// Returns errors when element type or required topology is invalid, and
     /// preserves deferred topology/member decode errors and their property paths.
+    #[doc(alias = "UsdGeomSubset::GetUnassignedIndices")]
+    #[doc(alias = "GetUnassignedIndices")]
     pub fn unassigned_subset_indices(
         &self,
         element: &SubsetElementType,
@@ -618,6 +628,8 @@ impl core::error::Error for MeshTopologyError {
 /// Checks count/index consistency and point-index bounds without scene reads.
 /// Negative counts are rejected explicitly; no allocation depends on their sum.
 /// OpenUSD: `UsdGeomMesh::ValidateTopology`.
+#[doc(alias = "UsdGeomMesh::ValidateTopology")]
+#[doc(alias = "ValidateTopology")]
 pub fn validate_mesh_topology(
     indices: &[i32],
     counts: &[i32],
@@ -642,6 +654,8 @@ impl Mesh<'_> {
     /// Returns an error for missing required arrays or inconsistent topology.
     /// Deferred decode failures retain their original error and attribute path;
     /// they are distinct from `MissingAttribute`.
+    #[doc(alias = "UsdGeomMesh::ValidateTopology")]
+    #[doc(alias = "ValidateTopology")]
     pub fn validate_topology(&self, time: Time) -> Result<(), MeshTopologyError> {
         let decode_error = |name: &str, error| MeshTopologyError::Decode {
             property: self

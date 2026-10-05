@@ -268,6 +268,7 @@ fn object_exists(scene: &Scene<'_>, path: TargetPath) -> bool {
 ///
 /// OpenUSD: `UsdCollectionMembershipQuery`.
 #[derive(Clone, Debug, PartialEq)]
+#[doc(alias = "UsdCollectionMembershipQuery")]
 pub struct MembershipQuery {
     rules: HashMap<TargetPath, MembershipRule>,
     included_collections: Vec<PropertyPath>,
@@ -306,6 +307,8 @@ impl MembershipQuery {
     ///
     /// OpenUSD: `UsdCollectionAPI::ComputeMembershipQuery`.
     #[must_use]
+    #[doc(alias = "UsdCollectionAPI::ComputeMembershipQuery")]
+    #[doc(alias = "ComputeMembershipQuery")]
     pub fn compute(scene: &Scene<'_>, path: PathId, name: &str) -> Self {
         let prim = PrimView::new(*scene, path);
         let property = |base: &str| format!("collection:{name}:{base}");
@@ -543,6 +546,8 @@ impl MembershipQuery {
     /// (`_IsPathIncludedByRuleMap`, which only includes prim and property
     /// paths, else `UsdObjectCollectionExpressionEvaluator::Match`).
     #[must_use]
+    #[doc(alias = "UsdCollectionMembershipQuery::IsPathIncluded")]
+    #[doc(alias = "IsPathIncluded")]
     pub fn is_included(&self, scene: &Scene<'_>, path: TargetPath) -> Membership {
         if !self.uses_rule_map() {
             let included = self

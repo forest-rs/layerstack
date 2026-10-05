@@ -190,6 +190,7 @@ fn participating_layers(
 /// [`notify_prim_edit`](Self::notify_prim_edit), and transitive dependents
 /// are expanded at drain time during [`recompose`](Self::recompose).
 #[derive(Debug)]
+#[doc(alias = "UsdStage")]
 pub struct LiveStage {
     stage: Stage,
     local_namespace: Option<local::LocalNamespace>,
@@ -329,6 +330,8 @@ impl LiveStage {
     /// Root muting and conflicting requests fail without changing any controls.
     /// A changed batch queues a structural recomposition and its usual notices.
     /// OpenUSD: `UsdStage::MuteAndUnmuteLayers`.
+    #[doc(alias = "UsdStage::MuteAndUnmuteLayers")]
+    #[doc(alias = "MuteAndUnmuteLayers")]
     pub fn mute_and_unmute_layers(
         &mut self,
         mute: &[LayerId],
@@ -352,11 +355,15 @@ impl LiveStage {
     }
 
     /// Queue exclusion of a layer and its sublayers from this stage.
+    #[doc(alias = "UsdStage::MuteLayer")]
+    #[doc(alias = "MuteLayer")]
     pub fn mute_layer(&mut self, layer: LayerId) -> Result<bool, crate::LayerMuteError> {
         self.mute_and_unmute_layers(&[layer], &[])
     }
 
     /// Queue restoring a muted layer. Returns false for an already unmuted layer.
+    #[doc(alias = "UsdStage::UnmuteLayer")]
+    #[doc(alias = "UnmuteLayer")]
     pub fn unmute_layer(&mut self, layer: LayerId) -> bool {
         self.mute_and_unmute_layers(&[], &[layer])
             .expect("unmuting cannot fail")
@@ -375,6 +382,8 @@ impl LiveStage {
     }
 
     /// Queue a new subtree population mask. None includes the full namespace.
+    #[doc(alias = "UsdStage::SetPopulationMask")]
+    #[doc(alias = "SetPopulationMask")]
     pub fn set_population_mask(&mut self, mask: Option<PopulationMask>) -> bool {
         if self.options.mask == mask {
             return false;
@@ -385,6 +394,8 @@ impl LiveStage {
     }
 
     /// Queue replacement payload inclusion rules without changing stored assets.
+    #[doc(alias = "UsdStage::SetLoadRules")]
+    #[doc(alias = "SetLoadRules")]
     pub fn set_load_rules(&mut self, rules: crate::PayloadLoadRules) -> bool {
         if self.options.load_rules == rules {
             return false;

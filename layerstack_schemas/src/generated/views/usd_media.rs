@@ -26,6 +26,9 @@ use crate::{PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "AssetPreviewsAPI supports providing thumbnail previews for assets."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's single-apply API schema `AssetPreviewsAPI`. Get it with [`AssetPreviewsApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdMediaAssetPreviewsAPI`."]
+#[doc(alias = "UsdMediaAssetPreviewsAPI")]
+#[doc(alias = "AssetPreviewsAPI")]
 #[derive(Clone, Copy, Debug)]
 pub struct AssetPreviewsApi<'a> {
     base: PrimView<'a>,
@@ -46,6 +49,8 @@ impl<'a> AssetPreviewsApi<'a> {
     /// A view of the schema on the prim at `path`, if the prim has it
     /// applied.
     #[must_use]
+    #[doc(alias = "UsdMediaAssetPreviewsAPI::Get")]
+    #[doc(alias = "Get")]
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
@@ -70,6 +75,8 @@ impl<'a> AssetPreviewsApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there.
+    #[doc(alias = "UsdMediaAssetPreviewsAPI::Apply")]
+    #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
@@ -138,6 +145,8 @@ token_enum! {
 #[doc = "Defines the properties that enable audio playback in the scene."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `SpatialAudio`, inheriting [`crate::usd_geom::Xformable`]. Construct it with [`SpatialAudio::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdMediaSpatialAudio`."]
+#[doc(alias = "UsdMediaSpatialAudio")]
 #[derive(Clone, Copy, Debug)]
 pub struct SpatialAudio<'a> {
     base: crate::usd_geom::Xformable<'a>,
@@ -156,6 +165,8 @@ impl<'a> SpatialAudio<'a> {
     pub const SCHEMA: &'static str = "SpatialAudio";
 
     #[doc = "A view of the prim at `path`, if it is a `SpatialAudio` or of a schema derived from it."]
+    #[doc(alias = "UsdMediaSpatialAudio::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -180,6 +191,8 @@ impl<'a> SpatialAudio<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdMediaSpatialAudio::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> SpatialAudioEdit {
         edit.define(path, Self::SCHEMA);
         SpatialAudioEdit::from_path(path)
@@ -192,6 +205,9 @@ impl<'a> SpatialAudio<'a> {
         #[doc = "How the audio is played, spatially or not."]
         #[doc = ""]
         #[doc = "USD attribute `auralMode` (`token`, uniform; fallback `\"spatial\"`)."]
+        #[doc = "C++ read: `UsdMediaSpatialAudio::GetAuralModeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdMediaSpatialAudio::GetAuralModeAttr")]
+        #[doc(alias = "GetAuralModeAttr")]
         aural_mode, "auralMode", SpatialAudioAuralMode, SpatialAudioAuralMode::read
     }
     /// The USD name of [`Self::end_time`].
@@ -201,6 +217,9 @@ impl<'a> SpatialAudio<'a> {
         #[doc = "Offset from the start of the audio file for when to end playing, in timeCodes."]
         #[doc = ""]
         #[doc = "USD attribute `endTime` (`timecode`, uniform; fallback `0.0`)."]
+        #[doc = "C++ read: `UsdMediaSpatialAudio::GetEndTimeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdMediaSpatialAudio::GetEndTimeAttr")]
+        #[doc(alias = "GetEndTimeAttr")]
         end_time, "endTime", f64, crate::value::read_timecode
     }
     /// The USD name of [`Self::file_path`].
@@ -210,6 +229,9 @@ impl<'a> SpatialAudio<'a> {
         #[doc = "Path to the audio file."]
         #[doc = ""]
         #[doc = "USD attribute `filePath` (`asset`, uniform; fallback `\"\"`)."]
+        #[doc = "C++ read: `UsdMediaSpatialAudio::GetFilePathAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdMediaSpatialAudio::GetFilePathAttr")]
+        #[doc(alias = "GetFilePathAttr")]
         file_path, "filePath", ::alloc::sync::Arc<str>, crate::value::read_asset
     }
     /// The USD name of [`Self::gain`].
@@ -219,6 +241,9 @@ impl<'a> SpatialAudio<'a> {
         #[doc = "Multiplier to the given audio signal."]
         #[doc = ""]
         #[doc = "USD attribute `gain` (`double`; fallback `1.0`)."]
+        #[doc = "C++ read: `UsdMediaSpatialAudio::GetGainAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdMediaSpatialAudio::GetGainAttr")]
+        #[doc(alias = "GetGainAttr")]
         gain, gain_at, "gain", f64, crate::value::read_double
     }
     /// The USD name of [`Self::media_offset`].
@@ -228,6 +253,9 @@ impl<'a> SpatialAudio<'a> {
         #[doc = "Amount, in seconds, the audio is offset when playing."]
         #[doc = ""]
         #[doc = "USD attribute `mediaOffset` (`double`, uniform; fallback `0.0`)."]
+        #[doc = "C++ read: `UsdMediaSpatialAudio::GetMediaOffsetAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdMediaSpatialAudio::GetMediaOffsetAttr")]
+        #[doc(alias = "GetMediaOffsetAttr")]
         media_offset, "mediaOffset", f64, crate::value::read_double
     }
     /// The USD name of [`Self::playback_mode`].
@@ -237,6 +265,9 @@ impl<'a> SpatialAudio<'a> {
         #[doc = "Determines general rules on the playback of the audio asset. Use this to specify when the audio should start, stop, and if the playback should loop."]
         #[doc = ""]
         #[doc = "USD attribute `playbackMode` (`token`, uniform; fallback `\"onceFromStart\"`)."]
+        #[doc = "C++ read: `UsdMediaSpatialAudio::GetPlaybackModeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdMediaSpatialAudio::GetPlaybackModeAttr")]
+        #[doc(alias = "GetPlaybackModeAttr")]
         playback_mode, "playbackMode", SpatialAudioPlaybackMode, SpatialAudioPlaybackMode::read
     }
     /// The USD name of [`Self::start_time`].
@@ -246,6 +277,9 @@ impl<'a> SpatialAudio<'a> {
         #[doc = "Offset from the start of the audio file for when to start playing, in timeCodes."]
         #[doc = ""]
         #[doc = "USD attribute `startTime` (`timecode`, uniform; fallback `0.0`)."]
+        #[doc = "C++ read: `UsdMediaSpatialAudio::GetStartTimeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdMediaSpatialAudio::GetStartTimeAttr")]
+        #[doc(alias = "GetStartTimeAttr")]
         start_time, "startTime", f64, crate::value::read_timecode
     }
 }
@@ -283,42 +317,63 @@ impl SpatialAudioEdit {
         #[doc = "How the audio is played, spatially or not."]
         #[doc = ""]
         #[doc = "USD attribute `auralMode` (`token`, uniform; fallback `\"spatial\"`)."]
+        #[doc = "C++ authoring: `UsdMediaSpatialAudio::CreateAuralModeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdMediaSpatialAudio::CreateAuralModeAttr")]
+        #[doc(alias = "CreateAuralModeAttr")]
         set_aural_mode, "auralMode", SpatialAudioAuralMode, SpatialAudioAuralMode::write
     }
     set_uniform_attribute! {
         #[doc = "Offset from the start of the audio file for when to end playing, in timeCodes."]
         #[doc = ""]
         #[doc = "USD attribute `endTime` (`timecode`, uniform; fallback `0.0`)."]
+        #[doc = "C++ authoring: `UsdMediaSpatialAudio::CreateEndTimeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdMediaSpatialAudio::CreateEndTimeAttr")]
+        #[doc(alias = "CreateEndTimeAttr")]
         set_end_time, "endTime", f64, crate::value::write_timecode
     }
     set_uniform_attribute! {
         #[doc = "Path to the audio file."]
         #[doc = ""]
         #[doc = "USD attribute `filePath` (`asset`, uniform; fallback `\"\"`)."]
+        #[doc = "C++ authoring: `UsdMediaSpatialAudio::CreateFilePathAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdMediaSpatialAudio::CreateFilePathAttr")]
+        #[doc(alias = "CreateFilePathAttr")]
         set_file_path, "filePath", &str, crate::value::write_asset
     }
     set_attribute! {
         #[doc = "Multiplier to the given audio signal."]
         #[doc = ""]
         #[doc = "USD attribute `gain` (`double`; fallback `1.0`)."]
+        #[doc = "C++ authoring: `UsdMediaSpatialAudio::CreateGainAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdMediaSpatialAudio::CreateGainAttr")]
+        #[doc(alias = "CreateGainAttr")]
         set_gain, set_gain_at, "gain", f64, crate::value::write_double
     }
     set_uniform_attribute! {
         #[doc = "Amount, in seconds, the audio is offset when playing."]
         #[doc = ""]
         #[doc = "USD attribute `mediaOffset` (`double`, uniform; fallback `0.0`)."]
+        #[doc = "C++ authoring: `UsdMediaSpatialAudio::CreateMediaOffsetAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdMediaSpatialAudio::CreateMediaOffsetAttr")]
+        #[doc(alias = "CreateMediaOffsetAttr")]
         set_media_offset, "mediaOffset", f64, crate::value::write_double
     }
     set_uniform_attribute! {
         #[doc = "Determines general rules on the playback of the audio asset. Use this to specify when the audio should start, stop, and if the playback should loop."]
         #[doc = ""]
         #[doc = "USD attribute `playbackMode` (`token`, uniform; fallback `\"onceFromStart\"`)."]
+        #[doc = "C++ authoring: `UsdMediaSpatialAudio::CreatePlaybackModeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdMediaSpatialAudio::CreatePlaybackModeAttr")]
+        #[doc(alias = "CreatePlaybackModeAttr")]
         set_playback_mode, "playbackMode", SpatialAudioPlaybackMode, SpatialAudioPlaybackMode::write
     }
     set_uniform_attribute! {
         #[doc = "Offset from the start of the audio file for when to start playing, in timeCodes."]
         #[doc = ""]
         #[doc = "USD attribute `startTime` (`timecode`, uniform; fallback `0.0`)."]
+        #[doc = "C++ authoring: `UsdMediaSpatialAudio::CreateStartTimeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdMediaSpatialAudio::CreateStartTimeAttr")]
+        #[doc(alias = "CreateStartTimeAttr")]
         set_start_time, "startTime", f64, crate::value::write_timecode
     }
 }

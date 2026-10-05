@@ -26,6 +26,8 @@ use crate::{PrimView, Scene, SchemaEdit};
 #[doc = "Represents the renderer and scene configuration for a single render pass in a multi-pass rendering workflow."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `RenderPass`, inheriting [`crate::usd::Typed`]. Construct it with [`RenderPass::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdRenderPass`."]
+#[doc(alias = "UsdRenderPass")]
 #[derive(Clone, Copy, Debug)]
 pub struct RenderPass<'a> {
     base: crate::usd::Typed<'a>,
@@ -44,6 +46,8 @@ impl<'a> RenderPass<'a> {
     pub const SCHEMA: &'static str = "RenderPass";
 
     #[doc = "A view of the prim at `path`, if it is a `RenderPass` or of a schema derived from it."]
+    #[doc(alias = "UsdRenderPass::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -68,6 +72,8 @@ impl<'a> RenderPass<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdRenderPass::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> RenderPassEdit {
         edit.define(path, Self::SCHEMA);
         RenderPassEdit::from_path(path)
@@ -80,6 +86,9 @@ impl<'a> RenderPass<'a> {
         #[doc = "Command to run in order to generate renders for this pass. Used by render pipelines to send jobs to scheduling components that will generate renders."]
         #[doc = ""]
         #[doc = "USD attribute `command` (`string\\[\\]`, uniform)."]
+        #[doc = "C++ read: `UsdRenderPass::GetCommandAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdRenderPass::GetCommandAttr")]
+        #[doc(alias = "GetCommandAttr")]
         command, "command", ::alloc::vec::Vec<::alloc::sync::Arc<str>>, |v, t| crate::value::read_array(v, t, crate::value::read_string)
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -99,6 +108,9 @@ impl<'a> RenderPass<'a> {
         #[doc = "Asset that contains the render configuration prims or other information needed to render this pass."]
         #[doc = ""]
         #[doc = "USD attribute `fileName` (`asset`, uniform)."]
+        #[doc = "C++ read: `UsdRenderPass::GetFileNameAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdRenderPass::GetFileNameAttr")]
+        #[doc(alias = "GetFileNameAttr")]
         file_name, "fileName", ::alloc::sync::Arc<str>, crate::value::read_asset
     }
     /// The USD name of [`Self::input_passes`].
@@ -108,6 +120,9 @@ impl<'a> RenderPass<'a> {
         #[doc = "The RenderPasses that this pass depends on. For example, this pass might depend on the output from a 'Render Texture' pass, which gets used as input for this pass."]
         #[doc = ""]
         #[doc = "USD relationship `inputPasses` (`rel`)."]
+        #[doc = "C++ read: `UsdRenderPass::GetInputPassesRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdRenderPass::GetInputPassesRel")]
+        #[doc(alias = "GetInputPassesRel")]
         input_passes, "inputPasses"
     }
     /// The USD name of [`Self::pass_type`].
@@ -117,6 +132,9 @@ impl<'a> RenderPass<'a> {
         #[doc = "Used to categorize different types of passes within a render pipeline."]
         #[doc = ""]
         #[doc = "USD attribute `passType` (`token`, uniform)."]
+        #[doc = "C++ read: `UsdRenderPass::GetPassTypeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdRenderPass::GetPassTypeAttr")]
+        #[doc(alias = "GetPassTypeAttr")]
         pass_type, "passType", &'a str, crate::value::read_token
     }
     /// The USD name of [`Self::render_source`].
@@ -126,6 +144,9 @@ impl<'a> RenderPass<'a> {
         #[doc = "Points to render configuration for this pass. Targets a relationship to a RenderSettings, or if fileName is set, points to configuration within that file."]
         #[doc = ""]
         #[doc = "USD relationship `renderSource` (`rel`)."]
+        #[doc = "C++ read: `UsdRenderPass::GetRenderSourceRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdRenderPass::GetRenderSourceRel")]
+        #[doc(alias = "GetRenderSourceRel")]
         render_source, "renderSource"
     }
 }
@@ -163,30 +184,45 @@ impl RenderPassEdit {
         #[doc = "Command to run in order to generate renders for this pass. Used by render pipelines to send jobs to scheduling components that will generate renders."]
         #[doc = ""]
         #[doc = "USD attribute `command` (`string\\[\\]`, uniform)."]
+        #[doc = "C++ authoring: `UsdRenderPass::CreateCommandAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdRenderPass::CreateCommandAttr")]
+        #[doc(alias = "CreateCommandAttr")]
         set_command, "command", &[&str], |v, t| crate::value::write_array(v, t, crate::value::write_string)
     }
     set_uniform_attribute! {
         #[doc = "Asset that contains the render configuration prims or other information needed to render this pass."]
         #[doc = ""]
         #[doc = "USD attribute `fileName` (`asset`, uniform)."]
+        #[doc = "C++ authoring: `UsdRenderPass::CreateFileNameAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdRenderPass::CreateFileNameAttr")]
+        #[doc(alias = "CreateFileNameAttr")]
         set_file_name, "fileName", &str, crate::value::write_asset
     }
     set_relationship! {
         #[doc = "The RenderPasses that this pass depends on. For example, this pass might depend on the output from a 'Render Texture' pass, which gets used as input for this pass."]
         #[doc = ""]
         #[doc = "USD relationship `inputPasses` (`rel`)."]
+        #[doc = "C++ authoring: `UsdRenderPass::CreateInputPassesRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdRenderPass::CreateInputPassesRel")]
+        #[doc(alias = "CreateInputPassesRel")]
         set_input_passes, "inputPasses"
     }
     set_uniform_attribute! {
         #[doc = "Used to categorize different types of passes within a render pipeline."]
         #[doc = ""]
         #[doc = "USD attribute `passType` (`token`, uniform)."]
+        #[doc = "C++ authoring: `UsdRenderPass::CreatePassTypeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdRenderPass::CreatePassTypeAttr")]
+        #[doc(alias = "CreatePassTypeAttr")]
         set_pass_type, "passType", &str, crate::value::write_token
     }
     set_relationship! {
         #[doc = "Points to render configuration for this pass. Targets a relationship to a RenderSettings, or if fileName is set, points to configuration within that file."]
         #[doc = ""]
         #[doc = "USD relationship `renderSource` (`rel`)."]
+        #[doc = "C++ authoring: `UsdRenderPass::CreateRenderSourceRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdRenderPass::CreateRenderSourceRel")]
+        #[doc(alias = "CreateRenderSourceRel")]
         set_render_source, "renderSource"
     }
 }
@@ -204,6 +240,8 @@ token_enum! {
 #[doc = "A single render output artifact, such as a rendered image or other file-like artifact. Specifies one or more RenderVars combined into the output artifact."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `RenderProduct`, inheriting [`RenderSettingsBase`]. Construct it with [`RenderProduct::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdRenderProduct`."]
+#[doc(alias = "UsdRenderProduct")]
 #[derive(Clone, Copy, Debug)]
 pub struct RenderProduct<'a> {
     base: RenderSettingsBase<'a>,
@@ -222,6 +260,8 @@ impl<'a> RenderProduct<'a> {
     pub const SCHEMA: &'static str = "RenderProduct";
 
     #[doc = "A view of the prim at `path`, if it is a `RenderProduct` or of a schema derived from it."]
+    #[doc(alias = "UsdRenderProduct::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -246,6 +286,8 @@ impl<'a> RenderProduct<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdRenderProduct::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> RenderProductEdit {
         edit.define(path, Self::SCHEMA);
         RenderProductEdit::from_path(path)
@@ -258,6 +300,9 @@ impl<'a> RenderProduct<'a> {
         #[doc = "Specifies the RenderVars that should be used and combined into the final output product. The order is provided to the render executable and pipeline tools."]
         #[doc = ""]
         #[doc = "USD relationship `orderedVars` (`rel`)."]
+        #[doc = "C++ read: `UsdRenderProduct::GetOrderedVarsRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdRenderProduct::GetOrderedVarsRel")]
+        #[doc(alias = "GetOrderedVarsRel")]
         ordered_vars, "orderedVars"
     }
     /// The USD name of [`Self::product_name`].
@@ -267,6 +312,9 @@ impl<'a> RenderProduct<'a> {
         #[doc = "Specifies the name for the output product. Used by render executables and pipeline tools to name the product, for example, using the productName as the filename (and path) for an output image artifact."]
         #[doc = ""]
         #[doc = "USD attribute `productName` (`token`; fallback `\"\"`)."]
+        #[doc = "C++ read: `UsdRenderProduct::GetProductNameAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdRenderProduct::GetProductNameAttr")]
+        #[doc(alias = "GetProductNameAttr")]
         product_name, product_name_at, "productName", &'a str, crate::value::read_token
     }
     /// The USD name of [`Self::product_type`].
@@ -276,6 +324,9 @@ impl<'a> RenderProduct<'a> {
         #[doc = "Specifies the type of output to produce. Values are output types most renderers should be able to support, such as 'raster' or 'deepRaster'."]
         #[doc = ""]
         #[doc = "USD attribute `productType` (`token`, uniform; fallback `\"raster\"`)."]
+        #[doc = "C++ read: `UsdRenderProduct::GetProductTypeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdRenderProduct::GetProductTypeAttr")]
+        #[doc(alias = "GetProductTypeAttr")]
         product_type, "productType", RenderProductProductType, RenderProductProductType::read
     }
 }
@@ -313,18 +364,27 @@ impl RenderProductEdit {
         #[doc = "Specifies the RenderVars that should be used and combined into the final output product. The order is provided to the render executable and pipeline tools."]
         #[doc = ""]
         #[doc = "USD relationship `orderedVars` (`rel`)."]
+        #[doc = "C++ authoring: `UsdRenderProduct::CreateOrderedVarsRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdRenderProduct::CreateOrderedVarsRel")]
+        #[doc(alias = "CreateOrderedVarsRel")]
         set_ordered_vars, "orderedVars"
     }
     set_attribute! {
         #[doc = "Specifies the name for the output product. Used by render executables and pipeline tools to name the product, for example, using the productName as the filename (and path) for an output image artifact."]
         #[doc = ""]
         #[doc = "USD attribute `productName` (`token`; fallback `\"\"`)."]
+        #[doc = "C++ authoring: `UsdRenderProduct::CreateProductNameAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdRenderProduct::CreateProductNameAttr")]
+        #[doc(alias = "CreateProductNameAttr")]
         set_product_name, set_product_name_at, "productName", &str, crate::value::write_token
     }
     set_uniform_attribute! {
         #[doc = "Specifies the type of output to produce. Values are output types most renderers should be able to support, such as 'raster' or 'deepRaster'."]
         #[doc = ""]
         #[doc = "USD attribute `productType` (`token`, uniform; fallback `\"raster\"`)."]
+        #[doc = "C++ authoring: `UsdRenderProduct::CreateProductTypeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdRenderProduct::CreateProductTypeAttr")]
+        #[doc(alias = "CreateProductTypeAttr")]
         set_product_type, "productType", RenderProductProductType, RenderProductProductType::write
     }
 }
@@ -332,6 +392,8 @@ impl RenderProductEdit {
 #[doc = "All the global settings for a single invocation of a rendering of a scene. Includes configuration of what render products should be produced, and what imageable purposes should be rendered."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `RenderSettings`, inheriting [`RenderSettingsBase`]. Construct it with [`RenderSettings::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdRenderSettings`."]
+#[doc(alias = "UsdRenderSettings")]
 #[derive(Clone, Copy, Debug)]
 pub struct RenderSettings<'a> {
     base: RenderSettingsBase<'a>,
@@ -350,6 +412,8 @@ impl<'a> RenderSettings<'a> {
     pub const SCHEMA: &'static str = "RenderSettings";
 
     #[doc = "A view of the prim at `path`, if it is a `RenderSettings` or of a schema derived from it."]
+    #[doc(alias = "UsdRenderSettings::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -374,6 +438,8 @@ impl<'a> RenderSettings<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdRenderSettings::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> RenderSettingsEdit {
         edit.define(path, Self::SCHEMA);
         RenderSettingsEdit::from_path(path)
@@ -386,6 +452,9 @@ impl<'a> RenderSettings<'a> {
         #[doc = "Imageable purpose values (e.g. default, render, proxy, guide) that should be included in the render. Only imageable prims with purpose set to one of the includedPurposes values will be rendered."]
         #[doc = ""]
         #[doc = "USD attribute `includedPurposes` (`token\\[\\]`, uniform; fallback `\\[\"default\", \"render\"\\]`)."]
+        #[doc = "C++ read: `UsdRenderSettings::GetIncludedPurposesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdRenderSettings::GetIncludedPurposesAttr")]
+        #[doc(alias = "GetIncludedPurposesAttr")]
         included_purposes, "includedPurposes", ::alloc::vec::Vec<&'a str>, |v, t| crate::value::read_array(v, t, crate::value::read_token)
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -404,6 +473,9 @@ impl<'a> RenderSettings<'a> {
         #[doc = "Ordered list of material binding purposes that will be used in the render."]
         #[doc = ""]
         #[doc = "USD attribute `materialBindingPurposes` (`token\\[\\]`, uniform; fallback `\\[\"full\", \"\"\\]`)."]
+        #[doc = "C++ read: `UsdRenderSettings::GetMaterialBindingPurposesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdRenderSettings::GetMaterialBindingPurposesAttr")]
+        #[doc(alias = "GetMaterialBindingPurposesAttr")]
         material_binding_purposes, "materialBindingPurposes", ::alloc::vec::Vec<&'a str>, |v, t| crate::value::read_array(v, t, crate::value::read_token)
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -422,6 +494,9 @@ impl<'a> RenderSettings<'a> {
         #[doc = "Specifies the RenderProducts that a render of this scene should produce. If no products are specified, renderers are expected to produce a default RGB image."]
         #[doc = ""]
         #[doc = "USD relationship `products` (`rel`)."]
+        #[doc = "C++ read: `UsdRenderSettings::GetProductsRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdRenderSettings::GetProductsRel")]
+        #[doc(alias = "GetProductsRel")]
         products, "products"
     }
     /// The USD name of [`Self::rendering_color_space`].
@@ -431,6 +506,9 @@ impl<'a> RenderSettings<'a> {
         #[doc = "The 'rendering color space' the renderer should use for internal color calculations. If this is not set, a renderer is expected to use its own default color space. Not to be confused with setting specific 'source' color spaces for scene assets."]
         #[doc = ""]
         #[doc = "USD attribute `renderingColorSpace` (`token`, uniform)."]
+        #[doc = "C++ read: `UsdRenderSettings::GetRenderingColorSpaceAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdRenderSettings::GetRenderingColorSpaceAttr")]
+        #[doc(alias = "GetRenderingColorSpaceAttr")]
         rendering_color_space, "renderingColorSpace", &'a str, crate::value::read_token
     }
 }
@@ -468,24 +546,36 @@ impl RenderSettingsEdit {
         #[doc = "Imageable purpose values (e.g. default, render, proxy, guide) that should be included in the render. Only imageable prims with purpose set to one of the includedPurposes values will be rendered."]
         #[doc = ""]
         #[doc = "USD attribute `includedPurposes` (`token\\[\\]`, uniform; fallback `\\[\"default\", \"render\"\\]`)."]
+        #[doc = "C++ authoring: `UsdRenderSettings::CreateIncludedPurposesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdRenderSettings::CreateIncludedPurposesAttr")]
+        #[doc(alias = "CreateIncludedPurposesAttr")]
         set_included_purposes, "includedPurposes", &[&str], |v, t| crate::value::write_array(v, t, crate::value::write_token)
     }
     set_uniform_attribute! {
         #[doc = "Ordered list of material binding purposes that will be used in the render."]
         #[doc = ""]
         #[doc = "USD attribute `materialBindingPurposes` (`token\\[\\]`, uniform; fallback `\\[\"full\", \"\"\\]`)."]
+        #[doc = "C++ authoring: `UsdRenderSettings::CreateMaterialBindingPurposesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdRenderSettings::CreateMaterialBindingPurposesAttr")]
+        #[doc(alias = "CreateMaterialBindingPurposesAttr")]
         set_material_binding_purposes, "materialBindingPurposes", &[&str], |v, t| crate::value::write_array(v, t, crate::value::write_token)
     }
     set_relationship! {
         #[doc = "Specifies the RenderProducts that a render of this scene should produce. If no products are specified, renderers are expected to produce a default RGB image."]
         #[doc = ""]
         #[doc = "USD relationship `products` (`rel`)."]
+        #[doc = "C++ authoring: `UsdRenderSettings::CreateProductsRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdRenderSettings::CreateProductsRel")]
+        #[doc(alias = "CreateProductsRel")]
         set_products, "products"
     }
     set_uniform_attribute! {
         #[doc = "The 'rendering color space' the renderer should use for internal color calculations. If this is not set, a renderer is expected to use its own default color space. Not to be confused with setting specific 'source' color spaces for scene assets."]
         #[doc = ""]
         #[doc = "USD attribute `renderingColorSpace` (`token`, uniform)."]
+        #[doc = "C++ authoring: `UsdRenderSettings::CreateRenderingColorSpaceAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdRenderSettings::CreateRenderingColorSpaceAttr")]
+        #[doc(alias = "CreateRenderingColorSpaceAttr")]
         set_rendering_color_space, "renderingColorSpace", &str, crate::value::write_token
     }
 }
@@ -509,6 +599,8 @@ token_enum! {
 #[doc = "An abstract base class schema that defines settings common to both RenderSettings and RenderProduct."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's abstract typed schema `RenderSettingsBase`, inheriting [`crate::usd::Typed`]. Construct it with [`RenderSettingsBase::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdRenderSettingsBase`."]
+#[doc(alias = "UsdRenderSettingsBase")]
 #[derive(Clone, Copy, Debug)]
 pub struct RenderSettingsBase<'a> {
     base: crate::usd::Typed<'a>,
@@ -527,6 +619,8 @@ impl<'a> RenderSettingsBase<'a> {
     pub const SCHEMA: &'static str = "RenderSettingsBase";
 
     #[doc = "A view of the prim at `path`, if it is a `RenderSettingsBase` or of a schema derived from it."]
+    #[doc(alias = "UsdRenderSettingsBase::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -553,6 +647,9 @@ impl<'a> RenderSettingsBase<'a> {
         #[doc = "Indicates the policy to use to resolve an aspect ratio mismatch between the camera aperture and image aspect ratio (derived from the resolution and pixelAspectRatio)."]
         #[doc = ""]
         #[doc = "USD attribute `aspectRatioConformPolicy` (`token`, uniform; fallback `\"expandAperture\"`)."]
+        #[doc = "C++ read: `UsdRenderSettingsBase::GetAspectRatioConformPolicyAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdRenderSettingsBase::GetAspectRatioConformPolicyAttr")]
+        #[doc(alias = "GetAspectRatioConformPolicyAttr")]
         aspect_ratio_conform_policy, "aspectRatioConformPolicy", RenderSettingsBaseAspectRatioConformPolicy, RenderSettingsBaseAspectRatioConformPolicy::read
     }
     /// The USD name of [`Self::camera`].
@@ -562,6 +659,9 @@ impl<'a> RenderSettingsBase<'a> {
         #[doc = "A relationship that specifies the primary camera to use for a render. Must target a Camera prim."]
         #[doc = ""]
         #[doc = "USD relationship `camera` (`rel`)."]
+        #[doc = "C++ read: `UsdRenderSettingsBase::GetCameraRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdRenderSettingsBase::GetCameraRel")]
+        #[doc(alias = "GetCameraRel")]
         camera, "camera"
     }
     /// The USD name of [`Self::data_window_ndc`].
@@ -580,6 +680,9 @@ impl<'a> RenderSettingsBase<'a> {
         #[doc = "Disable all depth of field by setting F-stop of the targeted camera to infinity."]
         #[doc = ""]
         #[doc = "USD attribute `disableDepthOfField` (`bool`, uniform; fallback `false`)."]
+        #[doc = "C++ read: `UsdRenderSettingsBase::GetDisableDepthOfFieldAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdRenderSettingsBase::GetDisableDepthOfFieldAttr")]
+        #[doc(alias = "GetDisableDepthOfFieldAttr")]
         disable_depth_of_field, "disableDepthOfField", bool, crate::value::read_bool
     }
     /// The USD name of [`Self::disable_motion_blur`].
@@ -589,6 +692,9 @@ impl<'a> RenderSettingsBase<'a> {
         #[doc = "Disable all motion blur by setting the shutter interval of the render camera to \\[0,0\\] (take only one sample at the current time code)."]
         #[doc = ""]
         #[doc = "USD attribute `disableMotionBlur` (`bool`, uniform; fallback `false`)."]
+        #[doc = "C++ read: `UsdRenderSettingsBase::GetDisableMotionBlurAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdRenderSettingsBase::GetDisableMotionBlurAttr")]
+        #[doc(alias = "GetDisableMotionBlurAttr")]
         disable_motion_blur, "disableMotionBlur", bool, crate::value::read_bool
     }
     /// The USD name of [`Self::instantaneous_shutter`].
@@ -598,6 +704,9 @@ impl<'a> RenderSettingsBase<'a> {
         #[doc = "Deprecated, use disableMotionBlur instead."]
         #[doc = ""]
         #[doc = "USD attribute `instantaneousShutter` (`bool`, uniform; fallback `false`)."]
+        #[doc = "C++ read: `UsdRenderSettingsBase::GetInstantaneousShutterAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdRenderSettingsBase::GetInstantaneousShutterAttr")]
+        #[doc(alias = "GetInstantaneousShutterAttr")]
         instantaneous_shutter, "instantaneousShutter", bool, crate::value::read_bool
     }
     /// The USD name of [`Self::pixel_aspect_ratio`].
@@ -607,6 +716,9 @@ impl<'a> RenderSettingsBase<'a> {
         #[doc = "The aspect ratio (width/height) of the image pixels."]
         #[doc = ""]
         #[doc = "USD attribute `pixelAspectRatio` (`float`, uniform; fallback `1.0`)."]
+        #[doc = "C++ read: `UsdRenderSettingsBase::GetPixelAspectRatioAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdRenderSettingsBase::GetPixelAspectRatioAttr")]
+        #[doc(alias = "GetPixelAspectRatioAttr")]
         pixel_aspect_ratio, "pixelAspectRatio", f32, crate::value::read_float
     }
     /// The USD name of [`Self::resolution`].
@@ -616,6 +728,9 @@ impl<'a> RenderSettingsBase<'a> {
         #[doc = "The image pixel resolution, corresponding to the camera's screen window."]
         #[doc = ""]
         #[doc = "USD attribute `resolution` (`int2`, uniform; fallback `(2048, 1080)`)."]
+        #[doc = "C++ read: `UsdRenderSettingsBase::GetResolutionAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdRenderSettingsBase::GetResolutionAttr")]
+        #[doc(alias = "GetResolutionAttr")]
         resolution, "resolution", [i32; 2], crate::value::read_int2
     }
 }
@@ -653,12 +768,18 @@ impl RenderSettingsBaseEdit {
         #[doc = "Indicates the policy to use to resolve an aspect ratio mismatch between the camera aperture and image aspect ratio (derived from the resolution and pixelAspectRatio)."]
         #[doc = ""]
         #[doc = "USD attribute `aspectRatioConformPolicy` (`token`, uniform; fallback `\"expandAperture\"`)."]
+        #[doc = "C++ authoring: `UsdRenderSettingsBase::CreateAspectRatioConformPolicyAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdRenderSettingsBase::CreateAspectRatioConformPolicyAttr")]
+        #[doc(alias = "CreateAspectRatioConformPolicyAttr")]
         set_aspect_ratio_conform_policy, "aspectRatioConformPolicy", RenderSettingsBaseAspectRatioConformPolicy, RenderSettingsBaseAspectRatioConformPolicy::write
     }
     set_relationship! {
         #[doc = "A relationship that specifies the primary camera to use for a render. Must target a Camera prim."]
         #[doc = ""]
         #[doc = "USD relationship `camera` (`rel`)."]
+        #[doc = "C++ authoring: `UsdRenderSettingsBase::CreateCameraRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdRenderSettingsBase::CreateCameraRel")]
+        #[doc(alias = "CreateCameraRel")]
         set_camera, "camera"
     }
     set_uniform_attribute! {
@@ -671,30 +792,45 @@ impl RenderSettingsBaseEdit {
         #[doc = "Disable all depth of field by setting F-stop of the targeted camera to infinity."]
         #[doc = ""]
         #[doc = "USD attribute `disableDepthOfField` (`bool`, uniform; fallback `false`)."]
+        #[doc = "C++ authoring: `UsdRenderSettingsBase::CreateDisableDepthOfFieldAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdRenderSettingsBase::CreateDisableDepthOfFieldAttr")]
+        #[doc(alias = "CreateDisableDepthOfFieldAttr")]
         set_disable_depth_of_field, "disableDepthOfField", bool, crate::value::write_bool
     }
     set_uniform_attribute! {
         #[doc = "Disable all motion blur by setting the shutter interval of the render camera to \\[0,0\\] (take only one sample at the current time code)."]
         #[doc = ""]
         #[doc = "USD attribute `disableMotionBlur` (`bool`, uniform; fallback `false`)."]
+        #[doc = "C++ authoring: `UsdRenderSettingsBase::CreateDisableMotionBlurAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdRenderSettingsBase::CreateDisableMotionBlurAttr")]
+        #[doc(alias = "CreateDisableMotionBlurAttr")]
         set_disable_motion_blur, "disableMotionBlur", bool, crate::value::write_bool
     }
     set_uniform_attribute! {
         #[doc = "Deprecated, use disableMotionBlur instead."]
         #[doc = ""]
         #[doc = "USD attribute `instantaneousShutter` (`bool`, uniform; fallback `false`)."]
+        #[doc = "C++ authoring: `UsdRenderSettingsBase::CreateInstantaneousShutterAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdRenderSettingsBase::CreateInstantaneousShutterAttr")]
+        #[doc(alias = "CreateInstantaneousShutterAttr")]
         set_instantaneous_shutter, "instantaneousShutter", bool, crate::value::write_bool
     }
     set_uniform_attribute! {
         #[doc = "The aspect ratio (width/height) of the image pixels."]
         #[doc = ""]
         #[doc = "USD attribute `pixelAspectRatio` (`float`, uniform; fallback `1.0`)."]
+        #[doc = "C++ authoring: `UsdRenderSettingsBase::CreatePixelAspectRatioAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdRenderSettingsBase::CreatePixelAspectRatioAttr")]
+        #[doc(alias = "CreatePixelAspectRatioAttr")]
         set_pixel_aspect_ratio, "pixelAspectRatio", f32, crate::value::write_float
     }
     set_uniform_attribute! {
         #[doc = "The image pixel resolution, corresponding to the camera's screen window."]
         #[doc = ""]
         #[doc = "USD attribute `resolution` (`int2`, uniform; fallback `(2048, 1080)`)."]
+        #[doc = "C++ authoring: `UsdRenderSettingsBase::CreateResolutionAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdRenderSettingsBase::CreateResolutionAttr")]
+        #[doc(alias = "CreateResolutionAttr")]
         set_resolution, "resolution", [i32; 2], crate::value::write_int2
     }
 }
@@ -716,6 +852,8 @@ token_enum! {
 #[doc = "Describes a quantity or 'channel' of computed data, produced by a renderer. Examples include camera-space depth channels, material shader quantities such as color or alpha channels, light path expressions (LPEs), and renderer intrinsic quantities such as computation time per pixel."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `RenderVar`, inheriting [`crate::usd::Typed`]. Construct it with [`RenderVar::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdRenderVar`."]
+#[doc(alias = "UsdRenderVar")]
 #[derive(Clone, Copy, Debug)]
 pub struct RenderVar<'a> {
     base: crate::usd::Typed<'a>,
@@ -734,6 +872,8 @@ impl<'a> RenderVar<'a> {
     pub const SCHEMA: &'static str = "RenderVar";
 
     #[doc = "A view of the prim at `path`, if it is a `RenderVar` or of a schema derived from it."]
+    #[doc(alias = "UsdRenderVar::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -758,6 +898,8 @@ impl<'a> RenderVar<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdRenderVar::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> RenderVarEdit {
         edit.define(path, Self::SCHEMA);
         RenderVarEdit::from_path(path)
@@ -770,6 +912,9 @@ impl<'a> RenderVar<'a> {
         #[doc = "The type of this quantity, as a USD attribute type (color3f, float, etc.)."]
         #[doc = ""]
         #[doc = "USD attribute `dataType` (`token`, uniform; fallback `\"color3f\"`)."]
+        #[doc = "C++ read: `UsdRenderVar::GetDataTypeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdRenderVar::GetDataTypeAttr")]
+        #[doc(alias = "GetDataTypeAttr")]
         data_type, "dataType", &'a str, crate::value::read_token
     }
     /// The USD name of [`Self::source_name`].
@@ -779,6 +924,9 @@ impl<'a> RenderVar<'a> {
         #[doc = "The name of the data source that contains the computed value(s) for the RenderVar."]
         #[doc = ""]
         #[doc = "USD attribute `sourceName` (`string`, uniform; fallback `\"\"`)."]
+        #[doc = "C++ read: `UsdRenderVar::GetSourceNameAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdRenderVar::GetSourceNameAttr")]
+        #[doc(alias = "GetSourceNameAttr")]
         source_name, "sourceName", ::alloc::sync::Arc<str>, crate::value::read_string
     }
     /// The USD name of [`Self::source_type`].
@@ -788,6 +936,9 @@ impl<'a> RenderVar<'a> {
         #[doc = "Describes the type of the quantity data source."]
         #[doc = ""]
         #[doc = "USD attribute `sourceType` (`token`, uniform; fallback `\"raw\"`)."]
+        #[doc = "C++ read: `UsdRenderVar::GetSourceTypeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdRenderVar::GetSourceTypeAttr")]
+        #[doc(alias = "GetSourceTypeAttr")]
         source_type, "sourceType", RenderVarSourceType, RenderVarSourceType::read
     }
 }
@@ -825,18 +976,27 @@ impl RenderVarEdit {
         #[doc = "The type of this quantity, as a USD attribute type (color3f, float, etc.)."]
         #[doc = ""]
         #[doc = "USD attribute `dataType` (`token`, uniform; fallback `\"color3f\"`)."]
+        #[doc = "C++ authoring: `UsdRenderVar::CreateDataTypeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdRenderVar::CreateDataTypeAttr")]
+        #[doc(alias = "CreateDataTypeAttr")]
         set_data_type, "dataType", &str, crate::value::write_token
     }
     set_uniform_attribute! {
         #[doc = "The name of the data source that contains the computed value(s) for the RenderVar."]
         #[doc = ""]
         #[doc = "USD attribute `sourceName` (`string`, uniform; fallback `\"\"`)."]
+        #[doc = "C++ authoring: `UsdRenderVar::CreateSourceNameAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdRenderVar::CreateSourceNameAttr")]
+        #[doc(alias = "CreateSourceNameAttr")]
         set_source_name, "sourceName", &str, crate::value::write_string
     }
     set_uniform_attribute! {
         #[doc = "Describes the type of the quantity data source."]
         #[doc = ""]
         #[doc = "USD attribute `sourceType` (`token`, uniform; fallback `\"raw\"`)."]
+        #[doc = "C++ authoring: `UsdRenderVar::CreateSourceTypeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdRenderVar::CreateSourceTypeAttr")]
+        #[doc(alias = "CreateSourceTypeAttr")]
         set_source_type, "sourceType", RenderVarSourceType, RenderVarSourceType::write
     }
 }

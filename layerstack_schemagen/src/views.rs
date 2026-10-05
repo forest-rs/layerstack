@@ -315,6 +315,36 @@ fn doc_attrs(indent: &str, paragraphs: &[String]) -> String {
     out
 }
 
+/// Search aliases only for native classes and declarations found in their headers.
+fn cpp_method_alias(schema: &Schema, method: &str, indent: &str) -> String {
+    schema
+        .cpp
+        .as_ref()
+        .filter(|(_, header)| header.contains(&format!("{method}(")))
+        .map_or_else(String::new, |(class, _)| {
+            format!(
+                "{indent}#[doc(alias = {:?})]\n{indent}#[doc(alias = {method:?})]\n",
+                format!("{class}::{method}")
+            )
+        })
+}
+
+/// Native schema type names are independent of Rust's API/underscore spelling.
+fn schema_aliases(schema: &Schema, view: &str) -> String {
+    let mut docs = String::new();
+    if let Some((class, _)) = &schema.cpp {
+        let _ = writeln!(
+            docs,
+            "#[doc = {:?}]\n#[doc(alias = {class:?})]",
+            format!("C++ schema class: `{class}`.")
+        );
+    }
+    if schema.name != view {
+        let _ = writeln!(docs, "#[doc(alias = {:?})]", schema.name);
+    }
+    docs
+}
+
 /// A fallback value as USD text.
 fn usd_text(value: &Value, tokens: &TokenInterner) -> String {
     if let Some(array) = value.array_ref() {
@@ -667,7 +697,34 @@ fn accessors(
     {
         brief.push("Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage.".into());
     }
-    let docs = doc_attrs("        ", &brief);
+    let stem = property.api_name.as_deref().unwrap_or(&property.name);
+    let stem = stem
+        .split_once(&format!(
+            "{}:",
+            layerstack::schema::INSTANCE_NAME_PLACEHOLDER
+        ))
+        .map_or(stem, |(_, tail)| tail);
+    let suffix = if property.kind == PropertyKind::Relationship {
+        "Rel"
+    } else {
+        "Attr"
+    };
+    let get = format!("Get{}{suffix}", pascal(&snake(stem)));
+    let create = format!("Create{}{suffix}", pascal(&snake(stem)));
+    let mut docs = doc_attrs("        ", &brief);
+    let mut setter_docs = docs.clone();
+    let alias = cpp_method_alias(schema, &get, "        ");
+    if !alias.is_empty() {
+        let class = &schema.cpp.as_ref().expect("verified native method").0;
+        docs.push_str(&doc_attrs("        ", &[format!("C++ read: `{class}::{get}().{}`; this getter returns the resolved value rather than an attribute/relationship handle.", if property.kind == PropertyKind::Relationship { "GetTargets()" } else { "Get()" })]));
+        docs.push_str(&alias);
+    }
+    let alias = cpp_method_alias(schema, &create, "        ");
+    if !alias.is_empty() {
+        let class = &schema.cpp.as_ref().expect("verified native method").0;
+        setter_docs.push_str(&doc_attrs("        ", &[format!("C++ authoring: `{class}::{create}().{}`; changes are queued in `SchemaEdit` until its transaction is applied.", if property.kind == PropertyKind::Relationship { "SetTargets()" } else { "Set()" })]));
+        setter_docs.push_str(&alias);
+    }
     // The USD name, for authoring and reading by name (OpenUSD's schema
     // tokens); a multiple-apply schema's names depend on the instance.
     let constant = if property
@@ -691,7 +748,7 @@ fn accessors(
                 property.name
             ),
             setters: format!(
-                "    set_relationship! {{\n{docs}        set_{name}, {:?}\n    }}\n",
+                "    set_relationship! {{\n{setter_docs}        set_{name}, {:?}\n    }}\n",
                 property.name
             ),
             enums,
@@ -758,12 +815,12 @@ fn accessors(
     }
     let mut setters = if varying {
         format!(
-            "    set_attribute! {{\n{docs}        set_{name}, set_{name}_at, {:?}, {}, {}\n    }}\n",
+            "    set_attribute! {{\n{setter_docs}        set_{name}, set_{name}_at, {:?}, {}, {}\n    }}\n",
             property.name, ty.write, ty.write_fn
         )
     } else {
         format!(
-            "    set_uniform_attribute! {{\n{docs}        set_{name}, {:?}, {}, {}\n    }}\n",
+            "    set_uniform_attribute! {{\n{setter_docs}        set_{name}, {:?}, {}, {}\n    }}\n",
             property.name, ty.write, ty.write_fn
         )
     };
@@ -930,7 +987,7 @@ fn typed_view(
             ),
         ],
     );
-    let define = if concrete {
+    let mut define = if concrete {
         format!(
             "    /// Defines `path` as a new `def {name}` prim spec in the edit's target.\n    \
              ///\n    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not\n    \
@@ -943,12 +1000,19 @@ fn typed_view(
     } else {
         String::new()
     };
+    define = define.replace(
+        "    pub fn define(",
+        &format!(
+            "{}    pub fn define(",
+            cpp_method_alias(schema, "Define", "    ")
+        ),
+    );
     Ok(format!(
-        "{enums}{docs}#[derive(Clone, Copy, Debug)]\npub struct {view}<'a> {{\n    base: {base},\n}}\n\n\
+        "{enums}{docs}{aliases}#[derive(Clone, Copy, Debug)]\npub struct {view}<'a> {{\n    base: {base},\n}}\n\n\
          impl<'a> Deref for {view}<'a> {{\n    type Target = {base};\n\n    \
          fn deref(&self) -> &Self::Target {{\n        &self.base\n    }}\n}}\n\n\
          impl<'a> {view}<'a> {{\n    /// The schema's name.\n    pub const SCHEMA: &'static str = {name:?};\n\n    \
-         #[doc = {new_doc:?}]\n    #[must_use]\n    \
+         #[doc = {new_doc:?}]\n{get_alias}    #[must_use]\n    \
          pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {{\n        \
          scene\n            .is_a(path, Self::SCHEMA)\n            .then(|| Self::from_view(PrimView::new(*scene, path)))\n    }}\n\n    \
          pub(crate) fn from_view(prim: PrimView<'a>) -> Self {{\n        Self {{\n            base: {wrap_base},\n        }}\n    }}\n\n    \
@@ -963,6 +1027,8 @@ fn typed_view(
          edit.exists(path).then(|| Self::from_path(path))\n    }}\n\n    \
          pub(crate) fn from_path(path: PathId) -> Self {{\n        Self {{\n            base: {new_base},\n        }}\n    }}\n\n\
          {setters}}}\n\n",
+        aliases = schema_aliases(schema, &view),
+        get_alias = cpp_method_alias(schema, "Get", "    "),
         name = schema.name,
         new_doc = format!(
             "A view of the prim at `path`, if it is a `{}` or of a schema derived from it.",
@@ -1020,7 +1086,7 @@ fn applied_view(
             ),
         ],
     );
-    let constructors = if multiple {
+    let mut constructors = if multiple {
         format!(
             "    /// A view of the instance `instance` of the schema on the prim at `path`,\n    \
              /// if the prim has it applied.\n    #[must_use]\n    \
@@ -1061,6 +1127,15 @@ fn applied_view(
              edit.apply(path, Self::SCHEMA, None)?;\n        Ok({edit}::from_path(path))\n    }}\n\n"
         )
     };
+    for (rust, native) in [("get", "Get"), ("instances", "GetAll"), ("apply", "Apply")] {
+        constructors = constructors.replace(
+            &format!("    pub fn {rust}("),
+            &format!(
+                "{}    pub fn {rust}(",
+                cpp_method_alias(schema, native, "    ")
+            ),
+        );
+    }
     let new_edit = if multiple {
         "    /// A handle authoring the instance `instance` on the prim at `path`\n    \
          /// through `edit`, if the prim exists: on the edit's stage, or defined\n    \
@@ -1084,7 +1159,7 @@ fn applied_view(
         "#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]"
     };
     Ok(format!(
-        "{enums}{docs}#[derive(Clone, Copy, Debug)]\npub struct {view}<'a> {{\n    base: {base},\n}}\n\n\
+        "{enums}{docs}{aliases}#[derive(Clone, Copy, Debug)]\npub struct {view}<'a> {{\n    base: {base},\n}}\n\n\
          impl<'a> Deref for {view}<'a> {{\n    type Target = {base};\n\n    \
          fn deref(&self) -> &Self::Target {{\n        &self.base\n    }}\n}}\n\n\
          impl<'a> {view}<'a> {{\n    /// The schema's name.\n    pub const SCHEMA: &'static str = {name:?};\n\n\
@@ -1093,6 +1168,7 @@ fn applied_view(
          impl Deref for {edit} {{\n    type Target = {base_edit};\n\n    \
          fn deref(&self) -> &Self::Target {{\n        &self.base\n    }}\n}}\n\n\
          impl {edit} {{\n{new_edit}{setters}}}\n\n",
+        aliases = schema_aliases(schema, &view),
         name = schema.name,
         edit_doc = format!(
             "Authors the properties of OpenUSD's `{}` through a [`SchemaEdit`].",

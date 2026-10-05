@@ -27,6 +27,9 @@ use crate::{PrimView, Scene, SchemaEdit};
 #[doc = "Application of labels for a prim for a taxonomy specified by the schema's instance name."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's multiple-apply API schema `SemanticsLabelsAPI`. Get it with [`SemanticsLabelsApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdSemanticsLabelsAPI`."]
+#[doc(alias = "UsdSemanticsLabelsAPI")]
+#[doc(alias = "SemanticsLabelsAPI")]
 #[derive(Clone, Copy, Debug)]
 pub struct SemanticsLabelsApi<'a> {
     base: InstanceView<'a>,
@@ -47,6 +50,8 @@ impl<'a> SemanticsLabelsApi<'a> {
     /// A view of the instance `instance` of the schema on the prim at `path`,
     /// if the prim has it applied.
     #[must_use]
+    #[doc(alias = "UsdSemanticsLabelsAPI::Get")]
+    #[doc(alias = "Get")]
     pub fn get(scene: &Scene<'a>, path: PathId, instance: &str) -> Option<Self> {
         if !scene.has_api(path, Self::SCHEMA, Some(instance)) {
             return None;
@@ -58,6 +63,8 @@ impl<'a> SemanticsLabelsApi<'a> {
     /// Every instance of the schema the prim at `path` has applied, in the
     /// order its definition applies them.
     #[must_use]
+    #[doc(alias = "UsdSemanticsLabelsAPI::GetAll")]
+    #[doc(alias = "GetAll")]
     pub fn instances(scene: &Scene<'a>, path: PathId) -> ::alloc::vec::Vec<Self> {
         scene
             .instances(path, Self::SCHEMA)
@@ -86,6 +93,8 @@ impl<'a> SemanticsLabelsApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there.
+    #[doc(alias = "UsdSemanticsLabelsAPI::Apply")]
+    #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
@@ -99,6 +108,9 @@ impl<'a> SemanticsLabelsApi<'a> {
         #[doc = "Array of labels specified directly at this prim."]
         #[doc = ""]
         #[doc = "USD attribute `semantics:labels:&lt;instance&gt;` (`token\\[\\]`; fallback `\\[\\]`)."]
+        #[doc = "C++ read: `UsdSemanticsLabelsAPI::GetLabelsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdSemanticsLabelsAPI::GetLabelsAttr")]
+        #[doc(alias = "GetLabelsAttr")]
         labels, labels_at, "semantics:labels:__INSTANCE_NAME__", ::alloc::vec::Vec<&'a str>, |v, t| crate::value::read_array(v, t, crate::value::read_token)
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -145,6 +157,9 @@ impl SemanticsLabelsApiEdit {
         #[doc = "Array of labels specified directly at this prim."]
         #[doc = ""]
         #[doc = "USD attribute `semantics:labels:&lt;instance&gt;` (`token\\[\\]`; fallback `\\[\\]`)."]
+        #[doc = "C++ authoring: `UsdSemanticsLabelsAPI::CreateLabelsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdSemanticsLabelsAPI::CreateLabelsAttr")]
+        #[doc(alias = "CreateLabelsAttr")]
         set_labels, set_labels_at, "semantics:labels:__INSTANCE_NAME__", &[&str], |v, t| crate::value::write_array(v, t, crate::value::write_token)
     }
 }

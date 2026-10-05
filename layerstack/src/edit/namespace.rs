@@ -47,6 +47,7 @@ use crate::{
 /// is the explicitly edited source. Asset-variable expressions require resolved
 /// dependency editing and are rejected.
 #[derive(Clone, Debug, PartialEq)]
+#[doc(alias = "UsdNamespaceEditor")]
 pub struct NamespaceEdit {
     transaction: Transaction,
     source: TargetPath,

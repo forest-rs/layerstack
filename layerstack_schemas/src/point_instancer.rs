@@ -115,12 +115,16 @@ impl PointInstancer<'_> {
     /// [`Self::try_compute_mask`] to distinguish corrupt storage. `inactiveIds` and time-varying `invisibleIds`
     /// match stable `ids`, falling back to array positions when IDs are absent.
     #[must_use]
+    #[doc(alias = "UsdGeomPointInstancer::ComputeMaskAtTime")]
+    #[doc(alias = "ComputeMaskAtTime")]
     pub fn compute_mask(&self, time: Time) -> Vec<bool> {
         self.try_compute_mask(time).unwrap_or_default()
     }
     /// Computes the visibility mask while preserving retained-array decode failures.
     /// Missing and incompatible optional arrays keep the ordinary USD fallback behavior.
     /// Prefer this checked form when consuming deferred numeric data.
+    #[doc(alias = "UsdGeomPointInstancer::ComputeMaskAtTime")]
+    #[doc(alias = "ComputeMaskAtTime")]
     pub fn try_compute_mask(&self, time: Time) -> Result<Vec<bool>, PointInstancerError> {
         let mut hidden = if let Some(value) = self.metadata_value("inactiveIds") {
             crate::value::try_read_array(
@@ -178,6 +182,8 @@ impl PointInstancer<'_> {
     /// returns an error without a partial batch. All times must have the same
     /// default/numeric kind as `base_time`; empty times return an empty batch.
     /// Matches `UsdGeomPointInstancer::ComputeInstanceTransformsAtTimes` ordering.
+    #[doc(alias = "UsdGeomPointInstancer::ComputeInstanceTransformsAtTimes")]
+    #[doc(alias = "ComputeInstanceTransformsAtTimes")]
     pub fn compute_instance_transforms_at_times(
         &self,
         times: &[Time],
@@ -196,6 +202,8 @@ impl PointInstancer<'_> {
     /// degrees per second. Misaligned motion arrays are ignored as in OpenUSD;
     /// malformed required arrays and prototype indices return explicit errors.
     /// Prototype transforms are local, even when their ancestors are transformed.
+    #[doc(alias = "UsdGeomPointInstancer::ComputeInstanceTransformsAtTime")]
+    #[doc(alias = "ComputeInstanceTransformsAtTime")]
     pub fn compute_instance_transforms(
         &self,
         time: Time,

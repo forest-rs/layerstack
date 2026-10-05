@@ -26,6 +26,8 @@ use crate::{PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "Describes a target blend shape, possibly containing inbetween shapes."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `BlendShape`, inheriting [`crate::usd::Typed`]. Construct it with [`BlendShape::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdSkelBlendShape`."]
+#[doc(alias = "UsdSkelBlendShape")]
 #[derive(Clone, Copy, Debug)]
 pub struct BlendShape<'a> {
     base: crate::usd::Typed<'a>,
@@ -44,6 +46,8 @@ impl<'a> BlendShape<'a> {
     pub const SCHEMA: &'static str = "BlendShape";
 
     #[doc = "A view of the prim at `path`, if it is a `BlendShape` or of a schema derived from it."]
+    #[doc(alias = "UsdSkelBlendShape::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -68,6 +72,8 @@ impl<'a> BlendShape<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdSkelBlendShape::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> BlendShapeEdit {
         edit.define(path, Self::SCHEMA);
         BlendShapeEdit::from_path(path)
@@ -82,6 +88,9 @@ impl<'a> BlendShape<'a> {
         #[doc = "USD attribute `normalOffsets` (`vector3f\\[\\]`, uniform)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdSkelBlendShape::GetNormalOffsetsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdSkelBlendShape::GetNormalOffsetsAttr")]
+        #[doc(alias = "GetNormalOffsetsAttr")]
         normal_offsets, "normalOffsets", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::read_float3_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -105,6 +114,9 @@ impl<'a> BlendShape<'a> {
         #[doc = "USD attribute `offsets` (`vector3f\\[\\]`, uniform)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdSkelBlendShape::GetOffsetsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdSkelBlendShape::GetOffsetsAttr")]
+        #[doc(alias = "GetOffsetsAttr")]
         offsets, "offsets", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::read_float3_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -124,6 +136,9 @@ impl<'a> BlendShape<'a> {
         #[doc = "USD attribute `pointIndices` (`int\\[\\]`, uniform)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdSkelBlendShape::GetPointIndicesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdSkelBlendShape::GetPointIndicesAttr")]
+        #[doc(alias = "GetPointIndicesAttr")]
         point_indices, "pointIndices", ::alloc::sync::Arc<::alloc::vec::Vec<i32>>, crate::value::read_int_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -171,6 +186,9 @@ impl BlendShapeEdit {
         #[doc = "USD attribute `normalOffsets` (`vector3f\\[\\]`, uniform)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdSkelBlendShape::CreateNormalOffsetsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdSkelBlendShape::CreateNormalOffsetsAttr")]
+        #[doc(alias = "CreateNormalOffsetsAttr")]
         set_normal_offsets, "normalOffsets", &[[f32; 3]], crate::value::write_float3_array
     }
     set_uniform_attribute! {
@@ -187,6 +205,9 @@ impl BlendShapeEdit {
         #[doc = "USD attribute `offsets` (`vector3f\\[\\]`, uniform)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdSkelBlendShape::CreateOffsetsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdSkelBlendShape::CreateOffsetsAttr")]
+        #[doc(alias = "CreateOffsetsAttr")]
         set_offsets, "offsets", &[[f32; 3]], crate::value::write_float3_array
     }
     set_uniform_attribute! {
@@ -203,6 +224,9 @@ impl BlendShapeEdit {
         #[doc = "USD attribute `pointIndices` (`int\\[\\]`, uniform)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdSkelBlendShape::CreatePointIndicesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdSkelBlendShape::CreatePointIndicesAttr")]
+        #[doc(alias = "CreatePointIndicesAttr")]
         set_point_indices, "pointIndices", &[i32], crate::value::write_int_array
     }
     set_uniform_attribute! {
@@ -218,6 +242,8 @@ impl BlendShapeEdit {
 #[doc = "Describes a skel animation, where joint animation is stored in a vectorized form."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `SkelAnimation`, inheriting [`crate::usd::Typed`]. Construct it with [`SkelAnimation::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdSkelAnimation`."]
+#[doc(alias = "UsdSkelAnimation")]
 #[derive(Clone, Copy, Debug)]
 pub struct SkelAnimation<'a> {
     base: crate::usd::Typed<'a>,
@@ -236,6 +262,8 @@ impl<'a> SkelAnimation<'a> {
     pub const SCHEMA: &'static str = "SkelAnimation";
 
     #[doc = "A view of the prim at `path`, if it is a `SkelAnimation` or of a schema derived from it."]
+    #[doc(alias = "UsdSkelAnimation::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -260,6 +288,8 @@ impl<'a> SkelAnimation<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdSkelAnimation::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> SkelAnimationEdit {
         edit.define(path, Self::SCHEMA);
         SkelAnimationEdit::from_path(path)
@@ -272,6 +302,9 @@ impl<'a> SkelAnimation<'a> {
         #[doc = "Array of tokens identifying which blend shapes this animation's data applies to."]
         #[doc = ""]
         #[doc = "USD attribute `blendShapes` (`token\\[\\]`, uniform)."]
+        #[doc = "C++ read: `UsdSkelAnimation::GetBlendShapesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdSkelAnimation::GetBlendShapesAttr")]
+        #[doc(alias = "GetBlendShapesAttr")]
         blend_shapes, "blendShapes", ::alloc::vec::Vec<&'a str>, |v, t| crate::value::read_array(v, t, crate::value::read_token)
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -292,6 +325,9 @@ impl<'a> SkelAnimation<'a> {
         #[doc = "USD attribute `blendShapeWeights` (`float\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdSkelAnimation::GetBlendShapeWeightsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdSkelAnimation::GetBlendShapeWeightsAttr")]
+        #[doc(alias = "GetBlendShapeWeightsAttr")]
         blend_shape_weights, blend_shape_weights_at, "blendShapeWeights", ::alloc::sync::Arc<::alloc::vec::Vec<f32>>, crate::value::read_float_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -313,6 +349,9 @@ impl<'a> SkelAnimation<'a> {
         #[doc = "Array of tokens identifying which joints this animation's data applies to."]
         #[doc = ""]
         #[doc = "USD attribute `joints` (`token\\[\\]`, uniform)."]
+        #[doc = "C++ read: `UsdSkelAnimation::GetJointsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdSkelAnimation::GetJointsAttr")]
+        #[doc(alias = "GetJointsAttr")]
         joints, "joints", ::alloc::vec::Vec<&'a str>, |v, t| crate::value::read_array(v, t, crate::value::read_token)
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -333,6 +372,9 @@ impl<'a> SkelAnimation<'a> {
         #[doc = "USD attribute `rotations` (`quatf\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdSkelAnimation::GetRotationsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdSkelAnimation::GetRotationsAttr")]
+        #[doc(alias = "GetRotationsAttr")]
         rotations, rotations_at, "rotations", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 4]>>, crate::value::read_quatf_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -350,6 +392,9 @@ impl<'a> SkelAnimation<'a> {
         #[doc = "Joint-local scales of all affected joints, in 16 bit precision."]
         #[doc = ""]
         #[doc = "USD attribute `scales` (`half3\\[\\]`)."]
+        #[doc = "C++ read: `UsdSkelAnimation::GetScalesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdSkelAnimation::GetScalesAttr")]
+        #[doc(alias = "GetScalesAttr")]
         scales, scales_at, "scales", ::alloc::vec::Vec<[f32; 3]>, crate::value::read_half3_array
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -368,6 +413,9 @@ impl<'a> SkelAnimation<'a> {
         #[doc = "USD attribute `translations` (`float3\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdSkelAnimation::GetTranslationsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdSkelAnimation::GetTranslationsAttr")]
+        #[doc(alias = "GetTranslationsAttr")]
         translations, translations_at, "translations", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::read_float3_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -413,6 +461,9 @@ impl SkelAnimationEdit {
         #[doc = "Array of tokens identifying which blend shapes this animation's data applies to."]
         #[doc = ""]
         #[doc = "USD attribute `blendShapes` (`token\\[\\]`, uniform)."]
+        #[doc = "C++ authoring: `UsdSkelAnimation::CreateBlendShapesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdSkelAnimation::CreateBlendShapesAttr")]
+        #[doc(alias = "CreateBlendShapesAttr")]
         set_blend_shapes, "blendShapes", &[&str], |v, t| crate::value::write_array(v, t, crate::value::write_token)
     }
     set_attribute! {
@@ -421,6 +472,9 @@ impl SkelAnimationEdit {
         #[doc = "USD attribute `blendShapeWeights` (`float\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdSkelAnimation::CreateBlendShapeWeightsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdSkelAnimation::CreateBlendShapeWeightsAttr")]
+        #[doc(alias = "CreateBlendShapeWeightsAttr")]
         set_blend_shape_weights, set_blend_shape_weights_at, "blendShapeWeights", &[f32], crate::value::write_float_array
     }
     set_attribute! {
@@ -435,6 +489,9 @@ impl SkelAnimationEdit {
         #[doc = "Array of tokens identifying which joints this animation's data applies to."]
         #[doc = ""]
         #[doc = "USD attribute `joints` (`token\\[\\]`, uniform)."]
+        #[doc = "C++ authoring: `UsdSkelAnimation::CreateJointsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdSkelAnimation::CreateJointsAttr")]
+        #[doc(alias = "CreateJointsAttr")]
         set_joints, "joints", &[&str], |v, t| crate::value::write_array(v, t, crate::value::write_token)
     }
     set_attribute! {
@@ -443,6 +500,9 @@ impl SkelAnimationEdit {
         #[doc = "USD attribute `rotations` (`quatf\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdSkelAnimation::CreateRotationsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdSkelAnimation::CreateRotationsAttr")]
+        #[doc(alias = "CreateRotationsAttr")]
         set_rotations, set_rotations_at, "rotations", &[[f32; 4]], crate::value::write_quatf_array
     }
     set_attribute! {
@@ -457,6 +517,9 @@ impl SkelAnimationEdit {
         #[doc = "Joint-local scales of all affected joints, in 16 bit precision."]
         #[doc = ""]
         #[doc = "USD attribute `scales` (`half3\\[\\]`)."]
+        #[doc = "C++ authoring: `UsdSkelAnimation::CreateScalesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdSkelAnimation::CreateScalesAttr")]
+        #[doc(alias = "CreateScalesAttr")]
         set_scales, set_scales_at, "scales", &[[f32; 3]], crate::value::write_half3_array
     }
     set_attribute! {
@@ -465,6 +528,9 @@ impl SkelAnimationEdit {
         #[doc = "USD attribute `translations` (`float3\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdSkelAnimation::CreateTranslationsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdSkelAnimation::CreateTranslationsAttr")]
+        #[doc(alias = "CreateTranslationsAttr")]
         set_translations, set_translations_at, "translations", &[[f32; 3]], crate::value::write_float3_array
     }
     set_attribute! {
@@ -490,6 +556,9 @@ token_enum! {
 #[doc = "Provides API for authoring and extracting all the skinning-related data that lives in the \"geometry hierarchy\" of prims and models that want to be skeletally deformed."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's single-apply API schema `SkelBindingAPI`. Get it with [`SkelBindingApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdSkelBindingAPI`."]
+#[doc(alias = "UsdSkelBindingAPI")]
+#[doc(alias = "SkelBindingAPI")]
 #[derive(Clone, Copy, Debug)]
 pub struct SkelBindingApi<'a> {
     base: PrimView<'a>,
@@ -510,6 +579,8 @@ impl<'a> SkelBindingApi<'a> {
     /// A view of the schema on the prim at `path`, if the prim has it
     /// applied.
     #[must_use]
+    #[doc(alias = "UsdSkelBindingAPI::Get")]
+    #[doc(alias = "Get")]
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
@@ -534,6 +605,8 @@ impl<'a> SkelBindingApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there.
+    #[doc(alias = "UsdSkelBindingAPI::Apply")]
+    #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
@@ -549,6 +622,9 @@ impl<'a> SkelBindingApi<'a> {
         #[doc = "Encodes the bind-time world space transforms of the prim."]
         #[doc = ""]
         #[doc = "USD attribute `primvars:skel:geomBindTransform` (`matrix4d`)."]
+        #[doc = "C++ read: `UsdSkelBindingAPI::GetGeomBindTransformAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdSkelBindingAPI::GetGeomBindTransformAttr")]
+        #[doc(alias = "GetGeomBindTransformAttr")]
         geom_bind_transform, geom_bind_transform_at, "primvars:skel:geomBindTransform", [[f64; 4]; 4], crate::value::read_matrix4d
     }
     /// The USD name of [`Self::joint_indices`].
@@ -560,6 +636,9 @@ impl<'a> SkelBindingApi<'a> {
         #[doc = "USD attribute `primvars:skel:jointIndices` (`int\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdSkelBindingAPI::GetJointIndicesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdSkelBindingAPI::GetJointIndicesAttr")]
+        #[doc(alias = "GetJointIndicesAttr")]
         joint_indices, joint_indices_at, "primvars:skel:jointIndices", ::alloc::sync::Arc<::alloc::vec::Vec<i32>>, crate::value::read_int_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -583,6 +662,9 @@ impl<'a> SkelBindingApi<'a> {
         #[doc = "USD attribute `primvars:skel:jointWeights` (`float\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ read: `UsdSkelBindingAPI::GetJointWeightsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdSkelBindingAPI::GetJointWeightsAttr")]
+        #[doc(alias = "GetJointWeightsAttr")]
         joint_weights, joint_weights_at, "primvars:skel:jointWeights", ::alloc::sync::Arc<::alloc::vec::Vec<f32>>, crate::value::read_float_array_shared
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -604,6 +686,9 @@ impl<'a> SkelBindingApi<'a> {
         #[doc = "The skinningMethod specifies the skinning method for the prim."]
         #[doc = ""]
         #[doc = "USD attribute `primvars:skel:skinningMethod` (`token`, uniform; fallback `\"classicLinear\"`)."]
+        #[doc = "C++ read: `UsdSkelBindingAPI::GetSkinningMethodAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdSkelBindingAPI::GetSkinningMethodAttr")]
+        #[doc(alias = "GetSkinningMethodAttr")]
         skinning_method, "primvars:skel:skinningMethod", SkelBindingApiSkinningMethod, SkelBindingApiSkinningMethod::read
     }
     /// The USD name of [`Self::animation_source`].
@@ -613,6 +698,9 @@ impl<'a> SkelBindingApi<'a> {
         #[doc = "Animation source to be bound to Skeleton primitives at or beneath the location at which this property is defined."]
         #[doc = ""]
         #[doc = "USD relationship `skel:animationSource` (`rel`)."]
+        #[doc = "C++ read: `UsdSkelBindingAPI::GetAnimationSourceRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdSkelBindingAPI::GetAnimationSourceRel")]
+        #[doc(alias = "GetAnimationSourceRel")]
         animation_source, "skel:animationSource"
     }
     /// The USD name of [`Self::blend_shapes`].
@@ -622,6 +710,9 @@ impl<'a> SkelBindingApi<'a> {
         #[doc = "An array of tokens defining the order onto which blend shape weights from an animation source map onto the \\*skel:blendShapeTargets\\* rel of a binding site."]
         #[doc = ""]
         #[doc = "USD attribute `skel:blendShapes` (`token\\[\\]`, uniform)."]
+        #[doc = "C++ read: `UsdSkelBindingAPI::GetBlendShapesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdSkelBindingAPI::GetBlendShapesAttr")]
+        #[doc(alias = "GetBlendShapesAttr")]
         blend_shapes, "skel:blendShapes", ::alloc::vec::Vec<&'a str>, |v, t| crate::value::read_array(v, t, crate::value::read_token)
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -640,6 +731,9 @@ impl<'a> SkelBindingApi<'a> {
         #[doc = "Ordered list of all target blend shapes."]
         #[doc = ""]
         #[doc = "USD relationship `skel:blendShapeTargets` (`rel`)."]
+        #[doc = "C++ read: `UsdSkelBindingAPI::GetBlendShapeTargetsRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdSkelBindingAPI::GetBlendShapeTargetsRel")]
+        #[doc(alias = "GetBlendShapeTargetsRel")]
         blend_shape_targets, "skel:blendShapeTargets"
     }
     /// The USD name of [`Self::joints`].
@@ -649,6 +743,9 @@ impl<'a> SkelBindingApi<'a> {
         #[doc = "An (optional) array of tokens defining the list of joints to which jointIndices apply."]
         #[doc = ""]
         #[doc = "USD attribute `skel:joints` (`token\\[\\]`, uniform)."]
+        #[doc = "C++ read: `UsdSkelBindingAPI::GetJointsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdSkelBindingAPI::GetJointsAttr")]
+        #[doc(alias = "GetJointsAttr")]
         joints, "skel:joints", ::alloc::vec::Vec<&'a str>, |v, t| crate::value::read_array(v, t, crate::value::read_token)
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -667,6 +764,9 @@ impl<'a> SkelBindingApi<'a> {
         #[doc = "Skeleton to be bound to this prim and its descendents that possess a mapping and weighting to the joints of the identified Skeleton."]
         #[doc = ""]
         #[doc = "USD relationship `skel:skeleton` (`rel`)."]
+        #[doc = "C++ read: `UsdSkelBindingAPI::GetSkeletonRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdSkelBindingAPI::GetSkeletonRel")]
+        #[doc(alias = "GetSkeletonRel")]
         skeleton, "skel:skeleton"
     }
 }
@@ -704,6 +804,9 @@ impl SkelBindingApiEdit {
         #[doc = "Encodes the bind-time world space transforms of the prim."]
         #[doc = ""]
         #[doc = "USD attribute `primvars:skel:geomBindTransform` (`matrix4d`)."]
+        #[doc = "C++ authoring: `UsdSkelBindingAPI::CreateGeomBindTransformAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdSkelBindingAPI::CreateGeomBindTransformAttr")]
+        #[doc(alias = "CreateGeomBindTransformAttr")]
         set_geom_bind_transform, set_geom_bind_transform_at, "primvars:skel:geomBindTransform", [[f64; 4]; 4], crate::value::write_matrix4d
     }
     set_attribute! {
@@ -712,6 +815,9 @@ impl SkelBindingApiEdit {
         #[doc = "USD attribute `primvars:skel:jointIndices` (`int\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdSkelBindingAPI::CreateJointIndicesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdSkelBindingAPI::CreateJointIndicesAttr")]
+        #[doc(alias = "CreateJointIndicesAttr")]
         set_joint_indices, set_joint_indices_at, "primvars:skel:jointIndices", &[i32], crate::value::write_int_array
     }
     set_attribute! {
@@ -728,6 +834,9 @@ impl SkelBindingApiEdit {
         #[doc = "USD attribute `primvars:skel:jointWeights` (`float\\[\\]`)."]
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        #[doc = "C++ authoring: `UsdSkelBindingAPI::CreateJointWeightsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdSkelBindingAPI::CreateJointWeightsAttr")]
+        #[doc(alias = "CreateJointWeightsAttr")]
         set_joint_weights, set_joint_weights_at, "primvars:skel:jointWeights", &[f32], crate::value::write_float_array
     }
     set_attribute! {
@@ -742,36 +851,54 @@ impl SkelBindingApiEdit {
         #[doc = "The skinningMethod specifies the skinning method for the prim."]
         #[doc = ""]
         #[doc = "USD attribute `primvars:skel:skinningMethod` (`token`, uniform; fallback `\"classicLinear\"`)."]
+        #[doc = "C++ authoring: `UsdSkelBindingAPI::CreateSkinningMethodAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdSkelBindingAPI::CreateSkinningMethodAttr")]
+        #[doc(alias = "CreateSkinningMethodAttr")]
         set_skinning_method, "primvars:skel:skinningMethod", SkelBindingApiSkinningMethod, SkelBindingApiSkinningMethod::write
     }
     set_relationship! {
         #[doc = "Animation source to be bound to Skeleton primitives at or beneath the location at which this property is defined."]
         #[doc = ""]
         #[doc = "USD relationship `skel:animationSource` (`rel`)."]
+        #[doc = "C++ authoring: `UsdSkelBindingAPI::CreateAnimationSourceRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdSkelBindingAPI::CreateAnimationSourceRel")]
+        #[doc(alias = "CreateAnimationSourceRel")]
         set_animation_source, "skel:animationSource"
     }
     set_uniform_attribute! {
         #[doc = "An array of tokens defining the order onto which blend shape weights from an animation source map onto the \\*skel:blendShapeTargets\\* rel of a binding site."]
         #[doc = ""]
         #[doc = "USD attribute `skel:blendShapes` (`token\\[\\]`, uniform)."]
+        #[doc = "C++ authoring: `UsdSkelBindingAPI::CreateBlendShapesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdSkelBindingAPI::CreateBlendShapesAttr")]
+        #[doc(alias = "CreateBlendShapesAttr")]
         set_blend_shapes, "skel:blendShapes", &[&str], |v, t| crate::value::write_array(v, t, crate::value::write_token)
     }
     set_relationship! {
         #[doc = "Ordered list of all target blend shapes."]
         #[doc = ""]
         #[doc = "USD relationship `skel:blendShapeTargets` (`rel`)."]
+        #[doc = "C++ authoring: `UsdSkelBindingAPI::CreateBlendShapeTargetsRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdSkelBindingAPI::CreateBlendShapeTargetsRel")]
+        #[doc(alias = "CreateBlendShapeTargetsRel")]
         set_blend_shape_targets, "skel:blendShapeTargets"
     }
     set_uniform_attribute! {
         #[doc = "An (optional) array of tokens defining the list of joints to which jointIndices apply."]
         #[doc = ""]
         #[doc = "USD attribute `skel:joints` (`token\\[\\]`, uniform)."]
+        #[doc = "C++ authoring: `UsdSkelBindingAPI::CreateJointsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdSkelBindingAPI::CreateJointsAttr")]
+        #[doc(alias = "CreateJointsAttr")]
         set_joints, "skel:joints", &[&str], |v, t| crate::value::write_array(v, t, crate::value::write_token)
     }
     set_relationship! {
         #[doc = "Skeleton to be bound to this prim and its descendents that possess a mapping and weighting to the joints of the identified Skeleton."]
         #[doc = ""]
         #[doc = "USD relationship `skel:skeleton` (`rel`)."]
+        #[doc = "C++ authoring: `UsdSkelBindingAPI::CreateSkeletonRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdSkelBindingAPI::CreateSkeletonRel")]
+        #[doc(alias = "CreateSkeletonRel")]
         set_skeleton, "skel:skeleton"
     }
 }
@@ -779,6 +906,8 @@ impl SkelBindingApiEdit {
 #[doc = "Boundable prim type used to identify a scope beneath which skeletally-posed primitives are defined."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `SkelRoot`, inheriting [`crate::usd_geom::Boundable`]. Construct it with [`SkelRoot::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdSkelRoot`."]
+#[doc(alias = "UsdSkelRoot")]
 #[derive(Clone, Copy, Debug)]
 pub struct SkelRoot<'a> {
     base: crate::usd_geom::Boundable<'a>,
@@ -797,6 +926,8 @@ impl<'a> SkelRoot<'a> {
     pub const SCHEMA: &'static str = "SkelRoot";
 
     #[doc = "A view of the prim at `path`, if it is a `SkelRoot` or of a schema derived from it."]
+    #[doc(alias = "UsdSkelRoot::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -821,6 +952,8 @@ impl<'a> SkelRoot<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdSkelRoot::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> SkelRootEdit {
         edit.define(path, Self::SCHEMA);
         SkelRootEdit::from_path(path)
@@ -860,6 +993,8 @@ impl SkelRootEdit {
 #[doc = "Describes a skeleton."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `Skeleton`, inheriting [`crate::usd_geom::Boundable`]. Construct it with [`Skeleton::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdSkelSkeleton`."]
+#[doc(alias = "UsdSkelSkeleton")]
 #[derive(Clone, Copy, Debug)]
 pub struct Skeleton<'a> {
     base: crate::usd_geom::Boundable<'a>,
@@ -878,6 +1013,8 @@ impl<'a> Skeleton<'a> {
     pub const SCHEMA: &'static str = "Skeleton";
 
     #[doc = "A view of the prim at `path`, if it is a `Skeleton` or of a schema derived from it."]
+    #[doc(alias = "UsdSkelSkeleton::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -902,6 +1039,8 @@ impl<'a> Skeleton<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdSkelSkeleton::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> SkeletonEdit {
         edit.define(path, Self::SCHEMA);
         SkeletonEdit::from_path(path)
@@ -914,6 +1053,9 @@ impl<'a> Skeleton<'a> {
         #[doc = "Specifies the bind-pose transforms of each joint in \\*\\*world space\\*\\*, in the ordering imposed by \\*joints\\*."]
         #[doc = ""]
         #[doc = "USD attribute `bindTransforms` (`matrix4d\\[\\]`, uniform)."]
+        #[doc = "C++ read: `UsdSkelSkeleton::GetBindTransformsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdSkelSkeleton::GetBindTransformsAttr")]
+        #[doc(alias = "GetBindTransformsAttr")]
         bind_transforms, "bindTransforms", ::alloc::vec::Vec<[[f64; 4]; 4]>, crate::value::read_matrix4d_array
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -930,6 +1072,9 @@ impl<'a> Skeleton<'a> {
         #[doc = "If authored, provides a unique name per joint."]
         #[doc = ""]
         #[doc = "USD attribute `jointNames` (`token\\[\\]`, uniform)."]
+        #[doc = "C++ read: `UsdSkelSkeleton::GetJointNamesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdSkelSkeleton::GetJointNamesAttr")]
+        #[doc(alias = "GetJointNamesAttr")]
         joint_names, "jointNames", ::alloc::vec::Vec<&'a str>, |v, t| crate::value::read_array(v, t, crate::value::read_token)
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -948,6 +1093,9 @@ impl<'a> Skeleton<'a> {
         #[doc = "An array of path tokens identifying the set of joints that make up the skeleton, and their order."]
         #[doc = ""]
         #[doc = "USD attribute `joints` (`token\\[\\]`, uniform)."]
+        #[doc = "C++ read: `UsdSkelSkeleton::GetJointsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdSkelSkeleton::GetJointsAttr")]
+        #[doc(alias = "GetJointsAttr")]
         joints, "joints", ::alloc::vec::Vec<&'a str>, |v, t| crate::value::read_array(v, t, crate::value::read_token)
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -966,6 +1114,9 @@ impl<'a> Skeleton<'a> {
         #[doc = "Specifies the rest-pose transforms of each joint in \\*\\*local space\\*\\*, in the ordering imposed by \\*joints\\*."]
         #[doc = ""]
         #[doc = "USD attribute `restTransforms` (`matrix4d\\[\\]`, uniform)."]
+        #[doc = "C++ read: `UsdSkelSkeleton::GetRestTransformsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdSkelSkeleton::GetRestTransformsAttr")]
+        #[doc(alias = "GetRestTransformsAttr")]
         rest_transforms, "restTransforms", ::alloc::vec::Vec<[[f64; 4]; 4]>, crate::value::read_matrix4d_array
     }
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -1010,24 +1161,36 @@ impl SkeletonEdit {
         #[doc = "Specifies the bind-pose transforms of each joint in \\*\\*world space\\*\\*, in the ordering imposed by \\*joints\\*."]
         #[doc = ""]
         #[doc = "USD attribute `bindTransforms` (`matrix4d\\[\\]`, uniform)."]
+        #[doc = "C++ authoring: `UsdSkelSkeleton::CreateBindTransformsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdSkelSkeleton::CreateBindTransformsAttr")]
+        #[doc(alias = "CreateBindTransformsAttr")]
         set_bind_transforms, "bindTransforms", &[[[f64; 4]; 4]], crate::value::write_matrix4d_array
     }
     set_uniform_attribute! {
         #[doc = "If authored, provides a unique name per joint."]
         #[doc = ""]
         #[doc = "USD attribute `jointNames` (`token\\[\\]`, uniform)."]
+        #[doc = "C++ authoring: `UsdSkelSkeleton::CreateJointNamesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdSkelSkeleton::CreateJointNamesAttr")]
+        #[doc(alias = "CreateJointNamesAttr")]
         set_joint_names, "jointNames", &[&str], |v, t| crate::value::write_array(v, t, crate::value::write_token)
     }
     set_uniform_attribute! {
         #[doc = "An array of path tokens identifying the set of joints that make up the skeleton, and their order."]
         #[doc = ""]
         #[doc = "USD attribute `joints` (`token\\[\\]`, uniform)."]
+        #[doc = "C++ authoring: `UsdSkelSkeleton::CreateJointsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdSkelSkeleton::CreateJointsAttr")]
+        #[doc(alias = "CreateJointsAttr")]
         set_joints, "joints", &[&str], |v, t| crate::value::write_array(v, t, crate::value::write_token)
     }
     set_uniform_attribute! {
         #[doc = "Specifies the rest-pose transforms of each joint in \\*\\*local space\\*\\*, in the ordering imposed by \\*joints\\*."]
         #[doc = ""]
         #[doc = "USD attribute `restTransforms` (`matrix4d\\[\\]`, uniform)."]
+        #[doc = "C++ authoring: `UsdSkelSkeleton::CreateRestTransformsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdSkelSkeleton::CreateRestTransformsAttr")]
+        #[doc(alias = "CreateRestTransformsAttr")]
         set_rest_transforms, "restTransforms", &[[[f64; 4]; 4]], crate::value::write_matrix4d_array
     }
 }

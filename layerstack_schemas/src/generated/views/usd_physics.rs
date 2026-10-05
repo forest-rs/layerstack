@@ -27,6 +27,9 @@ use crate::{PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "PhysicsArticulationRootAPI can be applied to a scene graph node, and marks the subtree rooted here for inclusion in one or more reduced coordinate articulations."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's single-apply API schema `PhysicsArticulationRootAPI`. Get it with [`PhysicsArticulationRootApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdPhysicsArticulationRootAPI`."]
+#[doc(alias = "UsdPhysicsArticulationRootAPI")]
+#[doc(alias = "PhysicsArticulationRootAPI")]
 #[derive(Clone, Copy, Debug)]
 pub struct PhysicsArticulationRootApi<'a> {
     base: PrimView<'a>,
@@ -47,6 +50,8 @@ impl<'a> PhysicsArticulationRootApi<'a> {
     /// A view of the schema on the prim at `path`, if the prim has it
     /// applied.
     #[must_use]
+    #[doc(alias = "UsdPhysicsArticulationRootAPI::Get")]
+    #[doc(alias = "Get")]
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
@@ -71,6 +76,8 @@ impl<'a> PhysicsArticulationRootApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there.
+    #[doc(alias = "UsdPhysicsArticulationRootAPI::Apply")]
+    #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
@@ -113,6 +120,9 @@ impl PhysicsArticulationRootApiEdit {
 #[doc = "Applies collision attributes to a UsdGeomXformable prim."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's single-apply API schema `PhysicsCollisionAPI`. Get it with [`PhysicsCollisionApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdPhysicsCollisionAPI`."]
+#[doc(alias = "UsdPhysicsCollisionAPI")]
+#[doc(alias = "PhysicsCollisionAPI")]
 #[derive(Clone, Copy, Debug)]
 pub struct PhysicsCollisionApi<'a> {
     base: PrimView<'a>,
@@ -133,6 +143,8 @@ impl<'a> PhysicsCollisionApi<'a> {
     /// A view of the schema on the prim at `path`, if the prim has it
     /// applied.
     #[must_use]
+    #[doc(alias = "UsdPhysicsCollisionAPI::Get")]
+    #[doc(alias = "Get")]
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
@@ -157,6 +169,8 @@ impl<'a> PhysicsCollisionApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there.
+    #[doc(alias = "UsdPhysicsCollisionAPI::Apply")]
+    #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
@@ -172,6 +186,9 @@ impl<'a> PhysicsCollisionApi<'a> {
         #[doc = "Determines if the PhysicsCollisionAPI is enabled."]
         #[doc = ""]
         #[doc = "USD attribute `physics:collisionEnabled` (`bool`; fallback `true`)."]
+        #[doc = "C++ read: `UsdPhysicsCollisionAPI::GetCollisionEnabledAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsCollisionAPI::GetCollisionEnabledAttr")]
+        #[doc(alias = "GetCollisionEnabledAttr")]
         collision_enabled, collision_enabled_at, "physics:collisionEnabled", bool, crate::value::read_bool
     }
     /// The USD name of [`Self::simulation_owner`].
@@ -181,6 +198,9 @@ impl<'a> PhysicsCollisionApi<'a> {
         #[doc = "Single PhysicsScene that will simulate this collider."]
         #[doc = ""]
         #[doc = "USD relationship `physics:simulationOwner` (`rel`)."]
+        #[doc = "C++ read: `UsdPhysicsCollisionAPI::GetSimulationOwnerRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsCollisionAPI::GetSimulationOwnerRel")]
+        #[doc(alias = "GetSimulationOwnerRel")]
         simulation_owner, "physics:simulationOwner"
     }
 }
@@ -218,12 +238,18 @@ impl PhysicsCollisionApiEdit {
         #[doc = "Determines if the PhysicsCollisionAPI is enabled."]
         #[doc = ""]
         #[doc = "USD attribute `physics:collisionEnabled` (`bool`; fallback `true`)."]
+        #[doc = "C++ authoring: `UsdPhysicsCollisionAPI::CreateCollisionEnabledAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsCollisionAPI::CreateCollisionEnabledAttr")]
+        #[doc(alias = "CreateCollisionEnabledAttr")]
         set_collision_enabled, set_collision_enabled_at, "physics:collisionEnabled", bool, crate::value::write_bool
     }
     set_relationship! {
         #[doc = "Single PhysicsScene that will simulate this collider."]
         #[doc = ""]
         #[doc = "USD relationship `physics:simulationOwner` (`rel`)."]
+        #[doc = "C++ authoring: `UsdPhysicsCollisionAPI::CreateSimulationOwnerRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsCollisionAPI::CreateSimulationOwnerRel")]
+        #[doc(alias = "CreateSimulationOwnerRel")]
         set_simulation_owner, "physics:simulationOwner"
     }
 }
@@ -231,6 +257,8 @@ impl PhysicsCollisionApiEdit {
 #[doc = "Defines a collision group for coarse filtering."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `PhysicsCollisionGroup`, inheriting [`crate::usd::Typed`]. Construct it with [`PhysicsCollisionGroup::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdPhysicsCollisionGroup`."]
+#[doc(alias = "UsdPhysicsCollisionGroup")]
 #[derive(Clone, Copy, Debug)]
 pub struct PhysicsCollisionGroup<'a> {
     base: crate::usd::Typed<'a>,
@@ -249,6 +277,8 @@ impl<'a> PhysicsCollisionGroup<'a> {
     pub const SCHEMA: &'static str = "PhysicsCollisionGroup";
 
     #[doc = "A view of the prim at `path`, if it is a `PhysicsCollisionGroup` or of a schema derived from it."]
+    #[doc(alias = "UsdPhysicsCollisionGroup::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -273,6 +303,8 @@ impl<'a> PhysicsCollisionGroup<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdPhysicsCollisionGroup::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> PhysicsCollisionGroupEdit {
         edit.define(path, Self::SCHEMA);
         PhysicsCollisionGroupEdit::from_path(path)
@@ -285,6 +317,9 @@ impl<'a> PhysicsCollisionGroup<'a> {
         #[doc = "References a list of PhysicsCollisionGroups with which collisions should be ignored."]
         #[doc = ""]
         #[doc = "USD relationship `physics:filteredGroups` (`rel`)."]
+        #[doc = "C++ read: `UsdPhysicsCollisionGroup::GetFilteredGroupsRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsCollisionGroup::GetFilteredGroupsRel")]
+        #[doc(alias = "GetFilteredGroupsRel")]
         filtered_groups, "physics:filteredGroups"
     }
     /// The USD name of [`Self::invert_filtered_groups`].
@@ -294,6 +329,9 @@ impl<'a> PhysicsCollisionGroup<'a> {
         #[doc = "Normally, the filter will disable collisions against the selected filter groups."]
         #[doc = ""]
         #[doc = "USD attribute `physics:invertFilteredGroups` (`bool`)."]
+        #[doc = "C++ read: `UsdPhysicsCollisionGroup::GetInvertFilteredGroupsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsCollisionGroup::GetInvertFilteredGroupsAttr")]
+        #[doc(alias = "GetInvertFilteredGroupsAttr")]
         invert_filtered_groups, invert_filtered_groups_at, "physics:invertFilteredGroups", bool, crate::value::read_bool
     }
     /// The USD name of [`Self::merge_group_name`].
@@ -303,6 +341,9 @@ impl<'a> PhysicsCollisionGroup<'a> {
         #[doc = "If non-empty, any collision groups in a stage with a matching mergeGroup should be considered to refer to the same collection."]
         #[doc = ""]
         #[doc = "USD attribute `physics:mergeGroup` (`string`)."]
+        #[doc = "C++ read: `UsdPhysicsCollisionGroup::GetMergeGroupNameAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsCollisionGroup::GetMergeGroupNameAttr")]
+        #[doc(alias = "GetMergeGroupNameAttr")]
         merge_group_name, merge_group_name_at, "physics:mergeGroup", ::alloc::sync::Arc<str>, crate::value::read_string
     }
 }
@@ -340,18 +381,27 @@ impl PhysicsCollisionGroupEdit {
         #[doc = "References a list of PhysicsCollisionGroups with which collisions should be ignored."]
         #[doc = ""]
         #[doc = "USD relationship `physics:filteredGroups` (`rel`)."]
+        #[doc = "C++ authoring: `UsdPhysicsCollisionGroup::CreateFilteredGroupsRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsCollisionGroup::CreateFilteredGroupsRel")]
+        #[doc(alias = "CreateFilteredGroupsRel")]
         set_filtered_groups, "physics:filteredGroups"
     }
     set_attribute! {
         #[doc = "Normally, the filter will disable collisions against the selected filter groups."]
         #[doc = ""]
         #[doc = "USD attribute `physics:invertFilteredGroups` (`bool`)."]
+        #[doc = "C++ authoring: `UsdPhysicsCollisionGroup::CreateInvertFilteredGroupsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsCollisionGroup::CreateInvertFilteredGroupsAttr")]
+        #[doc(alias = "CreateInvertFilteredGroupsAttr")]
         set_invert_filtered_groups, set_invert_filtered_groups_at, "physics:invertFilteredGroups", bool, crate::value::write_bool
     }
     set_attribute! {
         #[doc = "If non-empty, any collision groups in a stage with a matching mergeGroup should be considered to refer to the same collection."]
         #[doc = ""]
         #[doc = "USD attribute `physics:mergeGroup` (`string`)."]
+        #[doc = "C++ authoring: `UsdPhysicsCollisionGroup::CreateMergeGroupNameAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsCollisionGroup::CreateMergeGroupNameAttr")]
+        #[doc(alias = "CreateMergeGroupNameAttr")]
         set_merge_group_name, set_merge_group_name_at, "physics:mergeGroup", &str, crate::value::write_string
     }
 }
@@ -359,6 +409,8 @@ impl PhysicsCollisionGroupEdit {
 #[doc = "Predefined distance joint type (Distance between rigid bodies may be limited to given minimum or maximum distance.)."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `PhysicsDistanceJoint`, inheriting [`PhysicsJoint`]. Construct it with [`PhysicsDistanceJoint::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdPhysicsDistanceJoint`."]
+#[doc(alias = "UsdPhysicsDistanceJoint")]
 #[derive(Clone, Copy, Debug)]
 pub struct PhysicsDistanceJoint<'a> {
     base: PhysicsJoint<'a>,
@@ -377,6 +429,8 @@ impl<'a> PhysicsDistanceJoint<'a> {
     pub const SCHEMA: &'static str = "PhysicsDistanceJoint";
 
     #[doc = "A view of the prim at `path`, if it is a `PhysicsDistanceJoint` or of a schema derived from it."]
+    #[doc(alias = "UsdPhysicsDistanceJoint::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -401,6 +455,8 @@ impl<'a> PhysicsDistanceJoint<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdPhysicsDistanceJoint::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> PhysicsDistanceJointEdit {
         edit.define(path, Self::SCHEMA);
         PhysicsDistanceJointEdit::from_path(path)
@@ -413,6 +469,9 @@ impl<'a> PhysicsDistanceJoint<'a> {
         #[doc = "Maximum distance."]
         #[doc = ""]
         #[doc = "USD attribute `physics:maxDistance` (`float`; fallback `-1.0`)."]
+        #[doc = "C++ read: `UsdPhysicsDistanceJoint::GetMaxDistanceAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsDistanceJoint::GetMaxDistanceAttr")]
+        #[doc(alias = "GetMaxDistanceAttr")]
         max_distance, max_distance_at, "physics:maxDistance", f32, crate::value::read_float
     }
     /// The USD name of [`Self::min_distance`].
@@ -422,6 +481,9 @@ impl<'a> PhysicsDistanceJoint<'a> {
         #[doc = "Minimum distance."]
         #[doc = ""]
         #[doc = "USD attribute `physics:minDistance` (`float`; fallback `-1.0`)."]
+        #[doc = "C++ read: `UsdPhysicsDistanceJoint::GetMinDistanceAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsDistanceJoint::GetMinDistanceAttr")]
+        #[doc(alias = "GetMinDistanceAttr")]
         min_distance, min_distance_at, "physics:minDistance", f32, crate::value::read_float
     }
 }
@@ -459,12 +521,18 @@ impl PhysicsDistanceJointEdit {
         #[doc = "Maximum distance."]
         #[doc = ""]
         #[doc = "USD attribute `physics:maxDistance` (`float`; fallback `-1.0`)."]
+        #[doc = "C++ authoring: `UsdPhysicsDistanceJoint::CreateMaxDistanceAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsDistanceJoint::CreateMaxDistanceAttr")]
+        #[doc(alias = "CreateMaxDistanceAttr")]
         set_max_distance, set_max_distance_at, "physics:maxDistance", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "Minimum distance."]
         #[doc = ""]
         #[doc = "USD attribute `physics:minDistance` (`float`; fallback `-1.0`)."]
+        #[doc = "C++ authoring: `UsdPhysicsDistanceJoint::CreateMinDistanceAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsDistanceJoint::CreateMinDistanceAttr")]
+        #[doc(alias = "CreateMinDistanceAttr")]
         set_min_distance, set_min_distance_at, "physics:minDistance", f32, crate::value::write_float
     }
 }
@@ -482,6 +550,9 @@ token_enum! {
 #[doc = "The PhysicsDriveAPI when applied to any joint primitive will drive the joint towards a given target."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's multiple-apply API schema `PhysicsDriveAPI`. Get it with [`PhysicsDriveApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdPhysicsDriveAPI`."]
+#[doc(alias = "UsdPhysicsDriveAPI")]
+#[doc(alias = "PhysicsDriveAPI")]
 #[derive(Clone, Copy, Debug)]
 pub struct PhysicsDriveApi<'a> {
     base: InstanceView<'a>,
@@ -502,6 +573,8 @@ impl<'a> PhysicsDriveApi<'a> {
     /// A view of the instance `instance` of the schema on the prim at `path`,
     /// if the prim has it applied.
     #[must_use]
+    #[doc(alias = "UsdPhysicsDriveAPI::Get")]
+    #[doc(alias = "Get")]
     pub fn get(scene: &Scene<'a>, path: PathId, instance: &str) -> Option<Self> {
         if !scene.has_api(path, Self::SCHEMA, Some(instance)) {
             return None;
@@ -513,6 +586,8 @@ impl<'a> PhysicsDriveApi<'a> {
     /// Every instance of the schema the prim at `path` has applied, in the
     /// order its definition applies them.
     #[must_use]
+    #[doc(alias = "UsdPhysicsDriveAPI::GetAll")]
+    #[doc(alias = "GetAll")]
     pub fn instances(scene: &Scene<'a>, path: PathId) -> ::alloc::vec::Vec<Self> {
         scene
             .instances(path, Self::SCHEMA)
@@ -541,6 +616,8 @@ impl<'a> PhysicsDriveApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there.
+    #[doc(alias = "UsdPhysicsDriveAPI::Apply")]
+    #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
@@ -552,26 +629,44 @@ impl<'a> PhysicsDriveApi<'a> {
 
     attribute! {
         #[doc = "USD attribute `drive:&lt;instance&gt;:physics:damping` (`float`; fallback `0.0`)."]
+        #[doc = "C++ read: `UsdPhysicsDriveAPI::GetDampingAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsDriveAPI::GetDampingAttr")]
+        #[doc(alias = "GetDampingAttr")]
         damping, damping_at, "drive:__INSTANCE_NAME__:physics:damping", f32, crate::value::read_float
     }
     attribute! {
         #[doc = "USD attribute `drive:&lt;instance&gt;:physics:maxForce` (`float`; fallback `inf`)."]
+        #[doc = "C++ read: `UsdPhysicsDriveAPI::GetMaxForceAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsDriveAPI::GetMaxForceAttr")]
+        #[doc(alias = "GetMaxForceAttr")]
         max_force, max_force_at, "drive:__INSTANCE_NAME__:physics:maxForce", f32, crate::value::read_float
     }
     attribute! {
         #[doc = "USD attribute `drive:&lt;instance&gt;:physics:stiffness` (`float`; fallback `0.0`)."]
+        #[doc = "C++ read: `UsdPhysicsDriveAPI::GetStiffnessAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsDriveAPI::GetStiffnessAttr")]
+        #[doc(alias = "GetStiffnessAttr")]
         stiffness, stiffness_at, "drive:__INSTANCE_NAME__:physics:stiffness", f32, crate::value::read_float
     }
     attribute! {
         #[doc = "USD attribute `drive:&lt;instance&gt;:physics:targetPosition` (`float`; fallback `0.0`)."]
+        #[doc = "C++ read: `UsdPhysicsDriveAPI::GetTargetPositionAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsDriveAPI::GetTargetPositionAttr")]
+        #[doc(alias = "GetTargetPositionAttr")]
         target_position, target_position_at, "drive:__INSTANCE_NAME__:physics:targetPosition", f32, crate::value::read_float
     }
     attribute! {
         #[doc = "USD attribute `drive:&lt;instance&gt;:physics:targetVelocity` (`float`; fallback `0.0`)."]
+        #[doc = "C++ read: `UsdPhysicsDriveAPI::GetTargetVelocityAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsDriveAPI::GetTargetVelocityAttr")]
+        #[doc(alias = "GetTargetVelocityAttr")]
         target_velocity, target_velocity_at, "drive:__INSTANCE_NAME__:physics:targetVelocity", f32, crate::value::read_float
     }
     uniform_attribute! {
         #[doc = "USD attribute `drive:&lt;instance&gt;:physics:type` (`token`, uniform; fallback `\"force\"`)."]
+        #[doc = "C++ read: `UsdPhysicsDriveAPI::GetTypeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsDriveAPI::GetTypeAttr")]
+        #[doc(alias = "GetTypeAttr")]
         drive_type, "drive:__INSTANCE_NAME__:physics:type", PhysicsDriveApiDriveType, PhysicsDriveApiDriveType::read
     }
 }
@@ -607,26 +702,44 @@ impl PhysicsDriveApiEdit {
 
     set_attribute! {
         #[doc = "USD attribute `drive:&lt;instance&gt;:physics:damping` (`float`; fallback `0.0`)."]
+        #[doc = "C++ authoring: `UsdPhysicsDriveAPI::CreateDampingAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsDriveAPI::CreateDampingAttr")]
+        #[doc(alias = "CreateDampingAttr")]
         set_damping, set_damping_at, "drive:__INSTANCE_NAME__:physics:damping", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "USD attribute `drive:&lt;instance&gt;:physics:maxForce` (`float`; fallback `inf`)."]
+        #[doc = "C++ authoring: `UsdPhysicsDriveAPI::CreateMaxForceAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsDriveAPI::CreateMaxForceAttr")]
+        #[doc(alias = "CreateMaxForceAttr")]
         set_max_force, set_max_force_at, "drive:__INSTANCE_NAME__:physics:maxForce", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "USD attribute `drive:&lt;instance&gt;:physics:stiffness` (`float`; fallback `0.0`)."]
+        #[doc = "C++ authoring: `UsdPhysicsDriveAPI::CreateStiffnessAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsDriveAPI::CreateStiffnessAttr")]
+        #[doc(alias = "CreateStiffnessAttr")]
         set_stiffness, set_stiffness_at, "drive:__INSTANCE_NAME__:physics:stiffness", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "USD attribute `drive:&lt;instance&gt;:physics:targetPosition` (`float`; fallback `0.0`)."]
+        #[doc = "C++ authoring: `UsdPhysicsDriveAPI::CreateTargetPositionAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsDriveAPI::CreateTargetPositionAttr")]
+        #[doc(alias = "CreateTargetPositionAttr")]
         set_target_position, set_target_position_at, "drive:__INSTANCE_NAME__:physics:targetPosition", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "USD attribute `drive:&lt;instance&gt;:physics:targetVelocity` (`float`; fallback `0.0`)."]
+        #[doc = "C++ authoring: `UsdPhysicsDriveAPI::CreateTargetVelocityAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsDriveAPI::CreateTargetVelocityAttr")]
+        #[doc(alias = "CreateTargetVelocityAttr")]
         set_target_velocity, set_target_velocity_at, "drive:__INSTANCE_NAME__:physics:targetVelocity", f32, crate::value::write_float
     }
     set_uniform_attribute! {
         #[doc = "USD attribute `drive:&lt;instance&gt;:physics:type` (`token`, uniform; fallback `\"force\"`)."]
+        #[doc = "C++ authoring: `UsdPhysicsDriveAPI::CreateTypeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsDriveAPI::CreateTypeAttr")]
+        #[doc(alias = "CreateTypeAttr")]
         set_drive_type, "drive:__INSTANCE_NAME__:physics:type", PhysicsDriveApiDriveType, PhysicsDriveApiDriveType::write
     }
 }
@@ -634,6 +747,9 @@ impl PhysicsDriveApiEdit {
 #[doc = "API to describe fine-grained filtering."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's single-apply API schema `PhysicsFilteredPairsAPI`. Get it with [`PhysicsFilteredPairsApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdPhysicsFilteredPairsAPI`."]
+#[doc(alias = "UsdPhysicsFilteredPairsAPI")]
+#[doc(alias = "PhysicsFilteredPairsAPI")]
 #[derive(Clone, Copy, Debug)]
 pub struct PhysicsFilteredPairsApi<'a> {
     base: PrimView<'a>,
@@ -654,6 +770,8 @@ impl<'a> PhysicsFilteredPairsApi<'a> {
     /// A view of the schema on the prim at `path`, if the prim has it
     /// applied.
     #[must_use]
+    #[doc(alias = "UsdPhysicsFilteredPairsAPI::Get")]
+    #[doc(alias = "Get")]
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
@@ -678,6 +796,8 @@ impl<'a> PhysicsFilteredPairsApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there.
+    #[doc(alias = "UsdPhysicsFilteredPairsAPI::Apply")]
+    #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
@@ -693,6 +813,9 @@ impl<'a> PhysicsFilteredPairsApi<'a> {
         #[doc = "Relationship to objects that should be filtered."]
         #[doc = ""]
         #[doc = "USD relationship `physics:filteredPairs` (`rel`)."]
+        #[doc = "C++ read: `UsdPhysicsFilteredPairsAPI::GetFilteredPairsRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsFilteredPairsAPI::GetFilteredPairsRel")]
+        #[doc(alias = "GetFilteredPairsRel")]
         filtered_pairs, "physics:filteredPairs"
     }
 }
@@ -730,6 +853,9 @@ impl PhysicsFilteredPairsApiEdit {
         #[doc = "Relationship to objects that should be filtered."]
         #[doc = ""]
         #[doc = "USD relationship `physics:filteredPairs` (`rel`)."]
+        #[doc = "C++ authoring: `UsdPhysicsFilteredPairsAPI::CreateFilteredPairsRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsFilteredPairsAPI::CreateFilteredPairsRel")]
+        #[doc(alias = "CreateFilteredPairsRel")]
         set_filtered_pairs, "physics:filteredPairs"
     }
 }
@@ -737,6 +863,8 @@ impl PhysicsFilteredPairsApiEdit {
 #[doc = "Predefined fixed joint type (All degrees of freedom are removed.)."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `PhysicsFixedJoint`, inheriting [`PhysicsJoint`]. Construct it with [`PhysicsFixedJoint::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdPhysicsFixedJoint`."]
+#[doc(alias = "UsdPhysicsFixedJoint")]
 #[derive(Clone, Copy, Debug)]
 pub struct PhysicsFixedJoint<'a> {
     base: PhysicsJoint<'a>,
@@ -755,6 +883,8 @@ impl<'a> PhysicsFixedJoint<'a> {
     pub const SCHEMA: &'static str = "PhysicsFixedJoint";
 
     #[doc = "A view of the prim at `path`, if it is a `PhysicsFixedJoint` or of a schema derived from it."]
+    #[doc(alias = "UsdPhysicsFixedJoint::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -779,6 +909,8 @@ impl<'a> PhysicsFixedJoint<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdPhysicsFixedJoint::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> PhysicsFixedJointEdit {
         edit.define(path, Self::SCHEMA);
         PhysicsFixedJointEdit::from_path(path)
@@ -818,6 +950,8 @@ impl PhysicsFixedJointEdit {
 #[doc = "A joint constrains the movement of rigid bodies."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `PhysicsJoint`, inheriting [`crate::usd_geom::Imageable`]. Construct it with [`PhysicsJoint::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdPhysicsJoint`."]
+#[doc(alias = "UsdPhysicsJoint")]
 #[derive(Clone, Copy, Debug)]
 pub struct PhysicsJoint<'a> {
     base: crate::usd_geom::Imageable<'a>,
@@ -836,6 +970,8 @@ impl<'a> PhysicsJoint<'a> {
     pub const SCHEMA: &'static str = "PhysicsJoint";
 
     #[doc = "A view of the prim at `path`, if it is a `PhysicsJoint` or of a schema derived from it."]
+    #[doc(alias = "UsdPhysicsJoint::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -860,6 +996,8 @@ impl<'a> PhysicsJoint<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdPhysicsJoint::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> PhysicsJointEdit {
         edit.define(path, Self::SCHEMA);
         PhysicsJointEdit::from_path(path)
@@ -872,6 +1010,9 @@ impl<'a> PhysicsJoint<'a> {
         #[doc = "Relationship to any UsdGeomXformable."]
         #[doc = ""]
         #[doc = "USD relationship `physics:body0` (`rel`)."]
+        #[doc = "C++ read: `UsdPhysicsJoint::GetBody0Rel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsJoint::GetBody0Rel")]
+        #[doc(alias = "GetBody0Rel")]
         body0, "physics:body0"
     }
     /// The USD name of [`Self::body1`].
@@ -881,6 +1022,9 @@ impl<'a> PhysicsJoint<'a> {
         #[doc = "Relationship to any UsdGeomXformable."]
         #[doc = ""]
         #[doc = "USD relationship `physics:body1` (`rel`)."]
+        #[doc = "C++ read: `UsdPhysicsJoint::GetBody1Rel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsJoint::GetBody1Rel")]
+        #[doc(alias = "GetBody1Rel")]
         body1, "physics:body1"
     }
     /// The USD name of [`Self::break_force`].
@@ -890,6 +1034,9 @@ impl<'a> PhysicsJoint<'a> {
         #[doc = "Joint break force."]
         #[doc = ""]
         #[doc = "USD attribute `physics:breakForce` (`float`; fallback `inf`)."]
+        #[doc = "C++ read: `UsdPhysicsJoint::GetBreakForceAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsJoint::GetBreakForceAttr")]
+        #[doc(alias = "GetBreakForceAttr")]
         break_force, break_force_at, "physics:breakForce", f32, crate::value::read_float
     }
     /// The USD name of [`Self::break_torque`].
@@ -899,6 +1046,9 @@ impl<'a> PhysicsJoint<'a> {
         #[doc = "Joint break torque."]
         #[doc = ""]
         #[doc = "USD attribute `physics:breakTorque` (`float`; fallback `inf`)."]
+        #[doc = "C++ read: `UsdPhysicsJoint::GetBreakTorqueAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsJoint::GetBreakTorqueAttr")]
+        #[doc(alias = "GetBreakTorqueAttr")]
         break_torque, break_torque_at, "physics:breakTorque", f32, crate::value::read_float
     }
     /// The USD name of [`Self::collision_enabled`].
@@ -908,6 +1058,9 @@ impl<'a> PhysicsJoint<'a> {
         #[doc = "Determines if the jointed subtrees should collide or not."]
         #[doc = ""]
         #[doc = "USD attribute `physics:collisionEnabled` (`bool`; fallback `false`)."]
+        #[doc = "C++ read: `UsdPhysicsJoint::GetCollisionEnabledAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsJoint::GetCollisionEnabledAttr")]
+        #[doc(alias = "GetCollisionEnabledAttr")]
         collision_enabled, collision_enabled_at, "physics:collisionEnabled", bool, crate::value::read_bool
     }
     /// The USD name of [`Self::exclude_from_articulation`].
@@ -917,6 +1070,9 @@ impl<'a> PhysicsJoint<'a> {
         #[doc = "Determines if the joint can be included in an Articulation."]
         #[doc = ""]
         #[doc = "USD attribute `physics:excludeFromArticulation` (`bool`, uniform; fallback `false`)."]
+        #[doc = "C++ read: `UsdPhysicsJoint::GetExcludeFromArticulationAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsJoint::GetExcludeFromArticulationAttr")]
+        #[doc(alias = "GetExcludeFromArticulationAttr")]
         exclude_from_articulation, "physics:excludeFromArticulation", bool, crate::value::read_bool
     }
     /// The USD name of [`Self::joint_enabled`].
@@ -926,6 +1082,9 @@ impl<'a> PhysicsJoint<'a> {
         #[doc = "Determines if the joint is enabled."]
         #[doc = ""]
         #[doc = "USD attribute `physics:jointEnabled` (`bool`; fallback `true`)."]
+        #[doc = "C++ read: `UsdPhysicsJoint::GetJointEnabledAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsJoint::GetJointEnabledAttr")]
+        #[doc(alias = "GetJointEnabledAttr")]
         joint_enabled, joint_enabled_at, "physics:jointEnabled", bool, crate::value::read_bool
     }
     /// The USD name of [`Self::local_pos0`].
@@ -935,6 +1094,9 @@ impl<'a> PhysicsJoint<'a> {
         #[doc = "Relative position of the joint frame to body0's frame."]
         #[doc = ""]
         #[doc = "USD attribute `physics:localPos0` (`point3f`; fallback `(0.0, 0.0, 0.0)`)."]
+        #[doc = "C++ read: `UsdPhysicsJoint::GetLocalPos0Attr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsJoint::GetLocalPos0Attr")]
+        #[doc(alias = "GetLocalPos0Attr")]
         local_pos0, local_pos0_at, "physics:localPos0", [f32; 3], crate::value::read_float3
     }
     /// The USD name of [`Self::local_pos1`].
@@ -944,6 +1106,9 @@ impl<'a> PhysicsJoint<'a> {
         #[doc = "Relative position of the joint frame to body1's frame."]
         #[doc = ""]
         #[doc = "USD attribute `physics:localPos1` (`point3f`; fallback `(0.0, 0.0, 0.0)`)."]
+        #[doc = "C++ read: `UsdPhysicsJoint::GetLocalPos1Attr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsJoint::GetLocalPos1Attr")]
+        #[doc(alias = "GetLocalPos1Attr")]
         local_pos1, local_pos1_at, "physics:localPos1", [f32; 3], crate::value::read_float3
     }
     /// The USD name of [`Self::local_rot0`].
@@ -953,6 +1118,9 @@ impl<'a> PhysicsJoint<'a> {
         #[doc = "Relative orientation of the joint frame to body0's frame."]
         #[doc = ""]
         #[doc = "USD attribute `physics:localRot0` (`quatf`; fallback `(0.0, 0.0, 0.0, 1.0)`)."]
+        #[doc = "C++ read: `UsdPhysicsJoint::GetLocalRot0Attr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsJoint::GetLocalRot0Attr")]
+        #[doc(alias = "GetLocalRot0Attr")]
         local_rot0, local_rot0_at, "physics:localRot0", [f32; 4], crate::value::read_quatf
     }
     /// The USD name of [`Self::local_rot1`].
@@ -962,6 +1130,9 @@ impl<'a> PhysicsJoint<'a> {
         #[doc = "Relative orientation of the joint frame to body1's frame."]
         #[doc = ""]
         #[doc = "USD attribute `physics:localRot1` (`quatf`; fallback `(0.0, 0.0, 0.0, 1.0)`)."]
+        #[doc = "C++ read: `UsdPhysicsJoint::GetLocalRot1Attr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsJoint::GetLocalRot1Attr")]
+        #[doc(alias = "GetLocalRot1Attr")]
         local_rot1, local_rot1_at, "physics:localRot1", [f32; 4], crate::value::read_quatf
     }
 }
@@ -999,66 +1170,99 @@ impl PhysicsJointEdit {
         #[doc = "Relationship to any UsdGeomXformable."]
         #[doc = ""]
         #[doc = "USD relationship `physics:body0` (`rel`)."]
+        #[doc = "C++ authoring: `UsdPhysicsJoint::CreateBody0Rel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsJoint::CreateBody0Rel")]
+        #[doc(alias = "CreateBody0Rel")]
         set_body0, "physics:body0"
     }
     set_relationship! {
         #[doc = "Relationship to any UsdGeomXformable."]
         #[doc = ""]
         #[doc = "USD relationship `physics:body1` (`rel`)."]
+        #[doc = "C++ authoring: `UsdPhysicsJoint::CreateBody1Rel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsJoint::CreateBody1Rel")]
+        #[doc(alias = "CreateBody1Rel")]
         set_body1, "physics:body1"
     }
     set_attribute! {
         #[doc = "Joint break force."]
         #[doc = ""]
         #[doc = "USD attribute `physics:breakForce` (`float`; fallback `inf`)."]
+        #[doc = "C++ authoring: `UsdPhysicsJoint::CreateBreakForceAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsJoint::CreateBreakForceAttr")]
+        #[doc(alias = "CreateBreakForceAttr")]
         set_break_force, set_break_force_at, "physics:breakForce", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "Joint break torque."]
         #[doc = ""]
         #[doc = "USD attribute `physics:breakTorque` (`float`; fallback `inf`)."]
+        #[doc = "C++ authoring: `UsdPhysicsJoint::CreateBreakTorqueAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsJoint::CreateBreakTorqueAttr")]
+        #[doc(alias = "CreateBreakTorqueAttr")]
         set_break_torque, set_break_torque_at, "physics:breakTorque", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "Determines if the jointed subtrees should collide or not."]
         #[doc = ""]
         #[doc = "USD attribute `physics:collisionEnabled` (`bool`; fallback `false`)."]
+        #[doc = "C++ authoring: `UsdPhysicsJoint::CreateCollisionEnabledAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsJoint::CreateCollisionEnabledAttr")]
+        #[doc(alias = "CreateCollisionEnabledAttr")]
         set_collision_enabled, set_collision_enabled_at, "physics:collisionEnabled", bool, crate::value::write_bool
     }
     set_uniform_attribute! {
         #[doc = "Determines if the joint can be included in an Articulation."]
         #[doc = ""]
         #[doc = "USD attribute `physics:excludeFromArticulation` (`bool`, uniform; fallback `false`)."]
+        #[doc = "C++ authoring: `UsdPhysicsJoint::CreateExcludeFromArticulationAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsJoint::CreateExcludeFromArticulationAttr")]
+        #[doc(alias = "CreateExcludeFromArticulationAttr")]
         set_exclude_from_articulation, "physics:excludeFromArticulation", bool, crate::value::write_bool
     }
     set_attribute! {
         #[doc = "Determines if the joint is enabled."]
         #[doc = ""]
         #[doc = "USD attribute `physics:jointEnabled` (`bool`; fallback `true`)."]
+        #[doc = "C++ authoring: `UsdPhysicsJoint::CreateJointEnabledAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsJoint::CreateJointEnabledAttr")]
+        #[doc(alias = "CreateJointEnabledAttr")]
         set_joint_enabled, set_joint_enabled_at, "physics:jointEnabled", bool, crate::value::write_bool
     }
     set_attribute! {
         #[doc = "Relative position of the joint frame to body0's frame."]
         #[doc = ""]
         #[doc = "USD attribute `physics:localPos0` (`point3f`; fallback `(0.0, 0.0, 0.0)`)."]
+        #[doc = "C++ authoring: `UsdPhysicsJoint::CreateLocalPos0Attr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsJoint::CreateLocalPos0Attr")]
+        #[doc(alias = "CreateLocalPos0Attr")]
         set_local_pos0, set_local_pos0_at, "physics:localPos0", [f32; 3], crate::value::write_float3
     }
     set_attribute! {
         #[doc = "Relative position of the joint frame to body1's frame."]
         #[doc = ""]
         #[doc = "USD attribute `physics:localPos1` (`point3f`; fallback `(0.0, 0.0, 0.0)`)."]
+        #[doc = "C++ authoring: `UsdPhysicsJoint::CreateLocalPos1Attr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsJoint::CreateLocalPos1Attr")]
+        #[doc(alias = "CreateLocalPos1Attr")]
         set_local_pos1, set_local_pos1_at, "physics:localPos1", [f32; 3], crate::value::write_float3
     }
     set_attribute! {
         #[doc = "Relative orientation of the joint frame to body0's frame."]
         #[doc = ""]
         #[doc = "USD attribute `physics:localRot0` (`quatf`; fallback `(0.0, 0.0, 0.0, 1.0)`)."]
+        #[doc = "C++ authoring: `UsdPhysicsJoint::CreateLocalRot0Attr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsJoint::CreateLocalRot0Attr")]
+        #[doc(alias = "CreateLocalRot0Attr")]
         set_local_rot0, set_local_rot0_at, "physics:localRot0", [f32; 4], crate::value::write_quatf
     }
     set_attribute! {
         #[doc = "Relative orientation of the joint frame to body1's frame."]
         #[doc = ""]
         #[doc = "USD attribute `physics:localRot1` (`quatf`; fallback `(0.0, 0.0, 0.0, 1.0)`)."]
+        #[doc = "C++ authoring: `UsdPhysicsJoint::CreateLocalRot1Attr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsJoint::CreateLocalRot1Attr")]
+        #[doc(alias = "CreateLocalRot1Attr")]
         set_local_rot1, set_local_rot1_at, "physics:localRot1", [f32; 4], crate::value::write_quatf
     }
 }
@@ -1066,6 +1270,9 @@ impl PhysicsJointEdit {
 #[doc = "The PhysicsLimitAPI can be applied to a PhysicsJoint and will restrict the movement along an axis."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's multiple-apply API schema `PhysicsLimitAPI`. Get it with [`PhysicsLimitApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdPhysicsLimitAPI`."]
+#[doc(alias = "UsdPhysicsLimitAPI")]
+#[doc(alias = "PhysicsLimitAPI")]
 #[derive(Clone, Copy, Debug)]
 pub struct PhysicsLimitApi<'a> {
     base: InstanceView<'a>,
@@ -1086,6 +1293,8 @@ impl<'a> PhysicsLimitApi<'a> {
     /// A view of the instance `instance` of the schema on the prim at `path`,
     /// if the prim has it applied.
     #[must_use]
+    #[doc(alias = "UsdPhysicsLimitAPI::Get")]
+    #[doc(alias = "Get")]
     pub fn get(scene: &Scene<'a>, path: PathId, instance: &str) -> Option<Self> {
         if !scene.has_api(path, Self::SCHEMA, Some(instance)) {
             return None;
@@ -1097,6 +1306,8 @@ impl<'a> PhysicsLimitApi<'a> {
     /// Every instance of the schema the prim at `path` has applied, in the
     /// order its definition applies them.
     #[must_use]
+    #[doc(alias = "UsdPhysicsLimitAPI::GetAll")]
+    #[doc(alias = "GetAll")]
     pub fn instances(scene: &Scene<'a>, path: PathId) -> ::alloc::vec::Vec<Self> {
         scene
             .instances(path, Self::SCHEMA)
@@ -1125,6 +1336,8 @@ impl<'a> PhysicsLimitApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there.
+    #[doc(alias = "UsdPhysicsLimitAPI::Apply")]
+    #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
@@ -1136,10 +1349,16 @@ impl<'a> PhysicsLimitApi<'a> {
 
     attribute! {
         #[doc = "USD attribute `limit:&lt;instance&gt;:physics:high` (`float`; fallback `inf`)."]
+        #[doc = "C++ read: `UsdPhysicsLimitAPI::GetHighAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsLimitAPI::GetHighAttr")]
+        #[doc(alias = "GetHighAttr")]
         high, high_at, "limit:__INSTANCE_NAME__:physics:high", f32, crate::value::read_float
     }
     attribute! {
         #[doc = "USD attribute `limit:&lt;instance&gt;:physics:low` (`float`; fallback `-inf`)."]
+        #[doc = "C++ read: `UsdPhysicsLimitAPI::GetLowAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsLimitAPI::GetLowAttr")]
+        #[doc(alias = "GetLowAttr")]
         low, low_at, "limit:__INSTANCE_NAME__:physics:low", f32, crate::value::read_float
     }
 }
@@ -1175,10 +1394,16 @@ impl PhysicsLimitApiEdit {
 
     set_attribute! {
         #[doc = "USD attribute `limit:&lt;instance&gt;:physics:high` (`float`; fallback `inf`)."]
+        #[doc = "C++ authoring: `UsdPhysicsLimitAPI::CreateHighAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsLimitAPI::CreateHighAttr")]
+        #[doc(alias = "CreateHighAttr")]
         set_high, set_high_at, "limit:__INSTANCE_NAME__:physics:high", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "USD attribute `limit:&lt;instance&gt;:physics:low` (`float`; fallback `-inf`)."]
+        #[doc = "C++ authoring: `UsdPhysicsLimitAPI::CreateLowAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsLimitAPI::CreateLowAttr")]
+        #[doc(alias = "CreateLowAttr")]
         set_low, set_low_at, "limit:__INSTANCE_NAME__:physics:low", f32, crate::value::write_float
     }
 }
@@ -1186,6 +1411,9 @@ impl PhysicsLimitApiEdit {
 #[doc = "Defines explicit mass properties (mass, density, inertia etc.)."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's single-apply API schema `PhysicsMassAPI`. Get it with [`PhysicsMassApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdPhysicsMassAPI`."]
+#[doc(alias = "UsdPhysicsMassAPI")]
+#[doc(alias = "PhysicsMassAPI")]
 #[derive(Clone, Copy, Debug)]
 pub struct PhysicsMassApi<'a> {
     base: PrimView<'a>,
@@ -1206,6 +1434,8 @@ impl<'a> PhysicsMassApi<'a> {
     /// A view of the schema on the prim at `path`, if the prim has it
     /// applied.
     #[must_use]
+    #[doc(alias = "UsdPhysicsMassAPI::Get")]
+    #[doc(alias = "Get")]
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
@@ -1230,6 +1460,8 @@ impl<'a> PhysicsMassApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there.
+    #[doc(alias = "UsdPhysicsMassAPI::Apply")]
+    #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
@@ -1245,6 +1477,9 @@ impl<'a> PhysicsMassApi<'a> {
         #[doc = "Center of mass in the prim's local space."]
         #[doc = ""]
         #[doc = "USD attribute `physics:centerOfMass` (`point3f`; fallback `(-inf, -inf, -inf)`)."]
+        #[doc = "C++ read: `UsdPhysicsMassAPI::GetCenterOfMassAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsMassAPI::GetCenterOfMassAttr")]
+        #[doc(alias = "GetCenterOfMassAttr")]
         center_of_mass, center_of_mass_at, "physics:centerOfMass", [f32; 3], crate::value::read_float3
     }
     /// The USD name of [`Self::density`].
@@ -1254,6 +1489,9 @@ impl<'a> PhysicsMassApi<'a> {
         #[doc = "If non-zero, specifies the density of the object."]
         #[doc = ""]
         #[doc = "USD attribute `physics:density` (`float`; fallback `0.0`)."]
+        #[doc = "C++ read: `UsdPhysicsMassAPI::GetDensityAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsMassAPI::GetDensityAttr")]
+        #[doc(alias = "GetDensityAttr")]
         density, density_at, "physics:density", f32, crate::value::read_float
     }
     /// The USD name of [`Self::diagonal_inertia`].
@@ -1263,6 +1501,9 @@ impl<'a> PhysicsMassApi<'a> {
         #[doc = "If non-zero, specifies diagonalized inertia tensor along the principal axes."]
         #[doc = ""]
         #[doc = "USD attribute `physics:diagonalInertia` (`float3`; fallback `(0.0, 0.0, 0.0)`)."]
+        #[doc = "C++ read: `UsdPhysicsMassAPI::GetDiagonalInertiaAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsMassAPI::GetDiagonalInertiaAttr")]
+        #[doc(alias = "GetDiagonalInertiaAttr")]
         diagonal_inertia, diagonal_inertia_at, "physics:diagonalInertia", [f32; 3], crate::value::read_float3
     }
     /// The USD name of [`Self::mass`].
@@ -1272,6 +1513,9 @@ impl<'a> PhysicsMassApi<'a> {
         #[doc = "If non-zero, directly specifies the mass of the object."]
         #[doc = ""]
         #[doc = "USD attribute `physics:mass` (`float`; fallback `0.0`)."]
+        #[doc = "C++ read: `UsdPhysicsMassAPI::GetMassAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsMassAPI::GetMassAttr")]
+        #[doc(alias = "GetMassAttr")]
         mass, mass_at, "physics:mass", f32, crate::value::read_float
     }
     /// The USD name of [`Self::principal_axes`].
@@ -1281,6 +1525,9 @@ impl<'a> PhysicsMassApi<'a> {
         #[doc = "Orientation of the inertia tensor's principal axes in the prim's local space."]
         #[doc = ""]
         #[doc = "USD attribute `physics:principalAxes` (`quatf`; fallback `(0.0, 0.0, 0.0, 0.0)`)."]
+        #[doc = "C++ read: `UsdPhysicsMassAPI::GetPrincipalAxesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsMassAPI::GetPrincipalAxesAttr")]
+        #[doc(alias = "GetPrincipalAxesAttr")]
         principal_axes, principal_axes_at, "physics:principalAxes", [f32; 4], crate::value::read_quatf
     }
 }
@@ -1318,30 +1565,45 @@ impl PhysicsMassApiEdit {
         #[doc = "Center of mass in the prim's local space."]
         #[doc = ""]
         #[doc = "USD attribute `physics:centerOfMass` (`point3f`; fallback `(-inf, -inf, -inf)`)."]
+        #[doc = "C++ authoring: `UsdPhysicsMassAPI::CreateCenterOfMassAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsMassAPI::CreateCenterOfMassAttr")]
+        #[doc(alias = "CreateCenterOfMassAttr")]
         set_center_of_mass, set_center_of_mass_at, "physics:centerOfMass", [f32; 3], crate::value::write_float3
     }
     set_attribute! {
         #[doc = "If non-zero, specifies the density of the object."]
         #[doc = ""]
         #[doc = "USD attribute `physics:density` (`float`; fallback `0.0`)."]
+        #[doc = "C++ authoring: `UsdPhysicsMassAPI::CreateDensityAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsMassAPI::CreateDensityAttr")]
+        #[doc(alias = "CreateDensityAttr")]
         set_density, set_density_at, "physics:density", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "If non-zero, specifies diagonalized inertia tensor along the principal axes."]
         #[doc = ""]
         #[doc = "USD attribute `physics:diagonalInertia` (`float3`; fallback `(0.0, 0.0, 0.0)`)."]
+        #[doc = "C++ authoring: `UsdPhysicsMassAPI::CreateDiagonalInertiaAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsMassAPI::CreateDiagonalInertiaAttr")]
+        #[doc(alias = "CreateDiagonalInertiaAttr")]
         set_diagonal_inertia, set_diagonal_inertia_at, "physics:diagonalInertia", [f32; 3], crate::value::write_float3
     }
     set_attribute! {
         #[doc = "If non-zero, directly specifies the mass of the object."]
         #[doc = ""]
         #[doc = "USD attribute `physics:mass` (`float`; fallback `0.0`)."]
+        #[doc = "C++ authoring: `UsdPhysicsMassAPI::CreateMassAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsMassAPI::CreateMassAttr")]
+        #[doc(alias = "CreateMassAttr")]
         set_mass, set_mass_at, "physics:mass", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "Orientation of the inertia tensor's principal axes in the prim's local space."]
         #[doc = ""]
         #[doc = "USD attribute `physics:principalAxes` (`quatf`; fallback `(0.0, 0.0, 0.0, 0.0)`)."]
+        #[doc = "C++ authoring: `UsdPhysicsMassAPI::CreatePrincipalAxesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsMassAPI::CreatePrincipalAxesAttr")]
+        #[doc(alias = "CreatePrincipalAxesAttr")]
         set_principal_axes, set_principal_axes_at, "physics:principalAxes", [f32; 4], crate::value::write_quatf
     }
 }
@@ -1349,6 +1611,9 @@ impl PhysicsMassApiEdit {
 #[doc = "Adds simulation material properties to a Material."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's single-apply API schema `PhysicsMaterialAPI`. Get it with [`PhysicsMaterialApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdPhysicsMaterialAPI`."]
+#[doc(alias = "UsdPhysicsMaterialAPI")]
+#[doc(alias = "PhysicsMaterialAPI")]
 #[derive(Clone, Copy, Debug)]
 pub struct PhysicsMaterialApi<'a> {
     base: PrimView<'a>,
@@ -1369,6 +1634,8 @@ impl<'a> PhysicsMaterialApi<'a> {
     /// A view of the schema on the prim at `path`, if the prim has it
     /// applied.
     #[must_use]
+    #[doc(alias = "UsdPhysicsMaterialAPI::Get")]
+    #[doc(alias = "Get")]
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
@@ -1393,6 +1660,8 @@ impl<'a> PhysicsMaterialApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there.
+    #[doc(alias = "UsdPhysicsMaterialAPI::Apply")]
+    #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
@@ -1408,6 +1677,9 @@ impl<'a> PhysicsMaterialApi<'a> {
         #[doc = "If non-zero, defines the density of the material."]
         #[doc = ""]
         #[doc = "USD attribute `physics:density` (`float`; fallback `0.0`)."]
+        #[doc = "C++ read: `UsdPhysicsMaterialAPI::GetDensityAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsMaterialAPI::GetDensityAttr")]
+        #[doc(alias = "GetDensityAttr")]
         density, density_at, "physics:density", f32, crate::value::read_float
     }
     /// The USD name of [`Self::dynamic_friction`].
@@ -1417,6 +1689,9 @@ impl<'a> PhysicsMaterialApi<'a> {
         #[doc = "Dynamic friction coefficient."]
         #[doc = ""]
         #[doc = "USD attribute `physics:dynamicFriction` (`float`; fallback `0.0`)."]
+        #[doc = "C++ read: `UsdPhysicsMaterialAPI::GetDynamicFrictionAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsMaterialAPI::GetDynamicFrictionAttr")]
+        #[doc(alias = "GetDynamicFrictionAttr")]
         dynamic_friction, dynamic_friction_at, "physics:dynamicFriction", f32, crate::value::read_float
     }
     /// The USD name of [`Self::restitution`].
@@ -1426,6 +1701,9 @@ impl<'a> PhysicsMaterialApi<'a> {
         #[doc = "Restitution coefficient."]
         #[doc = ""]
         #[doc = "USD attribute `physics:restitution` (`float`; fallback `0.0`)."]
+        #[doc = "C++ read: `UsdPhysicsMaterialAPI::GetRestitutionAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsMaterialAPI::GetRestitutionAttr")]
+        #[doc(alias = "GetRestitutionAttr")]
         restitution, restitution_at, "physics:restitution", f32, crate::value::read_float
     }
     /// The USD name of [`Self::static_friction`].
@@ -1435,6 +1713,9 @@ impl<'a> PhysicsMaterialApi<'a> {
         #[doc = "Static friction coefficient."]
         #[doc = ""]
         #[doc = "USD attribute `physics:staticFriction` (`float`; fallback `0.0`)."]
+        #[doc = "C++ read: `UsdPhysicsMaterialAPI::GetStaticFrictionAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsMaterialAPI::GetStaticFrictionAttr")]
+        #[doc(alias = "GetStaticFrictionAttr")]
         static_friction, static_friction_at, "physics:staticFriction", f32, crate::value::read_float
     }
 }
@@ -1472,24 +1753,36 @@ impl PhysicsMaterialApiEdit {
         #[doc = "If non-zero, defines the density of the material."]
         #[doc = ""]
         #[doc = "USD attribute `physics:density` (`float`; fallback `0.0`)."]
+        #[doc = "C++ authoring: `UsdPhysicsMaterialAPI::CreateDensityAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsMaterialAPI::CreateDensityAttr")]
+        #[doc(alias = "CreateDensityAttr")]
         set_density, set_density_at, "physics:density", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "Dynamic friction coefficient."]
         #[doc = ""]
         #[doc = "USD attribute `physics:dynamicFriction` (`float`; fallback `0.0`)."]
+        #[doc = "C++ authoring: `UsdPhysicsMaterialAPI::CreateDynamicFrictionAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsMaterialAPI::CreateDynamicFrictionAttr")]
+        #[doc(alias = "CreateDynamicFrictionAttr")]
         set_dynamic_friction, set_dynamic_friction_at, "physics:dynamicFriction", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "Restitution coefficient."]
         #[doc = ""]
         #[doc = "USD attribute `physics:restitution` (`float`; fallback `0.0`)."]
+        #[doc = "C++ authoring: `UsdPhysicsMaterialAPI::CreateRestitutionAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsMaterialAPI::CreateRestitutionAttr")]
+        #[doc(alias = "CreateRestitutionAttr")]
         set_restitution, set_restitution_at, "physics:restitution", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "Static friction coefficient."]
         #[doc = ""]
         #[doc = "USD attribute `physics:staticFriction` (`float`; fallback `0.0`)."]
+        #[doc = "C++ authoring: `UsdPhysicsMaterialAPI::CreateStaticFrictionAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsMaterialAPI::CreateStaticFrictionAttr")]
+        #[doc(alias = "CreateStaticFrictionAttr")]
         set_static_friction, set_static_friction_at, "physics:staticFriction", f32, crate::value::write_float
     }
 }
@@ -1515,6 +1808,9 @@ token_enum! {
 #[doc = "Attributes to control how a Mesh is made into a collider."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's single-apply API schema `PhysicsMeshCollisionAPI`. Get it with [`PhysicsMeshCollisionApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdPhysicsMeshCollisionAPI`."]
+#[doc(alias = "UsdPhysicsMeshCollisionAPI")]
+#[doc(alias = "PhysicsMeshCollisionAPI")]
 #[derive(Clone, Copy, Debug)]
 pub struct PhysicsMeshCollisionApi<'a> {
     base: PrimView<'a>,
@@ -1535,6 +1831,8 @@ impl<'a> PhysicsMeshCollisionApi<'a> {
     /// A view of the schema on the prim at `path`, if the prim has it
     /// applied.
     #[must_use]
+    #[doc(alias = "UsdPhysicsMeshCollisionAPI::Get")]
+    #[doc(alias = "Get")]
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
@@ -1559,6 +1857,8 @@ impl<'a> PhysicsMeshCollisionApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there.
+    #[doc(alias = "UsdPhysicsMeshCollisionAPI::Apply")]
+    #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
@@ -1574,6 +1874,9 @@ impl<'a> PhysicsMeshCollisionApi<'a> {
         #[doc = "Determines the mesh's collision approximation: \"none\" - The mesh geometry is used directly as a collider without any approximation."]
         #[doc = ""]
         #[doc = "USD attribute `physics:approximation` (`token`, uniform; fallback `\"none\"`)."]
+        #[doc = "C++ read: `UsdPhysicsMeshCollisionAPI::GetApproximationAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsMeshCollisionAPI::GetApproximationAttr")]
+        #[doc(alias = "GetApproximationAttr")]
         approximation, "physics:approximation", PhysicsMeshCollisionApiApproximation, PhysicsMeshCollisionApiApproximation::read
     }
 }
@@ -1611,6 +1914,9 @@ impl PhysicsMeshCollisionApiEdit {
         #[doc = "Determines the mesh's collision approximation: \"none\" - The mesh geometry is used directly as a collider without any approximation."]
         #[doc = ""]
         #[doc = "USD attribute `physics:approximation` (`token`, uniform; fallback `\"none\"`)."]
+        #[doc = "C++ authoring: `UsdPhysicsMeshCollisionAPI::CreateApproximationAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsMeshCollisionAPI::CreateApproximationAttr")]
+        #[doc(alias = "CreateApproximationAttr")]
         set_approximation, "physics:approximation", PhysicsMeshCollisionApiApproximation, PhysicsMeshCollisionApiApproximation::write
     }
 }
@@ -1630,6 +1936,8 @@ token_enum! {
 #[doc = "Predefined prismatic joint type (translation along prismatic joint axis is permitted.)."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `PhysicsPrismaticJoint`, inheriting [`PhysicsJoint`]. Construct it with [`PhysicsPrismaticJoint::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdPhysicsPrismaticJoint`."]
+#[doc(alias = "UsdPhysicsPrismaticJoint")]
 #[derive(Clone, Copy, Debug)]
 pub struct PhysicsPrismaticJoint<'a> {
     base: PhysicsJoint<'a>,
@@ -1648,6 +1956,8 @@ impl<'a> PhysicsPrismaticJoint<'a> {
     pub const SCHEMA: &'static str = "PhysicsPrismaticJoint";
 
     #[doc = "A view of the prim at `path`, if it is a `PhysicsPrismaticJoint` or of a schema derived from it."]
+    #[doc(alias = "UsdPhysicsPrismaticJoint::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -1672,6 +1982,8 @@ impl<'a> PhysicsPrismaticJoint<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdPhysicsPrismaticJoint::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> PhysicsPrismaticJointEdit {
         edit.define(path, Self::SCHEMA);
         PhysicsPrismaticJointEdit::from_path(path)
@@ -1684,6 +1996,9 @@ impl<'a> PhysicsPrismaticJoint<'a> {
         #[doc = "Joint axis."]
         #[doc = ""]
         #[doc = "USD attribute `physics:axis` (`token`, uniform; fallback `\"X\"`)."]
+        #[doc = "C++ read: `UsdPhysicsPrismaticJoint::GetAxisAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsPrismaticJoint::GetAxisAttr")]
+        #[doc(alias = "GetAxisAttr")]
         axis, "physics:axis", PhysicsPrismaticJointAxis, PhysicsPrismaticJointAxis::read
     }
     /// The USD name of [`Self::lower_limit`].
@@ -1693,6 +2008,9 @@ impl<'a> PhysicsPrismaticJoint<'a> {
         #[doc = "Lower limit."]
         #[doc = ""]
         #[doc = "USD attribute `physics:lowerLimit` (`float`; fallback `-inf`)."]
+        #[doc = "C++ read: `UsdPhysicsPrismaticJoint::GetLowerLimitAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsPrismaticJoint::GetLowerLimitAttr")]
+        #[doc(alias = "GetLowerLimitAttr")]
         lower_limit, lower_limit_at, "physics:lowerLimit", f32, crate::value::read_float
     }
     /// The USD name of [`Self::upper_limit`].
@@ -1702,6 +2020,9 @@ impl<'a> PhysicsPrismaticJoint<'a> {
         #[doc = "Upper limit."]
         #[doc = ""]
         #[doc = "USD attribute `physics:upperLimit` (`float`; fallback `inf`)."]
+        #[doc = "C++ read: `UsdPhysicsPrismaticJoint::GetUpperLimitAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsPrismaticJoint::GetUpperLimitAttr")]
+        #[doc(alias = "GetUpperLimitAttr")]
         upper_limit, upper_limit_at, "physics:upperLimit", f32, crate::value::read_float
     }
 }
@@ -1739,18 +2060,27 @@ impl PhysicsPrismaticJointEdit {
         #[doc = "Joint axis."]
         #[doc = ""]
         #[doc = "USD attribute `physics:axis` (`token`, uniform; fallback `\"X\"`)."]
+        #[doc = "C++ authoring: `UsdPhysicsPrismaticJoint::CreateAxisAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsPrismaticJoint::CreateAxisAttr")]
+        #[doc(alias = "CreateAxisAttr")]
         set_axis, "physics:axis", PhysicsPrismaticJointAxis, PhysicsPrismaticJointAxis::write
     }
     set_attribute! {
         #[doc = "Lower limit."]
         #[doc = ""]
         #[doc = "USD attribute `physics:lowerLimit` (`float`; fallback `-inf`)."]
+        #[doc = "C++ authoring: `UsdPhysicsPrismaticJoint::CreateLowerLimitAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsPrismaticJoint::CreateLowerLimitAttr")]
+        #[doc(alias = "CreateLowerLimitAttr")]
         set_lower_limit, set_lower_limit_at, "physics:lowerLimit", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "Upper limit."]
         #[doc = ""]
         #[doc = "USD attribute `physics:upperLimit` (`float`; fallback `inf`)."]
+        #[doc = "C++ authoring: `UsdPhysicsPrismaticJoint::CreateUpperLimitAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsPrismaticJoint::CreateUpperLimitAttr")]
+        #[doc(alias = "CreateUpperLimitAttr")]
         set_upper_limit, set_upper_limit_at, "physics:upperLimit", f32, crate::value::write_float
     }
 }
@@ -1770,6 +2100,8 @@ token_enum! {
 #[doc = "Predefined revolute joint type (rotation along revolute joint axis is permitted.)."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `PhysicsRevoluteJoint`, inheriting [`PhysicsJoint`]. Construct it with [`PhysicsRevoluteJoint::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdPhysicsRevoluteJoint`."]
+#[doc(alias = "UsdPhysicsRevoluteJoint")]
 #[derive(Clone, Copy, Debug)]
 pub struct PhysicsRevoluteJoint<'a> {
     base: PhysicsJoint<'a>,
@@ -1788,6 +2120,8 @@ impl<'a> PhysicsRevoluteJoint<'a> {
     pub const SCHEMA: &'static str = "PhysicsRevoluteJoint";
 
     #[doc = "A view of the prim at `path`, if it is a `PhysicsRevoluteJoint` or of a schema derived from it."]
+    #[doc(alias = "UsdPhysicsRevoluteJoint::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -1812,6 +2146,8 @@ impl<'a> PhysicsRevoluteJoint<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdPhysicsRevoluteJoint::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> PhysicsRevoluteJointEdit {
         edit.define(path, Self::SCHEMA);
         PhysicsRevoluteJointEdit::from_path(path)
@@ -1824,6 +2160,9 @@ impl<'a> PhysicsRevoluteJoint<'a> {
         #[doc = "Joint axis."]
         #[doc = ""]
         #[doc = "USD attribute `physics:axis` (`token`, uniform; fallback `\"X\"`)."]
+        #[doc = "C++ read: `UsdPhysicsRevoluteJoint::GetAxisAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsRevoluteJoint::GetAxisAttr")]
+        #[doc(alias = "GetAxisAttr")]
         axis, "physics:axis", PhysicsRevoluteJointAxis, PhysicsRevoluteJointAxis::read
     }
     /// The USD name of [`Self::lower_limit`].
@@ -1833,6 +2172,9 @@ impl<'a> PhysicsRevoluteJoint<'a> {
         #[doc = "Lower limit."]
         #[doc = ""]
         #[doc = "USD attribute `physics:lowerLimit` (`float`; fallback `-inf`)."]
+        #[doc = "C++ read: `UsdPhysicsRevoluteJoint::GetLowerLimitAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsRevoluteJoint::GetLowerLimitAttr")]
+        #[doc(alias = "GetLowerLimitAttr")]
         lower_limit, lower_limit_at, "physics:lowerLimit", f32, crate::value::read_float
     }
     /// The USD name of [`Self::upper_limit`].
@@ -1842,6 +2184,9 @@ impl<'a> PhysicsRevoluteJoint<'a> {
         #[doc = "Upper limit."]
         #[doc = ""]
         #[doc = "USD attribute `physics:upperLimit` (`float`; fallback `inf`)."]
+        #[doc = "C++ read: `UsdPhysicsRevoluteJoint::GetUpperLimitAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsRevoluteJoint::GetUpperLimitAttr")]
+        #[doc(alias = "GetUpperLimitAttr")]
         upper_limit, upper_limit_at, "physics:upperLimit", f32, crate::value::read_float
     }
 }
@@ -1879,18 +2224,27 @@ impl PhysicsRevoluteJointEdit {
         #[doc = "Joint axis."]
         #[doc = ""]
         #[doc = "USD attribute `physics:axis` (`token`, uniform; fallback `\"X\"`)."]
+        #[doc = "C++ authoring: `UsdPhysicsRevoluteJoint::CreateAxisAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsRevoluteJoint::CreateAxisAttr")]
+        #[doc(alias = "CreateAxisAttr")]
         set_axis, "physics:axis", PhysicsRevoluteJointAxis, PhysicsRevoluteJointAxis::write
     }
     set_attribute! {
         #[doc = "Lower limit."]
         #[doc = ""]
         #[doc = "USD attribute `physics:lowerLimit` (`float`; fallback `-inf`)."]
+        #[doc = "C++ authoring: `UsdPhysicsRevoluteJoint::CreateLowerLimitAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsRevoluteJoint::CreateLowerLimitAttr")]
+        #[doc(alias = "CreateLowerLimitAttr")]
         set_lower_limit, set_lower_limit_at, "physics:lowerLimit", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "Upper limit."]
         #[doc = ""]
         #[doc = "USD attribute `physics:upperLimit` (`float`; fallback `inf`)."]
+        #[doc = "C++ authoring: `UsdPhysicsRevoluteJoint::CreateUpperLimitAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsRevoluteJoint::CreateUpperLimitAttr")]
+        #[doc(alias = "CreateUpperLimitAttr")]
         set_upper_limit, set_upper_limit_at, "physics:upperLimit", f32, crate::value::write_float
     }
 }
@@ -1898,6 +2252,9 @@ impl PhysicsRevoluteJointEdit {
 #[doc = "Applies physics body attributes to any UsdGeomXformable prim and marks that prim to be driven by a simulation."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's single-apply API schema `PhysicsRigidBodyAPI`. Get it with [`PhysicsRigidBodyApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdPhysicsRigidBodyAPI`."]
+#[doc(alias = "UsdPhysicsRigidBodyAPI")]
+#[doc(alias = "PhysicsRigidBodyAPI")]
 #[derive(Clone, Copy, Debug)]
 pub struct PhysicsRigidBodyApi<'a> {
     base: PrimView<'a>,
@@ -1918,6 +2275,8 @@ impl<'a> PhysicsRigidBodyApi<'a> {
     /// A view of the schema on the prim at `path`, if the prim has it
     /// applied.
     #[must_use]
+    #[doc(alias = "UsdPhysicsRigidBodyAPI::Get")]
+    #[doc(alias = "Get")]
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
@@ -1942,6 +2301,8 @@ impl<'a> PhysicsRigidBodyApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there.
+    #[doc(alias = "UsdPhysicsRigidBodyAPI::Apply")]
+    #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
@@ -1957,6 +2318,9 @@ impl<'a> PhysicsRigidBodyApi<'a> {
         #[doc = "Angular velocity in the same space as the node's xform."]
         #[doc = ""]
         #[doc = "USD attribute `physics:angularVelocity` (`vector3f`; fallback `(0.0, 0.0, 0.0)`)."]
+        #[doc = "C++ read: `UsdPhysicsRigidBodyAPI::GetAngularVelocityAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsRigidBodyAPI::GetAngularVelocityAttr")]
+        #[doc(alias = "GetAngularVelocityAttr")]
         angular_velocity, angular_velocity_at, "physics:angularVelocity", [f32; 3], crate::value::read_float3
     }
     /// The USD name of [`Self::kinematic_enabled`].
@@ -1966,6 +2330,9 @@ impl<'a> PhysicsRigidBodyApi<'a> {
         #[doc = "Determines whether the body is kinematic or not."]
         #[doc = ""]
         #[doc = "USD attribute `physics:kinematicEnabled` (`bool`; fallback `false`)."]
+        #[doc = "C++ read: `UsdPhysicsRigidBodyAPI::GetKinematicEnabledAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsRigidBodyAPI::GetKinematicEnabledAttr")]
+        #[doc(alias = "GetKinematicEnabledAttr")]
         kinematic_enabled, kinematic_enabled_at, "physics:kinematicEnabled", bool, crate::value::read_bool
     }
     /// The USD name of [`Self::rigid_body_enabled`].
@@ -1975,6 +2342,9 @@ impl<'a> PhysicsRigidBodyApi<'a> {
         #[doc = "Determines if this PhysicsRigidBodyAPI is enabled."]
         #[doc = ""]
         #[doc = "USD attribute `physics:rigidBodyEnabled` (`bool`; fallback `true`)."]
+        #[doc = "C++ read: `UsdPhysicsRigidBodyAPI::GetRigidBodyEnabledAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsRigidBodyAPI::GetRigidBodyEnabledAttr")]
+        #[doc(alias = "GetRigidBodyEnabledAttr")]
         rigid_body_enabled, rigid_body_enabled_at, "physics:rigidBodyEnabled", bool, crate::value::read_bool
     }
     /// The USD name of [`Self::simulation_owner`].
@@ -1984,6 +2354,9 @@ impl<'a> PhysicsRigidBodyApi<'a> {
         #[doc = "Single PhysicsScene that will simulate this body."]
         #[doc = ""]
         #[doc = "USD relationship `physics:simulationOwner` (`rel`)."]
+        #[doc = "C++ read: `UsdPhysicsRigidBodyAPI::GetSimulationOwnerRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsRigidBodyAPI::GetSimulationOwnerRel")]
+        #[doc(alias = "GetSimulationOwnerRel")]
         simulation_owner, "physics:simulationOwner"
     }
     /// The USD name of [`Self::starts_asleep`].
@@ -1993,6 +2366,9 @@ impl<'a> PhysicsRigidBodyApi<'a> {
         #[doc = "Determines if the body is asleep when the simulation starts."]
         #[doc = ""]
         #[doc = "USD attribute `physics:startsAsleep` (`bool`, uniform; fallback `false`)."]
+        #[doc = "C++ read: `UsdPhysicsRigidBodyAPI::GetStartsAsleepAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsRigidBodyAPI::GetStartsAsleepAttr")]
+        #[doc(alias = "GetStartsAsleepAttr")]
         starts_asleep, "physics:startsAsleep", bool, crate::value::read_bool
     }
     /// The USD name of [`Self::velocity`].
@@ -2002,6 +2378,9 @@ impl<'a> PhysicsRigidBodyApi<'a> {
         #[doc = "Linear velocity in the same space as the node's xform."]
         #[doc = ""]
         #[doc = "USD attribute `physics:velocity` (`vector3f`; fallback `(0.0, 0.0, 0.0)`)."]
+        #[doc = "C++ read: `UsdPhysicsRigidBodyAPI::GetVelocityAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsRigidBodyAPI::GetVelocityAttr")]
+        #[doc(alias = "GetVelocityAttr")]
         velocity, velocity_at, "physics:velocity", [f32; 3], crate::value::read_float3
     }
 }
@@ -2039,36 +2418,54 @@ impl PhysicsRigidBodyApiEdit {
         #[doc = "Angular velocity in the same space as the node's xform."]
         #[doc = ""]
         #[doc = "USD attribute `physics:angularVelocity` (`vector3f`; fallback `(0.0, 0.0, 0.0)`)."]
+        #[doc = "C++ authoring: `UsdPhysicsRigidBodyAPI::CreateAngularVelocityAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsRigidBodyAPI::CreateAngularVelocityAttr")]
+        #[doc(alias = "CreateAngularVelocityAttr")]
         set_angular_velocity, set_angular_velocity_at, "physics:angularVelocity", [f32; 3], crate::value::write_float3
     }
     set_attribute! {
         #[doc = "Determines whether the body is kinematic or not."]
         #[doc = ""]
         #[doc = "USD attribute `physics:kinematicEnabled` (`bool`; fallback `false`)."]
+        #[doc = "C++ authoring: `UsdPhysicsRigidBodyAPI::CreateKinematicEnabledAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsRigidBodyAPI::CreateKinematicEnabledAttr")]
+        #[doc(alias = "CreateKinematicEnabledAttr")]
         set_kinematic_enabled, set_kinematic_enabled_at, "physics:kinematicEnabled", bool, crate::value::write_bool
     }
     set_attribute! {
         #[doc = "Determines if this PhysicsRigidBodyAPI is enabled."]
         #[doc = ""]
         #[doc = "USD attribute `physics:rigidBodyEnabled` (`bool`; fallback `true`)."]
+        #[doc = "C++ authoring: `UsdPhysicsRigidBodyAPI::CreateRigidBodyEnabledAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsRigidBodyAPI::CreateRigidBodyEnabledAttr")]
+        #[doc(alias = "CreateRigidBodyEnabledAttr")]
         set_rigid_body_enabled, set_rigid_body_enabled_at, "physics:rigidBodyEnabled", bool, crate::value::write_bool
     }
     set_relationship! {
         #[doc = "Single PhysicsScene that will simulate this body."]
         #[doc = ""]
         #[doc = "USD relationship `physics:simulationOwner` (`rel`)."]
+        #[doc = "C++ authoring: `UsdPhysicsRigidBodyAPI::CreateSimulationOwnerRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsRigidBodyAPI::CreateSimulationOwnerRel")]
+        #[doc(alias = "CreateSimulationOwnerRel")]
         set_simulation_owner, "physics:simulationOwner"
     }
     set_uniform_attribute! {
         #[doc = "Determines if the body is asleep when the simulation starts."]
         #[doc = ""]
         #[doc = "USD attribute `physics:startsAsleep` (`bool`, uniform; fallback `false`)."]
+        #[doc = "C++ authoring: `UsdPhysicsRigidBodyAPI::CreateStartsAsleepAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsRigidBodyAPI::CreateStartsAsleepAttr")]
+        #[doc(alias = "CreateStartsAsleepAttr")]
         set_starts_asleep, "physics:startsAsleep", bool, crate::value::write_bool
     }
     set_attribute! {
         #[doc = "Linear velocity in the same space as the node's xform."]
         #[doc = ""]
         #[doc = "USD attribute `physics:velocity` (`vector3f`; fallback `(0.0, 0.0, 0.0)`)."]
+        #[doc = "C++ authoring: `UsdPhysicsRigidBodyAPI::CreateVelocityAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsRigidBodyAPI::CreateVelocityAttr")]
+        #[doc(alias = "CreateVelocityAttr")]
         set_velocity, set_velocity_at, "physics:velocity", [f32; 3], crate::value::write_float3
     }
 }
@@ -2076,6 +2473,8 @@ impl PhysicsRigidBodyApiEdit {
 #[doc = "General physics simulation properties, required for simulation."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `PhysicsScene`, inheriting [`crate::usd::Typed`]. Construct it with [`PhysicsScene::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdPhysicsScene`."]
+#[doc(alias = "UsdPhysicsScene")]
 #[derive(Clone, Copy, Debug)]
 pub struct PhysicsScene<'a> {
     base: crate::usd::Typed<'a>,
@@ -2094,6 +2493,8 @@ impl<'a> PhysicsScene<'a> {
     pub const SCHEMA: &'static str = "PhysicsScene";
 
     #[doc = "A view of the prim at `path`, if it is a `PhysicsScene` or of a schema derived from it."]
+    #[doc(alias = "UsdPhysicsScene::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -2118,6 +2519,8 @@ impl<'a> PhysicsScene<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdPhysicsScene::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> PhysicsSceneEdit {
         edit.define(path, Self::SCHEMA);
         PhysicsSceneEdit::from_path(path)
@@ -2130,6 +2533,9 @@ impl<'a> PhysicsScene<'a> {
         #[doc = "Gravity direction vector in simulation world space."]
         #[doc = ""]
         #[doc = "USD attribute `physics:gravityDirection` (`vector3f`; fallback `(0.0, 0.0, 0.0)`)."]
+        #[doc = "C++ read: `UsdPhysicsScene::GetGravityDirectionAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsScene::GetGravityDirectionAttr")]
+        #[doc(alias = "GetGravityDirectionAttr")]
         gravity_direction, gravity_direction_at, "physics:gravityDirection", [f32; 3], crate::value::read_float3
     }
     /// The USD name of [`Self::gravity_magnitude`].
@@ -2139,6 +2545,9 @@ impl<'a> PhysicsScene<'a> {
         #[doc = "Gravity acceleration magnitude in simulation world space."]
         #[doc = ""]
         #[doc = "USD attribute `physics:gravityMagnitude` (`float`; fallback `-inf`)."]
+        #[doc = "C++ read: `UsdPhysicsScene::GetGravityMagnitudeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsScene::GetGravityMagnitudeAttr")]
+        #[doc(alias = "GetGravityMagnitudeAttr")]
         gravity_magnitude, gravity_magnitude_at, "physics:gravityMagnitude", f32, crate::value::read_float
     }
 }
@@ -2176,12 +2585,18 @@ impl PhysicsSceneEdit {
         #[doc = "Gravity direction vector in simulation world space."]
         #[doc = ""]
         #[doc = "USD attribute `physics:gravityDirection` (`vector3f`; fallback `(0.0, 0.0, 0.0)`)."]
+        #[doc = "C++ authoring: `UsdPhysicsScene::CreateGravityDirectionAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsScene::CreateGravityDirectionAttr")]
+        #[doc(alias = "CreateGravityDirectionAttr")]
         set_gravity_direction, set_gravity_direction_at, "physics:gravityDirection", [f32; 3], crate::value::write_float3
     }
     set_attribute! {
         #[doc = "Gravity acceleration magnitude in simulation world space."]
         #[doc = ""]
         #[doc = "USD attribute `physics:gravityMagnitude` (`float`; fallback `-inf`)."]
+        #[doc = "C++ authoring: `UsdPhysicsScene::CreateGravityMagnitudeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsScene::CreateGravityMagnitudeAttr")]
+        #[doc(alias = "CreateGravityMagnitudeAttr")]
         set_gravity_magnitude, set_gravity_magnitude_at, "physics:gravityMagnitude", f32, crate::value::write_float
     }
 }
@@ -2201,6 +2616,8 @@ token_enum! {
 #[doc = "Predefined spherical joint type (Removes linear degrees of freedom, cone limit may restrict the motion in a given range.) It allows two limit values, which when equal create a circular, else an elliptic cone limit around the limit axis."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `PhysicsSphericalJoint`, inheriting [`PhysicsJoint`]. Construct it with [`PhysicsSphericalJoint::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdPhysicsSphericalJoint`."]
+#[doc(alias = "UsdPhysicsSphericalJoint")]
 #[derive(Clone, Copy, Debug)]
 pub struct PhysicsSphericalJoint<'a> {
     base: PhysicsJoint<'a>,
@@ -2219,6 +2636,8 @@ impl<'a> PhysicsSphericalJoint<'a> {
     pub const SCHEMA: &'static str = "PhysicsSphericalJoint";
 
     #[doc = "A view of the prim at `path`, if it is a `PhysicsSphericalJoint` or of a schema derived from it."]
+    #[doc(alias = "UsdPhysicsSphericalJoint::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -2243,6 +2662,8 @@ impl<'a> PhysicsSphericalJoint<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdPhysicsSphericalJoint::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> PhysicsSphericalJointEdit {
         edit.define(path, Self::SCHEMA);
         PhysicsSphericalJointEdit::from_path(path)
@@ -2255,6 +2676,9 @@ impl<'a> PhysicsSphericalJoint<'a> {
         #[doc = "Cone limit axis."]
         #[doc = ""]
         #[doc = "USD attribute `physics:axis` (`token`, uniform; fallback `\"X\"`)."]
+        #[doc = "C++ read: `UsdPhysicsSphericalJoint::GetAxisAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsSphericalJoint::GetAxisAttr")]
+        #[doc(alias = "GetAxisAttr")]
         axis, "physics:axis", PhysicsSphericalJointAxis, PhysicsSphericalJointAxis::read
     }
     /// The USD name of [`Self::cone_angle0_limit`].
@@ -2264,6 +2688,9 @@ impl<'a> PhysicsSphericalJoint<'a> {
         #[doc = "Cone limit from the primary joint axis in the local0 frame toward the next axis."]
         #[doc = ""]
         #[doc = "USD attribute `physics:coneAngle0Limit` (`float`; fallback `-1.0`)."]
+        #[doc = "C++ read: `UsdPhysicsSphericalJoint::GetConeAngle0LimitAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsSphericalJoint::GetConeAngle0LimitAttr")]
+        #[doc(alias = "GetConeAngle0LimitAttr")]
         cone_angle0_limit, cone_angle0_limit_at, "physics:coneAngle0Limit", f32, crate::value::read_float
     }
     /// The USD name of [`Self::cone_angle1_limit`].
@@ -2273,6 +2700,9 @@ impl<'a> PhysicsSphericalJoint<'a> {
         #[doc = "Cone limit from the primary joint axis in the local0 frame toward the second to next axis."]
         #[doc = ""]
         #[doc = "USD attribute `physics:coneAngle1Limit` (`float`; fallback `-1.0`)."]
+        #[doc = "C++ read: `UsdPhysicsSphericalJoint::GetConeAngle1LimitAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdPhysicsSphericalJoint::GetConeAngle1LimitAttr")]
+        #[doc(alias = "GetConeAngle1LimitAttr")]
         cone_angle1_limit, cone_angle1_limit_at, "physics:coneAngle1Limit", f32, crate::value::read_float
     }
 }
@@ -2310,18 +2740,27 @@ impl PhysicsSphericalJointEdit {
         #[doc = "Cone limit axis."]
         #[doc = ""]
         #[doc = "USD attribute `physics:axis` (`token`, uniform; fallback `\"X\"`)."]
+        #[doc = "C++ authoring: `UsdPhysicsSphericalJoint::CreateAxisAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsSphericalJoint::CreateAxisAttr")]
+        #[doc(alias = "CreateAxisAttr")]
         set_axis, "physics:axis", PhysicsSphericalJointAxis, PhysicsSphericalJointAxis::write
     }
     set_attribute! {
         #[doc = "Cone limit from the primary joint axis in the local0 frame toward the next axis."]
         #[doc = ""]
         #[doc = "USD attribute `physics:coneAngle0Limit` (`float`; fallback `-1.0`)."]
+        #[doc = "C++ authoring: `UsdPhysicsSphericalJoint::CreateConeAngle0LimitAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsSphericalJoint::CreateConeAngle0LimitAttr")]
+        #[doc(alias = "CreateConeAngle0LimitAttr")]
         set_cone_angle0_limit, set_cone_angle0_limit_at, "physics:coneAngle0Limit", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "Cone limit from the primary joint axis in the local0 frame toward the second to next axis."]
         #[doc = ""]
         #[doc = "USD attribute `physics:coneAngle1Limit` (`float`; fallback `-1.0`)."]
+        #[doc = "C++ authoring: `UsdPhysicsSphericalJoint::CreateConeAngle1LimitAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdPhysicsSphericalJoint::CreateConeAngle1LimitAttr")]
+        #[doc(alias = "CreateConeAngle1LimitAttr")]
         set_cone_angle1_limit, set_cone_angle1_limit_at, "physics:coneAngle1Limit", f32, crate::value::write_float
     }
 }

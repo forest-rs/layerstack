@@ -25,6 +25,7 @@ use crate::{
 ///
 /// OpenUSD: `PcpLayerStackIdentifier`; AOUSD Core §9 (layer stacks).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[doc(alias = "PcpLayerStackIdentifier")]
 pub struct LayerStackIdentifier {
     /// Persistent root layer.
     pub root: LayerId,
@@ -74,6 +75,7 @@ impl LayerStackIdentifier {
 /// The order is strongest → weakest, and a layer is always stronger than any of
 /// its sublayers.
 #[derive(Clone, Debug, PartialEq)]
+#[doc(alias = "PcpLayerStack")]
 pub struct LayerStack {
     /// Ordered strongest → weakest.
     pub layers: Vec<LayerId>,

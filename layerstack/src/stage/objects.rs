@@ -20,6 +20,7 @@ pub enum Object<'a> {
 }
 /// Borrowed prim view, including generic properties and composed status.
 #[derive(Clone, Copy)]
+#[doc(alias = "UsdPrim")]
 pub struct Prim<'a> {
     stage: &'a Stage,
     store: &'a dyn LayerStore,
@@ -34,12 +35,14 @@ impl core::fmt::Debug for Prim<'_> {
 }
 /// Borrowed attribute view. Creation checks its composed property kind.
 #[derive(Clone, Copy, Debug)]
+#[doc(alias = "UsdAttribute")]
 pub struct Attribute<'a> {
     stage: &'a Stage,
     path: PropertyPath,
 }
 /// Borrowed relationship view. Creation checks its composed property kind.
 #[derive(Clone, Copy, Debug)]
+#[doc(alias = "UsdRelationship")]
 pub struct Relationship<'a> {
     stage: &'a Stage,
     path: PropertyPath,
@@ -51,6 +54,8 @@ impl Stage {
         self.store_identity.as_ref()
     }
     /// Views a populated prim in this immutable snapshot.
+    #[doc(alias = "UsdStage::GetPrimAtPath")]
+    #[doc(alias = "GetPrimAtPath")]
     pub fn prim<'a>(&'a self, path: PathId, store: &'a dyn LayerStore) -> Option<Prim<'a>> {
         self.has_prim(path).then_some(Prim {
             stage: self,
@@ -59,6 +64,8 @@ impl Stage {
         })
     }
     /// Views a concrete prim or property after checking its composed existence.
+    #[doc(alias = "UsdStage::GetObjectAtPath")]
+    #[doc(alias = "GetObjectAtPath")]
     pub fn object<'a>(&'a self, path: TargetPath, store: &'a dyn LayerStore) -> Option<Object<'a>> {
         match path {
             TargetPath::Prim(path) => self.prim(path, store).map(Object::Prim),
@@ -73,6 +80,8 @@ impl Stage {
 }
 impl<'a> Prim<'a> {
     /// Concrete stage path.
+    #[doc(alias = "UsdPrim::GetPath")]
+    #[doc(alias = "GetPath")]
     pub fn path(self) -> PathId {
         self.path
     }
@@ -83,6 +92,8 @@ impl<'a> Prim<'a> {
             .expect("populated view")
     }
     /// Authored type name; fallback mapping does not change it.
+    #[doc(alias = "UsdPrim::GetTypeName")]
+    #[doc(alias = "GetTypeName")]
     pub fn type_name(self) -> Option<TokenId> {
         self.stage.resolve_type_name(self.path, self.store)
     }
@@ -98,6 +109,8 @@ impl<'a> Prim<'a> {
         identity.mapped_type_name.or(identity.type_name)
     }
     /// Generic attribute with this USD name, including schema-defined properties.
+    #[doc(alias = "UsdPrim::GetAttribute")]
+    #[doc(alias = "GetAttribute")]
     pub fn attribute(self, name: &str) -> Option<Attribute<'a>> {
         let path = PropertyPath::new(self.path, self.store.tokens().lookup(name)?);
         (self.stage.property_kind(path) == Some(PropertyKind::Attribute)).then_some(Attribute {
@@ -106,6 +119,8 @@ impl<'a> Prim<'a> {
         })
     }
     /// Generic relationship with this USD name.
+    #[doc(alias = "UsdPrim::GetRelationship")]
+    #[doc(alias = "GetRelationship")]
     pub fn relationship(self, name: &str) -> Option<Relationship<'a>> {
         let path = PropertyPath::new(self.path, self.store.tokens().lookup(name)?);
         (self.stage.property_kind(path) == Some(PropertyKind::Relationship)).then_some(
@@ -116,10 +131,14 @@ impl<'a> Prim<'a> {
         )
     }
     /// All authored and schema-defined property names in composed order.
+    #[doc(alias = "UsdPrim::GetPropertyNames")]
+    #[doc(alias = "GetPropertyNames")]
     pub fn property_names(self) -> Vec<TokenId> {
         self.stage.property_names(self.path, self.store)
     }
     /// Direct populated children, with an explicit instance-proxy policy.
+    #[doc(alias = "UsdPrim::GetChildren")]
+    #[doc(alias = "GetChildren")]
     pub fn children(self, instance_proxies: bool) -> impl Iterator<Item = Prim<'a>> {
         let children = if self.stage.is_instance(self.path) && !instance_proxies {
             &[][..]
@@ -138,15 +157,21 @@ impl Attribute<'_> {
     }
     /// Composed value with captured schema fallback and optional provenance.
     /// Numeric arrays remain retained until the caller selects materialization.
+    #[doc(alias = "UsdAttribute::Get")]
+    #[doc(alias = "Get")]
     pub fn get(self, time: Time) -> Option<Resolved<Value>> {
         self.stage
             .read_property(self.path, time, |v| Some(v.clone()))
     }
     /// Reads and materializes the selected numeric array, exposing decode failure.
+    #[doc(alias = "UsdAttribute::Get")]
+    #[doc(alias = "Get")]
     pub fn try_get(self, time: Time) -> Result<Option<Resolved<Value>>, crate::ArrayReadError> {
         checked_read(self.stage, self.path, time)
     }
     /// Raw composed attribute connections, independent of its value.
+    #[doc(alias = "UsdAttribute::GetConnections")]
+    #[doc(alias = "GetConnections")]
     pub fn connections(self) -> Vec<TargetPath> {
         self.stage
             .resolve_target_list_path(self.path)
@@ -154,6 +179,8 @@ impl Attribute<'_> {
             .unwrap_or_default()
     }
     /// Composed property metadata, including schema fallbacks.
+    #[doc(alias = "UsdAttribute::GetMetadata")]
+    #[doc(alias = "GetMetadata")]
     pub fn metadata(self, key: TokenId) -> Option<Resolved<ResolvedValue>> {
         self.stage
             .resolve_property_metadata(self.path.prim_path(), self.path.property(), key)
@@ -163,11 +190,15 @@ impl Attribute<'_> {
         AttributeQuery::new(self.path)
     }
     /// Distinct composed sample times in stage time, including value clips.
+    #[doc(alias = "UsdAttribute::GetTimeSamples")]
+    #[doc(alias = "GetTimeSamples")]
     pub fn sample_times(self) -> Vec<f64> {
         self.stage
             .property_sample_times(self.path.prim_path(), self.path.property())
     }
     /// Conservative whether a numeric-time query can vary with time.
+    #[doc(alias = "UsdAttribute::ValueMightBeTimeVarying")]
+    #[doc(alias = "ValueMightBeTimeVarying")]
     pub fn might_be_time_varying(self) -> bool {
         self.stage
             .property_might_be_time_varying(self.path.prim_path(), self.path.property())
@@ -179,6 +210,8 @@ impl Relationship<'_> {
         self.path
     }
     /// Ordered composed targets without forwarding.
+    #[doc(alias = "UsdRelationship::GetTargets")]
+    #[doc(alias = "GetTargets")]
     pub fn targets(self) -> Vec<TargetPath> {
         self.stage
             .resolve_target_list_path(self.path)
@@ -186,6 +219,8 @@ impl Relationship<'_> {
             .unwrap_or_default()
     }
     /// Ordered terminal targets after recursively forwarding relationships.
+    #[doc(alias = "UsdRelationship::GetForwardedTargets")]
+    #[doc(alias = "GetForwardedTargets")]
     pub fn forwarded_targets(self) -> Vec<TargetPath> {
         self.stage.forwarded_relationship_targets(self.path)
     }
@@ -278,6 +313,7 @@ struct CachedQuery {
 /// Unrelated prim edits preserve hits; changes to this prim or prepared clips
 /// invalidate conservatively. Memory is bounded to one result and its sources.
 #[derive(Clone, Debug)]
+#[doc(alias = "UsdAttributeQuery")]
 pub struct AttributeQuery {
     path: PropertyPath,
     cached: Option<CachedQuery>,
@@ -312,11 +348,15 @@ impl AttributeQuery {
     }
     /// Evaluates against the supplied current snapshot, refreshing as needed.
     /// The caller synchronizes `LiveStage` before passing its snapshot.
+    #[doc(alias = "UsdAttributeQuery::Get")]
+    #[doc(alias = "Get")]
     pub fn get(&mut self, stage: &Stage, time: Time) -> Option<Resolved<Value>> {
         self.evaluate(stage, time, false).ok().flatten()
     }
     /// Evaluates and materializes the selected numeric array with typed failure.
     /// Repeated reads of the same mode/time/snapshot reuse failures as well as values.
+    #[doc(alias = "UsdAttributeQuery::Get")]
+    #[doc(alias = "Get")]
     pub fn try_get(
         &mut self,
         stage: &Stage,

@@ -136,6 +136,7 @@ impl XformOpType {
 
 /// One op of a prim's `xformOpOrder`, after `!resetXformStack!`.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[doc(alias = "UsdGeomXformOp")]
 pub struct XformOp<'a> {
     /// The entry as `xformOpOrder` lists it (`!invert!xformOp:translate:pivot`).
     pub name: &'a str,
@@ -544,6 +545,8 @@ impl<'a> Xformable<'a> {
     ///
     /// OpenUSD: `UsdGeomXformable::GetOrderedXformOps`.
     #[must_use]
+    #[doc(alias = "UsdGeomXformable::GetOrderedXformOps")]
+    #[doc(alias = "GetOrderedXformOps")]
     pub fn ordered_xform_ops(&self) -> XformOps<'a> {
         ordered_ops(self, &self.xform_op_order().unwrap_or_default())
     }
@@ -558,6 +561,8 @@ impl<'a> Xformable<'a> {
     /// value. This query is not sufficient to invalidate a cache when moving
     /// between default and numeric time.
     #[must_use]
+    #[doc(alias = "UsdGeomXformable::TransformMightBeTimeVarying")]
+    #[doc(alias = "TransformMightBeTimeVarying")]
     pub fn transform_might_be_time_varying(&self) -> bool {
         self.ordered_xform_ops().ops.iter().any(|op| {
             op.op_type.is_some()
@@ -577,6 +582,8 @@ impl<'a> Xformable<'a> {
     /// transforms are excluded. Splines have no discrete time samples; use
     /// [`Self::transform_might_be_time_varying`] to detect their variability.
     #[must_use]
+    #[doc(alias = "UsdGeomXformable::GetTimeSamples")]
+    #[doc(alias = "GetTimeSamples")]
     pub fn transform_time_samples(&self) -> Vec<f64> {
         let mut times = Vec::new();
         for op in self.ordered_xform_ops().ops {
@@ -623,6 +630,8 @@ impl<'a> Xformable<'a> {
     /// Spec: `UsdGeomXformable` (`pxr/usd/usdGeom/xformable.h`), "Xform Op
     /// Ordering".
     #[must_use]
+    #[doc(alias = "UsdGeomXformable::GetLocalTransformation")]
+    #[doc(alias = "GetLocalTransformation")]
     pub fn local_transform(&self, time: Time) -> LocalTransform {
         self.local_transform_inputs(time).evaluate()
     }
@@ -876,6 +885,7 @@ impl PreparedCache {
 ///
 /// OpenUSD: `UsdGeomXformCache`.
 #[derive(Clone, Debug)]
+#[doc(alias = "UsdGeomXformCache")]
 pub struct XformCache {
     time: Time,
     entries: HashMap<PathId, Slot>,
@@ -915,6 +925,8 @@ impl XformCache {
 
     /// The time it holds transforms at.
     #[must_use]
+    #[doc(alias = "UsdGeomXformCache::GetTime")]
+    #[doc(alias = "GetTime")]
     pub fn time(&self) -> Time {
         self.time
     }
@@ -930,6 +942,8 @@ impl XformCache {
     /// Spec: AOUSD Core §12.3 (default values and time samples), §12.5
     /// (interpolation). Unlike source opinions, evaluated cache values may be
     /// discarded without changing authored state.
+    #[doc(alias = "UsdGeomXformCache::SetTime")]
+    #[doc(alias = "SetTime")]
     pub fn set_time(&mut self, time: Time) {
         if time == self.time {
             return;
@@ -944,6 +958,8 @@ impl XformCache {
     }
 
     /// Drops everything held, and the statistics.
+    #[doc(alias = "UsdGeomXformCache::Clear")]
+    #[doc(alias = "Clear")]
     pub fn clear(&mut self) {
         self.entries.clear();
         self.nodes.clear();
@@ -1248,6 +1264,8 @@ impl XformCache {
     /// prim is there. The pseudo-root's is the identity.
     ///
     /// OpenUSD: `UsdGeomXformCache::GetLocalToWorldTransform`.
+    #[doc(alias = "UsdGeomXformCache::GetLocalToWorldTransform")]
+    #[doc(alias = "GetLocalToWorldTransform")]
     pub fn local_to_world(&mut self, scene: &Scene<'_>, path: PathId) -> Option<[[f64; 4]; 4]> {
         if !scene.stage().has_prim(path) {
             return None;
@@ -1314,6 +1332,8 @@ impl XformCache {
     /// requested ancestor is outside the prim's ancestry, the walk ends at
     /// the pseudo-root and returns the world transform. Equal paths return
     /// identity without a reset. Returns `None` if either prim is missing.
+    #[doc(alias = "UsdGeomXformCache::ComputeRelativeTransform")]
+    #[doc(alias = "ComputeRelativeTransform")]
     pub fn relative_transform(
         &mut self,
         scene: &Scene<'_>,
@@ -1396,6 +1416,8 @@ impl XformCache {
     /// or `None` if no prim is there.
     ///
     /// OpenUSD: `UsdGeomXformCache::GetParentToWorldTransform`.
+    #[doc(alias = "UsdGeomXformCache::GetParentToWorldTransform")]
+    #[doc(alias = "GetParentToWorldTransform")]
     pub fn parent_to_world(&mut self, scene: &Scene<'_>, path: PathId) -> Option<[[f64; 4]; 4]> {
         if !scene.stage().has_prim(path) {
             return None;

@@ -257,6 +257,7 @@ impl Catalog {
 /// One document's store, retained stage and source catalog. Owns no transport
 /// policy beyond the supplied `Storage`. Multiple retained clients may compose
 /// against `store`; each client synchronizes independently after source changes.
+#[doc(alias = "UsdStage")]
 pub struct StageDocument<B> {
     store: InMemoryStore,
     stage: LiveStage,
@@ -280,6 +281,8 @@ impl<B: core::fmt::Debug> core::fmt::Debug for StageDocument<B> {
 impl<B: Storage> StageDocument<B> {
     /// Creates a new USDA or USDC root bound to `target`; nothing is written
     /// until `save`. The new root remains dirty, including an empty document.
+    #[doc(alias = "UsdStage::CreateNew")]
+    #[doc(alias = "CreateNew")]
     pub fn create(storage: B, target: &str, options: StageOptions) -> Result<Self, IoError> {
         Self::create_in(storage, InMemoryStore::default(), target, options)
     }
@@ -326,6 +329,8 @@ impl<B: Storage> StageDocument<B> {
         })
     }
     /// Opens a stage with strict import into a new store.
+    #[doc(alias = "UsdStage::Open")]
+    #[doc(alias = "Open")]
     pub fn open(storage: B, asset: &str, options: StageOptions) -> Result<Self, IoError> {
         Self::open_with(storage, asset, options, LoadOptions::default())
     }
@@ -341,6 +346,8 @@ impl<B: Storage> StageDocument<B> {
     /// Opens into an existing store, allowing a host-owned session layer and
     /// schema registry. Existing identifiers remain reserved. Import is staged;
     /// failed reads never publish partially imported layers to a live stage.
+    #[doc(alias = "UsdStage::Open")]
+    #[doc(alias = "Open")]
     pub fn open_in(
         storage: B,
         store: InMemoryStore,
@@ -506,6 +513,8 @@ impl<B: Storage> StageDocument<B> {
     }
     /// Saves dirty used layers, excluding the primary session and its sublayers.
     /// Only resident sources participate; anonymous layers are reported separately.
+    #[doc(alias = "UsdStage::Save")]
+    #[doc(alias = "Save")]
     pub fn save(&mut self) -> SaveReport {
         self.synchronize();
         let session = self.session_layers();
@@ -519,6 +528,8 @@ impl<B: Storage> StageDocument<B> {
         self.save_layers(&layers)
     }
     /// Saves dirty resident layers in the primary session's sublayer stack only.
+    #[doc(alias = "UsdStage::SaveSessionLayers")]
+    #[doc(alias = "SaveSessionLayers")]
     pub fn save_session_layers(&mut self) -> SaveReport {
         self.synchronize();
         let layers: Vec<_> = self.session_layers().into_iter().collect();
@@ -593,6 +604,8 @@ impl<B: Storage> StageDocument<B> {
     }
     /// Reloads resident used sources, excluding anonymous/session layers.
     /// Equivalent to preparing and immediately committing [`Self::prepare_reload`].
+    #[doc(alias = "UsdStage::Reload")]
+    #[doc(alias = "Reload")]
     pub fn reload(&mut self, policy: ReloadPolicy) -> Result<LoadReport, IoError> {
         self.synchronize();
         Ok(self.prepare_reload(policy)?.commit())

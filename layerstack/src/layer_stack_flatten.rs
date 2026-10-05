@@ -131,6 +131,7 @@ impl core::error::Error for LayerStackFlattenError {}
 /// legacy list operations. If composing the detached output directly in this
 /// store, register known assets from the report under its new layer ID; persisted
 /// output can instead be reloaded through the ordinary importer.
+#[doc(alias = "UsdUtilsFlattenLayerStack")]
 pub fn flatten_layer_stack(
     store: &dyn LayerStore,
     identifier: LayerStackIdentifier,

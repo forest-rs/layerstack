@@ -26,6 +26,8 @@ use crate::{PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "A base class used by intrinsic lights. Not intended to be used directly."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's abstract typed schema `BoundableLightBase`, inheriting [`crate::usd_geom::Boundable`]. Construct it with [`BoundableLightBase::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdLuxBoundableLightBase`."]
+#[doc(alias = "UsdLuxBoundableLightBase")]
 #[derive(Clone, Copy, Debug)]
 pub struct BoundableLightBase<'a> {
     base: crate::usd_geom::Boundable<'a>,
@@ -44,6 +46,8 @@ impl<'a> BoundableLightBase<'a> {
     pub const SCHEMA: &'static str = "BoundableLightBase";
 
     #[doc = "A view of the prim at `path`, if it is a `BoundableLightBase` or of a schema derived from it."]
+    #[doc(alias = "UsdLuxBoundableLightBase::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -109,6 +113,8 @@ impl BoundableLightBaseEdit {
 #[doc = "A light that is emitted outwards from a cylinder."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `CylinderLight`, inheriting [`BoundableLightBase`]. Construct it with [`CylinderLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdLuxCylinderLight`."]
+#[doc(alias = "UsdLuxCylinderLight")]
 #[derive(Clone, Copy, Debug)]
 pub struct CylinderLight<'a> {
     base: BoundableLightBase<'a>,
@@ -127,6 +133,8 @@ impl<'a> CylinderLight<'a> {
     pub const SCHEMA: &'static str = "CylinderLight";
 
     #[doc = "A view of the prim at `path`, if it is a `CylinderLight` or of a schema derived from it."]
+    #[doc(alias = "UsdLuxCylinderLight::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -151,6 +159,8 @@ impl<'a> CylinderLight<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdLuxCylinderLight::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> CylinderLightEdit {
         edit.define(path, Self::SCHEMA);
         CylinderLightEdit::from_path(path)
@@ -163,6 +173,9 @@ impl<'a> CylinderLight<'a> {
         #[doc = "Specifies the length of the cylinder in the local X axis."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:length` (`float`; fallback `1.0`)."]
+        #[doc = "C++ read: `UsdLuxCylinderLight::GetLengthAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxCylinderLight::GetLengthAttr")]
+        #[doc(alias = "GetLengthAttr")]
         length, length_at, "inputs:length", f32, crate::value::read_float
     }
     /// The USD name of [`Self::radius`].
@@ -172,6 +185,9 @@ impl<'a> CylinderLight<'a> {
         #[doc = "Specifies the radius of the cylinder."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:radius` (`float`; fallback `0.5`)."]
+        #[doc = "C++ read: `UsdLuxCylinderLight::GetRadiusAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxCylinderLight::GetRadiusAttr")]
+        #[doc(alias = "GetRadiusAttr")]
         radius, radius_at, "inputs:radius", f32, crate::value::read_float
     }
     /// The USD name of [`Self::treat_as_line`].
@@ -181,6 +197,9 @@ impl<'a> CylinderLight<'a> {
         #[doc = "Specifies that renderers can treat this light as a zero-radius line."]
         #[doc = ""]
         #[doc = "USD attribute `treatAsLine` (`bool`; fallback `false`)."]
+        #[doc = "C++ read: `UsdLuxCylinderLight::GetTreatAsLineAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxCylinderLight::GetTreatAsLineAttr")]
+        #[doc(alias = "GetTreatAsLineAttr")]
         treat_as_line, treat_as_line_at, "treatAsLine", bool, crate::value::read_bool
     }
 }
@@ -218,18 +237,27 @@ impl CylinderLightEdit {
         #[doc = "Specifies the length of the cylinder in the local X axis."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:length` (`float`; fallback `1.0`)."]
+        #[doc = "C++ authoring: `UsdLuxCylinderLight::CreateLengthAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxCylinderLight::CreateLengthAttr")]
+        #[doc(alias = "CreateLengthAttr")]
         set_length, set_length_at, "inputs:length", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "Specifies the radius of the cylinder."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:radius` (`float`; fallback `0.5`)."]
+        #[doc = "C++ authoring: `UsdLuxCylinderLight::CreateRadiusAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxCylinderLight::CreateRadiusAttr")]
+        #[doc(alias = "CreateRadiusAttr")]
         set_radius, set_radius_at, "inputs:radius", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "Specifies that renderers can treat this light as a zero-radius line."]
         #[doc = ""]
         #[doc = "USD attribute `treatAsLine` (`bool`; fallback `false`)."]
+        #[doc = "C++ authoring: `UsdLuxCylinderLight::CreateTreatAsLineAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxCylinderLight::CreateTreatAsLineAttr")]
+        #[doc(alias = "CreateTreatAsLineAttr")]
         set_treat_as_line, set_treat_as_line_at, "treatAsLine", bool, crate::value::write_bool
     }
 }
@@ -237,6 +265,8 @@ impl CylinderLightEdit {
 #[doc = "A light that emits from one side of a circular disk (along the -Z axis), centered in the XY plane."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `DiskLight`, inheriting [`BoundableLightBase`]. Construct it with [`DiskLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdLuxDiskLight`."]
+#[doc(alias = "UsdLuxDiskLight")]
 #[derive(Clone, Copy, Debug)]
 pub struct DiskLight<'a> {
     base: BoundableLightBase<'a>,
@@ -255,6 +285,8 @@ impl<'a> DiskLight<'a> {
     pub const SCHEMA: &'static str = "DiskLight";
 
     #[doc = "A view of the prim at `path`, if it is a `DiskLight` or of a schema derived from it."]
+    #[doc(alias = "UsdLuxDiskLight::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -279,6 +311,8 @@ impl<'a> DiskLight<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdLuxDiskLight::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> DiskLightEdit {
         edit.define(path, Self::SCHEMA);
         DiskLightEdit::from_path(path)
@@ -291,6 +325,9 @@ impl<'a> DiskLight<'a> {
         #[doc = "Specifies the radius of the disk."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:radius` (`float`; fallback `0.5`)."]
+        #[doc = "C++ read: `UsdLuxDiskLight::GetRadiusAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxDiskLight::GetRadiusAttr")]
+        #[doc(alias = "GetRadiusAttr")]
         radius, radius_at, "inputs:radius", f32, crate::value::read_float
     }
 }
@@ -328,6 +365,9 @@ impl DiskLightEdit {
         #[doc = "Specifies the radius of the disk."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:radius` (`float`; fallback `0.5`)."]
+        #[doc = "C++ authoring: `UsdLuxDiskLight::CreateRadiusAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxDiskLight::CreateRadiusAttr")]
+        #[doc(alias = "CreateRadiusAttr")]
         set_radius, set_radius_at, "inputs:radius", f32, crate::value::write_float
     }
 }
@@ -335,6 +375,8 @@ impl DiskLightEdit {
 #[doc = "A light that provides light from a far distant source, along the -Z axis. Also known as a \"directional light\"."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `DistantLight`, inheriting [`NonboundableLightBase`]. Construct it with [`DistantLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdLuxDistantLight`."]
+#[doc(alias = "UsdLuxDistantLight")]
 #[derive(Clone, Copy, Debug)]
 pub struct DistantLight<'a> {
     base: NonboundableLightBase<'a>,
@@ -353,6 +395,8 @@ impl<'a> DistantLight<'a> {
     pub const SCHEMA: &'static str = "DistantLight";
 
     #[doc = "A view of the prim at `path`, if it is a `DistantLight` or of a schema derived from it."]
+    #[doc(alias = "UsdLuxDistantLight::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -377,6 +421,8 @@ impl<'a> DistantLight<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdLuxDistantLight::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> DistantLightEdit {
         edit.define(path, Self::SCHEMA);
         DistantLightEdit::from_path(path)
@@ -389,6 +435,9 @@ impl<'a> DistantLight<'a> {
         #[doc = "The angular diameter of the light in degrees. The fallback value is 0.53. Higher values make the light rays less parallel, thereby increasing shadow softness, but also increasing the overall amount of light."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:angle` (`float`; fallback `0.53`)."]
+        #[doc = "C++ read: `UsdLuxDistantLight::GetAngleAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxDistantLight::GetAngleAttr")]
+        #[doc(alias = "GetAngleAttr")]
         angle, angle_at, "inputs:angle", f32, crate::value::read_float
     }
 }
@@ -426,6 +475,9 @@ impl DistantLightEdit {
         #[doc = "The angular diameter of the light in degrees. The fallback value is 0.53. Higher values make the light rays less parallel, thereby increasing shadow softness, but also increasing the overall amount of light."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:angle` (`float`; fallback `0.53`)."]
+        #[doc = "C++ authoring: `UsdLuxDistantLight::CreateAngleAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxDistantLight::CreateAngleAttr")]
+        #[doc(alias = "CreateAngleAttr")]
         set_angle, set_angle_at, "inputs:angle", f32, crate::value::write_float
     }
 }
@@ -449,6 +501,8 @@ token_enum! {
 #[doc = "A light that is emitted inwards from a distant external environment such as a sky or a light environment captured in an HDR image used for Image Based Lighting (IBL)."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `DomeLight`, inheriting [`NonboundableLightBase`]. Construct it with [`DomeLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdLuxDomeLight`."]
+#[doc(alias = "UsdLuxDomeLight")]
 #[derive(Clone, Copy, Debug)]
 pub struct DomeLight<'a> {
     base: NonboundableLightBase<'a>,
@@ -467,6 +521,8 @@ impl<'a> DomeLight<'a> {
     pub const SCHEMA: &'static str = "DomeLight";
 
     #[doc = "A view of the prim at `path`, if it is a `DomeLight` or of a schema derived from it."]
+    #[doc(alias = "UsdLuxDomeLight::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -491,6 +547,8 @@ impl<'a> DomeLight<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdLuxDomeLight::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> DomeLightEdit {
         edit.define(path, Self::SCHEMA);
         DomeLightEdit::from_path(path)
@@ -503,6 +561,9 @@ impl<'a> DomeLight<'a> {
         #[doc = "Specifies the radius of guide geometry to use to visualize the dome light."]
         #[doc = ""]
         #[doc = "USD attribute `guideRadius` (`float`; fallback `100000.0`)."]
+        #[doc = "C++ read: `UsdLuxDomeLight::GetGuideRadiusAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxDomeLight::GetGuideRadiusAttr")]
+        #[doc(alias = "GetGuideRadiusAttr")]
         guide_radius, guide_radius_at, "guideRadius", f32, crate::value::read_float
     }
     /// The USD name of [`Self::texture_file`].
@@ -512,6 +573,9 @@ impl<'a> DomeLight<'a> {
         #[doc = "Specifies the color texture (typically an HDR image intended for IBL) used by the DomeLight."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:texture:file` (`asset`)."]
+        #[doc = "C++ read: `UsdLuxDomeLight::GetTextureFileAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxDomeLight::GetTextureFileAttr")]
+        #[doc(alias = "GetTextureFileAttr")]
         texture_file, texture_file_at, "inputs:texture:file", ::alloc::sync::Arc<str>, crate::value::read_asset
     }
     /// The USD name of [`Self::texture_format`].
@@ -521,6 +585,9 @@ impl<'a> DomeLight<'a> {
         #[doc = "Specifies the parameterization of the color texture. Values include: automatic, latlong, mirroredBall, angular, and cubeMapVerticalCross."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:texture:format` (`token`; fallback `\"automatic\"`)."]
+        #[doc = "C++ read: `UsdLuxDomeLight::GetTextureFormatAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxDomeLight::GetTextureFormatAttr")]
+        #[doc(alias = "GetTextureFormatAttr")]
         texture_format, texture_format_at, "inputs:texture:format", DomeLightTextureFormat, DomeLightTextureFormat::read
     }
     /// The USD name of [`Self::portals`].
@@ -530,6 +597,9 @@ impl<'a> DomeLight<'a> {
         #[doc = "Optional portals to guide light sampling."]
         #[doc = ""]
         #[doc = "USD relationship `portals` (`rel`)."]
+        #[doc = "C++ read: `UsdLuxDomeLight::GetPortalsRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxDomeLight::GetPortalsRel")]
+        #[doc(alias = "GetPortalsRel")]
         portals, "portals"
     }
 }
@@ -567,24 +637,36 @@ impl DomeLightEdit {
         #[doc = "Specifies the radius of guide geometry to use to visualize the dome light."]
         #[doc = ""]
         #[doc = "USD attribute `guideRadius` (`float`; fallback `100000.0`)."]
+        #[doc = "C++ authoring: `UsdLuxDomeLight::CreateGuideRadiusAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxDomeLight::CreateGuideRadiusAttr")]
+        #[doc(alias = "CreateGuideRadiusAttr")]
         set_guide_radius, set_guide_radius_at, "guideRadius", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "Specifies the color texture (typically an HDR image intended for IBL) used by the DomeLight."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:texture:file` (`asset`)."]
+        #[doc = "C++ authoring: `UsdLuxDomeLight::CreateTextureFileAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxDomeLight::CreateTextureFileAttr")]
+        #[doc(alias = "CreateTextureFileAttr")]
         set_texture_file, set_texture_file_at, "inputs:texture:file", &str, crate::value::write_asset
     }
     set_attribute! {
         #[doc = "Specifies the parameterization of the color texture. Values include: automatic, latlong, mirroredBall, angular, and cubeMapVerticalCross."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:texture:format` (`token`; fallback `\"automatic\"`)."]
+        #[doc = "C++ authoring: `UsdLuxDomeLight::CreateTextureFormatAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxDomeLight::CreateTextureFormatAttr")]
+        #[doc(alias = "CreateTextureFormatAttr")]
         set_texture_format, set_texture_format_at, "inputs:texture:format", DomeLightTextureFormat, DomeLightTextureFormat::write
     }
     set_relationship! {
         #[doc = "Optional portals to guide light sampling."]
         #[doc = ""]
         #[doc = "USD relationship `portals` (`rel`)."]
+        #[doc = "C++ authoring: `UsdLuxDomeLight::CreatePortalsRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxDomeLight::CreatePortalsRel")]
+        #[doc(alias = "CreatePortalsRel")]
         set_portals, "portals"
     }
 }
@@ -620,6 +702,9 @@ token_enum! {
 #[doc = "A light that is emitted inwards from a distant external environment such as a sky or a light environment captured in an HDR image used for Image Based Lighting (IBL). Provides additional control over the dome's orientation via the poleAxis property."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `DomeLight_1`, inheriting [`NonboundableLightBase`]. Construct it with [`DomeLight1::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdLuxDomeLight_1`."]
+#[doc(alias = "UsdLuxDomeLight_1")]
+#[doc(alias = "DomeLight_1")]
 #[derive(Clone, Copy, Debug)]
 pub struct DomeLight1<'a> {
     base: NonboundableLightBase<'a>,
@@ -638,6 +723,8 @@ impl<'a> DomeLight1<'a> {
     pub const SCHEMA: &'static str = "DomeLight_1";
 
     #[doc = "A view of the prim at `path`, if it is a `DomeLight_1` or of a schema derived from it."]
+    #[doc(alias = "UsdLuxDomeLight_1::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -662,6 +749,8 @@ impl<'a> DomeLight1<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdLuxDomeLight_1::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> DomeLight1Edit {
         edit.define(path, Self::SCHEMA);
         DomeLight1Edit::from_path(path)
@@ -674,6 +763,9 @@ impl<'a> DomeLight1<'a> {
         #[doc = "Specifies the radius of guide geometry to use to visualize the dome light."]
         #[doc = ""]
         #[doc = "USD attribute `guideRadius` (`float`; fallback `100000.0`)."]
+        #[doc = "C++ read: `UsdLuxDomeLight_1::GetGuideRadiusAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxDomeLight_1::GetGuideRadiusAttr")]
+        #[doc(alias = "GetGuideRadiusAttr")]
         guide_radius, guide_radius_at, "guideRadius", f32, crate::value::read_float
     }
     /// The USD name of [`Self::texture_file`].
@@ -683,6 +775,9 @@ impl<'a> DomeLight1<'a> {
         #[doc = "Specifies the color texture (typically an HDR image intended for IBL) used by the DomeLight."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:texture:file` (`asset`)."]
+        #[doc = "C++ read: `UsdLuxDomeLight_1::GetTextureFileAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxDomeLight_1::GetTextureFileAttr")]
+        #[doc(alias = "GetTextureFileAttr")]
         texture_file, texture_file_at, "inputs:texture:file", ::alloc::sync::Arc<str>, crate::value::read_asset
     }
     /// The USD name of [`Self::texture_format`].
@@ -692,6 +787,9 @@ impl<'a> DomeLight1<'a> {
         #[doc = "Specifies the parameterization of the color texture. Values include: automatic, latlong, mirroredBall, angular, and cubeMapVerticalCross."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:texture:format` (`token`; fallback `\"automatic\"`)."]
+        #[doc = "C++ read: `UsdLuxDomeLight_1::GetTextureFormatAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxDomeLight_1::GetTextureFormatAttr")]
+        #[doc(alias = "GetTextureFormatAttr")]
         texture_format, texture_format_at, "inputs:texture:format", DomeLight1TextureFormat, DomeLight1TextureFormat::read
     }
     /// The USD name of [`Self::pole_axis`].
@@ -701,6 +799,9 @@ impl<'a> DomeLight1<'a> {
         #[doc = "Specifies the starting alignment of the dome's top pole."]
         #[doc = ""]
         #[doc = "USD attribute `poleAxis` (`token`, uniform; fallback `\"scene\"`)."]
+        #[doc = "C++ read: `UsdLuxDomeLight_1::GetPoleAxisAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxDomeLight_1::GetPoleAxisAttr")]
+        #[doc(alias = "GetPoleAxisAttr")]
         pole_axis, "poleAxis", DomeLight1PoleAxis, DomeLight1PoleAxis::read
     }
     /// The USD name of [`Self::portals`].
@@ -710,6 +811,9 @@ impl<'a> DomeLight1<'a> {
         #[doc = "Optional portals to guide light sampling."]
         #[doc = ""]
         #[doc = "USD relationship `portals` (`rel`)."]
+        #[doc = "C++ read: `UsdLuxDomeLight_1::GetPortalsRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxDomeLight_1::GetPortalsRel")]
+        #[doc(alias = "GetPortalsRel")]
         portals, "portals"
     }
 }
@@ -747,30 +851,45 @@ impl DomeLight1Edit {
         #[doc = "Specifies the radius of guide geometry to use to visualize the dome light."]
         #[doc = ""]
         #[doc = "USD attribute `guideRadius` (`float`; fallback `100000.0`)."]
+        #[doc = "C++ authoring: `UsdLuxDomeLight_1::CreateGuideRadiusAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxDomeLight_1::CreateGuideRadiusAttr")]
+        #[doc(alias = "CreateGuideRadiusAttr")]
         set_guide_radius, set_guide_radius_at, "guideRadius", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "Specifies the color texture (typically an HDR image intended for IBL) used by the DomeLight."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:texture:file` (`asset`)."]
+        #[doc = "C++ authoring: `UsdLuxDomeLight_1::CreateTextureFileAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxDomeLight_1::CreateTextureFileAttr")]
+        #[doc(alias = "CreateTextureFileAttr")]
         set_texture_file, set_texture_file_at, "inputs:texture:file", &str, crate::value::write_asset
     }
     set_attribute! {
         #[doc = "Specifies the parameterization of the color texture. Values include: automatic, latlong, mirroredBall, angular, and cubeMapVerticalCross."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:texture:format` (`token`; fallback `\"automatic\"`)."]
+        #[doc = "C++ authoring: `UsdLuxDomeLight_1::CreateTextureFormatAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxDomeLight_1::CreateTextureFormatAttr")]
+        #[doc(alias = "CreateTextureFormatAttr")]
         set_texture_format, set_texture_format_at, "inputs:texture:format", DomeLight1TextureFormat, DomeLight1TextureFormat::write
     }
     set_uniform_attribute! {
         #[doc = "Specifies the starting alignment of the dome's top pole."]
         #[doc = ""]
         #[doc = "USD attribute `poleAxis` (`token`, uniform; fallback `\"scene\"`)."]
+        #[doc = "C++ authoring: `UsdLuxDomeLight_1::CreatePoleAxisAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxDomeLight_1::CreatePoleAxisAttr")]
+        #[doc(alias = "CreatePoleAxisAttr")]
         set_pole_axis, "poleAxis", DomeLight1PoleAxis, DomeLight1PoleAxis::write
     }
     set_relationship! {
         #[doc = "Optional portals to guide light sampling."]
         #[doc = ""]
         #[doc = "USD relationship `portals` (`rel`)."]
+        #[doc = "C++ authoring: `UsdLuxDomeLight_1::CreatePortalsRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxDomeLight_1::CreatePortalsRel")]
+        #[doc(alias = "CreatePortalsRel")]
         set_portals, "portals"
     }
 }
@@ -778,6 +897,8 @@ impl DomeLight1Edit {
 #[doc = "A light that emits outwards from a geometric prim. Deprecated, use MeshLight instead."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `GeometryLight`, inheriting [`NonboundableLightBase`]. Construct it with [`GeometryLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdLuxGeometryLight`."]
+#[doc(alias = "UsdLuxGeometryLight")]
 #[derive(Clone, Copy, Debug)]
 pub struct GeometryLight<'a> {
     base: NonboundableLightBase<'a>,
@@ -796,6 +917,8 @@ impl<'a> GeometryLight<'a> {
     pub const SCHEMA: &'static str = "GeometryLight";
 
     #[doc = "A view of the prim at `path`, if it is a `GeometryLight` or of a schema derived from it."]
+    #[doc(alias = "UsdLuxGeometryLight::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -820,6 +943,8 @@ impl<'a> GeometryLight<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdLuxGeometryLight::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> GeometryLightEdit {
         edit.define(path, Self::SCHEMA);
         GeometryLightEdit::from_path(path)
@@ -832,6 +957,9 @@ impl<'a> GeometryLight<'a> {
         #[doc = "Relationship to the geometry to use as the light source."]
         #[doc = ""]
         #[doc = "USD relationship `geometry` (`rel`)."]
+        #[doc = "C++ read: `UsdLuxGeometryLight::GetGeometryRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxGeometryLight::GetGeometryRel")]
+        #[doc(alias = "GetGeometryRel")]
         geometry, "geometry"
     }
 }
@@ -869,6 +997,9 @@ impl GeometryLightEdit {
         #[doc = "Relationship to the geometry to use as the light source."]
         #[doc = ""]
         #[doc = "USD relationship `geometry` (`rel`)."]
+        #[doc = "C++ authoring: `UsdLuxGeometryLight::CreateGeometryRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxGeometryLight::CreateGeometryRel")]
+        #[doc(alias = "CreateGeometryRel")]
         set_geometry, "geometry"
     }
 }
@@ -888,6 +1019,9 @@ token_enum! {
 #[doc = "This schema adds light capabilities to a prim."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's single-apply API schema `LightAPI`. Get it with [`LightApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdLuxLightAPI`."]
+#[doc(alias = "UsdLuxLightAPI")]
+#[doc(alias = "LightAPI")]
 #[derive(Clone, Copy, Debug)]
 pub struct LightApi<'a> {
     base: PrimView<'a>,
@@ -908,6 +1042,8 @@ impl<'a> LightApi<'a> {
     /// A view of the schema on the prim at `path`, if the prim has it
     /// applied.
     #[must_use]
+    #[doc(alias = "UsdLuxLightAPI::Get")]
+    #[doc(alias = "Get")]
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
@@ -932,6 +1068,8 @@ impl<'a> LightApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there.
+    #[doc(alias = "UsdLuxLightAPI::Apply")]
+    #[doc(alias = "Apply")]
     pub fn apply(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<LightApiEdit, CannotApply> {
         edit.apply(path, Self::SCHEMA, None)?;
         Ok(LightApiEdit::from_path(path))
@@ -944,6 +1082,9 @@ impl<'a> LightApi<'a> {
         #[doc = "The color of the emitted light, in the rendering color space."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:color` (`color3f`; fallback `(1.0, 1.0, 1.0)`)."]
+        #[doc = "C++ read: `UsdLuxLightAPI::GetColorAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxLightAPI::GetColorAttr")]
+        #[doc(alias = "GetColorAttr")]
         color, color_at, "inputs:color", [f32; 3], crate::value::read_float3
     }
     /// The USD name of [`Self::color_temperature`].
@@ -953,6 +1094,9 @@ impl<'a> LightApi<'a> {
         #[doc = "The color temperature of the light, in degrees Kelvin."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:colorTemperature` (`float`; fallback `6500.0`)."]
+        #[doc = "C++ read: `UsdLuxLightAPI::GetColorTemperatureAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxLightAPI::GetColorTemperatureAttr")]
+        #[doc(alias = "GetColorTemperatureAttr")]
         color_temperature, color_temperature_at, "inputs:colorTemperature", f32, crate::value::read_float
     }
     /// The USD name of [`Self::diffuse`].
@@ -962,6 +1106,9 @@ impl<'a> LightApi<'a> {
         #[doc = "A multiplier for the effect of this light on the diffuse response of materials."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:diffuse` (`float`; fallback `1.0`)."]
+        #[doc = "C++ read: `UsdLuxLightAPI::GetDiffuseAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxLightAPI::GetDiffuseAttr")]
+        #[doc(alias = "GetDiffuseAttr")]
         diffuse, diffuse_at, "inputs:diffuse", f32, crate::value::read_float
     }
     /// The USD name of [`Self::enable_color_temperature`].
@@ -971,6 +1118,9 @@ impl<'a> LightApi<'a> {
         #[doc = "Controls whether colorTemperature is used."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:enableColorTemperature` (`bool`; fallback `false`)."]
+        #[doc = "C++ read: `UsdLuxLightAPI::GetEnableColorTemperatureAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxLightAPI::GetEnableColorTemperatureAttr")]
+        #[doc(alias = "GetEnableColorTemperatureAttr")]
         enable_color_temperature, enable_color_temperature_at, "inputs:enableColorTemperature", bool, crate::value::read_bool
     }
     /// The USD name of [`Self::exposure`].
@@ -980,6 +1130,9 @@ impl<'a> LightApi<'a> {
         #[doc = "Exposure setting of the light. Scales the brightness of the light exponentially."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:exposure` (`float`; fallback `0.0`)."]
+        #[doc = "C++ read: `UsdLuxLightAPI::GetExposureAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxLightAPI::GetExposureAttr")]
+        #[doc(alias = "GetExposureAttr")]
         exposure, exposure_at, "inputs:exposure", f32, crate::value::read_float
     }
     /// The USD name of [`Self::intensity`].
@@ -989,6 +1142,9 @@ impl<'a> LightApi<'a> {
         #[doc = "The base intensity of the light. Scales the brightness of the light linearly."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:intensity` (`float`; fallback `1.0`)."]
+        #[doc = "C++ read: `UsdLuxLightAPI::GetIntensityAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxLightAPI::GetIntensityAttr")]
+        #[doc(alias = "GetIntensityAttr")]
         intensity, intensity_at, "inputs:intensity", f32, crate::value::read_float
     }
     /// The USD name of [`Self::normalize`].
@@ -998,6 +1154,9 @@ impl<'a> LightApi<'a> {
         #[doc = "Controls if the light power should be normalized by the surface area of the light. If enabled, the light power remains constant if the light's area or angular size is changed."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:normalize` (`bool`; fallback `false`)."]
+        #[doc = "C++ read: `UsdLuxLightAPI::GetNormalizeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxLightAPI::GetNormalizeAttr")]
+        #[doc(alias = "GetNormalizeAttr")]
         normalize, normalize_at, "inputs:normalize", bool, crate::value::read_bool
     }
     /// The USD name of [`Self::specular`].
@@ -1007,6 +1166,9 @@ impl<'a> LightApi<'a> {
         #[doc = "A multiplier for the effect of this light on the specular response of materials."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:specular` (`float`; fallback `1.0`)."]
+        #[doc = "C++ read: `UsdLuxLightAPI::GetSpecularAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxLightAPI::GetSpecularAttr")]
+        #[doc(alias = "GetSpecularAttr")]
         specular, specular_at, "inputs:specular", f32, crate::value::read_float
     }
     /// The USD name of [`Self::filters`].
@@ -1016,6 +1178,9 @@ impl<'a> LightApi<'a> {
         #[doc = "The set of light filters, if any, that apply to this light."]
         #[doc = ""]
         #[doc = "USD relationship `light:filters` (`rel`)."]
+        #[doc = "C++ read: `UsdLuxLightAPI::GetFiltersRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxLightAPI::GetFiltersRel")]
+        #[doc(alias = "GetFiltersRel")]
         filters, "light:filters"
     }
     /// The USD name of [`Self::material_sync_mode`].
@@ -1025,6 +1190,9 @@ impl<'a> LightApi<'a> {
         #[doc = "Specifies the lighting response of a material (if any) bound to the prim that has this schema applied."]
         #[doc = ""]
         #[doc = "USD attribute `light:materialSyncMode` (`token`, uniform; fallback `\"noMaterialResponse\"`)."]
+        #[doc = "C++ read: `UsdLuxLightAPI::GetMaterialSyncModeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxLightAPI::GetMaterialSyncModeAttr")]
+        #[doc(alias = "GetMaterialSyncModeAttr")]
         material_sync_mode, "light:materialSyncMode", LightApiMaterialSyncMode, LightApiMaterialSyncMode::read
     }
     /// The USD name of [`Self::shader_id`].
@@ -1034,6 +1202,9 @@ impl<'a> LightApi<'a> {
         #[doc = "The shader ID for this light, if any."]
         #[doc = ""]
         #[doc = "USD attribute `light:shaderId` (`token`, uniform; fallback `\"\"`)."]
+        #[doc = "C++ read: `UsdLuxLightAPI::GetShaderIdAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxLightAPI::GetShaderIdAttr")]
+        #[doc(alias = "GetShaderIdAttr")]
         shader_id, "light:shaderId", &'a str, crate::value::read_token
     }
 }
@@ -1071,66 +1242,99 @@ impl LightApiEdit {
         #[doc = "The color of the emitted light, in the rendering color space."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:color` (`color3f`; fallback `(1.0, 1.0, 1.0)`)."]
+        #[doc = "C++ authoring: `UsdLuxLightAPI::CreateColorAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxLightAPI::CreateColorAttr")]
+        #[doc(alias = "CreateColorAttr")]
         set_color, set_color_at, "inputs:color", [f32; 3], crate::value::write_float3
     }
     set_attribute! {
         #[doc = "The color temperature of the light, in degrees Kelvin."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:colorTemperature` (`float`; fallback `6500.0`)."]
+        #[doc = "C++ authoring: `UsdLuxLightAPI::CreateColorTemperatureAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxLightAPI::CreateColorTemperatureAttr")]
+        #[doc(alias = "CreateColorTemperatureAttr")]
         set_color_temperature, set_color_temperature_at, "inputs:colorTemperature", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "A multiplier for the effect of this light on the diffuse response of materials."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:diffuse` (`float`; fallback `1.0`)."]
+        #[doc = "C++ authoring: `UsdLuxLightAPI::CreateDiffuseAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxLightAPI::CreateDiffuseAttr")]
+        #[doc(alias = "CreateDiffuseAttr")]
         set_diffuse, set_diffuse_at, "inputs:diffuse", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "Controls whether colorTemperature is used."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:enableColorTemperature` (`bool`; fallback `false`)."]
+        #[doc = "C++ authoring: `UsdLuxLightAPI::CreateEnableColorTemperatureAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxLightAPI::CreateEnableColorTemperatureAttr")]
+        #[doc(alias = "CreateEnableColorTemperatureAttr")]
         set_enable_color_temperature, set_enable_color_temperature_at, "inputs:enableColorTemperature", bool, crate::value::write_bool
     }
     set_attribute! {
         #[doc = "Exposure setting of the light. Scales the brightness of the light exponentially."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:exposure` (`float`; fallback `0.0`)."]
+        #[doc = "C++ authoring: `UsdLuxLightAPI::CreateExposureAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxLightAPI::CreateExposureAttr")]
+        #[doc(alias = "CreateExposureAttr")]
         set_exposure, set_exposure_at, "inputs:exposure", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "The base intensity of the light. Scales the brightness of the light linearly."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:intensity` (`float`; fallback `1.0`)."]
+        #[doc = "C++ authoring: `UsdLuxLightAPI::CreateIntensityAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxLightAPI::CreateIntensityAttr")]
+        #[doc(alias = "CreateIntensityAttr")]
         set_intensity, set_intensity_at, "inputs:intensity", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "Controls if the light power should be normalized by the surface area of the light. If enabled, the light power remains constant if the light's area or angular size is changed."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:normalize` (`bool`; fallback `false`)."]
+        #[doc = "C++ authoring: `UsdLuxLightAPI::CreateNormalizeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxLightAPI::CreateNormalizeAttr")]
+        #[doc(alias = "CreateNormalizeAttr")]
         set_normalize, set_normalize_at, "inputs:normalize", bool, crate::value::write_bool
     }
     set_attribute! {
         #[doc = "A multiplier for the effect of this light on the specular response of materials."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:specular` (`float`; fallback `1.0`)."]
+        #[doc = "C++ authoring: `UsdLuxLightAPI::CreateSpecularAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxLightAPI::CreateSpecularAttr")]
+        #[doc(alias = "CreateSpecularAttr")]
         set_specular, set_specular_at, "inputs:specular", f32, crate::value::write_float
     }
     set_relationship! {
         #[doc = "The set of light filters, if any, that apply to this light."]
         #[doc = ""]
         #[doc = "USD relationship `light:filters` (`rel`)."]
+        #[doc = "C++ authoring: `UsdLuxLightAPI::CreateFiltersRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxLightAPI::CreateFiltersRel")]
+        #[doc(alias = "CreateFiltersRel")]
         set_filters, "light:filters"
     }
     set_uniform_attribute! {
         #[doc = "Specifies the lighting response of a material (if any) bound to the prim that has this schema applied."]
         #[doc = ""]
         #[doc = "USD attribute `light:materialSyncMode` (`token`, uniform; fallback `\"noMaterialResponse\"`)."]
+        #[doc = "C++ authoring: `UsdLuxLightAPI::CreateMaterialSyncModeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxLightAPI::CreateMaterialSyncModeAttr")]
+        #[doc(alias = "CreateMaterialSyncModeAttr")]
         set_material_sync_mode, "light:materialSyncMode", LightApiMaterialSyncMode, LightApiMaterialSyncMode::write
     }
     set_uniform_attribute! {
         #[doc = "The shader ID for this light, if any."]
         #[doc = ""]
         #[doc = "USD attribute `light:shaderId` (`token`, uniform; fallback `\"\"`)."]
+        #[doc = "C++ authoring: `UsdLuxLightAPI::CreateShaderIdAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxLightAPI::CreateShaderIdAttr")]
+        #[doc(alias = "CreateShaderIdAttr")]
         set_shader_id, "light:shaderId", &str, crate::value::write_token
     }
 }
@@ -1138,6 +1342,8 @@ impl LightApiEdit {
 #[doc = "A light filter is used to modify the effect of a light."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `LightFilter`, inheriting [`crate::usd_geom::Xformable`]. Construct it with [`LightFilter::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdLuxLightFilter`."]
+#[doc(alias = "UsdLuxLightFilter")]
 #[derive(Clone, Copy, Debug)]
 pub struct LightFilter<'a> {
     base: crate::usd_geom::Xformable<'a>,
@@ -1156,6 +1362,8 @@ impl<'a> LightFilter<'a> {
     pub const SCHEMA: &'static str = "LightFilter";
 
     #[doc = "A view of the prim at `path`, if it is a `LightFilter` or of a schema derived from it."]
+    #[doc(alias = "UsdLuxLightFilter::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -1180,6 +1388,8 @@ impl<'a> LightFilter<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdLuxLightFilter::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> LightFilterEdit {
         edit.define(path, Self::SCHEMA);
         LightFilterEdit::from_path(path)
@@ -1192,6 +1402,9 @@ impl<'a> LightFilter<'a> {
         #[doc = "The shader ID for a LightFilter (the fallback value is no shader ID)."]
         #[doc = ""]
         #[doc = "USD attribute `lightFilter:shaderId` (`token`, uniform; fallback `\"\"`)."]
+        #[doc = "C++ read: `UsdLuxLightFilter::GetShaderIdAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxLightFilter::GetShaderIdAttr")]
+        #[doc(alias = "GetShaderIdAttr")]
         shader_id, "lightFilter:shaderId", &'a str, crate::value::read_token
     }
 }
@@ -1229,6 +1442,9 @@ impl LightFilterEdit {
         #[doc = "The shader ID for a LightFilter (the fallback value is no shader ID)."]
         #[doc = ""]
         #[doc = "USD attribute `lightFilter:shaderId` (`token`, uniform; fallback `\"\"`)."]
+        #[doc = "C++ authoring: `UsdLuxLightFilter::CreateShaderIdAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxLightFilter::CreateShaderIdAttr")]
+        #[doc(alias = "CreateShaderIdAttr")]
         set_shader_id, "lightFilter:shaderId", &str, crate::value::write_token
     }
 }
@@ -1248,6 +1464,9 @@ token_enum! {
 #[doc = "Facilitates discovery and publishing of lights in a scene. Provides a mechanism to create and utilize a cache if needed."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's single-apply API schema `LightListAPI`. Get it with [`LightListApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdLuxLightListAPI`."]
+#[doc(alias = "UsdLuxLightListAPI")]
+#[doc(alias = "LightListAPI")]
 #[derive(Clone, Copy, Debug)]
 pub struct LightListApi<'a> {
     base: PrimView<'a>,
@@ -1268,6 +1487,8 @@ impl<'a> LightListApi<'a> {
     /// A view of the schema on the prim at `path`, if the prim has it
     /// applied.
     #[must_use]
+    #[doc(alias = "UsdLuxLightListAPI::Get")]
+    #[doc(alias = "Get")]
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
@@ -1292,6 +1513,8 @@ impl<'a> LightListApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there.
+    #[doc(alias = "UsdLuxLightListAPI::Apply")]
+    #[doc(alias = "Apply")]
     pub fn apply(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<LightListApiEdit, CannotApply> {
         edit.apply(path, Self::SCHEMA, None)?;
         Ok(LightListApiEdit::from_path(path))
@@ -1304,6 +1527,9 @@ impl<'a> LightListApi<'a> {
         #[doc = "A list of relationships to lights, that describe the light list for a model hierarchy prim with this schema applied. If empty and used as a cached list, this indicates no lights are present."]
         #[doc = ""]
         #[doc = "USD relationship `lightList` (`rel`)."]
+        #[doc = "C++ read: `UsdLuxLightListAPI::GetLightListRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxLightListAPI::GetLightListRel")]
+        #[doc(alias = "GetLightListRel")]
         light_list, "lightList"
     }
     /// The USD name of [`Self::light_list_cache_behavior`].
@@ -1313,6 +1539,9 @@ impl<'a> LightListApi<'a> {
         #[doc = "Controls how the cached light list should be interpreted: consumeAndHalt, consumeAndContinue, or ignore."]
         #[doc = ""]
         #[doc = "USD attribute `lightList:cacheBehavior` (`token`)."]
+        #[doc = "C++ read: `UsdLuxLightListAPI::GetLightListCacheBehaviorAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxLightListAPI::GetLightListCacheBehaviorAttr")]
+        #[doc(alias = "GetLightListCacheBehaviorAttr")]
         light_list_cache_behavior, light_list_cache_behavior_at, "lightList:cacheBehavior", LightListApiLightListCacheBehavior, LightListApiLightListCacheBehavior::read
     }
 }
@@ -1350,12 +1579,18 @@ impl LightListApiEdit {
         #[doc = "A list of relationships to lights, that describe the light list for a model hierarchy prim with this schema applied. If empty and used as a cached list, this indicates no lights are present."]
         #[doc = ""]
         #[doc = "USD relationship `lightList` (`rel`)."]
+        #[doc = "C++ authoring: `UsdLuxLightListAPI::CreateLightListRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxLightListAPI::CreateLightListRel")]
+        #[doc(alias = "CreateLightListRel")]
         set_light_list, "lightList"
     }
     set_attribute! {
         #[doc = "Controls how the cached light list should be interpreted: consumeAndHalt, consumeAndContinue, or ignore."]
         #[doc = ""]
         #[doc = "USD attribute `lightList:cacheBehavior` (`token`)."]
+        #[doc = "C++ authoring: `UsdLuxLightListAPI::CreateLightListCacheBehaviorAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxLightListAPI::CreateLightListCacheBehaviorAttr")]
+        #[doc(alias = "CreateLightListCacheBehaviorAttr")]
         set_light_list_cache_behavior, set_light_list_cache_behavior_at, "lightList:cacheBehavior", LightListApiLightListCacheBehavior, LightListApiLightListCacheBehavior::write
     }
 }
@@ -1375,6 +1610,9 @@ token_enum! {
 #[doc = "Facilitates discovery and publishing of lights in a scene. This schema is deprecated and LightListAPI should be used instead."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's single-apply API schema `ListAPI`. Get it with [`ListApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdLuxListAPI`."]
+#[doc(alias = "UsdLuxListAPI")]
+#[doc(alias = "ListAPI")]
 #[derive(Clone, Copy, Debug)]
 pub struct ListApi<'a> {
     base: PrimView<'a>,
@@ -1395,6 +1633,8 @@ impl<'a> ListApi<'a> {
     /// A view of the schema on the prim at `path`, if the prim has it
     /// applied.
     #[must_use]
+    #[doc(alias = "UsdLuxListAPI::Get")]
+    #[doc(alias = "Get")]
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
@@ -1419,6 +1659,8 @@ impl<'a> ListApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there.
+    #[doc(alias = "UsdLuxListAPI::Apply")]
+    #[doc(alias = "Apply")]
     pub fn apply(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<ListApiEdit, CannotApply> {
         edit.apply(path, Self::SCHEMA, None)?;
         Ok(ListApiEdit::from_path(path))
@@ -1431,6 +1673,9 @@ impl<'a> ListApi<'a> {
         #[doc = "A list of relationships to lights, that describe the light list for a model hierarchy prim with this schema applied. If empty and used as a cached list, this indicates no lights are present."]
         #[doc = ""]
         #[doc = "USD relationship `lightList` (`rel`)."]
+        #[doc = "C++ read: `UsdLuxListAPI::GetLightListRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxListAPI::GetLightListRel")]
+        #[doc(alias = "GetLightListRel")]
         light_list, "lightList"
     }
     /// The USD name of [`Self::light_list_cache_behavior`].
@@ -1440,6 +1685,9 @@ impl<'a> ListApi<'a> {
         #[doc = "Controls how the cached light list should be interpreted: consumeAndHalt, consumeAndContinue, or ignore."]
         #[doc = ""]
         #[doc = "USD attribute `lightList:cacheBehavior` (`token`)."]
+        #[doc = "C++ read: `UsdLuxListAPI::GetLightListCacheBehaviorAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxListAPI::GetLightListCacheBehaviorAttr")]
+        #[doc(alias = "GetLightListCacheBehaviorAttr")]
         light_list_cache_behavior, light_list_cache_behavior_at, "lightList:cacheBehavior", ListApiLightListCacheBehavior, ListApiLightListCacheBehavior::read
     }
 }
@@ -1477,12 +1725,18 @@ impl ListApiEdit {
         #[doc = "A list of relationships to lights, that describe the light list for a model hierarchy prim with this schema applied. If empty and used as a cached list, this indicates no lights are present."]
         #[doc = ""]
         #[doc = "USD relationship `lightList` (`rel`)."]
+        #[doc = "C++ authoring: `UsdLuxListAPI::CreateLightListRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxListAPI::CreateLightListRel")]
+        #[doc(alias = "CreateLightListRel")]
         set_light_list, "lightList"
     }
     set_attribute! {
         #[doc = "Controls how the cached light list should be interpreted: consumeAndHalt, consumeAndContinue, or ignore."]
         #[doc = ""]
         #[doc = "USD attribute `lightList:cacheBehavior` (`token`)."]
+        #[doc = "C++ authoring: `UsdLuxListAPI::CreateLightListCacheBehaviorAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxListAPI::CreateLightListCacheBehaviorAttr")]
+        #[doc(alias = "CreateLightListCacheBehaviorAttr")]
         set_light_list_cache_behavior, set_light_list_cache_behavior_at, "lightList:cacheBehavior", ListApiLightListCacheBehavior, ListApiLightListCacheBehavior::write
     }
 }
@@ -1490,6 +1744,9 @@ impl ListApiEdit {
 #[doc = "Applies light behavior to a mesh."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's single-apply API schema `MeshLightAPI`. Get it with [`MeshLightApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdLuxMeshLightAPI`."]
+#[doc(alias = "UsdLuxMeshLightAPI")]
+#[doc(alias = "MeshLightAPI")]
 #[derive(Clone, Copy, Debug)]
 pub struct MeshLightApi<'a> {
     base: PrimView<'a>,
@@ -1510,6 +1767,8 @@ impl<'a> MeshLightApi<'a> {
     /// A view of the schema on the prim at `path`, if the prim has it
     /// applied.
     #[must_use]
+    #[doc(alias = "UsdLuxMeshLightAPI::Get")]
+    #[doc(alias = "Get")]
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
@@ -1534,6 +1793,8 @@ impl<'a> MeshLightApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there.
+    #[doc(alias = "UsdLuxMeshLightAPI::Apply")]
+    #[doc(alias = "Apply")]
     pub fn apply(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<MeshLightApiEdit, CannotApply> {
         edit.apply(path, Self::SCHEMA, None)?;
         Ok(MeshLightApiEdit::from_path(path))
@@ -1573,6 +1834,8 @@ impl MeshLightApiEdit {
 #[doc = "A base class used by intrinsic lights. Not intended to be used directly."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's abstract typed schema `NonboundableLightBase`, inheriting [`crate::usd_geom::Xformable`]. Construct it with [`NonboundableLightBase::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdLuxNonboundableLightBase`."]
+#[doc(alias = "UsdLuxNonboundableLightBase")]
 #[derive(Clone, Copy, Debug)]
 pub struct NonboundableLightBase<'a> {
     base: crate::usd_geom::Xformable<'a>,
@@ -1591,6 +1854,8 @@ impl<'a> NonboundableLightBase<'a> {
     pub const SCHEMA: &'static str = "NonboundableLightBase";
 
     #[doc = "A view of the prim at `path`, if it is a `NonboundableLightBase` or of a schema derived from it."]
+    #[doc(alias = "UsdLuxNonboundableLightBase::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -1656,6 +1921,8 @@ impl NonboundableLightBaseEdit {
 #[doc = "A light that provides properties to allow it to identify an external Sdr shader node."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `PluginLight`, inheriting [`crate::usd_geom::Xformable`]. Construct it with [`PluginLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdLuxPluginLight`."]
+#[doc(alias = "UsdLuxPluginLight")]
 #[derive(Clone, Copy, Debug)]
 pub struct PluginLight<'a> {
     base: crate::usd_geom::Xformable<'a>,
@@ -1674,6 +1941,8 @@ impl<'a> PluginLight<'a> {
     pub const SCHEMA: &'static str = "PluginLight";
 
     #[doc = "A view of the prim at `path`, if it is a `PluginLight` or of a schema derived from it."]
+    #[doc(alias = "UsdLuxPluginLight::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -1698,6 +1967,8 @@ impl<'a> PluginLight<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdLuxPluginLight::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> PluginLightEdit {
         edit.define(path, Self::SCHEMA);
         PluginLightEdit::from_path(path)
@@ -1761,6 +2032,8 @@ impl PluginLightEdit {
 #[doc = "A Light filter that provides properties that allow it to identify an external SdrShadingNode definition, through UsdShadeNodeDefAPI, that can be provided to render delegates without the need to provide a schema definition for the light filter's type."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `PluginLightFilter`, inheriting [`LightFilter`]. Construct it with [`PluginLightFilter::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdLuxPluginLightFilter`."]
+#[doc(alias = "UsdLuxPluginLightFilter")]
 #[derive(Clone, Copy, Debug)]
 pub struct PluginLightFilter<'a> {
     base: LightFilter<'a>,
@@ -1779,6 +2052,8 @@ impl<'a> PluginLightFilter<'a> {
     pub const SCHEMA: &'static str = "PluginLightFilter";
 
     #[doc = "A view of the prim at `path`, if it is a `PluginLightFilter` or of a schema derived from it."]
+    #[doc(alias = "UsdLuxPluginLightFilter::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -1803,6 +2078,8 @@ impl<'a> PluginLightFilter<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdLuxPluginLightFilter::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> PluginLightFilterEdit {
         edit.define(path, Self::SCHEMA);
         PluginLightFilterEdit::from_path(path)
@@ -1854,6 +2131,8 @@ impl PluginLightFilterEdit {
 #[doc = "A rectangular portal in the local XY plane that guides sampling of a dome light (DomeLight, DomeLight_1)."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `PortalLight`, inheriting [`BoundableLightBase`]. Construct it with [`PortalLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdLuxPortalLight`."]
+#[doc(alias = "UsdLuxPortalLight")]
 #[derive(Clone, Copy, Debug)]
 pub struct PortalLight<'a> {
     base: BoundableLightBase<'a>,
@@ -1872,6 +2151,8 @@ impl<'a> PortalLight<'a> {
     pub const SCHEMA: &'static str = "PortalLight";
 
     #[doc = "A view of the prim at `path`, if it is a `PortalLight` or of a schema derived from it."]
+    #[doc(alias = "UsdLuxPortalLight::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -1896,6 +2177,8 @@ impl<'a> PortalLight<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdLuxPortalLight::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> PortalLightEdit {
         edit.define(path, Self::SCHEMA);
         PortalLightEdit::from_path(path)
@@ -1908,6 +2191,9 @@ impl<'a> PortalLight<'a> {
         #[doc = "Specifies the height of the portal rectangle in the local Y axis."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:height` (`float`; fallback `1.0`)."]
+        #[doc = "C++ read: `UsdLuxPortalLight::GetHeightAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxPortalLight::GetHeightAttr")]
+        #[doc(alias = "GetHeightAttr")]
         height, height_at, "inputs:height", f32, crate::value::read_float
     }
     /// The USD name of [`Self::width`].
@@ -1917,6 +2203,9 @@ impl<'a> PortalLight<'a> {
         #[doc = "Specifies the width of the portal rectangle in the local X axis."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:width` (`float`; fallback `1.0`)."]
+        #[doc = "C++ read: `UsdLuxPortalLight::GetWidthAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxPortalLight::GetWidthAttr")]
+        #[doc(alias = "GetWidthAttr")]
         width, width_at, "inputs:width", f32, crate::value::read_float
     }
 }
@@ -1954,12 +2243,18 @@ impl PortalLightEdit {
         #[doc = "Specifies the height of the portal rectangle in the local Y axis."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:height` (`float`; fallback `1.0`)."]
+        #[doc = "C++ authoring: `UsdLuxPortalLight::CreateHeightAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxPortalLight::CreateHeightAttr")]
+        #[doc(alias = "CreateHeightAttr")]
         set_height, set_height_at, "inputs:height", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "Specifies the width of the portal rectangle in the local X axis."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:width` (`float`; fallback `1.0`)."]
+        #[doc = "C++ authoring: `UsdLuxPortalLight::CreateWidthAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxPortalLight::CreateWidthAttr")]
+        #[doc(alias = "CreateWidthAttr")]
         set_width, set_width_at, "inputs:width", f32, crate::value::write_float
     }
 }
@@ -1967,6 +2262,8 @@ impl PortalLightEdit {
 #[doc = "A light that emits from one side of a rectangle (along the -Z axis), centered in the XY plane."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `RectLight`, inheriting [`BoundableLightBase`]. Construct it with [`RectLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdLuxRectLight`."]
+#[doc(alias = "UsdLuxRectLight")]
 #[derive(Clone, Copy, Debug)]
 pub struct RectLight<'a> {
     base: BoundableLightBase<'a>,
@@ -1985,6 +2282,8 @@ impl<'a> RectLight<'a> {
     pub const SCHEMA: &'static str = "RectLight";
 
     #[doc = "A view of the prim at `path`, if it is a `RectLight` or of a schema derived from it."]
+    #[doc(alias = "UsdLuxRectLight::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -2009,6 +2308,8 @@ impl<'a> RectLight<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdLuxRectLight::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> RectLightEdit {
         edit.define(path, Self::SCHEMA);
         RectLightEdit::from_path(path)
@@ -2021,6 +2322,9 @@ impl<'a> RectLight<'a> {
         #[doc = "Specifies the height of the rectangle in the local Y axis."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:height` (`float`; fallback `1.0`)."]
+        #[doc = "C++ read: `UsdLuxRectLight::GetHeightAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxRectLight::GetHeightAttr")]
+        #[doc(alias = "GetHeightAttr")]
         height, height_at, "inputs:height", f32, crate::value::read_float
     }
     /// The USD name of [`Self::texture_file`].
@@ -2030,6 +2334,9 @@ impl<'a> RectLight<'a> {
         #[doc = "An optional color texture set on the rectangle."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:texture:file` (`asset`)."]
+        #[doc = "C++ read: `UsdLuxRectLight::GetTextureFileAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxRectLight::GetTextureFileAttr")]
+        #[doc(alias = "GetTextureFileAttr")]
         texture_file, texture_file_at, "inputs:texture:file", ::alloc::sync::Arc<str>, crate::value::read_asset
     }
     /// The USD name of [`Self::width`].
@@ -2039,6 +2346,9 @@ impl<'a> RectLight<'a> {
         #[doc = "Specifies the width of the rectangle in the local X axis."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:width` (`float`; fallback `1.0`)."]
+        #[doc = "C++ read: `UsdLuxRectLight::GetWidthAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxRectLight::GetWidthAttr")]
+        #[doc(alias = "GetWidthAttr")]
         width, width_at, "inputs:width", f32, crate::value::read_float
     }
 }
@@ -2076,18 +2386,27 @@ impl RectLightEdit {
         #[doc = "Specifies the height of the rectangle in the local Y axis."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:height` (`float`; fallback `1.0`)."]
+        #[doc = "C++ authoring: `UsdLuxRectLight::CreateHeightAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxRectLight::CreateHeightAttr")]
+        #[doc(alias = "CreateHeightAttr")]
         set_height, set_height_at, "inputs:height", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "An optional color texture set on the rectangle."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:texture:file` (`asset`)."]
+        #[doc = "C++ authoring: `UsdLuxRectLight::CreateTextureFileAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxRectLight::CreateTextureFileAttr")]
+        #[doc(alias = "CreateTextureFileAttr")]
         set_texture_file, set_texture_file_at, "inputs:texture:file", &str, crate::value::write_asset
     }
     set_attribute! {
         #[doc = "Specifies the width of the rectangle in the local X axis."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:width` (`float`; fallback `1.0`)."]
+        #[doc = "C++ authoring: `UsdLuxRectLight::CreateWidthAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxRectLight::CreateWidthAttr")]
+        #[doc(alias = "CreateWidthAttr")]
         set_width, set_width_at, "inputs:width", f32, crate::value::write_float
     }
 }
@@ -2095,6 +2414,9 @@ impl RectLightEdit {
 #[doc = "Controls to refine a light's shadow casting behavior. These are non-physical controls."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's single-apply API schema `ShadowAPI`. Get it with [`ShadowApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdLuxShadowAPI`."]
+#[doc(alias = "UsdLuxShadowAPI")]
+#[doc(alias = "ShadowAPI")]
 #[derive(Clone, Copy, Debug)]
 pub struct ShadowApi<'a> {
     base: PrimView<'a>,
@@ -2115,6 +2437,8 @@ impl<'a> ShadowApi<'a> {
     /// A view of the schema on the prim at `path`, if the prim has it
     /// applied.
     #[must_use]
+    #[doc(alias = "UsdLuxShadowAPI::Get")]
+    #[doc(alias = "Get")]
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
@@ -2139,6 +2463,8 @@ impl<'a> ShadowApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there.
+    #[doc(alias = "UsdLuxShadowAPI::Apply")]
+    #[doc(alias = "Apply")]
     pub fn apply(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<ShadowApiEdit, CannotApply> {
         edit.apply(path, Self::SCHEMA, None)?;
         Ok(ShadowApiEdit::from_path(path))
@@ -2151,6 +2477,9 @@ impl<'a> ShadowApi<'a> {
         #[doc = "Specifies the color of the shadows cast by the light"]
         #[doc = ""]
         #[doc = "USD attribute `inputs:shadow:color` (`color3f`; fallback `(0.0, 0.0, 0.0)`)."]
+        #[doc = "C++ read: `UsdLuxShadowAPI::GetShadowColorAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxShadowAPI::GetShadowColorAttr")]
+        #[doc(alias = "GetShadowColorAttr")]
         shadow_color, shadow_color_at, "inputs:shadow:color", [f32; 3], crate::value::read_float3
     }
     /// The USD name of [`Self::shadow_distance`].
@@ -2160,6 +2489,9 @@ impl<'a> ShadowApi<'a> {
         #[doc = "Specifies the maximum distance, measured between the occluder and the point on a surface, within which shadows are cast."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:shadow:distance` (`float`; fallback `-1.0`)."]
+        #[doc = "C++ read: `UsdLuxShadowAPI::GetShadowDistanceAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxShadowAPI::GetShadowDistanceAttr")]
+        #[doc(alias = "GetShadowDistanceAttr")]
         shadow_distance, shadow_distance_at, "inputs:shadow:distance", f32, crate::value::read_float
     }
     /// The USD name of [`Self::shadow_enable`].
@@ -2169,6 +2501,9 @@ impl<'a> ShadowApi<'a> {
         #[doc = "Enables or disables whether the light casts shadows."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:shadow:enable` (`bool`; fallback `true`)."]
+        #[doc = "C++ read: `UsdLuxShadowAPI::GetShadowEnableAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxShadowAPI::GetShadowEnableAttr")]
+        #[doc(alias = "GetShadowEnableAttr")]
         shadow_enable, shadow_enable_at, "inputs:shadow:enable", bool, crate::value::read_bool
     }
     /// The USD name of [`Self::shadow_falloff`].
@@ -2178,6 +2513,9 @@ impl<'a> ShadowApi<'a> {
         #[doc = "Specifies the size of the shadow falloff zone, within the maximum shadow distance."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:shadow:falloff` (`float`; fallback `-1.0`)."]
+        #[doc = "C++ read: `UsdLuxShadowAPI::GetShadowFalloffAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxShadowAPI::GetShadowFalloffAttr")]
+        #[doc(alias = "GetShadowFalloffAttr")]
         shadow_falloff, shadow_falloff_at, "inputs:shadow:falloff", f32, crate::value::read_float
     }
     /// The USD name of [`Self::shadow_falloff_gamma`].
@@ -2187,6 +2525,9 @@ impl<'a> ShadowApi<'a> {
         #[doc = "Controls the rate of falloff within the shadow falloff zone specified with `shadow:falloff`."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:shadow:falloffGamma` (`float`; fallback `1.0`)."]
+        #[doc = "C++ read: `UsdLuxShadowAPI::GetShadowFalloffGammaAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxShadowAPI::GetShadowFalloffGammaAttr")]
+        #[doc(alias = "GetShadowFalloffGammaAttr")]
         shadow_falloff_gamma, shadow_falloff_gamma_at, "inputs:shadow:falloffGamma", f32, crate::value::read_float
     }
 }
@@ -2224,30 +2565,45 @@ impl ShadowApiEdit {
         #[doc = "Specifies the color of the shadows cast by the light"]
         #[doc = ""]
         #[doc = "USD attribute `inputs:shadow:color` (`color3f`; fallback `(0.0, 0.0, 0.0)`)."]
+        #[doc = "C++ authoring: `UsdLuxShadowAPI::CreateShadowColorAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxShadowAPI::CreateShadowColorAttr")]
+        #[doc(alias = "CreateShadowColorAttr")]
         set_shadow_color, set_shadow_color_at, "inputs:shadow:color", [f32; 3], crate::value::write_float3
     }
     set_attribute! {
         #[doc = "Specifies the maximum distance, measured between the occluder and the point on a surface, within which shadows are cast."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:shadow:distance` (`float`; fallback `-1.0`)."]
+        #[doc = "C++ authoring: `UsdLuxShadowAPI::CreateShadowDistanceAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxShadowAPI::CreateShadowDistanceAttr")]
+        #[doc(alias = "CreateShadowDistanceAttr")]
         set_shadow_distance, set_shadow_distance_at, "inputs:shadow:distance", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "Enables or disables whether the light casts shadows."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:shadow:enable` (`bool`; fallback `true`)."]
+        #[doc = "C++ authoring: `UsdLuxShadowAPI::CreateShadowEnableAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxShadowAPI::CreateShadowEnableAttr")]
+        #[doc(alias = "CreateShadowEnableAttr")]
         set_shadow_enable, set_shadow_enable_at, "inputs:shadow:enable", bool, crate::value::write_bool
     }
     set_attribute! {
         #[doc = "Specifies the size of the shadow falloff zone, within the maximum shadow distance."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:shadow:falloff` (`float`; fallback `-1.0`)."]
+        #[doc = "C++ authoring: `UsdLuxShadowAPI::CreateShadowFalloffAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxShadowAPI::CreateShadowFalloffAttr")]
+        #[doc(alias = "CreateShadowFalloffAttr")]
         set_shadow_falloff, set_shadow_falloff_at, "inputs:shadow:falloff", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "Controls the rate of falloff within the shadow falloff zone specified with `shadow:falloff`."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:shadow:falloffGamma` (`float`; fallback `1.0`)."]
+        #[doc = "C++ authoring: `UsdLuxShadowAPI::CreateShadowFalloffGammaAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxShadowAPI::CreateShadowFalloffGammaAttr")]
+        #[doc(alias = "CreateShadowFalloffGammaAttr")]
         set_shadow_falloff_gamma, set_shadow_falloff_gamma_at, "inputs:shadow:falloffGamma", f32, crate::value::write_float
     }
 }
@@ -2255,6 +2611,9 @@ impl ShadowApiEdit {
 #[doc = "Controls for shaping a light's emission, such as light cone angle and falloff."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's single-apply API schema `ShapingAPI`. Get it with [`ShapingApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdLuxShapingAPI`."]
+#[doc(alias = "UsdLuxShapingAPI")]
+#[doc(alias = "ShapingAPI")]
 #[derive(Clone, Copy, Debug)]
 pub struct ShapingApi<'a> {
     base: PrimView<'a>,
@@ -2275,6 +2634,8 @@ impl<'a> ShapingApi<'a> {
     /// A view of the schema on the prim at `path`, if the prim has it
     /// applied.
     #[must_use]
+    #[doc(alias = "UsdLuxShapingAPI::Get")]
+    #[doc(alias = "Get")]
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
@@ -2299,6 +2660,8 @@ impl<'a> ShapingApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there.
+    #[doc(alias = "UsdLuxShapingAPI::Apply")]
+    #[doc(alias = "Apply")]
     pub fn apply(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<ShapingApiEdit, CannotApply> {
         edit.apply(path, Self::SCHEMA, None)?;
         Ok(ShapingApiEdit::from_path(path))
@@ -2311,6 +2674,9 @@ impl<'a> ShapingApi<'a> {
         #[doc = "Specifies the angular limit off the primary axis to restrict the light spread, in degrees."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:shaping:cone:angle` (`float`; fallback `90.0`)."]
+        #[doc = "C++ read: `UsdLuxShapingAPI::GetShapingConeAngleAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxShapingAPI::GetShapingConeAngleAttr")]
+        #[doc(alias = "GetShapingConeAngleAttr")]
         shaping_cone_angle, shaping_cone_angle_at, "inputs:shaping:cone:angle", f32, crate::value::read_float
     }
     /// The USD name of [`Self::shaping_cone_softness`].
@@ -2320,6 +2686,9 @@ impl<'a> ShapingApi<'a> {
         #[doc = "Controls the cutoff softness for the cone angle. Typical range is 0 (hard cut-off) to 1.0 (smooth)."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:shaping:cone:softness` (`float`; fallback `0.0`)."]
+        #[doc = "C++ read: `UsdLuxShapingAPI::GetShapingConeSoftnessAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxShapingAPI::GetShapingConeSoftnessAttr")]
+        #[doc(alias = "GetShapingConeSoftnessAttr")]
         shaping_cone_softness, shaping_cone_softness_at, "inputs:shaping:cone:softness", f32, crate::value::read_float
     }
     /// The USD name of [`Self::shaping_focus`].
@@ -2329,6 +2698,9 @@ impl<'a> ShapingApi<'a> {
         #[doc = "Controls the spread of the light. Higher focus values pull light towards the center and narrow the spread."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:shaping:focus` (`float`; fallback `0.0`)."]
+        #[doc = "C++ read: `UsdLuxShapingAPI::GetShapingFocusAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxShapingAPI::GetShapingFocusAttr")]
+        #[doc(alias = "GetShapingFocusAttr")]
         shaping_focus, shaping_focus_at, "inputs:shaping:focus", f32, crate::value::read_float
     }
     /// The USD name of [`Self::shaping_focus_tint`].
@@ -2338,6 +2710,9 @@ impl<'a> ShapingApi<'a> {
         #[doc = "Controls the tint of the emission in the falloff region."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:shaping:focusTint` (`color3f`; fallback `(0.0, 0.0, 0.0)`)."]
+        #[doc = "C++ read: `UsdLuxShapingAPI::GetShapingFocusTintAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxShapingAPI::GetShapingFocusTintAttr")]
+        #[doc(alias = "GetShapingFocusTintAttr")]
         shaping_focus_tint, shaping_focus_tint_at, "inputs:shaping:focusTint", [f32; 3], crate::value::read_float3
     }
     /// The USD name of [`Self::shaping_ies_angle_scale`].
@@ -2347,6 +2722,9 @@ impl<'a> ShapingApi<'a> {
         #[doc = "Specifies a rescaling of the angular distribution of the IES profile."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:shaping:ies:angleScale` (`float`; fallback `0.0`)."]
+        #[doc = "C++ read: `UsdLuxShapingAPI::GetShapingIesAngleScaleAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxShapingAPI::GetShapingIesAngleScaleAttr")]
+        #[doc(alias = "GetShapingIesAngleScaleAttr")]
         shaping_ies_angle_scale, shaping_ies_angle_scale_at, "inputs:shaping:ies:angleScale", f32, crate::value::read_float
     }
     /// The USD name of [`Self::shaping_ies_file`].
@@ -2356,6 +2734,9 @@ impl<'a> ShapingApi<'a> {
         #[doc = "Specifies the IES profile file."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:shaping:ies:file` (`asset`)."]
+        #[doc = "C++ read: `UsdLuxShapingAPI::GetShapingIesFileAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxShapingAPI::GetShapingIesFileAttr")]
+        #[doc(alias = "GetShapingIesFileAttr")]
         shaping_ies_file, shaping_ies_file_at, "inputs:shaping:ies:file", ::alloc::sync::Arc<str>, crate::value::read_asset
     }
     /// The USD name of [`Self::shaping_ies_normalize`].
@@ -2365,6 +2746,9 @@ impl<'a> ShapingApi<'a> {
         #[doc = "Normalizes the IES profile to affect the shaping of the light while preserving the overall energy output."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:shaping:ies:normalize` (`bool`; fallback `false`)."]
+        #[doc = "C++ read: `UsdLuxShapingAPI::GetShapingIesNormalizeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxShapingAPI::GetShapingIesNormalizeAttr")]
+        #[doc(alias = "GetShapingIesNormalizeAttr")]
         shaping_ies_normalize, shaping_ies_normalize_at, "inputs:shaping:ies:normalize", bool, crate::value::read_bool
     }
 }
@@ -2402,42 +2786,63 @@ impl ShapingApiEdit {
         #[doc = "Specifies the angular limit off the primary axis to restrict the light spread, in degrees."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:shaping:cone:angle` (`float`; fallback `90.0`)."]
+        #[doc = "C++ authoring: `UsdLuxShapingAPI::CreateShapingConeAngleAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxShapingAPI::CreateShapingConeAngleAttr")]
+        #[doc(alias = "CreateShapingConeAngleAttr")]
         set_shaping_cone_angle, set_shaping_cone_angle_at, "inputs:shaping:cone:angle", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "Controls the cutoff softness for the cone angle. Typical range is 0 (hard cut-off) to 1.0 (smooth)."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:shaping:cone:softness` (`float`; fallback `0.0`)."]
+        #[doc = "C++ authoring: `UsdLuxShapingAPI::CreateShapingConeSoftnessAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxShapingAPI::CreateShapingConeSoftnessAttr")]
+        #[doc(alias = "CreateShapingConeSoftnessAttr")]
         set_shaping_cone_softness, set_shaping_cone_softness_at, "inputs:shaping:cone:softness", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "Controls the spread of the light. Higher focus values pull light towards the center and narrow the spread."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:shaping:focus` (`float`; fallback `0.0`)."]
+        #[doc = "C++ authoring: `UsdLuxShapingAPI::CreateShapingFocusAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxShapingAPI::CreateShapingFocusAttr")]
+        #[doc(alias = "CreateShapingFocusAttr")]
         set_shaping_focus, set_shaping_focus_at, "inputs:shaping:focus", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "Controls the tint of the emission in the falloff region."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:shaping:focusTint` (`color3f`; fallback `(0.0, 0.0, 0.0)`)."]
+        #[doc = "C++ authoring: `UsdLuxShapingAPI::CreateShapingFocusTintAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxShapingAPI::CreateShapingFocusTintAttr")]
+        #[doc(alias = "CreateShapingFocusTintAttr")]
         set_shaping_focus_tint, set_shaping_focus_tint_at, "inputs:shaping:focusTint", [f32; 3], crate::value::write_float3
     }
     set_attribute! {
         #[doc = "Specifies a rescaling of the angular distribution of the IES profile."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:shaping:ies:angleScale` (`float`; fallback `0.0`)."]
+        #[doc = "C++ authoring: `UsdLuxShapingAPI::CreateShapingIesAngleScaleAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxShapingAPI::CreateShapingIesAngleScaleAttr")]
+        #[doc(alias = "CreateShapingIesAngleScaleAttr")]
         set_shaping_ies_angle_scale, set_shaping_ies_angle_scale_at, "inputs:shaping:ies:angleScale", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "Specifies the IES profile file."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:shaping:ies:file` (`asset`)."]
+        #[doc = "C++ authoring: `UsdLuxShapingAPI::CreateShapingIesFileAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxShapingAPI::CreateShapingIesFileAttr")]
+        #[doc(alias = "CreateShapingIesFileAttr")]
         set_shaping_ies_file, set_shaping_ies_file_at, "inputs:shaping:ies:file", &str, crate::value::write_asset
     }
     set_attribute! {
         #[doc = "Normalizes the IES profile to affect the shaping of the light while preserving the overall energy output."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:shaping:ies:normalize` (`bool`; fallback `false`)."]
+        #[doc = "C++ authoring: `UsdLuxShapingAPI::CreateShapingIesNormalizeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxShapingAPI::CreateShapingIesNormalizeAttr")]
+        #[doc(alias = "CreateShapingIesNormalizeAttr")]
         set_shaping_ies_normalize, set_shaping_ies_normalize_at, "inputs:shaping:ies:normalize", bool, crate::value::write_bool
     }
 }
@@ -2445,6 +2850,8 @@ impl ShapingApiEdit {
 #[doc = "A light that is emitted outwards from a sphere."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `SphereLight`, inheriting [`BoundableLightBase`]. Construct it with [`SphereLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdLuxSphereLight`."]
+#[doc(alias = "UsdLuxSphereLight")]
 #[derive(Clone, Copy, Debug)]
 pub struct SphereLight<'a> {
     base: BoundableLightBase<'a>,
@@ -2463,6 +2870,8 @@ impl<'a> SphereLight<'a> {
     pub const SCHEMA: &'static str = "SphereLight";
 
     #[doc = "A view of the prim at `path`, if it is a `SphereLight` or of a schema derived from it."]
+    #[doc(alias = "UsdLuxSphereLight::Get")]
+    #[doc(alias = "Get")]
     #[must_use]
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
@@ -2487,6 +2896,8 @@ impl<'a> SphereLight<'a> {
     /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
     /// author yet; defining a spec that exists is rejected when the
     /// transaction applies.
+    #[doc(alias = "UsdLuxSphereLight::Define")]
+    #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> SphereLightEdit {
         edit.define(path, Self::SCHEMA);
         SphereLightEdit::from_path(path)
@@ -2499,6 +2910,9 @@ impl<'a> SphereLight<'a> {
         #[doc = "Specifies the radius of the sphere."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:radius` (`float`; fallback `0.5`)."]
+        #[doc = "C++ read: `UsdLuxSphereLight::GetRadiusAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxSphereLight::GetRadiusAttr")]
+        #[doc(alias = "GetRadiusAttr")]
         radius, radius_at, "inputs:radius", f32, crate::value::read_float
     }
     /// The USD name of [`Self::treat_as_point`].
@@ -2508,6 +2922,9 @@ impl<'a> SphereLight<'a> {
         #[doc = "Specifies that renderers can treat this light as a zero-radius point light."]
         #[doc = ""]
         #[doc = "USD attribute `treatAsPoint` (`bool`; fallback `false`)."]
+        #[doc = "C++ read: `UsdLuxSphereLight::GetTreatAsPointAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+        #[doc(alias = "UsdLuxSphereLight::GetTreatAsPointAttr")]
+        #[doc(alias = "GetTreatAsPointAttr")]
         treat_as_point, treat_as_point_at, "treatAsPoint", bool, crate::value::read_bool
     }
 }
@@ -2545,12 +2962,18 @@ impl SphereLightEdit {
         #[doc = "Specifies the radius of the sphere."]
         #[doc = ""]
         #[doc = "USD attribute `inputs:radius` (`float`; fallback `0.5`)."]
+        #[doc = "C++ authoring: `UsdLuxSphereLight::CreateRadiusAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxSphereLight::CreateRadiusAttr")]
+        #[doc(alias = "CreateRadiusAttr")]
         set_radius, set_radius_at, "inputs:radius", f32, crate::value::write_float
     }
     set_attribute! {
         #[doc = "Specifies that renderers can treat this light as a zero-radius point light."]
         #[doc = ""]
         #[doc = "USD attribute `treatAsPoint` (`bool`; fallback `false`)."]
+        #[doc = "C++ authoring: `UsdLuxSphereLight::CreateTreatAsPointAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+        #[doc(alias = "UsdLuxSphereLight::CreateTreatAsPointAttr")]
+        #[doc(alias = "CreateTreatAsPointAttr")]
         set_treat_as_point, set_treat_as_point_at, "treatAsPoint", bool, crate::value::write_bool
     }
 }
@@ -2558,6 +2981,9 @@ impl SphereLightEdit {
 #[doc = "Applies light behavior to a volume."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's single-apply API schema `VolumeLightAPI`. Get it with [`VolumeLightApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "C++ schema class: `UsdLuxVolumeLightAPI`."]
+#[doc(alias = "UsdLuxVolumeLightAPI")]
+#[doc(alias = "VolumeLightAPI")]
 #[derive(Clone, Copy, Debug)]
 pub struct VolumeLightApi<'a> {
     base: PrimView<'a>,
@@ -2578,6 +3004,8 @@ impl<'a> VolumeLightApi<'a> {
     /// A view of the schema on the prim at `path`, if the prim has it
     /// applied.
     #[must_use]
+    #[doc(alias = "UsdLuxVolumeLightAPI::Get")]
+    #[doc(alias = "Get")]
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
@@ -2602,6 +3030,8 @@ impl<'a> VolumeLightApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there.
+    #[doc(alias = "UsdLuxVolumeLightAPI::Apply")]
+    #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,

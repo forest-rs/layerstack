@@ -144,6 +144,7 @@ impl core::error::Error for SkelError {
 /// Validated parent-first forest. Missing intermediate paths attach to the
 /// closest listed ancestor, as `UsdSkelTopology` does; multiple roots are valid.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[doc(alias = "UsdSkelTopology")]
 pub struct JointTopology {
     parents: Vec<Option<usize>>,
 }
@@ -325,6 +326,7 @@ impl<'a> SkelBindingApi<'a> {
 /// A skeleton definition snapshot with retained topology and rest/bind arrays.
 /// Animation values resolve at each requested time. Rebuild after scene edits.
 #[derive(Clone, Debug)]
+#[doc(alias = "UsdSkelSkeletonQuery")]
 pub struct SkeletonQuery<'a> {
     skeleton: Skeleton<'a>,
     definition: Arc<SkeletonDefinition>,
@@ -477,6 +479,8 @@ impl<'a> SkeletonQuery<'a> {
     /// Joint-local animation with rest fallback and sparse/reordered mapping.
     /// As `UsdSkelSkeletonQuery`, absent or incompatible TRS arrays fall back to
     /// rest. Retained decode failures and inconsistent lengths are rejected.
+    #[doc(alias = "UsdSkelSkeletonQuery::ComputeJointLocalTransforms")]
+    #[doc(alias = "ComputeJointLocalTransforms")]
     pub fn local_transforms(&self, time: Time) -> Result<Vec<gf::Matrix4>, SkelError> {
         let Some(animation) = self
             .animation
@@ -525,6 +529,8 @@ impl<'a> SkeletonQuery<'a> {
         Ok(result)
     }
     /// Animated joint transforms in skeleton space, excluding skeleton Xforms.
+    #[doc(alias = "UsdSkelSkeletonQuery::ComputeJointSkelTransforms")]
+    #[doc(alias = "ComputeJointSkelTransforms")]
     pub fn skeleton_transforms(&self, time: Time) -> Result<Vec<gf::Matrix4>, SkelError> {
         Ok(self
             .definition
@@ -534,6 +540,8 @@ impl<'a> SkeletonQuery<'a> {
     }
     /// Inverse bind followed by animated skeleton-space transforms, in joint
     /// order. Singular bind matrices return an error before producing output.
+    #[doc(alias = "UsdSkelSkeletonQuery::ComputeSkinningTransforms")]
+    #[doc(alias = "ComputeSkinningTransforms")]
     pub fn skinning_transforms(&self, time: Time) -> Result<Vec<gf::Matrix4>, SkelError> {
         let bind = self
             .definition

@@ -10,6 +10,12 @@
 //! auto-applies. They are generated from OpenUSD's own schema definitions
 //! (see [`OPENUSD_VERSION`]), so nothing is parsed at run time.
 //!
+//! Rustdoc search accepts native names such as `UsdGeomMesh` and
+//! `UsdGeomMesh::GetFaceVertexCountsAttr`. Generated aliases are verified against
+//! registered classes and source headers. Getters return resolved values rather
+//! than C++ property handles; setters collect transactional authoring. Nearby
+//! docs describe differences, including explicit retained cache control.
+//!
 //! ```
 //! use std::sync::Arc;
 //!

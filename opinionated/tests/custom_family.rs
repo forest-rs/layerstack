@@ -10,7 +10,7 @@
 
 use opinionated::{
     FamilyEvent, FamilyMember, FamilyReport, FamilyResolution, IgnoreReason, OpinionFamily,
-    OpinionKind, resolve_family_chain, resolve_family_chain_report,
+    resolve_family_chain, resolve_family_chain_report,
 };
 
 /// A counter operation authored at one layer. This is deliberately *not*
@@ -39,12 +39,7 @@ impl OpinionFamily<CounterOp> for CounterFamily {
             CounterOp::Total(total) => FamilyMember::Dense(*total),
             CounterOp::Delta(delta) => FamilyMember::Sparse(*delta),
             CounterOp::Reset => FamilyMember::Block,
-            // A foreign op reuses `opinionated`'s shared `IgnoreReason`; the
-            // concrete variant only signals the op was skipped.
-            CounterOp::Label(_) => FamilyMember::Foreign(IgnoreReason::IncompatibleOperation {
-                resolved: OpinionKind::Set,
-                ignored: OpinionKind::Set,
-            }),
+            CounterOp::Label(_) => FamilyMember::Foreign(IgnoreReason::OtherFamily),
         }
     }
 
@@ -165,10 +160,7 @@ fn foreign_op_is_skipped_and_reported() {
         vec![
             FamilyEvent::Ignored {
                 provenance: "user",
-                reason: IgnoreReason::IncompatibleOperation {
-                    resolved: OpinionKind::Set,
-                    ignored: OpinionKind::Set,
-                },
+                reason: IgnoreReason::OtherFamily,
             },
             FamilyEvent::ContributedSparse {
                 provenance: "defaults",

@@ -977,7 +977,12 @@ fn chain_role(event: &ResolutionEvent<usize>) -> (usize, OpinionRole) {
                     IgnoreCause::Shadowed
                 }
                 IgnoreReason::WeakerThanBlock => IgnoreCause::CutOffByBlock,
-                IgnoreReason::IncompatibleOperation { .. } => IgnoreCause::Incompatible,
+                IgnoreReason::IncompatibleOperation { .. } | IgnoreReason::OtherFamily => {
+                    IgnoreCause::Incompatible
+                }
+                // A reason this mapping predates still did not contribute;
+                // `Incompatible` is the least specific cause.
+                _ => IgnoreCause::Incompatible,
             }),
         ),
     }

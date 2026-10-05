@@ -170,6 +170,7 @@ pub enum DictionaryEvent<K, P> {
 
 /// A combined dictionary paired with the events that explain it.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub struct DictionaryReport<K, V, P> {
     /// The combined dictionary, exactly as [`combine_dictionary_chain`]
     /// returns it.

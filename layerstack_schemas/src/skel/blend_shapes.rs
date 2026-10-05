@@ -173,8 +173,20 @@ impl BlendShapeQuery {
                 relationship: "skel:blendShapeTargets",
                 target,
             })?;
-            let indices = shape.point_indices().unwrap_or_default();
-            let offsets = shape.offsets().ok_or_else(|| invalid(path, "offsets"))?;
+            let indices = read(
+                &shape,
+                "pointIndices",
+                Time::Default,
+                crate::value::read_int_array_shared,
+            )?
+            .unwrap_or_default();
+            let offsets = read(
+                &shape,
+                "offsets",
+                Time::Default,
+                crate::value::read_float3_array_shared,
+            )?
+            .ok_or_else(|| invalid(path, "offsets"))?;
             let mut samples = vec![
                 Sample {
                     weight: 0.,
@@ -184,7 +196,13 @@ impl BlendShapeQuery {
                 Sample {
                     weight: 1.,
                     offsets,
-                    normals: shape.normal_offsets().unwrap_or_default(),
+                    normals: read(
+                        &shape,
+                        "normalOffsets",
+                        Time::Default,
+                        crate::value::read_float3_array_shared,
+                    )?
+                    .unwrap_or_default(),
                 },
             ];
             for token in scene.stage().authored_property_names(path, scene.store()) {
@@ -198,15 +216,20 @@ impl BlendShapeQuery {
                 if !weight.is_finite() || weight.abs() <= 1e-6 || (weight - 1.).abs() <= 1e-6 {
                     return Err(invalid(path, "inbetweens"));
                 }
-                let offsets = shape
-                    .read_value(name, crate::value::read_float3_array_shared)
-                    .ok_or_else(|| invalid(path, "inbetweens"))?;
-                let normals = shape
-                    .read_value(
-                        &alloc::format!("{name}:normalOffsets"),
-                        crate::value::read_float3_array_shared,
-                    )
-                    .unwrap_or_default();
+                let offsets = read(
+                    &shape,
+                    name,
+                    Time::Default,
+                    crate::value::read_float3_array_shared,
+                )?
+                .ok_or_else(|| invalid(path, "inbetweens"))?;
+                let normals = read(
+                    &shape,
+                    &alloc::format!("{name}:normalOffsets"),
+                    Time::Default,
+                    crate::value::read_float3_array_shared,
+                )?
+                .unwrap_or_default();
                 samples.push(Sample {
                     weight,
                     offsets,
@@ -472,8 +495,9 @@ impl BlendShapeQuery {
 }
 impl SkeletonQuery<'_> {
     /// Maps sampled animation weights into a geometry's blend-shape name order.
-    /// Unmapped names and unreadable weight arrays use zero; inconsistent readable
-    /// arrays error. Missing joint animation does not suppress blend animation.
+    /// Unmapped names and absent or incompatible weight arrays use zero. Retained
+    /// decode failures and inconsistent lengths error. Missing joint animation
+    /// does not suppress blend animation.
     pub fn blend_shape_weights(&self, time: Time, names: &[String]) -> Result<Vec<f32>, SkelError> {
         let Some(animation) = self.animation else {
             return Ok(vec![0.; names.len()]);
@@ -484,7 +508,8 @@ impl SkeletonQuery<'_> {
             "blendShapeWeights",
             time,
             crate::value::read_float_array,
-        ) else {
+        )?
+        else {
             return Ok(vec![0.; names.len()]);
         };
         length(
@@ -518,7 +543,7 @@ impl SkinningQuery<'_> {
             "points",
             time,
             crate::value::read_float3_array_shared,
-        )
+        )?
         .ok_or_else(|| invalid(self.definition.geometry, "points"))?;
         let deformed = self
             .definition

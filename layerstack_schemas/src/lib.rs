@@ -74,6 +74,10 @@
 //! data directly and `PointInstancer::prepare_instance_transforms` for bounded
 //! output. With geometry and shading enabled, material subset queries combine
 //! validation and binding resolution without allocating renderer draw ranges.
+//! Computed motion, skinning, mesh topology and checked subset validation retain
+//! numeric decode failures instead of reporting missing or empty input.
+//! [`extent::ExtentProviders`] lets hosts register custom Boundable geometry;
+//! bounds caches retain its stage dependencies and explicit external revision.
 //!
 //! With `usd-proc`, `procedural::Procedural` binds a `UsdProc` recipe to a
 //! caller-supplied evaluator, tracks composed input reads and retains its result.

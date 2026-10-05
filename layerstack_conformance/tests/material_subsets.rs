@@ -196,6 +196,24 @@ fn snapshot_subset_query_does_not_decode_unselected_topology_samples() {
         },
     );
     calls.store(0, Ordering::Relaxed);
+    let scene = Scene::new(live.stage(), &store);
+    let geometry = layerstack_schemas::usd_geom::Imageable::new(&scene, path).unwrap();
+    assert!(
+        geometry
+            .try_validate_subset_family_at(
+                &layerstack_schemas::usd_geom::GeomSubsetElementType::Face,
+                "materialBind",
+                Time::held(1.),
+            )
+            .unwrap()
+            .is_valid(),
+        "checked snapshot validation uses only the selected topology sample"
+    );
+    assert_eq!(
+        calls.load(Ordering::Relaxed),
+        0,
+        "generic checked validation leaves cold samples undecoded"
+    );
     let mut cache = BindingCache::new(MaterialPurpose::All, BindingOptions::default());
     cache
         .material_binding_subsets(&Scene::new(live.stage(), &store), path, Time::held(1.))
@@ -219,39 +237,45 @@ fn material_subsets_preserve_decode_failure_paths() {
             Value::Int(0)
         }
     }
-    for (prim, name) in [("/M", "faceVertexCounts"), ("/M/a", "indices")] {
-        let (mut store, _) = support::scene(&text("partition", "1", ""));
-        let path = store.path(prim);
-        let token = store.tokens.lookup(name).unwrap();
-        let property = PropertyPath::new(path, token);
-        let error = ArrayReadError::InvalidData("invalid retained subset input".into());
-        store
-            .layers
-            .get_mut(&LayerId(1))
-            .unwrap()
-            .prims
-            .get_mut(&path)
-            .unwrap()
-            .property_mut(token)
-            .unwrap()
-            .default = Some(Value::TypedArray(TypedArray::Deferred(Arc::new(Failed(
-            error.clone(),
-        )))));
-        let schemas = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
-        let live = layerstack::LiveStage::compose(
-            &mut store,
-            LayerId(1),
-            layerstack::StageOptions {
-                schemas: Some(schemas),
-                ..Default::default()
-            },
-        );
-        let mesh = store.path("/M");
-        let mut cache = BindingCache::new(MaterialPurpose::All, BindingOptions::default());
-        assert_eq!(
-            cache.material_binding_subsets(&Scene::new(live.stage(), &store), mesh, Time::Default),
-            Err(MaterialSubsetError::Decode { property, error })
-        );
+    for time in [Time::Default, Time::held(1.), Time::at(1.5)] {
+        for (prim, name) in [("/M", "faceVertexCounts"), ("/M/a", "indices")] {
+            let (mut store, _) = support::scene(&text("partition", "1", ""));
+            let path = store.path(prim);
+            let token = store.tokens.lookup(name).unwrap();
+            let property = PropertyPath::new(path, token);
+            let error = ArrayReadError::InvalidData("invalid retained subset input".into());
+            let value = Value::TypedArray(TypedArray::Deferred(Arc::new(Failed(error.clone()))));
+            let attribute = store
+                .layers
+                .get_mut(&LayerId(1))
+                .unwrap()
+                .prims
+                .get_mut(&path)
+                .unwrap()
+                .property_mut(token)
+                .unwrap();
+            if time == Time::Default {
+                attribute.default = Some(value);
+            } else {
+                attribute.time_samples = Some(vec![(1., value.clone()), (2., value)].into());
+            }
+            let schemas = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+            let live = layerstack::LiveStage::compose(
+                &mut store,
+                LayerId(1),
+                layerstack::StageOptions {
+                    schemas: Some(schemas),
+                    ..Default::default()
+                },
+            );
+            let mesh = store.path("/M");
+            let mut cache = BindingCache::new(MaterialPurpose::All, BindingOptions::default());
+            assert_eq!(
+                cache.material_binding_subsets(&Scene::new(live.stage(), &store), mesh, time),
+                Err(MaterialSubsetError::Decode { property, error }),
+                "material validation preserves the requested {name} source at {time:?}"
+            );
+        }
     }
 }
 

@@ -11,14 +11,8 @@ pub(crate) fn read<'a, T>(
     name: &str,
     time: Time,
     decode: impl Fn(&Value, &'a TokenInterner) -> Option<T>,
-) -> Option<T> {
-    match time {
-        Time::Default => prim.read_value(name, decode),
-        Time::At {
-            code,
-            interpolation,
-        } => prim.read_value_at(name, code, interpolation, decode),
-    }
+) -> Result<Option<T>, layerstack::ArrayReadError> {
+    prim.try_read_value(name, time, decode)
 }
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Anchor {
@@ -135,7 +129,11 @@ pub(crate) fn aligned(a: Anchor, b: Anchor) -> bool {
         _ => false,
     }
 }
-pub(crate) fn vectors(prim: &PrimView<'_>, name: &str, time: Time) -> Option<Vec<[f32; 3]>> {
+pub(crate) fn vectors(
+    prim: &PrimView<'_>,
+    name: &str,
+    time: Time,
+) -> Result<Option<Vec<[f32; 3]>>, layerstack::ArrayReadError> {
     read(prim, name, time, crate::value::read_float3_array)
 }
 pub(crate) fn rate(scene: &Scene<'_>) -> f64 {

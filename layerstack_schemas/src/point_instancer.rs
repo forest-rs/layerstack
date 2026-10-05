@@ -8,14 +8,31 @@
 //! time offsets and interpolation follow AOUSD Core §12.3–12.5.
 use crate::{
     Time, gf,
-    motion_sampling::{aligned, anchor, rate, read},
+    motion_sampling::{aligned, anchor, rate},
     usd_geom::PointInstancer,
 };
 use alloc::{sync::Arc, vec::Vec};
 use core::num::NonZeroUsize;
-use layerstack::{PathId, TargetPath};
+use layerstack::{PathId, TargetPath, TokenInterner, Value};
 
-fn vectors(prim: &crate::PrimView<'_>, name: &str, time: Time) -> Option<Arc<Vec<[f32; 3]>>> {
+fn read<'a, T>(
+    prim: &crate::PrimView<'a>,
+    name: &str,
+    time: Time,
+    decode: impl Fn(&Value, &'a TokenInterner) -> Option<T>,
+) -> Result<Option<T>, PointInstancerError> {
+    crate::motion_sampling::read(prim, name, time, decode).map_err(|error| {
+        PointInstancerError::Decode {
+            property: prim.property_path(name).expect("failed attribute exists"),
+            error,
+        }
+    })
+}
+fn vectors(
+    prim: &crate::PrimView<'_>,
+    name: &str,
+    time: Time,
+) -> Result<Option<Arc<Vec<[f32; 3]>>>, PointInstancerError> {
     read(prim, name, time, crate::value::read_float3_array_shared)
 }
 
@@ -48,10 +65,17 @@ pub struct InstanceTransform {
     pub matrix: [[f64; 4]; 4],
 }
 /// Invalid instance data; computations never return partial transforms.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PointInstancerError {
     /// A required array cannot be read with its declared type.
     MissingAttribute(&'static str),
+    /// Retained numeric storage failed to decode; no partial transforms are returned.
+    Decode {
+        /// The failed attribute in stage namespace.
+        property: layerstack::PropertyPath,
+        /// The original decoder error.
+        error: layerstack::ArrayReadError,
+    },
     /// An authored array length differs from the instance count.
     LengthMismatch(&'static str),
     /// A prototype relationship is empty or targets a property.
@@ -76,36 +100,64 @@ impl core::fmt::Display for PointInstancerError {
         write!(f, "invalid point instancer: {self:?}")
     }
 }
-impl core::error::Error for PointInstancerError {}
+impl core::error::Error for PointInstancerError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::Decode { error, .. } => Some(error),
+            _ => None,
+        }
+    }
+}
 
 impl PointInstancer<'_> {
     /// Visibility mask in original array order. Empty means every instance
-    /// passes, matching OpenUSD. `inactiveIds` and time-varying `invisibleIds`
+    /// passes, matching OpenUSD. Decode failures also return an empty mask; use
+    /// [`Self::try_compute_mask`] to distinguish corrupt storage. `inactiveIds` and time-varying `invisibleIds`
     /// match stable `ids`, falling back to array positions when IDs are absent.
     #[must_use]
     pub fn compute_mask(&self, time: Time) -> Vec<bool> {
-        let mut hidden = self.inactive_ids().unwrap_or_default();
+        self.try_compute_mask(time).unwrap_or_default()
+    }
+    /// Computes the visibility mask while preserving retained-array decode failures.
+    /// Missing and incompatible optional arrays keep the ordinary USD fallback behavior.
+    /// Prefer this checked form when consuming deferred numeric data.
+    pub fn try_compute_mask(&self, time: Time) -> Result<Vec<bool>, PointInstancerError> {
+        let mut hidden = if let Some(value) = self.metadata_value("inactiveIds") {
+            crate::value::try_read_array(
+                &value,
+                self.scene().store().tokens(),
+                crate::value::read_int64,
+            )
+            .map_err(|error| PointInstancerError::Decode {
+                property: self
+                    .property_path("inactiveIds")
+                    .expect("failed field exists"),
+                error,
+            })?
+            .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
         hidden.extend(
-            read(self, "invisibleIds", time, crate::value::read_int64_array).unwrap_or_default(),
+            read(self, "invisibleIds", time, crate::value::read_int64_array)?.unwrap_or_default(),
         );
         if hidden.is_empty() {
-            return Vec::new();
+            return Ok(Vec::new());
         }
         hidden.sort_unstable();
         hidden.dedup();
-        let ids = read(self, "ids", time, crate::value::read_int64_array_shared);
-        let count = ids.as_ref().map_or_else(
-            || {
-                read(
-                    self,
-                    "protoIndices",
-                    time,
-                    crate::value::read_int_array_shared,
-                )
-                .map_or(0, |v| v.len())
-            },
-            |ids| ids.len(),
-        );
+        let ids = read(self, "ids", time, crate::value::read_int64_array_shared)?;
+        let count = if let Some(ids) = &ids {
+            ids.len()
+        } else {
+            read(
+                self,
+                "protoIndices",
+                time,
+                crate::value::read_int_array_shared,
+            )?
+            .map_or(0, |v| v.len())
+        };
         let mask: Vec<_> = (0..count)
             .map(|i| {
                 let id = ids.as_ref().map_or_else(
@@ -115,11 +167,11 @@ impl PointInstancer<'_> {
                 hidden.binary_search(&id).is_err()
             })
             .collect();
-        if mask.iter().all(|&v| v) {
+        Ok(if mask.iter().all(|&v| v) {
             Vec::new()
         } else {
             mask
-        }
+        })
     }
     /// Computes ordered shutter samples against one fixed topology/mask base.
     /// Preserves duplicate times and interpolation policies. Any invalid sample
@@ -197,12 +249,12 @@ impl PointInstancer<'_> {
             "protoIndices",
             indices_anchor.time,
             crate::value::read_int_array_shared,
-        )
+        )?
         .ok_or(PointInstancerError::MissingAttribute("protoIndices"))?;
         let count = indices.len();
         let position_anchor = anchor(self, "positions", base_time)
             .map_err(PointInstancerError::UnsupportedMotionSource)?;
-        let mut positions = vectors(self, "positions", position_anchor.time)
+        let mut positions = vectors(self, "positions", position_anchor.time)?
             .ok_or(PointInstancerError::MissingAttribute("positions"))?;
         if positions.len() != count {
             return Err(PointInstancerError::LengthMismatch("positions"));
@@ -223,26 +275,27 @@ impl PointInstancer<'_> {
                     crate::value::read_quatf_array_shared,
                 )
             } else {
-                read(self, orientation_name, at, crate::value::read_quath_array).map(Arc::new)
+                read(self, orientation_name, at, crate::value::read_quath_array)
+                    .map(|v| v.map(Arc::new))
             }
         };
-        let mut rotations = orientations(orientation_anchor.time)
+        let mut rotations = orientations(orientation_anchor.time)?
             .filter(|v| v.len() == count)
             .unwrap_or_default();
         let scale_anchor = anchor(self, "scales", base_time)
             .map_err(PointInstancerError::UnsupportedMotionSource)?;
-        let mut scales = vectors(self, "scales", scale_anchor.time).unwrap_or_default();
+        let mut scales = vectors(self, "scales", scale_anchor.time)?.unwrap_or_default();
         if !scales.is_empty() && scales.len() != count {
             return Err(PointInstancerError::LengthMismatch("scales"));
         }
         let velocity_anchor = anchor(self, "velocities", base_time)
             .map_err(PointInstancerError::UnsupportedMotionSource)?;
-        let velocities = vectors(self, "velocities", velocity_anchor.time)
+        let velocities = vectors(self, "velocities", velocity_anchor.time)?
             .filter(|v| v.len() == count && aligned(position_anchor, velocity_anchor))
             .unwrap_or_default();
         let acceleration_anchor = anchor(self, "accelerations", base_time)
             .map_err(PointInstancerError::UnsupportedMotionSource)?;
-        let accelerations = vectors(self, "accelerations", acceleration_anchor.time)
+        let accelerations = vectors(self, "accelerations", acceleration_anchor.time)?
             .filter(|v| {
                 v.len() == count
                     && !velocities.is_empty()
@@ -251,7 +304,7 @@ impl PointInstancer<'_> {
             .unwrap_or_default();
         let angular_anchor = anchor(self, "angularVelocities", base_time)
             .map_err(PointInstancerError::UnsupportedMotionSource)?;
-        let angular = vectors(self, "angularVelocities", angular_anchor.time)
+        let angular = vectors(self, "angularVelocities", angular_anchor.time)?
             .filter(|v| {
                 v.len() == count
                     && !rotations.is_empty()
@@ -259,13 +312,13 @@ impl PointInstancer<'_> {
             })
             .unwrap_or_default();
         if velocities.is_empty() && angular.is_empty() {
-            if let Some(values) = vectors(self, "positions", time).filter(|v| v.len() == count) {
+            if let Some(values) = vectors(self, "positions", time)?.filter(|v| v.len() == count) {
                 positions = values;
             }
-            if let Some(values) = vectors(self, "scales", time).filter(|v| v.len() == count) {
+            if let Some(values) = vectors(self, "scales", time)?.filter(|v| v.len() == count) {
                 scales = values;
             }
-            if let Some(values) = orientations(time).filter(|v| v.len() == count) {
+            if let Some(values) = orientations(time)?.filter(|v| v.len() == count) {
                 rotations = values;
             }
         }
@@ -274,12 +327,12 @@ impl PointInstancer<'_> {
             "ids",
             base_time,
             crate::value::read_int64_array_shared,
-        );
+        )?;
         if ids.as_ref().is_some_and(|v| v.len() != count) {
             return Err(PointInstancerError::LengthMismatch("ids"));
         }
         let mask = if options.apply_mask {
-            self.compute_mask(base_time)
+            self.try_compute_mask(base_time)?
         } else {
             Vec::new()
         };

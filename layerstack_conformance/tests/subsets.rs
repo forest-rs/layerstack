@@ -54,6 +54,12 @@ fn family_validation_and_discovery_match_openusd() {
             row.path,
             row.reason
         );
+        assert_eq!(
+            g.try_validate_subset_family(&e, "materialBind").unwrap(),
+            g.validate_subset_family(&e, "materialBind"),
+            "checked validation preserves dense OpenUSD expectations at {}",
+            row.path
+        );
         assert_eq!(g.subset_family_type("materialBind"), row.family_type);
         assert_eq!(
             g.geom_subsets(None, Some("materialBind"))

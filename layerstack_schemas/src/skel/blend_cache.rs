@@ -315,14 +315,18 @@ impl BlendShapeCache {
             .get_mut(&path)
             .expect("prepared shape binding");
         self.stats.weight_evaluations += 1;
-        let raw = b.animation.and_then(|p| {
-            read(
-                &PrimView::new(*scene, p),
-                "blendShapeWeights",
-                self.time,
-                crate::value::read_float_array,
-            )
-        });
+        let raw = b
+            .animation
+            .map(|p| {
+                read(
+                    &PrimView::new(*scene, p),
+                    "blendShapeWeights",
+                    self.time,
+                    crate::value::read_float_array,
+                )
+            })
+            .transpose()?
+            .flatten();
         if let Some(weights) = &raw {
             length(
                 b.animation.expect("animated weights"),
@@ -437,7 +441,7 @@ impl BlendShapeCache {
         self.ensure_weights(scene, path)?;
         let prim = PrimView::new(*scene, path);
         let name = if normals { "normals" } else { "points" };
-        let values = read(&prim, name, self.time, crate::value::read_float3_array)
+        let values = read(&prim, name, self.time, crate::value::read_float3_array)?
             .ok_or_else(|| invalid(path, name))?;
         let b = self
             .bindings
@@ -461,14 +465,14 @@ impl BlendShapeCache {
             .and_then(|m| m.interpolation())
             .unwrap_or("vertex");
         if normals && interpolation == "faceVarying" && scene.is_a(path, "Mesh") {
-            let points = read(&prim, "points", self.time, crate::value::read_float3_array)
+            let points = read(&prim, "points", self.time, crate::value::read_float3_array)?
                 .ok_or_else(|| invalid(path, "points"))?;
             let corners = read(
                 &prim,
                 "faceVertexIndices",
                 self.time,
                 crate::value::read_int_array,
-            )
+            )?
             .ok_or_else(|| invalid(path, "faceVertexIndices"))?;
             b.query
                 .deform_corner_normals(&b.contributions, points.len(), &corners, output)?;

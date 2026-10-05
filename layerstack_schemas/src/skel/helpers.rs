@@ -97,20 +97,21 @@ impl SkelAnimation<'_> {
         varying(self, &["blendShapeWeights"])
     }
     /// Reads TRS in animation joint order, validating each array's length.
-    /// Unreadable components return `None`, as OpenUSD's animation query does;
+    /// Absent or incompatible components return `None`, as OpenUSD's animation
+    /// query does. Retained numeric decode failures return `SkelError::Decode`;
     /// this standalone query does not substitute a skeleton's rest pose.
     pub fn compute_joint_local_transform_components(
         &self,
         time: Time,
     ) -> Result<Option<JointTransformComponents>, SkelError> {
-        let Some(translations) = read(self, "translations", time, crate::value::read_float3_array)
+        let Some(translations) = read(self, "translations", time, crate::value::read_float3_array)?
         else {
             return Ok(None);
         };
-        let Some(rotations) = read(self, "rotations", time, crate::value::read_quatf_array) else {
+        let Some(rotations) = read(self, "rotations", time, crate::value::read_quatf_array)? else {
             return Ok(None);
         };
-        let Some(scales) = read(self, "scales", time, crate::value::read_half3_array) else {
+        let Some(scales) = read(self, "scales", time, crate::value::read_half3_array)? else {
             return Ok(None);
         };
         let count = tokens(self, "joints")
@@ -130,7 +131,8 @@ impl SkelAnimation<'_> {
         }))
     }
     /// Composes sampled TRS into joint-local matrices in animation joint order.
-    /// Unreadable components return `None`; malformed readable arrays error.
+    /// Absent or incompatible components return `None`; malformed readable
+    /// arrays and retained decode failures error.
     pub fn compute_joint_local_transforms(
         &self,
         time: Time,
@@ -147,14 +149,16 @@ impl SkelAnimation<'_> {
             }))
     }
     /// Reads sampled weights in the animation's own blend-shape order.
-    /// Unreadable weights return `None`; malformed readable lengths error.
+    /// Absent or incompatible weights return `None`; malformed readable lengths
+    /// and retained decode failures error.
     pub fn compute_blend_shape_weights(&self, time: Time) -> Result<Option<Vec<f32>>, SkelError> {
         let Some(weights) = read(
             self,
             "blendShapeWeights",
             time,
             crate::value::read_float_array,
-        ) else {
+        )?
+        else {
             return Ok(None);
         };
         let names = tokens(self, "blendShapes").unwrap_or_default();

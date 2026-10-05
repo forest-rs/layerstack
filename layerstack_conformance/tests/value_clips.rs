@@ -404,6 +404,105 @@ fn activation_boundaries_interpolate_and_held_queries_do_not() {
         true,
     );
 }
+
+#[test]
+fn activation_interpolates_between_overlapping_clip_sample_ranges() {
+    // Both source clips bracket the switch. The next activation contributes
+    // the second clip's value at 10, so 5 resolves to 3.5, not clip A's 1.5.
+    // AOUSD Core §12.3.4.7; OpenUSD Usd_ClipSet::_GetBracketingTimeSamples.
+    check(
+        "overlapping-clip-ranges",
+        basic(
+            &clips(""),
+            "double x",
+            "double x.timeSamples = {0: 1, 20: 3}",
+            "double x.timeSamples = {0: 5, 20: 7}",
+            "double x",
+        ),
+        "/P.x",
+        &[0., 5., 9., 10., 15., 20.],
+        &[
+            Some(1.),
+            Some(3.5),
+            Some(5.5),
+            Some(6.),
+            Some(6.5),
+            Some(7.),
+        ],
+        None,
+        &[0., 10., 20.],
+        false,
+        false,
+    );
+}
+
+#[test]
+fn dormant_unavailable_clip_does_not_block_resident_samples() {
+    // The host leaves the dormant asset unresolved. Composition and queries
+    // read resident layers; the native probe also puts malformed bytes at
+    // that path and verifies early queries do not open it. AOUSD Core §12.3.4.7.
+    let metadata = clips("")
+        .replace("@b.usda@", "@bad.usda@")
+        .replace("[(0, 0), (10, 1)]", "[(0, 0), (100, 1)]");
+    let layers = basic(
+        &metadata,
+        "double x",
+        "double x.timeSamples = {0: 1, 20: 3}",
+        "",
+        "double x",
+    );
+    check(
+        "dormant-unavailable-clip",
+        layers.clone(),
+        "/P.x",
+        &[0., 5., 10.],
+        &[Some(1.), Some(1.5), Some(2.)],
+        None,
+        &[0., 20., 100.],
+        false,
+        false,
+    );
+    let (_, stage) = compose(&layers);
+    assert!(
+        stage.clip_issues().is_empty(),
+        "the available clip remains valid"
+    );
+    assert!(
+        stage.clip_asset_requests().iter().any(|request| {
+            &*request.identifier == "bad.usda"
+                && request.status
+                    == layerstack::value_clips::ClipAssetStatus::Unavailable(
+                        layerstack::value_clips::ClipAssetUnavailable::Unresolved,
+                    )
+        }),
+        "dormant assets remain an explicit host request"
+    );
+    if let Some(python) = python() {
+        let dir = std::env::temp_dir().join(format!(
+            "layerstack-dormant-corrupt-clip-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        for (name, text) in &layers {
+            std::fs::write(dir.join(name), text).unwrap();
+        }
+        std::fs::write(dir.join("bad.usda"), "#usda 1.0\ndef BROKEN").unwrap();
+        let output = Command::new(python)
+            .args([
+                "-c",
+                "from pxr import Usd; import sys; s=Usd.Stage.Open(sys.argv[1]); a=s.GetAttributeAtPath('/P.x'); assert [a.Get(t) for t in [0,5,10]] == [1,1.5,2]",
+            ])
+            .arg(dir.join(&layers[0].0))
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "dormant corrupt asset must not obstruct native queries: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+}
 #[test]
 fn gaps_manifest_defaults_and_blocks_are_authoritative() {
     for (name, interpolate, manifest, expected, samples) in [

@@ -155,7 +155,11 @@ pub struct UnresolvedDefaultPrim {
 /// composition reaches the arc, including arcs nested in other arcs'
 /// targets. An arc is checked for the prim it is authored on, not for the
 /// descendants it reaches ancestrally.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+///
+/// The introducing layer and variant-qualified authored spec identify the
+/// source independently of the composed occurrence. Diagnostics own that
+/// spec and implement `Clone`; clone retained diagnostics explicitly.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct UnresolvedPrimPath {
     /// The composed prim whose composition reached the arc.
     pub prim: PathId,
@@ -166,6 +170,12 @@ pub struct UnresolvedPrimPath {
     pub layer: LayerId,
     /// The prim path the arc names.
     pub path: PathId,
+    /// Layer whose list edit adds the unresolved reference or payload.
+    /// `None` means no introducing authored spec could be identified.
+    pub introducing_layer: Option<LayerId>,
+    /// Spec that introduces the arc, including any enclosing variant selections.
+    /// This remains in its authored namespace when `prim` is a referenced copy.
+    pub introducing_spec: SpecPath,
 }
 
 /// A composition arc that would form a cycle, found while composing `prim`.

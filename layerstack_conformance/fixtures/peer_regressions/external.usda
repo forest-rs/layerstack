@@ -1,0 +1,5 @@
+#usda 1.0
+def "MissingReference" (references = @content.usda@</Absent>) {}
+def "MissingPayload" (payload = @content.usda@</Absent>) {}
+def "MissingSubReference" (references = @content.usda@</Box/Absent>) {}
+def "MissingSubPayload" (payload = @content.usda@</Box/Absent>) {}

@@ -60,25 +60,16 @@ impl TargetSpecsCheck {
         store: &dyn LayerStore,
         out: &HashMap<PathId, PrimIndex>,
         reference: &Reference,
-        prim: PathId,
-        arc: ArcKind,
-        path: PathId,
+        error: UnresolvedPrimPath,
         namespace_depth: u16,
     ) -> Option<Self> {
         if reference.target == ReferenceTarget::DefaultPrim
-            || usize::from(namespace_depth) != store.paths().resolve(prim).depth()
+            || usize::from(namespace_depth) != store.paths().resolve(error.prim).depth()
         {
             return None;
         }
-        Some(Self {
-            error: UnresolvedPrimPath {
-                prim,
-                arc,
-                layer: reference.layer,
-                path,
-            },
-            sources: out.get(&prim).map_or(0, |index| index.sources.len()),
-        })
+        let sources = out.get(&error.prim).map_or(0, |index| index.sources.len());
+        Some(Self { error, sources })
     }
 
     /// Reports the arc when expanding it added no source to the prim.
@@ -513,12 +504,16 @@ mod tests {
                 arc: ArcKind::Payloads,
                 layer: ROOT,
                 path: missing,
+                introducing_layer: Some(ROOT),
+                introducing_spec: SpecPath::from_prim_path(stone, &store.paths),
             }),
             CompositionError::UnresolvedPrimPath(UnresolvedPrimPath {
                 prim: brook,
                 arc: ArcKind::References,
                 layer: ASSET,
                 path: nowhere,
+                introducing_layer: Some(ROOT),
+                introducing_spec: SpecPath::from_prim_path(brook, &store.paths),
             }),
         ];
         expected.sort_by_key(|error| error.prim());

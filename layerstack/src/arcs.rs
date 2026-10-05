@@ -388,7 +388,16 @@ impl ArcAuthoring<'_> {
                     reference.layer_offset.scale * parent_rate / child_rate;
             }
         }
-        (AuthoredReference { reference, layer }, sites)
+        let spec =
+            crate::SpecPath::from_variant_selection_sites(self.prim, &sites, self.store.paths());
+        (
+            AuthoredReference {
+                reference,
+                layer,
+                spec,
+            },
+            sites,
+        )
     }
 }
 
@@ -404,6 +413,8 @@ pub(crate) struct AuthoredReference {
     /// The strongest layer of the site's layer stack that adds the arc;
     /// `None` when no spec of the site adds it.
     pub(crate) layer: Option<LayerId>,
+    /// Variant-qualified authored site of the arc, before namespace mapping.
+    pub(crate) spec: crate::SpecPath,
 }
 
 /// Returns the parent of `prim`, if it has been interned.

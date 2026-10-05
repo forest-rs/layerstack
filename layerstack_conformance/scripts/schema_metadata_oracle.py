@@ -1,9 +1,14 @@
 # Copyright 2026 the LayerStack Authors
 # SPDX-License-Identifier: Apache-2.0 OR MIT
 """Record native metadata and ColorAPI precedence; run with usd-core 26.8."""
+import argparse
 import json
 from pathlib import Path
 from pxr import Plug, Usd
+
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--check", action="store_true")
+args = parser.parse_args()
 
 fixture = Path(__file__).resolve().parent.parent / "fixtures" / "schema_metadata"
 Plug.Registry().RegisterPlugins(str(fixture / "plugInfo.json"))
@@ -27,4 +32,10 @@ for prim in stage.Traverse():
             "documentation": definition.GetPropertyMetadata(name, "documentation"),
             "custom_data": definition.GetPropertyMetadata(name, "customData"),
         })
-(fixture / "oracle.json").write_text(json.dumps({"openusd_version":list(Usd.GetVersion()), "properties":rows},indent=2)+"\n")
+text = json.dumps({"openusd_version":list(Usd.GetVersion()), "properties":rows},indent=2)+"\n"
+snapshot = fixture / "oracle.json"
+if args.check:
+    if snapshot.read_text() != text:
+        raise SystemExit(f"native snapshot differs: {snapshot}")
+else:
+    snapshot.write_text(text)

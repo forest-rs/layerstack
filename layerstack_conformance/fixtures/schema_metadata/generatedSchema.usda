@@ -1,0 +1,34 @@
+#usda 1.0
+class MetadataColor "MetadataColor" {
+    color3f tint = (1, 1, 1) (
+        colorSpace = "srgb_rec709_scene"
+        settings = {
+            dictionary nested = { int strong = 1
+                int shared = 1 }
+        }
+        displayName = "Strong tint"
+        customData = { string ignored = "generator-only" }
+    )
+    color3f emptyTint (
+        colorSpace = ""
+    )
+    color3f blockedTint (
+        colorSpace = "srgb_rec709_scene"
+    )
+}
+class "MetadataWeakAPI" {
+    color3f tint (
+        colorSpace = "lin_rec709_scene"
+        settings = {
+            dictionary nested = { int weak = 2
+                int shared = 2 }
+        }
+        displayGroup = "Weak group"
+        documentation = "Weak documentation must not fill"
+    )
+}
+class "MetadataSlotAPI" {
+    color3f slot:__INSTANCE_NAME__:tint (
+        colorSpace = "lin_ap1_scene"
+    )
+}

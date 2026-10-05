@@ -7,7 +7,7 @@
 //! The model keeps everything the generated code needs, the registry tables
 //! and the typed views built from the same schemas: each schema's kind,
 //! parent, built-ins, auto-applies, documentation and properties, and each
-//! property's declared type, variability, fallback, `allowedTokens`,
+//! property's declared type, variability, fallback, runtime metadata, `allowedTokens`,
 //! documentation and `apiName`. Only `apiName` comes from the source
 //! (`pxr/usd/*/schema.usda`), since usdGenSchema consumes it; everything
 //! else comes from the wheel.
@@ -98,6 +98,8 @@ pub(crate) struct Property {
     pub(crate) variability: Variability,
     /// The fallback value.
     pub(crate) fallback: Option<Value>,
+    /// Runtime property metadata, excluding generator-only and arc fields.
+    pub(crate) metadata: Vec<layerstack::FieldEntry>,
     /// The tokens `allowedTokens` lists.
     pub(crate) allowed_tokens: Vec<String>,
     /// Its `userDocBrief`.
@@ -373,6 +375,7 @@ pub(crate) fn read(pxr: &Path, source: &Path) -> Result<Model, String> {
                 }),
                 variability: p.variability,
                 fallback: p.fallback.clone(),
+                metadata: p.metadata.clone(),
             };
             let names = |ids: &[layerstack::TokenId], tokens: &TokenInterner| -> Vec<String> {
                 ids.iter()

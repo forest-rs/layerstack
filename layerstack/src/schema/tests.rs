@@ -692,3 +692,216 @@ fn can_apply_checks_instance_names_and_prim_types() {
     }
     assert!(!registry.is_allowed_instance_name(label, "free", &t));
 }
+
+#[test]
+fn property_metadata_composes_strong_to_weak_only_for_matching_types() {
+    use crate::{FieldValue, PropertyType};
+    let mut tokens = TokenInterner::default();
+    let strong = tokens.intern("StrongAPI");
+    let weak = tokens.intern("WeakAPI");
+    let wrong = tokens.intern("WrongAPI");
+    let name = tokens.intern("tint");
+    let color = tokens.intern("colorSpace");
+    let empty = tokens.intern("");
+    let group = tokens.intern("displayGroup");
+    let docs = tokens.intern("documentation");
+    let dict = tokens.intern("settings");
+    let only_wrong = tokens.intern("wrongTypeOnly");
+    let float = PropertyType::new("float", false, Value::Float(0.0));
+    let dictionary = |items: &[(&str, i32)]| {
+        Value::Dictionary(vec![(
+            "nested".into(),
+            Value::Dictionary(
+                items
+                    .iter()
+                    .map(|(key, value)| ((*key).into(), Value::Int(*value)))
+                    .collect(),
+            ),
+        )])
+    };
+    let mut builder = SchemaRegistry::builder();
+    builder.register(
+        SchemaDefinition::new(strong, SchemaKind::SingleApplyApi).with_property(
+            PropertyDefinition::attribute(name)
+                .with_type(float.clone())
+                .with_metadata(color, Value::Token(empty))
+                .with_metadata(dict, dictionary(&[("strong", 1), ("shared", 1)])),
+        ),
+    );
+    builder.register(
+        SchemaDefinition::new(weak, SchemaKind::SingleApplyApi).with_property(
+            PropertyDefinition::attribute(name)
+                .with_type(float)
+                .with_metadata(color, Value::string("weak"))
+                .with_metadata(group, Value::string("Weak group"))
+                .with_metadata(docs, Value::string("Not inherited from weaker API"))
+                .with_metadata(dict, dictionary(&[("weak", 2), ("shared", 2)])),
+        ),
+    );
+    builder.register(
+        SchemaDefinition::new(wrong, SchemaKind::SingleApplyApi).with_property(
+            PropertyDefinition::attribute(name)
+                .with_type(PropertyType::new("int", false, Value::Int(0)))
+                .with_metadata(only_wrong, Value::Bool(true)),
+        ),
+    );
+    let registry = builder.build(&mut tokens);
+    let applied = [strong, weak, wrong];
+    let definition = registry.prim_definition(None, &applied, &tokens);
+    let property = definition.property(name).unwrap();
+    assert_eq!(
+        Some(property),
+        registry
+            .property_definition(None, &applied, name, &tokens)
+            .as_ref()
+    );
+    assert_eq!(
+        property.metadata(color),
+        Some(&FieldValue::Value(Value::Token(empty)))
+    );
+    assert_eq!(
+        property.metadata(group),
+        Some(&FieldValue::Value(Value::string("Weak group")))
+    );
+    assert!(property.metadata(docs).is_none());
+    assert!(property.metadata(only_wrong).is_none());
+    assert_eq!(
+        property.metadata(dict),
+        Some(&FieldValue::Value(dictionary(&[
+            ("shared", 1),
+            ("strong", 1),
+            ("weak", 2)
+        ])))
+    );
+}
+
+#[test]
+fn property_metadata_override_replaces_dictionary_and_preserves_variability() {
+    let mut tokens = TokenInterner::default();
+    let strong = tokens.intern("StrongAPI");
+    let weak = tokens.intern("WeakAPI");
+    let name = tokens.intern("size");
+    let dict = tokens.intern("settings");
+    let dictionary = |key: &str| Value::Dictionary(vec![(key.into(), Value::Int(1))]);
+    let float = PropertyType::new("float", false, Value::Float(0.0));
+    let mut builder = SchemaRegistry::builder();
+    builder.register(
+        SchemaDefinition::new(weak, SchemaKind::SingleApplyApi).with_property(
+            PropertyDefinition::attribute(name)
+                .with_type(float.clone())
+                .uniform()
+                .with_metadata(dict, dictionary("weak")),
+        ),
+    );
+    builder.register(
+        SchemaDefinition::new(strong, SchemaKind::SingleApplyApi)
+            .with_built_in(weak)
+            .with_override(
+                PropertyDefinition::attribute(name)
+                    .with_type(float)
+                    .with_metadata(dict, dictionary("override")),
+            ),
+    );
+    let registry = builder.build(&mut tokens);
+    let property = registry
+        .schema_definition(strong)
+        .unwrap()
+        .property(name)
+        .unwrap();
+    assert_eq!(property.variability, Variability::Uniform);
+    assert_eq!(
+        property.metadata(dict),
+        Some(&FieldValue::Value(dictionary("override")))
+    );
+}
+
+#[test]
+fn stage_property_metadata_fallback_merges_dictionaries_and_respects_blocks() {
+    use crate::{
+        InMemoryStore, Layer, LayerId, PrimSpec, PropertySpec, ResolvedValue, Stage, StageOptions,
+    };
+    let mut store = InMemoryStore::default();
+    let prim = store.path("/Prim");
+    let schema = store.tokens.intern("MetadataPrim");
+    let name = store.tokens.intern("value");
+    let blocked = store.tokens.intern("blocked");
+    let custom = store.tokens.intern("customProperty");
+    let settings = store.tokens.intern("settings");
+    let dictionary = |items: &[(&str, i32)]| {
+        Value::Dictionary(
+            items
+                .iter()
+                .map(|(key, value)| ((*key).into(), Value::Int(*value)))
+                .collect(),
+        )
+    };
+    let mut builder = SchemaRegistry::builder();
+    builder.register(
+        SchemaDefinition::new(schema, SchemaKind::ConcreteTyped)
+            .with_property(
+                PropertyDefinition::attribute(name)
+                    .with_metadata(settings, dictionary(&[("a", 1), ("b", 2)])),
+            )
+            .with_property(
+                PropertyDefinition::attribute(blocked)
+                    .with_metadata(settings, Value::string("fallback")),
+            ),
+    );
+    let registry = Arc::new(builder.build(&mut store.tokens));
+    let mut layer = Layer::new(LayerId(1));
+    layer.insert_prim(
+        prim,
+        PrimSpec::def()
+            .with_type_name(schema)
+            .with_property(
+                name,
+                PropertySpec::attribute().with_metadata(settings, dictionary(&[("a", 9)])),
+            )
+            .with_property(
+                blocked,
+                PropertySpec::attribute().with_metadata(settings, Value::Blocked),
+            )
+            .with_property(
+                custom,
+                PropertySpec::attribute().with_metadata(settings, Value::string("authored only")),
+            ),
+    );
+    store.insert_layer(layer);
+    let stage = Stage::compose(
+        &mut store,
+        LayerId(1),
+        StageOptions {
+            schemas: Some(registry),
+            ..StageOptions::default()
+        },
+    );
+    assert_eq!(
+        stage
+            .resolve_property_metadata(prim, name, settings)
+            .unwrap()
+            .value,
+        ResolvedValue::Dictionary(vec![
+            ("a".into(), Value::Int(9)),
+            ("b".into(), Value::Int(2))
+        ])
+    );
+    assert_eq!(
+        stage
+            .resolve_authored_property_metadata(prim, name, settings)
+            .unwrap()
+            .value,
+        ResolvedValue::Dictionary(vec![("a".into(), Value::Int(9))])
+    );
+    assert!(
+        stage
+            .resolve_property_metadata(prim, blocked, settings)
+            .is_none()
+    );
+    assert_eq!(
+        stage
+            .resolve_property_metadata(prim, custom, settings)
+            .unwrap()
+            .value,
+        ResolvedValue::Scalar(Value::string("authored only"))
+    );
+}

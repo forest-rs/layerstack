@@ -159,7 +159,11 @@ impl<'a> PropertyMetadata<'a> {
         scalar(
             self.scene
                 .stage()
-                .resolve_property_metadata(self.path.prim_path(), self.path.property(), key)?
+                .resolve_authored_property_metadata(
+                    self.path.prim_path(),
+                    self.path.property(),
+                    key,
+                )?
                 .value,
         )
     }

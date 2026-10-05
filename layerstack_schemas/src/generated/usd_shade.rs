@@ -19,6 +19,8 @@
     reason = "values as OpenUSD writes them"
 )]
 
+use alloc::sync::Arc;
+
 use layerstack::{PropertyKind, SchemaKind, Value, Variability};
 
 use crate::table::{DomainTables, Metadata, Property, Schema, fallback};
@@ -36,6 +38,9 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                 value_type: None,
                 variability: Variability::Uniform,
                 fallback: None,
+                metadata: &[("displayName", |_| {
+                    Value::String(Arc::from("Bound Coordinate System"))
+                })],
             }],
             overrides: &[],
             can_only_apply_to: &[],
@@ -54,6 +59,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Varying,
                     fallback: None,
+                    metadata: &[("displayGroup", |_| Value::String(Arc::from("Outputs")))],
                 },
                 Property {
                     name: "outputs:surface",
@@ -61,6 +67,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Varying,
                     fallback: None,
+                    metadata: &[("displayGroup", |_| Value::String(Arc::from("Outputs")))],
                 },
                 Property {
                     name: "outputs:volume",
@@ -68,6 +75,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Varying,
                     fallback: None,
+                    metadata: &[("displayGroup", |_| Value::String(Arc::from("Outputs")))],
                 },
             ],
             overrides: &[],
@@ -98,6 +106,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "info:implementationSource",
@@ -105,6 +114,13 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Uniform,
                     fallback: fallback(|t| Value::Token(t.intern("id"))),
+                    metadata: &[("allowedTokens", |t| {
+                        Value::Array(alloc::vec![
+                            Value::Token(t.intern("id")),
+                            Value::Token(t.intern("sourceAsset")),
+                            Value::Token(t.intern("sourceCode"))
+                        ])
+                    })],
                 },
             ],
             overrides: &[],

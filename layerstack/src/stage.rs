@@ -2142,20 +2142,37 @@ impl Stage {
         })
     }
 
-    /// Resolves a metadata field of a composed property, such as
-    /// `interpolation`, `customData` or `limits`.
+    /// Resolves a metadata field of a composed property, including its schema
+    /// fallback. Authored scalar values (including empty tokens) win; blocks
+    /// suppress weaker opinions and fallbacks. Dictionaries combine recursively
+    /// across authored opinions and the schema fallback; list ops chain.
     ///
-    /// The strongest property opinion that authors `key` wins. Dictionaries
-    /// combine recursively across all opinions, so a stronger `limits.soft`
-    /// minimum keeps a weaker `limits.soft` maximum; a value block discards
-    /// weaker opinions. Token and path list ops chain.
+    /// Call [`Self::resolve_authored_property_metadata`] for the former
+    /// authored-only behavior. Schema-only values have no layer provenance.
     ///
-    /// Spec: AOUSD Core §12.2 (metadata resolution), §12.2.5 (dictionaries
-    /// combine), §12.2.6 (list ops). The UI hints proposal relies on the
-    /// same combining for nested `limits` dictionaries
-    /// (`OpenUSD-proposals/proposals/ui-hints/README.md`).
+    /// Spec: AOUSD Core §12.2.5–§12.2.6, §13.3.2.3–§13.3.2.4.
     #[must_use]
     pub fn resolve_property_metadata(
+        &self,
+        prim: PathId,
+        property: TokenId,
+        key: TokenId,
+    ) -> Option<Resolved<ResolvedValue>> {
+        let index = self.prims.get(&prim)?;
+        let opinions = index.property_opinions(property).unwrap_or(&[]);
+        let fallback = self
+            .property_definition_ref(prim, property)
+            .and_then(|p| p.metadata(key));
+        self.resolve_property_metadata_with_fallback(opinions, property, key, fallback)
+    }
+
+    /// Resolves only authored property metadata, excluding schema fallbacks.
+    /// Empty values are opinions; a block returns `None` without exposing weaker
+    /// values. Use this for APIs that explicitly inspect authored metadata.
+    ///
+    /// Spec: AOUSD Core §12.2.5–§12.2.6.
+    #[must_use]
+    pub fn resolve_authored_property_metadata(
         &self,
         prim: PathId,
         property: TokenId,
@@ -2165,13 +2182,22 @@ impl Stage {
         self.resolve_property_metadata_over(opinions, property, key)
     }
 
-    /// Resolves the property metadata field `key` over a chain of property
-    /// opinions, as [`Stage::resolve_property_metadata`] does.
+    /// Authored-only resolution, also used by flattening layer opinions.
     fn resolve_property_metadata_over(
         &self,
         opinions: &[Opinion],
         property: TokenId,
         key: TokenId,
+    ) -> Option<Resolved<ResolvedValue>> {
+        self.resolve_property_metadata_with_fallback(opinions, property, key, None)
+    }
+
+    fn resolve_property_metadata_with_fallback(
+        &self,
+        opinions: &[Opinion],
+        property: TokenId,
+        key: TokenId,
+        fallback: Option<&FieldValue>,
     ) -> Option<Resolved<ResolvedValue>> {
         // Spec: AOUSD Core §12.3.2.1 (`timecode` values in stage time).
         let opinions = stage_time::opinions_in_stage_time(opinions);
@@ -2179,14 +2205,16 @@ impl Stage {
             .iter()
             .filter_map(|op| Some((op, op.value.as_property()?.metadata(key)?)))
             .collect();
-        let (strongest, value) = *authored.first()?;
-        let provenance = self.provenance_for(property, strongest);
-        let value = match value {
+        let provenance = authored
+            .first()
+            .and_then(|(opinion, _)| self.provenance_for(property, opinion));
+        let fields = authored.iter().map(|(_, value)| *value).chain(fallback);
+        let strongest = authored.first().map(|(_, value)| *value).or(fallback)?;
+        let value = match strongest {
             FieldValue::Value(Value::Blocked) => return None,
             FieldValue::Value(Value::Dictionary(_)) => {
-                let dictionaries = authored
-                    .iter()
-                    .map_while(|(_, value)| match value {
+                let dictionaries = fields
+                    .map_while(|value| match value {
                         FieldValue::Value(Value::Blocked) => None,
                         other => Some(other),
                     })
@@ -2197,7 +2225,7 @@ impl Stage {
                 ResolvedValue::Dictionary(combine_dictionary_chain(dictionaries))
             }
             FieldValue::Value(value) => ResolvedValue::Scalar(value.clone()),
-            list => resolve_field_list(list, authored.iter().map(|(_, value)| *value))?,
+            list => resolve_field_list(list, fields)?,
         };
         Some(Resolved { value, provenance })
     }

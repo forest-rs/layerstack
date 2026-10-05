@@ -19,6 +19,8 @@
     reason = "values as OpenUSD writes them"
 )]
 
+use alloc::sync::Arc;
+
 use layerstack::{PropertyKind, SchemaKind, Value, Variability};
 
 use crate::table::{DomainTables, Metadata, Property, Schema, fallback};
@@ -37,6 +39,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::STRING),
                     variability: Variability::Varying,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "accessibility:__INSTANCE_NAME__:label",
@@ -44,6 +47,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::STRING),
                     variability: Variability::Varying,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "accessibility:__INSTANCE_NAME__:priority",
@@ -51,6 +55,13 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Varying,
                     fallback: fallback(|t| Value::Token(t.intern("standard"))),
+                    metadata: &[("allowedTokens", |t| {
+                        Value::Array(alloc::vec![
+                            Value::Token(t.intern("low")),
+                            Value::Token(t.intern("standard")),
+                            Value::Token(t.intern("high"))
+                        ])
+                    })],
                 },
             ],
             overrides: &[],
@@ -69,6 +80,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                 value_type: Some(&super::TOKEN),
                 variability: Variability::Uniform,
                 fallback: None,
+                metadata: &[],
             }],
             overrides: &[],
             can_only_apply_to: &[],
@@ -87,6 +99,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::COLOR3F),
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "ui:nodegraph:node:docURI",
@@ -94,6 +107,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::STRING),
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[("displayName", |_| Value::String(Arc::from("Doc Link")))],
                 },
                 Property {
                     name: "ui:nodegraph:node:expansionState",
@@ -101,6 +115,13 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[("allowedTokens", |t| {
+                        Value::Array(alloc::vec![
+                            Value::Token(t.intern("open")),
+                            Value::Token(t.intern("closed")),
+                            Value::Token(t.intern("minimized"))
+                        ])
+                    })],
                 },
                 Property {
                     name: "ui:nodegraph:node:icon",
@@ -108,6 +129,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::ASSET),
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "ui:nodegraph:node:pos",
@@ -115,6 +137,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT2),
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "ui:nodegraph:node:size",
@@ -122,6 +145,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT2),
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "ui:nodegraph:node:stackingOrder",
@@ -129,6 +153,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::INT),
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
             ],
             overrides: &[],
@@ -148,6 +173,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "ui:displayName",
@@ -155,6 +181,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
             ],
             overrides: &[],

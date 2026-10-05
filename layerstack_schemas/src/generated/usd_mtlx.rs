@@ -37,6 +37,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
             value_type: Some(&super::STRING),
             variability: Variability::Varying,
             fallback: fallback(|_| Value::String(Arc::from("1.38"))),
+            metadata: &[],
         }],
         overrides: &[],
         can_only_apply_to: &["Material"],

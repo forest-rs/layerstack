@@ -27,8 +27,8 @@ pub struct AppliedSchema {
 
 /// The schemas a prim has, and the properties they define: its type, its
 /// applied schemas in strength order, and for each defined property the
-/// definition its strongest schema gives, with a fallback a weaker one
-/// fills in when the stronger has none.
+/// definition its strongest schema gives, with missing fallbacks and metadata
+/// filled by weaker matching definitions and dictionary metadata merged.
 ///
 /// Built by [`crate::SchemaRegistry::prim_definition`] for a composed prim
 /// (or [`crate::Stage::prim_definition`]), and for each schema itself by
@@ -121,13 +121,13 @@ impl PrimDefinition {
 
     /// Adds `property` as weaker than the properties already defined: a
     /// new name is added; an existing one keeps its definition, taking the
-    /// fallback when it has none and the types agree.
+    /// fallback and metadata when missing, merging dictionaries when types agree.
     ///
     /// Spec: AOUSD Core §13.3.2.3 (`compose_prim_definition`). OpenUSD:
     /// `UsdPrimDefinition::_AddOrComposeProperty`.
-    pub(super) fn add_property(&mut self, property: PropertyDefinition) {
+    pub(super) fn add_property(&mut self, property: PropertyDefinition, tokens: &TokenInterner) {
         match self.index.get(&property.name) {
-            Some(&i) => self.properties[i].compose_weaker(&property),
+            Some(&i) => self.properties[i].compose_weaker(&property, tokens),
             None => {
                 self.index.insert(property.name, self.properties.len());
                 self.properties.push(property);
@@ -167,10 +167,13 @@ impl PrimDefinition {
         }
         for property in &weaker.properties {
             if let Some(name) = names.instantiate(property.name, instance) {
-                self.add_property(PropertyDefinition {
-                    name,
-                    ..property.clone()
-                });
+                self.add_property(
+                    PropertyDefinition {
+                        name,
+                        ..property.clone()
+                    },
+                    names.tokens(),
+                );
             }
         }
     }
@@ -233,14 +236,46 @@ fn instantiated_text(template: &str, instance: &str) -> alloc::string::String {
 }
 
 impl PropertyDefinition {
-    /// Composes a weaker definition of this property into it: the fallback
-    /// fills in when this one has none and the types agree.
+    /// Composes missing fallback values and metadata from matching weaker
+    /// definitions, recursively merging dictionaries.
     ///
     /// Spec: AOUSD Core §13.3.2.3 (`compose_prim_definition` fills in
     /// `default`). OpenUSD: `_CreateComposedPrimOrPropertyIfNeeded`.
-    pub(super) fn compose_weaker(&mut self, weaker: &Self) {
-        if self.fallback.is_none() && self.has_type_of(weaker) {
+    pub(super) fn compose_weaker(&mut self, weaker: &Self, tokens: &TokenInterner) {
+        if !self.has_type_of(weaker) {
+            return;
+        }
+        if self.fallback.is_none() {
             self.fallback.clone_from(&weaker.fallback);
+        }
+        // Core §13.3.2.3; OpenUSD `_CreateComposedPrimOrPropertyIfNeeded`:
+        // missing metadata fills in, dictionaries recursively merge, while
+        // custom/documentation never come from a weaker property definition.
+        for field in &weaker.metadata {
+            if matches!(tokens.resolve(field.name), "custom" | "documentation") {
+                continue;
+            }
+            match crate::doc::get_field_mut(&mut self.metadata, &field.name) {
+                Some(crate::FieldValue::Value(crate::Value::Dictionary(strong))) => {
+                    if let crate::FieldValue::Value(crate::Value::Dictionary(weak)) = &field.value {
+                        *strong = crate::doc::combine_dictionaries(strong, weak);
+                    }
+                }
+                Some(crate::FieldValue::Value(crate::Value::Array(strong)))
+                    if tokens.resolve(field.name) == "propertyOrder" =>
+                {
+                    if let crate::FieldValue::Value(crate::Value::Array(weak)) = &field.value {
+                        // Core §13.3.2.3: propertyOrder appends unique names.
+                        for value in weak {
+                            if !strong.contains(value) {
+                                strong.push(value.clone());
+                            }
+                        }
+                    }
+                }
+                Some(_) => {}
+                None => self.metadata.push(field.clone()),
+            }
         }
     }
 }

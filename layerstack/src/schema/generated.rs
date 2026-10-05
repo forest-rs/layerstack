@@ -96,7 +96,9 @@ impl core::error::Error for GeneratedSchemaError {}
 /// becomes `Other`, `Other:__INSTANCE_NAME__:sub` becomes `Other:sub`).
 /// Properties named in `apiSchemaOverridePropertyNames` become
 /// [`SchemaDefinition::overrides`]; every other property's authored default
-/// is its fallback.
+/// is its fallback. Property metadata is retained except fields that OpenUSD
+/// excludes from runtime schema fallbacks (`customData`, composition arcs,
+/// children, clips, time samples, splines, and connection/target paths).
 ///
 /// # Errors
 ///
@@ -144,6 +146,13 @@ pub fn read_generated_schema(
                     kind: entry.spec.kind,
                     type_name: entry.spec.type_name.clone(),
                     variability: entry.spec.variability,
+                    metadata: entry
+                        .spec
+                        .metadata
+                        .iter()
+                        .filter(|field| allowed_metadata(tokens.resolve(field.name)))
+                        .cloned()
+                        .collect(),
                     fallback: match entry.spec.kind {
                         PropertyKind::Attribute => entry.spec.default.clone(),
                         PropertyKind::Relationship => None,
@@ -199,4 +208,35 @@ fn override_names(custom_data: Option<&FieldValue>, tokens: &mut TokenInterner) 
             _ => None,
         })
         .collect()
+}
+
+/// Runtime and generator-only fields have no schema metadata fallback.
+/// OpenUSD `UsdSchemaRegistry::IsDisallowedField`; Core §13.3.2.4.
+fn allowed_metadata(name: &str) -> bool {
+    !matches!(
+        name,
+        "customData"
+            | "inheritPaths"
+            | "payload"
+            | "references"
+            | "specializes"
+            | "variantSelection"
+            | "variantSetNames"
+            | "active"
+            | "instanceable"
+            | "timeSamples"
+            | "spline"
+            | "connectionPaths"
+            | "targetPaths"
+            | "specifier"
+            | "kind"
+            | "clips"
+            | "clipSets"
+            | "primChildren"
+            | "propertyChildren"
+            | "variantChildren"
+            | "variantSetChildren"
+            | "connectionChildren"
+            | "relationshipTargetChildren"
+    )
 }

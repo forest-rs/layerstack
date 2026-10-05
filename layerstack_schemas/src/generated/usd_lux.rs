@@ -19,6 +19,8 @@
     reason = "values as OpenUSD writes them"
 )]
 
+use alloc::sync::Arc;
+
 use layerstack::{PropertyKind, SchemaKind, Value, Variability};
 
 use crate::table::{DomainTables, Property, Schema, fallback};
@@ -37,6 +39,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT3_ARRAY),
                     variability: Variability::Varying,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "proxyPrim",
@@ -44,6 +47,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: None,
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "purpose",
@@ -51,6 +55,14 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Uniform,
                     fallback: fallback(|t| Value::Token(t.intern("default"))),
+                    metadata: &[("allowedTokens", |t| {
+                        Value::Array(alloc::vec![
+                            Value::Token(t.intern("default")),
+                            Value::Token(t.intern("render")),
+                            Value::Token(t.intern("proxy")),
+                            Value::Token(t.intern("guide"))
+                        ])
+                    })],
                 },
                 Property {
                     name: "visibility",
@@ -58,6 +70,12 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Varying,
                     fallback: fallback(|t| Value::Token(t.intern("inherited"))),
+                    metadata: &[("allowedTokens", |t| {
+                        Value::Array(alloc::vec![
+                            Value::Token(t.intern("inherited")),
+                            Value::Token(t.intern("invisible"))
+                        ])
+                    })],
                 },
                 Property {
                     name: "xformOpOrder",
@@ -65,6 +83,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN_ARRAY),
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
             ],
             overrides: &[],
@@ -84,6 +103,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT3_ARRAY),
                     variability: Variability::Varying,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "inputs:length",
@@ -91,6 +111,10 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT),
                     variability: Variability::Varying,
                     fallback: fallback(|_| Value::Float(1.0)),
+                    metadata: &[
+                        ("displayGroup", |_| Value::String(Arc::from("Geometry"))),
+                        ("displayName", |_| Value::String(Arc::from("Length"))),
+                    ],
                 },
                 Property {
                     name: "inputs:radius",
@@ -98,6 +122,10 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT),
                     variability: Variability::Varying,
                     fallback: fallback(|_| Value::Float(0.5)),
+                    metadata: &[
+                        ("displayGroup", |_| Value::String(Arc::from("Geometry"))),
+                        ("displayName", |_| Value::String(Arc::from("Radius"))),
+                    ],
                 },
                 Property {
                     name: "proxyPrim",
@@ -105,6 +133,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: None,
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "purpose",
@@ -112,6 +141,14 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Uniform,
                     fallback: fallback(|t| Value::Token(t.intern("default"))),
+                    metadata: &[("allowedTokens", |t| {
+                        Value::Array(alloc::vec![
+                            Value::Token(t.intern("default")),
+                            Value::Token(t.intern("render")),
+                            Value::Token(t.intern("proxy")),
+                            Value::Token(t.intern("guide"))
+                        ])
+                    })],
                 },
                 Property {
                     name: "treatAsLine",
@@ -119,6 +156,10 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::BOOL),
                     variability: Variability::Varying,
                     fallback: fallback(|_| Value::Bool(false)),
+                    metadata: &[
+                        ("displayGroup", |_| Value::String(Arc::from("Advanced"))),
+                        ("displayName", |_| Value::String(Arc::from("Treat As Line"))),
+                    ],
                 },
                 Property {
                     name: "visibility",
@@ -126,6 +167,12 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Varying,
                     fallback: fallback(|t| Value::Token(t.intern("inherited"))),
+                    metadata: &[("allowedTokens", |t| {
+                        Value::Array(alloc::vec![
+                            Value::Token(t.intern("inherited")),
+                            Value::Token(t.intern("invisible"))
+                        ])
+                    })],
                 },
                 Property {
                     name: "xformOpOrder",
@@ -133,6 +180,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN_ARRAY),
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
             ],
             overrides: &[Property {
@@ -141,6 +189,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                 value_type: Some(&super::TOKEN),
                 variability: Variability::Uniform,
                 fallback: fallback(|t| Value::Token(t.intern("CylinderLight"))),
+                metadata: &[],
             }],
             can_only_apply_to: &[],
             allowed_instance_names: &[],
@@ -158,6 +207,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT3_ARRAY),
                     variability: Variability::Varying,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "inputs:radius",
@@ -165,6 +215,10 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT),
                     variability: Variability::Varying,
                     fallback: fallback(|_| Value::Float(0.5)),
+                    metadata: &[
+                        ("displayGroup", |_| Value::String(Arc::from("Geometry"))),
+                        ("displayName", |_| Value::String(Arc::from("Radius"))),
+                    ],
                 },
                 Property {
                     name: "proxyPrim",
@@ -172,6 +226,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: None,
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "purpose",
@@ -179,6 +234,14 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Uniform,
                     fallback: fallback(|t| Value::Token(t.intern("default"))),
+                    metadata: &[("allowedTokens", |t| {
+                        Value::Array(alloc::vec![
+                            Value::Token(t.intern("default")),
+                            Value::Token(t.intern("render")),
+                            Value::Token(t.intern("proxy")),
+                            Value::Token(t.intern("guide"))
+                        ])
+                    })],
                 },
                 Property {
                     name: "visibility",
@@ -186,6 +249,12 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Varying,
                     fallback: fallback(|t| Value::Token(t.intern("inherited"))),
+                    metadata: &[("allowedTokens", |t| {
+                        Value::Array(alloc::vec![
+                            Value::Token(t.intern("inherited")),
+                            Value::Token(t.intern("invisible"))
+                        ])
+                    })],
                 },
                 Property {
                     name: "xformOpOrder",
@@ -193,6 +262,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN_ARRAY),
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
             ],
             overrides: &[Property {
@@ -201,6 +271,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                 value_type: Some(&super::TOKEN),
                 variability: Variability::Uniform,
                 fallback: fallback(|t| Value::Token(t.intern("DiskLight"))),
+                metadata: &[],
             }],
             can_only_apply_to: &[],
             allowed_instance_names: &[],
@@ -218,6 +289,10 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT),
                     variability: Variability::Varying,
                     fallback: fallback(|_| Value::Float(0.53)),
+                    metadata: &[
+                        ("displayGroup", |_| Value::String(Arc::from("Basic"))),
+                        ("displayName", |_| Value::String(Arc::from("Angle Extent"))),
+                    ],
                 },
                 Property {
                     name: "proxyPrim",
@@ -225,6 +300,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: None,
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "purpose",
@@ -232,6 +308,14 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Uniform,
                     fallback: fallback(|t| Value::Token(t.intern("default"))),
+                    metadata: &[("allowedTokens", |t| {
+                        Value::Array(alloc::vec![
+                            Value::Token(t.intern("default")),
+                            Value::Token(t.intern("render")),
+                            Value::Token(t.intern("proxy")),
+                            Value::Token(t.intern("guide"))
+                        ])
+                    })],
                 },
                 Property {
                     name: "visibility",
@@ -239,6 +323,12 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Varying,
                     fallback: fallback(|t| Value::Token(t.intern("inherited"))),
+                    metadata: &[("allowedTokens", |t| {
+                        Value::Array(alloc::vec![
+                            Value::Token(t.intern("inherited")),
+                            Value::Token(t.intern("invisible"))
+                        ])
+                    })],
                 },
                 Property {
                     name: "xformOpOrder",
@@ -246,6 +336,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN_ARRAY),
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
             ],
             overrides: &[
@@ -255,6 +346,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT),
                     variability: Variability::Varying,
                     fallback: fallback(|_| Value::Float(50000.0)),
+                    metadata: &[],
                 },
                 Property {
                     name: "light:shaderId",
@@ -262,6 +354,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Uniform,
                     fallback: fallback(|t| Value::Token(t.intern("DistantLight"))),
+                    metadata: &[],
                 },
             ],
             can_only_apply_to: &[],
@@ -280,6 +373,10 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT),
                     variability: Variability::Varying,
                     fallback: fallback(|_| Value::Float(100000.0)),
+                    metadata: &[
+                        ("displayGroup", |_| Value::String(Arc::from("Guides"))),
+                        ("displayName", |_| Value::String(Arc::from("Radius"))),
+                    ],
                 },
                 Property {
                     name: "inputs:texture:file",
@@ -287,6 +384,10 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::ASSET),
                     variability: Variability::Varying,
                     fallback: None,
+                    metadata: &[
+                        ("displayGroup", |_| Value::String(Arc::from("Basic"))),
+                        ("displayName", |_| Value::String(Arc::from("Color Map"))),
+                    ],
                 },
                 Property {
                     name: "inputs:texture:format",
@@ -294,6 +395,21 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Varying,
                     fallback: fallback(|t| Value::Token(t.intern("automatic"))),
+                    metadata: &[
+                        ("allowedTokens", |t| {
+                            Value::Array(alloc::vec![
+                                Value::Token(t.intern("automatic")),
+                                Value::Token(t.intern("latlong")),
+                                Value::Token(t.intern("mirroredBall")),
+                                Value::Token(t.intern("angular")),
+                                Value::Token(t.intern("cubeMapVerticalCross"))
+                            ])
+                        }),
+                        ("displayGroup", |_| Value::String(Arc::from("Basic"))),
+                        ("displayName", |_| {
+                            Value::String(Arc::from("Color Map Format"))
+                        }),
+                    ],
                 },
                 Property {
                     name: "portals",
@@ -301,6 +417,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: None,
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "proxyPrim",
@@ -308,6 +425,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: None,
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "purpose",
@@ -315,6 +433,14 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Uniform,
                     fallback: fallback(|t| Value::Token(t.intern("default"))),
+                    metadata: &[("allowedTokens", |t| {
+                        Value::Array(alloc::vec![
+                            Value::Token(t.intern("default")),
+                            Value::Token(t.intern("render")),
+                            Value::Token(t.intern("proxy")),
+                            Value::Token(t.intern("guide"))
+                        ])
+                    })],
                 },
                 Property {
                     name: "visibility",
@@ -322,6 +448,12 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Varying,
                     fallback: fallback(|t| Value::Token(t.intern("inherited"))),
+                    metadata: &[("allowedTokens", |t| {
+                        Value::Array(alloc::vec![
+                            Value::Token(t.intern("inherited")),
+                            Value::Token(t.intern("invisible"))
+                        ])
+                    })],
                 },
                 Property {
                     name: "xformOpOrder",
@@ -329,6 +461,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN_ARRAY),
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
             ],
             overrides: &[Property {
@@ -337,6 +470,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                 value_type: Some(&super::TOKEN),
                 variability: Variability::Uniform,
                 fallback: fallback(|t| Value::Token(t.intern("DomeLight"))),
+                metadata: &[],
             }],
             can_only_apply_to: &[],
             allowed_instance_names: &[],
@@ -354,6 +488,10 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT),
                     variability: Variability::Varying,
                     fallback: fallback(|_| Value::Float(100000.0)),
+                    metadata: &[
+                        ("displayGroup", |_| Value::String(Arc::from("Guides"))),
+                        ("displayName", |_| Value::String(Arc::from("Radius"))),
+                    ],
                 },
                 Property {
                     name: "inputs:texture:file",
@@ -361,6 +499,10 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::ASSET),
                     variability: Variability::Varying,
                     fallback: None,
+                    metadata: &[
+                        ("displayGroup", |_| Value::String(Arc::from("Basic"))),
+                        ("displayName", |_| Value::String(Arc::from("Color Map"))),
+                    ],
                 },
                 Property {
                     name: "inputs:texture:format",
@@ -368,6 +510,21 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Varying,
                     fallback: fallback(|t| Value::Token(t.intern("automatic"))),
+                    metadata: &[
+                        ("allowedTokens", |t| {
+                            Value::Array(alloc::vec![
+                                Value::Token(t.intern("automatic")),
+                                Value::Token(t.intern("latlong")),
+                                Value::Token(t.intern("mirroredBall")),
+                                Value::Token(t.intern("angular")),
+                                Value::Token(t.intern("cubeMapVerticalCross"))
+                            ])
+                        }),
+                        ("displayGroup", |_| Value::String(Arc::from("Basic"))),
+                        ("displayName", |_| {
+                            Value::String(Arc::from("Color Map Format"))
+                        }),
+                    ],
                 },
                 Property {
                     name: "poleAxis",
@@ -375,6 +532,17 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Uniform,
                     fallback: fallback(|t| Value::Token(t.intern("scene"))),
+                    metadata: &[
+                        ("allowedTokens", |t| {
+                            Value::Array(alloc::vec![
+                                Value::Token(t.intern("scene")),
+                                Value::Token(t.intern("Y")),
+                                Value::Token(t.intern("Z"))
+                            ])
+                        }),
+                        ("displayGroup", |_| Value::String(Arc::from("Advanced"))),
+                        ("displayName", |_| Value::String(Arc::from("Pole Axis"))),
+                    ],
                 },
                 Property {
                     name: "portals",
@@ -382,6 +550,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: None,
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "proxyPrim",
@@ -389,6 +558,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: None,
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "purpose",
@@ -396,6 +566,14 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Uniform,
                     fallback: fallback(|t| Value::Token(t.intern("default"))),
+                    metadata: &[("allowedTokens", |t| {
+                        Value::Array(alloc::vec![
+                            Value::Token(t.intern("default")),
+                            Value::Token(t.intern("render")),
+                            Value::Token(t.intern("proxy")),
+                            Value::Token(t.intern("guide"))
+                        ])
+                    })],
                 },
                 Property {
                     name: "visibility",
@@ -403,6 +581,12 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Varying,
                     fallback: fallback(|t| Value::Token(t.intern("inherited"))),
+                    metadata: &[("allowedTokens", |t| {
+                        Value::Array(alloc::vec![
+                            Value::Token(t.intern("inherited")),
+                            Value::Token(t.intern("invisible"))
+                        ])
+                    })],
                 },
                 Property {
                     name: "xformOpOrder",
@@ -410,6 +594,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN_ARRAY),
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
             ],
             overrides: &[Property {
@@ -418,6 +603,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                 value_type: Some(&super::TOKEN),
                 variability: Variability::Uniform,
                 fallback: fallback(|t| Value::Token(t.intern("DomeLight"))),
+                metadata: &[],
             }],
             can_only_apply_to: &[],
             allowed_instance_names: &[],
@@ -435,6 +621,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: None,
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "proxyPrim",
@@ -442,6 +629,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: None,
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "purpose",
@@ -449,6 +637,14 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Uniform,
                     fallback: fallback(|t| Value::Token(t.intern("default"))),
+                    metadata: &[("allowedTokens", |t| {
+                        Value::Array(alloc::vec![
+                            Value::Token(t.intern("default")),
+                            Value::Token(t.intern("render")),
+                            Value::Token(t.intern("proxy")),
+                            Value::Token(t.intern("guide"))
+                        ])
+                    })],
                 },
                 Property {
                     name: "visibility",
@@ -456,6 +652,12 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Varying,
                     fallback: fallback(|t| Value::Token(t.intern("inherited"))),
+                    metadata: &[("allowedTokens", |t| {
+                        Value::Array(alloc::vec![
+                            Value::Token(t.intern("inherited")),
+                            Value::Token(t.intern("invisible"))
+                        ])
+                    })],
                 },
                 Property {
                     name: "xformOpOrder",
@@ -463,6 +665,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN_ARRAY),
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
             ],
             overrides: &[Property {
@@ -471,6 +674,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                 value_type: Some(&super::TOKEN),
                 variability: Variability::Uniform,
                 fallback: fallback(|t| Value::Token(t.intern("GeometryLight"))),
+                metadata: &[],
             }],
             can_only_apply_to: &[],
             allowed_instance_names: &[],
@@ -488,6 +692,10 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::COLOR3F),
                     variability: Variability::Varying,
                     fallback: fallback(|_| Value::Vec3f([1.0, 1.0, 1.0])),
+                    metadata: &[
+                        ("displayGroup", |_| Value::String(Arc::from("Basic"))),
+                        ("displayName", |_| Value::String(Arc::from("Color"))),
+                    ],
                 },
                 Property {
                     name: "inputs:colorTemperature",
@@ -495,6 +703,12 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT),
                     variability: Variability::Varying,
                     fallback: fallback(|_| Value::Float(6500.0)),
+                    metadata: &[
+                        ("displayGroup", |_| Value::String(Arc::from("Basic"))),
+                        ("displayName", |_| {
+                            Value::String(Arc::from("Color Temperature"))
+                        }),
+                    ],
                 },
                 Property {
                     name: "inputs:diffuse",
@@ -502,6 +716,12 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT),
                     variability: Variability::Varying,
                     fallback: fallback(|_| Value::Float(1.0)),
+                    metadata: &[
+                        ("displayGroup", |_| Value::String(Arc::from("Refine"))),
+                        ("displayName", |_| {
+                            Value::String(Arc::from("Diffuse Multiplier"))
+                        }),
+                    ],
                 },
                 Property {
                     name: "inputs:enableColorTemperature",
@@ -509,6 +729,12 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::BOOL),
                     variability: Variability::Varying,
                     fallback: fallback(|_| Value::Bool(false)),
+                    metadata: &[
+                        ("displayGroup", |_| Value::String(Arc::from("Basic"))),
+                        ("displayName", |_| {
+                            Value::String(Arc::from("Enable Color Temperature"))
+                        }),
+                    ],
                 },
                 Property {
                     name: "inputs:exposure",
@@ -516,6 +742,10 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT),
                     variability: Variability::Varying,
                     fallback: fallback(|_| Value::Float(0.0)),
+                    metadata: &[
+                        ("displayGroup", |_| Value::String(Arc::from("Basic"))),
+                        ("displayName", |_| Value::String(Arc::from("Exposure"))),
+                    ],
                 },
                 Property {
                     name: "inputs:intensity",
@@ -523,6 +753,10 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT),
                     variability: Variability::Varying,
                     fallback: fallback(|_| Value::Float(1.0)),
+                    metadata: &[
+                        ("displayGroup", |_| Value::String(Arc::from("Basic"))),
+                        ("displayName", |_| Value::String(Arc::from("Intensity"))),
+                    ],
                 },
                 Property {
                     name: "inputs:normalize",
@@ -530,6 +764,12 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::BOOL),
                     variability: Variability::Varying,
                     fallback: fallback(|_| Value::Bool(false)),
+                    metadata: &[
+                        ("displayGroup", |_| Value::String(Arc::from("Advanced"))),
+                        ("displayName", |_| {
+                            Value::String(Arc::from("Normalize Power"))
+                        }),
+                    ],
                 },
                 Property {
                     name: "inputs:specular",
@@ -537,6 +777,12 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT),
                     variability: Variability::Varying,
                     fallback: fallback(|_| Value::Float(1.0)),
+                    metadata: &[
+                        ("displayGroup", |_| Value::String(Arc::from("Refine"))),
+                        ("displayName", |_| {
+                            Value::String(Arc::from("Specular Multiplier"))
+                        }),
+                    ],
                 },
                 Property {
                     name: "light:filters",
@@ -544,6 +790,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: None,
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "light:materialSyncMode",
@@ -551,6 +798,19 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Uniform,
                     fallback: fallback(|t| Value::Token(t.intern("noMaterialResponse"))),
+                    metadata: &[
+                        ("allowedTokens", |t| {
+                            Value::Array(alloc::vec![
+                                Value::Token(t.intern("materialGlowTintsLight")),
+                                Value::Token(t.intern("independent")),
+                                Value::Token(t.intern("noMaterialResponse"))
+                            ])
+                        }),
+                        ("displayGroup", |_| Value::String(Arc::from("Geometry"))),
+                        ("displayName", |_| {
+                            Value::String(Arc::from("Material Sync Mode"))
+                        }),
+                    ],
                 },
                 Property {
                     name: "light:shaderId",
@@ -558,6 +818,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Uniform,
                     fallback: fallback(|t| Value::Token(t.intern(""))),
+                    metadata: &[("displayGroup", |_| Value::String(Arc::from("Internal")))],
                 },
             ],
             overrides: &[
@@ -567,6 +828,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::BOOL),
                     variability: Variability::Uniform,
                     fallback: fallback(|_| Value::Bool(true)),
+                    metadata: &[],
                 },
                 Property {
                     name: "collection:shadowLink:includeRoot",
@@ -574,6 +836,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::BOOL),
                     variability: Variability::Uniform,
                     fallback: fallback(|_| Value::Bool(true)),
+                    metadata: &[],
                 },
             ],
             can_only_apply_to: &[],
@@ -592,6 +855,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Uniform,
                     fallback: fallback(|t| Value::Token(t.intern(""))),
+                    metadata: &[("displayGroup", |_| Value::String(Arc::from("Internal")))],
                 },
                 Property {
                     name: "proxyPrim",
@@ -599,6 +863,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: None,
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "purpose",
@@ -606,6 +871,14 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Uniform,
                     fallback: fallback(|t| Value::Token(t.intern("default"))),
+                    metadata: &[("allowedTokens", |t| {
+                        Value::Array(alloc::vec![
+                            Value::Token(t.intern("default")),
+                            Value::Token(t.intern("render")),
+                            Value::Token(t.intern("proxy")),
+                            Value::Token(t.intern("guide"))
+                        ])
+                    })],
                 },
                 Property {
                     name: "visibility",
@@ -613,6 +886,12 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Varying,
                     fallback: fallback(|t| Value::Token(t.intern("inherited"))),
+                    metadata: &[("allowedTokens", |t| {
+                        Value::Array(alloc::vec![
+                            Value::Token(t.intern("inherited")),
+                            Value::Token(t.intern("invisible"))
+                        ])
+                    })],
                 },
                 Property {
                     name: "xformOpOrder",
@@ -620,6 +899,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN_ARRAY),
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
             ],
             overrides: &[Property {
@@ -628,6 +908,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                 value_type: Some(&super::BOOL),
                 variability: Variability::Uniform,
                 fallback: fallback(|_| Value::Bool(true)),
+                metadata: &[],
             }],
             can_only_apply_to: &[],
             allowed_instance_names: &[],
@@ -645,6 +926,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: None,
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "lightList:cacheBehavior",
@@ -652,6 +934,13 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Varying,
                     fallback: None,
+                    metadata: &[("allowedTokens", |t| {
+                        Value::Array(alloc::vec![
+                            Value::Token(t.intern("consumeAndHalt")),
+                            Value::Token(t.intern("consumeAndContinue")),
+                            Value::Token(t.intern("ignore"))
+                        ])
+                    })],
                 },
             ],
             overrides: &[],
@@ -671,6 +960,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: None,
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "lightList:cacheBehavior",
@@ -678,6 +968,13 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Varying,
                     fallback: None,
+                    metadata: &[("allowedTokens", |t| {
+                        Value::Array(alloc::vec![
+                            Value::Token(t.intern("consumeAndHalt")),
+                            Value::Token(t.intern("consumeAndContinue")),
+                            Value::Token(t.intern("ignore"))
+                        ])
+                    })],
                 },
             ],
             overrides: &[],
@@ -698,6 +995,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Uniform,
                     fallback: fallback(|t| Value::Token(t.intern("materialGlowTintsLight"))),
+                    metadata: &[],
                 },
                 Property {
                     name: "light:shaderId",
@@ -705,6 +1003,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Uniform,
                     fallback: fallback(|t| Value::Token(t.intern("MeshLight"))),
+                    metadata: &[],
                 },
             ],
             can_only_apply_to: &[],
@@ -723,6 +1022,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: None,
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "purpose",
@@ -730,6 +1030,14 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Uniform,
                     fallback: fallback(|t| Value::Token(t.intern("default"))),
+                    metadata: &[("allowedTokens", |t| {
+                        Value::Array(alloc::vec![
+                            Value::Token(t.intern("default")),
+                            Value::Token(t.intern("render")),
+                            Value::Token(t.intern("proxy")),
+                            Value::Token(t.intern("guide"))
+                        ])
+                    })],
                 },
                 Property {
                     name: "visibility",
@@ -737,6 +1045,12 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Varying,
                     fallback: fallback(|t| Value::Token(t.intern("inherited"))),
+                    metadata: &[("allowedTokens", |t| {
+                        Value::Array(alloc::vec![
+                            Value::Token(t.intern("inherited")),
+                            Value::Token(t.intern("invisible"))
+                        ])
+                    })],
                 },
                 Property {
                     name: "xformOpOrder",
@@ -744,6 +1058,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN_ARRAY),
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
             ],
             overrides: &[],
@@ -763,6 +1078,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: None,
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "purpose",
@@ -770,6 +1086,14 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Uniform,
                     fallback: fallback(|t| Value::Token(t.intern("default"))),
+                    metadata: &[("allowedTokens", |t| {
+                        Value::Array(alloc::vec![
+                            Value::Token(t.intern("default")),
+                            Value::Token(t.intern("render")),
+                            Value::Token(t.intern("proxy")),
+                            Value::Token(t.intern("guide"))
+                        ])
+                    })],
                 },
                 Property {
                     name: "visibility",
@@ -777,6 +1101,12 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Varying,
                     fallback: fallback(|t| Value::Token(t.intern("inherited"))),
+                    metadata: &[("allowedTokens", |t| {
+                        Value::Array(alloc::vec![
+                            Value::Token(t.intern("inherited")),
+                            Value::Token(t.intern("invisible"))
+                        ])
+                    })],
                 },
                 Property {
                     name: "xformOpOrder",
@@ -784,6 +1114,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN_ARRAY),
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
             ],
             overrides: &[],
@@ -803,6 +1134,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Uniform,
                     fallback: fallback(|t| Value::Token(t.intern(""))),
+                    metadata: &[("displayGroup", |_| Value::String(Arc::from("Internal")))],
                 },
                 Property {
                     name: "proxyPrim",
@@ -810,6 +1142,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: None,
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "purpose",
@@ -817,6 +1150,14 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Uniform,
                     fallback: fallback(|t| Value::Token(t.intern("default"))),
+                    metadata: &[("allowedTokens", |t| {
+                        Value::Array(alloc::vec![
+                            Value::Token(t.intern("default")),
+                            Value::Token(t.intern("render")),
+                            Value::Token(t.intern("proxy")),
+                            Value::Token(t.intern("guide"))
+                        ])
+                    })],
                 },
                 Property {
                     name: "visibility",
@@ -824,6 +1165,12 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Varying,
                     fallback: fallback(|t| Value::Token(t.intern("inherited"))),
+                    metadata: &[("allowedTokens", |t| {
+                        Value::Array(alloc::vec![
+                            Value::Token(t.intern("inherited")),
+                            Value::Token(t.intern("invisible"))
+                        ])
+                    })],
                 },
                 Property {
                     name: "xformOpOrder",
@@ -831,6 +1178,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN_ARRAY),
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
             ],
             overrides: &[Property {
@@ -839,6 +1187,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                 value_type: Some(&super::BOOL),
                 variability: Variability::Uniform,
                 fallback: fallback(|_| Value::Bool(true)),
+                metadata: &[],
             }],
             can_only_apply_to: &[],
             allowed_instance_names: &[],
@@ -856,6 +1205,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT3_ARRAY),
                     variability: Variability::Varying,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "inputs:height",
@@ -863,6 +1213,10 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT),
                     variability: Variability::Varying,
                     fallback: fallback(|_| Value::Float(1.0)),
+                    metadata: &[
+                        ("displayGroup", |_| Value::String(Arc::from("Geometry"))),
+                        ("displayName", |_| Value::String(Arc::from("Height"))),
+                    ],
                 },
                 Property {
                     name: "inputs:width",
@@ -870,6 +1224,10 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT),
                     variability: Variability::Varying,
                     fallback: fallback(|_| Value::Float(1.0)),
+                    metadata: &[
+                        ("displayGroup", |_| Value::String(Arc::from("Geometry"))),
+                        ("displayName", |_| Value::String(Arc::from("Width"))),
+                    ],
                 },
                 Property {
                     name: "proxyPrim",
@@ -877,6 +1235,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: None,
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "purpose",
@@ -884,6 +1243,14 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Uniform,
                     fallback: fallback(|t| Value::Token(t.intern("default"))),
+                    metadata: &[("allowedTokens", |t| {
+                        Value::Array(alloc::vec![
+                            Value::Token(t.intern("default")),
+                            Value::Token(t.intern("render")),
+                            Value::Token(t.intern("proxy")),
+                            Value::Token(t.intern("guide"))
+                        ])
+                    })],
                 },
                 Property {
                     name: "visibility",
@@ -891,6 +1258,12 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Varying,
                     fallback: fallback(|t| Value::Token(t.intern("inherited"))),
+                    metadata: &[("allowedTokens", |t| {
+                        Value::Array(alloc::vec![
+                            Value::Token(t.intern("inherited")),
+                            Value::Token(t.intern("invisible"))
+                        ])
+                    })],
                 },
                 Property {
                     name: "xformOpOrder",
@@ -898,6 +1271,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN_ARRAY),
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
             ],
             overrides: &[Property {
@@ -906,6 +1280,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                 value_type: Some(&super::TOKEN),
                 variability: Variability::Uniform,
                 fallback: fallback(|t| Value::Token(t.intern("PortalLight"))),
+                metadata: &[],
             }],
             can_only_apply_to: &[],
             allowed_instance_names: &[],
@@ -923,6 +1298,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT3_ARRAY),
                     variability: Variability::Varying,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "inputs:height",
@@ -930,6 +1306,10 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT),
                     variability: Variability::Varying,
                     fallback: fallback(|_| Value::Float(1.0)),
+                    metadata: &[
+                        ("displayGroup", |_| Value::String(Arc::from("Geometry"))),
+                        ("displayName", |_| Value::String(Arc::from("Height"))),
+                    ],
                 },
                 Property {
                     name: "inputs:texture:file",
@@ -937,6 +1317,10 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::ASSET),
                     variability: Variability::Varying,
                     fallback: None,
+                    metadata: &[
+                        ("displayGroup", |_| Value::String(Arc::from("Basic"))),
+                        ("displayName", |_| Value::String(Arc::from("Color Map"))),
+                    ],
                 },
                 Property {
                     name: "inputs:width",
@@ -944,6 +1328,10 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT),
                     variability: Variability::Varying,
                     fallback: fallback(|_| Value::Float(1.0)),
+                    metadata: &[
+                        ("displayGroup", |_| Value::String(Arc::from("Geometry"))),
+                        ("displayName", |_| Value::String(Arc::from("Width"))),
+                    ],
                 },
                 Property {
                     name: "proxyPrim",
@@ -951,6 +1339,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: None,
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "purpose",
@@ -958,6 +1347,14 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Uniform,
                     fallback: fallback(|t| Value::Token(t.intern("default"))),
+                    metadata: &[("allowedTokens", |t| {
+                        Value::Array(alloc::vec![
+                            Value::Token(t.intern("default")),
+                            Value::Token(t.intern("render")),
+                            Value::Token(t.intern("proxy")),
+                            Value::Token(t.intern("guide"))
+                        ])
+                    })],
                 },
                 Property {
                     name: "visibility",
@@ -965,6 +1362,12 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Varying,
                     fallback: fallback(|t| Value::Token(t.intern("inherited"))),
+                    metadata: &[("allowedTokens", |t| {
+                        Value::Array(alloc::vec![
+                            Value::Token(t.intern("inherited")),
+                            Value::Token(t.intern("invisible"))
+                        ])
+                    })],
                 },
                 Property {
                     name: "xformOpOrder",
@@ -972,6 +1375,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN_ARRAY),
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
             ],
             overrides: &[Property {
@@ -980,6 +1384,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                 value_type: Some(&super::TOKEN),
                 variability: Variability::Uniform,
                 fallback: fallback(|t| Value::Token(t.intern("RectLight"))),
+                metadata: &[],
             }],
             can_only_apply_to: &[],
             allowed_instance_names: &[],
@@ -997,6 +1402,10 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::COLOR3F),
                     variability: Variability::Varying,
                     fallback: fallback(|_| Value::Vec3f([0.0, 0.0, 0.0])),
+                    metadata: &[
+                        ("displayGroup", |_| Value::String(Arc::from("Shadows"))),
+                        ("displayName", |_| Value::String(Arc::from("Shadow Color"))),
+                    ],
                 },
                 Property {
                     name: "inputs:shadow:distance",
@@ -1004,6 +1413,12 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT),
                     variability: Variability::Varying,
                     fallback: fallback(|_| Value::Float(-1.0)),
+                    metadata: &[
+                        ("displayGroup", |_| Value::String(Arc::from("Shadows"))),
+                        ("displayName", |_| {
+                            Value::String(Arc::from("Shadow Max Distance"))
+                        }),
+                    ],
                 },
                 Property {
                     name: "inputs:shadow:enable",
@@ -1011,6 +1426,12 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::BOOL),
                     variability: Variability::Varying,
                     fallback: fallback(|_| Value::Bool(true)),
+                    metadata: &[
+                        ("displayGroup", |_| Value::String(Arc::from("Shadows"))),
+                        ("displayName", |_| {
+                            Value::String(Arc::from("Enable Shadows"))
+                        }),
+                    ],
                 },
                 Property {
                     name: "inputs:shadow:falloff",
@@ -1018,6 +1439,12 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT),
                     variability: Variability::Varying,
                     fallback: fallback(|_| Value::Float(-1.0)),
+                    metadata: &[
+                        ("displayGroup", |_| Value::String(Arc::from("Shadows"))),
+                        ("displayName", |_| {
+                            Value::String(Arc::from("Shadow Falloff"))
+                        }),
+                    ],
                 },
                 Property {
                     name: "inputs:shadow:falloffGamma",
@@ -1025,6 +1452,12 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT),
                     variability: Variability::Varying,
                     fallback: fallback(|_| Value::Float(1.0)),
+                    metadata: &[
+                        ("displayGroup", |_| Value::String(Arc::from("Shadows"))),
+                        ("displayName", |_| {
+                            Value::String(Arc::from("Shadow Falloff Gamma"))
+                        }),
+                    ],
                 },
             ],
             overrides: &[],
@@ -1044,6 +1477,10 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT),
                     variability: Variability::Varying,
                     fallback: fallback(|_| Value::Float(90.0)),
+                    metadata: &[
+                        ("displayGroup", |_| Value::String(Arc::from("Shaping"))),
+                        ("displayName", |_| Value::String(Arc::from("Cone Angle"))),
+                    ],
                 },
                 Property {
                     name: "inputs:shaping:cone:softness",
@@ -1051,6 +1488,10 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT),
                     variability: Variability::Varying,
                     fallback: fallback(|_| Value::Float(0.0)),
+                    metadata: &[
+                        ("displayGroup", |_| Value::String(Arc::from("Shaping"))),
+                        ("displayName", |_| Value::String(Arc::from("Cone Softness"))),
+                    ],
                 },
                 Property {
                     name: "inputs:shaping:focus",
@@ -1058,6 +1499,12 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT),
                     variability: Variability::Varying,
                     fallback: fallback(|_| Value::Float(0.0)),
+                    metadata: &[
+                        ("displayGroup", |_| Value::String(Arc::from("Shaping"))),
+                        ("displayName", |_| {
+                            Value::String(Arc::from("Emission Focus"))
+                        }),
+                    ],
                 },
                 Property {
                     name: "inputs:shaping:focusTint",
@@ -1065,6 +1512,12 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::COLOR3F),
                     variability: Variability::Varying,
                     fallback: fallback(|_| Value::Vec3f([0.0, 0.0, 0.0])),
+                    metadata: &[
+                        ("displayGroup", |_| Value::String(Arc::from("Shaping"))),
+                        ("displayName", |_| {
+                            Value::String(Arc::from("Emission Focus Tint"))
+                        }),
+                    ],
                 },
                 Property {
                     name: "inputs:shaping:ies:angleScale",
@@ -1072,6 +1525,10 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT),
                     variability: Variability::Varying,
                     fallback: fallback(|_| Value::Float(0.0)),
+                    metadata: &[
+                        ("displayGroup", |_| Value::String(Arc::from("Shaping"))),
+                        ("displayName", |_| Value::String(Arc::from("Profile Scale"))),
+                    ],
                 },
                 Property {
                     name: "inputs:shaping:ies:file",
@@ -1079,6 +1536,10 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::ASSET),
                     variability: Variability::Varying,
                     fallback: None,
+                    metadata: &[
+                        ("displayGroup", |_| Value::String(Arc::from("Shaping"))),
+                        ("displayName", |_| Value::String(Arc::from("IES Profile"))),
+                    ],
                 },
                 Property {
                     name: "inputs:shaping:ies:normalize",
@@ -1086,6 +1547,12 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::BOOL),
                     variability: Variability::Varying,
                     fallback: fallback(|_| Value::Bool(false)),
+                    metadata: &[
+                        ("displayGroup", |_| Value::String(Arc::from("Shaping"))),
+                        ("displayName", |_| {
+                            Value::String(Arc::from("Profile Normalization"))
+                        }),
+                    ],
                 },
             ],
             overrides: &[],
@@ -1105,6 +1572,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT3_ARRAY),
                     variability: Variability::Varying,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "inputs:radius",
@@ -1112,6 +1580,10 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT),
                     variability: Variability::Varying,
                     fallback: fallback(|_| Value::Float(0.5)),
+                    metadata: &[
+                        ("displayGroup", |_| Value::String(Arc::from("Geometry"))),
+                        ("displayName", |_| Value::String(Arc::from("Radius"))),
+                    ],
                 },
                 Property {
                     name: "proxyPrim",
@@ -1119,6 +1591,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: None,
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "purpose",
@@ -1126,6 +1599,14 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Uniform,
                     fallback: fallback(|t| Value::Token(t.intern("default"))),
+                    metadata: &[("allowedTokens", |t| {
+                        Value::Array(alloc::vec![
+                            Value::Token(t.intern("default")),
+                            Value::Token(t.intern("render")),
+                            Value::Token(t.intern("proxy")),
+                            Value::Token(t.intern("guide"))
+                        ])
+                    })],
                 },
                 Property {
                     name: "treatAsPoint",
@@ -1133,6 +1614,12 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::BOOL),
                     variability: Variability::Varying,
                     fallback: fallback(|_| Value::Bool(false)),
+                    metadata: &[
+                        ("displayGroup", |_| Value::String(Arc::from("Advanced"))),
+                        ("displayName", |_| {
+                            Value::String(Arc::from("Treat As Point"))
+                        }),
+                    ],
                 },
                 Property {
                     name: "visibility",
@@ -1140,6 +1627,12 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Varying,
                     fallback: fallback(|t| Value::Token(t.intern("inherited"))),
+                    metadata: &[("allowedTokens", |t| {
+                        Value::Array(alloc::vec![
+                            Value::Token(t.intern("inherited")),
+                            Value::Token(t.intern("invisible"))
+                        ])
+                    })],
                 },
                 Property {
                     name: "xformOpOrder",
@@ -1147,6 +1640,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN_ARRAY),
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
             ],
             overrides: &[Property {
@@ -1155,6 +1649,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                 value_type: Some(&super::TOKEN),
                 variability: Variability::Uniform,
                 fallback: fallback(|t| Value::Token(t.intern("SphereLight"))),
+                metadata: &[],
             }],
             can_only_apply_to: &[],
             allowed_instance_names: &[],
@@ -1173,6 +1668,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Uniform,
                     fallback: fallback(|t| Value::Token(t.intern("materialGlowTintsLight"))),
+                    metadata: &[],
                 },
                 Property {
                     name: "light:shaderId",
@@ -1180,6 +1676,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Uniform,
                     fallback: fallback(|t| Value::Token(t.intern("VolumeLight"))),
+                    metadata: &[],
                 },
             ],
             can_only_apply_to: &[],

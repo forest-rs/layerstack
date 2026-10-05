@@ -37,6 +37,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::OPAQUE),
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "collection:__INSTANCE_NAME__:excludes",
@@ -44,6 +45,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: None,
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "collection:__INSTANCE_NAME__:expansionRule",
@@ -51,6 +53,13 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Uniform,
                     fallback: fallback(|t| Value::Token(t.intern("expandPrims"))),
+                    metadata: &[("allowedTokens", |t| {
+                        Value::Array(alloc::vec![
+                            Value::Token(t.intern("explicitOnly")),
+                            Value::Token(t.intern("expandPrims")),
+                            Value::Token(t.intern("expandPrimsAndProperties"))
+                        ])
+                    })],
                 },
                 Property {
                     name: "collection:__INSTANCE_NAME__:includeRoot",
@@ -58,6 +67,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::BOOL),
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "collection:__INSTANCE_NAME__:includes",
@@ -65,6 +75,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: None,
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "collection:__INSTANCE_NAME__:membershipExpression",
@@ -72,6 +83,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::PATHEXPRESSION),
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "collection:__INSTANCE_NAME__:mode",
@@ -79,6 +91,13 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Uniform,
                     fallback: fallback(|t| Value::Token(t.intern("automatic"))),
+                    metadata: &[("allowedTokens", |t| {
+                        Value::Array(alloc::vec![
+                            Value::Token(t.intern("automatic")),
+                            Value::Token(t.intern("relationship")),
+                            Value::Token(t.intern("expression"))
+                        ])
+                    })],
                 },
             ],
             overrides: &[],
@@ -97,6 +116,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                 value_type: Some(&super::TOKEN),
                 variability: Variability::Uniform,
                 fallback: None,
+                metadata: &[],
             }],
             overrides: &[],
             can_only_apply_to: &[],
@@ -115,6 +135,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT2),
                     variability: Variability::Varying,
                     fallback: fallback(|_| Value::Vec2f([0.0, 0.0])),
+                    metadata: &[],
                 },
                 Property {
                     name: "colorSpaceDefinition:__INSTANCE_NAME__:gamma",
@@ -122,6 +143,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT),
                     variability: Variability::Varying,
                     fallback: fallback(|_| Value::Float(1.0)),
+                    metadata: &[],
                 },
                 Property {
                     name: "colorSpaceDefinition:__INSTANCE_NAME__:greenChroma",
@@ -129,6 +151,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT2),
                     variability: Variability::Varying,
                     fallback: fallback(|_| Value::Vec2f([0.0, 1.0])),
+                    metadata: &[],
                 },
                 Property {
                     name: "colorSpaceDefinition:__INSTANCE_NAME__:linearBias",
@@ -136,6 +159,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT),
                     variability: Variability::Varying,
                     fallback: fallback(|_| Value::Float(0.0)),
+                    metadata: &[],
                 },
                 Property {
                     name: "colorSpaceDefinition:__INSTANCE_NAME__:name",
@@ -143,6 +167,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Uniform,
                     fallback: fallback(|t| Value::Token(t.intern("custom"))),
+                    metadata: &[],
                 },
                 Property {
                     name: "colorSpaceDefinition:__INSTANCE_NAME__:redChroma",
@@ -150,6 +175,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT2),
                     variability: Variability::Varying,
                     fallback: fallback(|_| Value::Vec2f([1.0, 0.0])),
+                    metadata: &[],
                 },
                 Property {
                     name: "colorSpaceDefinition:__INSTANCE_NAME__:whitePoint",
@@ -157,6 +183,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT2),
                     variability: Variability::Varying,
                     fallback: fallback(|_| Value::Vec2f([0.33333334, 0.33333334])),
+                    metadata: &[],
                 },
             ],
             overrides: &[],

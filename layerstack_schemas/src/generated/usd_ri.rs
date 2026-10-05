@@ -19,7 +19,9 @@
     reason = "values as OpenUSD writes them"
 )]
 
-use layerstack::{PropertyKind, SchemaKind, Variability};
+use alloc::sync::Arc;
+
+use layerstack::{PropertyKind, SchemaKind, Value, Variability};
 
 use crate::table::{DomainTables, Property, Schema};
 
@@ -37,6 +39,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Varying,
                     fallback: None,
+                    metadata: &[("displayGroup", |_| Value::String(Arc::from("Outputs")))],
                 },
                 Property {
                     name: "outputs:ri:surface",
@@ -44,6 +47,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Varying,
                     fallback: None,
+                    metadata: &[("displayGroup", |_| Value::String(Arc::from("Outputs")))],
                 },
                 Property {
                     name: "outputs:ri:volume",
@@ -51,6 +55,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Varying,
                     fallback: None,
+                    metadata: &[("displayGroup", |_| Value::String(Arc::from("Outputs")))],
                 },
             ],
             overrides: &[],

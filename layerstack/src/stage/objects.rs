@@ -153,7 +153,7 @@ impl Attribute<'_> {
             .map(|r| r.value)
             .unwrap_or_default()
     }
-    /// Authored property metadata, composed separately from its value.
+    /// Composed property metadata, including schema fallbacks.
     pub fn metadata(self, key: TokenId) -> Option<Resolved<ResolvedValue>> {
         self.stage
             .resolve_property_metadata(self.path.prim_path(), self.path.property(), key)

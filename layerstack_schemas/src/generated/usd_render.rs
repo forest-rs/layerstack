@@ -44,6 +44,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::STRING_ARRAY),
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "fileName",
@@ -51,6 +52,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::ASSET),
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "inputPasses",
@@ -58,6 +60,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: None,
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "passType",
@@ -65,6 +68,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "renderSource",
@@ -72,6 +76,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: None,
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
             ],
             overrides: &[
@@ -81,6 +86,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::BOOL),
                     variability: Variability::Uniform,
                     fallback: fallback(|_| Value::Bool(true)),
+                    metadata: &[],
                 },
                 Property {
                     name: "collection:renderVisibility:includeRoot",
@@ -88,6 +94,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::BOOL),
                     variability: Variability::Uniform,
                     fallback: fallback(|_| Value::Bool(true)),
+                    metadata: &[],
                 },
             ],
             can_only_apply_to: &[],
@@ -106,6 +113,15 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Uniform,
                     fallback: fallback(|t| Value::Token(t.intern("expandAperture"))),
+                    metadata: &[("allowedTokens", |t| {
+                        Value::Array(alloc::vec![
+                            Value::Token(t.intern("expandAperture")),
+                            Value::Token(t.intern("cropAperture")),
+                            Value::Token(t.intern("adjustApertureWidth")),
+                            Value::Token(t.intern("adjustApertureHeight")),
+                            Value::Token(t.intern("adjustPixelAspectRatio"))
+                        ])
+                    })],
                 },
                 Property {
                     name: "camera",
@@ -113,6 +129,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: None,
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "dataWindowNDC",
@@ -120,6 +137,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT4),
                     variability: Variability::Uniform,
                     fallback: fallback(|_| Value::Vec4f([0.0, 0.0, 1.0, 1.0])),
+                    metadata: &[],
                 },
                 Property {
                     name: "disableDepthOfField",
@@ -127,6 +145,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::BOOL),
                     variability: Variability::Uniform,
                     fallback: fallback(|_| Value::Bool(false)),
+                    metadata: &[],
                 },
                 Property {
                     name: "disableMotionBlur",
@@ -134,6 +153,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::BOOL),
                     variability: Variability::Uniform,
                     fallback: fallback(|_| Value::Bool(false)),
+                    metadata: &[],
                 },
                 Property {
                     name: "instantaneousShutter",
@@ -141,6 +161,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::BOOL),
                     variability: Variability::Uniform,
                     fallback: fallback(|_| Value::Bool(false)),
+                    metadata: &[],
                 },
                 Property {
                     name: "orderedVars",
@@ -148,6 +169,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: None,
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "pixelAspectRatio",
@@ -155,6 +177,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT),
                     variability: Variability::Uniform,
                     fallback: fallback(|_| Value::Float(1.0)),
+                    metadata: &[],
                 },
                 Property {
                     name: "productName",
@@ -162,6 +185,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Varying,
                     fallback: fallback(|t| Value::Token(t.intern(""))),
+                    metadata: &[],
                 },
                 Property {
                     name: "productType",
@@ -169,6 +193,12 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Uniform,
                     fallback: fallback(|t| Value::Token(t.intern("raster"))),
+                    metadata: &[("allowedTokens", |t| {
+                        Value::Array(alloc::vec![
+                            Value::Token(t.intern("raster")),
+                            Value::Token(t.intern("deepRaster"))
+                        ])
+                    })],
                 },
                 Property {
                     name: "resolution",
@@ -176,6 +206,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::INT2),
                     variability: Variability::Uniform,
                     fallback: fallback(|_| Value::Vec2i([2048, 1080])),
+                    metadata: &[],
                 },
             ],
             overrides: &[],
@@ -195,6 +226,15 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Uniform,
                     fallback: fallback(|t| Value::Token(t.intern("expandAperture"))),
+                    metadata: &[("allowedTokens", |t| {
+                        Value::Array(alloc::vec![
+                            Value::Token(t.intern("expandAperture")),
+                            Value::Token(t.intern("cropAperture")),
+                            Value::Token(t.intern("adjustApertureWidth")),
+                            Value::Token(t.intern("adjustApertureHeight")),
+                            Value::Token(t.intern("adjustPixelAspectRatio"))
+                        ])
+                    })],
                 },
                 Property {
                     name: "camera",
@@ -202,6 +242,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: None,
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "dataWindowNDC",
@@ -209,6 +250,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT4),
                     variability: Variability::Uniform,
                     fallback: fallback(|_| Value::Vec4f([0.0, 0.0, 1.0, 1.0])),
+                    metadata: &[],
                 },
                 Property {
                     name: "disableDepthOfField",
@@ -216,6 +258,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::BOOL),
                     variability: Variability::Uniform,
                     fallback: fallback(|_| Value::Bool(false)),
+                    metadata: &[],
                 },
                 Property {
                     name: "disableMotionBlur",
@@ -223,6 +266,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::BOOL),
                     variability: Variability::Uniform,
                     fallback: fallback(|_| Value::Bool(false)),
+                    metadata: &[],
                 },
                 Property {
                     name: "includedPurposes",
@@ -235,6 +279,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                             Value::Token(t.intern("render"))
                         ])
                     }),
+                    metadata: &[],
                 },
                 Property {
                     name: "instantaneousShutter",
@@ -242,6 +287,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::BOOL),
                     variability: Variability::Uniform,
                     fallback: fallback(|_| Value::Bool(false)),
+                    metadata: &[],
                 },
                 Property {
                     name: "materialBindingPurposes",
@@ -254,6 +300,13 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                             Value::Token(t.intern(""))
                         ])
                     }),
+                    metadata: &[("allowedTokens", |t| {
+                        Value::Array(alloc::vec![
+                            Value::Token(t.intern("full")),
+                            Value::Token(t.intern("preview")),
+                            Value::Token(t.intern(""))
+                        ])
+                    })],
                 },
                 Property {
                     name: "pixelAspectRatio",
@@ -261,6 +314,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT),
                     variability: Variability::Uniform,
                     fallback: fallback(|_| Value::Float(1.0)),
+                    metadata: &[],
                 },
                 Property {
                     name: "products",
@@ -268,6 +322,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: None,
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "renderingColorSpace",
@@ -275,6 +330,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "resolution",
@@ -282,6 +338,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::INT2),
                     variability: Variability::Uniform,
                     fallback: fallback(|_| Value::Vec2i([2048, 1080])),
+                    metadata: &[],
                 },
             ],
             overrides: &[],
@@ -301,6 +358,15 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Uniform,
                     fallback: fallback(|t| Value::Token(t.intern("expandAperture"))),
+                    metadata: &[("allowedTokens", |t| {
+                        Value::Array(alloc::vec![
+                            Value::Token(t.intern("expandAperture")),
+                            Value::Token(t.intern("cropAperture")),
+                            Value::Token(t.intern("adjustApertureWidth")),
+                            Value::Token(t.intern("adjustApertureHeight")),
+                            Value::Token(t.intern("adjustPixelAspectRatio"))
+                        ])
+                    })],
                 },
                 Property {
                     name: "camera",
@@ -308,6 +374,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: None,
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "dataWindowNDC",
@@ -315,6 +382,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT4),
                     variability: Variability::Uniform,
                     fallback: fallback(|_| Value::Vec4f([0.0, 0.0, 1.0, 1.0])),
+                    metadata: &[],
                 },
                 Property {
                     name: "disableDepthOfField",
@@ -322,6 +390,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::BOOL),
                     variability: Variability::Uniform,
                     fallback: fallback(|_| Value::Bool(false)),
+                    metadata: &[],
                 },
                 Property {
                     name: "disableMotionBlur",
@@ -329,6 +398,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::BOOL),
                     variability: Variability::Uniform,
                     fallback: fallback(|_| Value::Bool(false)),
+                    metadata: &[],
                 },
                 Property {
                     name: "instantaneousShutter",
@@ -336,6 +406,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::BOOL),
                     variability: Variability::Uniform,
                     fallback: fallback(|_| Value::Bool(false)),
+                    metadata: &[],
                 },
                 Property {
                     name: "pixelAspectRatio",
@@ -343,6 +414,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT),
                     variability: Variability::Uniform,
                     fallback: fallback(|_| Value::Float(1.0)),
+                    metadata: &[],
                 },
                 Property {
                     name: "resolution",
@@ -350,6 +422,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::INT2),
                     variability: Variability::Uniform,
                     fallback: fallback(|_| Value::Vec2i([2048, 1080])),
+                    metadata: &[],
                 },
             ],
             overrides: &[],
@@ -369,6 +442,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Uniform,
                     fallback: fallback(|t| Value::Token(t.intern("color3f"))),
+                    metadata: &[],
                 },
                 Property {
                     name: "sourceName",
@@ -376,6 +450,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::STRING),
                     variability: Variability::Uniform,
                     fallback: fallback(|_| Value::String(Arc::from(""))),
+                    metadata: &[],
                 },
                 Property {
                     name: "sourceType",
@@ -383,6 +458,14 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Uniform,
                     fallback: fallback(|t| Value::Token(t.intern("raw"))),
+                    metadata: &[("allowedTokens", |t| {
+                        Value::Array(alloc::vec![
+                            Value::Token(t.intern("raw")),
+                            Value::Token(t.intern("primvar")),
+                            Value::Token(t.intern("lpe")),
+                            Value::Token(t.intern("intrinsic"))
+                        ])
+                    })],
                 },
             ],
             overrides: &[],

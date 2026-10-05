@@ -4,7 +4,7 @@
 //! Bounds from authored or intrinsic extents, with component-space accumulation.
 //!
 //! Built-in geometry can compute its extent from points or shape parameters.
-//! Other procedural extent plugins are not run; missing geometry is an error.
+//! Hosts can supply explicit extent providers; missing geometry is an error.
 //! It preserves an oriented range and matrix, rather than repeatedly aligning
 //! boxes in every ancestor's coordinates. OpenUSD: `UsdGeomBBoxCache`.
 
@@ -100,12 +100,19 @@ impl BoundingBox {
 }
 
 /// An unsupported or invalid input; no partial bound is returned.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BoundsError {
     /// No composed prim exists at this path.
     MissingPrim(PathId),
     /// This boundable needs an extent computation plugin, or has an invalid extent.
     ExtentUnavailable(PathId),
+    /// Host evaluation or retained numeric input failed.
+    ExtentProvider {
+        /// Boundable whose extent was requested.
+        prim: PathId,
+        /// Input failure with property or host diagnostic context.
+        source: crate::extent::ExtentError,
+    },
     /// Point-instancer arrays or prototype transforms are invalid.
     InvalidPointInstancer {
         /// The instancer path.
@@ -117,6 +124,38 @@ pub enum BoundsError {
     PointInstancerCycle(PathId),
     /// Component-space conversion requires an invertible world transform.
     SingularTransform(PathId),
+}
+impl core::fmt::Display for BoundsError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::MissingPrim(prim) => write!(f, "bounds prim {prim:?} does not exist"),
+            Self::ExtentUnavailable(prim) => write!(
+                f,
+                "boundable {prim:?} has no valid extent or supported extent provider"
+            ),
+            Self::ExtentProvider { prim, source } => {
+                write!(f, "bounds extent for {prim:?}: {source}")
+            }
+            Self::InvalidPointInstancer { prim, source } => {
+                write!(f, "invalid point instancer {prim:?}: {source:?}")
+            }
+            Self::PointInstancerCycle(prim) => write!(
+                f,
+                "point instancer {prim:?} revisits an active instancer or exceeds nesting limit"
+            ),
+            Self::SingularTransform(prim) => {
+                write!(f, "bounds frame {prim:?} has a singular world transform")
+            }
+        }
+    }
+}
+impl core::error::Error for BoundsError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::ExtentProvider { source, .. } => Some(source),
+            _ => None,
+        }
+    }
 }
 
 /// Policies held constant for a cache's lifetime.
@@ -185,7 +224,7 @@ impl<T> Entry<T> {
 /// It does not observe edits automatically. Clear between unrelated scenes.
 /// Intrinsic extents are computed for meshes, points, curves, cubes, spheres,
 /// cylinders, cones and capsules when a valid authored extent is unavailable. Other extent
-/// providers are not implemented; missing geometry is an
+/// providers can be supplied with [`Self::with_extent_providers`]; missing geometry is an
 /// error, never a silently incomplete bound. Computed point-instancer extents
 /// retain prototype dependencies, including prototypes outside their namespace.
 /// Prototype extent evaluation always uses ordinary visibility and no model
@@ -214,6 +253,9 @@ pub struct BoundsCache {
     prototype_cache: Option<Box<Self>>,
     stats: BoundsStats,
     epoch: u64,
+    extent_providers: crate::extent::ExtentProviders,
+    extent_revision: u64,
+    extent_dependencies: HashMap<PathId, crate::extent::ExtentDependencies>,
 }
 impl BoundsCache {
     /// An empty cache at `time`, with explicit traversal policies.
@@ -234,7 +276,51 @@ impl BoundsCache {
             prototype_cache: None,
             stats: BoundsStats::default(),
             epoch: 1,
+            extent_providers: crate::extent::ExtentProviders::default(),
+            extent_revision: 0,
+            extent_dependencies: HashMap::new(),
         }
+    }
+    /// An empty cache with explicit host extent providers. Providers are selected
+    /// by nearest typed-schema ancestor, and authored extents take precedence.
+    #[must_use]
+    pub fn with_extent_providers(
+        time: Time,
+        options: BoundsOptions,
+        providers: crate::extent::ExtentProviders,
+    ) -> Self {
+        let mut cache = Self::new(time, options);
+        cache.extent_providers = providers;
+        cache
+    }
+    /// Replace host dispatch and drop all results, including prototype results.
+    /// Use this when registering, replacing or removing host capabilities.
+    pub fn set_extent_providers(&mut self, providers: crate::extent::ExtentProviders) {
+        self.extent_providers = providers;
+        self.clear();
+    }
+    /// Current caller-supplied revision of host geometry and external inputs.
+    #[must_use]
+    pub fn extent_revision(&self) -> u64 {
+        self.extent_revision
+    }
+    /// Update host geometry revision and drop all derived results when it changes.
+    /// Revision values are opaque equality tokens, so resetting or wrapping is
+    /// supported. `clear` also forces reevaluation if a revision is reused.
+    /// The host must call this after changing data outside the composed stage.
+    pub fn set_extent_revision(&mut self, revision: u64) {
+        if self.extent_revision != revision {
+            self.extent_revision = revision;
+            self.clear();
+        }
+    }
+    /// Inputs consulted by the last host evaluation of this exact prim, including
+    /// failed queries. Stage dependencies are conservative until reevaluation.
+    #[must_use]
+    pub fn extent_dependencies(&self, path: PathId) -> Option<&crate::extent::ExtentDependencies> {
+        self.extent_dependencies
+            .get(&path)
+            .or_else(|| self.prototype_cache.as_ref()?.extent_dependencies(path))
     }
     /// Work counters since construction or clearing.
     #[must_use]
@@ -273,6 +359,7 @@ impl BoundsCache {
     }
     /// Drop every result and reset counters.
     pub fn clear(&mut self) {
+        self.extent_dependencies.clear();
         self.prototype_cache = None;
         self.instancer_prototypes.clear();
         self.active_instancers.clear();
@@ -317,6 +404,7 @@ impl BoundsCache {
             cache.invalidate(scene, path);
         }
         self.transforms.invalidate(scene, path);
+        self.invalidate_extent_dependents(scene, path);
         self.invalidate_prototypes(scene, path);
         self.invalidate_bounds(scene, path);
     }
@@ -334,10 +422,12 @@ impl BoundsCache {
         // reach deleted and excluded descendants without revisiting ancestors
         // once for every entry in the exact removal inventory.
         for &path in &changes.resynced {
+            self.invalidate_extent_dependents(scene, path);
             self.invalidate_prototypes(scene, path);
             self.invalidate_bounds(scene, path);
         }
         for &path in &changes.changed_info_only {
+            self.invalidate_extent_dependents(scene, path);
             if changes.properties_for(path).is_none_or(|fields| {
                 fields
                     .iter()
@@ -345,6 +435,43 @@ impl BoundsCache {
             }) {
                 self.invalidate_prototypes(scene, path);
                 self.invalidate_bounds(scene, path);
+            }
+        }
+    }
+
+    fn invalidate_extent_dependents(&mut self, scene: &Scene<'_>, path: PathId) {
+        // Provider inputs may be any property, including outside the boundable's
+        // namespace. Retain failed-read edges so source creation can recover.
+        let mut pending = vec![path];
+        let mut visited = HashSet::new();
+        while let Some(changed) = pending.pop() {
+            if !visited.insert(changed) {
+                continue;
+            }
+            let changed_path = scene.store().paths().resolve(changed);
+            let affected: Vec<_> = self
+                .extent_dependencies
+                .iter()
+                .chain(
+                    self.prototype_cache
+                        .iter()
+                        .flat_map(|cache| cache.extent_dependencies.iter()),
+                )
+                .filter_map(|(&prim, inputs)| {
+                    inputs
+                        .prims
+                        .iter()
+                        .any(|&input| {
+                            let input = scene.store().paths().resolve(input);
+                            changed_path.is_prefix_of(input) || input.is_prefix_of(changed_path)
+                        })
+                        .then_some(prim)
+                })
+                .collect();
+            for prim in affected {
+                self.invalidate_bounds(scene, prim);
+                self.invalidate_prototypes(scene, prim);
+                pending.push(prim);
             }
         }
     }
@@ -741,6 +868,45 @@ impl BoundsCache {
         );
         included
     }
+    fn compute_extent(
+        &mut self,
+        scene: &Scene<'_>,
+        path: PathId,
+    ) -> Result<Option<(Range3d, bool)>, BoundsError> {
+        let failure = |source| BoundsError::ExtentProvider { prim: path, source };
+        if let Some(extent) = crate::extent::authored(scene, path, self.time).map_err(failure)? {
+            self.extent_dependencies.remove(&path);
+            return Ok(Some(extent));
+        }
+        if let Some((schema, provider)) = self.extent_providers.select(scene, path) {
+            let mut context = crate::extent::ExtentContext::new(
+                *scene,
+                path,
+                self.time,
+                schema,
+                self.extent_revision,
+            );
+            let result = provider.compute_extent(&mut context);
+            let varying = context.dependencies.time_varying
+                || PrimView::new(*scene, path).property_might_vary("extent");
+            context.dependencies.time_varying = varying;
+            self.extent_dependencies.insert(path, context.dependencies);
+            if let Some(error) = context.input_error {
+                return Err(failure(error));
+            }
+            let range = result.map_err(failure)?;
+            if !range.min.iter().chain(&range.max).all(|v| v.is_finite()) {
+                return Err(failure(crate::extent::ExtentError::Failed {
+                    prim: path,
+                    message: "extent provider returned non-finite coordinates".into(),
+                }));
+            }
+            return Ok(Some((range, varying)));
+        }
+        self.extent_dependencies.remove(&path);
+        crate::extent::checked_compute(scene, path, self.time).map_err(failure)
+    }
+
     fn direct_bounds(
         &mut self,
         scene: &Scene<'_>,
@@ -749,7 +915,7 @@ impl BoundsCache {
         let prim = PrimView::new(*scene, path);
         if self.options.use_extents_hint
             && scene.is_model(path)
-            && let Some(hint) = vectors(&prim, "extentsHint", self.time).filter(|v| v.len() >= 2)
+            && let Some(hint) = vectors(&prim, "extentsHint", self.time)?.filter(|v| v.len() >= 2)
         {
             use ImageablePurpose::{Default, Guide, Proxy, Render};
             return Ok(Some((
@@ -761,18 +927,23 @@ impl BoundsCache {
                 prim.property_might_vary("extentsHint"),
             )));
         }
-        if scene.is_a(path, "PointInstancer")
-            && crate::extent::compute(scene, path, self.time).is_none()
-        {
+        let extent = if scene.is_a(path, "Boundable") {
+            self.compute_extent(scene, path)?
+        } else {
+            None
+        };
+        if scene.is_a(path, "PointInstancer") && extent.is_none() {
             if self.options.ignore_visibility || self.options.use_extents_hint {
                 // UsdGeomPointInstancer::_ComputeExtent uses a separate
                 // BBoxCache with fixed policies; caller hints and visibility
                 // must not alter intrinsic prototype geometry (AOUSD Core §12.3).
                 let time = self.time;
+                let providers = self.extent_providers.clone();
+                let revision = self.extent_revision;
                 return self
                     .prototype_cache
                     .get_or_insert_with(|| {
-                        Box::new(Self::new(
+                        let mut cache = Self::with_extent_providers(
                             time,
                             BoundsOptions {
                                 included_purposes: vec![
@@ -782,7 +953,10 @@ impl BoundsCache {
                                 ],
                                 ..BoundsOptions::default()
                             },
-                        ))
+                            providers,
+                        );
+                        cache.extent_revision = revision;
+                        Box::new(cache)
                     })
                     .direct_bounds(scene, path);
             }
@@ -794,8 +968,7 @@ impl BoundsCache {
             return result.map(Some);
         }
         if scene.is_a(path, "Boundable") {
-            let (range, varying) = crate::extent::compute(scene, path, self.time)
-                .ok_or(BoundsError::ExtentUnavailable(path))?;
+            let (range, varying) = extent.ok_or(BoundsError::ExtentUnavailable(path))?;
             let purpose = self.purpose(scene, path);
             return Ok(Some((
                 Box::new([(
@@ -997,19 +1170,29 @@ impl BoundsCache {
         Ok((result.into_boxed_slice(), varying))
     }
 }
-fn vectors(prim: &PrimView<'_>, name: &str, time: Time) -> Option<Vec<[f32; 3]>> {
+fn vectors(
+    prim: &PrimView<'_>,
+    name: &str,
+    time: Time,
+) -> Result<Option<Vec<[f32; 3]>>, BoundsError> {
     let read = |value: &layerstack::Value, tokens: &layerstack::TokenInterner| {
         crate::value::read_array(value, tokens, crate::value::read_float3)
     };
-    // Decode the resolver's owned value directly; raw_value would clone the
-    // whole array before immediately turning it into vectors.
-    match time {
-        Time::Default => prim.read_value(name, read),
-        Time::At {
-            code,
-            interpolation,
-        } => prim.read_value_at(name, code, interpolation, read),
-    }
+    prim.try_read_value(name, time, read)
+        .map_err(|error| BoundsError::ExtentProvider {
+            prim: prim.path(),
+            source: crate::extent::ExtentError::Decode {
+                property: layerstack::PropertyPath::new(
+                    prim.path(),
+                    prim.scene()
+                        .store()
+                        .tokens()
+                        .lookup(name)
+                        .expect("decoded property token"),
+                ),
+                error,
+            },
+        })
 }
 fn box_from_extent(extent: &[[f32; 3]]) -> BoundingBox {
     BoundingBox {

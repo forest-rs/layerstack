@@ -390,7 +390,7 @@ pub mod validation;
 pub use metadata::{PropertyMetadata, StageMetadata};
 pub mod assets;
 #[cfg(feature = "usd-geom")]
-mod extent;
+pub mod extent;
 mod generated;
 #[cfg(feature = "usd-geom")]
 pub mod geometry;

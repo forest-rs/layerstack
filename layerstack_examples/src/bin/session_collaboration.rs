@@ -5,6 +5,11 @@
 //! maps durable network identities to store-local `LayerId`s, serializes incoming
 //! batches, checks permissions and chooses conflict/merge policy. Transactions
 //! and change cursors are local APIs, not a transport or replicated edit log.
+//!
+//! OpenUSD's C++ `UsdStage` documents this stack in its Stage Session Layers
+//! section: `GetEditTargetForLocalLayer(GetSessionLayer())` selects the ephemeral
+//! authoring layer. Here each transaction carries its own explicit edit target.
+//! <https://openusd.org/release/api/class_usd_stage.html#Usd_SessionLayer>
 use layerstack::{
     EditTarget, InMemoryStore, Layer, LayerId, LiveStage, PrimSpec, PropertySpec, PropertyType,
     Specifier, StageOptions, SublayerEntry, Transaction, Value,
@@ -51,7 +56,7 @@ fn main() {
         EditTarget::for_layer(LayerId(3)).property(prop),
         Value::Double(10.0),
     );
-    a.apply(&mut store, &private).unwrap();
+    let private_edit = a.apply(&mut store, &private).unwrap();
 
     // Incoming shared batch: compare the authored slot, not a client's composed
     // value. Independent slot guards permit unrelated edits; generation guards
@@ -76,6 +81,11 @@ fn main() {
         b.stage().resolve_field_path(prop).unwrap().value,
         Value::Double(3.0),
         "shared opinion reaches client B"
+    );
+    assert_eq!(
+        store.layers[&LayerId(1)].property(prop).unwrap().default,
+        Some(Value::Double(1.0)),
+        "shared and session edits leave the published root unchanged"
     );
     println!(
         "client A reports: {}",
@@ -155,6 +165,21 @@ fn main() {
         "both clients incorporate the shared removal"
     );
     println!("SharedLamp removed from both clients after independent synchronization.");
+
+    // Releasing the private edit reveals the newest shared opinion, rather than
+    // copying the old composed value back into the session layer.
+    a.apply(&mut store, &private_edit.inverse).unwrap();
+    assert_eq!(
+        a.stage().resolve_field_path(prop).unwrap().value,
+        Value::Double(3.0),
+        "undoing the private override reveals the current shared value"
+    );
+    assert_eq!(
+        b.stage().resolve_field_path(prop).unwrap().value,
+        Value::Double(3.0),
+        "client B's snapshot is unaffected by A's private undo"
+    );
+    println!("A released its private override; both clients now read shared exposure 3.");
 
     // Each consumer owns its cursor. Persistent publication or merging the live
     // layer is a separate host operation; saving the root does not save sessions.

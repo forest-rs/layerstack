@@ -81,6 +81,30 @@ impl Storage for Filesystem {
     fn read(&mut self, identifier: &str) -> Result<Vec<u8>, IoError> {
         fs::read(identifier).map_err(storage_error)
     }
+    fn read_bounded(&mut self, identifier: &str, max_bytes: u64) -> Result<Vec<u8>, IoError> {
+        use std::io::Read;
+        let file = fs::File::open(identifier).map_err(storage_error)?;
+        if file.metadata().map_err(storage_error)?.len() > max_bytes {
+            return Err(IoError::new(
+                IoErrorKind::Rejected,
+                "resource exceeds encoded byte budget",
+            ));
+        }
+        let limit = max_bytes
+            .checked_add(1)
+            .ok_or_else(|| IoError::new(IoErrorKind::Rejected, "resource byte budget overflow"))?;
+        let mut bytes = Vec::new();
+        file.take(limit)
+            .read_to_end(&mut bytes)
+            .map_err(storage_error)?;
+        if bytes.len() as u64 > max_bytes {
+            return Err(IoError::new(
+                IoErrorKind::Rejected,
+                "resource exceeds encoded byte budget",
+            ));
+        }
+        Ok(bytes)
+    }
     fn write(&mut self, identifier: &str, bytes: &[u8]) -> Result<(), IoError> {
         fs::write(identifier, bytes).map_err(storage_error)
     }
@@ -214,5 +238,29 @@ mod asset_byte_tests {
             b"root directory"
         );
         fs::remove_dir_all(root).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod bounded_tests {
+    use super::*;
+    #[test]
+    fn oversized_sparse_resource_rejects_before_reading_payload() {
+        let path = std::env::temp_dir().join(alloc::format!(
+            "layerstack-sparse-resource-{}",
+            std::process::id()
+        ));
+        let file = fs::File::create(&path).unwrap();
+        file.set_len(2 * 1024 * 1024 * 1024).unwrap();
+        let mut storage = Filesystem::new(".", []).unwrap();
+        assert_eq!(
+            storage
+                .read_bounded(path.to_str().unwrap(), 1024)
+                .unwrap_err()
+                .kind,
+            IoErrorKind::Rejected
+        );
+        drop(file);
+        fs::remove_file(path).unwrap();
     }
 }

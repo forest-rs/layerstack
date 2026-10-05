@@ -63,7 +63,7 @@ pub use layerstack_usdz::{UsdcArrayLoading, UsdcReadOptions};
 mod reload;
 pub use reload::PreparedReload;
 mod asset_bytes;
-pub use asset_bytes::{AssetByteSource, AssetBytes};
+pub use asset_bytes::{AssetByteSource, AssetBytes, AssetReadLimits};
 
 #[cfg(feature = "std")]
 mod filesystem;
@@ -134,6 +134,16 @@ pub trait Storage {
     fn identify(&self, asset: &str, anchor: Option<&str>) -> Result<String, IoError>;
     /// Reads a complete source.
     fn read(&mut self, identifier: &str) -> Result<Vec<u8>, IoError>;
+    /// Reads at most `max_bytes` of a resource, rejecting excessive size before
+    /// allocating its complete payload. Implementations may read one extra byte
+    /// to detect growth. The default fails without reading; it never falls back
+    /// to the unbounded `read` method. AOUSD Core §9 (host asset transport).
+    fn read_bounded(&mut self, _identifier: &str, _max_bytes: u64) -> Result<Vec<u8>, IoError> {
+        Err(IoError::new(
+            IoErrorKind::Unsupported,
+            "storage does not implement bounded resource reads",
+        ))
+    }
     /// Writes a complete source.
     fn write(&mut self, identifier: &str, bytes: &[u8]) -> Result<(), IoError>;
 }

@@ -87,3 +87,14 @@ external assets are read at call time. Explicit `package[member]` identifiers
 support one archive level; nested archives are unsupported.
 Run `cargo run -p layerstack_examples --bin prepared_reload` for a complete
 reject/accept workflow with checked geometry, host budgets and packaged textures.
+
+## Bounded resources
+
+`read_asset_bytes_bounded(asset, authoring_layer, AssetReadLimits { bytes,
+package_bytes })` rejects oversized resident members before copying them and
+uses `Storage::read_bounded` for loose resources and nonresident archives.
+The storage extension defaults to an unsupported error without invoking `read`;
+custom transports opt into bounded reads explicitly. `Filesystem` bounds reads
+and checks file size before allocation. Existing unbounded resource APIs retain
+their behavior; use the bounded API when admitting renderer inputs.
+

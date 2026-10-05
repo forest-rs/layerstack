@@ -35,6 +35,16 @@ pub struct AssetBytes {
     pub anchor: Option<LayerId>,
 }
 
+/// Explicit allocation limits for resource and nonresident archive transport.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AssetReadLimits {
+    /// Maximum returned resource bytes, checked before copying a package member.
+    pub bytes: u64,
+    /// Maximum archive bytes when an explicit package is not already resident.
+    /// Resident source snapshots need no transport allocation and bypass this limit.
+    pub package_bytes: u64,
+}
+
 impl<B: Storage> StageDocument<B> {
     /// Resolves and reads arbitrary bytes relative to their authoring layer.
     ///
@@ -50,7 +60,26 @@ impl<B: Storage> StageDocument<B> {
         asset: &str,
         anchor: Option<LayerId>,
     ) -> Result<AssetBytes, IoError> {
-        read(&mut self.storage, &self.catalog, asset, anchor)
+        read(&mut self.storage, &self.catalog, asset, anchor, None)
+    }
+    /// Resolves opaque bytes with limits checked before payload allocation.
+    /// Loose resources require `Storage::read_bounded`; resident package members
+    /// check their existing slice length before making the returned shared copy.
+    /// Nonresident explicit packages also obey `limits.package_bytes`.
+    /// No unbounded fallback occurs. AOUSD Core §9.4, §9.7.
+    pub fn read_asset_bytes_bounded(
+        &mut self,
+        asset: &str,
+        anchor: Option<LayerId>,
+        limits: AssetReadLimits,
+    ) -> Result<AssetBytes, IoError> {
+        read(
+            &mut self.storage,
+            &self.catalog,
+            asset,
+            anchor,
+            Some(limits),
+        )
     }
 }
 
@@ -65,7 +94,32 @@ impl<B: Storage> PreparedReload<'_, B> {
         asset: &str,
         anchor: Option<LayerId>,
     ) -> Result<AssetBytes, IoError> {
-        read(&mut self.document.storage, &self.catalog, asset, anchor)
+        read(
+            &mut self.document.storage,
+            &self.catalog,
+            asset,
+            anchor,
+            None,
+        )
+    }
+    /// Resolves opaque bytes with limits checked before payload allocation.
+    /// Loose resources require `Storage::read_bounded`; resident package members
+    /// check their existing slice length before making the returned shared copy.
+    /// Nonresident explicit packages also obey `limits.package_bytes`.
+    /// No unbounded fallback occurs. AOUSD Core §9.4, §9.7.
+    pub fn read_asset_bytes_bounded(
+        &mut self,
+        asset: &str,
+        anchor: Option<LayerId>,
+        limits: AssetReadLimits,
+    ) -> Result<AssetBytes, IoError> {
+        read(
+            &mut self.document.storage,
+            &self.catalog,
+            asset,
+            anchor,
+            Some(limits),
+        )
     }
 }
 
@@ -110,6 +164,7 @@ fn read<B: Storage>(
     catalog: &Catalog,
     asset: &str,
     anchor: Option<LayerId>,
+    limits: Option<AssetReadLimits>,
 ) -> Result<AssetBytes, IoError> {
     let source = anchor
         .map(|id| {
@@ -156,9 +211,12 @@ fn read<B: Storage>(
             .cloned();
         let bytes = match bytes {
             Some(bytes) => bytes,
-            None => Arc::from(storage.read(&identifier)?),
+            None => Arc::from(match limits {
+                Some(limits) => storage.read_bounded(&identifier, limits.package_bytes)?,
+                None => storage.read(&identifier)?,
+            }),
         };
-        return package_bytes(&bytes, &identifier, member, anchor);
+        return package_bytes(&bytes, &identifier, member, anchor, limits);
     }
     if let Some(package) = package
         && !asset.starts_with('/')
@@ -174,6 +232,7 @@ fn read<B: Storage>(
                 &catalog.sources[&package].identifier,
                 &member,
                 anchor,
+                limits,
             );
         }
         if asset.starts_with('.') {
@@ -185,7 +244,10 @@ fn read<B: Storage>(
     }
     let identifier = storage.identify(asset, outer_anchor)?;
     Ok(AssetBytes {
-        bytes: Arc::from(storage.read(&identifier)?),
+        bytes: Arc::from(match limits {
+            Some(limits) => storage.read_bounded(&identifier, limits.bytes)?,
+            None => storage.read(&identifier)?,
+        }),
         identifier,
         source: AssetByteSource::Storage,
         anchor,
@@ -197,10 +259,11 @@ fn package_bytes(
     package: &str,
     member: &str,
     anchor: Option<LayerId>,
+    limits: Option<AssetReadLimits>,
 ) -> Result<AssetBytes, IoError> {
     let archive = layerstack_usdz::zip::ZipArchive::parse(bytes)
         .map_err(|e| IoError::new(IoErrorKind::Rejected, e.to_string()))?;
-    package_entry(&archive, package, member, anchor)
+    package_entry(&archive, package, member, anchor, limits)
 }
 
 fn package_entry(
@@ -208,6 +271,7 @@ fn package_entry(
     package: &str,
     member: &str,
     anchor: Option<LayerId>,
+    limits: Option<AssetReadLimits>,
 ) -> Result<AssetBytes, IoError> {
     let entry = archive.find(member).ok_or_else(|| {
         IoError::new(
@@ -215,9 +279,16 @@ fn package_entry(
             alloc::format!("missing package member {member}"),
         )
     })?;
+    let data = archive.entry_data(entry);
+    if limits.is_some_and(|limits| data.len() as u64 > limits.bytes) {
+        return Err(IoError::new(
+            IoErrorKind::Rejected,
+            "resource exceeds encoded byte budget",
+        ));
+    }
     Ok(AssetBytes {
         identifier: alloc::format!("{package}[{member}]"),
-        bytes: Arc::from(archive.entry_data(entry)),
+        bytes: Arc::from(data),
         source: AssetByteSource::PackageMember {
             package: package.into(),
             member: member.into(),

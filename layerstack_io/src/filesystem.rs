@@ -246,21 +246,27 @@ mod bounded_tests {
     use super::*;
     #[test]
     fn oversized_sparse_resource_rejects_before_reading_payload() {
+        #[cfg(target_os = "wasi")]
+        let path = std::env::current_dir()
+            .unwrap()
+            .join("layerstack-sparse-resource-wasm");
+        #[cfg(not(target_os = "wasi"))]
         let path = std::env::temp_dir().join(alloc::format!(
             "layerstack-sparse-resource-{}",
             std::process::id()
         ));
-        let file = fs::File::create(&path).unwrap();
-        file.set_len(2 * 1024 * 1024 * 1024).unwrap();
-        let mut storage = Filesystem::new(".", []).unwrap();
-        assert_eq!(
-            storage
-                .read_bounded(path.to_str().unwrap(), 1024)
-                .unwrap_err()
-                .kind,
-            IoErrorKind::Rejected
-        );
-        drop(file);
+        {
+            let file = fs::File::create(&path).unwrap();
+            file.set_len(2 * 1024 * 1024 * 1024).unwrap();
+            let mut storage = Filesystem::new(".", []).unwrap();
+            assert_eq!(
+                storage
+                    .read_bounded(path.to_str().unwrap(), 1024)
+                    .unwrap_err()
+                    .kind,
+                IoErrorKind::Rejected
+            );
+        }
         fs::remove_file(path).unwrap();
     }
 }

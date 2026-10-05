@@ -900,7 +900,7 @@ fn fold_array_chain<'o>(
 ///
 /// - composing two series treats their samples as one time
 ///   (`Sdf_timesEqualDefaultFn` in `pxr/usd/sdf/composeTimeSampleSeries.h`),
-///   see [`TemporalPlanner::push`];
+///   see [`TemporalPlanner::new`];
 /// - within one series, two bracketing samples this close in layer time do
 ///   not interpolate: the lower one holds (`_GetInterpolatingSamplesImpl` in
 ///   `pxr/usd/usd/interpolators.cpp`), see [`Bracket::of`] and
@@ -1110,7 +1110,7 @@ fn plan_brackets_recording<'o>(
     // independent of output interpolation (stage.cpp::_GetResolveInfoWithClipsImpl).
     // Payload composition retains every actual sparse knot fetched from that
     // source chain. Their kinds can differ at synthetic clip activation times.
-    let mut payload_planner = composability.map(|_| TemporalPlanner::new(time, mode));
+    let mut payload_planner = composability.map(|_| TemporalPlanner::new(time, mode, times_close));
     let source_mode = if composability.is_some() {
         TemporalMode::Bracketing
     } else {
@@ -1121,7 +1121,7 @@ fn plan_brackets_recording<'o>(
     } else {
         interp
     };
-    let mut planner = TemporalPlanner::new(time, source_mode);
+    let mut planner = TemporalPlanner::new(time, source_mode, times_close);
     let mut opinions = opinions.into_iter().enumerate();
     let mut incompatible = None;
     let mut actual_edit: Option<&Value> = None;
@@ -1196,13 +1196,11 @@ fn plan_brackets_recording<'o>(
             payload.push(
                 bracket.planning_sample(Pick::Lower, opinion, None),
                 bracket.planning_sample(Pick::Upper, opinion, None),
-                times_close,
             );
         }
         planner.push(
             bracket.planning_sample(Pick::Lower, opinion, composability),
             bracket.planning_sample(Pick::Upper, opinion, composability),
-            times_close,
         );
         brackets.push(bracket);
     }

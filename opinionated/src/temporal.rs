@@ -16,6 +16,7 @@
 //! default can be represented by a host-defined earliest time key.
 
 use alloc::{vec, vec::Vec};
+use core::fmt;
 
 /// Which sample of a participating source a recipe selects.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -74,40 +75,56 @@ pub struct TemporalSelection<T> {
 /// identical times denoting one sample. A non-reflexive query such as floating
 /// point NaN has no meaningful interpolation result; it does not cause a panic.
 ///
+/// `equivalent` decides when samples from different sources count as the same
+/// key, and which sample is held when they merge. It is fixed for the whole
+/// query. It may use a tolerance and need not be transitive. Bracketing the
+/// merged series at the query time uses exact ordering instead.
+///
 /// ```
 /// use opinionated::{TemporalMode, TemporalPlanner, TemporalSample};
-/// let mut plan = TemporalPlanner::new(5_u64, TemporalMode::Bracketing);
+/// let mut plan = TemporalPlanner::new(5_u64, TemporalMode::Bracketing, |a, b| a == b);
 /// assert_eq!(plan.query(), Some(5));
 /// plan.push(
 ///     TemporalSample { time: 0, composes: false },
 ///     TemporalSample { time: 10, composes: true },
-///     |a, b| a == b,
 /// );
 /// assert_eq!(plan.query(), Some(10)); // only the upper bracket needs a base
 /// plan.push(
 ///     TemporalSample { time: 10, composes: false },
 ///     TemporalSample { time: 10, composes: false },
-///     |a, b| a == b,
 /// );
 /// assert_eq!(plan.query(), None);
 /// assert_eq!(plan.samples().len(), 2);
 /// ```
-#[derive(Clone, Debug)]
-pub struct TemporalPlanner<T> {
+#[derive(Clone)]
+pub struct TemporalPlanner<T, E> {
     time: T,
     query: Option<T>,
     mode: TemporalMode,
+    equivalent: E,
     samples: Vec<TemporalSelection<T>>,
 }
 
-impl<T: Copy + PartialOrd> TemporalPlanner<T> {
-    /// Starts an empty plan at `time`.
+impl<T: fmt::Debug, E> fmt::Debug for TemporalPlanner<T, E> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("TemporalPlanner")
+            .field("time", &self.time)
+            .field("query", &self.query)
+            .field("mode", &self.mode)
+            .field("samples", &self.samples)
+            .finish_non_exhaustive()
+    }
+}
+
+impl<T: Copy + PartialOrd, E: Fn(T, T) -> bool> TemporalPlanner<T, E> {
+    /// Starts an empty plan at `time`, merging keys with `equivalent`.
     #[must_use]
-    pub fn new(time: T, mode: TemporalMode) -> Self {
+    pub fn new(time: T, mode: TemporalMode, equivalent: E) -> Self {
         Self {
             time,
             query: Some(time),
             mode,
+            equivalent,
             samples: Vec::new(),
         }
     }
@@ -137,19 +154,9 @@ impl<T: Copy + PartialOrd> TemporalPlanner<T> {
     /// Composes a weaker source's brackets into the plan. Returns `false` and
     /// leaves the plan unchanged if it was already complete.
     ///
-    /// `equivalent` decides when samples from different series merge, and
-    /// which sample is held during that merge. Use the same policy on every
-    /// call. It may use a tolerance and need not be transitive. Bracketing the
-    /// resulting series at the original query uses exact ordering instead.
-    ///
     /// Supply the same sample twice for a single sample. With equal times the
     /// lower sample wins. Samples contain no values and require no allocation.
-    pub fn push(
-        &mut self,
-        lower: TemporalSample<T>,
-        upper: TemporalSample<T>,
-        equivalent: impl Fn(T, T) -> bool,
-    ) -> bool {
+    pub fn push(&mut self, lower: TemporalSample<T>, upper: TemporalSample<T>) -> bool {
         if self.query.is_none() {
             return false;
         }
@@ -174,6 +181,7 @@ impl<T: Copy + PartialOrd> TemporalPlanner<T> {
                 .collect();
         } else {
             let strong = &self.samples;
+            let equivalent = &self.equivalent;
             // Merge only metadata first: at most four candidates exist, and
             // only two can survive bracketing. Do not copy recipes discarded
             // by that selection, or copy recipes that can be moved intact.
@@ -186,11 +194,11 @@ impl<T: Copy + PartialOrd> TemporalPlanner<T> {
                 // Explicit exhaustion avoids treating a real maximum time
                 // (including +infinity) as an end-of-series sentinel.
                 if let Some(s) = s.filter(|s| w.is_none_or(|w| s.time <= w.time)) {
-                    let held = held_index(weak.len(), j, s.time, |k| weak[k].time, &equivalent);
+                    let held = held_index(weak.len(), j, s.time, |k| weak[k].time, equivalent);
                     merged[len] = (i, s.time, s.composes && weak[held].composes, pick(held));
                     len += 1;
                 } else if let Some(w) = w {
-                    let held = held_index(strong.len(), i, w.time, |k| strong[k].time, &equivalent);
+                    let held = held_index(strong.len(), i, w.time, |k| strong[k].time, equivalent);
                     if strong[held].composes {
                         merged[len] = (held, w.time, w.composes, pick(j));
                         len += 1;
@@ -309,9 +317,9 @@ mod tests {
 
     #[test]
     fn shared_recipe_forks_before_either_branch_is_extended() {
-        let mut plan = TemporalPlanner::new(5, TemporalMode::Bracketing);
-        plan.push(sample(0, true), sample(10, true), |a, b| a == b);
-        plan.push(sample(3, true), sample(7, true), |a, b| a == b);
+        let mut plan = TemporalPlanner::new(5, TemporalMode::Bracketing, |a, b| a == b);
+        plan.push(sample(0, true), sample(10, true));
+        plan.push(sample(3, true), sample(7, true));
         assert_eq!(plan.samples()[0].time, 3);
         assert_eq!(plan.samples()[1].time, 7);
         assert_eq!(
@@ -322,7 +330,7 @@ mod tests {
             plan.samples()[1].picks,
             [SamplePick::Lower, SamplePick::Upper]
         );
-        plan.push(sample(3, false), sample(7, false), |a, b| a == b);
+        plan.push(sample(3, false), sample(7, false));
         assert_eq!(plan.query(), None);
         assert_eq!(plan.samples()[0].picks, [SamplePick::Lower; 3]);
         assert_eq!(
@@ -333,8 +341,8 @@ mod tests {
 
     #[test]
     fn aligned_sources_reuse_recipe_storage() {
-        let mut plan = TemporalPlanner::new(5, TemporalMode::Bracketing);
-        plan.push(sample(0, true), sample(10, true), |a, b| a == b);
+        let mut plan = TemporalPlanner::new(5, TemporalMode::Bracketing, |a, b| a == b);
+        plan.push(sample(0, true), sample(10, true));
         for selection in &mut plan.samples {
             selection.picks.reserve(100);
         }
@@ -343,7 +351,7 @@ mod tests {
             plan.samples[1].picks.as_ptr(),
         ];
         for _ in 0..99 {
-            plan.push(sample(0, true), sample(10, true), |a, b| a == b);
+            plan.push(sample(0, true), sample(10, true));
             assert_eq!(plan.samples[0].picks.as_ptr(), buffers[0]);
             assert_eq!(plan.samples[1].picks.as_ptr(), buffers[1]);
         }
@@ -360,36 +368,32 @@ mod tests {
             (10, vec![10]),
             (20, vec![10]),
         ] {
-            let mut plan = TemporalPlanner::new(time, TemporalMode::Bracketing);
-            plan.push(sample(0, false), sample(10, false), |a, b| a == b);
+            let mut plan = TemporalPlanner::new(time, TemporalMode::Bracketing, |a, b| a == b);
+            plan.push(sample(0, false), sample(10, false));
             assert_eq!(
                 plan.samples().iter().map(|s| s.time).collect::<Vec<_>>(),
                 expected
             );
             assert_eq!(plan.query(), None);
         }
-        let mut held = TemporalPlanner::new(5, TemporalMode::Held);
-        held.push(sample(0, false), sample(10, true), |a, b| a == b);
+        let mut held = TemporalPlanner::new(5, TemporalMode::Held, |a, b| a == b);
+        held.push(sample(0, false), sample(10, true));
         assert_eq!(held.query(), None);
         let before = held.samples().to_vec();
-        assert!(
-            !held.push(sample(5, false), sample(5, false), |_, _| panic!(
-                "hidden source"
-            ))
-        );
+        assert!(!held.push(sample(5, false), sample(5, false)));
         assert_eq!(held.samples(), before);
     }
 
     #[test]
     fn only_upper_needs_a_weaker_source_and_its_lower_sample_must_continue() {
-        let mut plan = TemporalPlanner::new(5, TemporalMode::Bracketing);
-        plan.push(sample(0, false), sample(10, true), |a, b| a == b);
+        let mut plan = TemporalPlanner::new(5, TemporalMode::Bracketing, |a, b| a == b);
+        plan.push(sample(0, false), sample(10, true));
         assert_eq!(plan.query(), Some(10));
         // The weak upper is terminal, but its lower contributes at time 10.
         // Stopping on the weak upper here would lose the eventual base.
-        plan.push(sample(8, true), sample(12, false), |a, b| a == b);
+        plan.push(sample(8, true), sample(12, false));
         assert_eq!(plan.query(), Some(10));
-        plan.push(sample(10, false), sample(10, false), |a, b| a == b);
+        plan.push(sample(10, false), sample(10, false));
         assert_eq!(plan.query(), None);
         assert_eq!(
             plan.samples()[1].picks,
@@ -399,9 +403,9 @@ mod tests {
 
     #[test]
     fn sparse_chain_runs_out_and_keeps_recipes_for_the_host_seed() {
-        let mut plan = TemporalPlanner::new(5, TemporalMode::Bracketing);
-        plan.push(sample(0, true), sample(10, true), |a, b| a == b);
-        plan.push(sample(3, true), sample(7, true), |a, b| a == b);
+        let mut plan = TemporalPlanner::new(5, TemporalMode::Bracketing, |a, b| a == b);
+        plan.push(sample(0, true), sample(10, true));
+        plan.push(sample(3, true), sample(7, true));
         assert_eq!(plan.query(), Some(5));
         assert_eq!(plan.samples()[0].time, 3);
         assert_eq!(plan.samples()[1].time, 7);
@@ -419,9 +423,9 @@ mod tests {
     #[test]
     fn host_tolerance_preserves_near_collision_rules() {
         let close = |a: f64, b: f64| a == b || (a - b).abs() < 1e-6;
-        let mut plan = TemporalPlanner::new(1.5, TemporalMode::Bracketing);
-        plan.push(sample(1.000_000_4, false), sample(2.0, true), close);
-        plan.push(sample(1.0, false), sample(2.0, false), close);
+        let mut plan = TemporalPlanner::new(1.5, TemporalMode::Bracketing, close);
+        plan.push(sample(1.000_000_4, false), sample(2.0, true));
+        plan.push(sample(1.0, false), sample(2.0, false));
         assert_eq!(plan.samples().len(), 1);
         assert_eq!(plan.samples()[0].time, 2.0);
         assert_eq!(
@@ -433,25 +437,19 @@ mod tests {
 
     #[test]
     fn maximum_keys_and_infinities_are_samples_not_sentinels() {
-        let mut ticks = TemporalPlanner::new(u64::MAX - 1, TemporalMode::Bracketing);
-        ticks.push(sample(0, true), sample(u64::MAX, true), |a, b| a == b);
-        ticks.push(sample(0, false), sample(0, false), |a, b| a == b);
+        let mut ticks = TemporalPlanner::new(u64::MAX - 1, TemporalMode::Bracketing, |a, b| a == b);
+        ticks.push(sample(0, true), sample(u64::MAX, true));
+        ticks.push(sample(0, false), sample(0, false));
         assert_eq!(ticks.samples()[1].time, u64::MAX);
         assert_eq!(ticks.query(), None);
-        let mut exhausted = TemporalPlanner::new(5.0, TemporalMode::Bracketing);
-        exhausted.push(sample(0.0, true), sample(0.0, true), |a, b| a == b);
-        exhausted.push(sample(0.0, true), sample(f64::INFINITY, false), |a, b| {
-            a == b
-        });
+        let mut exhausted = TemporalPlanner::new(5.0, TemporalMode::Bracketing, |a, b| a == b);
+        exhausted.push(sample(0.0, true), sample(0.0, true));
+        exhausted.push(sample(0.0, true), sample(f64::INFINITY, false));
         assert_eq!(exhausted.samples()[1].time, f64::INFINITY);
         for time in [0.0, f64::INFINITY, f64::NAN] {
-            let mut plan = TemporalPlanner::new(time, TemporalMode::Bracketing);
-            plan.push(
-                sample(f64::NEG_INFINITY, true),
-                sample(f64::INFINITY, true),
-                |a, b| a == b,
-            );
-            plan.push(sample(0.0, false), sample(0.0, false), |a, b| a == b);
+            let mut plan = TemporalPlanner::new(time, TemporalMode::Bracketing, |a, b| a == b);
+            plan.push(sample(f64::NEG_INFINITY, true), sample(f64::INFINITY, true));
+            plan.push(sample(0.0, false), sample(0.0, false));
             assert_eq!(
                 plan.samples().last().unwrap().time,
                 if time == f64::INFINITY {
@@ -505,7 +503,7 @@ mod tests {
             })
         };
         let sources = [(correction(10), correction(30)), (dense(0), dense(20))];
-        let mut plan = TemporalPlanner::new(5_u64, TemporalMode::Bracketing);
+        let mut plan = TemporalPlanner::new(5_u64, TemporalMode::Bracketing, |a, b| a == b);
         let read = Cell::new(0);
         let materialized = Cell::new(0);
         let mut inputs = sources
@@ -517,7 +515,6 @@ mod tests {
             plan.push(
                 sample(0, matches!(lower, Value::Sparse(_))),
                 sample(10, matches!(upper, Value::Sparse(_))),
-                |a, b| a == b,
             );
         }
         assert_eq!(read.get(), 2);
@@ -571,9 +568,9 @@ mod tests {
             }),
             Value::Block,
         ];
-        let mut plan = TemporalPlanner::new(4, TemporalMode::Bracketing);
-        plan.push(sample(0, true), sample(0, true), |a, b| a == b);
-        plan.push(sample(0, false), sample(0, false), |a, b| a == b);
+        let mut plan = TemporalPlanner::new(4, TemporalMode::Bracketing, |a, b| a == b);
+        plan.push(sample(0, true), sample(0, true));
+        plan.push(sample(0, false), sample(0, false));
         assert_eq!(plan.query(), None);
         let count = Cell::new(0);
         let result = resolve_family_chain(

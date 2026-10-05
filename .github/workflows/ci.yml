@@ -256,6 +256,7 @@ jobs:
           cargo run --locked --all-features -p layerstack_examples --example mesh_to_usdz -- "$RUNNER_TEMP/cube.usdz"
           cargo run --locked --all-features -p layerstack_examples --example mesh_materials_to_usdz -- "$RUNNER_TEMP/materials.usdz"
           cargo run --locked --all-features -p layerstack_examples --example scatter_to_usdz -- "$RUNNER_TEMP/field.usdz"
+          cargo run --locked --all-features -p layerstack_examples --bin prepared_reload
 
   test-stable-wasm:
     name: cargo test (wasm32)

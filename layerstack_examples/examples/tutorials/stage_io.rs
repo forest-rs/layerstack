@@ -5,8 +5,10 @@
 //! reload sources, and protect unsaved edits through an explicit policy.
 //! <https://openusd.org/release/tut_traversing_stage.html>
 //! <https://openusd.org/release/tut_converting_between_layer_formats.html>
+//! OpenUSD `UsdStage::Reload` excludes session layers and their sublayers.
+//! <https://openusd.org/release/api/class_usd_stage.html>
 mod support;
-use layerstack::{EditTarget, PrimPredicate, Time, Transaction, Value};
+use layerstack::{EditTarget, Layer, LayerId, PrimPredicate, Time, Transaction, Value};
 use layerstack_io::ReloadPolicy;
 fn main() {
     let directory = support::directory();
@@ -78,10 +80,55 @@ fn main() {
     let (store, live) = document.parts_mut();
     live.apply(store, &applied.inverse).unwrap();
     document.export_layer(root, "HelloWorld.usdc").unwrap();
+
+    // A private preview belongs in the session layer. Saving and reloading the
+    // document operates on published source layers while retaining this preview.
+    let (store, live) = document.parts_mut();
+    let session = LayerId(1_000);
+    store.insert_layer(Layer::new(session));
+    assert!(
+        live.set_session_layer(Some(session)),
+        "attach the private session"
+    );
+    live.synchronize(store);
+    let mut preview = Transaction::new();
+    preview.set_default(
+        EditTarget::for_layer(session).property(radius),
+        Value::Double(9.0),
+    );
+    let preview = live.apply(store, &preview).unwrap();
+    let saved = document.save();
+    assert!(saved.failures.is_empty(), "{:?}", saved.failures);
+    assert_eq!(
+        saved.saved,
+        vec![root],
+        "save the edited root, excluding sessions"
+    );
+    assert!(document.is_dirty(session), "save excludes private sessions");
     document.reload(ReloadPolicy::DiscardDirty).unwrap();
     assert!(
         !document.is_dirty(root),
         "successful reload restores the saved baseline"
+    );
+    let (store, live) = document.parts_mut();
+    assert_eq!(
+        query
+            .try_get(live.stage(), Time::Default)
+            .unwrap()
+            .unwrap()
+            .value,
+        Value::Double(9.0),
+        "source reload preserves the private session preview"
+    );
+    live.apply(store, &preview.inverse).unwrap();
+    assert_eq!(
+        query
+            .try_get(live.stage(), Time::Default)
+            .unwrap()
+            .unwrap()
+            .value,
+        Value::Double(2.0),
+        "clearing the preview reveals the saved radius"
     );
     println!("{}", directory.join("HelloWorld.usdc").display());
 }

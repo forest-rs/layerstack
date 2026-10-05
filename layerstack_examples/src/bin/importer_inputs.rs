@@ -2,6 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 //! Capture renderer inputs with checked reads, material subsets and bounded output.
+//!
+//! OpenUSD's C++ `UsdGeomPrimvar` keeps indexed values distinct from flattened
+//! output; `UsdGeomPointInstancer::ComputeInstanceTransformsAtTime` supplies the
+//! corresponding placement semantics. This example writes UV corners directly
+//! and streams placements into a caller-owned scratch buffer.
+//! <https://openusd.org/release/api/class_usd_geom_primvar.html>
+//! <https://openusd.org/release/api/class_usd_geom_point_instancer.html>
 use core::num::NonZeroUsize;
 use layerstack::{
     EditTarget, InMemoryStore, Layer, LayerId, ListOp, LiveStage, PropertyPath, PropertySpec,
@@ -114,6 +121,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(|corner| uv[st.element_range(corner).unwrap().start])
         .collect();
     assert_eq!(vertex_uv.len(), 6, "two triangles require six UV corners");
+    assert_eq!(
+        vertex_uv,
+        vec![[0., 0.], [1., 0.], [1., 1.], [0., 0.], [1., 1.], [0., 1.]],
+        "indexed values preserve the authored face-corner order"
+    );
 
     let instances = PointInstancer::new(&scene, instance_path)
         .unwrap()
@@ -124,11 +136,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )?;
     let mut scratch = Vec::with_capacity(2);
     let mut placements = 0;
+    let mut chunks = Vec::new();
+    let mut translations = Vec::new();
     instances.for_each_chunk(NonZeroUsize::new(2).unwrap(), &mut scratch, |chunk| {
         // Submit or convert this bounded slice to the engine's placement format.
+        assert!(chunk.len() <= 2, "each submission respects the chunk limit");
+        chunks.push(chunk.len());
+        translations.extend(chunk.iter().map(|instance| {
+            let translation = instance.matrix[3];
+            [translation[0], translation[1], translation[2]]
+        }));
         placements += chunk.len();
     });
     assert_eq!(placements, 3, "chunking preserves all instance placements");
+    assert_eq!(chunks, vec![2, 1], "the tail chunk remains bounded");
+    assert_eq!(
+        translations,
+        vec![[0., 0., 0.], [2., 0., 0.], [4., 0., 0.]],
+        "chunked placements preserve the authored translations"
+    );
     println!(
         "{} shared points, {} material subset, {} UV corners, {placements} streamed placements",
         points.len(),

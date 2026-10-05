@@ -447,6 +447,10 @@ pub mod retained;
 pub mod ri_spline;
 #[cfg(feature = "usd-shade")]
 pub mod shading;
+
+/// Retained renderer-neutral geometry, occurrence and material records.
+#[cfg(all(feature = "usd-geom", feature = "usd-shade"))]
+pub mod scene_records;
 #[cfg(feature = "usd-skel")]
 pub mod skel;
 #[cfg(feature = "usd-geom")]

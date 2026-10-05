@@ -62,3 +62,28 @@ Value-clip requests remain explicit: inspect `Stage::clip_asset_requests`, then
 use `StageDocument::load_asset` with each request's authoring layer. The host can
 schedule those reads independently of rendering. Other retained clients over
 the document's store synchronize independently after publication.
+
+Use `prepare_reload` or `prepare_reload_layers` when an engine must inspect a
+candidate before publication. `PreparedReload` exposes its store, composed stage,
+import report, source identities and retained decode statistics. Dropping it
+rejects the reload; `commit()` publishes its layers, source catalog and already
+composed stage together, preserving existing change observers. No source reads
+or second composition occur at commit. Rejection leaves dirty generations and
+dependency freshness unchanged, including failed or leaked candidates.
+Preparation copies authored maps and interner indexes into an independent ID
+domain; immutable numeric buffers and package bytes share ownership.
+Candidate-only IDs must not be used on a rejected document. The document stays
+exclusively borrowed until acceptance or rejection. Synchronize direct edits
+before preparation if they change which source layers the snapshot uses.
+
+`read_asset_bytes(path, authoring_layer)` reads arbitrary images, environment maps
+and other bytes using the same package/member policy as layer imports. Capture
+the winning source with `layerstack_schemas::assets::AssetReference::read` rather
+than assuming the composed root authored the asset. The result contains immutable
+bytes, canonical identity and package provenance; no image decoder, renderer or
+new layer identity is introduced. Candidate reads use the candidate USDZ snapshot,
+so keep those validated bytes for renderer/GPU publication after commit. Loose
+external assets are read at call time. Explicit `package[member]` identifiers
+support one archive level; nested archives are unsupported.
+Run `cargo run -p layerstack_examples --bin prepared_reload` for a complete
+reject/accept workflow with checked geometry, host budgets and packaged textures.

@@ -143,3 +143,76 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 }
+
+#[cfg(test)]
+mod asset_byte_tests {
+    use super::*;
+    use layerstack::StageOptions;
+    #[test]
+    fn arbitrary_bytes_follow_the_winning_layer_location_and_external_package_anchor() {
+        #[cfg(target_os = "wasi")]
+        let root = std::env::current_dir()
+            .unwrap()
+            .join("layerstack-asset-bytes");
+        #[cfg(not(target_os = "wasi"))]
+        let root = std::env::temp_dir().join(alloc::format!(
+            "layerstack-asset-bytes-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(root.join("layers")).unwrap();
+        fs::write(
+            root.join("root.usda"),
+            b"#usda 1.0\n(subLayers=[@layers/base.usda@])",
+        )
+        .unwrap();
+        fs::write(root.join("layers/base.usda"), b"#usda 1.0\ndef \"Root\" {}").unwrap();
+        fs::write(root.join("layers/image.png"), b"member directory").unwrap();
+        fs::write(root.join("image.png"), b"root directory").unwrap();
+        fs::write(
+            root.join("scene.usdz"),
+            layerstack_usdz::write_usdz(&[layerstack_usdz::PackageFile::new(
+                "root.usda",
+                b"#usda 1.0",
+            )])
+            .unwrap(),
+        )
+        .unwrap();
+        let mut document = StageDocument::open(
+            Filesystem::new(&root, []).unwrap(),
+            "root.usda",
+            StageOptions::default(),
+        )
+        .unwrap();
+        let layer = document
+            .load_report()
+            .layers
+            .iter()
+            .copied()
+            .find(|id| document.identifier(*id).unwrap().ends_with("base.usda"))
+            .unwrap();
+        let bytes = document
+            .read_asset_bytes("./image.png", Some(layer))
+            .unwrap();
+        assert_eq!(bytes.bytes.as_ref(), b"member directory");
+        assert_eq!(
+            Path::new(&bytes.identifier),
+            fs::canonicalize(root.join("layers/image.png")).unwrap()
+        );
+        let mut package = StageDocument::open(
+            Filesystem::new(&root, []).unwrap(),
+            "scene.usdz",
+            StageOptions::default(),
+        )
+        .unwrap();
+        let package_root = package.stage().stage().root_layer().unwrap();
+        assert_eq!(
+            package
+                .read_asset_bytes("image.png", Some(package_root))
+                .unwrap()
+                .bytes
+                .as_ref(),
+            b"root directory"
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+}

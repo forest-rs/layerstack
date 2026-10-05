@@ -36,6 +36,12 @@
 //! Retained import still reads complete encoded files; package members each
 //! retain an independent byte copy. Numeric payload failures surface through
 //! checked attribute reads and [`IoErrorKind::Decode`] during save/export.
+//!
+//! [`StageDocument::prepare_reload`] separates import/validation from publication.
+//! Dropping its candidate rejects it; [`PreparedReload::commit`] reuses the
+//! candidate composition and preserves stage observers. Both document and
+//! candidate provide `read_asset_bytes` for package-aware arbitrary resources;
+//! pass the asset's winning authoring layer, not its composed prim's root layer.
 #![no_std]
 extern crate alloc;
 #[cfg(feature = "std")]
@@ -53,6 +59,11 @@ use layerstack::{
 };
 use layerstack_usdz::{ImportDiagnostic, MemberDiagnostic};
 pub use layerstack_usdz::{UsdcArrayLoading, UsdcReadOptions};
+
+mod reload;
+pub use reload::PreparedReload;
+mod asset_bytes;
+pub use asset_bytes::{AssetByteSource, AssetBytes};
 
 #[cfg(feature = "std")]
 mod filesystem;
@@ -581,100 +592,19 @@ impl<B: Storage> StageDocument<B> {
         self.storage.write(&identifier, &bytes)
     }
     /// Reloads resident used sources, excluding anonymous/session layers.
-    /// Call `reload_layers` to select a different scope explicitly.
+    /// Equivalent to preparing and immediately committing [`Self::prepare_reload`].
     pub fn reload(&mut self, policy: ReloadPolicy) -> Result<LoadReport, IoError> {
         self.synchronize();
-        let sessions = self.session_layers();
-        let ids: Vec<_> = self
-            .stage
-            .stage()
-            .used_layers(true)
-            .difference(&sessions)
-            .copied()
-            .filter(|id| self.catalog.sources.contains_key(id))
-            .collect();
-        self.reload_layers(&ids, policy)
+        Ok(self.prepare_reload(policy)?.commit())
     }
-    /// Stages every selected source before publishing replacements. Read/parse
-    /// failure leaves authored layers, dirty cursors and the source catalog intact.
-    /// Interners may gain unused names. Selecting a package member reloads its
-    /// whole package; dirty protection covers every resident member.
+    /// Reloads an explicit source selection with no validation pause.
+    /// Equivalent to preparing and immediately committing [`Self::prepare_reload_layers`].
     pub fn reload_layers(
         &mut self,
         layers: &[LayerId],
         policy: ReloadPolicy,
     ) -> Result<LoadReport, IoError> {
-        let roots: BTreeSet<_> = layers
-            .iter()
-            .map(|id| {
-                self.catalog
-                    .sources
-                    .get(id)
-                    .map(|s| s.package.unwrap_or(*id))
-                    .ok_or_else(|| {
-                        IoError::new(
-                            IoErrorKind::MissingLayer,
-                            "selected layer has no reloadable source",
-                        )
-                    })
-            })
-            .collect::<Result<_, _>>()?;
-        let selected: BTreeSet<_> = self
-            .catalog
-            .sources
-            .iter()
-            .filter_map(|(&id, s)| {
-                (roots.contains(&id) || s.package.is_some_and(|p| roots.contains(&p))).then_some(id)
-            })
-            .collect();
-        if policy == ReloadPolicy::PreserveDirty && selected.iter().any(|id| self.is_dirty(*id)) {
-            return Err(IoError::new(
-                IoErrorKind::DirtyReload,
-                "reload would overwrite dirty selected layers",
-            ));
-        }
-        let mut catalog = self.catalog.clone();
-        catalog.reserved.extend(self.store.layers.keys().copied());
-        for id in &selected {
-            catalog.states.remove(id);
-            #[cfg(feature = "std")]
-            catalog.retained_values.remove(id);
-        }
-        for root in &roots {
-            let outer = catalog.sources[root].identifier.clone();
-            catalog
-                .ids
-                .retain(|identifier, id| *id != *root || *identifier == outer);
-        }
-        let mut reader = Reader::new(
-            &mut self.storage,
-            &mut catalog,
-            self.import_policy,
-            self.usdc_options,
-        );
-        for id in roots {
-            let identifier = reader.catalog.sources[&id].identifier.clone();
-            let result = reader.load(
-                &identifier,
-                None,
-                &mut self.store.tokens,
-                &mut self.store.paths,
-            )?;
-            if let Some(layer) = result.layer {
-                reader.pending.push(layer);
-            }
-        }
-        reader.resolve_expressions(
-            &mut self.store,
-            layerstack::LayerStackIdentifier {
-                root: self.stage.stage().root_layer().expect("document root"),
-                session: self.stage.stage().session_layer(),
-            },
-        )?;
-        let report = reader.commit(&mut self.store);
-        self.catalog = catalog;
-        self.synchronize();
-        Ok(report)
+        Ok(self.prepare_reload_layers(layers, policy)?.commit())
     }
     fn serialize(&self, id: LayerId, format: Format) -> Result<Vec<u8>, IoError> {
         let layer = self
@@ -1068,37 +998,14 @@ impl<B: Storage> Reader<'_, B> {
         if asset.starts_with('/') || asset.contains(':') {
             return self.load_external(asset, Some(package), tokens, paths);
         }
-        let source = &self.catalog.sources[&anchor];
-        let root_member = self.catalog.package_roots[&package].clone();
-        let authoring = if anchor == package {
-            root_member.as_str()
-        } else {
-            source
-                .identifier
-                .strip_suffix(']')
-                .and_then(|s| s.rsplit_once('[').map(|(_, m)| m))
-                .expect("package member source")
-        };
         let bytes = self.catalog.package_bytes[&package].clone();
         let archive = layerstack_usdz::zip::ZipArchive::parse(&bytes)
             .map_err(|e| IoError::new(IoErrorKind::Rejected, e.to_string()))?;
-        let path = asset.replace('\\', "/");
-        let layer_relative = path.starts_with('.');
-        let candidates = core::iter::once(authoring)
-            .chain((!layer_relative).then_some(root_member.as_str()))
-            .filter_map(|anchor| {
-                layerstack::asset::anchor_asset_path(
-                    &alloc::format!("./{path}"),
-                    &alloc::format!("./{anchor}"),
-                )
-                .and_then(|p| p.strip_prefix("./").map(ToString::to_string))
-                .filter(|p| !p.starts_with("../"))
-            });
-        let entry = candidates
-            .into_iter()
-            .find_map(|member| archive.find(&member));
-        let Some(entry) = entry else {
-            return if layer_relative {
+        let Some(member) = self
+            .catalog
+            .package_member(&archive, asset, anchor, package)?
+        else {
+            return if asset.starts_with('.') {
                 Err(IoError::new(
                     IoErrorKind::NotFound,
                     alloc::format!("missing package-relative asset {asset}"),
@@ -1107,7 +1014,7 @@ impl<B: Storage> Reader<'_, B> {
                 self.load_external(asset, Some(package), tokens, paths)
             };
         };
-        let member = entry.name.to_string();
+        let entry = archive.find(&member).expect("selected package member");
         let data = archive.entry_data(entry);
         let id = self
             .allocate_package_layer_id(package, &member)

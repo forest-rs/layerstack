@@ -9,6 +9,7 @@ use layerstack::{EditTarget, PrimSpec, PropertySpec, Transaction, Value};
 struct Memory {
     files: BTreeMap<String, Vec<u8>>,
     writes: Vec<String>,
+    reads: Vec<String>,
     fail_write: bool,
 }
 impl Memory {
@@ -27,6 +28,7 @@ impl Storage for Memory {
         Ok(asset.into())
     }
     fn read(&mut self, identifier: &str) -> Result<Vec<u8>, IoError> {
+        self.reads.push(identifier.into());
         self.files
             .get(identifier)
             .cloned()
@@ -40,6 +42,183 @@ impl Storage for Memory {
         self.writes.push(identifier.into());
         Ok(())
     }
+}
+
+#[test]
+fn rejecting_a_prepared_reload_preserves_sources_bindings_and_freshness() {
+    let mut doc = StageDocument::open(
+        Memory::with(&[
+            ("root.usda", "#usda 1.0\ndef \"Root\" { int value = 1 }"),
+            ("new.usda", "#usda 1.0\ndef \"Asset\" { int value = 9 }"),
+        ]),
+        "root.usda",
+        StageOptions::default(),
+    )
+    .unwrap();
+    let root = doc.stage.stage().root_layer().unwrap();
+    let generation = doc.store.layers[&root].generation();
+    let ids = doc.catalog.ids.clone();
+    let saved = doc.catalog.saved.clone();
+    let bindings = doc.store.asset_layers.clone();
+    let identity = doc.store.identity();
+    let mut cursor = doc.stage.change_cursor();
+    doc.storage.files.insert(
+        "root.usda".into(),
+        b"#usda 1.0\ndef \"Root\" (references=@new.usda@</Asset>) {}".to_vec(),
+    );
+    {
+        let candidate = doc.prepare_reload(ReloadPolicy::PreserveDirty).unwrap();
+        let new = candidate
+            .load_report()
+            .layers
+            .iter()
+            .copied()
+            .find(|id| candidate.identifier(*id) == Some("new.usda"))
+            .unwrap();
+        assert!(candidate.store().layers.contains_key(&new));
+        let property = layerstack::PropertyPath::new(
+            candidate
+                .store()
+                .paths
+                .lookup(
+                    &layerstack::Path::root().join(&[candidate
+                        .store()
+                        .tokens
+                        .lookup("Root")
+                        .unwrap()]),
+                )
+                .unwrap(),
+            candidate.store().tokens.lookup("value").unwrap(),
+        );
+        assert_eq!(
+            candidate
+                .stage()
+                .stage()
+                .resolve_field_path(property)
+                .unwrap()
+                .value,
+            Value::Int(9)
+        );
+    }
+    assert_eq!(doc.store.layers[&root].generation(), generation);
+    assert_eq!(doc.catalog.ids, ids);
+    assert_eq!(doc.catalog.saved, saved);
+    assert_eq!(doc.store.asset_layers, bindings);
+    assert_eq!(doc.store.identity(), identity);
+    assert_eq!(value(&doc), Value::Int(1));
+    doc.synchronize();
+    assert_eq!(doc.stage.changes_since(&mut cursor).unwrap().count(), 0);
+    assert!(!doc.is_dirty(root));
+    doc.prepare_reload(ReloadPolicy::PreserveDirty)
+        .unwrap()
+        .commit();
+    assert_eq!(value(&doc), Value::Int(9));
+}
+
+#[test]
+fn prepared_commit_reuses_sources_and_preserves_stage_observers_and_dependencies() {
+    use core::sync::atomic::{AtomicUsize, Ordering};
+    let mut doc = StageDocument::open(
+        Memory::with(&[
+            (
+                "root.usda",
+                "#usda 1.0\n(subLayers=[@base.usda@])\ndef \"Removed\" {}",
+            ),
+            ("base.usda", "#usda 1.0\ndef \"Root\" { int value = 1 }"),
+        ]),
+        "root.usda",
+        StageOptions::default(),
+    )
+    .unwrap();
+    let base = doc.catalog.ids["base.usda"];
+    let property = doc.store.property_path("/Root.value");
+    let mut cached = layerstack::AttributeQuery::new(property);
+    assert_eq!(
+        cached
+            .try_get(doc.stage.stage(), layerstack::Time::Default)
+            .unwrap()
+            .unwrap()
+            .value,
+        Value::Int(1)
+    );
+    assert!(cached.is_current(doc.stage.stage(), layerstack::Time::Default));
+    let mut other = LiveStage::compose(
+        &mut doc.store,
+        doc.stage.stage().root_layer().unwrap(),
+        StageOptions::default(),
+    );
+    let mut cursor = doc.stage.change_cursor();
+    let calls = Arc::new(AtomicUsize::new(0));
+    let counter = calls.clone();
+    let subscription = doc.stage.subscribe_changes(move |notice| {
+        if counter.fetch_add(1, Ordering::Relaxed) == 0 {
+            assert!(
+                !notice.changes.resynced.is_empty(),
+                "publication resynchronizes composed observers"
+            );
+        }
+    });
+    let budget = doc.stage.change_history_budget();
+    doc.storage.files.insert(
+        "root.usda".into(),
+        b"#usda 1.0\n(subLayers=[@base.usda@])\ndef \"Created\" {}".to_vec(),
+    );
+    doc.storage.files.insert(
+        "base.usda".into(),
+        b"#usda 1.0\ndef \"Root\" { int value = 7 }".to_vec(),
+    );
+    let report = doc
+        .prepare_reload(ReloadPolicy::PreserveDirty)
+        .unwrap()
+        .commit();
+    assert!(report.layers.contains(&base));
+    assert!(!cached.is_current(doc.stage.stage(), layerstack::Time::Default));
+    assert_eq!(
+        cached
+            .try_get(doc.stage.stage(), layerstack::Time::Default)
+            .unwrap()
+            .unwrap()
+            .value,
+        Value::Int(7)
+    );
+    assert_eq!(value(&doc), Value::Int(7));
+    assert_eq!(calls.load(Ordering::Relaxed), 1);
+    let notices: Vec<_> = doc.stage.changes_since(&mut cursor).unwrap().collect();
+    assert_eq!(notices.len(), 1);
+    assert_eq!(
+        notices[0].created,
+        [doc.store
+            .paths
+            .lookup(&layerstack::Path::root().join(&[doc.store.tokens.lookup("Created").unwrap()]))
+            .unwrap()]
+    );
+    assert_eq!(
+        notices[0].removed,
+        [doc.store
+            .paths
+            .lookup(&layerstack::Path::root().join(&[doc.store.tokens.lookup("Removed").unwrap()]))
+            .unwrap()]
+    );
+    assert_eq!(doc.stage.change_history_budget(), budget);
+    assert_eq!(
+        doc.storage.reads.len(),
+        4,
+        "commit never rereads source bytes"
+    );
+    other.synchronize(&mut doc.store);
+    assert!(
+        other.stage().has_prim(
+            doc.store
+                .paths
+                .lookup(
+                    &layerstack::Path::root().join(&[doc.store.tokens.lookup("Created").unwrap()])
+                )
+                .unwrap()
+        )
+    );
+    set_value(&mut doc, base, 11);
+    assert_eq!(value(&doc), Value::Int(11));
+    assert!(doc.stage.unsubscribe_changes(&subscription));
 }
 
 fn numeric_usdc() -> Vec<u8> {
@@ -880,4 +1059,246 @@ def "P" (clips = { dictionary default = {
         Value::Double(9.0)
     );
     assert_eq!(query.work().evaluations, 2);
+}
+
+#[test]
+fn asset_bytes_use_package_member_provenance_without_importing_assets() {
+    let mut backend = Memory::default();
+    backend.files.insert(
+        "scene.usdz".into(),
+        layerstack_usdz::write_usdz(&[
+            layerstack_usdz::PackageFile::new(
+                "root.usda",
+                b"#usda 1.0\n(subLayers=[@layers/member.usda@])\n",
+            ),
+            layerstack_usdz::PackageFile::new(
+                "layers/member.usda",
+                b"#usda 1.0\ndef \"Mesh\" {}\n",
+            ),
+            layerstack_usdz::PackageFile::new("layers/textures/color.png", &[0, 1, 2, 255]),
+            layerstack_usdz::PackageFile::new("textures/color.png", b"root texture"),
+            layerstack_usdz::PackageFile::new("root_only.exr", b"environment"),
+        ])
+        .unwrap(),
+    );
+    backend
+        .files
+        .insert("missing.png".into(), b"search fallback".to_vec());
+    backend
+        .files
+        .insert("./missing.png".into(), b"must not fall through".to_vec());
+    let mut doc = StageDocument::open(backend, "scene.usdz", StageOptions::default()).unwrap();
+    let root = doc.stage.stage().root_layer().unwrap();
+    let member = doc.catalog.ids["scene.usdz[layers/member.usda]"];
+    let generation = doc.store.layers[&member].generation();
+    let layers = doc.store.layers.len();
+    let reads = doc.storage.reads.len();
+    let bytes = doc
+        .read_asset_bytes("textures/color.png", Some(member))
+        .unwrap();
+    assert_eq!(bytes.bytes.as_ref(), &[0, 1, 2, 255]);
+    assert_eq!(bytes.identifier, "scene.usdz[layers/textures/color.png]");
+    assert_eq!(bytes.anchor, Some(member));
+    assert_eq!(
+        bytes.source,
+        AssetByteSource::PackageMember {
+            package: "scene.usdz".into(),
+            member: "layers/textures/color.png".into()
+        }
+    );
+    assert_eq!(
+        doc.read_asset_bytes("textures\\color.png", Some(member))
+            .unwrap()
+            .identifier,
+        bytes.identifier
+    );
+    assert_eq!(
+        doc.read_asset_bytes("../textures/color.png", Some(member))
+            .unwrap()
+            .bytes
+            .as_ref(),
+        b"root texture"
+    );
+    assert_eq!(
+        doc.read_asset_bytes("root_only.exr", Some(member))
+            .unwrap()
+            .bytes
+            .as_ref(),
+        b"environment"
+    );
+    assert_eq!(
+        doc.read_asset_bytes("textures/color.png", Some(root))
+            .unwrap()
+            .bytes
+            .as_ref(),
+        b"root texture"
+    );
+    assert_eq!(
+        doc.read_asset_bytes(&bytes.identifier, None)
+            .unwrap()
+            .bytes
+            .as_ref(),
+        bytes.bytes.as_ref()
+    );
+    assert_eq!(
+        doc.storage.reads.len(),
+        reads,
+        "resident packages provide their snapshot without transport reads"
+    );
+    assert_eq!(
+        doc.read_asset_bytes("./missing.png", Some(member))
+            .unwrap_err()
+            .kind,
+        IoErrorKind::NotFound
+    );
+    assert_eq!(
+        doc.read_asset_bytes("../../textures/color.png", Some(member))
+            .unwrap_err()
+            .kind,
+        IoErrorKind::NotFound
+    );
+    let external = doc.read_asset_bytes("missing.png", Some(member)).unwrap();
+    assert_eq!(external.bytes.as_ref(), b"search fallback");
+    assert_eq!(external.source, AssetByteSource::Storage);
+    assert_eq!(
+        doc.read_asset_bytes("textures/color.png", Some(LayerId(9999)))
+            .unwrap_err()
+            .kind,
+        IoErrorKind::MissingLayer
+    );
+    assert_eq!(
+        doc.read_asset_bytes("scene.usdz[../escape.png]", None)
+            .unwrap_err()
+            .kind,
+        IoErrorKind::Rejected
+    );
+    assert_eq!(
+        doc.read_asset_bytes("scene.usdz[x.usdz[y.png]]", None)
+            .unwrap_err()
+            .kind,
+        IoErrorKind::Unsupported
+    );
+    assert_eq!(doc.store.layers.len(), layers);
+    assert_eq!(doc.store.layers[&member].generation(), generation);
+    assert!(!doc.is_dirty(member));
+}
+
+#[test]
+fn candidate_package_bytes_publish_only_on_commit_and_keep_validated_handles() {
+    fn package(value: u8) -> Vec<u8> {
+        layerstack_usdz::write_usdz(&[
+            layerstack_usdz::PackageFile::new("root.usda", b"#usda 1.0\ndef \"Root\" {}"),
+            layerstack_usdz::PackageFile::new("textures/color.png", &[value]),
+        ])
+        .unwrap()
+    }
+    let mut backend = Memory::default();
+    backend.files.insert("scene.usdz".into(), package(1));
+    let mut doc = StageDocument::open(backend, "scene.usdz", StageOptions::default()).unwrap();
+    let root = doc.stage.stage().root_layer().unwrap();
+    let old = doc
+        .read_asset_bytes("textures/color.png", Some(root))
+        .unwrap();
+    doc.storage.files.insert("scene.usdz".into(), package(2));
+    let validated = {
+        let mut candidate = doc.prepare_reload(ReloadPolicy::PreserveDirty).unwrap();
+        candidate
+            .read_asset_bytes("textures/color.png", Some(root))
+            .unwrap()
+    };
+    assert_eq!(validated.bytes.as_ref(), &[2]);
+    assert_eq!(
+        doc.read_asset_bytes("textures/color.png", Some(root))
+            .unwrap()
+            .bytes
+            .as_ref(),
+        &[1]
+    );
+    let mut candidate = doc.prepare_reload(ReloadPolicy::PreserveDirty).unwrap();
+    let committed = candidate
+        .read_asset_bytes("textures/color.png", Some(root))
+        .unwrap();
+    candidate.commit();
+    assert_eq!(
+        doc.read_asset_bytes("textures/color.png", Some(root))
+            .unwrap()
+            .bytes
+            .as_ref(),
+        committed.bytes.as_ref()
+    );
+    assert_eq!(old.bytes.as_ref(), &[1]);
+    assert_eq!(
+        doc.storage.reads.len(),
+        3,
+        "one archive read per preparation and none at commit"
+    );
+}
+
+#[test]
+fn explicit_package_bytes_work_without_a_loaded_package_and_keep_decode_errors() {
+    let mut backend = Memory::with(&[("root.usda", "#usda 1.0\ndef \"Root\" {}")]);
+    backend.files.insert(
+        "images.usdz".into(),
+        layerstack_usdz::write_usdz(&[
+            layerstack_usdz::PackageFile::new("root.usda", b"#usda 1.0"),
+            layerstack_usdz::PackageFile::new("image.exr", &[0, 255, 0, 128]),
+        ])
+        .unwrap(),
+    );
+    backend
+        .files
+        .insert("broken.usdz".into(), b"not a zip archive".to_vec());
+    let mut doc = StageDocument::open(backend, "root.usda", StageOptions::default()).unwrap();
+    let count = doc.store.layers.len();
+    assert_eq!(
+        doc.read_asset_bytes("images.usdz[./image.exr]", None)
+            .unwrap()
+            .bytes
+            .as_ref(),
+        &[0, 255, 0, 128]
+    );
+    assert_eq!(
+        doc.read_asset_bytes("images.usdz[absent]", None)
+            .unwrap_err()
+            .kind,
+        IoErrorKind::NotFound
+    );
+    assert_eq!(
+        doc.read_asset_bytes("broken.usdz[image.exr]", None)
+            .unwrap_err()
+            .kind,
+        IoErrorKind::Rejected
+    );
+    assert_eq!(doc.store.layers.len(), count);
+}
+
+#[test]
+fn forgetting_a_candidate_leaves_the_published_document_usable() {
+    let mut doc = StageDocument::open(
+        Memory::with(&[("root.usda", "#usda 1.0\ndef \"Root\" { int value = 1 }")]),
+        "root.usda",
+        StageOptions::default(),
+    )
+    .unwrap();
+    let root = doc.stage.stage().root_layer().unwrap();
+    let identity = doc.store.identity();
+    let path = doc.store.path("/Root");
+    doc.storage.files.insert(
+        "root.usda".into(),
+        b"#usda 1.0\ndef \"CandidateOnly\" {}".to_vec(),
+    );
+    let candidate = doc.prepare_reload(ReloadPolicy::PreserveDirty).unwrap();
+    assert_ne!(
+        candidate.store().identity(),
+        identity,
+        "candidate names cannot alias a published domain"
+    );
+    core::mem::forget(candidate);
+    assert_eq!(doc.store.identity(), identity);
+    assert_eq!(doc.store.paths.display(path, &doc.store.tokens), "/Root");
+    assert_eq!(value(&doc), Value::Int(1));
+    assert!(doc.store.tokens.lookup("CandidateOnly").is_none());
+    set_value(&mut doc, root, 2);
+    assert_eq!(value(&doc), Value::Int(2));
+    assert_eq!(doc.save().saved, [root]);
 }

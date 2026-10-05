@@ -1,0 +1,46 @@
+#usda 1.0
+(
+    startTimeCode = 0
+    endTimeCode = 100
+)
+def Xform "P" (
+    prepend references = [@assets/asset.usda@</Asset>, @assets/deleted.usda@</Asset>]
+    prepend inherits = </Class>
+    prepend specializes = </Specialized>
+    prepend variantSets = "look"
+    customData = { dictionary nested = { int weak = 2 } }
+) {
+    double masked.timeSamples = { 0: 1, 2: 2 }
+    double animated.timeSamples = { 0: 1, 2: 2 }
+    double weakAnimated.timeSamples = { 0: 1, 2: 2 }
+    timecode timeline = 3
+    asset texture = @./assets/texture.png@
+    rel link = </Class>
+    variantSet "look" = {
+        "red" {
+            string label = "weak red"
+        }
+        "blue" {
+            string label = "unselected blue"
+            def "Child" {
+            int branch = 1
+            }
+        }
+    }
+    def "Inactive" (active = false) {
+            int retained = 1
+        }
+}
+
+def "ClipPrim" (
+    clips = {
+        dictionary default = {
+            asset[] assetPaths = [@assets/clip.usda@]
+            double2[] active = [(0, 0)]
+            double2[] times = [(0, 0), (2, 2)]
+            string primPath = "/Clip"
+        }
+    }
+) {
+    double clipValue
+}

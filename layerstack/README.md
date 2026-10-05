@@ -135,6 +135,8 @@ Composition returns a stage even when some arcs cannot be resolved. Inspect
 | [`TokenInterner`] / [`PathInterner`] | Store-local token and path handles |
 | [`SchemaRegistry`] | Schema definitions, prim definitions and fallback values |
 | [`EditTarget`] / [`Transaction`] | Mapped, atomic authoring with preconditions and undo |
+| [`NamespaceEdit`] | Prepared moves with explicit dependent stages and authored repairs |
+| [`flatten_layer_stack`] | Local layer consolidation preserving external composition arcs |
 
 [`PathId`] and [`TokenId`] belong to their interners; they are not durable
 identities to persist or exchange between unrelated stores.

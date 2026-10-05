@@ -28,6 +28,50 @@ fn read<'a, T>(
         }
     })
 }
+
+#[cfg(test)]
+mod retained_input_tests {
+    use super::*;
+    use alloc::vec;
+
+    #[test]
+    fn independent_inputs_preserve_float_bits_and_detect_motion_or_identity_changes() {
+        let a = InstanceTransforms {
+            indices: Arc::new(vec![0]),
+            positions: Arc::new(vec![[f32::NAN, 0., 0.]]),
+            rotations: Arc::new(Vec::new()),
+            scales: Arc::new(Vec::new()),
+            velocities: Arc::new(Vec::new()),
+            accelerations: Arc::new(Vec::new()),
+            angular: Arc::new(Vec::new()),
+            ids: Some(Arc::new(vec![7])),
+            mask: Vec::new(),
+            prototypes: vec![gf::IDENTITY],
+            include_prototype_transform: true,
+            velocity_delta: 0.,
+            angular_delta: 0.,
+            survivors: 1,
+        };
+        let mut b = a.clone();
+        assert!(a.same_inputs(&b));
+        b.positions = Arc::new(a.positions.as_ref().clone());
+        assert!(
+            a.same_inputs(&b),
+            "independent equal NaNs retain the same input representation"
+        );
+        Arc::make_mut(&mut b.positions)[0][1] = -0.;
+        assert!(!a.same_inputs(&b), "signed zero is a representation change");
+        b = a.clone();
+        b.velocity_delta = 1.;
+        assert!(!a.same_inputs(&b));
+        b = a.clone();
+        b.prototypes[0][3][0] = 2.;
+        assert!(!a.same_inputs(&b));
+        b = a.clone();
+        b.ids = Some(Arc::new(vec![8]));
+        assert!(!a.same_inputs(&b));
+    }
+}
 fn vectors(
     prim: &crate::PrimView<'_>,
     name: &str,
@@ -433,6 +477,49 @@ pub struct InstanceTransforms {
     survivors: usize,
 }
 impl InstanceTransforms {
+    /// Whether both snapshots retain identical transform inputs and policies.
+    ///
+    /// This compares input representations, not computed matrices. Shared array
+    /// owners skip element comparison; independent owners compare their contents.
+    /// Float bits distinguish signed zero and preserve identical NaNs. No
+    /// matrices are evaluated and no output buffer is allocated. Hosts can use
+    /// this to suppress unchanged input handoffs after conservative invalidation.
+    #[must_use]
+    pub fn same_inputs(&self, other: &Self) -> bool {
+        fn shared<T>(a: &Arc<Vec<T>>, b: &Arc<Vec<T>>, same: impl Fn(&T, &T) -> bool) -> bool {
+            Arc::ptr_eq(a, b)
+                || (a.len() == b.len() && a.iter().zip(b.iter()).all(|(a, b)| same(a, b)))
+        }
+        fn bits<const N: usize>(a: &[f32; N], b: &[f32; N]) -> bool {
+            a.iter().zip(b).all(|(a, b)| a.to_bits() == b.to_bits())
+        }
+        shared(&self.indices, &other.indices, PartialEq::eq)
+            && shared(&self.positions, &other.positions, bits)
+            && shared(&self.rotations, &other.rotations, bits)
+            && shared(&self.scales, &other.scales, bits)
+            && shared(&self.velocities, &other.velocities, bits)
+            && shared(&self.accelerations, &other.accelerations, bits)
+            && shared(&self.angular, &other.angular, bits)
+            && match (&self.ids, &other.ids) {
+                (None, None) => true,
+                (Some(a), Some(b)) => shared(a, b, PartialEq::eq),
+                _ => false,
+            }
+            && self.mask == other.mask
+            && self.prototypes.len() == other.prototypes.len()
+            && self
+                .prototypes
+                .iter()
+                .flatten()
+                .flatten()
+                .zip(other.prototypes.iter().flatten().flatten())
+                .all(|(a, b)| a.to_bits() == b.to_bits())
+            && self.include_prototype_transform == other.include_prototype_transform
+            && self.velocity_delta.to_bits() == other.velocity_delta.to_bits()
+            && self.angular_delta.to_bits() == other.angular_delta.to_bits()
+            && self.survivors == other.survivors
+    }
+
     /// Number of transforms after mask compaction.
     #[must_use]
     pub fn len(&self) -> usize {

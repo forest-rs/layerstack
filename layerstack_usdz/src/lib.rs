@@ -19,7 +19,10 @@
 //! - First file is the root USD layer
 //!
 //! The reader operates on a byte slice (`&[u8]`), making it suitable for
-//! both file reads and memory-mapped I/O.
+//! both file reads and memory-mapped I/O. [`read_usdz_with_options`] accepts
+//! a per-member USDC decoder budget. With `std`, retained array loading defers
+//! numeric payload decoding; each USDC member owns its encoded byte copy and
+//! cache, exposed through [`UsdzResult::retained_values`].
 //!
 //! # Pipeline
 //!
@@ -56,6 +59,42 @@ pub use diagnostic::{ImportDiagnostic, MemberDiagnostic};
 pub use error::{LayerReadError, UsdzError};
 pub use writer::{PackageFile, UsdzWriteError, write_usdz};
 
+/// How USDC numeric values are loaded within a package or stage document.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum UsdcArrayLoading {
+    /// Decode numeric arrays during import.
+    #[default]
+    Eager,
+    /// Retain immutable encoded bytes and decode numeric arrays on demand.
+    /// Structural validation occurs during import; payload failures occur during
+    /// checked reads. Each package member retains a separate byte copy/cache.
+    #[cfg(feature = "std")]
+    Retained,
+}
+/// Per-USDC-file decoding policy, including package members.
+///
+/// The budget covers structural import plus numeric elements and decode work;
+/// it is measured in decoder units, not memory bytes. It applies independently
+/// to each file. It does not limit transport bytes, USDA parsing or scene-wide
+/// memory. The host remains responsible for those budgets.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct UsdcReadOptions {
+    /// Whether arrays decode immediately or retain their encoded storage.
+    pub arrays: UsdcArrayLoading,
+    /// Explicit decoder-unit limit; `None` uses the input-derived default.
+    pub decode_budget: Option<u64>,
+}
+impl UsdcReadOptions {
+    /// Creates a fresh budget for one file, shared with future retained reads.
+    #[must_use]
+    pub fn budget(&self, input_bytes: usize) -> layerstack_usdc::DecodeBudget {
+        self.decode_budget.map_or_else(
+            || layerstack_usdc::DecodeBudget::for_input(input_bytes),
+            layerstack_usdc::DecodeBudget::with_limit,
+        )
+    }
+}
+
 /// The result of successfully reading a USDZ package.
 #[derive(Clone, Debug)]
 pub struct UsdzResult {
@@ -78,6 +117,10 @@ pub struct UsdzResult {
     /// available here for unloaded members or layers decoded by the outer
     /// resolver, which owns its own diagnostic policy.
     pub diagnostics: Vec<MemberDiagnostic>,
+    /// Inspection handles for retained USDC package members, including the root.
+    /// Handles survive layer clones; dropping them does not invalidate numeric values.
+    #[cfg(feature = "std")]
+    pub retained_values: BTreeMap<LayerId, layerstack_usdc::RetainedValues>,
 }
 
 impl UsdzResult {
@@ -185,6 +228,29 @@ pub fn read_usdz_with_members(
     resolver: &mut dyn AssetResolver,
     members: &[&str],
 ) -> Result<UsdzResult, UsdzError> {
+    read_usdz_with_options(
+        data,
+        layer_id,
+        tokens,
+        paths,
+        resolver,
+        members,
+        UsdcReadOptions::default(),
+    )
+}
+/// Reads reachable and explicitly selected members with a per-file USDC policy.
+/// CRC and structural validation remain eager. Retained payloads must be read
+/// through checked queries to distinguish decode failure from missing data.
+/// AOUSD Core §9.7 and §16.4 (package members and format dispatch).
+pub fn read_usdz_with_options(
+    data: &[u8],
+    layer_id: LayerId,
+    tokens: &mut TokenInterner,
+    paths: &mut PathInterner,
+    resolver: &mut dyn AssetResolver,
+    members: &[&str],
+    options: UsdcReadOptions,
+) -> Result<UsdzResult, UsdzError> {
     // 1. Parse ZIP archive with USDZ constraint validation.
     let archive = zip::ZipArchive::parse(data)?;
 
@@ -214,8 +280,13 @@ pub fn read_usdz_with_members(
     // 4. Create a package-scoped resolver, which knows the root layer as
     //    the member it anchors to. The outer resolver allocates the layer
     //    IDs of the other members.
-    let mut usdz_resolver =
-        resolver::UsdzResolver::new(&archive, root_entry.name.clone(), layer_id, resolver);
+    let mut usdz_resolver = resolver::UsdzResolver::new(
+        &archive,
+        root_entry.name.clone(),
+        layer_id,
+        resolver,
+        options,
+    );
 
     // 5. Parse the root layer.
     let root_data = archive.entry_data(root_entry);
@@ -226,6 +297,7 @@ pub fn read_usdz_with_members(
         tokens,
         paths,
         &mut usdz_resolver,
+        options,
     )?;
 
     for member in members {
@@ -248,11 +320,21 @@ pub fn read_usdz_with_members(
         return Err(UsdzError::DuplicateLayerId { id: layer.id });
     }
 
+    #[cfg(feature = "std")]
+    let retained_values = {
+        let mut values = loaded.retained_values;
+        if let Some(handle) = parsed.retained_values {
+            values.insert(layer_id, handle);
+        }
+        values
+    };
     Ok(UsdzResult {
         layer: parsed.layer,
         resolved_layers,
         member_paths,
         diagnostics,
+        #[cfg(feature = "std")]
+        retained_values,
     })
 }
 

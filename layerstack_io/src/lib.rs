@@ -28,6 +28,14 @@
 //! prebuilt registry's token domain. [`Storage`] supports transports without `std`.
 //! [`StageDocument::parts_mut`] provides explicit access for atomic authoring;
 //! saving, exporting and reloading remain separate operations.
+//!
+//! [`StageDocument::open_with`] and [`StageDocument::open_in_with`] accept
+//! [`LoadOptions`] for eager or retained USDC arrays and a per-file decoder
+//! budget. These options also govern dependencies, package members and reloads.
+//! With `std`, [`StageDocument::retained_values`] exposes decoder statistics.
+//! Retained import still reads complete encoded files; package members each
+//! retain an independent byte copy. Numeric payload failures surface through
+//! checked attribute reads and [`IoErrorKind::Decode`] during save/export.
 #![no_std]
 extern crate alloc;
 #[cfg(feature = "std")]
@@ -44,6 +52,7 @@ use layerstack::{
     PathInterner, ResolvedAsset, StageOptions, TokenInterner,
 };
 use layerstack_usdz::{ImportDiagnostic, MemberDiagnostic};
+pub use layerstack_usdz::{UsdcArrayLoading, UsdcReadOptions};
 
 #[cfg(feature = "std")]
 mod filesystem;
@@ -61,6 +70,8 @@ pub enum IoErrorKind {
     Rejected,
     /// The requested format is unsupported.
     Unsupported,
+    /// A retained numeric source failed to decode during save/export.
+    Decode,
     /// Package source layers cannot be saved individually.
     ReadOnly,
     /// Reload would overwrite dirty authored state under preserve policy.
@@ -77,6 +88,8 @@ pub struct IoError {
     pub kind: IoErrorKind,
     /// Human-readable evidence from storage or the format implementation.
     pub message: String,
+    /// Original retained-array failure when `kind` is [`IoErrorKind::Decode`].
+    pub array_read_error: Option<layerstack::ArrayReadError>,
 }
 impl IoError {
     /// Constructs an error for a host storage implementation.
@@ -84,6 +97,7 @@ impl IoError {
         Self {
             kind,
             message: message.into(),
+            array_read_error: None,
         }
     }
 }
@@ -92,7 +106,13 @@ impl core::fmt::Display for IoError {
         f.write_str(&self.message)
     }
 }
-impl core::error::Error for IoError {}
+impl core::error::Error for IoError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        self.array_read_error
+            .as_ref()
+            .map(|error| error as &dyn core::error::Error)
+    }
+}
 
 /// Host-owned identifier policy and byte transport, usable without `std`.
 /// `identify` must return stable canonical identifiers within this document.
@@ -114,6 +134,16 @@ pub enum ImportPolicy {
     Strict,
     /// Preserve available content and retain all recovery diagnostics.
     AllowRecovery,
+}
+/// Document import policy applied consistently to root, dependencies and package members.
+/// Existing opening methods use strict, eager import. Set these options explicitly
+/// to defer USDC numeric decoding; checked reads then report payload errors later.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct LoadOptions {
+    /// Whether recovery diagnostics reject an import.
+    pub import_policy: ImportPolicy,
+    /// Per-file USDC array loading and decoder work budget.
+    pub usdc: UsdcReadOptions,
 }
 /// Explicit protection against overwriting unsaved authored state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -196,6 +226,8 @@ struct Catalog {
     next: u64,
     package_bytes: BTreeMap<LayerId, Arc<[u8]>>,
     package_roots: BTreeMap<LayerId, String>,
+    #[cfg(feature = "std")]
+    retained_values: BTreeMap<LayerId, layerstack_usdc::RetainedValues>,
 }
 impl Catalog {
     fn allocate(&mut self) -> Result<LayerId, IoError> {
@@ -220,6 +252,7 @@ pub struct StageDocument<B> {
     storage: B,
     catalog: Catalog,
     import_policy: ImportPolicy,
+    usdc_options: UsdcReadOptions,
     load_report: LoadReport,
 }
 impl<B: core::fmt::Debug> core::fmt::Debug for StageDocument<B> {
@@ -228,6 +261,7 @@ impl<B: core::fmt::Debug> core::fmt::Debug for StageDocument<B> {
             .field("storage", &self.storage)
             .field("catalog", &self.catalog)
             .field("import_policy", &self.import_policy)
+            .field("usdc_options", &self.usdc_options)
             .field("load_report", &self.load_report)
             .finish_non_exhaustive()
     }
@@ -276,34 +310,60 @@ impl<B: Storage> StageDocument<B> {
             storage,
             catalog,
             import_policy: ImportPolicy::Strict,
+            usdc_options: UsdcReadOptions::default(),
             load_report: LoadReport::default(),
         })
     }
     /// Opens a stage with strict import into a new store.
     pub fn open(storage: B, asset: &str, options: StageOptions) -> Result<Self, IoError> {
-        Self::open_in(
-            storage,
-            InMemoryStore::default(),
-            asset,
-            options,
-            ImportPolicy::Strict,
-        )
+        Self::open_with(storage, asset, options, LoadOptions::default())
+    }
+    /// Opens with explicit root/dependency import and per-file USDC policies.
+    pub fn open_with(
+        storage: B,
+        asset: &str,
+        options: StageOptions,
+        loading: LoadOptions,
+    ) -> Result<Self, IoError> {
+        Self::open_in_with(storage, InMemoryStore::default(), asset, options, loading)
     }
     /// Opens into an existing store, allowing a host-owned session layer and
     /// schema registry. Existing identifiers remain reserved. Import is staged;
     /// failed reads never publish partially imported layers to a live stage.
     pub fn open_in(
-        mut storage: B,
-        mut store: InMemoryStore,
+        storage: B,
+        store: InMemoryStore,
         asset: &str,
         options: StageOptions,
         import_policy: ImportPolicy,
     ) -> Result<Self, IoError> {
+        Self::open_in_with(
+            storage,
+            store,
+            asset,
+            options,
+            LoadOptions {
+                import_policy,
+                ..Default::default()
+            },
+        )
+    }
+    /// Opens with host-owned schemas/session layers and an explicit load policy.
+    /// Registry tokens must belong to `store`, as for [`Self::open_in`]. Failed
+    /// structural imports publish no layers; retained payloads are checked on demand.
+    pub fn open_in_with(
+        mut storage: B,
+        mut store: InMemoryStore,
+        asset: &str,
+        options: StageOptions,
+        loading: LoadOptions,
+    ) -> Result<Self, IoError> {
+        let import_policy = loading.import_policy;
         let mut catalog = Catalog {
             reserved: store.layers.keys().copied().collect(),
             ..Default::default()
         };
-        let mut reader = Reader::new(&mut storage, &mut catalog, import_policy);
+        let mut reader = Reader::new(&mut storage, &mut catalog, import_policy, loading.usdc);
         let resolved = reader.load(asset, None, &mut store.tokens, &mut store.paths)?;
         if let Some(layer) = resolved.layer {
             reader.pending.push(layer);
@@ -323,6 +383,7 @@ impl<B: Storage> StageDocument<B> {
             storage,
             catalog,
             import_policy,
+            usdc_options: loading.usdc,
             load_report: report,
         })
     }
@@ -336,7 +397,12 @@ impl<B: Storage> StageDocument<B> {
     ) -> Result<(LayerId, LoadReport), IoError> {
         let mut catalog = self.catalog.clone();
         catalog.reserved.extend(self.store.layers.keys().copied());
-        let mut reader = Reader::new(&mut self.storage, &mut catalog, self.import_policy);
+        let mut reader = Reader::new(
+            &mut self.storage,
+            &mut catalog,
+            self.import_policy,
+            self.usdc_options,
+        );
         let resolved = reader.load(asset, anchor, &mut self.store.tokens, &mut self.store.paths)?;
         let id = resolved.layer_id;
         if let Some(anchor) = anchor {
@@ -356,6 +422,21 @@ impl<B: Storage> StageDocument<B> {
         self.catalog = catalog;
         self.synchronize();
         Ok((id, report))
+    }
+    /// The policy used for future explicit loads and reloads.
+    pub fn load_options(&self) -> LoadOptions {
+        LoadOptions {
+            import_policy: self.import_policy,
+            usdc: self.usdc_options,
+        }
+    }
+    /// Cache inspection for a retained USDC layer without decoding arrays.
+    /// `None` means an eager/non-USDC or unknown source. Cloned handles can inspect
+    /// old snapshots after reload. Footprints exclude structural and composed data;
+    /// demand-all queries retain encoded bytes plus decoded buffers.
+    #[cfg(feature = "std")]
+    pub fn retained_values(&self, layer: LayerId) -> Option<&layerstack_usdc::RetainedValues> {
+        self.catalog.retained_values.get(&layer)
     }
     /// Authored layers and the document's shared interners.
     pub fn store(&self) -> &InMemoryStore {
@@ -490,7 +571,13 @@ impl<B: Storage> StageDocument<B> {
         let identifier = self.storage.identify(target, None)?;
         let bytes = plan
             .write_usdz(&self.store.tokens, &self.store.paths)
-            .map_err(|e| IoError::new(IoErrorKind::Unsupported, e.to_string()))?;
+            .map_err(|error| match error {
+                layerstack_usdz::localize::LocalizationError::Usda(error)
+                | layerstack_usdz::localize::LocalizationError::Usdc(
+                    layerstack_usdc::writer::UsdcWriteError::Save(error),
+                ) => save_error(error),
+                other => IoError::new(IoErrorKind::Unsupported, other.to_string()),
+            })?;
         self.storage.write(&identifier, &bytes)
     }
     /// Reloads resident used sources, excluding anonymous/session layers.
@@ -550,6 +637,8 @@ impl<B: Storage> StageDocument<B> {
         catalog.reserved.extend(self.store.layers.keys().copied());
         for id in &selected {
             catalog.states.remove(id);
+            #[cfg(feature = "std")]
+            catalog.retained_values.remove(id);
         }
         for root in &roots {
             let outer = catalog.sources[root].identifier.clone();
@@ -557,7 +646,12 @@ impl<B: Storage> StageDocument<B> {
                 .ids
                 .retain(|identifier, id| *id != *root || *identifier == outer);
         }
-        let mut reader = Reader::new(&mut self.storage, &mut catalog, self.import_policy);
+        let mut reader = Reader::new(
+            &mut self.storage,
+            &mut catalog,
+            self.import_policy,
+            self.usdc_options,
+        );
         for id in roots {
             let identifier = reader.catalog.sources[&id].identifier.clone();
             let result = reader.load(
@@ -591,11 +685,14 @@ impl<B: Storage> StageDocument<B> {
             Format::Usda => {
                 layerstack_usda::save::save_usda(layer, &self.store.tokens, &self.store.paths)
                     .map(String::into_bytes)
-                    .map_err(|e| IoError::new(IoErrorKind::Unsupported, e.to_string()))
+                    .map_err(save_error)
             }
             Format::Usdc => {
                 layerstack_usdc::writer::save_layer(layer, &self.store.tokens, &self.store.paths)
-                    .map_err(|e| IoError::new(IoErrorKind::Unsupported, e.to_string()))
+                    .map_err(|error| match error {
+                        layerstack_usdc::writer::UsdcWriteError::Save(error) => save_error(error),
+                        error => IoError::new(IoErrorKind::Unsupported, error.to_string()),
+                    })
             }
             Format::Usdz => Err(IoError::new(
                 IoErrorKind::Unsupported,
@@ -624,17 +721,24 @@ struct Reader<'a, B> {
     storage: &'a mut B,
     catalog: &'a mut Catalog,
     policy: ImportPolicy,
+    usdc_options: UsdcReadOptions,
     pending: Vec<Layer>,
     diagnostics: Vec<MemberDiagnostic>,
     bindings: BTreeMap<(LayerId, String), LayerId>,
     failures: Vec<AssetFailure>,
 }
 impl<'a, B: Storage> Reader<'a, B> {
-    fn new(storage: &'a mut B, catalog: &'a mut Catalog, policy: ImportPolicy) -> Self {
+    fn new(
+        storage: &'a mut B,
+        catalog: &'a mut Catalog,
+        policy: ImportPolicy,
+        usdc_options: UsdcReadOptions,
+    ) -> Self {
         Self {
             storage,
             catalog,
             policy,
+            usdc_options,
             pending: Vec::new(),
             diagnostics: Vec::new(),
             bindings: BTreeMap::new(),
@@ -798,8 +902,36 @@ impl<'a, B: Storage> Reader<'a, B> {
                 result.emitted.layer
             }
             Format::Usdc => {
-                let result = layerstack_usdc::read_usdc(data, id, tokens, paths, self)
-                    .map_err(|e| IoError::new(IoErrorKind::Rejected, e.to_string()))?;
+                let mut budget = self.usdc_options.budget(data.len());
+                #[cfg(feature = "std")]
+                let result = match self.usdc_options.arrays {
+                    UsdcArrayLoading::Retained => {
+                        let result = layerstack_usdc::read_usdc_lazy_within(
+                            Arc::from(data),
+                            id,
+                            tokens,
+                            paths,
+                            self,
+                            budget,
+                        )
+                        .map_err(|e| IoError::new(IoErrorKind::Rejected, e.to_string()))?;
+                        self.catalog.retained_values.insert(id, result.values);
+                        result.assembled
+                    }
+                    UsdcArrayLoading::Eager => layerstack_usdc::read_usdc_within(
+                        data,
+                        id,
+                        tokens,
+                        paths,
+                        self,
+                        &mut budget,
+                    )
+                    .map_err(|e| IoError::new(IoErrorKind::Rejected, e.to_string()))?,
+                };
+                #[cfg(not(feature = "std"))]
+                let result =
+                    layerstack_usdc::read_usdc_within(data, id, tokens, paths, self, &mut budget)
+                        .map_err(|e| IoError::new(IoErrorKind::Rejected, e.to_string()))?;
                 self.pending.extend(result.resolved_layers);
                 self.diagnostics
                     .extend(result.diagnostics.into_iter().map(|d| MemberDiagnostic {
@@ -822,10 +954,19 @@ impl<'a, B: Storage> Reader<'a, B> {
                     })
                     .collect();
                 let selected: Vec<&str> = members.iter().map(String::as_str).collect();
-                let result = layerstack_usdz::read_usdz_with_members(
-                    data, id, tokens, paths, self, &selected,
+                let usdc_options = self.usdc_options;
+                let result = layerstack_usdz::read_usdz_with_options(
+                    data,
+                    id,
+                    tokens,
+                    paths,
+                    self,
+                    &selected,
+                    usdc_options,
                 )
                 .map_err(|e| IoError::new(IoErrorKind::Rejected, e.to_string()))?;
+                #[cfg(feature = "std")]
+                self.catalog.retained_values.extend(result.retained_values);
                 self.catalog.package_bytes.insert(id, Arc::from(data));
                 self.catalog
                     .package_roots
@@ -1110,6 +1251,18 @@ impl<B: Storage> AssetResolver for Reader<'_, B> {
         let id = self.catalog.allocate().ok()?;
         self.catalog.ids.insert(identifier, id);
         Some(id)
+    }
+}
+fn save_error(error: layerstack_usda::save::SaveError) -> IoError {
+    let message = error.to_string();
+    if let layerstack_usda::save::SaveError::ArrayRead { error, .. } = error {
+        IoError {
+            kind: IoErrorKind::Decode,
+            message,
+            array_read_error: Some(error),
+        }
+    } else {
+        IoError::new(IoErrorKind::Unsupported, message)
     }
 }
 fn asset_error(error: IoError) -> AssetResolveError {

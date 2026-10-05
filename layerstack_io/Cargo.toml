@@ -13,7 +13,7 @@ categories = ["encoding", "no-std"]
 
 [features]
 default = ["std"]
-std = []
+std = ["layerstack_usdc/std", "layerstack_usdz/std"]
 
 [dependencies]
 layerstack = { workspace = true }

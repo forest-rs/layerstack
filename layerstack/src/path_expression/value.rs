@@ -54,6 +54,14 @@ pub(crate) struct ArcMap {
     source: Vec<String>,
     target: Vec<String>,
     root_identity: bool,
+    relocates: Vec<ExpressionRelocate>,
+}
+
+/// One validated relocation in the receiving layer stack's namespace.
+#[derive(Clone, Debug)]
+struct ExpressionRelocate {
+    source: Vec<String>,
+    target: Option<Vec<String>>,
 }
 
 impl ArcMap {
@@ -63,17 +71,39 @@ impl ArcMap {
     /// specific pair's target is blocked, since that pair's inverse would
     /// not map it back. OpenUSD: `_Map` in `pxr/usd/pcp/mapFunction.cpp`.
     fn map(&self, path: &[String]) -> Option<Vec<String>> {
-        if path.starts_with(&self.source) {
-            let mut mapped = self.target.clone();
-            mapped.extend_from_slice(&path[self.source.len()..]);
-            return Some(mapped);
+        if !path.starts_with(&self.source) {
+            // Identity paths outside this arc's specific source domain are
+            // already in the receiving namespace. In particular, same-stack
+            // class and internal-reference chains must keep them unchanged.
+            return (self.root_identity
+                && (!path.starts_with(&self.target) || self.target.is_empty()))
+            .then(|| path.to_vec());
         }
-        if !self.root_identity {
+        let mut mapped = self.target.clone();
+        mapped.extend_from_slice(&path[self.source.len()..]);
+        // Relocates belong to the receiving stack's arc map. Local root
+        // opinions are already in that namespace and must not be relocated
+        // again; only opinions crossing an arc apply these pairs.
+        for relocate in &self.relocates {
+            if mapped.starts_with(&relocate.source) {
+                let mut target = relocate.target.clone()?;
+                target.extend_from_slice(&mapped[relocate.source.len()..]);
+                return Some(target);
+            }
+        }
+        // An independently authored destination has no identity preimage:
+        // its inverse would point at the relocation source instead. Paths
+        // actually mapped from a source returned above before this check.
+        // AOUSD Core §10.3.2.6.1; PcpMapFunction::_Map invertibility check.
+        if self.relocates.iter().any(|relocate| {
+            relocate
+                .target
+                .as_ref()
+                .is_some_and(|target| mapped.starts_with(target))
+        }) {
             return None;
         }
-        // The root identity matched, with no elements: the pair's target is
-        // more specific.
-        (!path.starts_with(&self.target) || self.target.is_empty()).then(|| path.to_vec())
+        Some(mapped)
     }
 }
 
@@ -195,26 +225,84 @@ fn node_maps(
     node: NodeId,
     prim_depth: usize,
 ) -> Option<Vec<ArcMap>> {
-    let mut maps = Vec::new();
-    let mut cursor = graph.node(node)?;
-    while let Some(parent_id) = cursor.parent() {
-        let parent = graph.node(parent_id)?;
-        if cursor.arc_kind() != ArcKind::Variants {
-            let below = prim_depth.checked_sub(usize::from(cursor.namespace_depth()))?;
-            let mut source = prim_names(store, cursor.site());
-            let mut target = prim_names(store, parent.site());
-            source.truncate(source.len().checked_sub(below)?);
-            target.truncate(target.len().checked_sub(below)?);
-            let root_identity =
-                matches!(cursor.arc_kind(), ArcKind::Inherits | ArcKind::Specializes)
-                    || cursor.layer_stack_identifier() == parent.layer_stack_identifier();
-            maps.push(ArcMap {
-                source,
-                target,
-                root_identity,
-            });
+    let mut chain = Vec::new();
+    let mut current = Some(node);
+    while let Some(id) = current {
+        let cursor = graph.node(id)?;
+        chain.push(cursor);
+        current = cursor.parent();
+    }
+    // A reparenting relocate can change depth. Underlying nodes see the
+    // source depth; outer nodes see the destination depth (§10.3.2.6.1).
+    let mut depths = alloc::vec![0; chain.len()];
+    let mut depth = prim_depth;
+    for (i, cursor) in chain.iter().enumerate().rev() {
+        depths[i] = depth;
+        if cursor.arc_kind() == ArcKind::Relocates
+            && let Some(parent) = chain.get(i + 1)
+        {
+            depth = (depth + prim_names(store, cursor.site()).len())
+                .checked_sub(prim_names(store, parent.site()).len())?;
         }
-        cursor = parent;
+    }
+    let mut maps = Vec::new();
+    for (i, pair) in chain.windows(2).enumerate() {
+        let (cursor, parent) = (pair[0], pair[1]);
+        if matches!(cursor.arc_kind(), ArcKind::Variants | ArcKind::Relocates) {
+            // Relocate nodes carry no opinions. Their receiving table belongs
+            // to the incoming arc's specific source-prefix branch, not a second
+            // global identity map: class arcs can also carry unrelated paths
+            // already in the receiving namespace. Keep their depth adjustment
+            // above, but apply the table exactly once on the incoming arc.
+            // AOUSD Core §10.3.2.6.1; PcpMapFunction::_Map.
+            continue;
+        }
+        let mut stack =
+            crate::LayerStack::gather_identifier(store, parent.layer_stack_identifier());
+        // Fresh-value refresh receives the full store. The graph offsets
+        // retain the actual loaded, unmuted stack selected by composition.
+        if parent
+            .layer_offset_for_layer(parent.layer_stack())
+            .is_some()
+        {
+            for i in (0..stack.layers.len()).rev() {
+                if parent.layer_offset_for_layer(stack.layers[i]).is_none() {
+                    stack.layers.remove(i);
+                    stack.offsets.remove(i);
+                    stack.chains.remove(i);
+                }
+            }
+        }
+        let table = crate::RelocationTable::compute(store, &stack, &mut Vec::new());
+        let names = |path: PathId| {
+            store
+                .paths()
+                .resolve(path)
+                .segments()
+                .iter()
+                .map(|n| store.tokens().resolve(*n).to_owned())
+                .collect()
+        };
+        let relocates = table
+            .iter()
+            .map(|r| ExpressionRelocate {
+                source: names(r.source),
+                target: r.target.map(names),
+            })
+            .collect();
+        let below = depths[i].checked_sub(usize::from(cursor.namespace_depth()))?;
+        let mut source = prim_names(store, cursor.site());
+        let mut target = prim_names(store, parent.site());
+        source.truncate(source.len().checked_sub(below)?);
+        target.truncate(target.len().checked_sub(below)?);
+        let root_identity = matches!(cursor.arc_kind(), ArcKind::Inherits | ArcKind::Specializes)
+            || cursor.layer_stack_identifier() == parent.layer_stack_identifier();
+        maps.push(ArcMap {
+            source,
+            target,
+            root_identity,
+            relocates,
+        });
     }
     Some(maps)
 }
@@ -583,6 +671,33 @@ mod tests {
         assert_eq!(compose("/X", "/B"), "/X");
     }
 
+    #[test]
+    fn relocation_destinations_have_no_independent_identity_preimage() {
+        let maps = [ArcMap {
+            source: names("/Asset"),
+            target: names("/Model"),
+            root_identity: false,
+            relocates: alloc::vec![ExpressionRelocate {
+                source: names("/Model/Child"),
+                target: Some(names("/Model/Renamed"))
+            }],
+        }];
+        for (source, expected) in [
+            ("/Asset/Child//", "/Model/Renamed//"),
+            ("/Asset/Child.size", "/Model/Renamed.size"),
+            ("%/Asset/Child:expression", "%/Model/Renamed:expression"),
+            ("/Asset/Renamed//", ""),
+            ("/Asset/Renamed.size", ""),
+            ("%/Asset/Renamed:expression", ""),
+        ] {
+            assert_eq!(
+                anchor_and_map(parse(source).unwrap(), &names("/Asset/Watch"), &maps).text(),
+                expected,
+                "{source}"
+            );
+        }
+    }
+
     /// Relative patterns anchor at the authoring prim; patterns and
     /// reference paths map through the arcs, and drop out of the domain of
     /// a map without a root identity (checked against OpenUSD 26.08).
@@ -592,6 +707,7 @@ mod tests {
             source: names("/Gear"),
             target: names("/Part"),
             root_identity: false,
+            relocates: Vec::new(),
         }];
         let map = |text: &str, anchor: &str| {
             anchor_and_map(parse(text).unwrap(), &names(anchor), &reference).text()
@@ -625,6 +741,7 @@ mod tests {
             source: names("/Local"),
             target: names("/Copy"),
             root_identity: true,
+            relocates: Vec::new(),
         }];
         let map =
             |text: &str| anchor_and_map(parse(text).unwrap(), &names("/Local"), &internal).text();
@@ -645,9 +762,11 @@ mod tests {
             source: names("/Model"),
             target: names("/Copy"),
             root_identity: false,
+            relocates: Vec::new(),
         }];
         let internal = [ArcMap {
             root_identity: true,
+            relocates: Vec::new(),
             ..external[0].clone()
         }];
         let map = |text: &str, maps: &[ArcMap]| {

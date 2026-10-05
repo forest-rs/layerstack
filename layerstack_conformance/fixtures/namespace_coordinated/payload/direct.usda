@@ -1,0 +1,7 @@
+#usda 1.0
+
+def "Direct" (
+    prepend references = @root.usda@</Model/Child>
+)
+{
+}

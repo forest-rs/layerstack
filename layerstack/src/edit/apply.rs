@@ -55,6 +55,11 @@ pub(crate) enum Raw {
         value: Option<FieldValue>,
         index: usize,
     },
+    /// Replaces layer relocates as one structural, guarded slot.
+    LayerRelocates {
+        layer: LayerId,
+        relocates: Vec<crate::Relocate>,
+    },
     LayerFields {
         layer: LayerId,
         default_prim: Option<TokenId>,
@@ -156,7 +161,8 @@ pub(crate) enum Raw {
 impl Raw {
     pub(crate) fn layer(&self) -> LayerId {
         match self {
-            Self::LayerFields { layer, .. }
+            Self::LayerRelocates { layer, .. }
+            | Self::LayerFields { layer, .. }
             | Self::LayerMetadata { layer, .. }
             | Self::PrimSlots { layer, .. }
             | Self::Child { layer, .. }
@@ -174,7 +180,9 @@ impl Raw {
     /// Structural scopes preserve child edits without widening to all siblings.
     fn change_path(&self, store: &dyn LayerStore) -> Option<PathId> {
         match self {
-            Self::LayerFields { .. } | Self::LayerMetadata { .. } => None,
+            Self::LayerRelocates { .. } | Self::LayerFields { .. } | Self::LayerMetadata { .. } => {
+                None
+            }
             Self::PrimSlots { path, .. } => Some(*path),
             Self::Child { parent, name, .. } => {
                 let path = store.paths().resolve(parent.prim_path()).join(&[*name]);
@@ -195,7 +203,8 @@ impl Raw {
     /// `None` for a step that changes namespace or composition arcs.
     fn opinion_site(&self) -> Option<PathId> {
         match self {
-            Self::LayerFields { .. }
+            Self::LayerRelocates { .. }
+            | Self::LayerFields { .. }
             | Self::LayerMetadata { .. }
             | Self::PrimSlots { .. }
             | Self::Child { .. }
@@ -228,6 +237,13 @@ impl Raw {
                     ..
                 },
             ) => (layer, key) == (l, k) && value.same(v),
+            (
+                Self::LayerRelocates { layer, relocates },
+                Self::LayerRelocates {
+                    layer: l,
+                    relocates: r,
+                },
+            ) => layer == l && relocates == r,
             (
                 Self::LayerFields {
                     layer,
@@ -408,7 +424,7 @@ impl Raw {
                 ),
                 Slot::Metadata(*key),
             ),
-            Self::LayerFields { .. } => (
+            Self::LayerRelocates { .. } | Self::LayerFields { .. } => (
                 SpecPath::from_prim_path(
                     paths.lookup(&crate::Path::root()).expect("interned root"),
                     paths,
@@ -752,7 +768,8 @@ pub(crate) fn apply(
                     paths.push(*path);
                 }
             }
-            Raw::LayerFields { .. }
+            Raw::LayerRelocates { .. }
+            | Raw::LayerFields { .. }
             | Raw::LayerMetadata { .. }
             | Raw::Variant { .. }
             | Raw::Selection { .. }
@@ -1711,6 +1728,13 @@ fn apply_raw(store: &mut dyn LayerStore, step: &Raw) -> Result<Raw, Rejection> {
                 key: *key,
                 value: previous,
                 index: old_index,
+            })
+        }
+        Raw::LayerRelocates { relocates, .. } => {
+            let found = store.layer_mut(id).ok_or(Rejection::NoSuchLayer(id))?;
+            Ok(Raw::LayerRelocates {
+                layer: id,
+                relocates: core::mem::replace(&mut found.relocates, relocates.clone()),
             })
         }
         Raw::LayerFields {

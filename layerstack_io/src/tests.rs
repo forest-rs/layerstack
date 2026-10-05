@@ -34,6 +34,19 @@ impl Storage for Memory {
             .cloned()
             .ok_or_else(|| IoError::new(IoErrorKind::NotFound, format!("missing {identifier}")))
     }
+    fn read_bounded(&mut self, identifier: &str, max_bytes: u64) -> Result<Vec<u8>, IoError> {
+        let bytes = self
+            .files
+            .get(identifier)
+            .ok_or_else(|| IoError::new(IoErrorKind::NotFound, identifier))?;
+        if bytes.len() as u64 > max_bytes {
+            return Err(IoError::new(
+                IoErrorKind::Rejected,
+                "resource exceeds encoded byte budget",
+            ));
+        }
+        self.read(identifier)
+    }
     fn write(&mut self, identifier: &str, bytes: &[u8]) -> Result<(), IoError> {
         if self.fail_write {
             return Err(IoError::new(IoErrorKind::Storage, "injected write failure"));
@@ -1302,3 +1315,86 @@ fn forgetting_a_candidate_leaves_the_published_document_usable() {
     assert_eq!(value(&doc), Value::Int(2));
     assert_eq!(doc.save().saved, [root]);
 }
+
+#[test]
+fn bounded_resources_reject_before_storage_or_member_payload_copies() {
+    let package = layerstack_usdz::write_usdz(&[
+        layerstack_usdz::PackageFile::new("root.usda", b"#usda 1.0"),
+        layerstack_usdz::PackageFile::new("image.png", &[1; 32]),
+    ])
+    .unwrap();
+    let mut memory = Memory::default();
+    memory.files.insert("scene.usdz".into(), package);
+    memory.files.insert("loose.png".into(), vec![2; 32]);
+    let mut doc = StageDocument::open(memory, "scene.usdz", StageOptions::default()).unwrap();
+    doc.storage.reads.clear();
+    let limits = AssetReadLimits {
+        bytes: 4,
+        package_bytes: 4096,
+    };
+    let root = doc.stage.stage().root_layer().unwrap();
+    assert!(
+        doc.read_asset_bytes_bounded("./image.png", Some(root), limits)
+            .is_err()
+    );
+    assert!(
+        doc.read_asset_bytes_bounded("loose.png", None, limits)
+            .is_err()
+    );
+    assert!(
+        doc.storage.reads.is_empty(),
+        "oversized resource payloads are not read/copied"
+    );
+    let mut candidate = doc
+        .prepare_reload_root(ReloadPolicy::PreserveDirty)
+        .unwrap();
+    assert!(
+        candidate
+            .read_asset_bytes_bounded("./image.png", Some(root), limits)
+            .is_err()
+    );
+    drop(candidate);
+    let limits = AssetReadLimits {
+        bytes: 32,
+        ..limits
+    };
+    assert_eq!(
+        doc.read_asset_bytes_bounded("./image.png", Some(root), limits)
+            .unwrap()
+            .bytes
+            .as_ref(),
+        &[1; 32]
+    );
+}
+
+#[test]
+fn bounded_reads_never_fall_back_to_a_transport_without_limit_support() {
+    struct UnboundedOnly;
+    impl Storage for UnboundedOnly {
+        fn identify(&self, asset: &str, _: Option<&str>) -> Result<String, IoError> {
+            Ok(asset.into())
+        }
+        fn read(&mut self, identifier: &str) -> Result<Vec<u8>, IoError> {
+            assert_eq!(
+                identifier, "root.usda",
+                "a resource must never reach unbounded transport"
+            );
+            Ok(b"#usda 1.0".to_vec())
+        }
+        fn write(&mut self, _: &str, _: &[u8]) -> Result<(), IoError> {
+            Ok(())
+        }
+    }
+    let mut doc = StageDocument::open(UnboundedOnly, "root.usda", StageOptions::default()).unwrap();
+    let limits = AssetReadLimits {
+        bytes: 4,
+        package_bytes: 4,
+    };
+    assert_eq!(
+        doc.read_asset_bytes_bounded("huge.png", None, limits)
+            .unwrap_err()
+            .kind,
+        IoErrorKind::Unsupported
+    );
+}
+

@@ -55,7 +55,14 @@ supported subsets; packaging does not expand their format coverage.
 ## Features and limits
 
 - Rust **1.89** or later; `no_std` with `alloc` and a global allocator.
-- No default features. The optional `std` feature currently adds no behavior.
+- No default features. The optional `std` feature enables retained USDC numeric
+  arrays through `read_usdz_with_options` and `UsdcArrayLoading::Retained`.
+  `UsdzResult::retained_values` exposes a cache/statistics handle for each loaded
+  USDC member. Members retain separate encoded byte copies. Numeric failures
+  appear during checked reads; structural validation still occurs on import.
+- `UsdcReadOptions::decode_budget` limits decoder work independently per USDC
+  file, including subsequent retained reads. It does not limit archive size,
+  USDA parsing or total scene memory.
 - Uncompressed, unencrypted 32-bit ZIP only; no Zip64.
 - The writer accepts USD layers and supported image/audio extensions, not nested
   USDZ packages. See the [writer API](https://docs.rs/layerstack_usdz/latest/layerstack_usdz/writer/index.html)

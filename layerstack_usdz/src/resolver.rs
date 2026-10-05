@@ -71,6 +71,9 @@ pub(crate) struct UsdzResolver<'a> {
     /// Resolves paths outside the package, and allocates the layer IDs of
     /// members, so that they share one ID space with the layers it loads.
     outer: &'a mut dyn AssetResolver,
+    options: crate::UsdcReadOptions,
+    #[cfg(feature = "std")]
+    retained_values: BTreeMap<LayerId, layerstack_usdc::RetainedValues>,
 }
 
 impl<'a> UsdzResolver<'a> {
@@ -82,6 +85,7 @@ impl<'a> UsdzResolver<'a> {
         root_member: Arc<str>,
         root: LayerId,
         outer: &'a mut dyn AssetResolver,
+        options: crate::UsdcReadOptions,
     ) -> Self {
         let distinct_member = outer
             .existing_package_layer_id(root, &root_member)
@@ -99,6 +103,9 @@ impl<'a> UsdzResolver<'a> {
             failure: None,
             diagnostics: Vec::new(),
             outer,
+            options,
+            #[cfg(feature = "std")]
+            retained_values: BTreeMap::new(),
         }
     }
 
@@ -138,6 +145,8 @@ impl<'a> UsdzResolver<'a> {
                 descendants: self.descendants,
                 member_paths: self.member_paths,
                 diagnostics: self.diagnostics,
+                #[cfg(feature = "std")]
+                retained_values: self.retained_values,
             }),
         }
     }
@@ -177,7 +186,8 @@ impl<'a> UsdzResolver<'a> {
         self.by_member.insert(name.clone(), layer_id);
         self.member_paths.insert(layer_id, name.clone());
 
-        let parsed = match parse_layer_data(data, &name, layer_id, tokens, paths, self) {
+        let options = self.options;
+        let parsed = match parse_layer_data(data, &name, layer_id, tokens, paths, self, options) {
             Ok(parsed) => parsed,
             Err(e) => {
                 let message = Arc::from(alloc::format!("{e}"));
@@ -191,6 +201,10 @@ impl<'a> UsdzResolver<'a> {
 
         // The layer goes back to the parser that asked for it; the layers
         // its own parser resolved have no other way back to the caller.
+        #[cfg(feature = "std")]
+        if let Some(handle) = parsed.retained_values {
+            self.retained_values.insert(layer_id, handle);
+        }
         self.descendants.extend(parsed.resolved_layers);
         self.diagnostics.extend(parsed.diagnostics);
 
@@ -212,6 +226,8 @@ pub(crate) struct Loaded {
     pub(crate) member_paths: BTreeMap<LayerId, Arc<str>>,
     /// Diagnostics retained from each member parsed by the resolver.
     pub(crate) diagnostics: Vec<MemberDiagnostic>,
+    #[cfg(feature = "std")]
+    pub(crate) retained_values: BTreeMap<LayerId, layerstack_usdc::RetainedValues>,
 }
 
 impl AssetResolver for UsdzResolver<'_> {
@@ -318,6 +334,8 @@ pub(crate) struct ParsedLayer {
     pub(crate) resolved_layers: Vec<Layer>,
     /// Diagnostics reported by this layer's format pipeline.
     pub(crate) diagnostics: Vec<MemberDiagnostic>,
+    #[cfg(feature = "std")]
+    pub(crate) retained_values: Option<layerstack_usdc::RetainedValues>,
 }
 
 /// Parses a USD layer from raw bytes, dispatching by extension and magic.
@@ -328,16 +346,17 @@ pub(crate) fn parse_layer_data(
     tokens: &mut TokenInterner,
     paths: &mut PathInterner,
     resolver: &mut dyn AssetResolver,
+    options: crate::UsdcReadOptions,
 ) -> Result<ParsedLayer, UsdzError> {
     let ext = name.rsplit('.').next().unwrap_or("");
 
     match ext {
-        "usdc" => parse_usdc(data, name, layer_id, tokens, paths, resolver),
+        "usdc" => parse_usdc(data, name, layer_id, tokens, paths, resolver, options),
         "usda" => parse_usda(data, name, layer_id, tokens, paths, resolver),
         "usd" => {
             // Probe magic bytes to determine format.
             if data.len() >= 8 && &data[..8] == USDC_MAGIC {
-                parse_usdc(data, name, layer_id, tokens, paths, resolver)
+                parse_usdc(data, name, layer_id, tokens, paths, resolver, options)
             } else {
                 parse_usda(data, name, layer_id, tokens, paths, resolver)
             }
@@ -358,16 +377,41 @@ fn parse_usdc(
     tokens: &mut TokenInterner,
     paths: &mut PathInterner,
     resolver: &mut dyn AssetResolver,
+    options: crate::UsdcReadOptions,
 ) -> Result<ParsedLayer, UsdzError> {
-    let result =
-        layerstack_usdc::read_usdc(data, layer_id, tokens, paths, resolver).map_err(|e| {
-            UsdzError::LayerRead {
-                member: Arc::from(name),
+    let mut budget = options.budget(data.len());
+    #[cfg(feature = "std")]
+    let (result, retained_values) = match options.arrays {
+        crate::UsdcArrayLoading::Retained => {
+            let result = layerstack_usdc::read_usdc_lazy_within(
+                Arc::from(data),
                 layer_id,
-                cause: LayerReadError::Usdc(e),
+                tokens,
+                paths,
+                resolver,
+                budget,
+            );
+            match result {
+                Ok(result) => (Ok(result.assembled), Some(result.values)),
+                Err(error) => (Err(error), None),
             }
-        })?;
+        }
+        crate::UsdcArrayLoading::Eager => (
+            layerstack_usdc::read_usdc_within(data, layer_id, tokens, paths, resolver, &mut budget),
+            None,
+        ),
+    };
+    #[cfg(not(feature = "std"))]
+    let result =
+        layerstack_usdc::read_usdc_within(data, layer_id, tokens, paths, resolver, &mut budget);
+    let result = result.map_err(|cause| UsdzError::LayerRead {
+        member: Arc::from(name),
+        layer_id,
+        cause: LayerReadError::Usdc(cause),
+    })?;
     Ok(ParsedLayer {
+        #[cfg(feature = "std")]
+        retained_values,
         layer: result.layer,
         resolved_layers: result.resolved_layers,
         diagnostics: member_diagnostics(
@@ -399,6 +443,8 @@ fn parse_usda(
     let result = layerstack_usda::read_usda(source, layer_id, tokens, paths, resolver);
     let emit_result = result.emitted;
     Ok(ParsedLayer {
+        #[cfg(feature = "std")]
+        retained_values: None,
         layer: emit_result.layer,
         resolved_layers: emit_result.resolved_layers,
         // Keep every phase's evidence. Successful recovery is not a clean

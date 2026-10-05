@@ -48,6 +48,16 @@ a filesystem dependency example. Backends implement three operations:
 package-relative resolution, expression-asset discovery and source tracking
 stay in this crate.
 
+For large USDC scenes, `StageDocument::open_with` or `open_in_with` accepts
+`LoadOptions` with `UsdcArrayLoading::Retained` and an optional per-file decoder
+budget. The policy also applies to dependencies, package members and reloads.
+`retained_values(layer_id).stats()` exposes decode attempts, failures and work
+remaining. Checked attribute reads preserve deferred failures; save/export
+reports them as `IoErrorKind::Decode` with the original `array_read_error`.
+Encoded files are still read completely, and each package member retains its
+own byte copy. Decoder units are not memory bytes or a scene-wide memory limit.
+Run `cargo run -p layerstack_examples --bin lazy_io` for a complete example.
+
 Value-clip requests remain explicit: inspect `Stage::clip_asset_requests`, then
 use `StageDocument::load_asset` with each request's authoring layer. The host can
 schedule those reads independently of rendering. Other retained clients over

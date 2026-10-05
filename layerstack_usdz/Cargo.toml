@@ -13,7 +13,7 @@ categories = ["parser-implementations"]
 
 [features]
 default = []
-std = []
+std = ["layerstack_usdc/std"]
 
 [dependencies]
 layerstack = { workspace = true }

@@ -41,6 +41,310 @@ impl Storage for Memory {
         Ok(())
     }
 }
+
+fn numeric_usdc() -> Vec<u8> {
+    let points = (0..2048)
+        .map(|i| format!("({i}, 0, 0)"))
+        .collect::<Vec<_>>()
+        .join(",");
+    let source = format!("#usda 1.0\ndef Mesh \"Mesh\" {{ point3f[] points = [{points}] }}");
+    let mut document = StageDocument::open(
+        Memory::with(&[("mesh.usda", &source)]),
+        "mesh.usda",
+        StageOptions::default(),
+    )
+    .unwrap();
+    let root = document.stage().stage().root_layer().unwrap();
+    document.export_layer(root, "mesh.usdc").unwrap();
+    document.storage_mut().files.remove("mesh.usdc").unwrap()
+}
+
+#[cfg(feature = "std")]
+fn retained_options() -> LoadOptions {
+    LoadOptions {
+        usdc: UsdcReadOptions {
+            arrays: UsdcArrayLoading::Retained,
+            decode_budget: None,
+        },
+        ..Default::default()
+    }
+}
+
+#[test]
+fn explicit_decode_budgets_reject_structural_import_without_publishing() {
+    let mut memory = Memory::default();
+    memory.files.insert("mesh.usdc".into(), numeric_usdc());
+    let error = StageDocument::open_with(
+        memory,
+        "mesh.usdc",
+        StageOptions::default(),
+        LoadOptions {
+            usdc: UsdcReadOptions {
+                decode_budget: Some(0),
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    )
+    .unwrap_err();
+    assert_eq!(error.kind, IoErrorKind::Rejected);
+    assert!(error.message.contains("budget"), "{error}");
+}
+
+#[cfg(feature = "std")]
+#[test]
+fn retained_open_decodes_on_demand_and_reload_preserves_old_snapshots() {
+    let mut memory = Memory::default();
+    let bytes = numeric_usdc();
+    memory.files.insert("mesh.usdc".into(), bytes.clone());
+    let mut document = StageDocument::open_with(
+        memory,
+        "mesh.usdc",
+        StageOptions::default(),
+        retained_options(),
+    )
+    .unwrap();
+    let root = document.stage().stage().root_layer().unwrap();
+    let old = document.retained_values(root).unwrap().clone();
+    assert_eq!(old.stats().decode_attempts, 0);
+    assert_eq!(old.stats().input_bytes, bytes.len());
+    let path = document.store_mut().property_path("/Mesh.points");
+    let mut query = layerstack::AttributeQuery::new(path);
+    let value = query
+        .try_get(document.stage().stage(), layerstack::Time::Default)
+        .unwrap()
+        .unwrap()
+        .value;
+    assert_eq!(value.array_ref().unwrap().len(), 2048);
+    assert_eq!(old.stats().decode_attempts, 1);
+    query
+        .try_get(document.stage().stage(), layerstack::Time::Default)
+        .unwrap();
+    assert_eq!(old.stats().decode_attempts, 1);
+    document.reload(ReloadPolicy::PreserveDirty).unwrap();
+    assert_eq!(
+        document
+            .retained_values(root)
+            .unwrap()
+            .stats()
+            .decode_attempts,
+        0
+    );
+    assert_eq!(old.stats().decode_attempts, 1);
+    assert_eq!(value.array_ref().unwrap().len(), 2048);
+    document
+        .storage_mut()
+        .files
+        .insert("mesh.usdc".into(), b"PXR-USDC corrupt".to_vec());
+    assert!(document.reload(ReloadPolicy::PreserveDirty).is_err());
+    assert_eq!(
+        document
+            .retained_values(root)
+            .unwrap()
+            .stats()
+            .decode_attempts,
+        0
+    );
+    assert!(
+        layerstack::AttributeQuery::new(path)
+            .try_get(document.stage().stage(), layerstack::Time::Default)
+            .unwrap()
+            .is_some()
+    );
+}
+
+#[cfg(feature = "std")]
+#[test]
+fn retained_budget_errors_are_distinct_from_missing_geometry() {
+    let bytes = numeric_usdc();
+    let mut memory = Memory::default();
+    memory.files.insert("mesh.usdc".into(), bytes.clone());
+    let probe = StageDocument::open_with(
+        memory,
+        "mesh.usdc",
+        StageOptions::default(),
+        retained_options(),
+    )
+    .unwrap();
+    let root = probe.stage().stage().root_layer().unwrap();
+    let limit = layerstack_usdc::DecodeBudget::for_input(bytes.len()).remaining()
+        - probe.retained_values(root).unwrap().stats().remaining_units;
+    let mut memory = Memory::default();
+    memory.files.insert("mesh.usdc".into(), bytes);
+    let mut document = StageDocument::open_with(
+        memory,
+        "mesh.usdc",
+        StageOptions::default(),
+        LoadOptions {
+            usdc: UsdcReadOptions {
+                decode_budget: Some(limit),
+                ..retained_options().usdc
+            },
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let path = document.store_mut().property_path("/Mesh.points");
+    let expected = layerstack::ArrayReadError::BudgetExceeded { limit };
+    assert_eq!(
+        layerstack::AttributeQuery::new(path)
+            .try_get(document.stage().stage(), layerstack::Time::Default),
+        Err(expected.clone())
+    );
+    assert_eq!(
+        layerstack::AttributeQuery::new(path)
+            .try_get(document.stage().stage(), layerstack::Time::Default),
+        Err(expected)
+    );
+    let stats = document.retained_values(root).unwrap().stats();
+    assert_eq!(stats.failed_arrays, 1);
+    assert_eq!(stats.decode_attempts, 1);
+    let failure = document.export_layer(root, "failed.usdc").unwrap_err();
+    assert_eq!(failure.kind, IoErrorKind::Decode);
+    assert_eq!(
+        failure.array_read_error,
+        Some(layerstack::ArrayReadError::BudgetExceeded { limit })
+    );
+    assert!(!document.storage().files.contains_key("failed.usdc"));
+    for member in ["root.usda", "root.usdc"] {
+        let plan = layerstack_usdz::localize::LocalizationPlan {
+            layers: vec![layerstack_usdz::localize::LocalizedLayer {
+                source: root,
+                member: member.into(),
+                layer: document.store().layers[&root].clone(),
+            }],
+            assets: vec![],
+            resolved_uses: 0,
+        };
+        let failure = document.export_usdz("failed.usdz", &plan).unwrap_err();
+        assert_eq!(failure.kind, IoErrorKind::Decode);
+        assert_eq!(
+            failure.array_read_error,
+            Some(layerstack::ArrayReadError::BudgetExceeded { limit })
+        );
+        assert!(!document.storage().files.contains_key("failed.usdz"));
+    }
+    assert!(document.storage().writes.is_empty());
+}
+
+#[cfg(feature = "std")]
+#[test]
+fn retained_policy_reaches_package_members_and_explicit_dependency_loads() {
+    let bytes = numeric_usdc();
+    let root = b"#usda 1.0\n( subLayers = [@./mesh.usdc@] )";
+    let package = layerstack_usdz::write_usdz(&[
+        layerstack_usdz::PackageFile {
+            path: "root.usda",
+            data: root,
+        },
+        layerstack_usdz::PackageFile {
+            path: "mesh.usdc",
+            data: &bytes,
+        },
+        layerstack_usdz::PackageFile {
+            path: "unused.usdc",
+            data: &bytes,
+        },
+    ])
+    .unwrap();
+    let mut memory = Memory::default();
+    memory.files.insert("scene.usdz".into(), package);
+    memory.files.insert("external.usdc".into(), bytes);
+    let mut document = StageDocument::open_with(
+        memory,
+        "scene.usdz",
+        StageOptions::default(),
+        retained_options(),
+    )
+    .unwrap();
+    let child = *document.catalog.ids.get("scene.usdz[mesh.usdc]").unwrap();
+    assert_eq!(
+        document
+            .retained_values(child)
+            .unwrap()
+            .stats()
+            .decode_attempts,
+        0
+    );
+    assert!(!document.catalog.ids.contains_key("scene.usdz[unused.usdc]"));
+    let path = document.store_mut().property_path("/Mesh.points");
+    layerstack::AttributeQuery::new(path)
+        .try_get(document.stage().stage(), layerstack::Time::Default)
+        .unwrap();
+    assert_eq!(
+        document
+            .retained_values(child)
+            .unwrap()
+            .stats()
+            .decode_attempts,
+        1
+    );
+    let (external, _) = document.load_asset("external.usdc", None).unwrap();
+    assert_eq!(
+        document
+            .retained_values(external)
+            .unwrap()
+            .stats()
+            .decode_attempts,
+        0
+    );
+    document.reload(ReloadPolicy::PreserveDirty).unwrap();
+    assert_eq!(
+        document
+            .retained_values(child)
+            .unwrap()
+            .stats()
+            .decode_attempts,
+        0
+    );
+}
+#[cfg(feature = "std")]
+#[test]
+fn retained_binary_package_root_preserves_budget_and_reload_policy() {
+    let bytes = numeric_usdc();
+    let package = layerstack_usdz::write_usdz(&[layerstack_usdz::PackageFile {
+        path: "root.usdc",
+        data: &bytes,
+    }])
+    .unwrap();
+    let mut memory = Memory::default();
+    memory.files.insert("binary.usdz".into(), package);
+    let mut document = StageDocument::open_with(
+        memory,
+        "binary.usdz",
+        StageOptions::default(),
+        retained_options(),
+    )
+    .unwrap();
+    let root = document.stage().stage().root_layer().unwrap();
+    let old = document.retained_values(root).unwrap().clone();
+    assert_eq!(old.stats().decode_attempts, 0);
+    let path = document.store_mut().property_path("/Mesh.points");
+    assert_eq!(
+        layerstack::AttributeQuery::new(path)
+            .try_get(document.stage().stage(), layerstack::Time::Default)
+            .unwrap()
+            .unwrap()
+            .value
+            .array_ref()
+            .unwrap()
+            .len(),
+        2048
+    );
+    assert_eq!(old.stats().decode_attempts, 1);
+    document.reload(ReloadPolicy::PreserveDirty).unwrap();
+    assert_eq!(
+        document
+            .retained_values(root)
+            .unwrap()
+            .stats()
+            .decode_attempts,
+        0
+    );
+    assert_eq!(old.stats().decode_attempts, 1);
+    assert_eq!(document.load_options(), retained_options());
+}
+
 fn set_value(doc: &mut StageDocument<Memory>, layer: LayerId, value: i32) {
     let (store, stage) = doc.parts_mut();
     let property = store.property_path("/Root.value");

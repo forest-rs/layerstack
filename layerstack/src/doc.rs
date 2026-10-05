@@ -2559,6 +2559,23 @@ pub struct InMemoryStore {
 }
 
 impl InMemoryStore {
+    /// Copies authored layers, bindings and interners into an independent domain.
+    ///
+    /// Existing token/path IDs retain their meanings in the snapshot. Future
+    /// interning is independent: newly created IDs must not be mixed between the
+    /// two stores. Their [`LayerStore::identity`] values differ so retained queries
+    /// cannot reuse evidence from a divergent domain. Immutable numeric buffers
+    /// and strings share ownership; layer maps, bindings and interner indexes copy.
+    /// Mutating the snapshot does not publish edits to this store.
+    #[must_use]
+    pub fn snapshot(&self) -> Self {
+        Self {
+            tokens: self.tokens.snapshot(),
+            paths: self.paths.snapshot(),
+            layers: self.layers.clone(),
+            asset_layers: self.asset_layers.clone(),
+        }
+    }
     /// Inserts (or replaces) a layer.
     /// Replacing a layer advances its generations so live stages detect reloads,
     /// even when the new layer happened to have the same generation counters.

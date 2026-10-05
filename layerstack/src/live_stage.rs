@@ -289,6 +289,42 @@ impl LiveStage {
         &self.options
     }
 
+    /// Publishes an already composed replacement without composing it again.
+    ///
+    /// Preserves this stage's change cursors, subscriptions and history budget;
+    /// publishes a root resync with created/removed paths. The replacement's own
+    /// observers are discarded. Its retained dependencies and controls become
+    /// this stage's, so subsequent edits continue to synchronize normally.
+    ///
+    /// The caller must publish the replacement's matching source store first;
+    /// old token/path IDs must retain their meanings (for example, through
+    /// [`crate::InMemoryStore::snapshot`]). Do not change replacement inputs between
+    /// composing and publishing. This is the commit seam for host-owned staged
+    /// reloads, not a reload or freshness check. AOUSD Core §12 (composed scene
+    /// observation); OpenUSD `UsdNotice::ObjectsChanged` root resync semantics.
+    pub fn replace_with(&mut self, mut replacement: Self, store: &mut dyn LayerStore) -> Changes {
+        let old: HashSet<_> = self.stage.prim_paths().collect();
+        let mut changes = Changes {
+            created: replacement
+                .stage
+                .prim_paths()
+                .filter(|p| !old.contains(p))
+                .collect(),
+            removed: old
+                .into_iter()
+                .filter(|p| !replacement.stage.has_prim(*p))
+                .collect(),
+            resynced: alloc::vec![store.paths_mut().intern(crate::Path::root())],
+            ..Default::default()
+        };
+        changes.created.sort_unstable();
+        changes.removed.sort_unstable();
+        replacement.notices = core::mem::take(&mut self.notices);
+        *self = replacement;
+        self.notices.publish(&changes, &self.stage, store);
+        changes
+    }
+
     /// Queue an atomic mute/unmute batch. Muting never edits or evicts a layer.
     /// Root muting and conflicting requests fail without changing any controls.
     /// A changed batch queues a structural recomposition and its usual notices.
@@ -1169,6 +1205,10 @@ impl LiveStage {
         mut changes: Option<&mut Changes>,
     ) -> Vec<PathId> {
         self.work = RecompositionWork::default();
+        // Store snapshots preserve old numeric IDs but have independent future
+        // interning domains. Layer generations alone cannot detect publication
+        // of that snapshot; refresh all retained affinity and dependency evidence.
+        self.needs_full_rebuild |= self.stage.store_identity() != Some(&store.identity());
         if self.needs_full_rebuild {
             return self.full_rebuild(store, changes);
         }

@@ -88,7 +88,7 @@ support one archive level; nested archives are unsupported.
 Run `cargo run -p layerstack_examples --bin prepared_reload` for a complete
 reject/accept workflow with checked geometry, host budgets and packaged textures.
 
-## Bounded resources
+## Bounded resources and root reloads
 
 `read_asset_bytes_bounded(asset, authoring_layer, AssetReadLimits { bytes,
 package_bytes })` rejects oversized resident members before copying them and
@@ -98,3 +98,13 @@ custom transports opt into bounded reads explicitly. `Filesystem` bounds reads
 and checks file size before allocation. Existing unbounded resource APIs retain
 their behavior; use the bounded API when admitting renderer inputs.
 
+`prepare_reload_root(policy)` reads the authored root and its freshly reachable
+file dependencies once, preserving source IDs and session opinions. Old unused
+sources and package members are not mandatory reload roots. Session-only file
+dependencies are outside this explicit root-file scope; selected `prepare_reload`
+and `prepare_reload_layers` remain available for other policies. Only sources
+actually replaced by this candidate participate in dirty protection. Drop rejects
+all source/catalog/freshness changes; commit publishes the composed candidate.
+
+These additions keep transport, composition and renderer ownership unchanged;
+no new dependency or architectural boundary is introduced.

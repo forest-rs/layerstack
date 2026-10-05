@@ -679,6 +679,7 @@ struct Reader<'a, B> {
     diagnostics: Vec<MemberDiagnostic>,
     bindings: BTreeMap<(LayerId, String), LayerId>,
     failures: Vec<AssetFailure>,
+    reachable_only: bool,
 }
 impl<'a, B: Storage> Reader<'a, B> {
     fn new(
@@ -696,6 +697,7 @@ impl<'a, B: Storage> Reader<'a, B> {
             diagnostics: Vec::new(),
             bindings: BTreeMap::new(),
             failures: Vec::new(),
+            reachable_only: false,
         }
     }
     fn resolve_expressions(
@@ -895,11 +897,21 @@ impl<'a, B: Storage> Reader<'a, B> {
                 result.layer
             }
             Format::Usdz => {
+                if self.reachable_only {
+                    // A dependent archive may choose a different first member.
+                    // Its old root alias must not claim the outer package ID
+                    // when that former root becomes an ordinary member.
+                    self.catalog
+                        .ids
+                        .retain(|alias, member_id| *member_id != id || alias == identifier);
+                }
                 let members: Vec<String> = self
                     .catalog
                     .sources
                     .iter()
-                    .filter(|(member_id, s)| **member_id != id && s.package == Some(id))
+                    .filter(|(member_id, s)| {
+                        !self.reachable_only && **member_id != id && s.package == Some(id)
+                    })
                     .filter_map(|(_, s)| {
                         s.identifier
                             .strip_suffix(']')

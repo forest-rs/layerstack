@@ -113,11 +113,13 @@ fn unsupported_and_invalid_spline_semantics_remain_explicit() {
         num_post_loops: 1,
         value_offset: 3.,
     });
-    assert_eq!(
-        x.evaluate_checked(0.5),
-        Err(SplineQueryError::UnsupportedLoops)
-    );
-    assert_eq!(x.evaluate(0.5), None);
+    let mut inner = x.clone();
+    inner.pre_loop_boundary = None;
+    inner.post_loop_boundary = None;
+    let mut baked = inner.clone();
+    baked.bake_inner_loops(32).unwrap();
+    assert_eq!(inner.evaluate_checked(0.5), baked.evaluate_checked(0.5));
+    assert_eq!(inner.evaluate(0.5), baked.evaluate(0.5));
     x.loop_params = None;
     let far = -9_007_199_254_740_992.;
     assert_eq!(

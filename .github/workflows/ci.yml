@@ -422,6 +422,15 @@ jobs:
             layerstack_conformance/fixtures/schema_views/scene.usda "$RUNNER_TEMP/oracle.json"
           diff -u layerstack_conformance/fixtures/schema_views/oracle.json "$RUNNER_TEMP/oracle.json"
 
+      - name: check schema metadata oracle
+        run: python layerstack_conformance/scripts/schema_metadata_oracle.py --check
+
+      - name: check layer stack flatten oracle
+        run: python layerstack_conformance/scripts/layer_stack_flatten_oracle.py --check
+
+      - name: check coordinated namespace oracle
+        run: python layerstack_conformance/scripts/namespace_coordinated_oracle.py --check
+
       # The edit target oracle must be how OpenUSD's edit targets map.
       - name: check edit target maps oracle
         run: |

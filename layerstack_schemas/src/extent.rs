@@ -3,8 +3,103 @@
 
 //! Intrinsic bounds for the built-in geometry supported by `BoundsCache`.
 
+mod providers;
+pub use providers::{
+    ExtentContext, ExtentDependencies, ExtentError, ExtentProvider, ExtentProviders,
+    ExtentRegistrationError,
+};
+
 use crate::{PrimView, Scene, Time, bounds::Range3d};
 use layerstack::{PathId, TokenInterner, Value};
+
+pub(crate) fn has_builtin(schema: &str) -> bool {
+    matches!(
+        schema,
+        "Mesh"
+            | "Points"
+            | "Curves"
+            | "Cube"
+            | "Sphere"
+            | "Cylinder"
+            | "Cone"
+            | "Capsule"
+            | "PointInstancer"
+    ) || cfg!(feature = "usd-lux")
+        && matches!(
+            schema,
+            "SphereLight" | "CylinderLight" | "DiskLight" | "RectLight" | "PortalLight"
+        )
+}
+
+fn decode_error(prim: &PrimView<'_>, name: &str, error: layerstack::ArrayReadError) -> ExtentError {
+    ExtentError::Decode {
+        property: layerstack::PropertyPath::new(
+            prim.path(),
+            prim.scene()
+                .store()
+                .tokens()
+                .lookup(name)
+                .expect("decoded property token"),
+        ),
+        error,
+    }
+}
+
+/// Read authored extent before dispatching any provider. A compatible malformed
+/// extent can fall through to computation; retained decode failures cannot.
+/// OpenUSD `UsdGeomBoundable::ComputeExtent`; AOUSD Core §12.3.
+pub(crate) fn authored(
+    scene: &Scene<'_>,
+    path: PathId,
+    time: Time,
+) -> Result<Option<(Range3d, bool)>, ExtentError> {
+    let prim = PrimView::new(*scene, path);
+    if !prim.has_authored_value("extent") {
+        return Ok(None);
+    }
+    let extent = prim
+        .try_read_value("extent", time, |value, tokens| {
+            let values = value.array_ref()?;
+            if let Some(typed) = values.typed() {
+                typed.as_vec3f()?;
+            } else if !values.iter().all(|v| matches!(&*v, Value::Vec3f(_))) {
+                return None;
+            }
+            if values.len() != 2 {
+                return Some(None);
+            }
+            Some(Some(Range3d {
+                min: crate::value::read_float3(values.get(0)?.as_ref(), tokens)?.map(f64::from),
+                max: crate::value::read_float3(values.get(1)?.as_ref(), tokens)?.map(f64::from),
+            }))
+        })
+        .map_err(|error| decode_error(&prim, "extent", error))?;
+    Ok(extent
+        .flatten()
+        .map(|range| (range, prim.property_might_vary("extent"))))
+}
+
+/// Preserve retained numeric failures before the intrinsic provider consumes
+/// points or widths. Typed selection is identical to the intrinsic reader.
+pub(crate) fn checked_compute(
+    scene: &Scene<'_>,
+    path: PathId,
+    time: Time,
+) -> Result<Option<(Range3d, bool)>, ExtentError> {
+    if let Some(extent) = authored(scene, path, time)? {
+        return Ok(Some(extent));
+    }
+    let prim = PrimView::new(*scene, path);
+    if scene.is_a(path, "Mesh") || scene.is_a(path, "Points") || scene.is_a(path, "Curves") {
+        prim.try_read_value("points", time, crate::value::read_float3_array_shared)
+            .map_err(|error| decode_error(&prim, "points", error))?;
+        if scene.is_a(path, "Points") || scene.is_a(path, "Curves") {
+            prim.try_read_value("widths", time, crate::value::read_float_array_shared)
+                .map_err(|error| decode_error(&prim, "widths", error))?;
+        }
+    }
+    Ok(compute(scene, path, time))
+}
 
 /// OpenUSD `UsdGeomBoundable::ComputeExtent`: a valid authored extent wins;
 /// schema fallback extents do not replace evaluation of intrinsic geometry.

@@ -9,6 +9,17 @@ time, and as typed views over a composed stage: `usd_geom::Mesh`,
 getter per property (its fallback applied), enums for `allowedTokens`, and
 edit handles whose setters author through a `SchemaEdit` transaction.
 
+## Runtime API schemas
+
+`SchemaEdit::apply_api(path, "PipelineTintAPI", None)` applies a registered API
+by name. Pass `Some("main")` for a multiple-apply instance. It uses the same
+applicability checks as generated API types and collects an ordinary transaction.
+A Rust type is unnecessary. The host loads the codeless schema library and its
+plugin declarations into the stage's registry, using the store's interners;
+`layerstack::schema::read_generated_schema` reads runtime schema layers.
+Run `cargo run -p layerstack_examples --bin codeless_api` for application,
+fallback reads and undo without generated getters.
+
 ## Numeric buffer ownership
 
 Matching numeric array getters, including `Mesh::points`, return

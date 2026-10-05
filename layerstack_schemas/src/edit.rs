@@ -118,6 +118,32 @@ impl<'s> SchemaEdit<'s> {
         self.transaction
     }
 
+    /// Applies a registered API schema by name, including codeless schemas.
+    ///
+    /// Pass `None` for a single-apply schema, or the separate instance name for
+    /// a multiple-apply schema (for example `"PipelineSlotAPI"`, `Some("main")`).
+    /// A generated Rust type is unnecessary. The stage's registry must already
+    /// contain the schema, using this store's token domain; loading a schema
+    /// library and its plugin declarations remains the caller's responsibility.
+    /// [`layerstack::schema::read_generated_schema`] supports runtime libraries.
+    ///
+    /// Checks the prim's composed type or a type defined earlier in this edit,
+    /// schema kind, application restrictions and instance name. Rejection adds
+    /// no operation. Success only collects `apiSchemas` authoring; publish the
+    /// finished transaction explicitly. This shares the generated `…Api::apply`
+    /// path, so newly applied properties also participate in this edit's schema
+    /// overlay. AOUSD Core §13.2.1.2, §13.3.2; OpenUSD `UsdPrim::ApplyAPI`.
+    #[doc(alias = "ApplyAPI")]
+    #[doc(alias = "UsdPrim::ApplyAPI")]
+    pub fn apply_api(
+        &mut self,
+        path: PathId,
+        schema: &str,
+        instance: Option<&str>,
+    ) -> Result<(), CannotApply> {
+        self.apply(path, schema, instance)
+    }
+
     /// Collects a fallible child group. Success appends its transaction; an error
     /// discards every child edit and restores the parent's schema overlay.
     /// Nested groups follow the same rule. Interned tokens and paths remain in

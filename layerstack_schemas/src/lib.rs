@@ -91,7 +91,9 @@
 //!
 //! Every view has an edit handle (`MeshEdit`) whose setters author through
 //! a [`SchemaEdit`], which collects a `Transaction` for one explicit edit
-//! target. A handle is had only for a prim that exists, on the stage or
+//! target. [`SchemaEdit::apply_api`] applies registered API schemas by name,
+//! including runtime codeless schemas without generated Rust types.
+//! A handle is had only for a prim that exists, on the stage or
 //! defined earlier in the edit: from a view's `edit`, a concrete schema's
 //! `define`, an applied schema's `apply` (which fails with
 //! `CannotApply::NoSuchPrim` for a missing prim), or `new`, which returns

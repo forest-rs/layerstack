@@ -47,6 +47,14 @@ pub struct TokenInterner {
 }
 
 impl TokenInterner {
+    pub(crate) fn snapshot(&self) -> Self {
+        Self {
+            affinity: Arc::default(),
+            by_str: self.by_str.clone(),
+            strings: self.strings.clone(),
+            expressions: self.expressions,
+        }
+    }
     /// Interns a string, returning its stable [`TokenId`].
     #[must_use]
     pub fn intern(&mut self, s: impl AsRef<str>) -> TokenId {

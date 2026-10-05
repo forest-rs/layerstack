@@ -368,6 +368,13 @@ pub struct PathInterner {
 }
 
 impl PathInterner {
+    pub(crate) fn snapshot(&self) -> Self {
+        Self {
+            affinity: Arc::default(),
+            by_path: self.by_path.clone(),
+            paths: self.paths.clone(),
+        }
+    }
     /// Interns a path, returning a stable [`PathId`].
     #[must_use]
     pub fn intern(&mut self, path: Path) -> PathId {

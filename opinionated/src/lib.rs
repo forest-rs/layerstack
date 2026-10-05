@@ -104,7 +104,7 @@
 extern crate alloc;
 
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
-use core::borrow::Borrow;
+use core::{borrow::Borrow, fmt};
 
 mod array_edit;
 mod dictionary;
@@ -494,6 +494,7 @@ pub fn resolve_list_chain<T: Clone + Eq>(
 
 /// A composed list paired with events for every authored list operation.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub struct ListReport<T, P> {
     /// The list, exactly as [`resolve_list_chain`] returns it.
     pub value: Vec<T>,
@@ -660,6 +661,7 @@ impl<V, I, K, P> Resolution<V, I, K, P> {
 
 /// A storage-independent report for one resolution attempt.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub struct ResolutionReport<V, I = V, K = String, P = ()> {
     /// The outcome of the resolution.
     pub resolution: Resolution<V, I, K, P>,
@@ -692,7 +694,11 @@ pub enum ResolutionEvent<P = ()> {
 }
 
 /// Why an opinion in a chain did not contribute to the resolved value.
+///
+/// New reasons may be added in minor releases, so a `match` needs a fallback
+/// arm.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum IgnoreReason {
     /// A stronger scalar set already resolved the value.
     WeakerThanSet,
@@ -707,6 +713,12 @@ pub enum IgnoreReason {
         /// The incompatible operation family on the ignored opinion.
         ignored: OpinionKind,
     },
+    /// The opinion belongs to a value family other than the one being
+    /// resolved, and has no [`OpinionKind`].
+    ///
+    /// A host [`OpinionFamily`] returns this from
+    /// [`OpinionFamily::classify`] for operations it does not own.
+    OtherFamily,
 }
 
 /// Error returned when addressing a layer outside the composer's layer order.
@@ -716,12 +728,36 @@ pub struct UnknownLayer<L> {
     pub layer: L,
 }
 
+impl<L: fmt::Debug> fmt::Display for UnknownLayer<L> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "layer {:?} is not in the composer's layer order",
+            self.layer
+        )
+    }
+}
+
+impl<L: fmt::Debug> core::error::Error for UnknownLayer<L> {}
+
 /// Error returned when constructing a composer with duplicate layers.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DuplicateLayer<L> {
     /// The duplicated layer.
     pub layer: L,
 }
+
+impl<L: fmt::Debug> fmt::Display for DuplicateLayer<L> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "layer {:?} appears more than once in the layer order",
+            self.layer
+        )
+    }
+}
+
+impl<L: fmt::Debug> core::error::Error for DuplicateLayer<L> {}
 
 /// A borrowed opinion in strength order.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

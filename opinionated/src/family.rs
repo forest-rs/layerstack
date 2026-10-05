@@ -172,6 +172,7 @@ pub enum FamilyBase {
 
 /// A [`FamilyResolution`] paired with the events that explain it.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub struct FamilyReport<T, P> {
     /// The outcome of the fold.
     pub resolution: FamilyResolution<T, P>,

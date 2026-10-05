@@ -35,6 +35,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
             value_type: Some(&super::TOKEN_ARRAY),
             variability: Variability::Varying,
             fallback: fallback(|_| Value::Array(alloc::vec![])),
+            metadata: &[],
         }],
         overrides: &[],
         can_only_apply_to: &[],

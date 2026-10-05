@@ -35,6 +35,7 @@ pub(crate) struct Property {
     pub(crate) value_type: Option<&'static ValueType>,
     pub(crate) variability: Variability,
     pub(crate) fallback: Option<Construct>,
+    pub(crate) metadata: &'static [(&'static str, Construct)],
 }
 
 /// A schema, as `layerstack::schema::read_generated_schema` reads it.
@@ -88,6 +89,14 @@ impl Property {
                 .map(|t| PropertyType::new(t.name, t.is_array, (t.zero)(tokens))),
             variability: self.variability,
             fallback: self.fallback.map(|construct| construct(tokens)),
+            metadata: self
+                .metadata
+                .iter()
+                .map(|(name, construct)| layerstack::FieldEntry {
+                    name: tokens.intern(name),
+                    value: construct(tokens).into(),
+                })
+                .collect(),
         }
     }
 }

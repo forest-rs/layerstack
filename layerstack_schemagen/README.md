@@ -6,6 +6,14 @@ Regenerate the bundled OpenUSD schemas with the matching wheel and source:
 cargo run -p layerstack_schemagen -- --pxr <site-packages>/pxr --source <OpenUSD> --check
 ```
 
+Property tables retain native schema metadata such as `allowedTokens`,
+`colorSpace`, `displayGroup`, and dictionary fields. `customData` remains available
+only during generation (for documentation and `apiName`); composition arcs,
+children, clips, time samples, splines, and connection/target paths have no runtime
+schema metadata fallback, following `UsdSchemaRegistry::IsDisallowedField`.
+Structural type, variability, and default values use their dedicated table fields.
+Unsupported metadata constructors fail generation rather than dropping a field.
+
 Generate a downstream shader module without an OpenUSD installation:
 
 ```sh

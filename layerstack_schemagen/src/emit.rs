@@ -409,6 +409,33 @@ fn property_entry(
             }
         },
     };
+    let metadata = property
+        .metadata
+        .iter()
+        .filter_map(|field| {
+            let name = model.tokens.resolve(field.name);
+            match &field.value {
+                layerstack::FieldValue::Value(value) => match expr(value, &model.tokens) {
+                    Ok(value) => Some(format!("({name:?}, {})", closure(&value))),
+                    Err(why) => {
+                        failures.push(format!(
+                            "{schema}.{}: metadata {name}: {why}",
+                            property.name
+                        ));
+                        None
+                    }
+                },
+                _ => {
+                    failures.push(format!(
+                        "{schema}.{}: metadata {name}: list-op constructor unsupported",
+                        property.name
+                    ));
+                    None
+                }
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
     let variability = match property.variability {
         Variability::Varying => "Varying",
         Variability::Uniform => "Uniform",
@@ -417,7 +444,7 @@ fn property_entry(
         out,
         "                Property {{\n                    name: {:?},\n                    \
          kind: PropertyKind::{kind},\n                    value_type: {value_type},\n                    \
-         variability: Variability::{variability},\n                    fallback: {fallback},\n                \
+         variability: Variability::{variability},\n                    fallback: {fallback},\n                    metadata: &[{metadata}],\n                \
          }},\n",
         property.name
     );

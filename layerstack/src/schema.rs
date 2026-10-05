@@ -47,7 +47,7 @@ use alloc::{format, string::String, sync::Arc, vec, vec::Vec};
 use hashbrown::{HashMap, HashSet};
 
 use crate::{
-    doc::Value,
+    doc::{FieldEntry, FieldValue, Value},
     interner::{TokenId, TokenInterner},
     property::{PropertyKind, PropertyType, Variability},
 };
@@ -98,7 +98,7 @@ impl SchemaKind {
 }
 
 /// A property a schema defines: its kind, declared type, variability and
-/// fallback value.
+/// fallback value and metadata.
 ///
 /// ```
 /// use layerstack::{PropertyDefinition, PropertyType, TokenInterner, Value};
@@ -131,6 +131,14 @@ pub struct PropertyDefinition {
     ///
     /// Spec: AOUSD Core §12.3.5 (fallback values), §13.3.2.4.
     pub fallback: Option<Value>,
+    /// Metadata fallbacks, composed in schema strength order. Runtime fields
+    /// such as `customData`, time samples and connections are excluded when
+    /// reading generated schemas. Structural fields remain in their dedicated
+    /// members above. Struct literals must initialize this field (usually empty).
+    ///
+    /// Spec: AOUSD Core §13.3.2.3–§13.3.2.4; OpenUSD
+    /// `UsdPrimDefinition::ListPropertyMetadataFields`.
+    pub metadata: Vec<FieldEntry>,
 }
 
 impl PropertyDefinition {
@@ -143,6 +151,7 @@ impl PropertyDefinition {
             type_name: None,
             variability: Variability::Varying,
             fallback: None,
+            metadata: Vec::new(),
         }
     }
 
@@ -155,6 +164,7 @@ impl PropertyDefinition {
             type_name: None,
             variability: Variability::Uniform,
             fallback: None,
+            metadata: Vec::new(),
         }
     }
 
@@ -170,6 +180,19 @@ impl PropertyDefinition {
     pub fn with_fallback(mut self, fallback: impl Into<Value>) -> Self {
         self.fallback = Some(fallback.into());
         self
+    }
+
+    /// Sets a schema property metadata fallback (builder).
+    #[must_use]
+    pub fn with_metadata(mut self, key: TokenId, value: impl Into<FieldValue>) -> Self {
+        crate::doc::set_field_vec(&mut self.metadata, key, value.into());
+        self
+    }
+
+    /// Looks up a composed schema property metadata fallback.
+    #[must_use]
+    pub fn metadata(&self, key: TokenId) -> Option<&FieldValue> {
+        crate::doc::get_field(&self.metadata, &key)
     }
 
     /// Makes the attribute `uniform` (builder).
@@ -861,7 +884,7 @@ impl SchemaRegistry {
                     ..candidate.clone()
                 });
             }
-            Some(stronger) => stronger.compose_weaker(candidate),
+            Some(stronger) => stronger.compose_weaker(candidate, tokens),
         };
         if let Some(typed) = self.typed(type_name)
             && let Some(candidate) = typed.property(property)
@@ -1207,7 +1230,7 @@ impl<'a> Build<'a> {
             instance: template.then_some(self.placeholder),
         });
         for property in &schema.properties {
-            definition.add_property(property.clone());
+            definition.add_property(property.clone(), self.tokens);
         }
 
         building.push(name);
@@ -1259,7 +1282,7 @@ impl<'a> Build<'a> {
         for ancestor in &chain {
             let ancestor = &schemas[ancestor];
             for property in &ancestor.properties {
-                definition.add_property(property.clone());
+                definition.add_property(property.clone(), self.tokens);
             }
             for &included in &ancestor.built_ins {
                 if !inclusions.contains(&included) {
@@ -1293,8 +1316,8 @@ impl<'a> Build<'a> {
     }
 
     /// Composes the override property `over` of `schema` over the
-    /// property it names: its fallback replaces the defined one, its
-    /// variability is ignored.
+    /// property it names: its fallback and metadata replace defined fields,
+    /// including whole dictionaries; its variability is ignored.
     ///
     /// Spec: AOUSD Core §13.3.2.2. OpenUSD:
     /// `UsdPrimDefinition::_ComposeOverAndReplaceExistingProperty`.
@@ -1308,6 +1331,15 @@ impl<'a> Build<'a> {
             Some(defined) if defined.has_type_of(over) => {
                 if over.fallback.is_some() {
                     defined.fallback.clone_from(&over.fallback);
+                }
+                // Core §13.3.2.2: overrides replace whole metadata fields;
+                // unlike weaker API composition, dictionaries do not merge.
+                for field in &over.metadata {
+                    crate::doc::set_field_vec(
+                        &mut defined.metadata,
+                        field.name,
+                        field.value.clone(),
+                    );
                 }
             }
             _ => self.issue(SchemaIssue::IgnoredOverride {

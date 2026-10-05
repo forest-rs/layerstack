@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use super::*;
+use alloc::vec;
 #[test]
 fn native_rec709_matrix_transfer_and_alpha() {
     let srgb = ColorSpaceDefinition::builtin("srgb_rec709_scene").unwrap();
@@ -203,4 +204,127 @@ fn ap1_conversion_uses_openusd_preadapted_d65_primaries() {
     for (actual, expected) in output.into_iter().zip([1.169177, 0.2369814, 0.05740389]) {
         assert!((actual - expected).abs() < 2e-6);
     }
+}
+
+#[test]
+fn schema_metadata_empty_and_block_preserve_color_precedence() {
+    use layerstack::{
+        InMemoryStore, Layer, LayerId, ListOp, PrimSpec, PropertyDefinition, PropertySpec,
+        SchemaDefinition, SchemaKind, SchemaRegistry, Stage, StageOptions, Value,
+    };
+    let mut store = InMemoryStore::default();
+    let parent = store.path("/Parent");
+    let child = store.path("/Parent/Child");
+    let type_name = store.tokens.intern("TestColor");
+    let color = store.tokens.intern("colorSpace");
+    let api_schemas = store.tokens.intern("apiSchemas");
+    let api = store.tokens.intern("ColorSpaceAPI");
+    let assignment = store.tokens.intern("colorSpace:name");
+    let ancestor_name = store.tokens.intern("lin_rec709_scene");
+    let unknown = store.tokens.intern("unknown-schema-fallback");
+    let empty = store.tokens.intern("");
+    let tint = store.tokens.intern("tint");
+    let empty_tint = store.tokens.intern("emptyTint");
+    let blocked_tint = store.tokens.intern("blockedTint");
+    let authored_empty = store.tokens.intern("authoredEmpty");
+    let native = crate::openusd(&mut store.tokens);
+    let mut builder = SchemaRegistry::builder();
+    for definition in native.schemas() {
+        builder.register(definition.clone());
+    }
+    builder.register(
+        SchemaDefinition::new(type_name, SchemaKind::ConcreteTyped)
+            .with_property(
+                PropertyDefinition::attribute(tint).with_metadata(color, Value::Token(unknown)),
+            )
+            .with_property(
+                PropertyDefinition::attribute(empty_tint).with_metadata(color, Value::Token(empty)),
+            )
+            .with_property(
+                PropertyDefinition::attribute(blocked_tint)
+                    .with_metadata(color, Value::Token(unknown)),
+            )
+            .with_property(
+                PropertyDefinition::attribute(authored_empty)
+                    .with_metadata(color, Value::Token(unknown)),
+            ),
+    );
+    let schemas = Arc::new(builder.build(&mut store.tokens));
+    let mut layer = Layer::new(LayerId(1));
+    layer.insert_prim(
+        parent,
+        PrimSpec::def()
+            .with_field(
+                api_schemas,
+                layerstack::FieldValue::TokenListOp(ListOp {
+                    explicit: Some(vec![api]),
+                    ..ListOp::default()
+                }),
+            )
+            .with_property(
+                assignment,
+                PropertySpec::attribute().with_default(Value::Token(ancestor_name)),
+            ),
+    );
+    layer.insert_prim(
+        child,
+        PrimSpec::def()
+            .with_type_name(type_name)
+            .with_property(
+                blocked_tint,
+                PropertySpec::attribute().with_metadata(color, Value::Blocked),
+            )
+            .with_property(
+                authored_empty,
+                PropertySpec::attribute().with_metadata(color, Value::Token(empty)),
+            ),
+    );
+    store.insert_layer(layer);
+    let stage = Stage::compose(
+        &mut store,
+        LayerId(1),
+        StageOptions {
+            schemas: Some(schemas),
+            ..StageOptions::default()
+        },
+    );
+    let scene = Scene::new(&stage, &store);
+    for (property, name, source) in [
+        (
+            tint,
+            "unknown-schema-fallback",
+            ColorSpaceSource::Schema(PropertyPath::new(child, tint)),
+        ),
+        (
+            empty_tint,
+            "",
+            ColorSpaceSource::Schema(PropertyPath::new(child, empty_tint)),
+        ),
+        (
+            blocked_tint,
+            "lin_rec709_scene",
+            ColorSpaceSource::Prim(parent),
+        ),
+        (
+            authored_empty,
+            "",
+            ColorSpaceSource::Attribute(PropertyPath::new(child, authored_empty)),
+        ),
+    ] {
+        let result = scene
+            .compute_attribute_color_space_name(PropertyPath::new(child, property))
+            .unwrap();
+        assert_eq!(result.name.as_ref(), name);
+        assert_eq!(result.source, source);
+    }
+    assert!(
+        stage
+            .resolve_property_metadata(child, blocked_tint, color)
+            .is_none()
+    );
+    assert!(
+        stage
+            .resolve_authored_property_metadata(child, tint, color)
+            .is_none()
+    );
 }

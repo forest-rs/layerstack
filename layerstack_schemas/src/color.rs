@@ -45,7 +45,9 @@ pub enum ColorSpaceSource {
     Attribute(PropertyPath),
     /// Nearest nonempty `ColorSpaceAPI` assignment on this prim or ancestor.
     Prim(PathId),
-    /// No authored attribute metadata or ancestor assignment exists.
+    /// A `colorSpace` fallback from the attribute's prim definition.
+    Schema(PropertyPath),
+    /// No attribute metadata fallback or ancestor assignment exists.
     Unassigned,
 }
 /// Owned effective assignment, preserving the source that decided it.
@@ -253,11 +255,12 @@ impl Scene<'_> {
             source: ColorSpaceSource::Unassigned,
         })
     }
-    /// Resolves authored attribute `colorSpace` metadata before ancestor APIs.
-    /// Authored names bypass validation, matching `ComputeColorSpaceName(attr)`.
-    /// Empty authored metadata also suppresses inheritance. This registry does
-    /// not retain schema-property metadata, so OpenUSD's final prim-definition
-    /// `colorSpace` fallback is unavailable; an unassigned result says so.
+    /// Resolves attribute `colorSpace` metadata before ancestor APIs. Authored
+    /// and schema names bypass validation; empty metadata suppresses inheritance.
+    /// A block suppresses schema metadata and permits ancestor API lookup.
+    ///
+    /// OpenUSD `ComputeColorSpaceName(attr)` checks `HasColorSpace`, which uses
+    /// `HasMetadata` including schema fallbacks. Core §13.3.2.4.
     pub fn compute_attribute_color_space_name(
         &self,
         path: PropertyPath,
@@ -283,7 +286,15 @@ impl Scene<'_> {
         {
             return Ok(ColorSpaceAssignment {
                 name: Arc::from(name),
-                source: ColorSpaceSource::Attribute(path),
+                source: if self
+                    .stage()
+                    .resolve_authored_property_metadata(path.prim_path(), path.property(), key)
+                    .is_some()
+                {
+                    ColorSpaceSource::Attribute(path)
+                } else {
+                    ColorSpaceSource::Schema(path)
+                },
             });
         }
         self.compute_color_space_name(path.prim_path())

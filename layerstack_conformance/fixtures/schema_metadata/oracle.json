@@ -1,0 +1,123 @@
+{
+  "openusd_version": [
+    0,
+    26,
+    8
+  ],
+  "properties": [
+    {
+      "prim": "/Parent/Schema",
+      "property": "blockedTint",
+      "metadata_color_space": "srgb_rec709_scene",
+      "effective_color_space": "srgb_rec709_scene",
+      "schema_color_space": "srgb_rec709_scene",
+      "settings": null,
+      "schema_settings": null,
+      "display_name": null,
+      "display_group": null,
+      "documentation": null,
+      "custom_data": null
+    },
+    {
+      "prim": "/Parent/Schema",
+      "property": "emptyTint",
+      "metadata_color_space": "",
+      "effective_color_space": "",
+      "schema_color_space": "",
+      "settings": null,
+      "schema_settings": null,
+      "display_name": null,
+      "display_group": null,
+      "documentation": null,
+      "custom_data": null
+    },
+    {
+      "prim": "/Parent/Schema",
+      "property": "slot:left:eye:tint",
+      "metadata_color_space": "lin_ap1_scene",
+      "effective_color_space": "lin_ap1_scene",
+      "schema_color_space": "lin_ap1_scene",
+      "settings": null,
+      "schema_settings": null,
+      "display_name": null,
+      "display_group": null,
+      "documentation": null,
+      "custom_data": null
+    },
+    {
+      "prim": "/Parent/Schema",
+      "property": "tint",
+      "metadata_color_space": "srgb_rec709_scene",
+      "effective_color_space": "srgb_rec709_scene",
+      "schema_color_space": "srgb_rec709_scene",
+      "settings": {
+        "nested": {
+          "shared": 1,
+          "strong": 1,
+          "weak": 2
+        }
+      },
+      "schema_settings": {
+        "nested": {
+          "shared": 1,
+          "strong": 1,
+          "weak": 2
+        }
+      },
+      "display_name": "Strong tint",
+      "display_group": "Weak group",
+      "documentation": null,
+      "custom_data": null
+    },
+    {
+      "prim": "/Parent/Authored",
+      "property": "blockedTint",
+      "metadata_color_space": "srgb_rec709_scene",
+      "effective_color_space": "srgb_rec709_scene",
+      "schema_color_space": "srgb_rec709_scene",
+      "settings": null,
+      "schema_settings": null,
+      "display_name": null,
+      "display_group": null,
+      "documentation": null,
+      "custom_data": null
+    },
+    {
+      "prim": "/Parent/Authored",
+      "property": "emptyTint",
+      "metadata_color_space": "",
+      "effective_color_space": "",
+      "schema_color_space": "",
+      "settings": null,
+      "schema_settings": null,
+      "display_name": null,
+      "display_group": null,
+      "documentation": null,
+      "custom_data": null
+    },
+    {
+      "prim": "/Parent/Authored",
+      "property": "tint",
+      "metadata_color_space": "custom-unknown",
+      "effective_color_space": "custom-unknown",
+      "schema_color_space": "srgb_rec709_scene",
+      "settings": {
+        "nested": {
+          "authored": 3,
+          "shared": 9,
+          "strong": 1
+        }
+      },
+      "schema_settings": {
+        "nested": {
+          "shared": 1,
+          "strong": 1
+        }
+      },
+      "display_name": "Strong tint",
+      "display_group": null,
+      "documentation": null,
+      "custom_data": null
+    }
+  ]
+}

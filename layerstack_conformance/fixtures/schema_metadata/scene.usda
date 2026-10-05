@@ -1,0 +1,17 @@
+#usda 1.0
+def "Parent" (
+    prepend apiSchemas = ["ColorSpaceAPI"]
+) {
+    uniform token colorSpace:name = "lin_rec709_scene"
+    def MetadataColor "Schema" (
+        prepend apiSchemas = ["MetadataWeakAPI", "MetadataSlotAPI:left:eye"]
+    ) {}
+    def MetadataColor "Authored" {
+        color3f tint (
+            colorSpace = "custom-unknown"
+            settings = { dictionary nested = { int authored = 3
+                int shared = 9 } }
+        )
+        color3f emptyTint (colorSpace = "")
+    }
+}

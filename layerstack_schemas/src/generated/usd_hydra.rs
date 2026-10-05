@@ -37,6 +37,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Varying,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "proceduralSystem",
@@ -44,6 +45,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Varying,
                     fallback: fallback(|t| Value::Token(t.intern("hydraGenerativeProcedural"))),
+                    metadata: &[],
                 },
             ],
             overrides: &[],
@@ -62,6 +64,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                 value_type: Some(&super::TOKEN),
                 variability: Variability::Uniform,
                 fallback: None,
+                metadata: &[],
             }],
             overrides: &[],
             can_only_apply_to: &["RenderPass"],

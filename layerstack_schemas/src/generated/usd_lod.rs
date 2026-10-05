@@ -37,6 +37,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT_ARRAY),
                     variability: Variability::Uniform,
                     fallback: fallback(|_| Value::Array(alloc::vec![])),
+                    metadata: &[],
                 },
                 Property {
                     name: "boundingVolume",
@@ -44,6 +45,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: None,
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "center",
@@ -51,6 +53,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::POINT3F),
                     variability: Variability::Varying,
                     fallback: fallback(|_| Value::Vec3f([0.0, 0.0, 0.0])),
+                    metadata: &[],
                 },
                 Property {
                     name: "lod:domain",
@@ -58,6 +61,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "thresholds",
@@ -65,6 +69,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT_ARRAY),
                     variability: Variability::Uniform,
                     fallback: fallback(|_| Value::Array(alloc::vec![])),
+                    metadata: &[],
                 },
             ],
             overrides: &[],
@@ -83,6 +88,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                 value_type: Some(&super::TOKEN),
                 variability: Variability::Uniform,
                 fallback: None,
+                metadata: &[],
             }],
             overrides: &[],
             can_only_apply_to: &[],
@@ -101,6 +107,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT),
                     variability: Variability::Varying,
                     fallback: fallback(|_| Value::Float(0.0)),
+                    metadata: &[],
                 },
                 Property {
                     name: "lod:override:mode",
@@ -108,6 +115,15 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Varying,
                     fallback: fallback(|t| Value::Token(t.intern("inherited"))),
+                    metadata: &[("allowedTokens", |t| {
+                        Value::Array(alloc::vec![
+                            Value::Token(t.intern("inherited")),
+                            Value::Token(t.intern("noOverride")),
+                            Value::Token(t.intern("indexedLOD")),
+                            Value::Token(t.intern("noLOD")),
+                            Value::Token(t.intern("allLOD"))
+                        ])
+                    })],
                 },
             ],
             overrides: &[],
@@ -127,6 +143,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::INT),
                     variability: Variability::Varying,
                     fallback: fallback(|_| Value::Int(0)),
+                    metadata: &[],
                 },
                 Property {
                     name: "lod:heuristics",
@@ -134,6 +151,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: None,
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
             ],
             overrides: &[],
@@ -153,6 +171,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT_ARRAY),
                     variability: Variability::Uniform,
                     fallback: fallback(|_| Value::Array(alloc::vec![])),
+                    metadata: &[],
                 },
                 Property {
                     name: "boundingVolume",
@@ -160,6 +179,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: None,
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "extent",
@@ -172,6 +192,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                             Value::Vec3f([1.0, 1.0, 1.0])
                         ])
                     }),
+                    metadata: &[],
                 },
                 Property {
                     name: "lod:domain",
@@ -179,6 +200,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Uniform,
                     fallback: None,
+                    metadata: &[],
                 },
                 Property {
                     name: "projectionMethod",
@@ -186,6 +208,12 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::TOKEN),
                     variability: Variability::Uniform,
                     fallback: fallback(|t| Value::Token(t.intern("projectedSphere"))),
+                    metadata: &[("allowedTokens", |t| {
+                        Value::Array(alloc::vec![
+                            Value::Token(t.intern("projectedExtent")),
+                            Value::Token(t.intern("projectedSphere"))
+                        ])
+                    })],
                 },
                 Property {
                     name: "thresholds",
@@ -193,6 +221,7 @@ pub(crate) static TABLES: DomainTables = DomainTables {
                     value_type: Some(&super::FLOAT_ARRAY),
                     variability: Variability::Uniform,
                     fallback: fallback(|_| Value::Array(alloc::vec![])),
+                    metadata: &[],
                 },
             ],
             overrides: &[],

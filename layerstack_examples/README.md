@@ -99,6 +99,7 @@ These additional workflows are binaries: use
 | --- | --- |
 | `importer_inputs` | Checked geometry reads, validated material subsets, direct indexed primvars and bounded instance chunks |
 | `lazy_io` | Opt-in retained USDC arrays, checked demand reads, decode statistics and query refresh after reload |
+| `prepared_reload` | Validate checked geometry and packaged texture bytes before accepting a reload; rejected candidates leave the published document intact |
 | `codeless_api` | Load a runtime schema library and apply single/multiple APIs by name, inspect fallback values and undo |
 | `primvar_workflow` | Indexed primvar authoring, index animation, ID targets and reusable inheritance sets |
 | `shading_values` | Material interface inputs and shader value providers |

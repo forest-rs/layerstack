@@ -1,0 +1,83 @@
+#usda 1.0
+(
+    doc = "strong layer metadata"
+    endTimeCode = 8
+    startTimeCode = 5
+)
+
+def Xform "P" (
+    customData = {
+        dictionary nested = {
+            int strong = 1
+            int weak = 2
+        }
+    }
+    prepend inherits = </Class>
+    prepend payload = @__FIXTURE__/assets/payload.usda@</Asset>
+    delete references = @__FIXTURE__/assets/deleted.usda@</Asset>
+    prepend references = @__FIXTURE__/assets/asset.usda@</Asset> (offset = 10; scale = 2)
+    prepend specializes = </Specialized>
+    variants = {
+        string look = "red"
+    }
+    prepend variantSets = "look"
+)
+{
+    double animated.timeSamples = {
+        1: 9,
+    }
+    rel link = </Class>
+    double masked = 4
+    asset texture = @__FIXTURE__/assets/texture.png@
+    timecode timeline = 16
+    double weakAnimated.timeSamples = {
+        10: 1,
+        14: 2,
+    }
+
+    def "Inactive" (
+        active = false
+    )
+    {
+        int retained = 1
+    }
+    variantSet "look" = {
+        "blue" {
+            string label = "unselected blue"
+
+            def "Child"
+            {
+                int branch = 1
+            }
+
+        }
+        "red" {
+            string label = "strong red"
+
+        }
+    }
+}
+
+def "ClipPrim" (
+    clips = {
+        dictionary default = {
+            double2[] active = [(10, 0)]
+            asset[] assetPaths = [@__FIXTURE__/assets/clip.usda@]
+            string primPath = "/Clip"
+            double2[] times = [(10, 0), (14, 2)]
+        }
+    }
+)
+{
+    double clipValue
+}
+
+class "Class"
+{
+    double inherited = 7
+}
+
+class "Specialized"
+{
+    double specialized = 8
+}

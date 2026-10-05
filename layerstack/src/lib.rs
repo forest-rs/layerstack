@@ -85,6 +85,8 @@
 //! | [`TokenInterner`] / [`PathInterner`] | Store-local token and path handles |
 //! | [`SchemaRegistry`] | Schema definitions, prim definitions and fallback values |
 //! | [`EditTarget`] / [`Transaction`] | Mapped, atomic authoring with preconditions and undo |
+//! | [`NamespaceEdit`] | Prepared moves with explicit dependent stages and authored repairs |
+//! | [`flatten_layer_stack`] | Local layer consolidation preserving external composition arcs |
 //!
 //! [`PathId`] and [`TokenId`] belong to their interners; they are not durable
 //! identities to persist or exchange between unrelated stores.
@@ -167,6 +169,11 @@ pub mod half;
 pub mod ident;
 pub mod interner;
 pub mod layer_stack;
+pub mod layer_stack_flatten;
+pub use layer_stack_flatten::{
+    FlattenedLayerStack, LayerStackFlattenAssetPath, LayerStackFlattenError,
+    LayerStackFlattenReport, flatten_layer_stack,
+};
 pub mod listop;
 pub mod path;
 pub mod path_expression;

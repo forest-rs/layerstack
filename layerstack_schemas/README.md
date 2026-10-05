@@ -71,6 +71,35 @@ storage exposes `TypedArray::try_materialize`.
 
 Generated shader-node numeric array defaults also return shared owners.
 
+## Retained scene and material handoffs
+
+With `usd-geom` and `usd-shade`, `scene_records::SceneObserver::update` captures
+checked polygon meshes, native occurrences, point-instance inputs, inherited
+visibility/purpose, indexed primvars and material assignments. Initial records
+and later component deltas use observer-local incarnation handles. Unchanged
+buffers retain their shared owners; deleting and recreating a path retires its
+old handle. Lost notice history reports a reset and reconstructs the inventory.
+Failed capture preserves the last successful records. Polling and time selection
+are explicit; triangulation and subdivision evaluation belong to the geometry
+consumer.
+Source-domain changes are rejected before interpreting IDs. To accept a new
+domain after a prepared document reload, explicitly discard the consumer's
+inventory and call `observer.clear()` before its next update. Old handles remain
+retired and previously captured shared data stays owned by its holders.
+
+`shading::MaterialNetworkCache::get` retains an immutable upstream network for a
+selected material terminal and ordered render contexts. Typed ports, forwarding,
+constant origins, decode failures and asset authoring anchors remain inspectable.
+Separate topology, parameter and authored-resource revisions describe the USD
+handoff; external texture bytes require the host's own content revisions.
+`sample.preview_surface(max_depth)` projects constants, UV textures, standard
+primvar readers and 2D UV transforms into typed inputs. Unknown nodes, cycles and
+unsupported combinations remain explicit diagnostics. It does not compile
+shaders, decode images or prescribe a GPU layout.
+
+Run `cargo run -p layerstack_examples --bin live_scene` for the combined scene
+and material workflow, or `--bin material_network` for the shading-only handoff.
+
 ## Evaluating `UsdProc` recipes
 
 `UsdProc` describes a procedural recipe, not an execution engine. A
@@ -129,6 +158,19 @@ only the supplied scene snapshot; another edit requires another verification.
 Construction captures affinity of the token and path domains. Moving the store
 preserves it; replacing either interner or supplying a foreign stage/store is
 rejected before path lookup. This affinity is process-local, not a file identity.
+
+`procedural::graph::ProceduralGraph` adds an explicit output-owner registry above
+single-recipe evaluation. Requesting an output builds its declared prerequisites
+in dependency order and checks host resource revisions before starting. Cached
+evaluation still prepares publication so removed or edited output sites can be
+repaired. Detached build steps retain prerequisite USD-input/epoch evidence and
+transitive resource revisions, rejecting stale delayed publication before an
+upstream output has been rebuilt. A failed downstream producer reports already
+published prerequisites; publication is atomic per producer, rather than across
+the whole graph. Output manifests, resource snapshots and transactions remain
+host-owned. Run `cargo run -p layerstack_examples --bin procedural_graph`;
+an optional output directory writes the authored world that CI reopens with C++
+OpenUSD.
 
 The binding retains one shared output and its query records. Detached results
 extend those lifetimes and can pin other opinions on consumed prims; applications

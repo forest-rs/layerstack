@@ -338,3 +338,87 @@ print(json.dumps(rows))
     }
     fs::remove_dir_all(dir).unwrap();
 }
+
+#[test]
+fn reference_custom_data_survives_identity_and_nonidentity_offsets() {
+    // AOUSD Core §16.2.17.5; native SdfReference equality confirms dictionary
+    // and offset fidelity independently of USDA's whitespace/offset spelling.
+    let source = r#"#usda 1.0
+over "R" (
+    prepend references = [
+        @./a.usda@ (customData = { string note = "only data" }),
+        @./b.usda@ (offset = 5; scale = 2),
+        @./c.usda@</P> (offset = 5; scale = 2; customData = { int n = 1 })
+    ]
+) {}
+"#;
+    let mut original = Imported::usda(source);
+    let expected = original.prim("/R").references.prepend.clone();
+    assert_eq!(
+        expected[0].layer_offset,
+        LayerOffset::IDENTITY,
+        "metadata-only reference keeps its identity offset"
+    );
+    assert_eq!(
+        expected[0].custom_data,
+        vec![("note".into(), Value::String("only data".into()))],
+        "metadata-only reference retains its dictionary"
+    );
+    assert_eq!(
+        expected[2].custom_data,
+        vec![("n".into(), Value::Int(1))],
+        "retimed reference retains its dictionary"
+    );
+    let text = original.save_usda().unwrap();
+    for restored in [
+        Imported::usda(&text),
+        Imported::usdc(&original.save_usdc().unwrap()),
+    ] {
+        assert_eq!(
+            restored.save_usda().unwrap(),
+            text,
+            "both formats retain reference identity and custom data"
+        );
+    }
+    let python = std::env::var("LAYERSTACK_USD_PYTHON").unwrap_or_else(|_| "python3".into());
+    if !Command::new(&python)
+        .args(["-c", "from pxr import Sdf"])
+        .output()
+        .is_ok_and(|output| output.status.success())
+    {
+        return;
+    }
+    let directory = std::env::temp_dir().join(format!(
+        "layerstack-reference-custom-data-{}",
+        std::process::id()
+    ));
+    fs::create_dir_all(&directory).unwrap();
+    fs::write(directory.join("source.usda"), source).unwrap();
+    fs::write(directory.join("saved.usda"), text).unwrap();
+    fs::write(directory.join("saved.usdc"), original.save_usdc().unwrap()).unwrap();
+    let output = Command::new(&python)
+        .args([
+            "-c",
+            r#"
+import sys
+from pathlib import Path
+from pxr import Sdf
+folder = Path(sys.argv[1])
+def references(name):
+    layer = Sdf.Layer.FindOrOpen(str(folder / name)); assert layer
+    return layer.GetPrimAtPath('/R').referenceList.prependedItems
+expected = references('source.usda')
+for name in ['saved.usda', 'saved.usdc']:
+    assert references(name) == expected, name
+"#,
+        ])
+        .arg(&directory)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "native reference identity, offsets and custom data match: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    fs::remove_dir_all(directory).unwrap();
+}

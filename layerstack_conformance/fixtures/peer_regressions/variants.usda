@@ -1,0 +1,25 @@
+#usda 1.0
+def "Present" {
+ def "Child" {}
+}
+def "Varied" (
+ prepend variantSets = "v"
+ variants = { string v = "on" }
+) {
+ variantSet "v" = {
+ "on" {
+ def "FromVariant" {}
+ }
+ }
+}
+def "RootMissing" (references = </Absent>) {}
+def "SubMissing" (references = </Present/Absent>) {}
+def "PayloadMissing" (payload = </Absent>) {}
+def "SubPresent" (references = </Present/Child>) {}
+def "FromVariantRef" (references = </Varied/FromVariant>) {}
+def "Outer" {
+ def "ToVariant" (references = </Varied/FromVariant>) {}
+ def "ToAbsent" (references = </Absent>) {}
+}
+def "NestedVariantRef" (references = </Outer/ToVariant>) {}
+def "NestedMissing" (references = </Outer/ToAbsent>) {}

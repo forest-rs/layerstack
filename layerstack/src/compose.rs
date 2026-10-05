@@ -36,6 +36,7 @@ use crate::{
     },
     composition_error::{
         ArcToProhibitedChild, CompositionError, UnresolvedAsset, UnresolvedDefaultPrim,
+        UnresolvedPrimPath,
     },
     dependency_map::{ArcDependency, DependencyBuilder},
     doc::{LayerId, LayerOffset, LayerStore, Reference, ReferenceTarget, composed_entries},
@@ -7036,9 +7037,14 @@ fn add_reference_edge_opinions(
         store,
         out,
         &reference,
-        dest_root,
-        ArcKind::References,
-        reference_path,
+        UnresolvedPrimPath {
+            prim: dest_root,
+            arc: ArcKind::References,
+            layer: reference.layer,
+            path: reference_path,
+            introducing_layer: arc.layer,
+            introducing_spec: arc.spec,
+        },
         namespace_depth,
     );
     cycles.enter(target_stack, reference_path, dest_root, ArcKind::References);
@@ -7943,9 +7949,14 @@ fn add_payload_edge_opinions(
         store,
         out,
         &reference,
-        dest_root,
-        ArcKind::Payloads,
-        reference_path,
+        UnresolvedPrimPath {
+            prim: dest_root,
+            arc: ArcKind::Payloads,
+            layer: reference.layer,
+            path: reference_path,
+            introducing_layer: arc.layer,
+            introducing_spec: arc.spec,
+        },
         namespace_depth,
     );
     cycles.enter(target_stack, reference_path, dest_root, ArcKind::Payloads);

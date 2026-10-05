@@ -1,0 +1,12 @@
+#usda 1.0
+def "Template" (
+    prepend variantSets = "shape"
+    variants = { string shape = "on" }
+) {
+    variantSet "shape" = {
+        "on" {
+            def "Part" (references = @content.usda@</Absent>) {}
+        }
+    }
+}
+def "Mounted" (references = </Template>) {}

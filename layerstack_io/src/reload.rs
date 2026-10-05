@@ -109,6 +109,28 @@ impl<B: Storage> StageDocument<B> {
         layers: &[LayerId],
         policy: ReloadPolicy,
     ) -> Result<PreparedReload<'_, B>, IoError> {
+        self.prepare_reload_internal(layers, policy, false)
+    }
+    /// Refreshes the authored root and its freshly reachable dependencies once.
+    /// Unlike explicit selection, obsolete resident sources and package members
+    /// are not forced to load. Existing source IDs and unused authored layers are
+    /// retained; required dirty sources reject under `PreserveDirty`.
+    /// Session opinions are preserved, and session-only dependencies are outside
+    /// this root-file scope. Candidate rejection publishes no freshness changes.
+    /// AOUSD Core §9, §16; explicit host root/dependency reload policy.
+    pub fn prepare_reload_root(
+        &mut self,
+        policy: ReloadPolicy,
+    ) -> Result<PreparedReload<'_, B>, IoError> {
+        let root = self.stage.stage().root_layer().expect("document root");
+        self.prepare_reload_internal(&[root], policy, true)
+    }
+    fn prepare_reload_internal(
+        &mut self,
+        layers: &[LayerId],
+        policy: ReloadPolicy,
+        root_closure: bool,
+    ) -> Result<PreparedReload<'_, B>, IoError> {
         let roots: BTreeSet<_> = layers
             .iter()
             .map(|id| {
@@ -132,7 +154,10 @@ impl<B: Storage> StageDocument<B> {
                 (roots.contains(&id) || s.package.is_some_and(|p| roots.contains(&p))).then_some(id)
             })
             .collect();
-        if policy == ReloadPolicy::PreserveDirty && selected.iter().any(|id| self.is_dirty(*id)) {
+        if !root_closure
+            && policy == ReloadPolicy::PreserveDirty
+            && selected.iter().any(|id| self.is_dirty(*id))
+        {
             return Err(IoError::new(
                 IoErrorKind::DirtyReload,
                 "reload would overwrite dirty selected layers",
@@ -141,6 +166,11 @@ impl<B: Storage> StageDocument<B> {
         let mut store = self.store.snapshot();
         let mut catalog = self.catalog.clone();
         catalog.reserved.extend(self.store.layers.keys().copied());
+        if root_closure {
+            catalog.states.clear();
+            #[cfg(feature = "std")]
+            catalog.retained_values.clear();
+        }
         for id in &selected {
             catalog.states.remove(id);
             #[cfg(feature = "std")]
@@ -152,12 +182,23 @@ impl<B: Storage> StageDocument<B> {
                 .ids
                 .retain(|identifier, id| *id != *root || *identifier == outer);
         }
+        let dirty: BTreeSet<_> = if root_closure && policy == ReloadPolicy::PreserveDirty {
+            self.store
+                .layers
+                .keys()
+                .copied()
+                .filter(|&id| self.is_dirty(id))
+                .collect()
+        } else {
+            BTreeSet::new()
+        };
         let mut reader = Reader::new(
             &mut self.storage,
             &mut catalog,
             self.import_policy,
             self.usdc_options,
         );
+        reader.reachable_only = root_closure;
         for id in roots {
             let identifier = reader.catalog.sources[&id].identifier.clone();
             let result = reader.load(&identifier, None, &mut store.tokens, &mut store.paths)?;
@@ -172,6 +213,15 @@ impl<B: Storage> StageDocument<B> {
                 session: self.stage.stage().session_layer(),
             },
         )?;
+        if root_closure
+            && policy == ReloadPolicy::PreserveDirty
+            && reader.pending.iter().any(|layer| dirty.contains(&layer.id))
+        {
+            return Err(IoError::new(
+                IoErrorKind::DirtyReload,
+                "reload would overwrite a dirty reachable source",
+            ));
+        }
         let report = reader.commit(&mut store);
         let root = self.stage.stage().root_layer().expect("document root");
         let options = self.stage.options().clone();

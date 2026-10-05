@@ -1398,3 +1398,151 @@ fn bounded_reads_never_fall_back_to_a_transport_without_limit_support() {
     );
 }
 
+#[test]
+fn root_reload_skips_removed_sources_even_when_they_introduce_missing_children() {
+    let mut doc = StageDocument::open(
+        Memory::with(&[
+            ("root.usda", "#usda 1.0\n(subLayers=[@a.usda@])"),
+            ("a.usda", "#usda 1.0\ndef \"Old\" {}"),
+        ]),
+        "root.usda",
+        StageOptions::default(),
+    )
+    .unwrap();
+    let root = doc.stage.stage().root_layer().unwrap();
+    let a = doc.catalog.ids["a.usda"];
+    doc.storage
+        .files
+        .insert("root.usda".into(), b"#usda 1.0\ndef \"New\" {}".to_vec());
+    doc.storage.files.insert(
+        "a.usda".into(),
+        b"#usda 1.0\n(subLayers=[@missing.usda@])".to_vec(),
+    );
+    doc.storage.reads.clear();
+    let candidate = doc
+        .prepare_reload_root(ReloadPolicy::PreserveDirty)
+        .unwrap();
+    assert_eq!(candidate.load_report().layers, vec![root]);
+    candidate.commit();
+    assert_eq!(doc.storage.reads, vec![String::from("root.usda")]);
+    assert_eq!(
+        doc.catalog.ids["a.usda"], a,
+        "unused source identity remains reusable"
+    );
+    assert!(!doc.stage.stage().used_layers(true).contains(&a));
+}
+
+#[test]
+fn root_reload_refreshes_resident_dependencies_and_protects_required_dirty_layers() {
+    let mut doc = StageDocument::open(
+        Memory::with(&[
+            ("root.usda", "#usda 1.0\n(subLayers=[@a.usda@])"),
+            ("a.usda", "#usda 1.0\ndef \"Asset\" { int value=1 }"),
+        ]),
+        "root.usda",
+        StageOptions::default(),
+    )
+    .unwrap();
+    let a = doc.catalog.ids["a.usda"];
+    let property = doc.store.property_path("/Asset.value");
+    doc.storage.files.insert(
+        "a.usda".into(),
+        b"#usda 1.0\ndef \"Asset\" { int value=2 }".to_vec(),
+    );
+    doc.storage.reads.clear();
+    let candidate = doc
+        .prepare_reload_root(ReloadPolicy::PreserveDirty)
+        .unwrap();
+    assert_eq!(
+        candidate
+            .stage()
+            .stage()
+            .read_property(property, layerstack::Time::Default, |v| Some(v.clone()))
+            .unwrap()
+            .value,
+        Value::Int(2)
+    );
+    candidate.commit();
+    assert_eq!(
+        doc.storage.reads,
+        vec![String::from("root.usda"), String::from("a.usda")]
+    );
+    let mut layer = doc.store.layers[&a].clone();
+    layer.set_property(
+        property,
+        PropertySpec::attribute().with_default(Value::Int(9)),
+    );
+    doc.store.insert_layer(layer);
+    assert_eq!(
+        doc.prepare_reload_root(ReloadPolicy::PreserveDirty)
+            .unwrap_err()
+            .kind,
+        IoErrorKind::DirtyReload
+    );
+    doc.prepare_reload_root(ReloadPolicy::DiscardDirty)
+        .unwrap()
+        .commit();
+    assert_eq!(doc.catalog.ids["a.usda"], a);
+}
+
+#[test]
+fn root_reload_does_not_force_removed_package_members() {
+    let before = layerstack_usdz::write_usdz(&[
+        layerstack_usdz::PackageFile::new("root.usda", b"#usda 1.0\n(subLayers=[@old.usda@])"),
+        layerstack_usdz::PackageFile::new("old.usda", b"#usda 1.0\ndef \"Old\" {}"),
+    ])
+    .unwrap();
+    let after = layerstack_usdz::write_usdz(&[layerstack_usdz::PackageFile::new(
+        "root.usda",
+        b"#usda 1.0\ndef \"New\" {}",
+    )])
+    .unwrap();
+    let mut memory = Memory::default();
+    memory.files.insert("scene.usdz".into(), before);
+    let mut doc = StageDocument::open(memory, "scene.usdz", StageOptions::default()).unwrap();
+    let old = doc.catalog.ids["scene.usdz[old.usda]"];
+    doc.storage.files.insert("scene.usdz".into(), after);
+    doc.prepare_reload_root(ReloadPolicy::PreserveDirty)
+        .unwrap()
+        .commit();
+    assert!(!doc.stage.stage().used_layers(true).contains(&old));
+    assert_eq!(doc.catalog.ids["scene.usdz[old.usda]"], old);
+}
+
+#[test]
+fn root_reload_renames_a_dependent_package_root_without_alias_collision() {
+    let before = layerstack_usdz::write_usdz(&[layerstack_usdz::PackageFile::new(
+        "oldroot.usda",
+        b"#usda 1.0\ndef \"Before\" {}",
+    )])
+    .unwrap();
+    let after = layerstack_usdz::write_usdz(&[
+        layerstack_usdz::PackageFile::new(
+            "newroot.usda",
+            b"#usda 1.0\n(subLayers=[@oldroot.usda@])\ndef \"NewRoot\" {}",
+        ),
+        layerstack_usdz::PackageFile::new("oldroot.usda", b"#usda 1.0\ndef \"OldMember\" {}"),
+    ])
+    .unwrap();
+    let mut memory = Memory::default();
+    memory.files.insert(
+        "root.usda".into(),
+        b"#usda 1.0\n(subLayers=[@scene.usdz@])".to_vec(),
+    );
+    memory.files.insert("scene.usdz".into(), before);
+    let mut doc = StageDocument::open(memory, "root.usda", StageOptions::default()).unwrap();
+    let package = doc.catalog.ids["scene.usdz"];
+    assert_eq!(doc.catalog.ids["scene.usdz[oldroot.usda]"], package);
+    doc.storage.files.insert("scene.usdz".into(), after);
+    doc.prepare_reload_root(ReloadPolicy::PreserveDirty)
+        .unwrap()
+        .commit();
+    assert_eq!(doc.catalog.ids["scene.usdz"], package);
+    assert_eq!(doc.catalog.ids["scene.usdz[newroot.usda]"], package);
+    assert_ne!(doc.catalog.ids["scene.usdz[oldroot.usda]"], package);
+    assert!(doc.stage.stage().composition_errors().is_empty());
+    let old_member = doc.store.path("/OldMember");
+    let new_root = doc.store.path("/NewRoot");
+    assert!(doc.stage.stage().is_defined(old_member, &doc.store));
+    assert!(doc.stage.stage().is_defined(new_root, &doc.store));
+}

@@ -21,6 +21,14 @@ mod behavior;
 pub use behavior::{ConnectableBehavior, ConnectionError, ConnectionIssue};
 mod ports;
 pub use ports::{Port, PortEdit, PortError, PortKind};
+/// Immutable upstream material capture and caller-owned retention.
+pub mod network;
+/// Bounded standard Preview Surface handoff without shader execution.
+pub mod preview_surface;
+pub use network::{
+    MaterialCaptureError, MaterialNetwork, MaterialNetworkCache, MaterialNetworkSample,
+    MaterialRevisions,
+};
 
 use crate::{PrimView, Scene, usd_shade::Material};
 use alloc::{format, string::String, vec::Vec};

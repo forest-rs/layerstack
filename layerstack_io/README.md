@@ -103,7 +103,9 @@ file dependencies once, preserving source IDs and session opinions. Old unused
 sources and package members are not mandatory reload roots. Session-only file
 dependencies are outside this explicit root-file scope; selected `prepare_reload`
 and `prepare_reload_layers` remain available for other policies. Only sources
-actually replaced by this candidate participate in dirty protection. Drop rejects
+actually replaced by this candidate participate in dirty protection. Expression
+asset bindings from replaced layers are rediscovered, so retained expression
+dependencies refresh and participate in the same dirty protection. Drop rejects
 all source/catalog/freshness changes; commit publishes the composed candidate.
 
 These additions keep transport, composition and renderer ownership unchanged;

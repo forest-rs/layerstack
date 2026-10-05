@@ -1264,6 +1264,9 @@ impl LayerStore for Overlay<'_> {
     fn asset_layer(&self, anchor: LayerId, asset: &str) -> Option<LayerId> {
         match self.bindings.get(&(anchor, asset.into())) {
             Some(&id) => (id != LayerId::UNRESOLVED).then_some(id),
+            // Fresh authored layers must rediscover evaluated expression assets;
+            // published bindings describe the old source snapshot. AOUSD Core §9.
+            None if self.layers.iter().any(|layer| layer.id == anchor) => None,
             None => self.store.asset_layer(anchor, asset),
         }
     }

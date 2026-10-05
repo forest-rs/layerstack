@@ -389,11 +389,15 @@ fn collisions_cycles_missing_parents_and_split_opinions_change_nothing() {
         .sublayers
         .push(SublayerEntry::new(ASSET));
     live = LiveStage::compose(&mut store, ROOT, StageOptions::default());
-    let error = prim_move(live.stage(), &mut store, "/A", "/Renamed").unwrap_err();
-    assert!(matches!(
-        error,
-        NamespaceError::SplitOpinions { layer: ASSET, .. }
-    ));
+    let edit = prim_move(live.stage(), &mut store, "/A", "/Renamed").unwrap();
+    assert_eq!(edit.layers_to_edit(), &[ROOT, ASSET]);
+    let before_weak = store.layers[&ASSET].clone();
+    let inverse = live.apply(&mut store, edit.transaction()).unwrap().inverse;
+    let renamed = store.path("/Renamed");
+    assert!(store.layers[&ASSET].prims.contains_key(&renamed));
+    assert!(!store.layers[&ASSET].prims.contains_key(&a));
+    live.apply(&mut store, &inverse).unwrap();
+    assert_eq!(store.layers[&ASSET], before_weak);
 }
 
 #[test]
@@ -502,7 +506,7 @@ fn edits_beneath_instances_are_rejected() {
 }
 
 #[test]
-fn dependent_descendant_namespace_requires_explicit_coordination() {
+fn dependent_descendant_namespace_in_primary_stage_is_coordinated() {
     let mut store = base();
     let a = store.path("/A");
     let alias = store.path("/Alias");
@@ -511,10 +515,13 @@ fn dependent_descendant_namespace_requires_explicit_coordination() {
         PrimSpec::def().with_reference(Reference::new(ROOT, a)),
     );
     let stage = Stage::compose(&mut store, ROOT, StageOptions::default());
-    assert!(matches!(
-        prim_move(&stage, &mut store, "/A/Child", "/A/New"),
-        Err(NamespaceError::UnsupportedComposition(_))
-    ));
+    let edit = prim_move(&stage, &mut store, "/A/Child", "/A/New").unwrap();
+    let mut live = LiveStage::compose(&mut store, ROOT, StageOptions::default());
+    live.apply(&mut store, edit.transaction()).unwrap();
+    let old_alias = store.path("/Alias/Child");
+    let new_alias = store.path("/Alias/New");
+    assert!(!live.stage().has_prim(old_alias));
+    assert!(live.stage().has_prim(new_alias));
 }
 
 #[test]
@@ -583,6 +590,535 @@ fn dormant_weak_specs_are_rejected_even_when_they_are_not_populated() {
     let stage = Stage::compose(&mut store, ROOT, StageOptions::default());
     assert!(matches!(
         prim_move(&stage, &mut store, "/A", "/Renamed"),
-        Err(NamespaceError::SplitOpinions { layer: ASSET, .. })
+        Err(NamespaceError::UnsupportedComposition(_))
     ));
+}
+
+#[test]
+fn root_stack_referenced_child_uses_relocates_and_coordinated_dependent_overrides() {
+    const DEP: LayerId = LayerId(3);
+    const DIRECT: LayerId = LayerId(4);
+    let mut store = InMemoryStore::default();
+    let asset = store.path("/Asset");
+    let asset_child = store.path("/Asset/Child");
+    let model = store.path("/Model");
+    let child = store.path("/Model/Child");
+    let renamed = store.path("/Model/Renamed");
+    let used = store.path("/Use");
+    let used_child = store.path("/Use/Child");
+    let used_renamed = store.path("/Use/Renamed");
+    let direct = store.path("/Direct");
+    let watch = store.path("/Watch");
+    let size = store.tokens.intern("size");
+    let rel = store.tokens.intern("look");
+    let conn = store.tokens.intern("inputs:value");
+    let expression = store.tokens.intern("expression");
+    let mut source = Layer::new(ASSET);
+    source.insert_prim(asset, PrimSpec::def());
+    source.insert_prim(
+        asset_child,
+        PrimSpec::def().with_property(size, attribute(1.0)),
+    );
+    store.insert_layer(source);
+    let mut layer = Layer::new(ROOT);
+    layer.insert_prim(
+        model,
+        PrimSpec::def().with_reference(Reference::with_asset(ASSET, asset, "asset.usda")),
+    );
+    layer.insert_prim(child, PrimSpec::over().with_property(size, attribute(2.0)));
+    store.insert_layer(layer);
+    let mut dependent = Layer::new(DEP);
+    dependent.insert_prim(
+        used,
+        PrimSpec::def().with_reference(Reference::with_asset(ROOT, model, "root.usda")),
+    );
+    dependent.insert_prim(
+        used_child,
+        PrimSpec::over().with_property(size, attribute(3.0)),
+    );
+    dependent.insert_prim(
+        watch,
+        PrimSpec::def()
+            .with_property(
+                rel,
+                PropertySpec::relationship()
+                    .with_targets(ListOp::explicit(vec![TargetPath::Prim(used_child)])),
+            )
+            .with_property(
+                conn,
+                attribute(0.0).with_targets(ListOp::explicit(vec![TargetPath::Property(
+                    PropertyPath::new(used_child, size),
+                )])),
+            )
+            .with_property(
+                expression,
+                PropertySpec::typed_attribute(PropertyType::new(
+                    "pathExpression",
+                    false,
+                    Value::PathExpression(Arc::from("")),
+                ))
+                .with_default(Value::PathExpression(Arc::from("/Use/Child//"))),
+            ),
+    );
+    store.insert_layer(dependent);
+    let mut direct_layer = Layer::new(DIRECT);
+    direct_layer.insert_prim(
+        direct,
+        PrimSpec::def().with_reference(Reference::with_asset(ROOT, child, "root.usda")),
+    );
+    store.insert_layer(direct_layer);
+    let before: Vec<_> = [ROOT, ASSET, DEP, DIRECT]
+        .into_iter()
+        .map(|id| (id, store.layers[&id].clone()))
+        .collect();
+    let mut live = LiveStage::compose(&mut store, ROOT, StageOptions::default());
+    let mut dep = LiveStage::compose(&mut store, DEP, StageOptions::default());
+    let mut direct_stage = LiveStage::compose(&mut store, DIRECT, StageOptions::default());
+    let edit = NamespaceEdit::prepare_with_dependents(
+        live.stage(),
+        &[dep.stage(), direct_stage.stage()],
+        &mut store,
+        &EditTarget::for_layer(ROOT),
+        TargetPath::Prim(child),
+        TargetPath::Prim(renamed),
+    )
+    .unwrap();
+    assert_eq!(edit.layers_to_edit(), &[ROOT, DEP, DIRECT]);
+    for (id, layer) in &before {
+        assert_eq!(&store.layers[id], layer, "preview changed a layer");
+    }
+    let inverse = live.apply(&mut store, edit.transaction()).unwrap().inverse;
+    dep.synchronize(&mut store);
+    direct_stage.synchronize(&mut store);
+    assert_eq!(
+        store.layers[&ROOT].relocates,
+        vec![crate::Relocate {
+            source: child,
+            target: Some(renamed)
+        }]
+    );
+    assert!(!live.stage().has_prim(child));
+    assert!(live.stage().has_prim(renamed));
+    assert!(!dep.stage().has_prim(used_child));
+    assert!(dep.stage().has_prim(used_renamed));
+    assert_eq!(
+        store.layers[&DEP]
+            .property(PropertyPath::new(used_renamed, size))
+            .unwrap()
+            .default,
+        Some(Value::Double(3.0))
+    );
+    assert_eq!(
+        reads(&store, DEP, PropertyPath::new(watch, rel)),
+        vec![TargetPath::Prim(used_renamed)]
+    );
+    assert_eq!(
+        reads(&store, DEP, PropertyPath::new(watch, conn)),
+        vec![TargetPath::Property(PropertyPath::new(used_renamed, size))]
+    );
+    assert_eq!(
+        store.layers[&DEP]
+            .property(PropertyPath::new(watch, expression))
+            .unwrap()
+            .default,
+        Some(Value::PathExpression(Arc::from("/Use/Renamed//")))
+    );
+    assert_eq!(
+        store.layers[&DIRECT].prims[&direct]
+            .references
+            .items()
+            .next()
+            .unwrap()
+            .target,
+        ReferenceTarget::Prim(renamed)
+    );
+    assert!(direct_stage.stage().has_prim(direct));
+    assert_eq!(
+        store.layers[&ASSET],
+        before.iter().find(|(id, _)| *id == ASSET).unwrap().1
+    );
+    let rename_again = store.path("/Model/Again");
+    let second = NamespaceEdit::prepare_with_dependents(
+        live.stage(),
+        &[dep.stage(), direct_stage.stage()],
+        &mut store,
+        &EditTarget::for_layer(ROOT),
+        TargetPath::Prim(renamed),
+        TargetPath::Prim(rename_again),
+    )
+    .unwrap();
+    let second_inverse = live
+        .apply(&mut store, second.transaction())
+        .unwrap()
+        .inverse;
+    assert_eq!(
+        store.layers[&ROOT].relocates,
+        vec![crate::Relocate {
+            source: child,
+            target: Some(rename_again)
+        }]
+    );
+    live.apply(&mut store, &second_inverse).unwrap();
+    dep.synchronize(&mut store);
+    direct_stage.synchronize(&mut store);
+    let restore_source = NamespaceEdit::prepare_with_dependents(
+        live.stage(),
+        &[dep.stage(), direct_stage.stage()],
+        &mut store,
+        &EditTarget::for_layer(ROOT),
+        TargetPath::Prim(renamed),
+        TargetPath::Prim(child),
+    )
+    .unwrap();
+    let restore_inverse = live
+        .apply(&mut store, restore_source.transaction())
+        .unwrap()
+        .inverse;
+    assert!(store.layers[&ROOT].relocates.is_empty());
+    assert!(live.stage().has_prim(child));
+    live.apply(&mut store, &restore_inverse).unwrap();
+    live.apply(&mut store, &inverse).unwrap();
+    for (id, layer) in before {
+        assert_eq!(store.layers[&id], layer, "undo layer {id:?}");
+    }
+}
+
+#[test]
+fn split_opinions_create_destination_ancestors_and_undo_exactly() {
+    let mut store = base();
+    let a = store.path("/A");
+    let child = store.path("/A/Child");
+    let b = store.path("/B");
+    let moved = store.path("/B/New");
+    let mut weak = Layer::new(ASSET);
+    weak.insert_prim(a, PrimSpec::over());
+    weak.insert_prim(child, PrimSpec::over());
+    store.insert_layer(weak);
+    store
+        .layers
+        .get_mut(&ROOT)
+        .unwrap()
+        .sublayers
+        .push(SublayerEntry::new(ASSET));
+    let before = store.layers[&ASSET].clone();
+    let mut live = LiveStage::compose(&mut store, ROOT, StageOptions::default());
+    let edit = prim_move(live.stage(), &mut store, "/A", "/B/New").unwrap();
+    let inverse = live.apply(&mut store, edit.transaction()).unwrap().inverse;
+    assert_eq!(
+        store.layers[&ASSET].prims[&b].specifier,
+        Some(crate::Specifier::Over)
+    );
+    assert!(store.layers[&ASSET].prims.contains_key(&moved));
+    live.apply(&mut store, &inverse).unwrap();
+    assert_eq!(store.layers[&ASSET], before);
+}
+
+#[test]
+fn dependent_collisions_affinity_and_generation_fail_before_any_mutation() {
+    const DEP: LayerId = LayerId(3);
+    let mut store = base();
+    let a = store.path("/A");
+    let alias = store.path("/Alias");
+    let collision = store.path("/Alias/New");
+    let source = store.path("/A/Child");
+    let destination = store.path("/A/New");
+    let mut dependent = Layer::new(DEP);
+    dependent.insert_prim(
+        alias,
+        PrimSpec::def().with_reference(Reference::with_asset(ROOT, a, "root.usda")),
+    );
+    dependent.insert_prim(collision, PrimSpec::def());
+    store.insert_layer(dependent);
+    let mut live = LiveStage::compose(&mut store, ROOT, StageOptions::default());
+    let dep = Stage::compose(&mut store, DEP, StageOptions::default());
+    let before_root = store.layers[&ROOT].clone();
+    let before_dep = store.layers[&DEP].clone();
+    assert_eq!(
+        NamespaceEdit::prepare_with_dependents(
+            live.stage(),
+            &[&dep],
+            &mut store,
+            &EditTarget::for_layer(ROOT),
+            TargetPath::Prim(source),
+            TargetPath::Prim(destination)
+        ),
+        Err(NamespaceError::Collision)
+    );
+    assert_eq!(store.layers[&ROOT], before_root);
+    assert_eq!(store.layers[&DEP], before_dep);
+    store.layers.get_mut(&DEP).unwrap().prims.remove(&collision);
+    store.layer_mut(DEP).unwrap().touch();
+    let dep = Stage::compose(&mut store, DEP, StageOptions::default());
+    let edit = NamespaceEdit::prepare_with_dependents(
+        live.stage(),
+        &[&dep],
+        &mut store,
+        &EditTarget::for_layer(ROOT),
+        TargetPath::Prim(source),
+        TargetPath::Prim(destination),
+    )
+    .unwrap();
+    store.layer_mut(DEP).unwrap().touch();
+    let before_root = store.layers[&ROOT].clone();
+    let before_dep = store.layers[&DEP].clone();
+    assert!(matches!(
+        live.apply(&mut store, edit.transaction()),
+        Err(EditError::StaleGeneration { layer: DEP, .. })
+    ));
+    assert_eq!(store.layers[&ROOT], before_root);
+    assert_eq!(store.layers[&DEP], before_dep);
+    let mut other = base();
+    let other_stage = Stage::compose(&mut other, ROOT, StageOptions::default());
+    assert!(matches!(
+        NamespaceEdit::prepare_with_dependents(
+            live.stage(),
+            &[&other_stage],
+            &mut store,
+            &EditTarget::for_layer(ROOT),
+            TargetPath::Prim(source),
+            TargetPath::Prim(destination)
+        ),
+        Err(NamespaceError::UnsupportedComposition(_))
+    ));
+}
+
+#[test]
+fn relocated_expression_arcs_keep_root_local_values_and_refresh_source_values() {
+    // Native UsdStage keeps local root expressions in their authored namespace;
+    // incoming arc expressions include the receiving stack's relocates.
+    // AOUSD Core §10.3.2.6.1; PcpMapFunction::MapSourceToTarget.
+    let mut store = InMemoryStore::default();
+    let asset = store.path("/Asset");
+    let child = store.path("/Asset/Child");
+    let watch = store.path("/Asset/Watch");
+    let model = store.path("/Model");
+    let model_child = store.path("/Model/Child");
+    let mapped_watch = store.path("/Model/Watch");
+    let elsewhere = store.path("/Else");
+    let parent = store.path("/Else/Deep");
+    let moved = store.path("/Else/Deep/New");
+    let local = store.path("/Model/Local");
+    let name = store.tokens.intern("expression");
+    let expression = |text: &str| {
+        PropertySpec::typed_attribute(PropertyType::new(
+            "pathExpression",
+            false,
+            Value::PathExpression(Arc::from("")),
+        ))
+        .with_default(Value::PathExpression(Arc::from(text)))
+    };
+    let mut layer = Layer::new(ASSET);
+    layer.insert_prim(asset, PrimSpec::def());
+    layer.insert_prim(child, PrimSpec::def());
+    layer.insert_prim(
+        watch,
+        PrimSpec::def().with_property(
+            name,
+            expression("/Asset/Child.size %/Asset/Child:expression"),
+        ),
+    );
+    store.insert_layer(layer);
+    let mut layer = Layer::new(ROOT);
+    layer.insert_prim(
+        model,
+        PrimSpec::def().with_reference(Reference::with_asset(ASSET, asset, "asset.usda")),
+    );
+    layer.insert_prim(elsewhere, PrimSpec::def());
+    layer.insert_prim(parent, PrimSpec::def());
+    layer.insert_prim(
+        local,
+        PrimSpec::over().with_property(name, expression("/Model/Child//")),
+    );
+    layer.relocates.push(crate::Relocate {
+        source: model_child,
+        target: Some(moved),
+    });
+    store.insert_layer(layer);
+    let before_asset = store.layers[&ASSET].clone();
+    let mut live = LiveStage::compose(&mut store, ROOT, StageOptions::default());
+    let mapped_property = PropertyPath::new(mapped_watch, name);
+    assert_eq!(
+        live.stage()
+            .resolve_field_path(mapped_property)
+            .unwrap()
+            .value,
+        Value::PathExpression(Arc::from("/Else/Deep/New.size %/Else/Deep/New:expression"))
+    );
+    assert_eq!(
+        live.stage()
+            .resolve_field_path(PropertyPath::new(local, name))
+            .unwrap()
+            .value,
+        Value::PathExpression(Arc::from("/Model/Child//"))
+    );
+    assert_eq!(store.layers[&ASSET], before_asset);
+    let mut transaction = Transaction::new();
+    transaction.set_default(
+        EditTarget::for_layer(ASSET).property(PropertyPath::new(watch, name)),
+        Value::PathExpression(Arc::from("/Asset/Child//")),
+    );
+    live.apply(&mut store, &transaction).unwrap();
+    assert_eq!(
+        live.stage()
+            .resolve_field_path(mapped_property)
+            .unwrap()
+            .value,
+        Value::PathExpression(Arc::from("/Else/Deep/New//"))
+    );
+    let fresh = Stage::compose(&mut store, ROOT, StageOptions::default());
+    assert_eq!(
+        live.stage().resolve_field_path(mapped_property),
+        fresh.resolve_field_path(mapped_property)
+    );
+    // A muted layer's relocates never re-enter through fresh value mapping.
+    const WEAK: LayerId = LayerId(3);
+    let relocates = core::mem::take(&mut store.layers.get_mut(&ROOT).unwrap().relocates);
+    let mut weak = Layer::new(WEAK);
+    weak.relocates = relocates;
+    store.insert_layer(weak);
+    store
+        .layer_mut(ROOT)
+        .unwrap()
+        .sublayers
+        .push(SublayerEntry::new(WEAK));
+    store.layer_mut(ROOT).unwrap().touch();
+    let options = StageOptions {
+        muted_layers: alloc::collections::BTreeSet::from([WEAK]),
+        ..StageOptions::default()
+    };
+    let mut muted = LiveStage::compose(&mut store, ROOT, options);
+    assert_eq!(
+        muted
+            .stage()
+            .resolve_field_path(mapped_property)
+            .unwrap()
+            .value,
+        Value::PathExpression(Arc::from("/Model/Child//"))
+    );
+    let mut transaction = Transaction::new();
+    transaction.set_default(
+        EditTarget::for_layer(ASSET).property(PropertyPath::new(watch, name)),
+        Value::PathExpression(Arc::from("/Asset/Child.size")),
+    );
+    muted.apply(&mut store, &transaction).unwrap();
+    assert_eq!(
+        muted
+            .stage()
+            .resolve_field_path(mapped_property)
+            .unwrap()
+            .value,
+        Value::PathExpression(Arc::from("/Model/Child.size"))
+    );
+}
+
+#[test]
+fn namespace_relocate_slot_has_atomic_rollback_and_conflicting_undo_guards() {
+    let mut store = InMemoryStore::default();
+    let asset = store.path("/Asset");
+    let child = store.path("/Asset/Child");
+    let model = store.path("/Model");
+    let from = store.path("/Model/Child");
+    let to = store.path("/Model/New");
+    let mut layer = Layer::new(ASSET);
+    layer.insert_prim(asset, PrimSpec::def());
+    layer.insert_prim(child, PrimSpec::def());
+    store.insert_layer(layer);
+    let mut layer = Layer::new(ROOT);
+    layer.insert_prim(
+        model,
+        PrimSpec::def().with_reference(Reference::with_asset(ASSET, asset, "asset.usda")),
+    );
+    store.insert_layer(layer);
+    let mut live = LiveStage::compose(&mut store, ROOT, StageOptions::default());
+    let edit = NamespaceEdit::prepare(
+        live.stage(),
+        &mut store,
+        &EditTarget::for_layer(ROOT),
+        TargetPath::Prim(from),
+        TargetPath::Prim(to),
+    )
+    .unwrap();
+    assert_eq!(
+        edit.relocates_to_author(),
+        &[(
+            ROOT,
+            vec![crate::Relocate {
+                source: from,
+                target: Some(to)
+            }]
+        )]
+    );
+    assert_eq!(
+        edit.namespace_moves(),
+        &[(ROOT, TargetPath::Prim(from), TargetPath::Prim(to))]
+    );
+    let before = store.layers[&ROOT].clone();
+    let mut failed = edit.clone().into_transaction();
+    let nonexistent = store.property_path("/Absent.value");
+    failed.set_default(
+        EditTarget::for_layer(ROOT).property(nonexistent),
+        Value::Double(1.0),
+    );
+    assert!(live.apply(&mut store, &failed).is_err());
+    assert_eq!(store.layers[&ROOT], before);
+    let inverse = live.apply(&mut store, edit.transaction()).unwrap().inverse;
+    let other = store.path("/Other");
+    store.layers.get_mut(&ROOT).unwrap().relocates[0].target = Some(other);
+    store.layer_mut(ROOT).unwrap().touch();
+    let conflicting = store.layers[&ROOT].clone();
+    assert!(matches!(
+        live.apply(&mut store, &inverse),
+        Err(EditError::StaleValue { .. })
+    ));
+    assert_eq!(store.layers[&ROOT], conflicting);
+}
+
+#[test]
+fn dependent_session_on_same_root_moves_its_override_with_shared_source() {
+    const SESSION: LayerId = LayerId(3);
+    let mut store = base();
+    let from = store.path("/A/Child");
+    let to = store.path("/A/New");
+    let a = store.path("/A");
+    let value = store.tokens.intern("localValue");
+    let mut session = Layer::new(SESSION);
+    session.insert_prim(a, PrimSpec::over());
+    session.insert_prim(from, PrimSpec::over().with_property(value, attribute(42.0)));
+    store.insert_layer(session);
+    let mut primary = LiveStage::compose(&mut store, ROOT, StageOptions::default());
+    let mut dependent = LiveStage::compose(
+        &mut store,
+        ROOT,
+        StageOptions {
+            session_layer: Some(SESSION),
+            ..StageOptions::default()
+        },
+    );
+    let before_session = store.layers[&SESSION].clone();
+    let edit = NamespaceEdit::prepare_with_dependents(
+        primary.stage(),
+        &[dependent.stage()],
+        &mut store,
+        &EditTarget::for_layer(ROOT),
+        TargetPath::Prim(from),
+        TargetPath::Prim(to),
+    )
+    .unwrap();
+    assert_eq!(edit.layers_to_edit(), &[ROOT, SESSION]);
+    let inverse = primary
+        .apply(&mut store, edit.transaction())
+        .unwrap()
+        .inverse;
+    dependent.synchronize(&mut store);
+    assert!(!dependent.stage().has_prim(from));
+    assert_eq!(
+        dependent
+            .stage()
+            .resolve_field_path(PropertyPath::new(to, value))
+            .unwrap()
+            .value,
+        Value::Double(42.0)
+    );
+    primary.apply(&mut store, &inverse).unwrap();
+    assert_eq!(store.layers[&SESSION], before_session);
 }

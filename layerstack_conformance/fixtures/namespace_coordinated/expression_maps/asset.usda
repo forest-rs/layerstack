@@ -1,0 +1,24 @@
+#usda 1.0
+
+def "Asset"
+{
+    def "Child"
+    {
+        custom pathExpression source:property = "/Asset/Child.size"
+        custom pathExpression source:reference = "%/Asset/Child:expression"
+        custom pathExpression source:subtree = "/Asset/Child//"
+        custom pathExpression target:property = "/Asset/Renamed.size"
+        custom pathExpression target:reference = "%/Asset/Renamed:expression"
+        custom pathExpression target:subtree = "/Asset/Renamed//"
+    }
+
+    def "Watch"
+    {
+        custom pathExpression source:property = "/Asset/Child.size"
+        custom pathExpression source:reference = "%/Asset/Child:expression"
+        custom pathExpression source:subtree = "/Asset/Child//"
+        custom pathExpression target:property = "/Asset/Renamed.size"
+        custom pathExpression target:reference = "%/Asset/Renamed:expression"
+        custom pathExpression target:subtree = "/Asset/Renamed//"
+    }
+}

@@ -1,0 +1,115 @@
+#usda 1.0
+(
+    relocates = {
+        </Model/Child>: </Model/Renamed>,
+        </Else/Child>: </Else/Renamed>,
+        </Model2/Child>: </Model2/Renamed>,
+        </SpecialModel2/Child>: </SpecialModel2/Renamed>
+    }
+)
+
+def "Model" (
+    prepend references = @asset.usda@</Asset>
+)
+{
+}
+
+def "Copy" (
+    prepend references = </Model/Watch>
+)
+{
+}
+
+def "Copy2" (
+    prepend references = </Copy>
+)
+{
+}
+
+def "Local"
+{
+    custom pathExpression source:property = "/Model/Child.size"
+    custom pathExpression source:reference = "%/Model/Child:expression"
+    custom pathExpression source:subtree = "/Model/Child//"
+    custom pathExpression target:property = "/Model/Renamed.size"
+    custom pathExpression target:reference = "%/Model/Renamed:expression"
+    custom pathExpression target:subtree = "/Model/Renamed//"
+}
+
+def "Else" (
+    prepend references = @asset.usda@</Asset>
+)
+{
+}
+
+class "Class2"
+{
+    custom pathExpression source:property = "/Else/Child.size"
+    custom pathExpression source:reference = "%/Else/Child:expression"
+    custom pathExpression source:subtree = "/Else/Child//"
+    custom pathExpression target:property = "/Else/Renamed.size"
+    custom pathExpression target:reference = "%/Else/Renamed:expression"
+    custom pathExpression target:subtree = "/Else/Renamed//"
+}
+
+class "Class1" (
+    prepend inherits = </Class2>
+)
+{
+}
+
+def "ClassModel" (
+    prepend inherits = </Class1>
+)
+{
+}
+
+class "Class"
+{
+    custom pathExpression classSource:property = "/Class/Child.size"
+    custom pathExpression classSource:reference = "%/Class/Child:expression"
+    custom pathExpression classSource:subtree = "/Class/Child//"
+    custom pathExpression classTarget:property = "/Class/Renamed.size"
+    custom pathExpression classTarget:reference = "%/Class/Renamed:expression"
+    custom pathExpression classTarget:subtree = "/Class/Renamed//"
+    custom pathExpression source:property = "/Model2/Child.size"
+    custom pathExpression source:reference = "%/Model2/Child:expression"
+    custom pathExpression source:subtree = "/Model2/Child//"
+    custom pathExpression target:property = "/Model2/Renamed.size"
+    custom pathExpression target:reference = "%/Model2/Renamed:expression"
+    custom pathExpression target:subtree = "/Model2/Renamed//"
+
+    def "Child"
+    {
+        custom pathExpression outsideSource:property = "/Else/Child.size"
+        custom pathExpression outsideSource:reference = "%/Else/Child:expression"
+        custom pathExpression outsideSource:subtree = "/Else/Child//"
+        custom pathExpression outsideTarget:property = "/Else/Renamed.size"
+        custom pathExpression outsideTarget:reference = "%/Else/Renamed:expression"
+        custom pathExpression outsideTarget:subtree = "/Else/Renamed//"
+    }
+}
+
+def "Model2" (
+    prepend inherits = </Class>
+)
+{
+}
+
+class "ClassSpecial" (
+    prepend specializes = </Class2>
+)
+{
+}
+
+def "SpecialModel" (
+    prepend specializes = </ClassSpecial>
+)
+{
+}
+
+def "SpecialModel2" (
+    prepend specializes = </Class>
+)
+{
+}

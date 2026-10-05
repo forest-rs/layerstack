@@ -1,0 +1,22 @@
+#usda 1.0
+
+def "Asset"
+{
+    def "Child"
+    {
+        custom pathExpression expression = "/Asset/Child.size /Asset/Child/Leaf//"
+        custom double size = 1
+
+        def "Leaf"
+        {
+        }
+    }
+
+    def "Watch"
+    {
+        custom pathExpression expression = "/Asset/Child// /Asset/Child.size %/Asset/Child:expression"
+        custom double inputs:value
+        double inputs:value.connect = </Asset/Child.size>
+        custom rel look = </Asset/Child>
+    }
+}

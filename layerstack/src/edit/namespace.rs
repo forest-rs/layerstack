@@ -10,6 +10,8 @@
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use core::fmt;
 
+mod coordinated;
+
 use super::{
     EditTarget, Transaction,
     apply::{Guarded, Raw},
@@ -31,17 +33,18 @@ use crate::{
 /// usual guarded inverse, which guards each affected prim slot in full.
 /// Preparation changes no layer (it may intern paths).
 ///
-/// Moves stay within one edit target's source layer. Split opinions, edits
-/// requiring relocates, variant-qualified moves, instance proxies, and dependent
-/// namespace moves through other composition arcs return explicit errors.
-/// Moves of or beneath inactive roots are rejected until dormant descendants
-/// and their composition dependencies can be coordinated.
-/// Relationships, shader connections, all path-list-op buckets, internal and
-/// external reference/payload targets, inherits and specializes are repaired in
-/// the primary stage's reachable layers. Other stages and unloaded assets are
-/// outside this editor's scope. Literal path-expression prefixes and expression
-/// references are repaired, anchoring relative expressions at their original
-/// author before a move. Asset-path variable expressions require resolved
+/// Root-stack edits coordinate all contributing local opinions and author
+/// relocates for prim namespace introduced through ancestral arcs. Explicit
+/// dependent snapshots can participate through [`Self::prepare_with_dependents`].
+/// Mapped source-asset edit targets retain their single-source behavior; their
+/// split opinions and dependent arc namespaces remain explicit errors.
+/// Variant-qualified moves, instance proxies, inactive or dormant composition,
+/// unloaded assets and ambiguous mappings are rejected before layer mutation.
+/// Relationships, shader connections, all path-list-op buckets, reference and
+/// payload targets, inherits, specializes and literal path expressions are
+/// repaired in their own namespace. Relative expressions retain their original
+/// authoring anchor. External asset namespaces are preserved unless that asset
+/// is the explicitly edited source. Asset-variable expressions require resolved
 /// dependency editing and are rejected.
 #[derive(Clone, Debug, PartialEq)]
 pub struct NamespaceEdit {
@@ -50,6 +53,8 @@ pub struct NamespaceEdit {
     destination: TargetPath,
     layers: Vec<LayerId>,
     specs: Vec<(LayerId, SpecPath)>,
+    namespace_moves: Vec<(LayerId, TargetPath, TargetPath)>,
+    relocates: Vec<(LayerId, Vec<crate::Relocate>)>,
 }
 
 /// Why a namespace move cannot be prepared. No layer has been modified.
@@ -61,7 +66,7 @@ pub enum NamespaceError {
     NoSuchObject,
     /// The destination is already occupied in the stage or source layer.
     Collision,
-    /// The destination parent has no authored spec in the edit target.
+    /// The destination parent is absent from the required stage/source domain.
     MissingParent,
     /// A prim cannot move beneath itself.
     Cycle,
@@ -69,7 +74,7 @@ pub enum NamespaceError {
     InstanceProxy,
     /// The edit target does not map both paths.
     Unmappable,
-    /// The moved object's opinions require edits in additional source layers.
+    /// A mapped source-asset move requires additional source-layer edits.
     SplitOpinions {
         /// Source layer that contributes the unsupported opinion.
         layer: LayerId,
@@ -103,8 +108,11 @@ impl NamespaceEdit {
     /// Prepares a prim rename/reparent or a property rename/reparent.
     ///
     /// Both paths are in stage namespace and map through `target`. The
-    /// destination parent must exist in both the composed stage and source
-    /// layer; preparation does not create ancestors or author relocates.
+    /// destination parent must exist in the composed stage. A root-stack target
+    /// delegates to [`Self::prepare_with_dependents`] with no additional stages;
+    /// missing local ancestors become inert overs and ancestral arc namespace
+    /// uses relocates. A mapped source-asset target edits that asset directly
+    /// and requires its destination parent to have an authored spec.
     ///
     /// ```
     /// use layerstack::{EditTarget, InMemoryStore, Layer, LayerId, LiveStage,
@@ -132,8 +140,16 @@ impl NamespaceEdit {
     ) -> Result<Self, NamespaceError> {
         validate_paths(store, source, destination)?;
         validate_stage(stage, store, source, destination)?;
-        let from = map(target, store, source)?;
-        let to = map(target, store, destination)?;
+        let mapped_source = map(target, store, source)?;
+        let mapped_destination = map(target, store, destination)?;
+        if stage.layer_stack().contains(&target.layer())
+            && spec_target(&mapped_source) == source
+            && spec_target(&mapped_destination) == destination
+        {
+            return Self::prepare_with_dependents(stage, &[], store, target, source, destination);
+        }
+        let from = mapped_source;
+        let to = mapped_destination;
         if from
             .components()
             .iter()
@@ -240,6 +256,8 @@ impl NamespaceEdit {
             destination,
             layers: edited_layers,
             specs,
+            namespace_moves: alloc::vec![(root, source, destination)],
+            relocates: Vec::new(),
         })
     }
 
@@ -266,6 +284,20 @@ impl NamespaceEdit {
     pub fn specs_to_edit(&self) -> &[(LayerId, SpecPath)] {
         &self.specs
     }
+    /// Namespace moves discovered in each supplied stage, as
+    /// `(stage_root_layer, source, destination)` in that stage's namespace.
+    /// Direct reference mounts remain fixed and do not appear as moves.
+    #[must_use]
+    pub fn namespace_moves(&self) -> &[(LayerId, TargetPath, TargetPath)] {
+        &self.namespace_moves
+    }
+    /// Complete replacement relocate tables for affected local layers.
+    /// An empty table removes prior authored relocates. Source assets are
+    /// excluded unless they are the explicit mapped source edit target.
+    #[must_use]
+    pub fn relocates_to_author(&self) -> &[(LayerId, Vec<crate::Relocate>)] {
+        &self.relocates
+    }
     /// Atomic, generation-guarded edit; apply through [`crate::LiveStage::apply`].
     #[must_use]
     pub fn transaction(&self) -> &Transaction {
@@ -275,6 +307,39 @@ impl NamespaceEdit {
     #[must_use]
     pub fn into_transaction(self) -> Transaction {
         self.transaction
+    }
+
+    /// Prepares one atomic root-stack namespace edit and repairs supplied stages.
+    ///
+    /// Each snapshot must reflect the current store and share its token/path
+    /// domains. All root-stack opinions move together. Namespace introduced by
+    /// an ancestral reference or payload uses a relocate in `target.layer()`;
+    /// the referenced source layers remain intact. The editor discovers related
+    /// namespaces from each supplied stage's composition graph and moves their
+    /// local override specs, including relationship, connection and expression
+    /// repairs. Direct references to the moved root keep their mount namespace
+    /// and receive a repaired source target instead.
+    ///
+    /// Dependents are caller-owned: undisclosed stages cannot be discovered.
+    /// Masks, muted layers, unloaded payloads, dormant variants and ambiguous
+    /// mappings are rejected explicitly. Dependent mappings currently require
+    /// direct, non-implied arcs from their local stack and a destination within
+    /// that arc's source domain; nested arcs or a reparent leaving that domain
+    /// return an error. Preparation composes edited layer clones to verify the
+    /// proposed namespace before returning. All inspected layers receive generation
+    /// preconditions; application and its guarded inverse are atomic. Callers
+    /// refresh other live stages after applying the shared transaction.
+    /// AOUSD Core §8, §10.3.2.6 (relocates); OpenUSD `UsdNamespaceEditor` and
+    /// `PcpGatherDependentNamespaceEdits`.
+    pub fn prepare_with_dependents(
+        stage: &Stage,
+        dependents: &[&Stage],
+        store: &mut dyn LayerStore,
+        target: &EditTarget,
+        source: TargetPath,
+        destination: TargetPath,
+    ) -> Result<Self, NamespaceError> {
+        coordinated::prepare(stage, dependents, store, target, source, destination)
     }
 }
 
@@ -770,6 +835,7 @@ fn move_specs(
     Ok(())
 }
 
+#[derive(Clone)]
 struct PathMove {
     from: TargetPath,
     to: TargetPath,
@@ -825,10 +891,10 @@ fn repair_refs(
         ));
     }
     map_list(refs, |r| {
-        let mapping = if r.layer == edited {
+        let mapping = if r.layer == author && r.asset.is_none() {
+            local.or_else(|| (r.layer == edited).then_some(source))
+        } else if r.layer == edited {
             Some(source)
-        } else if r.layer == author && r.asset.is_none() {
-            local
         } else {
             None
         };

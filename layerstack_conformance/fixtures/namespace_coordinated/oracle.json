@@ -1,0 +1,469 @@
+{
+  "payload": {
+    "dependents": [
+      "dependent.usda",
+      "direct.usda"
+    ],
+    "destination": "/Model/Renamed",
+    "layers": {
+      "asset.usda": {
+        "relocates": [],
+        "specs": [
+          "/",
+          "/Asset",
+          "/Asset/Child",
+          "/Asset/Child/Leaf",
+          "/Asset/Watch"
+        ]
+      },
+      "dependent.usda": {
+        "relocates": [],
+        "specs": [
+          "/",
+          "/Use",
+          "/Use/Renamed",
+          "/Watch"
+        ]
+      },
+      "direct.usda": {
+        "relocates": [],
+        "specs": [
+          "/",
+          "/Direct"
+        ]
+      },
+      "root.usda": {
+        "relocates": [
+          [
+            "/Model/Child",
+            "/Model/Renamed"
+          ]
+        ],
+        "specs": [
+          "/",
+          "/Model",
+          "/Model/Renamed"
+        ]
+      }
+    },
+    "root": "root.usda",
+    "source": "/Model/Child",
+    "stages": {
+      "dependent.usda": {
+        "connections": {
+          "/Use/Watch.inputs:value": [
+            "/Use/Renamed.size"
+          ],
+          "/Watch.inputs:value": [
+            "/Use/Renamed.size"
+          ]
+        },
+        "expressions": {
+          "/Use/Renamed.expression": "/Use/Renamed.size /Use/Renamed/Leaf//",
+          "/Use/Watch.expression": "/Use/Renamed// /Use/Renamed.size %/Use/Renamed:expression",
+          "/Watch.expression": "/Use/Renamed//"
+        },
+        "prims": [
+          "/Use",
+          "/Use/Renamed",
+          "/Use/Renamed/Leaf",
+          "/Use/Watch",
+          "/Watch"
+        ],
+        "targets": {
+          "/Use/Watch.look": [
+            "/Use/Renamed"
+          ],
+          "/Watch.look": [
+            "/Use/Renamed"
+          ]
+        },
+        "values": {
+          "/Use/Renamed.size": 3.0
+        }
+      },
+      "direct.usda": {
+        "connections": {},
+        "expressions": {
+          "/Direct.expression": "/Direct.size /Direct/Leaf//"
+        },
+        "prims": [
+          "/Direct",
+          "/Direct/Leaf"
+        ],
+        "targets": {},
+        "values": {
+          "/Direct.size": 2.0
+        }
+      },
+      "root.usda": {
+        "connections": {
+          "/Model/Watch.inputs:value": [
+            "/Model/Renamed.size"
+          ]
+        },
+        "expressions": {
+          "/Model/Renamed.expression": "/Model/Renamed.size /Model/Renamed/Leaf//",
+          "/Model/Watch.expression": "/Model/Renamed// /Model/Renamed.size %/Model/Renamed:expression"
+        },
+        "prims": [
+          "/Model",
+          "/Model/Renamed",
+          "/Model/Renamed/Leaf",
+          "/Model/Watch"
+        ],
+        "targets": {
+          "/Model/Watch.look": [
+            "/Model/Renamed"
+          ]
+        },
+        "values": {
+          "/Model/Renamed.size": 2.0
+        }
+      }
+    }
+  },
+  "payload_reparent": {
+    "dependents": [],
+    "destination": "/Else/Group/Renamed",
+    "layers": {
+      "asset.usda": {
+        "relocates": [],
+        "specs": [
+          "/",
+          "/Asset",
+          "/Asset/Child",
+          "/Asset/Child/Leaf",
+          "/Asset/Watch"
+        ]
+      },
+      "root.usda": {
+        "relocates": [
+          [
+            "/Model/Child",
+            "/Else/Group/Renamed"
+          ]
+        ],
+        "specs": [
+          "/",
+          "/Else",
+          "/Else/Group",
+          "/Else/Group/Renamed",
+          "/Model"
+        ]
+      }
+    },
+    "root": "root.usda",
+    "source": "/Model/Child",
+    "stages": {
+      "root.usda": {
+        "connections": {
+          "/Model/Watch.inputs:value": [
+            "/Else/Group/Renamed.size"
+          ]
+        },
+        "expressions": {
+          "/Else/Group/Renamed.expression": "/Else/Group/Renamed.size /Else/Group/Renamed/Leaf//",
+          "/Model/Watch.expression": "/Else/Group/Renamed// /Else/Group/Renamed.size %/Else/Group/Renamed:expression"
+        },
+        "prims": [
+          "/Else",
+          "/Else/Group",
+          "/Else/Group/Renamed",
+          "/Else/Group/Renamed/Leaf",
+          "/Model",
+          "/Model/Watch"
+        ],
+        "targets": {
+          "/Model/Watch.look": [
+            "/Else/Group/Renamed"
+          ]
+        },
+        "values": {
+          "/Else/Group/Renamed.size": 2.0
+        }
+      }
+    }
+  },
+  "reference": {
+    "dependents": [
+      "dependent.usda",
+      "direct.usda"
+    ],
+    "destination": "/Model/Renamed",
+    "layers": {
+      "asset.usda": {
+        "relocates": [],
+        "specs": [
+          "/",
+          "/Asset",
+          "/Asset/Child",
+          "/Asset/Child/Leaf",
+          "/Asset/Watch"
+        ]
+      },
+      "dependent.usda": {
+        "relocates": [],
+        "specs": [
+          "/",
+          "/Use",
+          "/Use/Renamed",
+          "/Watch"
+        ]
+      },
+      "direct.usda": {
+        "relocates": [],
+        "specs": [
+          "/",
+          "/Direct"
+        ]
+      },
+      "root.usda": {
+        "relocates": [
+          [
+            "/Model/Child",
+            "/Model/Renamed"
+          ]
+        ],
+        "specs": [
+          "/",
+          "/Model",
+          "/Model/Renamed"
+        ]
+      }
+    },
+    "root": "root.usda",
+    "source": "/Model/Child",
+    "stages": {
+      "dependent.usda": {
+        "connections": {
+          "/Use/Watch.inputs:value": [
+            "/Use/Renamed.size"
+          ],
+          "/Watch.inputs:value": [
+            "/Use/Renamed.size"
+          ]
+        },
+        "expressions": {
+          "/Use/Renamed.expression": "/Use/Renamed.size /Use/Renamed/Leaf//",
+          "/Use/Watch.expression": "/Use/Renamed// /Use/Renamed.size %/Use/Renamed:expression",
+          "/Watch.expression": "/Use/Renamed//"
+        },
+        "prims": [
+          "/Use",
+          "/Use/Renamed",
+          "/Use/Renamed/Leaf",
+          "/Use/Watch",
+          "/Watch"
+        ],
+        "targets": {
+          "/Use/Watch.look": [
+            "/Use/Renamed"
+          ],
+          "/Watch.look": [
+            "/Use/Renamed"
+          ]
+        },
+        "values": {
+          "/Use/Renamed.size": 3.0
+        }
+      },
+      "direct.usda": {
+        "connections": {},
+        "expressions": {
+          "/Direct.expression": "/Direct.size /Direct/Leaf//"
+        },
+        "prims": [
+          "/Direct",
+          "/Direct/Leaf"
+        ],
+        "targets": {},
+        "values": {
+          "/Direct.size": 2.0
+        }
+      },
+      "root.usda": {
+        "connections": {
+          "/Model/Watch.inputs:value": [
+            "/Model/Renamed.size"
+          ]
+        },
+        "expressions": {
+          "/Model/Renamed.expression": "/Model/Renamed.size /Model/Renamed/Leaf//",
+          "/Model/Watch.expression": "/Model/Renamed// /Model/Renamed.size %/Model/Renamed:expression"
+        },
+        "prims": [
+          "/Model",
+          "/Model/Renamed",
+          "/Model/Renamed/Leaf",
+          "/Model/Watch"
+        ],
+        "targets": {
+          "/Model/Watch.look": [
+            "/Model/Renamed"
+          ]
+        },
+        "values": {
+          "/Model/Renamed.size": 2.0
+        }
+      }
+    }
+  },
+  "reference_reparent": {
+    "dependents": [],
+    "destination": "/Else/Group/Renamed",
+    "layers": {
+      "asset.usda": {
+        "relocates": [],
+        "specs": [
+          "/",
+          "/Asset",
+          "/Asset/Child",
+          "/Asset/Child/Leaf",
+          "/Asset/Watch"
+        ]
+      },
+      "root.usda": {
+        "relocates": [
+          [
+            "/Model/Child",
+            "/Else/Group/Renamed"
+          ]
+        ],
+        "specs": [
+          "/",
+          "/Else",
+          "/Else/Group",
+          "/Else/Group/Renamed",
+          "/Model"
+        ]
+      }
+    },
+    "root": "root.usda",
+    "source": "/Model/Child",
+    "stages": {
+      "root.usda": {
+        "connections": {
+          "/Model/Watch.inputs:value": [
+            "/Else/Group/Renamed.size"
+          ]
+        },
+        "expressions": {
+          "/Else/Group/Renamed.expression": "/Else/Group/Renamed.size /Else/Group/Renamed/Leaf//",
+          "/Model/Watch.expression": "/Else/Group/Renamed// /Else/Group/Renamed.size %/Else/Group/Renamed:expression"
+        },
+        "prims": [
+          "/Else",
+          "/Else/Group",
+          "/Else/Group/Renamed",
+          "/Else/Group/Renamed/Leaf",
+          "/Model",
+          "/Model/Watch"
+        ],
+        "targets": {
+          "/Model/Watch.look": [
+            "/Else/Group/Renamed"
+          ]
+        },
+        "values": {
+          "/Else/Group/Renamed.size": 2.0
+        }
+      }
+    }
+  },
+  "split": {
+    "dependents": [],
+    "destination": "/B/New",
+    "layers": {
+      "root.usda": {
+        "relocates": [],
+        "specs": [
+          "/",
+          "/B",
+          "/B/New"
+        ]
+      },
+      "weak.usda": {
+        "relocates": [],
+        "specs": [
+          "/",
+          "/B",
+          "/B/New",
+          "/B/New/Child"
+        ]
+      }
+    },
+    "root": "root.usda",
+    "source": "/A",
+    "stages": {
+      "root.usda": {
+        "connections": {},
+        "expressions": {},
+        "prims": [
+          "/B",
+          "/B/New",
+          "/B/New/Child"
+        ],
+        "targets": {},
+        "values": {
+          "/B/New.size": 2.0
+        }
+      }
+    }
+  },
+  "split_property": {
+    "dependents": [
+      "dependent.usda"
+    ],
+    "destination": "/A.renamed",
+    "layers": {
+      "dependent.usda": {
+        "relocates": [],
+        "specs": [
+          "/",
+          "/Alias"
+        ]
+      },
+      "root.usda": {
+        "relocates": [],
+        "specs": [
+          "/",
+          "/A"
+        ]
+      },
+      "weak.usda": {
+        "relocates": [],
+        "specs": [
+          "/",
+          "/A"
+        ]
+      }
+    },
+    "root": "root.usda",
+    "source": "/A.size",
+    "stages": {
+      "dependent.usda": {
+        "connections": {},
+        "expressions": {},
+        "prims": [
+          "/Alias"
+        ],
+        "targets": {},
+        "values": {
+          "/Alias.renamed": 3.0
+        }
+      },
+      "root.usda": {
+        "connections": {},
+        "expressions": {},
+        "prims": [
+          "/A"
+        ],
+        "targets": {},
+        "values": {
+          "/A.renamed": 2.0
+        }
+      }
+    }
+  }
+}

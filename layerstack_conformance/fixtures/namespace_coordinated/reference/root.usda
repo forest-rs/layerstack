@@ -1,0 +1,11 @@
+#usda 1.0
+
+def "Model" (
+    prepend references = @asset.usda@</Asset>
+)
+{
+    over "Child"
+    {
+        custom double size = 2
+    }
+}

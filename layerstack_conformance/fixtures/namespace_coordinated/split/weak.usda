@@ -1,0 +1,10 @@
+#usda 1.0
+
+def "A"
+{
+    custom double size = 7
+
+    def "Child"
+    {
+    }
+}

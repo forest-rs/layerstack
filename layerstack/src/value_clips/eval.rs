@@ -26,7 +26,7 @@ pub enum ClipEvalError {
     InvalidSamples,
     /// Numeric queries and their mapped times must be finite.
     InvalidQuery,
-    /// Spline loops and regressive tangents exceed the existing query core.
+    /// Regressive tangents or other unsupported spline semantics exceed the query core.
     UnsupportedSpline,
     /// The source spline has invalid knots, tangents or nonfinite data.
     InvalidSpline,
@@ -239,7 +239,7 @@ impl PreparedClipProperty {
     }
     /// Prepares manifest-selected spline evaluation with the same schedule.
     /// Authored splines retain their interpolation regardless of stage policy.
-    /// Extrapolation loops are resolved; inner loops require baking.
+    /// Extrapolation and finite inner loops use virtual evaluation without baking.
     /// Malformed and regressive sources error.
     /// Spline properties have no discrete sample timeline, as in OpenUSD 26.08.
     pub(super) fn new_spline(
@@ -340,7 +340,9 @@ impl PreparedClipProperty {
                 .evaluate_pre_value(internal)
                 .map_err(|_| ClipEvalError::InvalidSpline)?
         } else {
-            spline.evaluate(internal)
+            spline
+                .evaluate_checked(internal)
+                .map_err(|_| ClipEvalError::InvalidSpline)?
         };
         let value = value.map(|v| {
             if property
@@ -938,6 +940,43 @@ mod tests {
         .unwrap();
         for (t, v) in [(10., 0.), (15., 5.), (19., 9.)] {
             assert_eq!(value(&p, t), Some(Value::Double(v)));
+        }
+    }
+    #[test]
+    fn inner_loop_clips_evaluate_without_discrete_sample_expansion() {
+        let mut property = (*spline_clip(0., 10.).unwrap()).clone();
+        property.spline.as_mut().unwrap().loop_params = Some(crate::spline::LoopParams {
+            proto_start: 0.,
+            proto_end: 10.,
+            num_pre_loops: 1,
+            num_post_loops: 2,
+            value_offset: 100.,
+        });
+        let prepared = PreparedClipProperty::new_spline(
+            vec![(0., 0)],
+            vec![],
+            vec![Some(Arc::new(property))],
+            None,
+            false,
+        )
+        .unwrap();
+        assert!(prepared.sample_times().is_empty());
+        for (time, expected) in [
+            (-5., -50.),
+            (0., 0.),
+            (5., 50.),
+            (10., 100.),
+            (15., 150.),
+            (25., 250.),
+            (30., 300.),
+            (40., 300.),
+        ] {
+            for interpolation in [InterpolationType::Linear, InterpolationType::Held] {
+                assert_eq!(
+                    prepared.evaluate(time, interpolation).unwrap().value,
+                    Some(Value::Double(expected))
+                );
+            }
         }
     }
     #[test]

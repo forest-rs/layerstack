@@ -14,6 +14,7 @@ use crate::doc::Value;
 use alloc::{sync::Arc, vec::Vec};
 use core::fmt;
 
+mod loops;
 mod queries;
 pub use queries::{SplineChangeInterval, SplinePolyline, SplineQueryError, SplineSample};
 
@@ -85,7 +86,7 @@ pub enum SplineDataType {
 // ---------------------------------------------------------------------------
 
 /// Authored inner-loop parameters (§12.5). These are independent of
-/// extrapolation loops. Numerical queries require inner loops to be baked.
+/// extrapolation loops. Evaluation uses virtual echoes; baking is explicitly bounded.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LoopParams {
     /// Start of the prototype region (in time).
@@ -180,7 +181,7 @@ pub struct SplineData {
     pub pre_extrapolation: Extrapolation,
     /// Extrapolation mode after the last knot.
     pub post_extrapolation: Extrapolation,
-    /// Optional inner-loop parameters; preserved but require baking to evaluate.
+    /// Optional finite inner-loop parameters, evaluated without expanding every echo.
     pub loop_params: Option<LoopParams>,
     /// Knots sorted by time.
     pub knots: Vec<Knot>,
@@ -238,6 +239,9 @@ impl SplineData {
             if lp.proto_end > lp.proto_start {
                 lp.proto_start = time(lp.proto_start);
                 lp.proto_end = time(lp.proto_end);
+                if self.data_type == SplineDataType::TimeCode {
+                    lp.value_offset *= scale;
+                }
             }
             lp
         });
@@ -286,19 +290,17 @@ impl SplineData {
 
     /// Evaluate the spline at the given time, returning the interpolated value.
     ///
-    /// Returns `None` for empty/blocked regions, inner loops, regressive Bézier
+    /// Returns `None` for empty/blocked regions, invalid loops, regressive Bézier
     /// segments, nonfinite queries, or 2^53 or more extrapolation periods.
     /// Use [`Self::evaluate_checked`] for errors.
     ///
     /// Spec: §12.5 (interpolation methods).
     #[must_use]
     pub fn evaluate(&self, time: f64) -> Option<f64> {
-        if self.knots.is_empty()
-            || !time.is_finite()
-            || self
-                .loop_params
-                .is_some_and(|lp| lp.proto_end > lp.proto_start)
-        {
+        if self.active_inner_loops().ok()? {
+            return self.evaluate_inner_loops(time, false, false).ok().flatten();
+        }
+        if self.knots.is_empty() || !time.is_finite() {
             return None;
         }
         let mapping = self.map_extrapolation(time, false).ok()??;

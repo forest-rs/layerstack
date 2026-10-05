@@ -10,11 +10,11 @@ use alloc::{vec, vec::Vec};
 pub enum SplineQueryError {
     /// Nonfinite input, unordered knots, negative tangent widths or bad tolerance.
     InvalidInput,
-    /// Inner loops require baking; adaptive sampling and change intervals also
-    /// require extrapolation loops to be baked.
+    /// Adaptive sampling and change intervals require loops to be baked.
     UnsupportedLoops,
     /// The query spans 2^53 or more extrapolation periods; adjacent cycle
     /// indices and their boundary sides cannot be distinguished in `f64`.
+    /// Also returned when finite inner-loop echo times alias in `f64`.
     UnsupportedLoopRange,
     /// A Bézier time curve reverses direction, making inversion ambiguous.
     RegressiveTangents,
@@ -53,7 +53,7 @@ pub struct SplineChangeInterval {
     pub end: f64,
 }
 fn looped(spline: &SplineData) -> bool {
-    spline.loop_params.is_some()
+    spline.active_inner_loops().unwrap_or(true)
         || [spline.pre_extrapolation, spline.post_extrapolation]
             .iter()
             .any(|v| {
@@ -65,13 +65,8 @@ fn looped(spline: &SplineData) -> bool {
                 )
             })
 }
-fn validate(spline: &SplineData) -> Result<(), SplineQueryError> {
-    if spline
-        .loop_params
-        .is_some_and(|lp| lp.proto_end > lp.proto_start)
-    {
-        return Err(SplineQueryError::UnsupportedLoops);
-    }
+pub(super) fn validate(spline: &SplineData) -> Result<(), SplineQueryError> {
+    spline.active_inner_loops()?;
     if spline
         .knots
         .windows(2)
@@ -138,10 +133,13 @@ pub(super) fn regressive(a: &Knot, b: &Knot) -> bool {
 }
 impl SplineData {
     /// Evaluates a finite time with explicit invalid-data and unsupported-feature
-    /// errors. Extrapolation loops are resolved without expanding periods; inner loops
-    /// require baking and regressive Bézier tangents require containment.
+    /// errors. Both loop kinds use bounded virtual evaluation; regressive Bézier
+    /// tangents require containment.
     /// AOUSD Core §12.3.3, §12.5.
     pub fn evaluate_checked(&self, time: f64) -> Result<Option<f64>, SplineQueryError> {
+        if self.active_inner_loops()? {
+            return self.evaluate_inner_loops(time, false, false);
+        }
         validate(self)?;
         if !time.is_finite() {
             return Err(SplineQueryError::InvalidInput);
@@ -196,9 +194,14 @@ impl SplineData {
     /// Evaluates the left-hand limit, including held segments and blocked
     /// regions. At a dual-valued knot this uses its pre-value unless the preceding
     /// segment is held (previous value) or blocked (no value). Extrapolation loops
-    /// preserve boundary sides; inner loops require baking. Invalid data errors.
+    /// preserve boundary sides, including finite inner-loop echoes. Inner loops
+    /// use the effective curve's left limit; OpenUSD 26.8 can instead consult
+    /// shadowed knots at exact held boundaries. Invalid data errors.
     /// AOUSD Core §12.3.3, §12.5; OpenUSD `TsSpline::EvalPreValue`.
     pub fn evaluate_pre_value(&self, time: f64) -> Result<Option<f64>, SplineQueryError> {
+        if self.active_inner_loops()? {
+            return self.evaluate_inner_loops(time, true, false);
+        }
         validate(self)?;
         if self.has_regressive_tangents()? {
             return Err(SplineQueryError::RegressiveTangents);
@@ -241,8 +244,10 @@ impl SplineData {
     /// Analytic right-hand derivative, including linear/sloped extrapolation.
     /// Blocked regions return `None`. At a curved knot the authored right slope
     /// is used, including zero-width tangents, as `TsSpline::EvalDerivative` does.
-    /// Inner loops and regressive Bézier segments are explicitly unsupported; a
+    /// Regressive Bézier segments require containment; a
     /// vanishing interior time derivative returns `SingularDerivative`.
+    /// Inner-loop derivatives use the echoed curve, consistently with baking;
+    /// OpenUSD 26.8 can instead use shadowed authored knots at loop boundaries.
     /// AOUSD Core §12.5; OpenUSD `ts/eval.cpp`.
     pub fn evaluate_derivative(&self, time: f64) -> Result<Option<f64>, SplineQueryError> {
         self.derivative(time, false)
@@ -254,6 +259,9 @@ impl SplineData {
         self.derivative(time, true)
     }
     fn derivative(&self, time: f64, pre: bool) -> Result<Option<f64>, SplineQueryError> {
+        if self.active_inner_loops()? {
+            return self.evaluate_inner_loops(time, pre, true);
+        }
         validate(self)?;
         if !time.is_finite() {
             return Err(SplineQueryError::InvalidInput);
@@ -272,7 +280,11 @@ impl SplineData {
                 .map(|v| v * mapping.sign),
         )
     }
-    fn derivative_unlooped(&self, time: f64, pre: bool) -> Result<Option<f64>, SplineQueryError> {
+    pub(super) fn derivative_unlooped(
+        &self,
+        time: f64,
+        pre: bool,
+    ) -> Result<Option<f64>, SplineQueryError> {
         let segment = match self
             .knots
             .binary_search_by(|k| k.time.partial_cmp(&time).expect("finite time"))
@@ -825,10 +837,9 @@ mod tests {
             num_post_loops: 1,
             value_offset: 0.,
         });
-        assert_eq!(
-            s.evaluate_checked(1.),
-            Err(SplineQueryError::UnsupportedLoops)
-        );
+        let mut baked = s.clone();
+        baked.bake_inner_loops(16).unwrap();
+        assert_eq!(s.evaluate_checked(1.), baked.evaluate_checked(1.));
         s = spline();
         s.knots[1].value = f64::MAX;
         s.knots[0].value = -f64::MAX;

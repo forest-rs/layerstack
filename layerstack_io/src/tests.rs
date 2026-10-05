@@ -1546,3 +1546,159 @@ fn root_reload_renames_a_dependent_package_root_without_alias_collision() {
     assert!(doc.stage.stage().is_defined(old_member, &doc.store));
     assert!(doc.stage.stage().is_defined(new_root, &doc.store));
 }
+
+#[test]
+fn root_reload_refreshes_expression_dependencies_and_rejects_dirty_sources() {
+    let mut doc = StageDocument::open(
+        Memory::with(&[
+            ("root.usda", "#usda 1.0\n(expressionVariables = { string ASSET = \"asset.usda\" })\ndef \"Host\" (references = @`${ASSET}`@</Asset>) {}"),
+            ("asset.usda", "#usda 1.0\ndef \"Asset\" { int value=1 }"),
+        ]),
+        "root.usda", StageOptions::default(),
+    ).unwrap();
+    let asset = doc.catalog.ids["asset.usda"];
+    let property = doc.store.property_path("/Host.value");
+    let original_bindings = doc.store.asset_layers.clone();
+    doc.storage.files.insert(
+        "asset.usda".into(),
+        b"#usda 1.0\ndef \"Asset\" { int value=2 }".to_vec(),
+    );
+    doc.storage.reads.clear();
+    {
+        let candidate = doc
+            .prepare_reload_root(ReloadPolicy::PreserveDirty)
+            .unwrap();
+        assert_eq!(
+            candidate
+                .stage()
+                .stage()
+                .read_property(property, layerstack::Time::Default, |v| Some(v.clone()))
+                .unwrap()
+                .value,
+            Value::Int(2)
+        );
+        assert!(candidate.load_report().layers.contains(&asset));
+    }
+    assert_eq!(doc.store.asset_layers, original_bindings);
+    assert_eq!(
+        doc.stage
+            .stage()
+            .read_property(property, layerstack::Time::Default, |v| Some(v.clone()))
+            .unwrap()
+            .value,
+        Value::Int(1)
+    );
+    assert_eq!(
+        doc.storage.reads,
+        vec![String::from("root.usda"), String::from("asset.usda")]
+    );
+    let authored = doc.store.property_path("/Asset.value");
+    let mut layer = doc.store.layers[&asset].clone();
+    layer.set_property(
+        authored,
+        PropertySpec::attribute().with_default(Value::Int(9)),
+    );
+    doc.store.insert_layer(layer);
+    assert!(doc.is_dirty(asset));
+    assert_eq!(
+        doc.prepare_reload_root(ReloadPolicy::PreserveDirty)
+            .unwrap_err()
+            .kind,
+        IoErrorKind::DirtyReload
+    );
+    assert!(doc.is_dirty(asset));
+    doc.prepare_reload_root(ReloadPolicy::DiscardDirty)
+        .unwrap()
+        .commit();
+    assert_eq!(doc.catalog.ids["asset.usda"], asset);
+    assert_eq!(
+        doc.stage
+            .stage()
+            .read_property(property, layerstack::Time::Default, |v| Some(v.clone()))
+            .unwrap()
+            .value,
+        Value::Int(2)
+    );
+    assert!(!doc.is_dirty(asset));
+}
+
+#[test]
+fn root_reload_refreshes_nested_expression_assets_and_recovers_missing_sources() {
+    let mut doc = StageDocument::open(
+        Memory::with(&[
+            ("root.usda", "#usda 1.0\n(expressionVariables = { string ASSET = \"asset.usda\"\n string CHILD = \"child.usda\" })\ndef \"Host\" (references = @`${ASSET}`@</Asset>) {}"),
+            ("asset.usda", "#usda 1.0\n(subLayers=[@`${CHILD}`@])\ndef \"Asset\" {}"),
+            ("child.usda", "#usda 1.0\ndef \"Asset\" { int value=1 }"),
+        ]), "root.usda", StageOptions::default(),
+    ).unwrap();
+    let property = doc.store.property_path("/Host.value");
+    let child = doc.catalog.ids["child.usda"];
+    doc.storage.files.insert(
+        "child.usda".into(),
+        b"#usda 1.0\ndef \"Asset\" { int value=2 }".to_vec(),
+    );
+    doc.storage.reads.clear();
+    doc.prepare_reload_root(ReloadPolicy::PreserveDirty)
+        .unwrap()
+        .commit();
+    assert_eq!(
+        doc.stage
+            .stage()
+            .read_property(property, layerstack::Time::Default, |v| Some(v.clone()))
+            .unwrap()
+            .value,
+        Value::Int(2)
+    );
+    assert_eq!(
+        doc.storage.reads,
+        vec![
+            String::from("root.usda"),
+            String::from("asset.usda"),
+            String::from("child.usda")
+        ]
+    );
+    assert_eq!(doc.catalog.ids["child.usda"], child);
+    let bindings = doc.store.asset_layers.clone();
+    doc.storage.files.remove("child.usda");
+    assert_eq!(
+        doc.prepare_reload_root(ReloadPolicy::PreserveDirty)
+            .unwrap_err()
+            .kind,
+        IoErrorKind::NotFound
+    );
+    assert_eq!(doc.store.asset_layers, bindings);
+    assert_eq!(
+        doc.stage
+            .stage()
+            .read_property(property, layerstack::Time::Default, |v| Some(v.clone()))
+            .unwrap()
+            .value,
+        Value::Int(2)
+    );
+    doc.storage.files.insert(
+        "child.usda".into(),
+        b"#usda 1.0\ndef \"Asset\" { int value=3 }".to_vec(),
+    );
+    doc.prepare_reload_root(ReloadPolicy::PreserveDirty)
+        .unwrap()
+        .commit();
+    assert_eq!(
+        doc.stage
+            .stage()
+            .read_property(property, layerstack::Time::Default, |v| Some(v.clone()))
+            .unwrap()
+            .value,
+        Value::Int(3)
+    );
+    doc.storage.files.remove("child.usda");
+    doc.storage.files.insert(
+        "root.usda".into(),
+        b"#usda 1.0\ndef \"Repaired\" {}".to_vec(),
+    );
+    doc.storage.reads.clear();
+    doc.prepare_reload_root(ReloadPolicy::PreserveDirty)
+        .unwrap()
+        .commit();
+    assert_eq!(doc.storage.reads, vec![String::from("root.usda")]);
+    assert!(!doc.stage.stage().used_layers(true).contains(&child));
+}

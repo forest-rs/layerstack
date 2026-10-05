@@ -810,7 +810,7 @@ impl SkelCache {
             "points",
             self.time,
             crate::value::read_float3_array,
-        )
+        )?
         .ok_or_else(|| invalid(geometry, "points"))?;
         self.ensure_shape_weights(scene, geometry)?;
         let b = self.bindings.get_mut(&geometry).expect("prepared binding");
@@ -1052,7 +1052,7 @@ impl SkelCache {
             self.ensure_shape_weights(scene, geometry)?;
         }
         let prim = PrimView::new(*scene, geometry);
-        let normals = read(&prim, "normals", self.time, crate::value::read_float3_array)
+        let normals = read(&prim, "normals", self.time, crate::value::read_float3_array)?
             .ok_or_else(|| invalid(geometry, "normals"))?;
         let interpolation = prim
             .property_metadata("normals")
@@ -1067,14 +1067,14 @@ impl SkelCache {
         let i = b.inputs.as_ref().expect("prepared inputs");
         let (point_count, corners) =
             if interpolation == "faceVarying" && scene.is_a(geometry, "Mesh") {
-                let points = read(&prim, "points", self.time, crate::value::read_float3_array)
+                let points = read(&prim, "points", self.time, crate::value::read_float3_array)?
                     .ok_or_else(|| invalid(geometry, "points"))?;
                 let corners = read(
                     &prim,
                     "faceVertexIndices",
                     self.time,
                     crate::value::read_int_array,
-                )
+                )?
                 .ok_or_else(|| invalid(geometry, "faceVertexIndices"))?;
                 super::normals::validate_corners(points.len(), &corners, normals.len())?;
                 (points.len(), Some(corners))

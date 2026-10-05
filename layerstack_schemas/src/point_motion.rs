@@ -6,16 +6,23 @@
 //! Source selection and interpolation follow AOUSD Core §12.3–12.5.
 use crate::{
     Time,
-    motion_sampling::{aligned, anchor, rate, vectors},
+    motion_sampling::{aligned, anchor, rate},
     usd_geom::PointBased,
 };
 use alloc::vec::Vec;
 
 /// Invalid required point data or query configuration.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PointMotionError {
     /// The required `points` array cannot be read.
     MissingPoints,
+    /// Retained numeric storage failed to decode; no fallback motion is returned.
+    Decode {
+        /// The failed attribute in stage namespace.
+        property: layerstack::PropertyPath,
+        /// The original decoder error.
+        error: layerstack::ArrayReadError,
+    },
     /// Numeric times must be finite, of matching kind, and use a positive finite rate.
     InvalidTime,
     /// A nonempty motion array has a different length from points.
@@ -28,7 +35,14 @@ impl core::fmt::Display for PointMotionError {
         write!(f, "invalid point motion: {self:?}")
     }
 }
-impl core::error::Error for PointMotionError {}
+impl core::error::Error for PointMotionError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::Decode { error, .. } => Some(error),
+            _ => None,
+        }
+    }
+}
 
 /// Caller-owned motion inputs anchored to one base time.
 ///
@@ -52,6 +66,16 @@ pub struct PointMotionInputs {
     pub velocity_sample: Option<f64>,
     /// Stage time codes per second.
     pub time_codes_per_second: f64,
+}
+fn vectors(
+    prim: &crate::PrimView<'_>,
+    name: &str,
+    time: Time,
+) -> Result<Option<Vec<[f32; 3]>>, PointMotionError> {
+    crate::motion_sampling::vectors(prim, name, time).map_err(|error| PointMotionError::Decode {
+        property: prim.property_path(name).expect("failed attribute exists"),
+        error,
+    })
 }
 fn compatible(time: Time, base: Time) -> bool {
     match (time, base) {
@@ -110,21 +134,21 @@ impl PointMotionInputs {
 }
 impl PointBased<'_> {
     /// Gathers point and aligned motion arrays once at `base_time`.
-    /// Returns errors for unreadable points, unsupported sample sources or invalid times.
+    /// Returns errors for decode failures, unreadable points, unsupported sample sources or invalid times.
     pub fn motion_inputs(&self, base_time: Time) -> Result<PointMotionInputs, PointMotionError> {
         if !compatible(base_time, base_time) {
             return Err(PointMotionError::InvalidTime);
         }
         let p = anchor(self, "points", base_time).map_err(PointMotionError::UnsupportedSource)?;
-        let points = vectors(self, "points", p.time).ok_or(PointMotionError::MissingPoints)?;
+        let points = vectors(self, "points", p.time)?.ok_or(PointMotionError::MissingPoints)?;
         let v =
             anchor(self, "velocities", base_time).map_err(PointMotionError::UnsupportedSource)?;
-        let velocities = vectors(self, "velocities", v.time)
+        let velocities = vectors(self, "velocities", v.time)?
             .filter(|data| data.len() == points.len() && aligned(p, v))
             .unwrap_or_default();
         let a = anchor(self, "accelerations", base_time)
             .map_err(PointMotionError::UnsupportedSource)?;
-        let accelerations = vectors(self, "accelerations", a.time)
+        let accelerations = vectors(self, "accelerations", a.time)?
             .filter(|data| !velocities.is_empty() && data.len() == points.len() && aligned(v, a))
             .unwrap_or_default();
         Ok(PointMotionInputs {
@@ -171,7 +195,7 @@ impl PointBased<'_> {
             if inputs.velocities.is_empty()
                 && count != 0
                 && let Some(points) =
-                    vectors(self, "points", time).filter(|data| data.len() == count)
+                    vectors(self, "points", time)?.filter(|data| data.len() == count)
             {
                 inputs.points = points;
             }

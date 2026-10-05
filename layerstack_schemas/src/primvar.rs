@@ -348,12 +348,22 @@ impl<'a> Primvar<'a> {
     /// Decode failures retain the original property path and error.
     /// OpenUSD: `UsdGeomPrimvar::ComputeFlattened`; AOUSD Core §12.3–12.5.
     pub fn validated_values(&self, time: Time) -> Result<Option<PrimvarValues>, PrimvarError> {
+        self.validated_values_by(time, |v, _| Some(v.clone()))
+    }
+    // Typed internal consumers keep conversion in USD source selection while
+    // sharing the same indexed-value validation and native-buffer retention.
+    // AOUSD Core §12.3–12.5; OpenUSD `UsdAttribute::Get<T>` default-time retry.
+    pub(crate) fn validated_values_by(
+        &self,
+        time: Time,
+        decode: impl Fn(&Value, &'a layerstack::TokenInterner) -> Option<Value>,
+    ) -> Result<Option<PrimvarValues>, PrimvarError> {
         let property = self.property();
         let mut value = if self.is_id_target() {
             self.value(time)?
         } else {
             self.prim
-                .try_read_value(self.name, time, |v, _| Some(v.clone()))
+                .try_read_value(self.name, time, decode)
                 .map_err(|error| PrimvarError::Decode { property, error })?
         };
         if let Some(Value::TypedArray(array)) = &mut value {

@@ -5,7 +5,7 @@
 //! Draw ranges, triangulation and renderer grouping belong to the consumer.
 use crate::{
     BindingCache, BindingOptions, BoundMaterial, MaterialPurpose, PrimView, Scene, Time,
-    subset::SubsetValidation,
+    subset::{SubsetError, SubsetProblem, SubsetProblemKind, SubsetValidation},
     usd_geom::{GeomSubsetElementType, Imageable},
 };
 use alloc::{string::String, sync::Arc, vec::Vec};
@@ -71,6 +71,8 @@ impl BindingCache {
     /// a renderer-specific default. No face ownership or draw array is allocated.
     /// Missing material targets remain visible in `BoundMaterial::binding`.
     /// Cache invalidation follows the ordinary `BindingCache` contract.
+    /// Family validation uses checked reads: failed retained arrays preserve
+    /// their property and original error in [`MaterialSubsetError::Decode`].
     /// OpenUSD: `UsdShadeMaterialBindingAPI::GetMaterialBindSubsets`,
     /// `UsdGeomSubset::ValidateFamily`, `ComputeBoundMaterial`.
     /// AOUSD Core §12.2–12.5 (composed subset attributes and relationships).
@@ -134,8 +136,23 @@ impl BindingCache {
             })
             .map_err(|error| MaterialSubsetError::Decode { property, error })?
             .ok_or(MaterialSubsetError::MissingAttribute(property))?;
-            let validation =
-                geom.validate_subset_family_at(&GeomSubsetElementType::Face, "materialBind", time);
+            let validation = geom
+                .try_validate_subset_family_at(&GeomSubsetElementType::Face, "materialBind", time)
+                .map_err(|error| match error {
+                    SubsetError::Decode { property, error } => {
+                        MaterialSubsetError::Decode { property, error }
+                    }
+                    SubsetError::InvalidGeometry => MaterialSubsetError::InvalidGeometry(path),
+                    SubsetError::MissingTopology | SubsetError::InvalidTopology => {
+                        MaterialSubsetError::InvalidFamily(SubsetValidation {
+                            problems: alloc::vec![SubsetProblem {
+                                path,
+                                time,
+                                kind: SubsetProblemKind::InvalidTopology,
+                            }],
+                        })
+                    }
+                })?;
             if !validation.is_valid() {
                 return Err(MaterialSubsetError::InvalidFamily(validation));
             }

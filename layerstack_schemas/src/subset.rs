@@ -9,24 +9,38 @@ use crate::{
     usd_geom::{GeomSubset as Subset, GeomSubsetElementType as SubsetElementType, Imageable, Mesh},
 };
 use alloc::{collections::BTreeSet, format, string::String, vec::Vec};
-use layerstack::{PathId, TokenInterner, Value};
+use layerstack::{ArrayReadError, PathId, PropertyPath, TokenInterner, Value};
 
 /// Invalid or unreadable geometry needed for a subset query.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SubsetError {
     /// The element type does not apply to the owning geometry.
     InvalidGeometry,
-    /// Required topology cannot be read safely.
+    /// Required topology is absent or has an incompatible value type.
     MissingTopology,
     /// Topology contains invalid counts, indices or curve tokens.
     InvalidTopology,
+    /// Retained topology or subset indices failed to decode.
+    Decode {
+        /// The failed attribute.
+        property: PropertyPath,
+        /// The original deferred source error.
+        error: ArrayReadError,
+    },
 }
 impl core::fmt::Display for SubsetError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "invalid subset geometry: {self:?}")
     }
 }
-impl core::error::Error for SubsetError {}
+impl core::error::Error for SubsetError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::Decode { error, .. } => Some(error),
+            _ => None,
+        }
+    }
+}
 
 /// One violation of a subset family's contract.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -84,14 +98,14 @@ fn read<'a, T>(
     name: &str,
     time: Time,
     decode: impl Fn(&Value, &'a TokenInterner) -> Option<T>,
-) -> Option<T> {
-    match time {
-        Time::Default => prim.read_value(name, decode),
-        Time::At {
-            code,
-            interpolation,
-        } => prim.read_value_at(name, code, interpolation, decode),
-    }
+) -> Result<Option<T>, SubsetError> {
+    prim.try_read_value(name, time, decode)
+        .map_err(|error| SubsetError::Decode {
+            property: prim
+                .property_path(name)
+                .expect("failed attribute is interned"),
+            error,
+        })
 }
 fn sample_times(prim: &PrimView<'_>, name: &str) -> Vec<f64> {
     prim.property_path(name).map_or_else(Vec::new, |p| {
@@ -132,7 +146,7 @@ fn elements(
 ) -> Result<Elements, SubsetError> {
     let missing = SubsetError::MissingTopology;
     let ints =
-        |name: &str| read(geom, name, time, crate::value::read_int_array).ok_or(missing.clone());
+        |name: &str| read(geom, name, time, crate::value::read_int_array)?.ok_or(missing.clone());
     match element {
         SubsetElementType::Face => Ok(Elements::Scalar(
             if geom.scene().is_a(geom.path(), "Mesh") {
@@ -143,7 +157,7 @@ fn elements(
                     "surfaceFaceVertexIndices",
                     time,
                     crate::value::read_int3_array,
-                )
+                )?
                 .ok_or(missing.clone())?
                 .len()
             },
@@ -151,7 +165,7 @@ fn elements(
         SubsetElementType::Point => Ok(Elements::Scalar(
             read(geom, "points", time, |v, t| {
                 crate::value::read_float3_array(v, t).map(|a| a.len())
-            })
+            })?
             .ok_or(missing)?,
         )),
         SubsetElementType::Tetrahedron => Ok(Elements::Scalar(
@@ -160,14 +174,14 @@ fn elements(
                 "tetVertexIndices",
                 time,
                 crate::value::read_int4_array,
-            )
+            )?
             .ok_or(missing.clone())?
             .len(),
         )),
         SubsetElementType::Edge => {
             let counts = ints("faceVertexCounts")?;
             let indices = ints("faceVertexIndices")?;
-            let n = read(geom, "points", time, crate::value::read_float3_array)
+            let n = read(geom, "points", time, crate::value::read_float3_array)?
                 .ok_or(missing)?
                 .len();
             validate_mesh_topology(&indices, &counts, n)
@@ -190,7 +204,7 @@ fn elements(
         SubsetElementType::Segment => {
             let counts = ints("curveVertexCounts")?;
             let token = |name| {
-                read(geom, name, time, crate::value::read_token)
+                read(geom, name, time, crate::value::read_token)?
                     .map(String::from)
                     .ok_or(SubsetError::MissingTopology)
             };
@@ -234,6 +248,19 @@ fn topology_names(element: &SubsetElementType, geom: &Imageable<'_>) -> &'static
         SubsetElementType::Edge => &["faceVertexCounts", "faceVertexIndices"],
         SubsetElementType::Segment => &["curveVertexCounts"],
         _ => &["tetVertexIndices"],
+    }
+}
+// Ordinary invalid geometry remains a family diagnostic; failed deferred
+// storage must stop checked validation before it can appear empty or unassigned.
+fn validation_elements(
+    geom: &Imageable<'_>,
+    element: &SubsetElementType,
+    time: Time,
+) -> Result<Option<Elements>, SubsetError> {
+    match elements(geom, element, time) {
+        Ok(elements) => Ok(Some(elements)),
+        Err(error @ SubsetError::Decode { .. }) => Err(error),
+        Err(_) => Ok(None),
     }
 }
 impl<'a> Imageable<'a> {
@@ -291,6 +318,8 @@ impl<'a> Imageable<'a> {
     /// overlaps, bounds, missing indices and partition coverage. Unknown family
     /// tokens enforce non-overlap, matching OpenUSD's restricted-family behavior.
     /// Malformed topology produces diagnostics instead of unsafe indexing.
+    /// Deferred decode failures become one `InvalidTopology` problem; use
+    /// [`Self::try_validate_subset_family`] to retain their property and error.
     #[must_use]
     pub fn validate_subset_family(
         &self,
@@ -303,6 +332,8 @@ impl<'a> Imageable<'a> {
     /// Useful for importers evaluating a snapshot instead of auditing all samples.
     /// The same bounds, overlap and partition rules as `validate_subset_family`
     /// apply. AOUSD Core §12.3–12.5 (time-based attribute resolution).
+    /// Deferred decode failures become one `InvalidTopology` problem; use
+    /// [`Self::try_validate_subset_family_at`] to retain their property and error.
     #[must_use]
     pub fn validate_subset_family_at(
         &self,
@@ -318,6 +349,51 @@ impl<'a> Imageable<'a> {
         family: &str,
         selected_time: Option<Time>,
     ) -> SubsetValidation {
+        self.try_validate_subset_family_impl(element, family, selected_time)
+            .unwrap_or_else(|error| {
+                let path = match error {
+                    SubsetError::Decode { property, .. } => property.prim_path(),
+                    _ => self.path(),
+                };
+                let mut result = SubsetValidation::default();
+                result.push(
+                    path,
+                    selected_time.unwrap_or(Time::Default),
+                    SubsetProblemKind::InvalidTopology,
+                );
+                result
+            })
+    }
+    /// Checks the family at default time and every composed subset-index sample,
+    /// preserving deferred topology and index errors with their property paths.
+    /// Ordinary missing or malformed geometry remains in the returned problems.
+    /// Typed default selection and numeric interpolation follow attribute getters.
+    /// OpenUSD: `UsdGeomSubset::ValidateFamily`; AOUSD Core §12.3–12.5.
+    pub fn try_validate_subset_family(
+        &self,
+        element: &SubsetElementType,
+        family: &str,
+    ) -> Result<SubsetValidation, SubsetError> {
+        self.try_validate_subset_family_impl(element, family, None)
+    }
+    /// Checks a family only at `time`, preserving deferred array failures.
+    /// Samples outside that snapshot are not decoded. Ordinary topology and
+    /// membership violations are reported in the successful validation result.
+    /// See [`Self::try_validate_subset_family`] for the family rules.
+    pub fn try_validate_subset_family_at(
+        &self,
+        element: &SubsetElementType,
+        family: &str,
+        time: Time,
+    ) -> Result<SubsetValidation, SubsetError> {
+        self.try_validate_subset_family_impl(element, family, Some(time))
+    }
+    fn try_validate_subset_family_impl(
+        &self,
+        element: &SubsetElementType,
+        family: &str,
+        selected_time: Option<Time>,
+    ) -> Result<SubsetValidation, SubsetError> {
         let mut result = SubsetValidation::default();
         let diagnostic_time = selected_time.unwrap_or(Time::Default);
         if !valid_geom(self, element) {
@@ -326,7 +402,7 @@ impl<'a> Imageable<'a> {
                 diagnostic_time,
                 SubsetProblemKind::InvalidGeometry,
             );
-            return result;
+            return Ok(result);
         }
         let subsets = self.geom_subsets(None, Some(family));
         for subset in &subsets {
@@ -336,10 +412,17 @@ impl<'a> Imageable<'a> {
                     diagnostic_time,
                     SubsetProblemKind::ElementTypeMismatch,
                 );
-                return result;
+                return Ok(result);
             }
         }
-        let family_type = self.subset_family_type(family);
+        let family_type = read(
+            self,
+            &format!("subsetFamily:{family}:familyType"),
+            Time::Default,
+            crate::value::read_token,
+        )?
+        .filter(|s| !s.is_empty())
+        .unwrap_or("unrestricted");
         let restricted = family_type != "unrestricted";
         let partition = family_type == "partition";
         let varying = selected_time.is_some()
@@ -347,9 +430,9 @@ impl<'a> Imageable<'a> {
                 .iter()
                 .any(|name| sample_times(self, name).len() > 1);
         if !varying
-            && elements(self, element, Time::held(f64::MIN))
+            && validation_elements(self, element, Time::held(f64::MIN))?
                 .as_ref()
-                .map_or(true, |e| e.len() == 0)
+                .is_none_or(|e| e.len() == 0)
         {
             result.push(
                 self.path(),
@@ -374,16 +457,16 @@ impl<'a> Imageable<'a> {
         );
         for time in evaluated {
             let topology = if varying {
-                elements(self, element, time)
+                validation_elements(self, element, time)?
             } else {
-                elements(self, element, Time::held(f64::MIN))
+                validation_elements(self, element, Time::held(f64::MIN))?
             };
             let count = topology.as_ref().map_or(0, Elements::len);
             let mut indices = BTreeSet::new();
             let mut pairs = BTreeSet::new();
             for subset in &subsets {
-                let data =
-                    read(subset, "indices", time, crate::value::read_int_array).unwrap_or_default();
+                let data = read(subset, "indices", time, crate::value::read_int_array)?
+                    .unwrap_or_default();
                 any |= !data.is_empty();
                 if matches!(
                     element,
@@ -418,7 +501,7 @@ impl<'a> Imageable<'a> {
             if !indices.is_empty() && count == 0 {
                 result.push(self.path(), time, SubsetProblemKind::InvalidTopology);
             }
-            if let Ok(Elements::Pairs(possible)) = &topology {
+            if let Some(Elements::Pairs(possible)) = &topology {
                 for pair in &pairs {
                     if !possible.contains(pair) {
                         result.push(self.path(), time, SubsetProblemKind::InvalidPair(*pair));
@@ -444,12 +527,13 @@ impl<'a> Imageable<'a> {
         if !any {
             result.push(self.path(), diagnostic_time, SubsetProblemKind::NoIndices);
         }
-        result
+        Ok(result)
     }
     /// Sorted indices not assigned by matching subsets at `time`. Edges and
     /// segments are flattened pairs; edges are canonicalized to ascending order.
     /// Pair set subtraction sorts both inputs, including unsorted authored arrays.
-    /// Returns errors when element type or required topology is invalid.
+    /// Returns errors when element type or required topology is invalid, and
+    /// preserves deferred topology/member decode errors and their property paths.
     pub fn unassigned_subset_indices(
         &self,
         element: &SubsetElementType,
@@ -462,8 +546,11 @@ impl<'a> Imageable<'a> {
         let subsets = self.geom_subsets(Some(element), Some(family));
         let data: Vec<Vec<i32>> = subsets
             .iter()
-            .map(|s| read(s, "indices", time, crate::value::read_int_array).unwrap_or_default())
-            .collect();
+            .map(|s| {
+                read(s, "indices", time, crate::value::read_int_array)
+                    .map(Option::unwrap_or_default)
+            })
+            .collect::<Result<_, _>>()?;
         match elements(self, element, time)? {
             Elements::Scalar(n) => {
                 let assigned: BTreeSet<_> = data.into_iter().flatten().collect();
@@ -499,7 +586,7 @@ impl<'a> Imageable<'a> {
 /// Invalid mesh index/count storage.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MeshTopologyError {
-    /// Required points, face counts or face indices are absent or unreadable.
+    /// Required points, face counts or face indices are absent or incompatible.
     MissingAttribute,
     /// Face counts contain a negative value or overflow their total.
     InvalidFaceCounts,
@@ -507,13 +594,27 @@ pub enum MeshTopologyError {
     SizeMismatch,
     /// A face index does not address an existing point.
     InvalidVertexIndex(i32),
+    /// Retained points, face counts or face indices failed to decode.
+    Decode {
+        /// The failed attribute.
+        property: PropertyPath,
+        /// The original deferred source error.
+        error: ArrayReadError,
+    },
 }
 impl core::fmt::Display for MeshTopologyError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "invalid mesh topology: {self:?}")
     }
 }
-impl core::error::Error for MeshTopologyError {}
+impl core::error::Error for MeshTopologyError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::Decode { error, .. } => Some(error),
+            _ => None,
+        }
+    }
+}
 /// Checks count/index consistency and point-index bounds without scene reads.
 /// Negative counts are rejected explicitly; no allocation depends on their sum.
 /// OpenUSD: `UsdGeomMesh::ValidateTopology`.
@@ -539,23 +640,35 @@ pub fn validate_mesh_topology(
 impl Mesh<'_> {
     /// Validates this mesh's topology at `time`, including point-index bounds.
     /// Returns an error for missing required arrays or inconsistent topology.
+    /// Deferred decode failures retain their original error and attribute path;
+    /// they are distinct from `MissingAttribute`.
     pub fn validate_topology(&self, time: Time) -> Result<(), MeshTopologyError> {
-        let points = read(self, "points", time, crate::value::read_float3_array_shared)
+        let decode_error = |name: &str, error| MeshTopologyError::Decode {
+            property: self
+                .property_path(name)
+                .expect("failed attribute is interned"),
+            error,
+        };
+        let points = self
+            .try_read_value("points", time, crate::value::read_float3_array_shared)
+            .map_err(|error| decode_error("points", error))?
             .ok_or(MeshTopologyError::MissingAttribute)?;
-        let counts = read(
-            self,
-            "faceVertexCounts",
-            time,
-            crate::value::read_int_array_shared,
-        )
-        .ok_or(MeshTopologyError::MissingAttribute)?;
-        let indices = read(
-            self,
-            "faceVertexIndices",
-            time,
-            crate::value::read_int_array_shared,
-        )
-        .ok_or(MeshTopologyError::MissingAttribute)?;
+        let counts = self
+            .try_read_value(
+                "faceVertexCounts",
+                time,
+                crate::value::read_int_array_shared,
+            )
+            .map_err(|error| decode_error("faceVertexCounts", error))?
+            .ok_or(MeshTopologyError::MissingAttribute)?;
+        let indices = self
+            .try_read_value(
+                "faceVertexIndices",
+                time,
+                crate::value::read_int_array_shared,
+            )
+            .map_err(|error| decode_error("faceVertexIndices", error))?
+            .ok_or(MeshTopologyError::MissingAttribute)?;
         validate_mesh_topology(&indices, &counts, points.len())
     }
 }

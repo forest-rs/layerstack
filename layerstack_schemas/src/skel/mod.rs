@@ -57,6 +57,13 @@ use layerstack::{HashMap, PathId, PropertyPath, TargetPath, TokenInterner, Value
 /// Invalid skeletal inputs; evaluation returns no partial result.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SkelError {
+    /// A retained numeric input could not decode; absence fallback is disallowed.
+    Decode {
+        /// Failed property in composed stage namespace.
+        property: PropertyPath,
+        /// Adapter failure or exhausted numeric decode budget.
+        error: layerstack::ArrayReadError,
+    },
     /// A joint is duplicated, malformed or ordered before its parent.
     InvalidTopology {
         /// Offending joint in the supplied order.
@@ -124,7 +131,15 @@ impl core::fmt::Display for SkelError {
         write!(f, "invalid skeleton input: {self:?}")
     }
 }
-impl core::error::Error for SkelError {}
+impl core::error::Error for SkelError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::Decode { error, .. } => Some(error),
+            Self::Primvar { source, .. } => Some(source),
+            _ => None,
+        }
+    }
+}
 
 /// Validated parent-first forest. Missing intermediate paths attach to the
 /// closest listed ancestor, as `UsdSkelTopology` does; multiple roots are valid.
@@ -188,14 +203,21 @@ pub(super) fn read<'a, T>(
     name: &str,
     time: Time,
     decode: impl Fn(&Value, &'a TokenInterner) -> Option<T>,
-) -> Option<T> {
-    match time {
-        Time::Default => prim.read_value(name, decode),
-        Time::At {
-            code,
-            interpolation,
-        } => prim.read_value_at(name, code, interpolation, decode),
-    }
+) -> Result<Option<T>, SkelError> {
+    // Keep failures in typed source selection instead of untyped preflight:
+    // default time can skip incompatible stronger values (AOUSD Core §12.3).
+    prim.try_read_value(name, time, decode)
+        .map_err(|error| SkelError::Decode {
+            property: PropertyPath::new(
+                prim.path(),
+                prim.scene()
+                    .store()
+                    .tokens()
+                    .lookup(name)
+                    .expect("decoded input token"),
+            ),
+            error,
+        })
 }
 pub(super) fn tokens(prim: &PrimView<'_>, name: &str) -> Option<Vec<String>> {
     prim.read_value(name, |v, t| {
@@ -395,8 +417,18 @@ impl<'a> SkeletonQuery<'a> {
                 path: skeleton.path(),
                 topology,
                 joints,
-                rest: skeleton.rest_transforms(),
-                bind: skeleton.bind_transforms(),
+                rest: read(
+                    &skeleton,
+                    "restTransforms",
+                    Time::Default,
+                    crate::value::read_matrix4d_array,
+                )?,
+                bind: read(
+                    &skeleton,
+                    "bindTransforms",
+                    Time::Default,
+                    crate::value::read_matrix4d_array,
+                )?,
                 animation_path: animation.map(|a| a.path()),
                 animation_joints,
                 blend_shapes: animation
@@ -443,8 +475,8 @@ impl<'a> SkeletonQuery<'a> {
         Ok(rest.clone())
     }
     /// Joint-local animation with rest fallback and sparse/reordered mapping.
-    /// As `UsdSkelSkeletonQuery`, unreadable TRS arrays fall back to rest;
-    /// readable arrays with inconsistent lengths are rejected.
+    /// As `UsdSkelSkeletonQuery`, absent or incompatible TRS arrays fall back to
+    /// rest. Retained decode failures and inconsistent lengths are rejected.
     pub fn local_transforms(&self, time: Time) -> Result<Vec<gf::Matrix4>, SkelError> {
         let Some(animation) = self
             .animation
@@ -457,14 +489,14 @@ impl<'a> SkeletonQuery<'a> {
             "translations",
             time,
             crate::value::read_float3_array,
-        );
+        )?;
         let rotations = read(
             &animation,
             "rotations",
             time,
             crate::value::read_quatf_array,
-        );
-        let scales = read(&animation, "scales", time, crate::value::read_half3_array);
+        )?;
+        let scales = read(&animation, "scales", time, crate::value::read_half3_array)?;
         let (Some(t), Some(r), Some(s)) = (translations, rotations, scales) else {
             return self.rest_transforms();
         };

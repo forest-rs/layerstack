@@ -63,7 +63,7 @@ impl SkinningQuery<'_> {
         let geom_bind = self
             .definition
             .geom_bind
-            .and_then(|p| {
+            .map(|p| {
                 read(
                     &PrimView::new(self.scene, p),
                     "primvars:skel:geomBindTransform",
@@ -71,19 +71,33 @@ impl SkinningQuery<'_> {
                     crate::value::read_matrix4d,
                 )
             })
+            .transpose()?
+            .flatten()
             .unwrap_or(gf::IDENTITY);
-        let flattened = |path, name, property| {
+        let flattened = |path,
+                         name,
+                         property,
+                         decode: fn(
+            &layerstack::Value,
+            &layerstack::TokenInterner,
+        ) -> Option<layerstack::Value>| {
             Primvar::new(&self.scene, path, name)
                 .ok_or_else(|| invalid(path, property))?
-                .compute_flattened(time)
+                .validated_values_by(time, decode)
                 .map_err(|source| SkelError::Primvar { prim: path, source })?
                 .ok_or_else(|| invalid(path, property))
+                .map(|values| values.compute_flattened())
         };
         let indices = crate::value::read_int_array(
             &flattened(
                 self.definition.indices,
                 "skel:jointIndices",
                 "primvars:skel:jointIndices",
+                |value, tokens| {
+                    crate::value::read_int_array_shared(value, tokens).map(|values| {
+                        layerstack::Value::TypedArray(layerstack::TypedArray::Int(values))
+                    })
+                },
             )?,
             self.scene.store().tokens(),
         )
@@ -93,6 +107,11 @@ impl SkinningQuery<'_> {
                 self.definition.weights,
                 "skel:jointWeights",
                 "primvars:skel:jointWeights",
+                |value, tokens| {
+                    crate::value::read_float_array_shared(value, tokens).map(|values| {
+                        layerstack::Value::TypedArray(layerstack::TypedArray::Float(values))
+                    })
+                },
             )?,
             self.scene.store().tokens(),
         )

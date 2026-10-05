@@ -575,7 +575,7 @@ impl<'a> SkinningQuery<'a> {
     }
     fn compute_normals(&self, time: Time, shapes: bool) -> Result<Vec<[f32; 3]>, SkelError> {
         let prim = PrimView::new(self.scene, self.definition.geometry);
-        let mut normals = read(&prim, "normals", time, crate::value::read_float3_array)
+        let mut normals = read(&prim, "normals", time, crate::value::read_float3_array)?
             .ok_or_else(|| invalid(self.definition.geometry, "normals"))?;
         let interpolation = prim
             .property_metadata("normals")
@@ -589,14 +589,14 @@ impl<'a> SkinningQuery<'a> {
                 return Err(invalid(self.definition.geometry, "normals"));
             }
             if interpolation == "faceVarying" && self.scene.is_a(self.definition.geometry, "Mesh") {
-                let points = read(&prim, "points", time, crate::value::read_float3_array)
+                let points = read(&prim, "points", time, crate::value::read_float3_array)?
                     .ok_or_else(|| invalid(self.definition.geometry, "points"))?;
                 let corners = read(
                     &prim,
                     "faceVertexIndices",
                     time,
                     crate::value::read_int_array,
-                )
+                )?
                 .ok_or_else(|| invalid(self.definition.geometry, "faceVertexIndices"))?;
                 query.deform_corner_normals(
                     &contributions,
@@ -626,14 +626,14 @@ impl<'a> SkinningQuery<'a> {
                 )
             }
             "faceVarying" if self.scene.is_a(self.definition.geometry, "Mesh") => {
-                let points = read(&prim, "points", time, crate::value::read_float3_array)
+                let points = read(&prim, "points", time, crate::value::read_float3_array)?
                     .ok_or_else(|| invalid(self.definition.geometry, "points"))?;
                 let corners = read(
                     &prim,
                     "faceVertexIndices",
                     time,
                     crate::value::read_int_array,
-                )
+                )?
                 .ok_or_else(|| invalid(self.definition.geometry, "faceVertexIndices"))?;
                 super::skin_face_varying_normals_with_method(
                     inputs.binding.method,
@@ -666,7 +666,7 @@ impl<'a> SkinningQuery<'a> {
             "points",
             time,
             crate::value::read_float3_array,
-        )
+        )?
         .ok_or_else(|| invalid(self.definition.geometry, "points"))?;
         self.skin_points(&points, time)
     }

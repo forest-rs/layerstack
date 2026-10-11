@@ -97,7 +97,40 @@ These large-array cases improve about 11–49%; the 64-element cases remain near
 69,632,000 / 69,353,472 bytes (about 102 to 66 MiB), with byte-identical exported
 files. This measures process peak, including allocator retention, rather than
 live buffer ownership. End-to-end serialization wall time remains noisy and
-does not establish a speedup; conversion through the intermediate document and
-writer specs still copies numeric arrays. Results are recorded in
+does not establish a speedup; that version still copied numeric arrays between
+the intermediate document and writer specs. Results are recorded in
 `scalar-writer.csv`, `scalar-save-*.csv` and `scalar-save-memory.json` beside the
 earlier phase results.
+
+Layer saves now consume their temporary document, moving numeric arrays, strings
+and other owned buffers into writer specs. Authored layers and retained snapshots
+keep their ownership. Relative to `b04ba9cd`, the same wide probe's peak RSS fell
+from 69,648,384 bytes to 53,460,992 / 53,182,464 bytes (about 66 to 51 MiB, a 23%
+reduction), with byte-identical exported files. This is process peak RSS,
+including allocator retention, rather than a live-allocation measurement.
+
+The `usdc_layer_save` benchmark prepares four distinct float arrays outside the
+timer, either as defaults or as two time samples. It also measures the borrowed
+`write_document` API, whose input remains intact. On the same host/profile:
+
+| Save workload | Before (µs) | After, two runs (µs) |
+|---|---:|---:|
+| Layer, static, 64 elements per array | 15.37 | 15.63 / 15.55 |
+| Layer, animated, 64 elements per array | 16.51 | 16.59 / 16.93 |
+| Borrowed document, static, 64 elements | 13.50 | 14.00 / 14.00 |
+| Borrowed document, animated, 64 elements | 14.45 | 15.26 / 15.38 |
+| Layer, static, one million elements per array | 18,934 | 18,420 / 18,240 |
+| Layer, animated, one million elements per array | 19,644 | 18,580 / 18,678 |
+| Borrowed document, static, one million elements | 18,212 | 18,119 / 18,513 |
+| Borrowed document, animated, one million elements | 18,855 | 18,968 / 18,761 |
+
+The large layer saves improve about 3–5%; large borrowed documents remain near
+baseline. Tiny borrowed documents regress about 4–6% (0.5–0.9 µs): the shared
+lowering clones the document structure before consuming its buffers. This is a
+measured tradeoff for one lowering implementation, not an across-the-board speed
+claim. Raw means and 95% confidence intervals are in `owned-save.csv`; phase CSVs
+and peak counters are in `owned-save-*.csv` and `owned-save-memory.json`.
+
+```sh
+cargo bench -p wind_tunnel --bench usdc_write -- usdc_layer_save --warm-up-time 1 --measurement-time 1 --sample-size 10
+```

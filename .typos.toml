@@ -6,6 +6,10 @@
 # word is treated as always correct. If the value is an empty string, the word
 # is treated as always incorrect.
 
+[default]
+# Recorded benchmark revisions are hexadecimal commit IDs.
+extend-ignore-re = ["\\b[0-9a-f]{8,40}\\b"]
+
 # Match Identifier - Case Sensitive
 [default.extend-identifiers]
 

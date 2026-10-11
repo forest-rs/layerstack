@@ -548,6 +548,38 @@ impl PreparedClipProperty {
             raw.is_none() && self.manifest_default.is_some(),
         ))
     }
+    /// Discrete stage-time brackets shared by numeric reads and residency
+    /// planning. AOUSD Core §12.5: exact/exterior queries clamp to one sample.
+    fn sample_brackets(&self, time: f64) -> (f64, f64) {
+        let next = self.sample_times.partition_point(|t| *t < time);
+        if next == 0 {
+            (self.sample_times[0], self.sample_times[0])
+        } else if next == self.sample_times.len() {
+            let t = self.sample_times[next - 1];
+            (t, t)
+        } else if self.sample_times[next] == time {
+            let t = self.sample_times[next];
+            (t, t)
+        } else {
+            (self.sample_times[next - 1], self.sample_times[next])
+        }
+    }
+    /// Asset slots at the query's brackets, without reading numeric payloads.
+    /// Missing-value search is conservatively planned by the catalog. Spline
+    /// queries without that search need only their active asset.
+    pub(super) fn required_clips(&self, time: f64) -> Result<(usize, usize), ClipEvalError> {
+        if !time.is_finite() {
+            return Err(ClipEvalError::InvalidQuery);
+        }
+        let (lower, upper) = if self.spline_mode {
+            (time, time)
+        } else {
+            self.sample_brackets(time)
+        };
+        self.internal_time(lower)?;
+        self.internal_time(upper)?;
+        Ok((self.active_clip(lower), self.active_clip(upper)))
+    }
     /// Evaluates one finite numeric query. Exact endpoints and exterior queries
     /// clamp to one sample. A blocked/missing lower endpoint supplies no value;
     /// a blocked/missing upper endpoint holds the lower value, matching USD.
@@ -563,18 +595,7 @@ impl PreparedClipProperty {
         if self.spline_mode {
             return self.evaluate_spline(time);
         }
-        let next = self.sample_times.partition_point(|t| *t < time);
-        let (lower, upper) = if next == 0 {
-            (self.sample_times[0], self.sample_times[0])
-        } else if next == self.sample_times.len() {
-            let t = self.sample_times[next - 1];
-            (t, t)
-        } else if self.sample_times[next] == time {
-            let t = self.sample_times[next];
-            (t, t)
-        } else {
-            (self.sample_times[next - 1], self.sample_times[next])
-        };
+        let (lower, upper) = self.sample_brackets(time);
         let (a, lower_clip, lower_internal, lower_from_manifest) = self.endpoint(lower, interp)?;
         let (b, upper_clip, upper_internal, upper_from_manifest) = self.endpoint(upper, interp)?;
         let value = a.and_then(|a| {
@@ -633,6 +654,39 @@ mod tests {
     }
     fn value(p: &PreparedClipProperty, t: f64) -> Option<Value> {
         p.evaluate(t, InterpolationType::Linear).unwrap().value
+    }
+    #[test]
+    fn residency_slots_match_numeric_brackets_across_mappings_and_gaps() {
+        for mapping in [
+            vec![],
+            vec![(0., 20.), (20., 0.)],
+            vec![(0., 0.), (10., 10.), (10., 0.), (20., 10.)],
+        ] {
+            for interpolate_missing in [false, true] {
+                let prepared = PreparedClipProperty::new(
+                    vec![(0., 0), (7., 1), (13., 2), (18., 0)],
+                    mapping.clone(),
+                    vec![
+                        clip(&[(0., 0.), (5., 5.), (20., 20.)]),
+                        None,
+                        clip(&[(0., 30.), (20., 50.)]),
+                    ],
+                    None,
+                    interpolate_missing,
+                )
+                .unwrap();
+                for time in [-5., 0., 2., 5., 7., 9., 10., 12., 13., 16., 18., 20., 25.] {
+                    for policy in [InterpolationType::Held, InterpolationType::Linear] {
+                        let evaluated = prepared.evaluate(time, policy).unwrap();
+                        assert_eq!(
+                            prepared.required_clips(time).unwrap(),
+                            (evaluated.lower_clip, evaluated.upper_clip),
+                            "time={time}, policy={policy:?}, mapping={mapping:?}"
+                        );
+                    }
+                }
+            }
+        }
     }
     #[test]
     fn switch_gap_defaults_blocks_and_held_match_cpp() {

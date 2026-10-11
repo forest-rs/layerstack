@@ -268,13 +268,13 @@ impl Catalog {
                 .flatten()
                 .find(|p| p.owner == set.owner && p.set_name == set.name)
             {
-                match entry.evaluator.evaluate(time, interpolation) {
-                    Ok(value) => {
-                        if let Some(request) = request_for(value.lower_clip) {
+                match entry.evaluator.required_clips(time) {
+                    Ok((lower, upper)) => {
+                        if let Some(request) = request_for(lower) {
                             add(request, ClipDemandReason::LowerInterpolationBound);
                         }
                         if interpolation == InterpolationType::Linear
-                            && let Some(request) = request_for(value.upper_clip)
+                            && let Some(request) = request_for(upper)
                         {
                             add(request, ClipDemandReason::UpperInterpolationBound);
                         }

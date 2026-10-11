@@ -68,5 +68,36 @@ layer to a separate file. A complete dependency package is a separate
 
 Raw CSVs and environment/peak counters are in
 [results/stage-workflows-2026-10-11](results/stage-workflows-2026-10-11).
-They characterize these workloads; demand-all serialization and general lazy-field
-memory still need allocation profiling before further optimization.
+They characterize these workloads; general lazy-field memory still needs
+allocation profiling before further optimization.
+
+Scalar USDC array writing now inspects borrowed native elements, creating neither
+an `f64` copy nor a little-endian copy of the whole input before choosing its
+encoding. The integer candidate buffer reserves its final capacity. Encoding
+choices and output bits are preserved, including signed zero and NaN payloads.
+Run the focused benchmarks with fixtures prepared outside measurement:
+
+```sh
+cargo bench -p wind_tunnel --bench usdc_write -- usdc_numeric_write --warm-up-time 1 --measurement-time 1 --sample-size 10
+```
+
+On the same host/profile above, relative to `76509d15`, Criterion means for one
+million elements were:
+
+| Scalar array encoding | Before (ms) | After, two runs (ms) |
+|---|---:|---:|
+| Float, integral | 5.019 | 4.428 / 4.366 |
+| Float, lookup | 9.236 | 4.711 / 4.705 |
+| Float, plain | 1.304 | 0.698 / 0.708 |
+| Half, lookup | 6.269 | 4.243 / 4.011 |
+| Double, lookup | 4.734 | 4.209 / 4.151 |
+
+These large-array cases improve about 11–49%; the 64-element cases remain near
+5–6 µs. The wide end-to-end probe's peak RSS fell from 107,298,816 bytes to
+69,632,000 / 69,353,472 bytes (about 102 to 66 MiB), with byte-identical exported
+files. This measures process peak, including allocator retention, rather than
+live buffer ownership. End-to-end serialization wall time remains noisy and
+does not establish a speedup; conversion through the intermediate document and
+writer specs still copies numeric arrays. Results are recorded in
+`scalar-writer.csv`, `scalar-save-*.csv` and `scalar-save-memory.json` beside the
+earlier phase results.

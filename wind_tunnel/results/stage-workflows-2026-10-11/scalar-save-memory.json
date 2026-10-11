@@ -1,0 +1,10 @@
+{
+  "peak_rss_bytes": {
+    "before": 107298816,
+    "after": 69632000,
+    "repeat": 69353472
+  },
+  "baseline_revision": "76509d15",
+  "fixture": "wide.usdc; four distinct one-million-float arrays",
+  "measurement": "/usr/bin/time -l; standalone release stage_workflows; output bytes identical"
+}

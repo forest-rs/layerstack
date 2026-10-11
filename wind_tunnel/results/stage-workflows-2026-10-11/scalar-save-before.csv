@@ -1,0 +1,9 @@
+phase,wall_us,work_units,rss_kib,package_backing_bytes,encoded_copied_bytes,package_opens,index_parses,index_hits,decode_attempts,native_element_bytes,remaining_decode_units
+open_zero_arrays,11616.083,1,6960,0,7290,0,0,0,0,0,7527150
+traverse,11.791,257,7008,0,7290,0,0,0,0,0,7527150
+inventory_zero_arrays,13.708,4,7008,0,7290,0,0,0,0,0,7527150
+demand_one_array,1962.125,1,18800,0,7290,0,0,0,1,4000000,6527149
+demand_all_arrays,5945.125,4,30624,0,7290,0,0,0,4,16000000,3527146
+demand_all_warm,4.708,4,30624,0,7290,0,0,0,4,16000000,3527146
+edit_and_synchronize,527.625,1,30784,0,7290,0,0,0,4,16000000,3527146
+serialize_and_replace,31057.375,1,104768,0,7290,0,0,0,4,16000000,3527146

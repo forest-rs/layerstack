@@ -569,6 +569,74 @@ fn nan_payloads_survive() {
     );
 }
 
+#[test]
+fn scalar_array_encodings_preserve_native_bits_at_compression_boundaries() {
+    for len in [0, 1, 15, 16, 17, 64, 4097] {
+        // Exercise both lookup tables and their uncompressed fallback, including
+        // a failed integral scan after a long integral prefix.
+        for distinct in [1, 3, 8, len.max(1)] {
+            let floats: Vec<_> = (0..len)
+                .map(|i| {
+                    let i = i % distinct;
+                    match i {
+                        0 => -0.0,
+                        1 => f32::from_bits(0x7fc0_0001),
+                        2 => f32::from_bits(0xffc0_0002),
+                        3 => f32::INFINITY,
+                        4 => f32::NEG_INFINITY,
+                        5 => f32::from_bits(1),
+                        _ => i as f32 + 0.25,
+                    }
+                })
+                .collect();
+            let doubles: Vec<_> = floats
+                .iter()
+                .map(|v| f64::from_bits(u64::from(v.to_bits()) << 32))
+                .collect();
+            let halves: Vec<_> = (0..len)
+                .map(|i| u16::try_from(i % distinct).unwrap())
+                .collect();
+            let mut late_failure = vec![1.; len];
+            if let Some(last) = late_failure.last_mut() {
+                *last = -0.0;
+            }
+            let values = [
+                ("f", Value::FloatArray(floats.clone())),
+                ("d", Value::DoubleArray(doubles.clone())),
+                ("h", Value::HalfArray(halves.clone())),
+                ("late", Value::FloatArray(late_failure.clone())),
+            ];
+            let file = Decoded::new(write_crate(&layer_with(&values)).unwrap());
+            for (name, expected) in [("f", floats), ("late", late_failure)] {
+                let Value::FloatArray(read) =
+                    file.value(&alloc::format!("/Root.{name}"), "default")
+                else {
+                    panic!("float array");
+                };
+                assert!(
+                    read.iter()
+                        .zip(&expected)
+                        .all(|(a, b)| a.to_bits() == b.to_bits())
+                );
+                assert_eq!(read.len(), expected.len());
+            }
+            let Value::DoubleArray(read) = file.value("/Root.d", "default") else {
+                panic!("double array");
+            };
+            assert!(
+                read.iter()
+                    .zip(&doubles)
+                    .all(|(a, b)| a.to_bits() == b.to_bits())
+            );
+            assert_eq!(read.len(), doubles.len());
+            assert_eq!(file.value("/Root.h", "default"), Value::HalfArray(halves));
+        }
+    }
+    let values = [("h", Value::HalfArray((0..=u16::MAX).collect()))];
+    let file = Decoded::new(write_crate(&layer_with(&values)).unwrap());
+    assert_eq!(file.value("/Root.h", "default"), values[0].1);
+}
+
 /// Bytes 0–5 of a representation: the inlined payload or data offset.
 fn payload(rep: RawValueRep) -> usize {
     usize::try_from(rep.payload_offset()).unwrap()

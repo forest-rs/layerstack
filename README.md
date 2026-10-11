@@ -59,7 +59,12 @@ cargo run -p layerstack_examples --example light_rig_slots
 - [`layerstack_conformance`](layerstack_conformance/) contains fixture and interoperability tests.
 - [`layerstack_schemagen`](layerstack_schemagen/) regenerates schema tables and views.
 - [`wind_tunnel`](wind_tunnel/) contains benchmarks.
-- [`docs`](docs/) contains design and implementation notes.
+- [Architecture and authoring](docs/architecture-and-authoring.md) describes ownership,
+  mapped edits, undo and publication contracts.
+- [Compatibility and validation](docs/compatibility-and-validation.md) explains support
+  claims, versioned oracles and failure/recovery evidence.
+- [Measurement protocol](wind_tunnel/MEASUREMENT.md) defines reproducible workloads
+  and the scope of timing and memory claims.
 - `core-spec-supplemental-release_dec2025/` contains upstream test materials;
   `specs/` contains reference specifications. These are not part of the library packages.
 

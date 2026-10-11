@@ -1,5 +1,9 @@
 # Stage workflow probes
 
+Follow the [measurement protocol](MEASUREMENT.md) when extending these workloads or
+comparing results. It defines phase boundaries, equivalence checks, ownership
+metrics and external-dataset controls.
+
 These examples use the public composition and document APIs. Build once, then run
 the executables directly so compiler memory and time are outside measurements:
 

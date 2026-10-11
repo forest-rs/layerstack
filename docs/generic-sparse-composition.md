@@ -271,10 +271,17 @@ strongest node and layer; for composed sparse values the proposal's
 `UsdResolveInfoSourceComposed` says a chain composed without listing it. The
 explanation lists the whole chain.
 
-## Open Gaps
+## Value clips and source preparation
 
-- **Value clips.** Not implemented, so clip series do not participate in the
-  linearization.
+Runtime value clips participate through host-loaded source layers. Composition
+and temporal planning do not perform I/O. `Stage::plan_clip_query` inspects the
+demands for a property/time query; `StageDocument::prepare_clip_query` loads and
+replans under an explicit request budget. Check completeness and failures before
+the corresponding checked read. A complete plan can confirm a gap rather than a
+value. Automatic manifests and missing-value searches can demand additional files.
+See [I/O onboarding](../layerstack_io/README.md) and the
+[sparse clip tests](../layerstack_conformance/tests/clip_sparse.rs) for supported
+participation and preparation behavior.
 
 ## What Should Not Change
 

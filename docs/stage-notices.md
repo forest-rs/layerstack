@@ -48,11 +48,19 @@ Sync to preserve LiveStage's existing thread-transfer traits; dispatch is synchr
 
 Each cursor is independent and belongs to one stage. Reading advances that cursor;
 the returned iterator must be processed in full. Another stage's cursor is rejected.
-After the first cursor subscribes, the stage retains at most 64 reports. This bounds
-report count, not bytes: a structural report can contain many paths. A slow cursor
-gets ChangeHistoryError::Expired and advances to the current revision; rebuild the
-consumer's derived state before continuing. Callback-only use retains no report
-history. Callbacks and readers share the same reports and revision sequence.
+After the first cursor is created, the stage retains reports under
+`ChangeHistoryBudget`: by default at most 64 batches and 1 MiB of retained record
+and vector storage. Configure it with `LiveStage::set_change_history_budget`;
+`change_history_stats` exposes retained/allocated bytes and eviction/discard counts.
+Accounting excludes allocator overhead; allocated bytes additionally include spare
+ring storage. This is an evidence budget, not a whole-stage memory limit.
+
+An oversized batch is not retained and clears preceding replay evidence so a
+cursor cannot skip a missing middle batch. Callbacks still receive that update.
+A slow cursor gets `ChangeHistoryError::Expired` and advances to the current
+revision; rebuild the consumer's derived state before continuing. Callback-only
+use retains no report history. Callbacks and readers share the same reports and
+revision sequence. Authored layers have independently configurable history budgets.
 
 Callbacks perform no computation on behalf of the application. The stage does not
 have a frame clock; animation evaluation alone generates no authored-change notice.

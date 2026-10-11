@@ -3,6 +3,88 @@
 
 use super::*;
 
+#[cfg(feature = "std")]
+#[test]
+fn clip_query_planning_does_not_decode_retained_interpolation_endpoints() {
+    use layerstack::{InterpolationType, TypedArray};
+    let values = |value: &str| vec![value; 64].join(",");
+    let source = format!(
+        "#usda 1.0\ndef \"C\" {{\n float[] x.timeSamples={{0:[{}],10:[{}]}}\n}}",
+        values("1"),
+        values("3"),
+    );
+    let source = StageDocument::open(
+        Memory::with(&[("clip.usda", &source)]),
+        "clip.usda",
+        StageOptions::default(),
+    )
+    .unwrap();
+    let root = source.stage().stage().root_layer().unwrap();
+    let bytes = layerstack_usdc::writer::save_layer(
+        &source.store.layers[&root],
+        &source.store.tokens,
+        &source.store.paths,
+    )
+    .unwrap();
+    let mut memory = Memory::with(&[
+        (
+            "root.usda",
+            r#"#usda 1.0
+def "P" (clips = { dictionary default = {
+ asset[] assetPaths = [@clip.usdc@]
+ string primPath = "/C"
+ double2[] active = [(0,0)]
+ asset manifestAssetPath = @manifest.usda@
+ }}) { float[] x }
+"#,
+        ),
+        ("manifest.usda", "#usda 1.0\ndef \"C\" {\n float[] x\n}"),
+    ]);
+    memory.files.insert("clip.usdc".into(), bytes);
+    let mut document = StageDocument::open_with(
+        memory,
+        "root.usda",
+        StageOptions::default(),
+        retained_options(),
+    )
+    .unwrap();
+    let property = document.store_mut().property_path("/P.x");
+    let prepared = document.prepare_clip_query(property, 5., InterpolationType::Linear, 2, 16);
+    assert!(prepared.plan.is_complete(), "{prepared:?}");
+    assert_eq!(prepared.load_attempts, 2);
+    let clip = document.catalog.ids["clip.usdc"];
+    assert_eq!(
+        document
+            .retained_values(clip)
+            .unwrap()
+            .stats()
+            .decode_attempts,
+        0,
+        "residency planning must not evaluate the numeric interpolation"
+    );
+    let prepared = document.prepare_clip_query(property, 5., InterpolationType::Linear, 0, 16);
+    assert!(prepared.plan.is_complete(), "{prepared:?}");
+    assert_eq!(prepared.load_attempts, 0);
+    let resolved = document
+        .stage()
+        .stage()
+        .try_resolve_property_path_at_time(property, 5., InterpolationType::Linear)
+        .unwrap()
+        .unwrap();
+    let Value::TypedArray(TypedArray::Float(values)) = resolved.value else {
+        panic!("float array interpolation");
+    };
+    assert_eq!(values.as_slice(), &[2.; 64]);
+    assert_eq!(
+        document
+            .retained_values(clip)
+            .unwrap()
+            .stats()
+            .decode_attempts,
+        2
+    );
+}
+
 #[test]
 fn demanded_clip_failures_distinguish_missing_from_malformed_and_allow_retry() {
     use layerstack::InterpolationType;

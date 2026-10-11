@@ -463,9 +463,11 @@ impl<'a> Packer<'a> {
                 &v.iter().map(|&x| x as i64).collect::<Vec<_>>(),
                 IntWidth::W64,
             )?,
-            Value::HalfArray(v) => self.float_array(T::Half, &halves(v))?,
-            Value::FloatArray(v) => self.float_array(T::Float, &floats(v))?,
-            Value::DoubleArray(v) => self.float_array(T::Double, &doubles(v))?,
+            Value::HalfArray(v) => {
+                self.float_array(T::Half, v, |h| f64::from(half_to_f32(h)), u16::to_le_bytes)?
+            }
+            Value::FloatArray(v) => self.float_array(T::Float, v, f64::from, f32::to_le_bytes)?,
+            Value::DoubleArray(v) => self.float_array(T::Double, v, |v| v, f64::to_le_bytes)?,
             // `GfTimeCode` arrays have no compressed form.
             Value::TimeCodeArray(v) => {
                 self.math_array(T::TimeCode, v.len(), v, f64::to_le_bytes)?
@@ -965,27 +967,42 @@ impl<'a> Packer<'a> {
     /// from 16 elements up, all-integral arrays are stored as coded `int32`s
     /// (`'i'`), arrays with few distinct values as a lookup table and coded
     /// indexes (`'t'`); anything else is written uncompressed.
-    fn float_array(&mut self, ty: ValueType, elems: &Elems) -> Result<u64, UsdcWriteError> {
-        let len = elems.values.len();
+    fn float_array<T: Copy, const N: usize>(
+        &mut self,
+        ty: ValueType,
+        values: &[T],
+        number: impl Fn(T) -> f64,
+        le_bytes: impl Fn(T) -> [u8; N],
+    ) -> Result<u64, UsdcWriteError> {
+        // Inspect the borrowed native elements. Widening and serializing the
+        // entire array up front would retain two unnecessary full-size copies,
+        // including when the compressed form never uses the original bytes.
+        let len = values.len();
+        let write_plain = |out: &mut Vec<u8>| {
+            for &value in values {
+                out.extend_from_slice(&le_bytes(value));
+            }
+        };
         if len < MIN_COMPRESSED_ARRAY_SIZE {
-            return self.plain_array(ty, len, |out| out.extend_from_slice(&elems.bytes));
+            return self.plain_array(ty, len, write_plain);
         }
         let mut bytes = (len as u64).to_le_bytes().to_vec();
-        if let Some(ints) = elems
-            .values
-            .iter()
-            .map(|&v| exact_i32(v).map(i64::from))
-            .collect::<Option<Vec<_>>>()
-        {
+        let mut ints = Vec::with_capacity(len);
+        let integral = values.iter().try_for_each(|&v| {
+            ints.push(i64::from(exact_i32(number(v))?));
+            Some(())
+        });
+        if integral.is_some() {
             bytes.push(b'i');
             bytes.extend_from_slice(&checked_ints(&ints, IntWidth::W32)?);
             return self.array_blob(ty, ARRAY_BIT | COMPRESSED_BIT, &bytes, false);
         }
+        drop(ints);
         // Give up on a lookup table once it would hold more than a quarter
         // of the elements (at most 1024), as OpenUSD does.
         let max_lut = (len / 4).min(1024);
-        let size = elems.bytes.len() / len;
-        let element = |i: usize| &elems.bytes[i * size..(i + 1) * size];
+        // Bitwise comparison preserves signed zero and NaN payloads.
+        let element = |i: usize| le_bytes(values[i]);
         let mut lut: Vec<usize> = Vec::new();
         let mut indexes: Vec<i64> = Vec::with_capacity(len);
         for i in 0..len {
@@ -1004,13 +1021,13 @@ impl<'a> Packer<'a> {
             indexes.push(at as i64);
         }
         if lut.is_empty() {
-            return self.plain_array(ty, len, |out| out.extend_from_slice(&elems.bytes));
+            return self.plain_array(ty, len, write_plain);
         }
         bytes.push(b't');
         #[allow(clippy::cast_possible_truncation, reason = "at most 1024 entries")]
         bytes.extend_from_slice(&(lut.len() as u32).to_le_bytes());
         for &j in &lut {
-            bytes.extend_from_slice(element(j));
+            bytes.extend_from_slice(&element(j));
         }
         bytes.extend_from_slice(&checked_ints(&indexes, IntWidth::W32)?);
         self.array_blob(ty, ARRAY_BIT | COMPRESSED_BIT, &bytes, false)

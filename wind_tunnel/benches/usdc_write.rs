@@ -100,5 +100,78 @@ fn numeric_fixture(value: Value) -> Vec<Spec> {
     ]
 }
 
-criterion_group!(benches, bench_write, bench_numeric_write);
+fn bench_layer_save(c: &mut Criterion) {
+    use layerstack::{
+        InMemoryStore, Layer, LayerId, PrimSpec, PropertySpec, PropertyType, TypedArray,
+    };
+    use std::sync::Arc;
+
+    let mut group = c.benchmark_group("usdc_layer_save");
+    for len in [64, 1_000_000] {
+        for animated in [false, true] {
+            let mut store = InMemoryStore::default();
+            let prim = store.path("/Root");
+            let mut spec = PrimSpec::def();
+            for field in 0..4 {
+                let name = store.tokens.intern(format!("values{field}"));
+                let values = layerstack::Value::TypedArray(TypedArray::Float(Arc::new(
+                    (0..len).map(|i| (i % 256 + field) as f32).collect(),
+                )));
+                let property = PropertySpec::typed_attribute(PropertyType::new(
+                    "float",
+                    true,
+                    layerstack::Value::Float(0.),
+                ));
+                let property = if animated {
+                    property.with_time_samples(vec![(0., values.clone()), (10., values)])
+                } else {
+                    property.with_default(values)
+                };
+                spec = spec.with_property(name, property);
+            }
+            let mut layer = Layer::new(LayerId(1));
+            let mut root = PrimSpec::default();
+            root.authored_children.push(store.tokens.intern("Root"));
+            layer.insert_prim(store.path("/"), root);
+            layer.insert_prim(prim, spec);
+            group.bench_function(
+                BenchmarkId::new(if animated { "animated" } else { "static" }, len),
+                |b| {
+                    b.iter(|| {
+                        black_box(
+                            layerstack_usdc::writer::save_layer(
+                                black_box(&layer),
+                                &store.tokens,
+                                &store.paths,
+                            )
+                            .unwrap(),
+                        );
+                    });
+                },
+            );
+            let doc =
+                layerstack_usda::save::layer_document(&layer, &store.tokens, &store.paths).unwrap();
+            group.bench_function(
+                BenchmarkId::new(
+                    if animated {
+                        "borrowed_animated"
+                    } else {
+                        "borrowed_static"
+                    },
+                    len,
+                ),
+                |b| {
+                    b.iter(|| {
+                        black_box(
+                            layerstack_usdc::writer::write_document(black_box(&doc)).unwrap(),
+                        );
+                    });
+                },
+            );
+        }
+    }
+    group.finish();
+}
+
+criterion_group!(benches, bench_write, bench_numeric_write, bench_layer_save);
 criterion_main!(benches);

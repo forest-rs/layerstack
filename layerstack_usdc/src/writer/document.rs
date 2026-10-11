@@ -93,9 +93,11 @@ pub fn write_document(doc: &Document) -> Result<Vec<u8>, UsdcWriteError> {
 ///
 /// The layer goes through the same lowering as its USDA
 /// ([`layerstack_usda::save::layer_document`]), so both formats read the
-/// same source fields; the resulting document is then written with
-/// [`write_document`]. `tokens` and `paths` are the interners the layer's
+/// same source fields; the resulting document uses the same validation and
+/// lowering as [`write_document`]. `tokens` and `paths` are the interners the layer's
 /// identifiers belong to.
+/// The temporary document's numeric buffers move into the crate specs; the
+/// authored layer and its retained snapshots are never consumed or rebound.
 ///
 /// # Errors
 ///
@@ -107,7 +109,8 @@ pub fn save_layer(
     paths: &PathInterner,
 ) -> Result<Vec<u8>, UsdcWriteError> {
     let doc = layer_document(layer, tokens, paths).map_err(UsdcWriteError::Save)?;
-    write_document(&doc)
+    doc.validate().map_err(UsdcWriteError::Document)?;
+    write_crate(&lower_document(doc)?)
 }
 
 /// Lowers `doc` to the crate specs [`write_document`] writes.
@@ -117,18 +120,31 @@ pub fn save_layer(
 /// See [`write_document`].
 pub fn document_specs(doc: &Document) -> Result<Vec<Spec>, UsdcWriteError> {
     doc.validate().map_err(UsdcWriteError::Document)?;
+    lower_document(doc.clone())
+}
+
+// The validated temporary document belongs to serialization. Move its buffers
+// into specs so saving an authored layer does not copy every native array again.
+fn lower_document(mut doc: Document) -> Result<Vec<Spec>, UsdcWriteError> {
     let mut root = Spec::new("/", SpecForm::PseudoRoot);
-    if let Some(name) = &doc.default_prim {
-        root = root.with_field("defaultPrim", Value::Token(name.clone()));
+    if let Some(name) = doc.default_prim.take() {
+        root = root.with_field("defaultPrim", Value::Token(name));
     }
-    for entry in &doc.metadata {
+    for entry in &mut doc.metadata {
         root.fields.push(metadatum(Owner::Layer, "/", entry)?);
     }
     if !doc.relocates.is_empty() {
-        root = root.with_field("layerRelocates", Value::Relocates(doc.relocates.clone()));
+        root = root.with_field(
+            "layerRelocates",
+            Value::Relocates(core::mem::take(&mut doc.relocates)),
+        );
     }
     if !doc.sublayers.is_empty() {
-        let assets = doc.sublayers.iter().map(|s| s.asset.clone()).collect();
+        let assets = doc
+            .sublayers
+            .iter_mut()
+            .map(|s| core::mem::take(&mut s.asset))
+            .collect();
         let offsets = doc
             .sublayers
             .iter()
@@ -138,8 +154,8 @@ pub fn document_specs(doc: &Document) -> Result<Vec<Spec>, UsdcWriteError> {
             .with_field("subLayers", Value::StringVector(assets))
             .with_field("subLayerOffsets", Value::LayerOffsetVector(offsets));
     }
-    if let Some(order) = &doc.prim_order {
-        root = root.with_field("primOrder", Value::TokenVector(order.clone()));
+    if let Some(order) = doc.prim_order.take() {
+        root = root.with_field("primOrder", Value::TokenVector(order));
     }
     if !doc.prims.is_empty() {
         root = root.with_field(
@@ -148,13 +164,13 @@ pub fn document_specs(doc: &Document) -> Result<Vec<Spec>, UsdcWriteError> {
         );
     }
     let mut specs = alloc::vec![root];
-    for prim in &doc.prims {
+    for prim in &mut doc.prims {
         lower_prim(prim, "", &mut specs)?;
     }
     Ok(specs)
 }
 
-fn lower_prim(prim: &Prim, parent: &str, specs: &mut Vec<Spec>) -> Result<(), UsdcWriteError> {
+fn lower_prim(prim: &mut Prim, parent: &str, specs: &mut Vec<Spec>) -> Result<(), UsdcWriteError> {
     // A prim in a variant (`/P{v=x}C`) follows its variant's selection.
     let path = if parent.ends_with('}') {
         alloc::format!("{parent}{}", prim.name)
@@ -169,8 +185,8 @@ fn lower_prim(prim: &Prim, parent: &str, specs: &mut Vec<Spec>) -> Result<(), Us
             UsdaSpecifier::Class => Specifier::Class,
         }),
     );
-    if let Some(type_name) = &prim.type_name {
-        spec = spec.with_field("typeName", Value::Token(type_name.clone()));
+    if let Some(type_name) = prim.type_name.take() {
+        spec = spec.with_field("typeName", Value::Token(type_name));
     }
     lower_body(prim, spec, specs)
 }
@@ -189,37 +205,41 @@ fn lower_prim(prim: &Prim, parent: &str, specs: &mut Vec<Spec>) -> Result<(), Us
 ///
 /// Spec: AOUSD Core §7.6.2 (prim spec fields), §7.6.6 (variant set spec
 /// fields), §7.6.7 (variant spec fields).
-fn lower_body(prim: &Prim, mut spec: Spec, specs: &mut Vec<Spec>) -> Result<(), UsdcWriteError> {
+fn lower_body(
+    prim: &mut Prim,
+    mut spec: Spec,
+    specs: &mut Vec<Spec>,
+) -> Result<(), UsdcWriteError> {
     let path = spec.path.clone();
-    for entry in &prim.metadata {
+    for entry in &mut prim.metadata {
         spec.fields.push(metadatum(Owner::Prim, &path, entry)?);
     }
-    if let Some(op) = &prim.inherits {
+    if let Some(op) = &mut prim.inherits {
         spec = spec.with_field("inheritPaths", Value::PathListOp(list_op(op)));
     }
-    if let Some(op) = &prim.payloads {
+    if let Some(op) = &mut prim.payloads {
         spec = spec.with_field("payload", Value::PayloadListOp(map_list_op(op, arc)));
     }
-    if let Some(op) = &prim.references {
+    if let Some(op) = &mut prim.references {
         spec = spec.with_field("references", Value::ReferenceListOp(map_list_op(op, arc)));
     }
-    if let Some(op) = &prim.specializes {
+    if let Some(op) = &mut prim.specializes {
         spec = spec.with_field("specializes", Value::PathListOp(list_op(op)));
     }
     if !prim.variant_selections.is_empty() {
         spec = spec.with_field(
             "variantSelection",
-            Value::VariantSelectionMap(prim.variant_selections.clone()),
+            Value::VariantSelectionMap(core::mem::take(&mut prim.variant_selections)),
         );
     }
-    if let Some(op) = &prim.variant_set_names {
+    if let Some(op) = &mut prim.variant_set_names {
         spec = spec.with_field("variantSetNames", Value::StringListOp(list_op(op)));
     }
-    if let Some(order) = &prim.property_order {
-        spec = spec.with_field("propertyOrder", Value::TokenVector(order.clone()));
+    if let Some(order) = prim.property_order.take() {
+        spec = spec.with_field("propertyOrder", Value::TokenVector(order));
     }
-    if let Some(order) = &prim.prim_order {
-        spec = spec.with_field("primOrder", Value::TokenVector(order.clone()));
+    if let Some(order) = prim.prim_order.take() {
+        spec = spec.with_field("primOrder", Value::TokenVector(order));
     }
     if !prim.variant_sets.is_empty() {
         spec = spec.with_field(
@@ -238,16 +258,16 @@ fn lower_body(prim: &Prim, mut spec: Spec, specs: &mut Vec<Spec>) -> Result<(), 
         spec = spec.with_field("properties", Value::TokenVector(names.collect()));
     }
     specs.push(spec);
-    for property in &prim.properties {
+    for property in &mut prim.properties {
         specs.push(match property {
             Property::Attribute(attribute) => lower_attribute(attribute, &path)?,
             Property::Relationship(relationship) => lower_relationship(relationship, &path)?,
         });
     }
-    for child in &prim.children {
+    for child in &mut prim.children {
         lower_prim(child, &path, specs)?;
     }
-    for set in &prim.variant_sets {
+    for set in &mut prim.variant_sets {
         let names = set.variants.iter().map(|v| v.name.clone()).collect();
         specs.push(
             Spec::new(
@@ -256,7 +276,7 @@ fn lower_body(prim: &Prim, mut spec: Spec, specs: &mut Vec<Spec>) -> Result<(), 
             )
             .with_field("variantChildren", Value::TokenVector(names)),
         );
-        for variant in &set.variants {
+        for variant in &mut set.variants {
             let variant_path = alloc::format!("{path}{{{}={}}}", set.name, variant.name);
             lower_body(variant, Spec::new(variant_path, SpecForm::Variant), specs)?;
         }
@@ -264,11 +284,13 @@ fn lower_body(prim: &Prim, mut spec: Spec, specs: &mut Vec<Spec>) -> Result<(), 
     Ok(())
 }
 
-fn lower_attribute(attribute: &Attribute, prim: &str) -> Result<Spec, UsdcWriteError> {
+fn lower_attribute(attribute: &mut Attribute, prim: &str) -> Result<Spec, UsdcWriteError> {
     let path = alloc::format!("{prim}.{}", attribute.name);
+    let type_name = core::mem::take(&mut attribute.type_name);
+    let is_timecode = type_name.strip_suffix("[]").unwrap_or(&type_name) == "timecode";
     let mut spec = Spec::new(path.clone(), SpecForm::Attribute)
         .with_field("custom", Value::Bool(attribute.custom))
-        .with_field("typeName", Value::Token(attribute.type_name.clone()))
+        .with_field("typeName", Value::Token(type_name))
         .with_field(
             "variability",
             Value::Variability(match attribute.variability {
@@ -276,35 +298,35 @@ fn lower_attribute(attribute: &Attribute, prim: &str) -> Result<Spec, UsdcWriteE
                 UsdaVariability::Uniform => Variability::Uniform,
             }),
         );
-    if let Some(value) = &attribute.value {
-        spec = spec.with_field("default", attribute_value(&attribute.type_name, value));
+    if let Some(value) = &mut attribute.value {
+        spec = spec.with_field("default", attribute_value(is_timecode, value));
     }
-    for entry in &attribute.metadata {
+    for entry in &mut attribute.metadata {
         spec.fields.push(metadatum(Owner::Attribute, &path, entry)?);
     }
-    if let Some(connections) = &attribute.connections {
+    if let Some(connections) = &mut attribute.connections {
         spec = spec.with_field("connectionPaths", Value::PathListOp(list_op(connections)));
     }
-    if let Some(samples) = &attribute.time_samples {
+    if let Some(samples) = &mut attribute.time_samples {
         let samples = samples
-            .iter()
-            .map(|(time, value)| (*time, attribute_value(&attribute.type_name, value)))
+            .iter_mut()
+            .map(|(time, value)| (*time, attribute_value(is_timecode, value)))
             .collect();
         spec = spec.with_field("timeSamples", Value::TimeSamples(samples));
     }
-    if let Some(spline) = &attribute.spline {
+    if let Some(spline) = attribute.spline.take() {
         spec = spec.with_field(
             "spline",
             Value::Spline(
-                (**spline).clone(),
+                *spline,
                 attribute
                     .spline_custom_data
-                    .iter()
+                    .iter_mut()
                     .map(|(time, entries)| {
                         (
                             *time,
                             entries
-                                .iter()
+                                .iter_mut()
                                 .map(|(k, v)| (k.clone(), natural(v)))
                                 .collect(),
                         )
@@ -318,27 +340,26 @@ fn lower_attribute(attribute: &Attribute, prim: &str) -> Result<Spec, UsdcWriteE
 
 /// An attribute default or time sample: a `timecode` / `timecode[]` value is
 /// an `SdfTimeCode`; every other value keeps its own type.
-fn attribute_value(type_name: &str, value: &UsdaValue) -> Value {
-    let is_timecode = type_name.strip_suffix("[]").unwrap_or(type_name) == "timecode";
+fn attribute_value(is_timecode: bool, value: &mut UsdaValue) -> Value {
     match (is_timecode, value) {
         (true, UsdaValue::Double(v)) => Value::TimeCode(*v),
-        (true, UsdaValue::DoubleArray(v)) => Value::TimeCodeArray(v.clone()),
+        (true, UsdaValue::DoubleArray(v)) => Value::TimeCodeArray(core::mem::take(v)),
         (_, v) => natural(v),
     }
 }
 
-fn lower_relationship(relationship: &Relationship, prim: &str) -> Result<Spec, UsdcWriteError> {
+fn lower_relationship(relationship: &mut Relationship, prim: &str) -> Result<Spec, UsdcWriteError> {
     let path = alloc::format!("{prim}.{}", relationship.name);
     let mut spec = Spec::new(path.clone(), SpecForm::Relationship)
         .with_field("variability", Value::Variability(Variability::Uniform));
     if relationship.custom {
         spec = spec.with_field("custom", Value::Bool(true));
     }
-    let targets = relationship.targets.as_ref();
-    if let Some(targets) = targets.filter(|op| op.explicit.is_some()) {
+    let mut targets = relationship.targets.as_mut();
+    if let Some(targets) = targets.as_deref_mut().filter(|op| op.explicit.is_some()) {
         spec = spec.with_field("targetPaths", Value::PathListOp(list_op(targets)));
     }
-    for entry in &relationship.metadata {
+    for entry in &mut relationship.metadata {
         spec.fields
             .push(metadatum(Owner::Relationship, &path, entry)?);
     }
@@ -348,42 +369,42 @@ fn lower_relationship(relationship: &Relationship, prim: &str) -> Result<Spec, U
     Ok(spec)
 }
 
-fn list_op(op: &UsdaListOp<String>) -> ListOp<String> {
-    map_list_op(op, String::clone)
+fn list_op(op: &mut UsdaListOp<String>) -> ListOp<String> {
+    map_list_op(op, core::mem::take)
 }
 
-fn map_list_op<T, U>(op: &UsdaListOp<T>, item: impl Fn(&T) -> U) -> ListOp<U> {
-    let list = |items: &[T]| items.iter().map(&item).collect::<Vec<_>>();
+fn map_list_op<T, U>(op: &mut UsdaListOp<T>, item: impl Fn(&mut T) -> U) -> ListOp<U> {
+    let list = |items: &mut [T]| items.iter_mut().map(&item).collect::<Vec<_>>();
     ListOp {
-        explicit: op.explicit.as_deref().map(list),
-        prepended: list(&op.prepended),
-        appended: list(&op.appended),
-        deleted: list(&op.deleted),
-        added: list(&op.added),
-        reordered: list(&op.reordered),
+        explicit: op.explicit.as_deref_mut().map(list),
+        prepended: list(&mut op.prepended),
+        appended: list(&mut op.appended),
+        deleted: list(&mut op.deleted),
+        added: list(&mut op.added),
+        reordered: list(&mut op.reordered),
     }
 }
 
 /// A reference or payload as `SdfReference` / `SdfPayload` hold it: an
 /// empty asset path for an internal arc, an empty prim path for the
 /// `defaultPrim`.
-fn arc(arc: &UsdaReference) -> Reference {
+fn arc(arc: &mut UsdaReference) -> Reference {
     Reference {
-        asset: arc.asset.clone().unwrap_or_default(),
-        prim_path: arc.prim_path.clone().unwrap_or_default(),
+        asset: arc.asset.take().unwrap_or_default(),
+        prim_path: arc.prim_path.take().unwrap_or_default(),
         offset: arc.offset.offset,
         scale: arc.offset.scale,
         custom_data: arc
             .custom_data
-            .iter()
-            .map(|(k, v)| (k.clone(), natural(v)))
+            .iter_mut()
+            .map(|(k, v)| (core::mem::take(k), natural(v)))
             .collect(),
     }
 }
 
 /// The value type each value keeps outside a typed field: the type its
 /// USDA spelling (or typed dictionary entry) declares.
-fn natural(value: &UsdaValue) -> Value {
+fn natural(value: &mut UsdaValue) -> Value {
     use UsdaValue as U;
     match value {
         U::Bool(v) => Value::Bool(*v),
@@ -396,11 +417,11 @@ fn natural(value: &UsdaValue) -> Value {
         U::Float(v) => Value::Float(*v),
         U::Double(v) => Value::Double(*v),
         U::TimeCode(v) => Value::TimeCode(*v),
-        U::String(v) => Value::String(v.clone()),
-        U::Token(v) => Value::Token(v.clone()),
-        U::Asset(v) => Value::Asset(v.clone()),
-        U::PathExpression(v) => Value::PathExpression(v.clone()),
-        U::PathExpressionArray(v) => Value::PathExpressionArray(v.clone()),
+        U::String(v) => Value::String(core::mem::take(v)),
+        U::Token(v) => Value::Token(core::mem::take(v)),
+        U::Asset(v) => Value::Asset(core::mem::take(v)),
+        U::PathExpression(v) => Value::PathExpression(core::mem::take(v)),
+        U::PathExpressionArray(v) => Value::PathExpressionArray(core::mem::take(v)),
         U::Float2(v) => Value::Vec2f(*v),
         U::Float3(v) => Value::Vec3f(*v),
         U::Float4(v) => Value::Vec4f(*v),
@@ -419,37 +440,37 @@ fn natural(value: &UsdaValue) -> Value {
         U::Matrix2d(v) => Value::Matrix2d(*v),
         U::Matrix3d(v) => Value::Matrix3d(*v),
         U::Matrix4d(v) => Value::Matrix4d(*v),
-        U::BoolArray(v) => Value::BoolArray(v.clone()),
-        U::UCharArray(v) => Value::UCharArray(v.clone()),
-        U::IntArray(v) => Value::IntArray(v.clone()),
-        U::UIntArray(v) => Value::UIntArray(v.clone()),
-        U::Int64Array(v) => Value::Int64Array(v.clone()),
-        U::UInt64Array(v) => Value::UInt64Array(v.clone()),
-        U::HalfArray(v) => Value::HalfArray(v.clone()),
-        U::FloatArray(v) => Value::FloatArray(v.clone()),
-        U::DoubleArray(v) => Value::DoubleArray(v.clone()),
-        U::TimeCodeArray(v) => Value::TimeCodeArray(v.clone()),
-        U::StringArray(v) => Value::StringArray(v.clone()),
-        U::TokenArray(v) => Value::TokenArray(v.clone()),
-        U::AssetArray(v) => Value::AssetArray(v.clone()),
-        U::Float2Array(v) => Value::Vec2fArray(v.clone()),
-        U::Float3Array(v) => Value::Vec3fArray(v.clone()),
-        U::Float4Array(v) => Value::Vec4fArray(v.clone()),
-        U::Double2Array(v) => Value::Vec2dArray(v.clone()),
-        U::Double3Array(v) => Value::Vec3dArray(v.clone()),
-        U::Double4Array(v) => Value::Vec4dArray(v.clone()),
-        U::Int2Array(v) => Value::Vec2iArray(v.clone()),
-        U::Int3Array(v) => Value::Vec3iArray(v.clone()),
-        U::Int4Array(v) => Value::Vec4iArray(v.clone()),
-        U::Half2Array(v) => Value::Vec2hArray(v.clone()),
-        U::Half3Array(v) => Value::Vec3hArray(v.clone()),
-        U::Half4Array(v) => Value::Vec4hArray(v.clone()),
-        U::QuathArray(v) => Value::QuathArray(v.clone()),
-        U::QuatfArray(v) => Value::QuatfArray(v.clone()),
-        U::QuatdArray(v) => Value::QuatdArray(v.clone()),
-        U::Matrix2dArray(v) => Value::Matrix2dArray(v.clone()),
-        U::Matrix3dArray(v) => Value::Matrix3dArray(v.clone()),
-        U::Matrix4dArray(v) => Value::Matrix4dArray(v.clone()),
+        U::BoolArray(v) => Value::BoolArray(core::mem::take(v)),
+        U::UCharArray(v) => Value::UCharArray(core::mem::take(v)),
+        U::IntArray(v) => Value::IntArray(core::mem::take(v)),
+        U::UIntArray(v) => Value::UIntArray(core::mem::take(v)),
+        U::Int64Array(v) => Value::Int64Array(core::mem::take(v)),
+        U::UInt64Array(v) => Value::UInt64Array(core::mem::take(v)),
+        U::HalfArray(v) => Value::HalfArray(core::mem::take(v)),
+        U::FloatArray(v) => Value::FloatArray(core::mem::take(v)),
+        U::DoubleArray(v) => Value::DoubleArray(core::mem::take(v)),
+        U::TimeCodeArray(v) => Value::TimeCodeArray(core::mem::take(v)),
+        U::StringArray(v) => Value::StringArray(core::mem::take(v)),
+        U::TokenArray(v) => Value::TokenArray(core::mem::take(v)),
+        U::AssetArray(v) => Value::AssetArray(core::mem::take(v)),
+        U::Float2Array(v) => Value::Vec2fArray(core::mem::take(v)),
+        U::Float3Array(v) => Value::Vec3fArray(core::mem::take(v)),
+        U::Float4Array(v) => Value::Vec4fArray(core::mem::take(v)),
+        U::Double2Array(v) => Value::Vec2dArray(core::mem::take(v)),
+        U::Double3Array(v) => Value::Vec3dArray(core::mem::take(v)),
+        U::Double4Array(v) => Value::Vec4dArray(core::mem::take(v)),
+        U::Int2Array(v) => Value::Vec2iArray(core::mem::take(v)),
+        U::Int3Array(v) => Value::Vec3iArray(core::mem::take(v)),
+        U::Int4Array(v) => Value::Vec4iArray(core::mem::take(v)),
+        U::Half2Array(v) => Value::Vec2hArray(core::mem::take(v)),
+        U::Half3Array(v) => Value::Vec3hArray(core::mem::take(v)),
+        U::Half4Array(v) => Value::Vec4hArray(core::mem::take(v)),
+        U::QuathArray(v) => Value::QuathArray(core::mem::take(v)),
+        U::QuatfArray(v) => Value::QuatfArray(core::mem::take(v)),
+        U::QuatdArray(v) => Value::QuatdArray(core::mem::take(v)),
+        U::Matrix2dArray(v) => Value::Matrix2dArray(core::mem::take(v)),
+        U::Matrix3dArray(v) => Value::Matrix3dArray(core::mem::take(v)),
+        U::Matrix4dArray(v) => Value::Matrix4dArray(core::mem::take(v)),
         U::TokenListOp(op) => Value::TokenListOp(list_op(op)),
         U::StringListOp(op) => Value::StringListOp(list_op(op)),
         U::IntListOp(op) => Value::IntListOp(map_list_op(op, |x| *x)),
@@ -464,8 +485,8 @@ fn natural(value: &UsdaValue) -> Value {
         U::AnimationBlock => Value::AnimationBlock,
         U::Dictionary(entries) => Value::Dictionary(
             entries
-                .iter()
-                .map(|(k, v)| (k.clone(), natural(v)))
+                .iter_mut()
+                .map(|(k, v)| (core::mem::take(k), natural(v)))
                 .collect(),
         ),
     }
@@ -473,14 +494,14 @@ fn natural(value: &UsdaValue) -> Value {
 
 fn native_edit(
     element: &UsdaValue,
-    instructions: &[layerstack::array_edit::Instruction<UsdaValue>],
+    instructions: &mut [layerstack::array_edit::Instruction<UsdaValue>],
 ) -> Value {
     use crate::value_rep::CrateArrayEditOp as C;
     use layerstack::array_edit::{ArrayIndex, Instruction as I, Operand as O};
     let mut values = Vec::new();
-    let mut literal = |value: &UsdaValue| {
+    let mut literal = |value: &mut UsdaValue| {
         let i = values.len();
-        values.push(value.clone());
+        values.push(core::mem::replace(value, UsdaValue::Block));
         i
     };
     let index = |i: ArrayIndex| match i {
@@ -488,7 +509,7 @@ fn native_edit(
         ArrayIndex::End => i64::MIN,
     };
     let instructions = instructions
-        .iter()
+        .iter_mut()
         .map(|op| match op {
             I::Write {
                 src: O::Literal(value),
@@ -535,7 +556,8 @@ fn native_edit(
     // Document validation rejects incompatible descriptors and literals before
     // lowering. A sentinel here also makes an invalid raw program fail preflight
     // if this routine ever gains an unchecked caller.
-    let literals = UsdaValue::array_of(element, values).map_or(Value::Block, |v| natural(&v));
+    let literals =
+        UsdaValue::array_of(element, values).map_or(Value::Block, |mut v| natural(&mut v));
     Value::ArrayEdit {
         literals: Box::new(literals),
         instructions,
@@ -725,13 +747,17 @@ pub fn metadata_field(owner: Owner, key: &str) -> Option<(&'static str, FieldTyp
 /// field's registered type, so that the USDA text of the same document
 /// parses to the same value; only text types convert (a USDA string or
 /// token is quoted text either way).
-fn metadatum(owner: Owner, path: &str, entry: &Metadatum) -> Result<super::Field, UsdcWriteError> {
+fn metadatum(
+    owner: Owner,
+    path: &str,
+    entry: &mut Metadatum,
+) -> Result<super::Field, UsdcWriteError> {
     let Some((name, ty)) = metadata_field(owner, &entry.key) else {
         // OpenUSD's text parser keeps metadata no schema registers as an
         // `SdfUnregisteredValue`: a dictionary as itself, anything else as
         // the text of its value (`textParserHelpers.cpp`), which a crate
         // stores as it is.
-        let value = match &entry.value {
+        let value = match &mut entry.value {
             v @ UsdaValue::Dictionary(_) => natural(v),
             UsdaValue::TokenListOp(_)
             | UsdaValue::StringListOp(_)
@@ -747,27 +773,27 @@ fn metadatum(owner: Owner, path: &str, entry: &Metadatum) -> Result<super::Field
             v => Value::String(v.to_usda_text()),
         };
         return Ok(super::Field {
-            name: entry.key.clone(),
+            name: core::mem::take(&mut entry.key),
             value: Value::UnregisteredValue(Box::new(value)),
         });
     };
     use UsdaValue as U;
-    let value = match (ty, &entry.value) {
-        (FieldType::Token, U::Token(v) | U::String(v)) => Some(Value::Token(v.clone())),
-        (FieldType::String, U::Token(v) | U::String(v)) => Some(Value::String(v.clone())),
+    let value = match (ty, &mut entry.value) {
+        (FieldType::Token, U::Token(v) | U::String(v)) => Some(Value::Token(core::mem::take(v))),
+        (FieldType::String, U::Token(v) | U::String(v)) => Some(Value::String(core::mem::take(v))),
         (FieldType::Double, U::Double(v)) => Some(Value::Double(*v)),
         (FieldType::Int, U::Int(v)) => Some(Value::Int(*v)),
         (FieldType::Int64, U::Int64(v)) => Some(Value::Int64(*v)),
         (FieldType::Float, U::Float(v)) => Some(Value::Float(*v)),
         (FieldType::Bool, U::Bool(v)) => Some(Value::Bool(*v)),
         (FieldType::Dictionary, v @ U::Dictionary(_)) => Some(natural(v)),
-        (FieldType::Asset, U::Asset(v)) => Some(Value::Asset(v.clone())),
-        (FieldType::AssetArray, U::AssetArray(v)) => Some(Value::AssetArray(v.clone())),
+        (FieldType::Asset, U::Asset(v)) => Some(Value::Asset(core::mem::take(v))),
+        (FieldType::AssetArray, U::AssetArray(v)) => Some(Value::AssetArray(core::mem::take(v))),
         (FieldType::TokenArray, U::TokenArray(v) | U::StringArray(v)) => {
-            Some(Value::TokenArray(v.clone()))
+            Some(Value::TokenArray(core::mem::take(v)))
         }
         (FieldType::StringArray, U::StringArray(v) | U::TokenArray(v)) => {
-            Some(Value::StringArray(v.clone()))
+            Some(Value::StringArray(core::mem::take(v)))
         }
         (FieldType::TokenListOp, U::TokenListOp(op)) => Some(Value::TokenListOp(list_op(op))),
         (FieldType::StringListOp, U::StringListOp(op)) => Some(Value::StringListOp(list_op(op))),
@@ -803,6 +829,66 @@ mod tests {
 
     use super::*;
     use crate::writer::Field;
+
+    fn natural(value: &UsdaValue) -> Value {
+        super::natural(&mut value.clone())
+    }
+
+    #[test]
+    fn owned_lowering_moves_buffers_and_matches_borrowed_lowering() {
+        let mut doc = mesh_doc();
+        let numbers = vec![1.25_f32; 128];
+        let numbers_ptr = numbers.as_ptr();
+        doc.prims[0].metadata.push(Metadatum::new(
+            "customData",
+            UsdaValue::Dictionary(vec![("numbers".into(), UsdaValue::FloatArray(numbers))]),
+        ));
+        let times = vec![1.0, 2.0];
+        let times_ptr = times.as_ptr();
+        doc.prims[0].push_property(Attribute::new(
+            "times",
+            "timecode[]",
+            UsdaValue::DoubleArray(times),
+        ));
+        let Property::Attribute(points) = &doc.prims[0].children[0].properties[0] else {
+            panic!("points attribute");
+        };
+        let Some(UsdaValue::Float3Array(points)) = &points.value else {
+            panic!("points array");
+        };
+        let points_ptr = points.as_ptr();
+        let snapshot = doc.clone();
+        let expected = document_specs(&doc).unwrap();
+        assert_eq!(doc, snapshot, "borrowed lowering leaves the input intact");
+        let specs = lower_document(doc).unwrap();
+        assert_eq!(specs, expected);
+        let field = |path: &str, name: &str| {
+            &specs
+                .iter()
+                .find(|spec| spec.path == path)
+                .unwrap()
+                .fields
+                .iter()
+                .find(|field| field.name == name)
+                .unwrap()
+                .value
+        };
+        let Value::Vec3fArray(points) = field("/Root/Tri.points", "default") else {
+            panic!("points field");
+        };
+        assert_eq!(points.as_ptr(), points_ptr);
+        let Value::TimeCodeArray(times) = field("/Root.times", "default") else {
+            panic!("timecode field");
+        };
+        assert_eq!(times.as_ptr(), times_ptr);
+        let Value::Dictionary(entries) = field("/Root", "customData") else {
+            panic!("customData");
+        };
+        let Value::FloatArray(numbers) = &entries[0].1 else {
+            panic!("metadata array");
+        };
+        assert_eq!(numbers.as_ptr(), numbers_ptr);
+    }
 
     fn mesh_doc() -> Document {
         let mut mesh = Prim::def("Mesh", "Tri");

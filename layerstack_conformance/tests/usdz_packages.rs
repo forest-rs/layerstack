@@ -38,6 +38,93 @@ use serde::Deserialize;
 
 const ORACLE: &str = include_str!("../fixtures/usdz_packages/oracle.json");
 
+#[test]
+fn nested_writer_defaults_explicit_layers_and_resources_match_native_openusd() {
+    use std::process::Command;
+    let python = std::env::var("LAYERSTACK_USD_PYTHON").unwrap_or_else(|_| "python3".into());
+    let native = Command::new(&python)
+        .args(["-c", "from pxr import Usd, Ar"])
+        .output()
+        .is_ok_and(|output| output.status.success());
+    #[cfg(target_os = "wasi")]
+    let directory = std::env::current_dir()
+        .unwrap()
+        .join("layerstack-nested-interop-wasi");
+    #[cfg(not(target_os = "wasi"))]
+    let directory =
+        std::env::temp_dir().join(format!("layerstack-nested-interop-{}", std::process::id()));
+    std::fs::create_dir_all(&directory).unwrap();
+    let inner = write_usdz(&[
+        PackageFile::new(
+            "dir/root.usda",
+            b"#usda 1.0\n(defaultPrim=\"C\")\ndef \"C\" (references=@./child.usda@</Child>) {}",
+        ),
+        PackageFile::new(
+            "dir/child.usda",
+            b"#usda 1.0\ndef \"Child\" {\n int answer=42\n}",
+        ),
+        PackageFile::new("dir/data.png", b"exact nested bytes"),
+    ])
+    .unwrap();
+    for (index, reference) in ["inner.usdz", "inner.usdz[dir/root.usda]"]
+        .iter()
+        .enumerate()
+    {
+        let root = format!("#usda 1.0\ndef \"Root\" (references=@{reference}@) {{}}");
+        let outer = write_usdz(&[
+            PackageFile::new("root.usda", root.as_bytes()),
+            PackageFile::new("inner.usdz", &inner),
+        ])
+        .unwrap();
+        let mut loaded = load_usdz(&outer, &directory).unwrap();
+        let stage = Stage::compose(
+            &mut loaded.store,
+            loaded.root_layer,
+            StageOptions::default(),
+        );
+        assert!(
+            stage.composition_errors().is_empty(),
+            "{:?}",
+            stage.composition_errors()
+        );
+        let property = loaded.store.property_path("/Root.answer");
+        assert_eq!(
+            stage.resolve_field_path(property).unwrap().value,
+            Value::Int(42)
+        );
+        if native {
+            let path = directory.join(format!("{index}.usdz"));
+            std::fs::write(&path, outer).unwrap();
+            let output = Command::new(&python)
+                .args([
+                    "-c",
+                    r#"
+from pxr import Usd, Ar
+import sys
+path = sys.argv[1]
+stage = Usd.Stage.Open(path)
+assert stage.GetPrimAtPath('/Root').GetAttribute('answer').Get() == 42
+assert not stage.GetCompositionErrors()
+inner = Usd.Stage.Open(path + '[inner.usdz[dir/root.usda]]')
+assert inner.GetPrimAtPath('/C').GetAttribute('answer').Get() == 42
+assert not inner.GetCompositionErrors()
+asset = Ar.GetResolver().OpenAsset(Ar.ResolvedPath(path + '[inner.usdz[dir/data.png]]'))
+assert bytes(asset.GetBuffer()) == b'exact nested bytes'
+"#,
+                ])
+                .arg(&path)
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+    }
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
 #[derive(Deserialize)]
 struct Oracle {
     openusd_version: String,

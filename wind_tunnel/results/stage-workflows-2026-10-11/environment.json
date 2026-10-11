@@ -1,0 +1,16 @@
+{
+  "date": "2026-10-11",
+  "host": "macOS 27.0.1 arm64",
+  "rust": "1.98.1",
+  "profile": "release",
+  "native_reference": "OpenUSD 26.08",
+  "array_elements": 1000000,
+  "baseline_revision": "bf9d7e3c47e5b3bbe67a82ca0a1e845415b3f6e9",
+  "peak_rss_bytes": {
+    "wide": 107249664,
+    "deep": 139460608,
+    "animated": 139493376,
+    "nested": 32161792
+  },
+  "scope": "Warm synthetic traversal and one phase characterization per workload. No cross-platform or allocator-live-byte claim."
+}

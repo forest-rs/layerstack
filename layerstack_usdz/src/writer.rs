@@ -264,10 +264,10 @@ fn validate(files: &[PackageFile<'_>]) -> Result<(), UsdzWriteError> {
 /// USDZ specification lists them (`docs/spec_usdz.rst`, "Usdz
 /// Specification" table and "File Types"): USD layers, PNG/JPEG/OpenEXR/AVIF
 /// images, and M4A/MP3/WAV audio. AOUSD Core §16.4.1.5 recommends the same
-/// set. Nested `.usdz` packages are not in the specification's list and are
-/// not written. Extensions must be lowercase.
+/// set. The specification's “USD Constraints” also permits nested `.usdz`
+/// packages. Extensions must be lowercase; the first entry remains a USD layer.
 pub const MEMBER_EXTENSIONS: &[&str] = &[
-    "usda", "usdc", "usd", "png", "jpg", "jpeg", "exr", "avif", "m4a", "mp3", "wav",
+    "usda", "usdc", "usd", "usdz", "png", "jpg", "jpeg", "exr", "avif", "m4a", "mp3", "wav",
 ];
 
 fn is_member_type(path: &str) -> bool {
@@ -371,8 +371,18 @@ mod tests {
     #[test]
     fn member_types_follow_the_usdz_specification() {
         for path in [
-            "b.usda", "b.usdc", "b.usd", "t/a.png", "t/a.jpg", "t/a.jpeg", "t/a.exr", "t/a.avif",
-            "s/a.m4a", "s/a.mp3", "s/a.wav",
+            "b.usda",
+            "b.usdc",
+            "b.usd",
+            "t/a.png",
+            "t/a.jpg",
+            "t/a.jpeg",
+            "t/a.exr",
+            "t/a.avif",
+            "s/a.m4a",
+            "s/a.mp3",
+            "s/a.wav",
+            "nested.usdz",
         ] {
             let files = [
                 PackageFile::new("scene.usda", LAYER),
@@ -385,7 +395,6 @@ mod tests {
             "blob.bin",
             "noextension",
             "t/.png",
-            "nested.usdz",
             "a.PNG",
             "png/readme",
         ] {

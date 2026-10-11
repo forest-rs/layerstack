@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 //! Motion settings inherited through any prim type.
+//! See the executable [visibility and motion example](crate::Visibility) for
+//! authoring an applied `MotionAPI` and querying inherited blur scale on a child.
 
 use layerstack::{PathId, TokenInterner, Value};
 

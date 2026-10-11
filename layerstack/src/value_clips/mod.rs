@@ -9,6 +9,7 @@
 //! not composed. Default-time queries do not read clips. AOUSD Core §12.3;
 //! OpenUSD 26.08 `usd/clipSetDefinition.cpp`, `clipCache.cpp`, `clipSet.cpp`.
 
+mod demand;
 mod eval;
 mod instance_key;
 mod template;
@@ -19,6 +20,7 @@ use crate::{
     PropertySpec, PropertyType, SpecPath, TokenId, Value, Variability,
 };
 use alloc::{collections::BTreeMap, sync::Arc, vec::Vec};
+pub use demand::{ClipDemand, ClipDemandReason, ClipQueryPlan};
 pub use eval::ClipEvalError;
 use eval::PreparedClipProperty;
 pub(crate) use instance_key::{ClipInstanceKey, instance_keys};
@@ -188,6 +190,9 @@ struct ReadySet {
     active: Vec<(f64, usize)>,
     times: Vec<(f64, f64)>,
     interpolate_missing: bool,
+    manifest_unavailable: bool,
+    template_unresolved: bool,
+    identifiers: Vec<Arc<str>>,
 }
 #[derive(Clone, Debug)]
 struct ClipProperty {
@@ -204,6 +209,8 @@ struct ClipProperty {
 /// Immutable prepared state, kept private to stage integration.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct Catalog {
+    owners: HashMap<PathId, HashSet<PathId>>,
+    demands: HashMap<PathId, Vec<demand::DemandSet>>,
     properties: HashMap<(PathId, TokenId), Vec<ClipProperty>>,
     sites: HashMap<PathId, HashSet<(LayerId, PathId)>>,
     bearing: HashSet<PathId>,
@@ -323,6 +330,7 @@ impl Catalog {
                 // Metadata dependencies also retain definitions that currently
                 // fail preparation, so loading/fixing them can invalidate users.
                 if out.bearing.contains(&owner) {
+                    out.owners.entry(prim).or_default().insert(owner);
                     out.bearing.insert(prim);
                     if let Some(sites) = out.sites.get(&owner).cloned() {
                         out.sites.entry(prim).or_default().extend(sites);
@@ -434,103 +442,108 @@ impl Catalog {
                 return None;
             }
         };
-        let (clips, active, times) = if let Some(paths) = assets(get(&def.dictionary, "assetPaths"))
-        {
-            let Some(active_pairs) = pairs(get(&def.dictionary, "active")) else {
-                self.issue(&def, ClipIssueKind::InvalidMetadata("active"));
-                return None;
-            };
-            let active: Option<Vec<_>> = active_pairs
-                .into_iter()
-                .map(|(time, index)| {
-                    if index.is_finite()
-                        && index >= 0.
-                        && libm::floor(index) == index
-                        && index < paths.len() as f64
-                    {
-                        #[allow(
-                            clippy::cast_possible_truncation,
-                            clippy::cast_sign_loss,
-                            reason = "validated nonnegative index bounded by clip count"
-                        )]
-                        Some((time, index as usize))
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-            let Some(active) = active else {
-                self.issue(&def, ClipIssueKind::InvalidMetadata("active"));
-                return None;
-            };
-            let times = match get(&def.dictionary, "times") {
-                None => Vec::new(),
-                Some(value) => match pairs(Some(value)) {
-                    Some(v) => v,
-                    None => {
-                        self.issue(&def, ClipIssueKind::InvalidMetadata("times"));
+        let mut template_unresolved = false;
+        let (clips, active, times, identifiers) =
+            if let Some(paths) = assets(get(&def.dictionary, "assetPaths")) {
+                let Some(active_pairs) = pairs(get(&def.dictionary, "active")) else {
+                    self.issue(&def, ClipIssueKind::InvalidMetadata("active"));
+                    return None;
+                };
+                let active: Option<Vec<_>> = active_pairs
+                    .into_iter()
+                    .map(|(time, index)| {
+                        if index.is_finite()
+                            && index >= 0.
+                            && libm::floor(index) == index
+                            && index < paths.len() as f64
+                        {
+                            #[allow(
+                                clippy::cast_possible_truncation,
+                                clippy::cast_sign_loss,
+                                reason = "validated nonnegative index bounded by clip count"
+                            )]
+                            Some((time, index as usize))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                let Some(active) = active else {
+                    self.issue(&def, ClipIssueKind::InvalidMetadata("active"));
+                    return None;
+                };
+                let times = match get(&def.dictionary, "times") {
+                    None => Vec::new(),
+                    Some(value) => match pairs(Some(value)) {
+                        Some(v) => v,
+                        None => {
+                            self.issue(&def, ClipIssueKind::InvalidMetadata("times"));
+                            return None;
+                        }
+                    },
+                };
+                let mut clips = Vec::new();
+                let mut identifiers = Vec::new();
+                for path in paths {
+                    if path.is_empty() {
+                        self.issue(&def, ClipIssueKind::InvalidMetadata("assetPaths"));
                         return None;
                     }
-                },
-            };
-            let mut clips = Vec::new();
-            for path in paths {
-                if path.is_empty() {
-                    self.issue(&def, ClipIssueKind::InvalidMetadata("assetPaths"));
+                    clips.push(self.asset(store, &def, &path, ClipAssetRole::Value, raw));
+                    identifiers.push(path);
+                }
+                (clips, active, times, identifiers)
+            } else if let Some(Value::String(pattern)) = get(&def.dictionary, "templateAssetPath") {
+                let result = template::expand(&def.dictionary, pattern);
+                let Ok(template) = result else {
+                    self.issue(&def, ClipIssueKind::InvalidTemplate);
                     return None;
+                };
+                let mut clips = Vec::new();
+                let mut active = Vec::new();
+                let mut times = Vec::new();
+                let mut identifiers = Vec::new();
+                let mut unresolved = false;
+                if let Some(time) = template.front {
+                    times.push((external(def.offset, time), time));
                 }
-                clips.push(self.asset(store, &def, &path, ClipAssetRole::Value, raw));
-            }
-            (clips, active, times)
-        } else if let Some(Value::String(pattern)) = get(&def.dictionary, "templateAssetPath") {
-            let result = template::expand(&def.dictionary, pattern);
-            let Ok(template) = result else {
-                self.issue(&def, ClipIssueKind::InvalidTemplate);
+                for (time, identifier) in template.candidates {
+                    let availability = store.asset_availability(def.anchor.layer_id, &identifier);
+                    let layer = self.asset(
+                        store,
+                        &def,
+                        &identifier,
+                        ClipAssetRole::TemplateCandidate,
+                        raw,
+                    );
+                    if matches!(availability, AssetAvailability::Missing) {
+                        continue;
+                    }
+                    if layer.is_none() {
+                        unresolved = true;
+                        continue;
+                    }
+                    active.push((
+                        external(def.offset, time + template.active_offset),
+                        clips.len(),
+                    ));
+                    times.push((external(def.offset, time), time));
+                    clips.push(layer);
+                    identifiers.push(Arc::from(identifier));
+                }
+                if let Some(time) = template.back {
+                    times.push((external(def.offset, time), time));
+                }
+                if unresolved {
+                    self.issue(&def, ClipIssueKind::UnresolvedTemplate);
+                    template_unresolved = true;
+                }
+                (clips, active, times, identifiers)
+            } else {
+                self.issue(&def, ClipIssueKind::InvalidMetadata("assetPaths"));
                 return None;
             };
-            let mut clips = Vec::new();
-            let mut active = Vec::new();
-            let mut times = Vec::new();
-            let mut unresolved = false;
-            if let Some(time) = template.front {
-                times.push((external(def.offset, time), time));
-            }
-            for (time, identifier) in template.candidates {
-                let availability = store.asset_availability(def.anchor.layer_id, &identifier);
-                let layer = self.asset(
-                    store,
-                    &def,
-                    &identifier,
-                    ClipAssetRole::TemplateCandidate,
-                    raw,
-                );
-                if matches!(availability, AssetAvailability::Missing) {
-                    continue;
-                }
-                if layer.is_none() {
-                    unresolved = true;
-                    continue;
-                }
-                active.push((
-                    external(def.offset, time + template.active_offset),
-                    clips.len(),
-                ));
-                times.push((external(def.offset, time), time));
-                clips.push(layer);
-            }
-            if let Some(time) = template.back {
-                times.push((external(def.offset, time), time));
-            }
-            if unresolved {
-                self.issue(&def, ClipIssueKind::UnresolvedTemplate);
-                return None;
-            }
-            (clips, active, times)
-        } else {
-            self.issue(&def, ClipIssueKind::InvalidMetadata("assetPaths"));
-            return None;
-        };
-        if manifest_unavailable || clips.is_empty() || active.is_empty() {
+        if !template_unresolved && (clips.is_empty() || active.is_empty()) {
             return None;
         }
         Some(ReadySet {
@@ -541,6 +554,9 @@ impl Catalog {
             active,
             times,
             interpolate_missing,
+            manifest_unavailable,
+            template_unresolved,
+            identifiers,
         })
     }
     fn prepare_properties(
@@ -589,6 +605,13 @@ impl Catalog {
             return;
         };
         let clip_path = store.paths_mut().intern(set.clip_root.join(suffix));
+        self.demands
+            .entry(prim)
+            .or_default()
+            .push(demand::DemandSet::new(set, clip_path, node, &self.requests));
+        if set.manifest_unavailable || set.template_unresolved {
+            return;
+        }
         let mut manifest_props: BTreeMap<TokenId, Arc<PropertySpec>> = BTreeMap::new();
         if let Some((_, manifest)) = &set.manifest {
             if let Some(props) = manifest.at(clip_path) {

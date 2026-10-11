@@ -15,6 +15,7 @@
 //! `GfRotation` arithmetic step for step), so results agree with OpenUSD's
 //! to within the rounding of the platform's trigonometry and fused
 //! multiply-adds.
+//!
 
 use alloc::{
     borrow::Cow, boxed::Box, collections::BTreeMap, format, string::String, sync::Arc, vec::Vec,
@@ -884,6 +885,46 @@ impl PreparedCache {
 /// and clearing; retained arena capacity follows peak demand.
 ///
 /// OpenUSD: `UsdGeomXformCache`.
+///
+/// A reset stack ignores the parent's transform. After an edit, notify the
+/// cache using the applied change report before querying the new scene:
+///
+/// ```
+/// use std::sync::Arc;
+/// use layerstack::{EditTarget, InMemoryStore, Layer, LayerId, LiveStage, StageOptions};
+/// use layerstack_schemas::{Scene, SchemaEdit, Time, usd_geom::Xform,
+///     XformCache, XformOpPrecision};
+/// let mut store = InMemoryStore::default();
+/// let layer = LayerId(1);
+/// store.insert_layer(Layer::new(layer));
+/// let parent = store.path("/World");
+/// let child = store.path("/World/Child");
+/// let schemas = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+/// let mut live = LiveStage::compose(&mut store, layer,
+///     StageOptions { schemas: Some(schemas), ..Default::default() });
+/// let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(layer));
+/// Xform::define(&mut edit, parent).add_translate_op(&mut edit, XformOpPrecision::Double)?
+///     .set(&mut edit, [10., 0., 0.])?;
+/// let xform = Xform::define(&mut edit, child);
+/// xform.set_reset_xform_stack(&mut edit, true);
+/// let translation = xform.add_translate_op(&mut edit, XformOpPrecision::Double)?;
+/// translation.set(&mut edit, [1., 2., 3.])?;
+/// let transaction = edit.finish();
+/// live.apply(&mut store, &transaction).expect("valid authored transaction");
+/// let mut cache = XformCache::new(Time::Default);
+/// let scene = Scene::new(live.stage(), &store);
+/// let local = cache.local_transform(&scene, child).expect("populated child");
+/// assert!(local.resets_xform_stack && local.problems.is_empty());
+/// assert_eq!(cache.local_to_world(&scene, child).unwrap()[3], [1., 2., 3., 1.]);
+/// let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(layer));
+/// translation.set(&mut edit, [4., 5., 6.])?;
+/// let transaction = edit.finish();
+/// let applied = live.apply(&mut store, &transaction).expect("valid authored transaction");
+/// let scene = Scene::new(live.stage(), &store);
+/// cache.apply_changes(&scene, &applied.changes);
+/// assert_eq!(cache.local_to_world(&scene, child).unwrap()[3], [4., 5., 6., 1.]);
+/// # Ok::<(), layerstack_schemas::XformOpError>(())
+/// ```
 #[derive(Clone, Debug)]
 #[doc(alias = "UsdGeomXformCache")]
 pub struct XformCache {

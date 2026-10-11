@@ -58,14 +58,15 @@ supported subsets; packaging does not expand their format coverage.
 - No default features. The optional `std` feature enables retained USDC numeric
   arrays through `read_usdz_with_options` and `UsdcArrayLoading::Retained`.
   `UsdzResult::retained_values` exposes a cache/statistics handle for each loaded
-  USDC member. Members retain separate encoded byte copies. Numeric failures
+  USDC member. Members share checked ranges into one immutable archive allocation.
+  Numeric failures
   appear during checked reads; structural validation still occurs on import.
 - `UsdcReadOptions::decode_budget` limits decoder work independently per USDC
   file, including subsequent retained reads. It does not limit archive size,
   USDA parsing or total scene memory.
 - Uncompressed, unencrypted 32-bit ZIP only; no Zip64.
-- The writer accepts USD layers and supported image/audio extensions, not nested
-  USDZ packages. See the [writer API](https://docs.rs/layerstack_usdz/latest/layerstack_usdz/writer/index.html)
+- The writer accepts native USD layers, nested USDZ packages and supported
+  image/audio extensions. The first member must be a native USD layer. See the [writer API](https://docs.rs/layerstack_usdz/latest/layerstack_usdz/writer/index.html)
   for the exact accepted member types and errors.
 - The reader requires the full archive in memory; the writer returns a complete
   `Vec<u8>`. Neither API streams files to or from disk.
@@ -75,3 +76,13 @@ supported subsets; packaging does not expand their format coverage.
 See [CHANGELOG.md](CHANGELOG.md) for release status.
 
 Licensed under either [Apache-2.0](LICENSE-APACHE) or [MIT](LICENSE-MIT), at your option.
+
+
+`PackageSnapshot::new` validates all directories and member checksums, including
+unused nested packages, under `PackageLimits`. `read_usdz_snapshot` reuses those
+indexes and shared encoded views. The borrowed reader copies the outer archive
+once to obtain owned storage. Nested identifiers select explicit members or an
+inner archive's first native USD layer; relative dependencies and resources remain
+inside their innermost archive. `PackageStats` reports indexed entries, directory
+parses, verification bytes and backing allocation size. Small views retain the
+outer allocation until dropped or explicitly detached.

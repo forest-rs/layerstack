@@ -33,8 +33,8 @@
 //! [`LoadOptions`] for eager or retained USDC arrays and a per-file decoder
 //! budget. These options also govern dependencies, package members and reloads.
 //! With `std`, [`StageDocument::retained_values`] exposes decoder statistics.
-//! Retained import still reads complete encoded files; package members each
-//! retain an independent byte copy. Numeric payload failures surface through
+//! Retained import reads complete encoded files; package members share checked
+//! ranges into one immutable archive owner. Numeric payload failures surface through
 //! checked attribute reads and [`IoErrorKind::Decode`] during save/export.
 //!
 //! [`StageDocument::prepare_reload`] separates import/validation from publication.
@@ -57,13 +57,19 @@ use layerstack::{
     AssetResolveError, AssetResolver, InMemoryStore, Layer, LayerId, LayerStore, LiveStage,
     PathInterner, ResolvedAsset, StageOptions, TokenInterner,
 };
+use layerstack::{asset::PackagePath, encoded_bytes::EncodedBytes};
+use layerstack_usdz::snapshot::{PackageLimits, PackageSnapshot, PackageStats};
 use layerstack_usdz::{ImportDiagnostic, MemberDiagnostic};
 pub use layerstack_usdz::{UsdcArrayLoading, UsdcReadOptions};
 
 mod reload;
 pub use reload::PreparedReload;
 mod asset_bytes;
+mod clips;
+mod package;
 pub use asset_bytes::{AssetByteSource, AssetBytes, AssetReadLimits};
+pub use clips::{ClipLoadFailure, ClipQueryPreparation};
+pub use package::{PackageInclusion, PackagePreparationLimits, PreparedPackage};
 
 #[cfg(feature = "std")]
 mod filesystem;
@@ -165,6 +171,8 @@ pub struct LoadOptions {
     pub import_policy: ImportPolicy,
     /// Per-file USDC array loading and decoder work budget.
     pub usdc: UsdcReadOptions,
+    /// Cumulative directory, nesting and checksum work limits for each package.
+    pub package: PackageLimits,
 }
 /// Explicit protection against overwriting unsaved authored state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -239,18 +247,59 @@ enum State {
 }
 #[derive(Clone, Debug, Default)]
 struct Catalog {
+    cache_work: PackageCacheStats,
     sources: BTreeMap<LayerId, Source>,
     ids: BTreeMap<String, LayerId>,
     states: BTreeMap<LayerId, State>,
     saved: BTreeMap<LayerId, u64>,
     reserved: BTreeSet<LayerId>,
     next: u64,
-    package_bytes: BTreeMap<LayerId, Arc<[u8]>>,
+    package_bytes: BTreeMap<LayerId, Arc<PackageSnapshot>>,
     package_roots: BTreeMap<LayerId, String>,
     #[cfg(feature = "std")]
     retained_values: BTreeMap<LayerId, layerstack_usdc::RetainedValues>,
 }
+/// Package transport/index work since creation. Candidate work is published only
+/// on commit. Counts exclude numeric decoding and structural layer assembly.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PackageCacheStats {
+    /// Fresh package trees opened and completely verified.
+    pub opens: usize,
+    /// Directories parsed, including nested archives.
+    pub index_parses: usize,
+    /// Selections served from a resident immutable package index.
+    pub index_hits: usize,
+    /// Source/resource bytes copied into immutable owners after host transport.
+    /// Includes loose files; storage's own copies are outside this count.
+    pub encoded_bytes_copied: u64,
+    /// Unique encoded bytes in the current resident package catalog. Old external
+    /// holders and retained loose USDC pools are outside this count.
+    pub resident_backing_bytes: u64,
+}
 impl Catalog {
+    fn cache_stats(&self) -> PackageCacheStats {
+        let mut stats = self.cache_work;
+        let mut seen: Vec<&Arc<PackageSnapshot>> = Vec::new();
+        for archive in self.package_bytes.values() {
+            if !seen.iter().any(|old| Arc::ptr_eq(old, archive)) {
+                stats.resident_backing_bytes += archive.stats().backing_bytes as u64;
+                seen.push(archive);
+            }
+        }
+        stats
+    }
+    fn package_stats(&self, layer: LayerId) -> Option<PackageStats> {
+        let package = self.sources.get(&layer)?.package.unwrap_or(layer);
+        self.package_bytes
+            .get(&package)
+            .map(|archive| archive.stats())
+    }
+    fn package_identifier(&self, package: LayerId) -> &str {
+        let identifier = &self.sources[&package].identifier;
+        identifier
+            .split_once('[')
+            .map_or(identifier, |(outer, _)| outer)
+    }
     fn allocate(&mut self) -> Result<LayerId, IoError> {
         loop {
             let id = LayerId(self.next);
@@ -275,6 +324,7 @@ pub struct StageDocument<B> {
     catalog: Catalog,
     import_policy: ImportPolicy,
     usdc_options: UsdcReadOptions,
+    package_limits: PackageLimits,
     load_report: LoadReport,
 }
 impl<B: core::fmt::Debug> core::fmt::Debug for StageDocument<B> {
@@ -335,6 +385,7 @@ impl<B: Storage> StageDocument<B> {
             catalog,
             import_policy: ImportPolicy::Strict,
             usdc_options: UsdcReadOptions::default(),
+            package_limits: PackageLimits::default(),
             load_report: LoadReport::default(),
         })
     }
@@ -391,7 +442,13 @@ impl<B: Storage> StageDocument<B> {
             reserved: store.layers.keys().copied().collect(),
             ..Default::default()
         };
-        let mut reader = Reader::new(&mut storage, &mut catalog, import_policy, loading.usdc);
+        let mut reader = Reader::new(
+            &mut storage,
+            &mut catalog,
+            import_policy,
+            loading.usdc,
+            loading.package,
+        );
         let resolved = reader.load(asset, None, &mut store.tokens, &mut store.paths)?;
         if let Some(layer) = resolved.layer {
             reader.pending.push(layer);
@@ -412,6 +469,7 @@ impl<B: Storage> StageDocument<B> {
             catalog,
             import_policy,
             usdc_options: loading.usdc,
+            package_limits: loading.package,
             load_report: report,
         })
     }
@@ -430,6 +488,7 @@ impl<B: Storage> StageDocument<B> {
             &mut catalog,
             self.import_policy,
             self.usdc_options,
+            self.package_limits,
         );
         let resolved = reader.load(asset, anchor, &mut self.store.tokens, &mut self.store.paths)?;
         let id = resolved.layer_id;
@@ -456,6 +515,7 @@ impl<B: Storage> StageDocument<B> {
         LoadOptions {
             import_policy: self.import_policy,
             usdc: self.usdc_options,
+            package: self.package_limits,
         }
     }
     /// Cache inspection for a retained USDC layer without decoding arrays.
@@ -465,6 +525,16 @@ impl<B: Storage> StageDocument<B> {
     #[cfg(feature = "std")]
     pub fn retained_values(&self, layer: LayerId) -> Option<&layerstack_usdc::RetainedValues> {
         self.catalog.retained_values.get(&layer)
+    }
+    /// Directory/verification work and retained backing bytes for the package
+    /// containing `layer`. All its members share this snapshot and its indexes.
+    /// This excludes decoded arrays, structural tables and allocator overhead.
+    pub fn package_stats(&self, layer: LayerId) -> Option<PackageStats> {
+        self.catalog.package_stats(layer)
+    }
+    /// Cumulative transport/index work and current package owner footprint.
+    pub fn package_cache_stats(&self) -> PackageCacheStats {
+        self.catalog.cache_stats()
     }
     /// Authored layers and the document's shared interners.
     pub fn store(&self) -> &InMemoryStore {
@@ -603,13 +673,7 @@ impl<B: Storage> StageDocument<B> {
         let identifier = self.storage.identify(target, None)?;
         let bytes = plan
             .write_usdz(&self.store.tokens, &self.store.paths)
-            .map_err(|error| match error {
-                layerstack_usdz::localize::LocalizationError::Usda(error)
-                | layerstack_usdz::localize::LocalizationError::Usdc(
-                    layerstack_usdc::writer::UsdcWriteError::Save(error),
-                ) => save_error(error),
-                other => IoError::new(IoErrorKind::Unsupported, other.to_string()),
-            })?;
+            .map_err(localization_error)?;
         self.storage.write(&identifier, &bytes)
     }
     /// Reloads resident used sources, excluding anonymous/session layers.
@@ -675,6 +739,7 @@ struct Reader<'a, B> {
     catalog: &'a mut Catalog,
     policy: ImportPolicy,
     usdc_options: UsdcReadOptions,
+    package_limits: PackageLimits,
     pending: Vec<Layer>,
     diagnostics: Vec<MemberDiagnostic>,
     bindings: BTreeMap<(LayerId, String), LayerId>,
@@ -687,12 +752,14 @@ impl<'a, B: Storage> Reader<'a, B> {
         catalog: &'a mut Catalog,
         policy: ImportPolicy,
         usdc_options: UsdcReadOptions,
+        package_limits: PackageLimits,
     ) -> Self {
         Self {
             storage,
             catalog,
             policy,
             usdc_options,
+            package_limits,
             pending: Vec::new(),
             diagnostics: Vec::new(),
             bindings: BTreeMap::new(),
@@ -798,7 +865,7 @@ impl<'a, B: Storage> Reader<'a, B> {
     }
     fn read_layer(
         &mut self,
-        data: &[u8],
+        data: EncodedBytes,
         identifier: &str,
         id: LayerId,
         tokens: &mut TokenInterner,
@@ -820,7 +887,7 @@ impl<'a, B: Storage> Reader<'a, B> {
         let first_failure = self.failures.len();
         let layer = match format {
             Format::Usda => {
-                let source = core::str::from_utf8(data)
+                let source = core::str::from_utf8(&data)
                     .map_err(|e| IoError::new(IoErrorKind::Rejected, e.to_string()))?;
                 let result = layerstack_usda::read_usda(source, id, tokens, paths, self);
                 self.pending.extend(result.emitted.resolved_layers);
@@ -861,8 +928,8 @@ impl<'a, B: Storage> Reader<'a, B> {
                 #[cfg(feature = "std")]
                 let result = match self.usdc_options.arrays {
                     UsdcArrayLoading::Retained => {
-                        let result = layerstack_usdc::read_usdc_lazy_within(
-                            Arc::from(data),
+                        let result = layerstack_usdc::read_usdc_lazy_range_within(
+                            data.clone(),
                             id,
                             tokens,
                             paths,
@@ -874,7 +941,7 @@ impl<'a, B: Storage> Reader<'a, B> {
                         result.assembled
                     }
                     UsdcArrayLoading::Eager => layerstack_usdc::read_usdc_within(
-                        data,
+                        &data,
                         id,
                         tokens,
                         paths,
@@ -885,7 +952,7 @@ impl<'a, B: Storage> Reader<'a, B> {
                 };
                 #[cfg(not(feature = "std"))]
                 let result =
-                    layerstack_usdc::read_usdc_within(data, id, tokens, paths, self, &mut budget)
+                    layerstack_usdc::read_usdc_within(&data, id, tokens, paths, self, &mut budget)
                         .map_err(|e| IoError::new(IoErrorKind::Rejected, e.to_string()))?;
                 self.pending.extend(result.resolved_layers);
                 self.diagnostics
@@ -912,16 +979,20 @@ impl<'a, B: Storage> Reader<'a, B> {
                     .filter(|(member_id, s)| {
                         !self.reachable_only && **member_id != id && s.package == Some(id)
                     })
-                    .filter_map(|(_, s)| {
-                        s.identifier
-                            .strip_suffix(']')
-                            .and_then(|s| s.rsplit_once('[').map(|(_, m)| m.to_string()))
-                    })
+                    .filter_map(|(_, s)| package_member_path(&s.identifier))
                     .collect();
                 let selected: Vec<&str> = members.iter().map(String::as_str).collect();
                 let usdc_options = self.usdc_options;
-                let result = layerstack_usdz::read_usdz_with_options(
-                    data,
+                let archive = Arc::new(
+                    PackageSnapshot::new(data, self.package_limits)
+                        .map_err(|e| IoError::new(IoErrorKind::Rejected, e.to_string()))?,
+                );
+                let selection = package_member_path(identifier);
+                self.catalog.cache_work.opens += 1;
+                self.catalog.cache_work.index_parses += archive.stats().index_parses;
+                let result = layerstack_usdz::read_usdz_snapshot(
+                    &archive,
+                    selection.as_deref(),
                     id,
                     tokens,
                     paths,
@@ -932,12 +1003,15 @@ impl<'a, B: Storage> Reader<'a, B> {
                 .map_err(|e| IoError::new(IoErrorKind::Rejected, e.to_string()))?;
                 #[cfg(feature = "std")]
                 self.catalog.retained_values.extend(result.retained_values);
-                self.catalog.package_bytes.insert(id, Arc::from(data));
+                self.catalog.package_bytes.insert(id, archive);
                 self.catalog
                     .package_roots
                     .insert(id, result.member_paths[&id].to_string());
                 for (&member_id, member) in &result.member_paths {
-                    let member_identifier = alloc::format!("{identifier}[{member}]");
+                    let outer = identifier
+                        .split_once('[')
+                        .map_or(identifier, |(outer, _)| outer);
+                    let member_identifier = alloc::format!("{outer}[{member}]");
                     self.catalog.sources.insert(
                         member_id,
                         Source {
@@ -958,7 +1032,10 @@ impl<'a, B: Storage> Reader<'a, B> {
                     .expect("package root")
                     .identifier = identifier.into();
                 let root_member = self.catalog.package_roots[&id].clone();
-                let alias = alloc::format!("{identifier}[{root_member}]");
+                let outer = identifier
+                    .split_once('[')
+                    .map_or(identifier, |(outer, _)| outer);
+                let alias = alloc::format!("{outer}[{root_member}]");
                 if self
                     .catalog
                     .ids
@@ -1033,9 +1110,7 @@ impl<B: Storage> Reader<'_, B> {
         if asset.starts_with('/') || asset.contains(':') {
             return self.load_external(asset, Some(package), tokens, paths);
         }
-        let bytes = self.catalog.package_bytes[&package].clone();
-        let archive = layerstack_usdz::zip::ZipArchive::parse(&bytes)
-            .map_err(|e| IoError::new(IoErrorKind::Rejected, e.to_string()))?;
+        let archive = self.catalog.package_bytes[&package].clone();
         let Some(member) = self
             .catalog
             .package_member(&archive, asset, anchor, package)?
@@ -1049,8 +1124,22 @@ impl<B: Storage> Reader<'_, B> {
                 self.load_external(asset, Some(package), tokens, paths)
             };
         };
-        let entry = archive.find(&member).expect("selected package member");
-        let data = archive.entry_data(entry);
+        self.load_package_member(&member, package, tokens, paths)
+    }
+    fn load_package_member(
+        &mut self,
+        member: &str,
+        package: LayerId,
+        tokens: &mut TokenInterner,
+        paths: &mut PathInterner,
+    ) -> Result<ResolvedAsset, IoError> {
+        self.catalog.cache_work.index_hits += 1;
+        let archive = self.catalog.package_bytes[&package].clone();
+        let selected = archive
+            .layer(member)
+            .map_err(|e| IoError::new(IoErrorKind::Rejected, e.to_string()))?;
+        let member = selected.path;
+        let data = selected.bytes;
         let id = self
             .allocate_package_layer_id(package, &member)
             .ok_or_else(|| {
@@ -1059,7 +1148,7 @@ impl<B: Storage> Reader<'_, B> {
                     "package member identity unavailable",
                 )
             })?;
-        let identifier = alloc::format!("{}[{member}]", self.catalog.sources[&package].identifier);
+        let identifier = alloc::format!("{}[{member}]", self.catalog.package_identifier(package));
         if self.catalog.states.contains_key(&id) {
             return Ok(ResolvedAsset {
                 layer_id: id,
@@ -1100,8 +1189,27 @@ impl<B: Storage> Reader<'_, B> {
     ) -> Result<ResolvedAsset, IoError> {
         let anchor_identifier = anchor
             .and_then(|id| self.catalog.sources.get(&id))
-            .map(|s| s.identifier.as_str());
-        let identifier = self.storage.identify(asset, anchor_identifier)?;
+            .map(|s| {
+                s.identifier
+                    .split_once('[')
+                    .map_or(s.identifier.as_str(), |(outer, _)| outer)
+            });
+        let path = PackagePath::parse(asset, 32)
+            .map_err(|reason| IoError::new(IoErrorKind::Rejected, reason))?;
+        let outer = self.storage.identify(path.outer(), anchor_identifier)?;
+        let identifier = path.with_outer(&outer);
+        if let Some((first, rest)) = path.members().split_first()
+            && let Some(&package) = self.catalog.ids.get(&outer)
+            && self.catalog.states.get(&package) == Some(&State::Loaded)
+            && self.catalog.package_bytes.contains_key(&package)
+        {
+            return self.load_package_member(
+                &PackagePath::join(first, rest),
+                package,
+                tokens,
+                paths,
+            );
+        }
         let id = if let Some(&id) = self.catalog.ids.get(&identifier) {
             id
         } else {
@@ -1124,9 +1232,16 @@ impl<B: Storage> Reader<'_, B> {
                 layer: None,
             });
         }
-        let bytes = self.storage.read(&identifier)?;
+        let bytes = self.storage.read(&outer)?;
+        self.catalog.cache_work.encoded_bytes_copied += bytes.len() as u64;
         self.catalog.states.insert(id, State::Loading);
-        match self.read_layer(&bytes, &identifier, id, tokens, paths) {
+        match self.read_layer(
+            Arc::<[u8]>::from(bytes).into(),
+            &identifier,
+            id,
+            tokens,
+            paths,
+        ) {
             Ok(layer) => {
                 self.catalog.states.insert(id, State::Loaded);
                 Ok(ResolvedAsset {
@@ -1176,23 +1291,26 @@ impl<B: Storage> AssetResolver for Reader<'_, B> {
         self.catalog.allocate().ok()
     }
     fn existing_package_layer_id(&self, package: LayerId, member: &str) -> Option<LayerId> {
-        let identifier = alloc::format!(
-            "{}[{member}]",
-            self.catalog.sources.get(&package)?.identifier
-        );
+        let identifier = alloc::format!("{}[{member}]", self.catalog.package_identifier(package));
         self.catalog.ids.get(&identifier).copied()
     }
     fn allocate_package_layer_id(&mut self, package: LayerId, member: &str) -> Option<LayerId> {
-        let identifier = alloc::format!(
-            "{}[{member}]",
-            self.catalog.sources.get(&package)?.identifier
-        );
+        let identifier = alloc::format!("{}[{member}]", self.catalog.package_identifier(package));
         if let Some(&id) = self.catalog.ids.get(&identifier) {
             return Some(id);
         }
         let id = self.catalog.allocate().ok()?;
         self.catalog.ids.insert(identifier, id);
         Some(id)
+    }
+}
+fn localization_error(error: layerstack_usdz::localize::LocalizationError) -> IoError {
+    match error {
+        layerstack_usdz::localize::LocalizationError::Usda(error)
+        | layerstack_usdz::localize::LocalizationError::Usdc(
+            layerstack_usdc::writer::UsdcWriteError::Save(error),
+        ) => save_error(error),
+        other => IoError::new(IoErrorKind::Unsupported, other.to_string()),
     }
 }
 fn save_error(error: layerstack_usda::save::SaveError) -> IoError {
@@ -1215,11 +1333,9 @@ fn asset_error(error: IoError) -> AssetResolveError {
     }
 }
 fn identifier_format(identifier: &str) -> Result<Format, IoError> {
-    let identifier = identifier
-        .strip_suffix(']')
-        .and_then(|s| s.rsplit_once('[').map(|(_, member)| member))
-        .unwrap_or(identifier);
-    match identifier.rsplit('.').next() {
+    let path = PackagePath::parse(identifier, 32)
+        .map_err(|reason| IoError::new(IoErrorKind::Rejected, reason))?;
+    match path.leaf().rsplit('.').next() {
         Some("usda") => Ok(Format::Usda),
         Some("usd" | "usdc") => Ok(Format::Usdc),
         Some("usdz") => Ok(Format::Usdz),
@@ -1228,6 +1344,12 @@ fn identifier_format(identifier: &str) -> Result<Format, IoError> {
             "target requires .usda, .usd, .usdc or .usdz extension",
         )),
     }
+}
+
+fn package_member_path(identifier: &str) -> Option<String> {
+    let path = PackagePath::parse(identifier, 32).ok()?;
+    let (first, rest) = path.members().split_first()?;
+    Some(PackagePath::join(first, rest))
 }
 
 #[cfg(test)]

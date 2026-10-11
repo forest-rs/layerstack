@@ -130,6 +130,7 @@ impl Stage {
 #[derive(Debug)]
 struct Frame<'a> {
     prim: PathId,
+    status: PrimStatus,
     children: &'a [PathId],
     next: usize,
 }
@@ -187,6 +188,65 @@ impl core::fmt::Debug for PrimVisits<'_> {
     }
 }
 impl PrimVisits<'_> {
+    // AOUSD Core §11.5: defined, abstract, loaded and proxy state inherit from
+    // ancestors. Carry it on the traversal stack; resolve each local specifier
+    // once from the live store, never cache it across traversals or source edits.
+    fn status(&self, prim: PathId) -> Option<PrimStatus> {
+        if !self.stage.has_prim(prim) {
+            return None;
+        }
+        let stage = self.stage;
+        let predicate = self.predicate;
+        let parent = self.stack.last().map(|frame| frame.status);
+        let active = if predicate.active.is_some() || predicate.loaded.is_some() {
+            stage.is_active(prim)
+        } else {
+            true
+        };
+        let loaded = if predicate.loaded.is_none() {
+            true
+        } else if let Some(parent) = parent {
+            active
+                && parent.loaded
+                && (!stage.loadable.contains(&prim)
+                    || stage
+                        .options
+                        .load_rules
+                        .is_loaded(self.store.paths().resolve(prim)))
+        } else {
+            stage.is_loaded(prim, self.store.paths())
+        };
+        let (defined, abstract_) = if predicate.defined.is_none() && predicate.abstract_.is_none() {
+            (true, false)
+        } else if let Some(parent) = parent {
+            let specifier = stage.resolve_specifier(prim, self.store);
+            (
+                parent.defined && matches!(specifier, Some(Specifier::Def | Specifier::Class)),
+                parent.abstract_ || specifier == Some(Specifier::Class),
+            )
+        } else {
+            (
+                predicate.defined.is_none() || stage.is_defined(prim, self.store),
+                predicate.abstract_.is_some() && stage.is_abstract(prim, self.store),
+            )
+        };
+        let instance = (predicate.instance.is_some() || !predicate.instance_proxies)
+            && stage.is_instance(prim);
+        let instance_proxy = !predicate.instance_proxies
+            && parent.map_or_else(
+                || stage.is_instance_proxy(prim, self.store.paths()),
+                |parent| parent.instance || parent.instance_proxy,
+            );
+        Some(PrimStatus {
+            active,
+            loaded,
+            defined,
+            abstract_,
+            instance,
+            instance_proxy,
+        })
+    }
+
     /// Prunes children after an entry visit. Returns false on an exit visit,
     /// before iteration or after exhaustion; a pruned prim still gets its exit.
     pub fn prune_children(&mut self) -> bool {
@@ -222,7 +282,7 @@ impl Iterator for PrimVisits<'_> {
                     continue;
                 }
             };
-            let Some(status) = self.stage.prim_status(prim, self.store) else {
+            let Some(status) = self.status(prim) else {
                 continue;
             };
             if !self.predicate.matches(status) {
@@ -235,6 +295,7 @@ impl Iterator for PrimVisits<'_> {
             };
             self.stack.push(Frame {
                 prim,
+                status,
                 children,
                 next: 0,
             });
@@ -248,3 +309,95 @@ impl Iterator for PrimVisits<'_> {
 }
 impl core::iter::FusedIterator for PrimRange<'_> {}
 impl core::iter::FusedIterator for PrimVisits<'_> {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{InMemoryStore, Layer, LayerId, PrimSpec};
+
+    #[test]
+    fn inherited_traversal_matches_standalone_flags_for_every_predicate_and_subroot() {
+        let mut store = InMemoryStore::default();
+        let mut layer = Layer::new(LayerId(1));
+        for (path, spec) in [
+            ("/Def", PrimSpec::def()),
+            ("/Def/Child", PrimSpec::def()),
+            ("/Over", PrimSpec::over()),
+            ("/Over/Child", PrimSpec::def()),
+            ("/Class", PrimSpec::class()),
+            ("/Class/Child", PrimSpec::def()),
+            (
+                "/Off",
+                PrimSpec {
+                    active: Some(false),
+                    ..PrimSpec::def()
+                },
+            ),
+        ] {
+            let id = store.path(path);
+            layer.insert_prim(id, spec);
+        }
+        store.insert_layer(layer);
+        let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+        let root = store.path("/");
+        let roots: Vec<_> = stage.traverse_all(root).collect();
+        fn expected(
+            stage: &Stage,
+            store: &dyn LayerStore,
+            prim: PathId,
+            predicate: PrimPredicate,
+            output: &mut Vec<PathId>,
+        ) {
+            let status = stage.prim_status(prim, store).unwrap();
+            if predicate.matches(status) {
+                output.push(prim);
+                if !status.instance || predicate.instance_proxies {
+                    for &child in stage.all_children_of(prim).unwrap_or_default() {
+                        expected(stage, store, child, predicate, output);
+                    }
+                }
+            }
+        }
+        for root in roots {
+            for mut code in 0..243 {
+                let mut values = [None; 5];
+                for value in &mut values {
+                    *value = [None, Some(false), Some(true)][code % 3];
+                    code /= 3;
+                }
+                for instance_proxies in [false, true] {
+                    let predicate = PrimPredicate {
+                        active: values[0],
+                        loaded: values[1],
+                        defined: values[2],
+                        abstract_: values[3],
+                        instance: values[4],
+                        instance_proxies,
+                    };
+                    let mut wanted = Vec::new();
+                    expected(&stage, &store, root, predicate, &mut wanted);
+                    assert_eq!(
+                        stage
+                            .prim_range(root, &store, predicate)
+                            .collect::<Vec<_>>(),
+                        wanted,
+                        "{root:?} {predicate:?}"
+                    );
+                    let visits: Vec<_> = stage
+                        .prim_range(root, &store, predicate)
+                        .pre_and_post()
+                        .collect();
+                    assert_eq!(
+                        visits
+                            .iter()
+                            .filter(|v| !v.is_post_visit)
+                            .map(|v| v.prim)
+                            .collect::<Vec<_>>(),
+                        wanted
+                    );
+                    assert_eq!(visits.len(), wanted.len() * 2);
+                }
+            }
+        }
+    }
+}

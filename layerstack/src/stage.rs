@@ -783,6 +783,27 @@ impl Stage {
     pub fn clip_asset_requests(&self) -> &[crate::value_clips::ClipAssetRequest] {
         self.clips.asset_requests()
     }
+    /// Plans residency for one numeric clip query without I/O or payload decoding.
+    /// Replan after loading pending requests and synchronizing the stage. Explicit
+    /// manifests gate property eligibility; automatic manifests and unresolved
+    /// templates require broader discovery. `max_demands` limits returned uses,
+    /// not metadata preparation work. AOUSD Core §12.3, §12.5.
+    #[must_use]
+    pub fn plan_clip_query(
+        &self,
+        property: PropertyPath,
+        time: f64,
+        interpolation: InterpolationType,
+        max_demands: usize,
+    ) -> crate::value_clips::ClipQueryPlan {
+        self.clips.query_plan(
+            property,
+            time,
+            interpolation,
+            max_demands,
+            self.prims.get(&property.prim_path()),
+        )
+    }
 
     /// Invalid or unsupported clip definitions found during preparation.
     #[must_use]
@@ -2560,11 +2581,14 @@ impl Stage {
         root: PathId,
         store: &'a dyn LayerStore,
     ) -> impl Iterator<Item = PathId> + 'a {
-        self.traverse(root).filter(move |p| {
-            self.is_loaded(*p, store.paths())
-                && self.is_defined(*p, store)
-                && !self.is_abstract(*p, store)
-        })
+        self.prim_range(
+            root,
+            store,
+            PrimPredicate {
+                instance_proxies: true,
+                ..PrimPredicate::DEFAULT
+            },
+        )
     }
 
     /// All direct populated children, including inactive roots, in composed

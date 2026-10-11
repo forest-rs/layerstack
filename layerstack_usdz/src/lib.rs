@@ -21,8 +21,10 @@
 //! The reader operates on a byte slice (`&[u8]`), making it suitable for
 //! both file reads and memory-mapped I/O. [`read_usdz_with_options`] accepts
 //! a per-member USDC decoder budget. With `std`, retained array loading defers
-//! numeric payload decoding; each USDC member owns its encoded byte copy and
-//! cache, exposed through [`UsdzResult::retained_values`].
+//! numeric payload decoding; members share immutable encoded storage and retain
+//! per-file caches, exposed through [`UsdzResult::retained_values`]. The borrowed
+//! entry point copies the outer archive once; [`read_usdz_snapshot`] accepts
+//! already owned, verified storage without that copy.
 //!
 //! # Pipeline
 //!
@@ -52,6 +54,7 @@ pub mod diagnostic;
 pub mod error;
 pub mod localize;
 mod resolver;
+pub mod snapshot;
 pub mod writer;
 pub mod zip;
 
@@ -67,7 +70,7 @@ pub enum UsdcArrayLoading {
     Eager,
     /// Retain immutable encoded bytes and decode numeric arrays on demand.
     /// Structural validation occurs during import; payload failures occur during
-    /// checked reads. Each package member retains a separate byte copy/cache.
+    /// checked reads. Members share encoded storage with separate per-file caches.
     #[cfg(feature = "std")]
     Retained,
 }
@@ -251,48 +254,55 @@ pub fn read_usdz_with_options(
     members: &[&str],
     options: UsdcReadOptions,
 ) -> Result<UsdzResult, UsdzError> {
-    // 1. Parse ZIP archive with USDZ constraint validation.
-    let archive = zip::ZipArchive::parse(data)?;
+    let archive = snapshot::PackageSnapshot::new(
+        Arc::<[u8]>::from(data).into(),
+        snapshot::PackageLimits::default(),
+    )?;
+    read_usdz_snapshot(
+        &archive, None, layer_id, tokens, paths, resolver, members, options,
+    )
+}
 
-    // 2. Validate CRC-32 for all entries.
-    for entry in archive.entries() {
-        let entry_data = archive.entry_data(entry);
-        let actual = crc32::crc32(entry_data);
-        if actual != entry.crc32 {
-            return Err(UsdzError::CrcMismatch {
-                entry: entry.name.clone(),
-                expected: entry.crc32,
-                actual,
-            });
-        }
-    }
-
-    // 3. Find the root layer (first entry must be a USD file).
-    let entries = archive.entries();
-    if entries.is_empty() {
-        return Err(UsdzError::NoRootLayer);
-    }
-    let root_entry = &entries[0];
-    if !is_usd_extension(&root_entry.name) {
-        return Err(UsdzError::NoRootLayer);
-    }
+/// Imports from an already verified immutable directory tree without copying
+/// encoded members or reparsing indexes. `selected` chooses an explicit layer;
+/// `None` uses the first-entry default. Nested package identifiers are accepted.
+/// Limits and full checksum verification are enforced when constructing the
+/// [`snapshot::PackageSnapshot`]. AOUSD Core §9.7, §16.4.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "format import carries caller-owned identity, interners, resolver and explicit policy"
+)]
+pub fn read_usdz_snapshot(
+    archive: &snapshot::PackageSnapshot,
+    selected: Option<&str>,
+    layer_id: LayerId,
+    tokens: &mut TokenInterner,
+    paths: &mut PathInterner,
+    resolver: &mut dyn AssetResolver,
+    members: &[&str],
+    options: UsdcReadOptions,
+) -> Result<UsdzResult, UsdzError> {
+    let root = archive.layer(
+        selected
+            .or_else(|| archive.root_member())
+            .ok_or(UsdzError::NoRootLayer)?,
+    )?;
 
     // 4. Create a package-scoped resolver, which knows the root layer as
     //    the member it anchors to. The outer resolver allocates the layer
     //    IDs of the other members.
     let mut usdz_resolver = resolver::UsdzResolver::new(
-        &archive,
-        root_entry.name.clone(),
+        archive,
+        Arc::from(root.path.as_str()),
         layer_id,
         resolver,
         options,
     );
 
     // 5. Parse the root layer.
-    let root_data = archive.entry_data(root_entry);
     let parsed = resolver::parse_layer_data(
-        root_data,
-        &root_entry.name,
+        root.bytes,
+        &root.path,
         layer_id,
         tokens,
         paths,

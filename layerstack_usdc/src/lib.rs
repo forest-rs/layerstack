@@ -42,7 +42,8 @@ extern crate std;
 mod lazy;
 #[cfg(feature = "std")]
 pub use lazy::{
-    LazyReadResult, RetainedValueStats, RetainedValues, read_usdc_lazy, read_usdc_lazy_within,
+    LazyReadResult, RetainedValueStats, RetainedValues, read_usdc_lazy,
+    read_usdc_lazy_range_within, read_usdc_lazy_within,
 };
 
 pub mod compression;

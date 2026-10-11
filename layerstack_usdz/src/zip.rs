@@ -81,6 +81,12 @@ impl<'a> ZipArchive<'a> {
     /// Validates all USDZ constraints (§16.4.1) and populates the entry
     /// list from the Central Directory.
     pub fn parse(data: &'a [u8]) -> Result<Self, UsdzError> {
+        Self::parse_with_entry_limit(data, usize::MAX)
+    }
+    /// Parses with a directory-entry limit checked before allocating its index.
+    /// Checks constraints but does not verify member CRCs; use `PackageSnapshot`
+    /// for complete integrity verification. AOUSD Core §16.4.
+    pub fn parse_with_entry_limit(data: &'a [u8], max_entries: usize) -> Result<Self, UsdzError> {
         // 1. Locate EOCD (End of Central Directory).
         let eocd_offset = find_eocd(data)?;
 
@@ -93,6 +99,11 @@ impl<'a> ZipArchive<'a> {
         }
 
         let total_entries = read_u16(data, eocd_offset + 10)? as usize;
+        if total_entries > max_entries {
+            return Err(UsdzError::ConstraintViolation {
+                reason: "package entry budget exceeded",
+            });
+        }
         let cd_offset = read_u32(data, eocd_offset + 16)? as usize;
 
         // 3. Parse Central Directory entries.

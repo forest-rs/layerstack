@@ -18,6 +18,7 @@ use core::{
     fmt,
     sync::atomic::{AtomicUsize, Ordering},
 };
+use layerstack::encoded_bytes::EncodedBytes;
 use layerstack::{
     ArrayReadError, AssetResolver, DeferredArraySource, HashMap, LayerId, PathInterner,
     TokenInterner, TypedArray, Value,
@@ -44,6 +45,9 @@ pub struct RetainedValues {
 pub struct RetainedValueStats {
     /// Encoded file bytes retained by this pool.
     pub input_bytes: usize,
+    /// Complete backing allocation retained, possibly shared with other members.
+    /// Do not sum this across pools without deduplicating their backing owners.
+    pub backing_bytes: usize,
     /// Numeric sources still owned by layers or query results.
     pub live_arrays: usize,
     /// Sources with a cached successful native buffer.
@@ -58,10 +62,16 @@ pub struct RetainedValueStats {
     pub remaining_units: u64,
 }
 impl RetainedValues {
+    /// Immutable encoded view retained by this pool. Use `shares_backing` to
+    /// deduplicate allocation accounting across members and resource views.
+    pub fn encoded_bytes(&self) -> &EncodedBytes {
+        &self.pool.bytes
+    }
     /// Inspects caches without decoding or traversing any payload elements.
     pub fn stats(&self) -> RetainedValueStats {
         let mut stats = RetainedValueStats {
             input_bytes: self.pool.bytes.len(),
+            backing_bytes: self.pool.bytes.backing_bytes(),
             decode_attempts: self.pool.attempts.load(Ordering::Relaxed),
             remaining_units: self
                 .pool
@@ -92,7 +102,7 @@ impl RetainedValues {
 }
 
 pub(crate) struct LazyPool {
-    bytes: Arc<[u8]>,
+    bytes: EncodedBytes,
     sections: Arc<CrateSections>,
     budget: Mutex<DecodeBudget>,
     // Weak registry avoids a source -> pool -> source ownership cycle.
@@ -254,6 +264,20 @@ pub fn read_usdc_lazy(
 /// future decodes. A cached failure never consumes the budget a second time.
 pub fn read_usdc_lazy_within(
     bytes: Arc<[u8]>,
+    id: LayerId,
+    tokens: &mut TokenInterner,
+    paths: &mut PathInterner,
+    resolver: &mut dyn AssetResolver,
+    budget: DecodeBudget,
+) -> Result<LazyReadResult, UsdcError> {
+    read_usdc_lazy_range_within(bytes.into(), id, tokens, paths, resolver, budget)
+}
+/// Retains a checked view of shared encoded storage without copying its bytes.
+/// The budget and once-only cache have the same semantics as
+/// [`read_usdc_lazy_within`]. A small file view may retain a large archive;
+/// pass [`EncodedBytes::detached`] when independent ownership is preferable.
+pub fn read_usdc_lazy_range_within(
+    bytes: EncodedBytes,
     id: LayerId,
     tokens: &mut TokenInterner,
     paths: &mut PathInterner,

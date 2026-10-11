@@ -5,6 +5,41 @@
 //!
 //! OpenUSD: `UsdGeomPrimvar` and `UsdGeomPrimvarsAPI`. Value and metadata
 //! composition remain the core's responsibility (AOUSD Core §12.2–12.5).
+//!
+//! Constant primvars inherit; indexed primvars flatten through a checked read:
+//!
+//! ```
+//! use std::sync::Arc;
+//! use layerstack::{EditTarget, InMemoryStore, Layer, LayerId, LiveStage,
+//!     PropertyType, StageOptions, Value};
+//! use layerstack_schemas::{PrimView, Scene, SchemaEdit, Time, usd_geom::{Mesh, Xform}};
+//! let mut store = InMemoryStore::default();
+//! let layer = LayerId(1);
+//! store.insert_layer(Layer::new(layer));
+//! let world = store.path("/World");
+//! let path = store.path("/World/Mesh");
+//! let schemas = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+//! let mut live = LiveStage::compose(&mut store, layer,
+//!     StageOptions { schemas: Some(schemas), ..Default::default() });
+//! let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(layer));
+//! Xform::define(&mut edit, world).create_primvar(&mut edit, "tint",
+//!     PropertyType::new("float", false, Value::Float(0.)))?.set(&mut edit, Value::Float(0.7))?;
+//! Mesh::define(&mut edit, path).create_indexed_primvar(&mut edit, "weight",
+//!     PropertyType::new("float", true, Value::Float(0.)),
+//!     Value::array(vec![Value::Float(0.25), Value::Float(0.75)]), &[1, 0], "vertex", 1)?;
+//! let transaction = edit.finish();
+//! live.apply(&mut store, &transaction).expect("valid authored transaction");
+//! let scene = Scene::new(live.stage(), &store);
+//! let mesh = PrimView::new(scene, path);
+//! assert_eq!(mesh.find_primvar_with_inheritance("tint").unwrap().value(Time::Default)?,
+//!     Some(Value::Float(0.7)));
+//! let weight = mesh.primvars().into_iter().find(|p| p.name() == "weight").unwrap();
+//! let flattened = weight.compute_flattened(Time::Default)?;
+//! assert_eq!(flattened, Some(Value::array(vec![Value::Float(0.75), Value::Float(0.25)])));
+//! // `?` preserves invalid-index and retained-decode errors rather than
+//! // interpreting an unreadable array as a missing primvar.
+//! # Ok::<(), Box<dyn std::error::Error>>(())
+//! ```
 use crate::{PrimEdit, PrimView, Scene, SchemaEdit, Time};
 use alloc::{
     format,

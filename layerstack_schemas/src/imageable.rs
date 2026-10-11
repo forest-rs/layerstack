@@ -11,6 +11,7 @@
 //! [`PurposeInputs::read`]), so a caller that tracks dependencies (an
 //! incremental graph) can record them and rerun the steps. The views'
 //! `compute_*` methods fold the steps from the pseudo-root down.
+//!
 
 use alloc::vec::Vec;
 
@@ -23,6 +24,34 @@ use crate::{
 };
 
 /// A computed visibility.
+///
+/// Visibility and motion inherit independently. Here an invisible parent hides
+/// its child while its applied motion settings still supply the blur scale:
+///
+/// ```
+/// use std::sync::Arc;
+/// use layerstack::{EditTarget, InMemoryStore, Layer, LayerId, LiveStage, StageOptions};
+/// use layerstack_schemas::{Scene, SchemaEdit, Time, Visibility,
+///     usd_geom::{Imageable, ImageableVisibility, MotionApi, Xform}};
+/// let mut store = InMemoryStore::default();
+/// let layer = LayerId(1);
+/// store.insert_layer(Layer::new(layer));
+/// let parent = store.path("/World");
+/// let child = store.path("/World/Child");
+/// let schemas = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+/// let mut live = LiveStage::compose(&mut store, layer,
+///     StageOptions { schemas: Some(schemas), ..Default::default() });
+/// let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(layer));
+/// Xform::define(&mut edit, parent).set_visibility(&mut edit, ImageableVisibility::Invisible);
+/// Xform::define(&mut edit, child);
+/// MotionApi::apply(&mut edit, parent)?.set_motion_blur_scale(&mut edit, 0.5);
+/// let transaction = edit.finish();
+/// live.apply(&mut store, &transaction).expect("valid authored transaction");
+/// let scene = Scene::new(live.stage(), &store);
+/// assert_eq!(Imageable::new(&scene, child).unwrap().compute_visibility(Time::Default), Visibility::Invisible);
+/// assert_eq!(scene.compute_motion_blur_scale(child, Time::Default), 0.5);
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Visibility {
     /// Visible if its ancestors are: no opinion makes it invisible.

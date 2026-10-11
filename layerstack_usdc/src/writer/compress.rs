@@ -90,17 +90,29 @@ pub(crate) fn encode_integers(values: &[i64], width: IntWidth) -> Vec<u8> {
     };
 
     let mut counts: BTreeMap<i64, usize> = BTreeMap::new();
+    // AOUSD Core §16.3.4: count every delta exactly. Keep the first inter-element
+    // delta in a separate counter: ramps and repeated ranges avoid a tree lookup
+    // for their usual step, without a preliminary pass or a guessed mode.
+    let cached_delta = values
+        .get(1)
+        .map_or_else(|| delta(0, values[0]), |&v| delta(values[0], v));
+    let mut cached_count = 0;
     let mut prev = 0;
     for &v in values {
-        *counts.entry(delta(prev, v)).or_insert(0) += 1;
+        let d = delta(prev, v);
+        if d == cached_delta {
+            cached_count += 1;
+        } else {
+            *counts.entry(d).or_insert(0) += 1;
+        }
         prev = v;
     }
-    // Highest count; among equal counts the largest value (iteration is in
-    // ascending value order, so `>=` keeps the last, largest one).
-    let mut common = 0;
-    let mut best = 0;
+    // Highest count; among equal counts the largest delta, including the
+    // cached candidate, whether or not it is actually the most frequent one.
+    let mut common = cached_delta;
+    let mut best = cached_count;
     for (&value, &count) in &counts {
-        if count >= best {
+        if (count, value) > (best, common) {
             best = count;
             common = value;
         }
@@ -191,6 +203,64 @@ mod tests {
         // Deltas 5, 5, -1, -1: tie between 5 and -1.
         let encoded = encode_integers(&[5, 10, 9, 8], IntWidth::W32);
         assert_eq!(&encoded[..4], &5_i32.to_le_bytes(), "common delta");
+    }
+
+    #[test]
+    fn integer_coding_cached_counts_preserve_modes_ties_and_wrapping() {
+        for width in [IntWidth::W32, IntWidth::W64] {
+            for len in [1, 3, 4, 5, 15, 16, 17, 64, 257, 4096] {
+                for deltas in [
+                    &[1][..],
+                    &[5, 5, -1, -1],
+                    &[-1, -1, 5, 5],
+                    &[5, 1, 1, 1],
+                    &[0, 0, 0, i64::MAX, i64::MIN],
+                    &[i64::from(i32::MAX), i64::from(i32::MIN), -1],
+                ] {
+                    let mut value = 0_i64;
+                    let values: Vec<_> = (0..len)
+                        .map(|i| {
+                            value = value.wrapping_add(deltas[i % deltas.len()]);
+                            match width {
+                                IntWidth::W32 => i64::from(i32::from_le_bytes(
+                                    value.to_le_bytes()[..4].try_into().unwrap(),
+                                )),
+                                IntWidth::W64 => value,
+                            }
+                        })
+                        .collect();
+                    let mut counts = BTreeMap::new();
+                    let mut prev = 0_i64;
+                    for &value in &values {
+                        let delta = match width {
+                            IntWidth::W32 => {
+                                let narrow = |v: i64| {
+                                    i32::from_le_bytes(v.to_le_bytes()[..4].try_into().unwrap())
+                                };
+                                i64::from(narrow(value).wrapping_sub(narrow(prev)))
+                            }
+                            IntWidth::W64 => value.wrapping_sub(prev),
+                        };
+                        *counts.entry(delta).or_insert(0_usize) += 1;
+                        prev = value;
+                    }
+                    let common = counts
+                        .iter()
+                        .max_by_key(|&(delta, count)| (count, delta))
+                        .unwrap()
+                        .0;
+                    let encoded = encode_integers(&values, width);
+                    assert_eq!(
+                        &encoded[..width.bytes()],
+                        &common.to_le_bytes()[..width.bytes()]
+                    );
+                    assert_eq!(
+                        decode_integer_array(&encoded, len, width.bytes()).unwrap(),
+                        values
+                    );
+                }
+            }
+        }
     }
 
     #[test]

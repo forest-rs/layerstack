@@ -1,0 +1,17 @@
+[
+  {
+    "shape": "wide",
+    "byte_identical": true,
+    "output_bytes": 7290
+  },
+  {
+    "shape": "deep",
+    "byte_identical": true,
+    "output_bytes": 6218
+  },
+  {
+    "shape": "animated",
+    "byte_identical": true,
+    "output_bytes": 7509
+  }
+]

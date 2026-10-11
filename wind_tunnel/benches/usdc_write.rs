@@ -100,6 +100,47 @@ fn numeric_fixture(value: Value) -> Vec<Spec> {
     ]
 }
 
+fn bench_integer_write(c: &mut Criterion) {
+    let mut group = c.benchmark_group("usdc_integer_write");
+    for len in [64_usize, 65_536] {
+        for pattern in ["constant_delta", "periodic", "alternating", "random"] {
+            let mut random = 7_u32;
+            let values: Vec<i32> = (0..len)
+                .map(|i| match pattern {
+                    "constant_delta" => i32::try_from(i).unwrap(),
+                    "periodic" => i32::try_from(i % 256).unwrap(),
+                    "alternating" => i32::try_from(i % 2).unwrap(),
+                    _ => {
+                        random ^= random << 13;
+                        random ^= random >> 17;
+                        random ^= random << 5;
+                        i32::from_ne_bytes(random.to_ne_bytes())
+                    }
+                })
+                .collect();
+            for wide in [false, true] {
+                let value = if wide {
+                    Value::Int64Array(values.iter().map(|&v| i64::from(v) << 32).collect())
+                } else {
+                    Value::IntArray(values.clone())
+                };
+                let specs = numeric_fixture(value);
+                group.bench_with_input(
+                    BenchmarkId::new(
+                        format!("{pattern}_{}", if wide { "i64" } else { "i32" }),
+                        len,
+                    ),
+                    &specs,
+                    |b, specs| {
+                        b.iter(|| black_box(write_crate(black_box(specs)).unwrap()));
+                    },
+                );
+            }
+        }
+    }
+    group.finish();
+}
+
 fn bench_layer_save(c: &mut Criterion) {
     use layerstack::{
         InMemoryStore, Layer, LayerId, PrimSpec, PropertySpec, PropertyType, TypedArray,
@@ -173,5 +214,11 @@ fn bench_layer_save(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench_write, bench_numeric_write, bench_layer_save);
+criterion_group!(
+    benches,
+    bench_write,
+    bench_numeric_write,
+    bench_integer_write,
+    bench_layer_save
+);
 criterion_main!(benches);

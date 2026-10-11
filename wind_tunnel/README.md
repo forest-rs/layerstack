@@ -134,3 +134,41 @@ and peak counters are in `owned-save-*.csv` and `owned-save-memory.json`.
 ```sh
 cargo bench -p wind_tunnel --bench usdc_write -- usdc_layer_save --warm-up-time 1 --measurement-time 1 --sample-size 10
 ```
+
+Integer compression counts one candidate delta separately, avoiding tree lookups
+for its occurrences while preserving exact frequencies and the largest-delta tie
+rule. The candidate is the first inter-element delta, which covers the usual step
+in ramps and periodic ranges. Every other delta still enters the exact histogram;
+no sample or guessed mode determines the encoding.
+
+Relative to `7d9ace51`, on the same host/profile, Criterion means were:
+
+| Integer workload, 65,536 elements | Before (µs) | After, two runs (µs) |
+|---|---:|---:|
+| Ramp, i32 | 163.52 | 78.41 / 78.89 |
+| Ramp, i64 | 168.17 | 72.43 / 76.20 |
+| Periodic, i32 | 216.46 | 121.86 / 130.30 |
+| Periodic, i64 | 210.80 | 113.65 / 113.01 |
+| Alternating, i32 | 223.51 | 168.61 / 175.36 |
+| Alternating, i64 | 249.29 | 193.28 / 203.16 |
+| Random, i32 | 5,468.68 | 5,467.94 / 5,546.04 |
+| Random, i64 | 6,092.43 | 6,170.84 / 6,128.93 |
+
+Structured integer arrays improve about 19–57%; random arrays range from unchanged
+to 1.4% slower. Random deltas rarely hit the separate counter. The corresponding
+four-array layer saves improve about 26–35%: static means fall from 19.49 ms to
+12.63 / 12.61 ms, and animated means from 19.08 ms to 13.13 / 14.16 ms. These float
+fixtures select integer encoding; the results do not imply a speedup for arbitrary
+floating-point payloads. Tiny inputs and borrowed-document cases are included in
+`delta-writer.csv`, with means and 95% confidence intervals. Fixtures are prepared
+outside the timer; each measurement uses 1 s warm-up, 1 s measurement and 10 samples.
+
+Wide, deep and animated exports are byte-identical to the baseline, recorded in
+`delta-output-checks.json`. Their single-run phase CSVs (`delta-before-*.csv` and
+`delta-after-*.csv`) provide workflow context, not additional statistical timing
+evidence. Tests independently check the chosen mode, ties, wrapping and round trips
+in both integer widths.
+
+```sh
+cargo bench -p wind_tunnel --bench usdc_write -- 'usdc_(integer_write|layer_save)' --warm-up-time 1 --measurement-time 1 --sample-size 10
+```

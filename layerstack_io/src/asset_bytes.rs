@@ -28,7 +28,7 @@ pub struct AssetBytes {
     /// Canonical resolved identity, suitable for host cache keys.
     pub identifier: String,
     /// Complete immutable bytes. Cloning this result shares this allocation.
-    pub bytes: Arc<[u8]>,
+    pub bytes: EncodedBytes,
     /// Transport/package provenance of these bytes.
     pub source: AssetByteSource,
     /// Layer relative to which the authored asset was resolved, if supplied.
@@ -38,7 +38,7 @@ pub struct AssetBytes {
 /// Explicit allocation limits for resource and nonresident archive transport.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct AssetReadLimits {
-    /// Maximum returned resource bytes, checked before copying a package member.
+    /// Maximum returned resource bytes, checked before returning a shared package view.
     pub bytes: u64,
     /// Maximum archive bytes when an explicit package is not already resident.
     /// Resident source snapshots need no transport allocation and bypass this limit.
@@ -51,7 +51,7 @@ impl<B: Storage> StageDocument<B> {
     /// Uses resident USDZ snapshots before host transport. Explicit `./` or `../`
     /// package paths never fall through to external storage; search paths try the
     /// authoring member, package root, then the outer resolver. Explicit
-    /// `package.usdz[member]` identifiers are supported for one archive level.
+    /// `package.usdz[member]` identifiers support nested archives.
     /// Unknown/anonymous anchors fail rather than silently resolve elsewhere.
     /// No layers are imported and no bindings or dirty generations are changed.
     /// AOUSD Core §9.4, §9.7; OpenUSD `ArResolver::OpenAsset` and package resolution.
@@ -60,11 +60,18 @@ impl<B: Storage> StageDocument<B> {
         asset: &str,
         anchor: Option<LayerId>,
     ) -> Result<AssetBytes, IoError> {
-        read(&mut self.storage, &self.catalog, asset, anchor, None)
+        read(
+            &mut self.storage,
+            &mut self.catalog,
+            asset,
+            anchor,
+            None,
+            self.package_limits,
+        )
     }
     /// Resolves opaque bytes with limits checked before payload allocation.
     /// Loose resources require `Storage::read_bounded`; resident package members
-    /// check their existing slice length before making the returned shared copy.
+    /// check their existing slice length before returning a shared view.
     /// Nonresident explicit packages also obey `limits.package_bytes`.
     /// No unbounded fallback occurs. AOUSD Core §9.4, §9.7.
     pub fn read_asset_bytes_bounded(
@@ -75,10 +82,11 @@ impl<B: Storage> StageDocument<B> {
     ) -> Result<AssetBytes, IoError> {
         read(
             &mut self.storage,
-            &self.catalog,
+            &mut self.catalog,
             asset,
             anchor,
             Some(limits),
+            self.package_limits,
         )
     }
 }
@@ -96,15 +104,16 @@ impl<B: Storage> PreparedReload<'_, B> {
     ) -> Result<AssetBytes, IoError> {
         read(
             &mut self.document.storage,
-            &self.catalog,
+            &mut self.catalog,
             asset,
             anchor,
             None,
+            self.document.package_limits,
         )
     }
     /// Resolves opaque bytes with limits checked before payload allocation.
     /// Loose resources require `Storage::read_bounded`; resident package members
-    /// check their existing slice length before making the returned shared copy.
+    /// check their existing slice length before returning a shared view.
     /// Nonresident explicit packages also obey `limits.package_bytes`.
     /// No unbounded fallback occurs. AOUSD Core §9.4, §9.7.
     pub fn read_asset_bytes_bounded(
@@ -115,10 +124,11 @@ impl<B: Storage> PreparedReload<'_, B> {
     ) -> Result<AssetBytes, IoError> {
         read(
             &mut self.document.storage,
-            &self.catalog,
+            &mut self.catalog,
             asset,
             anchor,
             Some(limits),
+            self.document.package_limits,
         )
     }
 }
@@ -127,44 +137,51 @@ impl<B: Storage> PreparedReload<'_, B> {
 impl Catalog {
     pub(super) fn package_member(
         &self,
-        archive: &layerstack_usdz::zip::ZipArchive<'_>,
+        archive: &PackageSnapshot,
         asset: &str,
         anchor: LayerId,
         package: LayerId,
     ) -> Result<Option<String>, IoError> {
-        let root_member = &self.package_roots[&package];
         let authoring = if anchor == package {
-            root_member.as_str()
+            self.package_roots[&package].clone()
         } else {
-            self.sources[&anchor]
-                .identifier
-                .strip_suffix(']')
-                .and_then(|s| s.rsplit_once('[').map(|(_, m)| m))
-                .expect("package member source")
+            package_member_path(&self.sources[&anchor].identifier).expect("package source")
         };
+        let root = archive.containing_root(&authoring).ok_or_else(|| {
+            IoError::new(
+                IoErrorKind::Rejected,
+                "package anchor has no containing default layer",
+            )
+        })?;
         let path = asset.replace('\\', "/");
-        let candidates = core::iter::once(authoring)
-            .chain((!path.starts_with('.')).then_some(root_member.as_str()))
-            .filter_map(|anchor| {
-                layerstack::asset::anchor_asset_path(
-                    &alloc::format!("./{path}"),
-                    &alloc::format!("./{anchor}"),
-                )
-                .and_then(|p| p.strip_prefix("./").map(ToString::to_string))
-                .filter(|p| !p.starts_with("../"))
-            });
-        Ok(candidates
-            .into_iter()
-            .find(|member| archive.find(member).is_some()))
+        let mut valid = false;
+        for anchor in core::iter::once(authoring.as_str())
+            .chain((!path.starts_with('.')).then_some(root.as_str()))
+        {
+            if let Some(member) = PackagePath::anchor_member(&path, anchor) {
+                valid = true;
+                if archive.member(&member).is_ok() {
+                    return Ok(Some(member));
+                }
+            }
+        }
+        if !valid {
+            return Err(IoError::new(
+                IoErrorKind::Rejected,
+                "asset path escapes its containing package",
+            ));
+        }
+        Ok(None)
     }
 }
 
-fn read<B: Storage>(
+pub(super) fn read<B: Storage>(
     storage: &mut B,
-    catalog: &Catalog,
+    catalog: &mut Catalog,
     asset: &str,
     anchor: Option<LayerId>,
     limits: Option<AssetReadLimits>,
+    package_limits: PackageLimits,
 ) -> Result<AssetBytes, IoError> {
     let source = anchor
         .map(|id| {
@@ -178,58 +195,21 @@ fn read<B: Storage>(
         .transpose()?;
     let package = source.and_then(|s| s.package);
     let outer_anchor = package
-        .and_then(|id| catalog.sources.get(&id))
-        .or(source)
-        .map(|s| s.identifier.as_str());
-    if let Some((outer, member)) = asset.split_once('[') {
-        let member = member
-            .strip_suffix(']')
-            .filter(|m| !m.contains(['[', ']']))
-            .ok_or_else(|| {
-                IoError::new(
-                    IoErrorKind::Unsupported,
-                    "requires a single package[member] identifier",
-                )
-            })?;
-        let identifier = storage.identify(outer, outer_anchor)?;
-        let member = layerstack::asset::normalize_asset_path(&member.replace('\\', "/"));
-        let member = member.strip_prefix("./").unwrap_or(&member);
-        if member.is_empty()
-            || member.starts_with('/')
-            || member == ".."
-            || member.starts_with("../")
-        {
-            return Err(IoError::new(
-                IoErrorKind::Rejected,
-                "asset member must remain inside its package",
-            ));
-        }
-        let bytes = catalog
-            .ids
-            .get(&identifier)
-            .and_then(|id| catalog.package_bytes.get(id))
-            .cloned();
-        let bytes = match bytes {
-            Some(bytes) => bytes,
-            None => Arc::from(match limits {
-                Some(limits) => storage.read_bounded(&identifier, limits.package_bytes)?,
-                None => storage.read(&identifier)?,
-            }),
-        };
-        return package_bytes(&bytes, &identifier, member, anchor, limits);
-    }
+        .map(|id| catalog.package_identifier(id))
+        .or_else(|| source.map(|s| s.identifier.as_str()))
+        .map(ToString::to_string);
     if let Some(package) = package
         && !asset.starts_with('/')
         && !asset.contains(':')
     {
-        let archive = layerstack_usdz::zip::ZipArchive::parse(&catalog.package_bytes[&package])
-            .map_err(|e| IoError::new(IoErrorKind::Rejected, e.to_string()))?;
+        catalog.cache_work.index_hits += 1;
+        let archive = &catalog.package_bytes[&package];
         if let Some(member) =
-            catalog.package_member(&archive, asset, anchor.expect("package anchor"), package)?
+            catalog.package_member(archive, asset, anchor.expect("package anchor"), package)?
         {
             return package_entry(
-                &archive,
-                &catalog.sources[&package].identifier,
+                archive,
+                catalog.package_identifier(package),
                 &member,
                 anchor,
                 limits,
@@ -242,56 +222,79 @@ fn read<B: Storage>(
             ));
         }
     }
-    let identifier = storage.identify(asset, outer_anchor)?;
+    let path = PackagePath::parse(asset, 32)
+        .map_err(|reason| IoError::new(IoErrorKind::Rejected, reason))?;
+    let identifier = storage.identify(path.outer(), outer_anchor.as_deref())?;
+    if let Some((first, rest)) = path.members().split_first() {
+        let member = PackagePath::join(first, rest);
+        let resident = catalog
+            .ids
+            .get(&identifier)
+            .and_then(|id| catalog.package_bytes.get(id))
+            .cloned();
+        let archive = match resident {
+            Some(archive) => {
+                catalog.cache_work.index_hits += 1;
+                archive
+            }
+            None => {
+                let bytes = match limits {
+                    Some(limits) => storage.read_bounded(&identifier, limits.package_bytes)?,
+                    None => storage.read(&identifier)?,
+                };
+                catalog.cache_work.encoded_bytes_copied += bytes.len() as u64;
+                let archive = Arc::new(
+                    PackageSnapshot::new(Arc::<[u8]>::from(bytes).into(), package_limits)
+                        .map_err(|e| IoError::new(IoErrorKind::Rejected, e.to_string()))?,
+                );
+                catalog.cache_work.opens += 1;
+                catalog.cache_work.index_parses += archive.stats().index_parses;
+                archive
+            }
+        };
+        return package_entry(&archive, &identifier, &member, anchor, limits);
+    }
+    let bytes = match limits {
+        Some(limits) => storage.read_bounded(&identifier, limits.bytes)?,
+        None => storage.read(&identifier)?,
+    };
+    catalog.cache_work.encoded_bytes_copied += bytes.len() as u64;
     Ok(AssetBytes {
-        bytes: Arc::from(match limits {
-            Some(limits) => storage.read_bounded(&identifier, limits.bytes)?,
-            None => storage.read(&identifier)?,
-        }),
+        bytes: Arc::<[u8]>::from(bytes).into(),
         identifier,
         source: AssetByteSource::Storage,
         anchor,
     })
 }
 
-fn package_bytes(
-    bytes: &[u8],
-    package: &str,
-    member: &str,
-    anchor: Option<LayerId>,
-    limits: Option<AssetReadLimits>,
-) -> Result<AssetBytes, IoError> {
-    let archive = layerstack_usdz::zip::ZipArchive::parse(bytes)
-        .map_err(|e| IoError::new(IoErrorKind::Rejected, e.to_string()))?;
-    package_entry(&archive, package, member, anchor, limits)
-}
-
 fn package_entry(
-    archive: &layerstack_usdz::zip::ZipArchive<'_>,
+    archive: &PackageSnapshot,
     package: &str,
     member: &str,
     anchor: Option<LayerId>,
     limits: Option<AssetReadLimits>,
 ) -> Result<AssetBytes, IoError> {
-    let entry = archive.find(member).ok_or_else(|| {
+    let selected = archive.member(member).map_err(|e| {
         IoError::new(
-            IoErrorKind::NotFound,
-            alloc::format!("missing package member {member}"),
+            match e {
+                layerstack_usdz::UsdzError::MissingMember { .. } => IoErrorKind::NotFound,
+                _ => IoErrorKind::Rejected,
+            },
+            e.to_string(),
         )
     })?;
-    let data = archive.entry_data(entry);
-    if limits.is_some_and(|limits| data.len() as u64 > limits.bytes) {
+    if limits.is_some_and(|limits| selected.bytes.len() as u64 > limits.bytes) {
         return Err(IoError::new(
             IoErrorKind::Rejected,
             "resource exceeds encoded byte budget",
         ));
     }
     Ok(AssetBytes {
-        identifier: alloc::format!("{package}[{member}]"),
-        bytes: Arc::from(data),
+        identifier: alloc::format!("{package}[{}]", selected.path),
+        bytes: selected.bytes,
         source: AssetByteSource::PackageMember {
             package: package.into(),
-            member: member.into(),
+            member: selected.path,
         },
         anchor,
     })

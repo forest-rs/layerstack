@@ -8,11 +8,10 @@
 //! implements packaged resource resolution per AOUSD Core §9.7.
 
 use alloc::collections::BTreeMap;
-use alloc::string::String;
+use alloc::string::{String, ToString};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
-use layerstack::asset::anchor_asset_path;
 use layerstack::doc::{Layer, LayerId};
 use layerstack::interner::TokenInterner;
 use layerstack::path::PathInterner;
@@ -20,7 +19,8 @@ use layerstack::{AssetResolveError, AssetResolver, ResolvedAsset};
 
 use crate::diagnostic::{ImportDiagnostic, MemberDiagnostic};
 use crate::error::{LayerReadError, UsdzError};
-use crate::zip::ZipArchive;
+use crate::snapshot::PackageSnapshot;
+use layerstack::{asset::PackagePath, encoded_bytes::EncodedBytes};
 
 /// USDC magic bytes used for format sniffing.
 const USDC_MAGIC: &[u8; 8] = b"PXR-USDC";
@@ -53,7 +53,7 @@ const USDC_MAGIC: &[u8; 8] = b"PXR-USDC";
 ///
 /// [`read_usdz`]: crate::read_usdz
 pub(crate) struct UsdzResolver<'a> {
-    archive: &'a ZipArchive<'a>,
+    archive: &'a PackageSnapshot,
     /// The package's root layer, which stands for the package itself when
     /// a path goes to the outer resolver.
     root: LayerId,
@@ -81,7 +81,7 @@ impl<'a> UsdzResolver<'a> {
     /// member `root_member`, loaded as `root`. Members it loads get layer
     /// IDs from `outer`.
     pub(crate) fn new(
-        archive: &'a ZipArchive<'a>,
+        archive: &'a PackageSnapshot,
         root_member: Arc<str>,
         root: LayerId,
         outer: &'a mut dyn AssetResolver,
@@ -160,16 +160,24 @@ impl<'a> UsdzResolver<'a> {
         tokens: &mut TokenInterner,
         paths: &mut PathInterner,
     ) -> Option<Result<ResolvedAsset, AssetResolveError>> {
-        if let Some((name, &id)) = self.by_member.get_key_value(member) {
+        let selected = match self.archive.layer(member) {
+            Ok(selected) => selected,
+            Err(UsdzError::MissingMember { .. }) => return None,
+            Err(error) => {
+                let message = Arc::from(alloc::format!("{error}"));
+                self.failure.get_or_insert(error);
+                return Some(Err(AssetResolveError::LoadError(message)));
+            }
+        };
+        if let Some((name, &id)) = self.by_member.get_key_value(selected.path.as_str()) {
             return Some(Ok(ResolvedAsset {
                 layer_id: id,
                 resolved_path: name.clone(),
                 layer: None,
             }));
         }
-        let entry = self.archive.find(member)?;
-        let data = self.archive.entry_data(entry);
-        let name = entry.name.clone();
+        let data = selected.bytes;
+        let name: Arc<str> = Arc::from(selected.path);
 
         // The outer resolver owns the ID space the members share with the
         // layers it loads.
@@ -275,7 +283,10 @@ impl AssetResolver for UsdzResolver<'_> {
             });
             return Err(AssetResolveError::NotFound);
         }
-        let root_member = self.member_paths[&self.root].clone();
+        let root_member = self
+            .archive
+            .containing_root(&authoring)
+            .unwrap_or_else(|| self.member_paths[&self.root].to_string());
         if let Some(member) = member_path(&path, &root_member)
             && let Some(resolved) = self.load_member(&member, tokens, paths)
         {
@@ -318,10 +329,7 @@ fn is_absolute(path: &str) -> bool {
 ///
 /// OpenUSD: `_AnchorRelativePath` in `pxr/usd/sdf/layerUtils.cpp`.
 fn member_path(path: &str, anchor: &str) -> Option<String> {
-    // Both are marked relative to the package's top, so that anchoring
-    // joins them even for a search path and a member at the top.
-    let anchored = anchor_asset_path(&alloc::format!("./{path}"), &alloc::format!("./{anchor}"))?;
-    anchored.strip_prefix("./").map(String::from)
+    PackagePath::anchor_member(path, anchor)
 }
 
 /// A layer parsed from a package member.
@@ -340,7 +348,7 @@ pub(crate) struct ParsedLayer {
 
 /// Parses a USD layer from raw bytes, dispatching by extension and magic.
 pub(crate) fn parse_layer_data(
-    data: &[u8],
+    data: EncodedBytes,
     name: &str,
     layer_id: LayerId,
     tokens: &mut TokenInterner,
@@ -348,17 +356,19 @@ pub(crate) fn parse_layer_data(
     resolver: &mut dyn AssetResolver,
     options: crate::UsdcReadOptions,
 ) -> Result<ParsedLayer, UsdzError> {
-    let ext = name.rsplit('.').next().unwrap_or("");
+    let identifier =
+        PackagePath::parse(name, 32).map_err(|reason| UsdzError::ConstraintViolation { reason })?;
+    let ext = identifier.leaf().rsplit('.').next().unwrap_or("");
 
     match ext {
         "usdc" => parse_usdc(data, name, layer_id, tokens, paths, resolver, options),
-        "usda" => parse_usda(data, name, layer_id, tokens, paths, resolver),
+        "usda" => parse_usda(&data, name, layer_id, tokens, paths, resolver),
         "usd" => {
             // Probe magic bytes to determine format.
             if data.len() >= 8 && &data[..8] == USDC_MAGIC {
                 parse_usdc(data, name, layer_id, tokens, paths, resolver, options)
             } else {
-                parse_usda(data, name, layer_id, tokens, paths, resolver)
+                parse_usda(&data, name, layer_id, tokens, paths, resolver)
             }
         }
         _ => Err(UsdzError::LayerRead {
@@ -371,7 +381,7 @@ pub(crate) fn parse_layer_data(
 
 /// Parses a USDC binary layer.
 fn parse_usdc(
-    data: &[u8],
+    data: EncodedBytes,
     name: &str,
     layer_id: LayerId,
     tokens: &mut TokenInterner,
@@ -383,8 +393,8 @@ fn parse_usdc(
     #[cfg(feature = "std")]
     let (result, retained_values) = match options.arrays {
         crate::UsdcArrayLoading::Retained => {
-            let result = layerstack_usdc::read_usdc_lazy_within(
-                Arc::from(data),
+            let result = layerstack_usdc::read_usdc_lazy_range_within(
+                data.clone(),
                 layer_id,
                 tokens,
                 paths,
@@ -397,13 +407,20 @@ fn parse_usdc(
             }
         }
         crate::UsdcArrayLoading::Eager => (
-            layerstack_usdc::read_usdc_within(data, layer_id, tokens, paths, resolver, &mut budget),
+            layerstack_usdc::read_usdc_within(
+                &data,
+                layer_id,
+                tokens,
+                paths,
+                resolver,
+                &mut budget,
+            ),
             None,
         ),
     };
     #[cfg(not(feature = "std"))]
     let result =
-        layerstack_usdc::read_usdc_within(data, layer_id, tokens, paths, resolver, &mut budget);
+        layerstack_usdc::read_usdc_within(&data, layer_id, tokens, paths, resolver, &mut budget);
     let result = result.map_err(|cause| UsdzError::LayerRead {
         member: Arc::from(name),
         layer_id,

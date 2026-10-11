@@ -153,6 +153,7 @@ mod change_history;
 pub mod clip_authoring;
 pub(crate) mod compose;
 pub(crate) mod composition_checks;
+pub mod encoded_bytes;
 pub use change_history::{ChangeHistoryBudget, ChangeHistoryStats};
 pub mod composition_error;
 pub mod dependency_map;

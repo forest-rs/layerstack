@@ -5,12 +5,22 @@
 use super::*;
 use std::{
     fs,
+    io::Write,
     path::{Component, Path, PathBuf},
+    sync::atomic::{AtomicU64, Ordering},
 };
 
 /// Filesystem transport with an explicit root and ordered search directories.
 /// Relative assets first try their authoring file's directory, then search
 /// directories, then `root`. No process-global resolver context is modified.
+/// Writes stage a complete sibling file, sync its contents, then rename it over
+/// the destination. Errors before replacement leave the destination intact.
+/// Existing symlinks are followed. Replacement changes file identity (and breaks
+/// hard links); this is not a transaction across files or a power-loss durability
+/// guarantee for the directory entry. Existing permissions are copied on native
+/// platforms; WASI relies on host-granted filesystem rights. On macOS
+/// the standard library also copies extended metadata. Other platforms' extended
+/// access controls require a host-specific [`Storage`] backend.
 #[derive(Clone, Debug)]
 pub struct Filesystem {
     root: PathBuf,
@@ -106,7 +116,92 @@ impl Storage for Filesystem {
         Ok(bytes)
     }
     fn write(&mut self, identifier: &str, bytes: &[u8]) -> Result<(), IoError> {
-        fs::write(identifier, bytes).map_err(storage_error)
+        atomic_write(Path::new(identifier), |file| file.write_all(bytes)).map_err(storage_error)
+    }
+}
+
+static NEXT_CANDIDATE: AtomicU64 = AtomicU64::new(0);
+
+/// The callback seam permits deterministic partial-write failures in tests.
+fn atomic_write(
+    path: &Path,
+    write: impl FnOnce(&mut fs::File) -> std::io::Result<()>,
+) -> std::io::Result<()> {
+    let target = match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_symlink() => fs::canonicalize(path)?,
+        Ok(_) => path.to_path_buf(),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => path.to_path_buf(),
+        Err(error) => return Err(error),
+    };
+    let metadata = match fs::metadata(&target) {
+        Ok(metadata) => {
+            // WASI exposes filesystem rights rather than file permission bits.
+            if !metadata.is_file()
+                || (!cfg!(target_os = "wasi") && metadata.permissions().readonly())
+            {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::PermissionDenied,
+                    "destination is not a writable regular file",
+                ));
+            }
+            Some(metadata)
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(error) => return Err(error),
+    };
+    let parent = target
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or(Path::new("."));
+    // WASI has no process ID. create_new still arbitrates candidate collisions.
+    #[cfg(target_os = "wasi")]
+    let process = 0;
+    #[cfg(not(target_os = "wasi"))]
+    let process = std::process::id();
+    // Close the candidate handle before replacement, including on Windows.
+    let candidate = {
+        let (candidate, mut file) = loop {
+            let serial = NEXT_CANDIDATE.fetch_add(1, Ordering::Relaxed);
+            let candidate = parent.join(alloc::format!(".layerstack-save-{process}-{serial}"));
+            let mut options = fs::OpenOptions::new();
+            options.write(true).create_new(true);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt;
+                options.mode(0o600);
+            }
+            match options.open(&candidate) {
+                Ok(file) => break (Candidate(candidate), file),
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(error) => return Err(error),
+            }
+        };
+        // TODO: Preserve ACLs on Windows/Linux through suitable Rust platform APIs,
+        // and verify replacement retains access controls with native regression tests.
+        // macOS std::fs::copy uses COPYFILE_ALL, preserving ACLs and extended metadata
+        // as well as mode. Copy before truncating the candidate, never the destination.
+        #[cfg(target_os = "macos")]
+        if metadata.is_some() {
+            fs::copy(&target, &candidate.0)?;
+            file.set_len(0)?;
+        }
+        write(&mut file)?;
+        if let Some(metadata) = metadata
+            && !cfg!(target_os = "wasi")
+        {
+            file.set_permissions(metadata.permissions())?;
+        }
+        file.sync_all()?;
+        candidate
+    };
+    fs::rename(&candidate.0, &target)?;
+    Ok(())
+}
+
+struct Candidate(PathBuf);
+impl Drop for Candidate {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.0);
     }
 }
 fn storage_error(error: std::io::Error) -> IoError {
@@ -134,6 +229,164 @@ fn normalize(path: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+    // wasm32-wasip1 has no thread spawning support.
+    #[cfg(not(target_family = "wasm"))]
+    #[test]
+    fn concurrent_replacements_publish_complete_files_and_clean_candidates() {
+        use std::sync::{Arc, Barrier, atomic::AtomicUsize};
+        let root = std::env::temp_dir().join(alloc::format!(
+            "layerstack-save-concurrent-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let target = root.join("scene.usda");
+        const SIZE: usize = 128 * 1024;
+        fs::write(&target, alloc::vec![0; SIZE]).unwrap();
+        let barrier = Arc::new(Barrier::new(5));
+        let pending = Arc::new(AtomicUsize::new(4));
+        std::thread::scope(|scope| {
+            for value in 1..=4_u8 {
+                let target = &target;
+                let barrier = barrier.clone();
+                let pending = pending.clone();
+                scope.spawn(move || {
+                    let bytes = alloc::vec![value; SIZE];
+                    barrier.wait();
+                    let result = atomic_write(target, |file| file.write_all(&bytes));
+                    pending.fetch_sub(1, Ordering::Release);
+                    result.unwrap();
+                });
+            }
+            barrier.wait();
+            loop {
+                let bytes = fs::read(&target).unwrap();
+                assert_eq!(bytes.len(), SIZE);
+                assert!(bytes[0] <= 4);
+                assert!(bytes.iter().all(|value| *value == bytes[0]));
+                if pending.load(Ordering::Acquire) == 0 {
+                    break;
+                }
+            }
+        });
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 1);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn replacement_preserves_extended_metadata() {
+        use std::process::Command;
+        let root = std::env::temp_dir().join(alloc::format!(
+            "layerstack-save-metadata-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let target = root.join("scene.usda");
+        fs::write(&target, b"previous scene").unwrap();
+        let attribute = "com.layerstack.save-test";
+        let set = Command::new("/usr/bin/xattr")
+            .args(["-w", attribute, "preserved"])
+            .arg(&target)
+            .output()
+            .unwrap();
+        assert!(
+            set.status.success(),
+            "{}",
+            String::from_utf8_lossy(&set.stderr)
+        );
+        atomic_write(&target, |file| file.write_all(b"replacement")).unwrap();
+        let get = Command::new("/usr/bin/xattr")
+            .args(["-p", attribute])
+            .arg(&target)
+            .output()
+            .unwrap();
+        assert!(
+            get.status.success(),
+            "{}",
+            String::from_utf8_lossy(&get.stderr)
+        );
+        assert_eq!(get.stdout, b"preserved\n");
+        assert_eq!(fs::read(&target).unwrap(), b"replacement");
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn partial_write_and_replace_failure_preserve_destination_and_clean_candidates() {
+        #[cfg(target_os = "wasi")]
+        let root = std::env::current_dir()
+            .unwrap()
+            .join("layerstack-atomic-save-wasi");
+        #[cfg(not(target_os = "wasi"))]
+        let root = std::env::temp_dir().join(alloc::format!(
+            "layerstack-atomic-save-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let target = root.join("scene.usda");
+        fs::write(&target, b"previous scene").unwrap();
+        let error = atomic_write(&target, |file| {
+            file.write_all(b"partial replacement")?;
+            Err(std::io::Error::other("injected write failure"))
+        })
+        .unwrap_err();
+        assert_eq!(error.to_string(), "injected write failure");
+        assert_eq!(fs::read(&target).unwrap(), b"previous scene");
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 1);
+        // Force rename failure after a complete write without touching the old file.
+        let moved = root.join("moved.usda");
+        atomic_write(&target, |file| {
+            file.write_all(b"complete candidate")?;
+            fs::rename(&target, &moved)?;
+            fs::create_dir(&target)
+        })
+        .unwrap_err();
+        assert_eq!(fs::read(&moved).unwrap(), b"previous scene");
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 2);
+        fs::remove_dir(&target).unwrap();
+        let mut storage = Filesystem::new(&root, []).unwrap();
+        storage
+            .write(target.to_str().unwrap(), b"new scene")
+            .unwrap();
+        assert_eq!(fs::read(&target).unwrap(), b"new scene");
+        storage
+            .write(target.to_str().unwrap(), b"replacement scene")
+            .unwrap();
+        assert_eq!(fs::read(&target).unwrap(), b"replacement scene");
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn replacement_follows_symlink_and_preserves_mode_and_readonly_policy() {
+        use std::os::unix::fs::{PermissionsExt, symlink};
+        let root = std::env::temp_dir().join(alloc::format!(
+            "layerstack-save-mode-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let target = root.join("scene.usda");
+        let link = root.join("link.usda");
+        fs::write(&target, b"old").unwrap();
+        fs::set_permissions(&target, fs::Permissions::from_mode(0o640)).unwrap();
+        symlink(&target, &link).unwrap();
+        atomic_write(&link, |file| file.write_all(b"new")).unwrap();
+        assert!(
+            fs::symlink_metadata(&link)
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+        assert_eq!(fs::read(&target).unwrap(), b"new");
+        assert_eq!(
+            fs::metadata(&target).unwrap().permissions().mode() & 0o777,
+            0o640
+        );
+        fs::set_permissions(&target, fs::Permissions::from_mode(0o400)).unwrap();
+        assert!(atomic_write(&target, |file| file.write_all(b"forbidden")).is_err());
+        assert_eq!(fs::read(&target).unwrap(), b"new");
+        fs::remove_dir_all(root).unwrap();
+    }
+
     #[test]
     fn file_relative_assets_do_not_fall_through_to_search_directories() {
         #[cfg(target_os = "wasi")]

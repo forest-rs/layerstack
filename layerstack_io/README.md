@@ -37,7 +37,8 @@ write atomicity and scheduling belong to that backend. No third-party dependenci
 are added. Recoverable format errors require explicit `ImportPolicy::AllowRecovery`.
 
 USDA and USDC source layers can be saved in place. USDZ members are read-only;
-export a caller-selected localization plan to write a package. Layer export writes
+use `prepare_package` to inventory and localize a dependency closure, inspect its
+report, then `export_package` to write the candidate. Layer export writes
 a copy and preserves the original source binding and dirty state. Direct writes to
 public importer fields must call `Layer::touch` before synchronization or saving.
 
@@ -54,13 +55,19 @@ budget. The policy also applies to dependencies, package members and reloads.
 `retained_values(layer_id).stats()` exposes decode attempts, failures and work
 remaining. Checked attribute reads preserve deferred failures; save/export
 reports them as `IoErrorKind::Decode` with the original `array_read_error`.
-Encoded files are still read completely, and each package member retains its
-own byte copy. Decoder units are not memory bytes or a scene-wide memory limit.
+Encoded files are still read completely. Package members, including nested
+archives, share checked ranges into one immutable encoded owner. Decoder units are not memory bytes or a scene-wide memory limit.
 Run `cargo run -p layerstack_examples --bin lazy_io` for a complete example.
 
-Value-clip requests remain explicit: inspect `Stage::clip_asset_requests`, then
-use `StageDocument::load_asset` with each request's authoring layer. The host can
-schedule those reads independently of rendering. Other retained clients over
+For a time-specific clip read, call `Stage::plan_clip_query(property, time,
+interpolation, max_demands)` to inspect manifest, active-interval and interpolation
+bound demands without I/O. `StageDocument::prepare_clip_query` explicitly loads
+and replans under a request budget. Inspect `plan.is_complete()`, failures and
+budget exhaustion before a checked value read; a complete plan can describe a
+confirmed gap. A zero-load budget only inspects residency. Dormant clips outside
+the required interval remain unread when an explicit manifest permits it. Automatic
+manifests, templates and missing-value searches can require more files.
+`clip_asset_requests` and `load_asset` remain available for custom scheduling. Other retained clients over
 the document's store synchronize independently after publication.
 
 Use `prepare_reload` or `prepare_reload_layers` when an engine must inspect a
@@ -84,14 +91,19 @@ bytes, canonical identity and package provenance; no image decoder, renderer or
 new layer identity is introduced. Candidate reads use the candidate USDZ snapshot,
 so keep those validated bytes for renderer/GPU publication after commit. Loose
 external assets are read at call time. Explicit `package[member]` identifiers
-support one archive level; nested archives are unsupported.
+support nested archives, for example `scene.usdz[props.usdz[textures/base.png]]`.
+Relative identifiers stay inside their innermost containing package. Returned
+`EncodedBytes` views expose `backing_bytes()` and `shares_backing()`; `detached()`
+copies a small resource when retaining its whole archive would be undesirable.
+`package_stats` reports directory/CRC work and `package_cache_stats` reports
+package opens, index hits, copied encoded bytes and resident archive ownership.
 Run `cargo run -p layerstack_examples --bin prepared_reload` for a complete
 reject/accept workflow with checked geometry, host budgets and packaged textures.
 
 ## Bounded resources and root reloads
 
 `read_asset_bytes_bounded(asset, authoring_layer, AssetReadLimits { bytes,
-package_bytes })` rejects oversized resident members before copying them and
+package_bytes })` rejects oversized resident members before returning shared views and
 uses `Storage::read_bounded` for loose resources and nonresident archives.
 The storage extension defaults to an unsupported error without invoking `read`;
 custom transports opt into bounded reads explicitly. `Filesystem` bounds reads
@@ -110,3 +122,33 @@ all source/catalog/freshness changes; commit publishes the composed candidate.
 
 These additions keep transport, composition and renderer ownership unchanged;
 no new dependency or architectural boundary is introduced.
+
+## Preparing a package
+
+`prepare_package(root, "scene.usda", PackagePreparationLimits::default(),
+|_| PackageInclusion::Include)` inventories authored dependencies across variants
+and inactive list items in an isolated store. Resident layers include their unsaved
+edits. The candidate rewrites copied layers and shares opaque resource bytes;
+preparation and export preserve live source bindings and dirty generations.
+Inspect `report()` for exact unresolved authoring uses and `plan()` for destinations.
+Missing resources, unsupported resource types and unexpanded patterns prevent a
+plan. Choose `KeepExternal` for intentional external dependencies; concrete paths
+are anchored to their original sources, while expressions remain host controlled.
+Use the lower-level localization callback for custom pattern expansion.
+
+Set layer/asset inventory counts, cumulative opaque bytes and per-resource
+transport limits explicitly. These bound inventory and resource reads; layer
+format imports can follow arcs and the counts are not a scene allocation cap.
+`LoadOptions::package` separately bounds nesting, total directory entries and
+checksum work, including unused nested archives. Limits apply before admitting a
+snapshot. Each resident package directory is reused for later layer/resource reads.
+
+`Filesystem` writes a sibling candidate, synchronizes its contents, then replaces
+the destination. Failed writes preserve the old file and clean up the candidate.
+Symlink destinations retain the link and replace its resolved target. Replacement
+changes inode identity; hard links retain the old inode. This is a single-file
+replacement guarantee, not a multi-file transaction or directory durability promise.
+Standard permissions are preserved on native platforms; macOS also preserves
+extended metadata. WASI relies on host-granted filesystem rights, without file
+permission bits.
+Other platforms' extended access controls require a host-specific `Storage`.

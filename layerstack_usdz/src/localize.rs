@@ -91,7 +91,7 @@ pub struct LocalizedAsset {
     /// Root-relative destination path.
     pub member: Arc<str>,
     /// Complete immutable bytes.
-    pub data: Arc<[u8]>,
+    pub data: layerstack::encoded_bytes::EncodedBytes,
 }
 /// A complete inspectable localization, whose source layers remain unchanged.
 #[derive(Clone, Debug)]
@@ -284,7 +284,10 @@ pub fn localize_asset(
         layers,
         assets: assets
             .into_iter()
-            .map(|(member, data)| LocalizedAsset { member, data })
+            .map(|(member, data)| LocalizedAsset {
+                member,
+                data: data.into(),
+            })
             .collect(),
         resolved_uses,
     })
@@ -362,7 +365,10 @@ fn valid_layer_member(member: &Arc<str>) -> Result<(), LocalizationError> {
         })
     }
 }
-fn relative_member(from: &str, to: &str) -> String {
+/// Returns a layer-relative path from one normalized package member to another.
+/// Both arguments must be validated root-relative member paths. AOUSD Core §9.4.
+#[must_use]
+pub fn relative_member(from: &str, to: &str) -> String {
     let mut parent: Vec<_> = from.split('/').collect();
     parent.pop();
     let target: Vec<_> = to.split('/').collect();

@@ -2,10 +2,445 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use super::*;
+
+#[test]
+fn demanded_clip_failures_distinguish_missing_from_malformed_and_allow_retry() {
+    use layerstack::InterpolationType;
+    let memory = Memory::with(&[
+        (
+            "root.usda",
+            r#"#usda 1.0
+def "P" (clips = { dictionary default = {
+ asset[] assetPaths = [@needed.usdc@]
+ string primPath = "/C"
+ double2[] active = [(0,0)]
+ asset manifestAssetPath = @manifest.usda@
+ }}) { double x }
+"#,
+        ),
+        ("manifest.usda", "#usda 1.0\ndef \"C\" {\n double x\n}"),
+        ("needed.usdc", "malformed required source"),
+    ]);
+    let mut doc =
+        StageDocument::open(memory.clone(), "root.usda", StageOptions::default()).unwrap();
+    let property = doc.store.property_path("/P.x");
+    let failed = doc.prepare_clip_query(property, 2., InterpolationType::Linear, 4, 16);
+    assert!(!failed.plan.is_complete());
+    assert_eq!(failed.failures.len(), 1);
+    assert_ne!(failed.failures[0].error.kind, IoErrorKind::NotFound);
+    let source = StageDocument::open(
+        Memory::with(&[(
+            "needed.usda",
+            "#usda 1.0\ndef \"C\" {\n double x.timeSamples={0:7,10:7}\n}",
+        )]),
+        "needed.usda",
+        StageOptions::default(),
+    )
+    .unwrap();
+    let id = source.stage.stage().root_layer().unwrap();
+    let bytes = layerstack_usdc::writer::save_layer(
+        &source.store.layers[&id],
+        &source.store.tokens,
+        &source.store.paths,
+    )
+    .unwrap();
+    doc.storage.files.insert("needed.usdc".into(), bytes);
+    let retried = doc.prepare_clip_query(property, 2., InterpolationType::Linear, 4, 16);
+    assert!(retried.plan.is_complete(), "{retried:?}");
+    assert_eq!(retried.load_attempts, 1);
+    assert!(retried.failures.is_empty());
+
+    let mut memory = memory;
+    memory.files.remove("needed.usdc");
+    let mut missing = StageDocument::open(memory, "root.usda", StageOptions::default()).unwrap();
+    let property = missing.store.property_path("/P.x");
+    let gap = missing.prepare_clip_query(property, 2., InterpolationType::Linear, 4, 16);
+    assert!(gap.plan.is_complete(), "{gap:?}");
+    assert!(gap.failures.is_empty());
+    assert!(gap.plan.demands.iter().any(|d| matches!(
+        d.request.status,
+        layerstack::value_clips::ClipAssetStatus::Unavailable(
+            layerstack::value_clips::ClipAssetUnavailable::Missing
+        )
+    )));
+}
+
+#[test]
+fn unsupported_package_resources_are_reported_before_export() {
+    let memory = Memory::with(&[
+        (
+            "root.usda",
+            "#usda 1.0\ndef \"P\" {\n asset blob=@data.bin@\n}",
+        ),
+        ("data.bin", "opaque unsupported resource"),
+    ]);
+    let mut document = StageDocument::open(memory, "root.usda", StageOptions::default()).unwrap();
+    let root = document.stage.stage().root_layer().unwrap();
+    let prepared = document
+        .prepare_package(
+            root,
+            "scene.usda",
+            PackagePreparationLimits::default(),
+            |_| PackageInclusion::Include,
+        )
+        .unwrap();
+    assert!(!prepared.report().is_complete());
+    assert!(prepared.plan().is_none());
+    assert!(prepared.write_usdz().is_err());
+}
+
+#[cfg(feature = "std")]
+#[test]
+fn external_package_resources_keep_their_original_filesystem_anchor() {
+    use std::fs;
+    #[cfg(target_os = "wasi")]
+    let directory = std::env::current_dir()
+        .unwrap()
+        .join("layerstack-package-external-wasi");
+    #[cfg(not(target_os = "wasi"))]
+    let directory = std::env::temp_dir().join(format!(
+        "layerstack-package-external-{}",
+        std::process::id()
+    ));
+    fs::create_dir_all(&directory).unwrap();
+    fs::write(
+        directory.join("root.usda"),
+        b"#usda 1.0\n(subLayers=[@child.usda@])",
+    )
+    .unwrap();
+    fs::write(
+        directory.join("child.usda"),
+        b"#usda 1.0\ndef \"P\" {\n asset image=@./image.png@\n}",
+    )
+    .unwrap();
+    fs::write(directory.join("image.png"), b"pixels").unwrap();
+    let mut document = StageDocument::open(
+        Filesystem::new(&directory, []).unwrap(),
+        "root.usda",
+        StageOptions::default(),
+    )
+    .unwrap();
+    let root = document.stage.stage().root_layer().unwrap();
+    let package = document
+        .prepare_package(
+            root,
+            "scene.usda",
+            PackagePreparationLimits::default(),
+            |dependency| {
+                if dependency.identifier.ends_with("image.png") {
+                    PackageInclusion::KeepExternal
+                } else {
+                    PackageInclusion::Include
+                }
+            },
+        )
+        .unwrap();
+    assert!(package.report().is_complete());
+    let plan = package.plan().unwrap();
+    assert!(plan.assets.is_empty());
+    let image = plan
+        .layers
+        .iter()
+        .flat_map(|layer| {
+            layerstack::asset_dependencies::extract_layer_dependencies(
+                &layer.layer,
+                &document.store.paths,
+                &document.store.tokens,
+            )
+        })
+        .find(|dependency| dependency.identifier.ends_with("image.png"))
+        .unwrap();
+    assert_eq!(
+        image.identifier.as_ref(),
+        fs::canonicalize(directory.join("image.png"))
+            .unwrap()
+            .to_str()
+            .unwrap()
+    );
+    fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn query_preparation_resumes_and_leaves_dormant_malformed_clips_unread() {
+    use layerstack::{InterpolationType, PropertyPath};
+    let memory = Memory::with(&[
+        (
+            "root.usda",
+            r#"#usda 1.0
+def "P" (clips = { dictionary default = {
+ asset[] assetPaths = [@first.usda@, @next.usda@, @dormant.usdc@]
+ string primPath = "/C"
+ double2[] active = [(0,0),(10,1),(100,2)]
+ asset manifestAssetPath = @manifest.usda@
+ }}) { double x }
+"#,
+        ),
+        (
+            "first.usda",
+            "#usda 1.0\ndef \"C\" {\n double x.timeSamples={0:0,3:3}\n}",
+        ),
+        (
+            "next.usda",
+            "#usda 1.0\ndef \"C\" {\n double x.timeSamples={10:10,100:100}\n}",
+        ),
+        ("manifest.usda", "#usda 1.0\ndef \"C\" {\n double x\n}"),
+        ("dormant.usdc", "malformed dormant source"),
+    ]);
+    let mut doc = StageDocument::open(memory, "root.usda", StageOptions::default()).unwrap();
+    let property = doc.store.property_path("/P.x");
+    let first = doc.prepare_clip_query(property, 2., InterpolationType::Linear, 2, 16);
+    assert!(first.plan.is_complete(), "{first:?}");
+    assert_eq!(first.load_attempts, 2);
+    assert!(
+        !doc.storage
+            .reads
+            .iter()
+            .any(|s| s == "next.usda" || s == "dormant.usdc")
+    );
+    let held = doc.prepare_clip_query(property, 5., InterpolationType::Held, 0, 16);
+    assert!(held.plan.is_complete(), "{held:?}");
+    let pending = doc.prepare_clip_query(property, 5., InterpolationType::Linear, 0, 16);
+    assert!(pending.budget_exhausted);
+    assert_eq!(
+        pending
+            .plan
+            .pending()
+            .next()
+            .unwrap()
+            .request
+            .identifier
+            .as_ref(),
+        "next.usda"
+    );
+    let next = doc.prepare_clip_query(property, 5., InterpolationType::Linear, 1, 16);
+    assert!(next.plan.is_complete(), "{next:?}");
+    assert_eq!(next.load_attempts, 1);
+    assert_eq!(
+        doc.stage
+            .stage()
+            .resolve_property_path_at_time(property, 5., InterpolationType::Linear)
+            .unwrap()
+            .value,
+        Value::Double(5.)
+    );
+    assert!(!doc.storage.reads.iter().any(|s| s == "dormant.usdc"));
+    assert_eq!(
+        doc.prepare_clip_query(property, 5., InterpolationType::Linear, 0, 16)
+            .load_attempts,
+        0
+    );
+    let unknown = PropertyPath::new(property.prim_path(), doc.store.tokens.intern("absent"));
+    assert!(
+        doc.stage
+            .stage()
+            .plan_clip_query(unknown, 5., InterpolationType::Linear, 16)
+            .is_complete()
+    );
+    assert!(
+        !doc.stage
+            .stage()
+            .plan_clip_query(property, f64::NAN, InterpolationType::Linear, 16)
+            .is_complete()
+    );
+    assert!(
+        doc.stage
+            .stage()
+            .plan_clip_query(property, 5., InterpolationType::Linear, 0)
+            .budget_exhausted
+    );
+}
+
+#[test]
+fn package_preparation_includes_unsaved_layers_and_reports_missing_resources_without_publication() {
+    let memory = Memory::with(&[
+        (
+            "root.usda",
+            "#usda 1.0\ndef \"Root\" (references=@child.usda@</Child>) {}",
+        ),
+        (
+            "child.usda",
+            "#usda 1.0\ndef \"Child\" {\n int answer=42\n asset image=@image.png@\n}",
+        ),
+        ("image.png", "pixels"),
+    ]);
+    let mut doc = StageDocument::open(memory, "root.usda", StageOptions::default()).unwrap();
+    let root = doc.stage.stage().root_layer().unwrap();
+    let child = *doc.catalog.ids.get("child.usda").unwrap();
+    let source = doc.store.path("/Child");
+    let answer = doc.store.tokens.intern("answer");
+    let layer = doc.store.layers.get_mut(&child).unwrap();
+    let property = layer
+        .prims
+        .get_mut(&source)
+        .unwrap()
+        .properties
+        .iter_mut()
+        .find(|p| p.name == answer)
+        .unwrap();
+    Arc::make_mut(&mut property.spec).default = Some(Value::Int(99));
+    layer.touch();
+    let generation = layer.generation();
+    let package = doc
+        .prepare_package(
+            root,
+            "scene.usda",
+            PackagePreparationLimits::default(),
+            |_| PackageInclusion::Include,
+        )
+        .unwrap();
+    assert!(package.report().is_complete(), "{:?}", package.report());
+    assert_eq!(package.plan().unwrap().layers.len(), 2);
+    assert_eq!(package.plan().unwrap().assets.len(), 1);
+    assert_eq!(doc.store.layers[&child].generation(), generation);
+    assert!(doc.is_dirty(child));
+    assert!(doc.storage.writes.is_empty());
+    doc.export_package("out.usdz", &package).unwrap();
+    let bytes = doc.storage.files["out.usdz"].clone();
+    let mut output = Memory::default();
+    output.files.insert("out.usdz".into(), bytes);
+    let mut reopened = StageDocument::open(output, "out.usdz", StageOptions::default()).unwrap();
+    let property = reopened.store.property_path("/Root.answer");
+    assert_eq!(
+        reopened
+            .stage
+            .stage()
+            .resolve_field_path(property)
+            .unwrap()
+            .value,
+        Value::Int(99)
+    );
+    doc.storage.files.remove("image.png");
+    let missing = doc
+        .prepare_package(
+            root,
+            "scene.usda",
+            PackagePreparationLimits::default(),
+            |_| PackageInclusion::Include,
+        )
+        .unwrap();
+    assert!(!missing.report().is_complete());
+    assert!(missing.plan().is_none());
+    assert!(missing.write_usdz().is_err());
+    let external = doc
+        .prepare_package(
+            root,
+            "scene.usda",
+            PackagePreparationLimits::default(),
+            |dependency| {
+                if dependency.identifier.as_ref() == "image.png" {
+                    PackageInclusion::KeepExternal
+                } else {
+                    PackageInclusion::Include
+                }
+            },
+        )
+        .unwrap();
+    assert!(external.report().is_complete());
+    assert!(external.plan().unwrap().assets.is_empty());
+}
+
+#[test]
+fn nested_packages_resolve_defaults_explicit_layers_relative_dependencies_and_resources() {
+    let inner = layerstack_usdz::write_usdz(&[
+        layerstack_usdz::PackageFile::new("dir/root.usda", b"#usda 1.0\n(defaultPrim=\"Inside\")\ndef \"Inside\" (references=@./child.usda@</Child>) {}"),
+        layerstack_usdz::PackageFile::new("dir/child.usda", b"#usda 1.0\ndef \"Child\" {\n int answer=42\n}"),
+        layerstack_usdz::PackageFile::new("dir/data.png", b"inner pixels"),
+    ]).unwrap();
+    for reference in ["inner.usdz", "inner.usdz[dir/root.usda]"] {
+        let source =
+            alloc::format!("#usda 1.0\ndef \"Root\" (references=@{reference}@</Inside>) {{}}");
+        let outer = layerstack_usdz::write_usdz(&[
+            layerstack_usdz::PackageFile::new("root.usda", source.as_bytes()),
+            layerstack_usdz::PackageFile::new("inner.usdz", &inner),
+        ])
+        .unwrap();
+        let mut memory = Memory::default();
+        memory.files.insert("outer.usdz".into(), outer);
+        let mut document =
+            StageDocument::open(memory, "outer.usdz", StageOptions::default()).unwrap();
+        let root = document.store.path("/Root");
+        let answer = document.store.tokens.intern("answer");
+        assert_eq!(
+            document
+                .stage
+                .stage()
+                .resolve_field_path(layerstack::PropertyPath::new(root, answer))
+                .unwrap_or_else(|| panic!(
+                    "{:?} {:?} {:?}",
+                    document.stage.stage().composition_errors(),
+                    document.load_report,
+                    document.store.layers
+                ))
+                .value,
+            Value::Int(42)
+        );
+        let inside = document
+            .load_report
+            .layers
+            .iter()
+            .copied()
+            .find(|id| {
+                document
+                    .identifier(*id)
+                    .unwrap()
+                    .ends_with("inner.usdz[dir/root.usda]]")
+            })
+            .unwrap();
+        let first = document
+            .read_asset_bytes("./data.png", Some(inside))
+            .unwrap();
+        let second = document
+            .read_asset_bytes("outer.usdz[inner.usdz[dir/data.png]]", None)
+            .unwrap();
+        assert_eq!(first.bytes.as_ref(), b"inner pixels");
+        assert!(first.bytes.shares_backing(&second.bytes));
+        assert_eq!(document.package_stats(inside).unwrap().index_parses, 2);
+        assert_eq!(document.storage.reads.len(), 1);
+        let (explicit, _) = document
+            .load_asset("outer.usdz[inner.usdz[dir/root.usda]]", None)
+            .unwrap();
+        assert_eq!(explicit, inside);
+        let storage = document.storage.clone();
+        let mut explicit = StageDocument::open(
+            storage,
+            "outer.usdz[inner.usdz[dir/root.usda]]",
+            StageOptions::default(),
+        )
+        .unwrap();
+        assert_eq!(
+            explicit
+                .read_asset_bytes(
+                    "./data.png",
+                    Some(explicit.stage.stage().root_layer().unwrap())
+                )
+                .unwrap()
+                .bytes
+                .as_ref(),
+            b"inner pixels"
+        );
+        let mut candidate = document
+            .prepare_reload_root(ReloadPolicy::PreserveDirty)
+            .unwrap();
+        let fresh = candidate
+            .read_asset_bytes("./data.png", Some(inside))
+            .unwrap();
+        assert!(!first.bytes.shares_backing(&fresh.bytes));
+        drop(candidate);
+        assert!(
+            first.bytes.shares_backing(
+                &document
+                    .read_asset_bytes("./data.png", Some(inside))
+                    .unwrap()
+                    .bytes
+            )
+        );
+        assert_eq!(first.bytes.as_ref(), b"inner pixels");
+    }
+}
 use alloc::{format, vec};
 use layerstack::{EditTarget, PrimSpec, PropertySpec, Transaction, Value};
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 struct Memory {
     files: BTreeMap<String, Vec<u8>>,
     writes: Vec<String>,
@@ -415,6 +850,26 @@ fn retained_budget_errors_are_distinct_from_missing_geometry() {
             Some(layerstack::ArrayReadError::BudgetExceeded { limit })
         );
         assert!(!document.storage().files.contains_key("failed.usdz"));
+        let prepared = document
+            .prepare_package(root, member, PackagePreparationLimits::default(), |_| {
+                PackageInclusion::Include
+            })
+            .unwrap();
+        assert!(prepared.report().is_complete());
+        let failure = document
+            .export_package("failed-prepared.usdz", &prepared)
+            .unwrap_err();
+        assert_eq!(failure.kind, IoErrorKind::Decode);
+        assert_eq!(
+            failure.array_read_error,
+            Some(layerstack::ArrayReadError::BudgetExceeded { limit })
+        );
+        assert!(
+            !document
+                .storage()
+                .files
+                .contains_key("failed-prepared.usdz")
+        );
     }
     assert!(document.storage().writes.is_empty());
 }
@@ -1168,7 +1623,7 @@ fn asset_bytes_use_package_member_provenance_without_importing_assets() {
         doc.read_asset_bytes("../../textures/color.png", Some(member))
             .unwrap_err()
             .kind,
-        IoErrorKind::NotFound
+        IoErrorKind::Rejected
     );
     let external = doc.read_asset_bytes("missing.png", Some(member)).unwrap();
     assert_eq!(external.bytes.as_ref(), b"search fallback");
@@ -1189,7 +1644,7 @@ fn asset_bytes_use_package_member_provenance_without_importing_assets() {
         doc.read_asset_bytes("scene.usdz[x.usdz[y.png]]", None)
             .unwrap_err()
             .kind,
-        IoErrorKind::Unsupported
+        IoErrorKind::NotFound
     );
     assert_eq!(doc.store.layers.len(), layers);
     assert_eq!(doc.store.layers[&member].generation(), generation);

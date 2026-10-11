@@ -60,6 +60,15 @@ impl<B> PreparedReload<'_, B> {
     pub fn retained_values(&self, layer: LayerId) -> Option<&layerstack_usdc::RetainedValues> {
         self.catalog.retained_values.get(&layer)
     }
+    /// Candidate package construction work and encoded backing size, with the
+    /// same units and exclusions as [`StageDocument::package_stats`].
+    pub fn package_stats(&self, layer: LayerId) -> Option<PackageStats> {
+        self.catalog.package_stats(layer)
+    }
+    /// Candidate-local transport/index work and current package owner footprint.
+    pub fn package_cache_stats(&self) -> PackageCacheStats {
+        self.catalog.cache_stats()
+    }
     /// Publishes the validated candidate store, source catalog and composition.
     ///
     /// No sources are reread and no second composition is performed. Publication
@@ -197,6 +206,7 @@ impl<B: Storage> StageDocument<B> {
             &mut catalog,
             self.import_policy,
             self.usdc_options,
+            self.package_limits,
         );
         reader.reachable_only = root_closure;
         for id in roots {

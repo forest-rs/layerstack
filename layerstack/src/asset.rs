@@ -45,6 +45,9 @@
 
 use alloc::{string::String, sync::Arc, vec::Vec};
 
+mod package_path;
+pub use package_path::PackagePath;
+
 use crate::{
     doc::{Layer, LayerId, LayerStore},
     interner::TokenInterner,
@@ -284,6 +287,14 @@ fn is_file_relative(asset_path: &str) -> bool {
 /// `pxr/usd/ar/defaultResolver.cpp`.
 #[must_use]
 pub fn normalize_asset_path(path: &str) -> String {
+    // AOUSD Core §9.7: normalize each package level independently; `..` in a
+    // member must never consume an enclosing package segment.
+    if path.contains('[') && !path.starts_with('`') {
+        return PackagePath::parse(path, 32).map_or_else(
+            |_| String::from(path),
+            |parsed| parsed.with_outer(&normalize_asset_path(parsed.outer())),
+        );
+    }
     if let Some((drive, rest)) = drive_root(path) {
         return alloc::format!("{drive}{}", normalize_asset_path(rest));
     }
@@ -326,9 +337,8 @@ fn drive_root(path: &str) -> Option<(&str, &str)> {
 /// joined to the layer's directory and normalized
 /// ([`normalize_asset_path`]); any other path is normalized and kept, a
 /// search path staying a search path. `None` for an expression
-/// (`` `...` ``), or for a layer relative path in a layer inside a package
-/// (`a.usdz[b.usda]`) or of unknown location, which only a package-aware
-/// resolver can anchor.
+/// (`` `...` ``), an unknown location, or a path escaping its containing package. Nested
+/// package levels are anchored independently.
 ///
 /// The location and the path may use `\` separators and a drive root
 /// (`C:\assets\oak.usda`); the anchored path uses `/`, as OpenUSD's
@@ -344,7 +354,13 @@ pub fn anchor_asset_path(asset_path: &str, layer_location: &str) -> Option<Strin
     if !is_file_relative(&asset_path) {
         return Some(normalize_asset_path(&asset_path));
     }
-    if layer_location.contains('[') || layer_location.is_empty() {
+    if layer_location.contains('[') {
+        let location = PackagePath::parse(layer_location, 32).ok()?;
+        let (first, rest) = location.members().split_first()?;
+        let member = PackagePath::anchor_member(&asset_path, &PackagePath::join(first, rest))?;
+        return Some(alloc::format!("{}[{member}]", location.outer()));
+    }
+    if layer_location.is_empty() {
         return None;
     }
     let location = layer_location.replace('\\', "/");
@@ -418,7 +434,18 @@ mod tests {
             Some("C:/assets/mixed/bark.png")
         );
         assert_eq!(anchor_asset_path("`${X}.png`", layer), None);
-        assert_eq!(anchor_asset_path("./a.png", "/p/a.usdz[b.usda]"), None);
+        assert_eq!(
+            anchor_asset_path("./a.png", "/p/a.usdz[b.usda]").as_deref(),
+            Some("/p/a.usdz[a.png]")
+        );
+        assert_eq!(
+            anchor_asset_path("../a.png", "/p/a.usdz[inner.usdz[dir/b.usda]]").as_deref(),
+            Some("/p/a.usdz[inner.usdz[a.png]]")
+        );
+        assert_eq!(
+            anchor_asset_path("../../a.png", "/p/a.usdz[inner.usdz[dir/b.usda]]"),
+            None
+        );
     }
 
     #[test]

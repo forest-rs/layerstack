@@ -1,0 +1,8 @@
+phase,wall_us,encoded_bytes,cached_native_bytes,decode_attempts,old_cached_native_bytes,rss_kib,generation
+open,3724.292,7290,0,0,0,6944,257
+warm_all,7856.208,7290,16000000,4,16000000,30608,257
+save_keep_sources,23447.042,7290,16000000,4,16000000,52272,258
+open_saved_tables_100,3526.333,7290,16000000,4,16000000,52384,258
+explicit_reload_cold,2101.042,7340,0,0,16000000,54080,259
+requery_all,6087.166,7340,16000000,4,16000000,57744,259
+drop_old_snapshot,26.708,7340,16000000,4,0,57744,259

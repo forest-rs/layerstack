@@ -617,6 +617,9 @@ impl<B: Storage> StageDocument<B> {
     }
     /// Saves the explicit selection. Unsupported content fails before the backend
     /// is called; each successful write advances only that layer's saved generation.
+    /// Serialization may decode retained numeric values. Saving keeps their source
+    /// ownership and caches; it does not rebind them to the written bytes, change
+    /// authored generations or emit a scene edit. Existing snapshots remain valid.
     pub fn save_layers(&mut self, layers: &[LayerId]) -> SaveReport {
         let mut report = SaveReport::default();
         for id in layers.iter().copied().collect::<BTreeSet<_>>() {

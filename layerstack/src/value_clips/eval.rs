@@ -580,6 +580,32 @@ impl PreparedClipProperty {
         self.internal_time(upper)?;
         Ok((self.active_clip(lower), self.active_clip(upper)))
     }
+    /// Whether the lower bracket can supply a value, without interpolating it.
+    /// A missing/blocked lower endpoint makes the result a complete gap; its
+    /// upper endpoint cannot restore a value (AOUSD Core §12.3.6, §12.5).
+    pub(super) fn lower_has_value(&self, time: f64) -> Result<bool, ClipEvalError> {
+        if self.spline_mode {
+            return Ok(true);
+        }
+        let (lower, _) = self.sample_brackets(time);
+        let internal = self.internal_time(lower)?;
+        let raw = self.clips[self.active_clip(lower)]
+            .as_ref()
+            .and_then(|p| p.time_samples.as_deref())
+            .filter(|s| !s.is_empty());
+        let value = if let Some(samples) = raw {
+            let (at, _) = crate::value_resolution::sample_bracket(
+                samples,
+                internal,
+                InterpolationType::Linear,
+            )
+            .expect("nonempty validated samples");
+            Some(&samples[at].1)
+        } else {
+            self.manifest_default.as_ref()
+        };
+        Ok(value.is_some_and(|v| !matches!(v, Value::Blocked)))
+    }
     /// Evaluates one finite numeric query. Exact endpoints and exterior queries
     /// clamp to one sample. A blocked/missing lower endpoint supplies no value;
     /// a blocked/missing upper endpoint holds the lower value, matching USD.
@@ -682,6 +708,11 @@ mod tests {
                             prepared.required_clips(time).unwrap(),
                             (evaluated.lower_clip, evaluated.upper_clip),
                             "time={time}, policy={policy:?}, mapping={mapping:?}"
+                        );
+                        assert_eq!(
+                            prepared.lower_has_value(time).unwrap(),
+                            evaluated.value.is_some(),
+                            "lower presence at {time}, policy={policy:?}, mapping={mapping:?}"
                         );
                     }
                 }

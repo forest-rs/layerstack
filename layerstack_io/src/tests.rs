@@ -3,6 +3,162 @@
 
 use super::*;
 
+#[test]
+fn sparse_clip_preparation_covers_advanced_weaker_queries_and_set_reordering() {
+    use layerstack::InterpolationType;
+    for reorder in [false, true] {
+        let root = format!(
+            r#"#usda 1.0
+def "P" (
+{}
+clips = {{
+ dictionary a = {{
+  asset[] assetPaths=[@a.usda@]
+  string primPath="/C"
+  double2[] active=[(0,0)]
+  asset manifestAssetPath=@manifest.usda@
+ }}
+ dictionary b = {{
+  asset[] assetPaths=[@b0.usda@,@b1.usda@]
+  string primPath="/C"
+  double2[] active=[(0,0),(10,1)]
+  asset manifestAssetPath=@manifest.usda@
+ }}
+}}) {{ float[] x }}
+"#,
+            if reorder {
+                "reorder clipSets=[\"b\",\"a\"]"
+            } else {
+                ""
+            }
+        );
+        let memory = Memory::with(&[
+            ("root.usda", &root),
+            ("manifest.usda", "#usda 1.0\ndef \"C\" {\n float[] x\n}"),
+            (
+                "a.usda",
+                "#usda 1.0\ndef \"C\" {\n float[] x.timeSamples={0:[100,100],10:edit[write 200 to [0]]}\n}",
+            ),
+            (
+                "b0.usda",
+                "#usda 1.0\ndef \"C\" {\n float[] x.timeSamples={0:[0,0],3:[3,3]}\n}",
+            ),
+            (
+                "b1.usda",
+                "#usda 1.0\ndef \"C\" {\n float[] x.timeSamples={10:[10,10],20:[20,20]}\n}",
+            ),
+        ]);
+        let mut document =
+            StageDocument::open(memory, "root.usda", StageOptions::default()).unwrap();
+        let property = document.store_mut().property_path("/P.x");
+        let prepared = document.prepare_clip_query(property, 2., InterpolationType::Linear, 8, 16);
+        assert!(prepared.plan.is_complete(), "{prepared:?}");
+        let resolved = document
+            .stage()
+            .stage()
+            .resolve_property_path_at_time(property, 2., InterpolationType::Linear)
+            .unwrap()
+            .value;
+        let expected = if reorder {
+            vec![2., 2.]
+        } else {
+            vec![120., 82.]
+        };
+        let array = resolved.array_ref().unwrap();
+        assert_eq!(
+            array.iter().map(|v| v.into_owned()).collect::<Vec<_>>(),
+            expected.into_iter().map(Value::Float).collect::<Vec<_>>()
+        );
+        assert_eq!(
+            document.storage.reads.iter().any(|s| s == "a.usda"),
+            !reorder
+        );
+        assert_eq!(
+            document.storage.reads.iter().any(|s| s == "b1.usda"),
+            !reorder,
+            "only the sparse stronger set advances to the next clip"
+        );
+    }
+}
+
+#[test]
+fn dense_clip_preparation_does_not_load_masked_sets_or_dormant_assets() {
+    use layerstack::InterpolationType;
+    for (source, manifest, expected) in [
+        (
+            Some("#usda 1.0\ndef \"C\" {\n double x.timeSamples={0:42,3:42}\n}"),
+            "double x",
+            Some(Value::Double(42.)),
+        ),
+        (None, "double x", None),
+        (None, "double x=9", Some(Value::Double(9.))),
+    ] {
+        let manifest = format!("#usda 1.0\ndef \"C\" {{\n {manifest}\n}}");
+        let mut memory = Memory::with(&[
+            (
+                "root.usda",
+                r#"#usda 1.0
+def "P" (clips = {
+ dictionary a = {
+  asset[] assetPaths=[@a.usda@,@dormant.usdc@]
+  string primPath="/C"
+  double2[] active=[(0,0),(100,1)]
+  asset manifestAssetPath=@a-manifest.usda@
+ }
+ dictionary b = {
+  asset[] assetPaths=[@masked.usdc@]
+  string primPath="/C"
+  double2[] active=[(0,0)]
+  asset manifestAssetPath=@b-manifest.usda@
+ }
+}) { double x }
+"#,
+            ),
+            ("a-manifest.usda", &manifest),
+            ("b-manifest.usda", "#usda 1.0\ndef \"C\" {\n double x\n}"),
+            ("masked.usdc", "malformed masked source"),
+            ("dormant.usdc", "malformed dormant source"),
+        ]);
+        if let Some(source) = source {
+            memory
+                .files
+                .insert("a.usda".into(), source.as_bytes().to_vec());
+        }
+        if manifest.contains("=9") {
+            let root = String::from_utf8(memory.files["root.usda"].clone()).unwrap();
+            memory.files.insert(
+                "root.usda".into(),
+                root.replace(
+                    "double2[] active=[(0,0),(100,1)]",
+                    "double2[] active=[(0,0)]",
+                )
+                .into_bytes(),
+            );
+        }
+        let mut document =
+            StageDocument::open(memory, "root.usda", StageOptions::default()).unwrap();
+        let property = document.store_mut().property_path("/P.x");
+        let prepared = document.prepare_clip_query(property, 2., InterpolationType::Linear, 8, 16);
+        assert!(prepared.plan.is_complete(), "{prepared:?}");
+        assert!(prepared.failures.is_empty(), "{prepared:?}");
+        assert_eq!(prepared.load_attempts, 2);
+        assert!(!document.storage.reads.iter().any(|name| {
+            matches!(
+                name.as_str(),
+                "masked.usdc" | "dormant.usdc" | "b-manifest.usda"
+            )
+        }));
+        assert_eq!(
+            document
+                .stage()
+                .stage()
+                .resolve_property_path_at_time(property, 2., InterpolationType::Linear)
+                .map(|resolved| resolved.value),
+            expected
+        );
+    }
+}
+
 #[cfg(feature = "std")]
 #[test]
 fn clip_query_planning_does_not_decode_retained_interpolation_endpoints() {

@@ -787,7 +787,9 @@ impl Stage {
     /// Replan after loading pending requests and synchronizing the stage. Explicit
     /// manifests gate property eligibility; automatic manifests and unresolved
     /// templates require broader discovery. `max_demands` limits returned uses,
-    /// not metadata preparation work. AOUSD Core §12.3, §12.5.
+    /// not metadata preparation work. A complete dense clip source masks weaker
+    /// sets; stronger sparse or unresolved sets retain conservative discovery
+    /// until their source composition can be established. AOUSD Core §12.3, §12.5.
     #[must_use]
     pub fn plan_clip_query(
         &self,

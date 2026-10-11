@@ -21,6 +21,8 @@ pub enum ClipDemandReason {
     TemplateSchedule,
     /// Missing-value interpolation can search across other activation intervals.
     MissingValueSearch,
+    /// A stronger sparse or unresolved clip set may advance this set's query.
+    StrongerSourceComposition,
 }
 /// One anchored demand and its reason. Loaded/missing results are retained so
 /// consumers can distinguish a complete gap from unresolved residency.
@@ -156,18 +158,29 @@ impl Catalog {
         if plan.error.is_some() {
             return plan;
         }
-        for set in self
+        let Some(index) = index else {
+            return plan;
+        };
+        let ordinary = index
+            .property_opinions(property.property())
+            .unwrap_or_default();
+        let mut sets: Vec<_> = self
             .demands
             .get(&property.prim_path())
             .into_iter()
             .flatten()
-        {
-            let Some(index) = index else {
-                continue;
-            };
-            let ordinary = index
-                .property_opinions(property.property())
-                .unwrap_or_default();
+            .collect();
+        // Stable ties preserve the composed clipSets order. Ancestor discovery
+        // order alone does not establish composition strength.
+        sets.sort_by(|a, b| {
+            index
+                .graph
+                .cmp_nodes(a.key.node, b.key.node)
+                .then_with(|| a.key.layer_strength.cmp(&b.key.layer_strength))
+        });
+        let mut stronger_candidate = false;
+        let mut masked_from = sets.len();
+        for (position, set) in sets.iter().enumerate() {
             let mut prefix = Vec::new();
             let mut masked = false;
             for opinion in ordinary {
@@ -202,17 +215,10 @@ impl Catalog {
             else {
                 continue;
             };
-            let mut add = |request: &ClipAssetRequest, reason| {
-                if !plan.demands.iter().any(|d| d.request == *request) {
-                    plan.demands.push(ClipDemand {
-                        request: request.clone(),
-                        reason,
-                    });
-                }
-            };
             if let Some(manifest) = &set.manifest {
-                add(manifest, ClipDemandReason::Manifest);
-                if !matches!(manifest.status, ClipAssetStatus::Loaded(_)) {
+                add_demand(&mut plan.demands, manifest, ClipDemandReason::Manifest);
+                if !resident(manifest) {
+                    stronger_candidate = true;
                     continue;
                 }
                 if !set.declarations.get(&property.property()).is_some_and(|p| {
@@ -222,69 +228,57 @@ impl Catalog {
                     continue;
                 }
             }
-            if set.template_unresolved || set.manifest.is_none() || set.interpolate_missing {
-                let reason = if set.template_unresolved {
-                    ClipDemandReason::TemplateSchedule
-                } else if set.manifest.is_none() {
-                    ClipDemandReason::AutomaticManifest
-                } else {
-                    ClipDemandReason::MissingValueSearch
-                };
-                for request in &set.requests {
-                    if request.role != ClipAssetRole::Manifest {
-                        add(request, reason);
-                    }
-                }
-                continue;
-            }
-            let slot = set
-                .active
-                .partition_point(|(start, _)| *start <= time)
-                .saturating_sub(1);
-            let Some(&(_, active)) = set.active.get(slot) else {
-                continue;
-            };
-            let request_for = |index: usize| {
-                set.identifiers.get(index).and_then(|name| {
-                    set.requests
-                        .iter()
-                        .find(|r| r.role != ClipAssetRole::Manifest && r.identifier == *name)
-                })
-            };
-            if let Some(request) = request_for(active) {
-                add(request, ClipDemandReason::ActiveInterval);
-                if !matches!(
-                    request.status,
-                    ClipAssetStatus::Loaded(_)
-                        | ClipAssetStatus::Unavailable(ClipAssetUnavailable::Missing)
-                ) {
-                    continue;
-                }
-            }
-            if let Some(entry) = self
+            let entry = self
                 .properties
                 .get(&(property.prim_path(), property.property()))
                 .into_iter()
                 .flatten()
-                .find(|p| p.owner == set.owner && p.set_name == set.name)
+                .find(|p| p.owner == set.owner && p.set_name == set.name && p.key == set.key);
+            if set.manifest.is_none()
+                && !set.template_unresolved
+                && set.requests.iter().all(resident)
+                && entry.is_none()
             {
-                match entry.evaluator.required_clips(time) {
-                    Ok((lower, upper)) => {
-                        if let Some(request) = request_for(lower) {
-                            add(request, ClipDemandReason::LowerInterpolationBound);
-                        }
-                        if interpolation == InterpolationType::Linear
-                            && let Some(request) = request_for(upper)
-                        {
-                            add(request, ClipDemandReason::UpperInterpolationBound);
-                        }
-                    }
-                    Err(error) => plan.error = Some(error),
-                }
+                continue;
+            }
+            let may_mask = !stronger_candidate;
+            stronger_candidate = true;
+            if let Err(error) = append_value_demands(
+                set,
+                entry,
+                time,
+                interpolation,
+                !may_mask,
+                &mut plan.demands,
+            ) {
+                plan.error = Some(error);
+                continue;
+            }
+            // AOUSD Core §12.3.2 and §12.5: the first eligible dense source,
+            // including a complete gap, masks weaker sets. Only required assets
+            // must be resident. Sparse/unknown stronger sets remain conservative;
+            // their query advancement must not be guessed from numeric values.
+            if may_mask
+                && plan.error.is_none()
+                && entry.is_some_and(|p| !p.has_sparse_samples)
+                && plan
+                    .demands
+                    .iter()
+                    .filter(|d| set.requests.contains(&d.request))
+                    .all(|d| resident(&d.request))
+            {
+                masked_from = position + 1;
+                break;
             }
         }
         for issue in &self.issues {
             if issue.kind != ClipIssueKind::UnresolvedTemplate
+                && !sets[masked_from..].iter().any(|set| {
+                    set.owner == issue.owner
+                        && set.name == issue.set_name
+                        && set.key.layer_id == issue.anchor
+                        && set.key.spec_path == issue.source
+                })
                 && self
                     .owners
                     .get(&property.prim_path())
@@ -297,4 +291,82 @@ impl Catalog {
         plan.demands.truncate(max_demands);
         plan
     }
+}
+
+fn resident(request: &ClipAssetRequest) -> bool {
+    matches!(
+        request.status,
+        ClipAssetStatus::Loaded(_) | ClipAssetStatus::Unavailable(ClipAssetUnavailable::Missing)
+    )
+}
+fn add_demand(demands: &mut Vec<ClipDemand>, request: &ClipAssetRequest, reason: ClipDemandReason) {
+    if !demands.iter().any(|d| d.request == *request) {
+        demands.push(ClipDemand {
+            request: request.clone(),
+            reason,
+        });
+    }
+}
+fn append_value_demands(
+    set: &DemandSet,
+    entry: Option<&ClipProperty>,
+    time: f64,
+    interpolation: InterpolationType,
+    stronger_source: bool,
+    demands: &mut Vec<ClipDemand>,
+) -> Result<(), ClipEvalError> {
+    if stronger_source
+        || set.template_unresolved
+        || set.manifest.is_none()
+        || set.interpolate_missing
+    {
+        let reason = if set.template_unresolved {
+            ClipDemandReason::TemplateSchedule
+        } else if set.manifest.is_none() {
+            ClipDemandReason::AutomaticManifest
+        } else if stronger_source {
+            ClipDemandReason::StrongerSourceComposition
+        } else {
+            ClipDemandReason::MissingValueSearch
+        };
+        for request in &set.requests {
+            if request.role != ClipAssetRole::Manifest {
+                add_demand(demands, request, reason);
+            }
+        }
+        return Ok(());
+    }
+    let slot = set
+        .active
+        .partition_point(|(start, _)| *start <= time)
+        .saturating_sub(1);
+    let Some(&(_, active)) = set.active.get(slot) else {
+        return Ok(());
+    };
+    let request_for = |index: usize| {
+        set.identifiers.get(index).and_then(|name| {
+            set.requests
+                .iter()
+                .find(|r| r.role != ClipAssetRole::Manifest && r.identifier == *name)
+        })
+    };
+    if let Some(request) = request_for(active) {
+        add_demand(demands, request, ClipDemandReason::ActiveInterval);
+        if !resident(request) {
+            return Ok(());
+        }
+    }
+    if let Some(entry) = entry {
+        let (lower, upper) = entry.evaluator.required_clips(time)?;
+        if let Some(request) = request_for(lower) {
+            add_demand(demands, request, ClipDemandReason::LowerInterpolationBound);
+        }
+        if interpolation == InterpolationType::Linear
+            && entry.evaluator.lower_has_value(time)?
+            && let Some(request) = request_for(upper)
+        {
+            add_demand(demands, request, ClipDemandReason::UpperInterpolationBound);
+        }
+    }
+    Ok(())
 }

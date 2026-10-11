@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 //! Creates original wide/deep/animated/packaged workloads for `stage_workflows`.
-//! Usage: `workflow_fixtures output_directory [array_elements]` (default 1,000,000).
+//! Usage: `workflow_fixtures output_directory [array_elements] [wide_prims]`.
+//! Defaults: 1,000,000 array elements and 256 prims. Other shapes keep 256 prims.
 use layerstack::{InMemoryStore, Layer, LayerId, PrimSpec, PropertySpec, PropertyType, Value};
 use layerstack_usdz::{PackageFile, write_usdz};
 use std::path::PathBuf;
@@ -11,6 +12,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args().skip(1);
     let directory = PathBuf::from(args.next().ok_or("supply an output directory")?);
     let elements: usize = args.next().map_or(Ok(1_000_000), |arg| arg.parse())?;
+    let wide_prims: usize = args.next().map_or(Ok(256), |arg| arg.parse())?;
     std::fs::create_dir_all(&directory)?;
     for shape in ["wide", "deep", "animated"] {
         let mut store = InMemoryStore::default();
@@ -20,7 +22,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut parent = root;
         let name = store.tokens.intern("samples");
         let mut path = String::new();
-        for index in 0..256_usize {
+        let prims = if shape == "wide" { wide_prims } else { 256 };
+        for index in 0..prims {
             if shape == "deep" {
                 path.push_str("/P");
             } else {

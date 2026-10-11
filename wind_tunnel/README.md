@@ -172,3 +172,56 @@ in both integer widths.
 ```sh
 cargo bench -p wind_tunnel --bench usdc_write -- 'usdc_(integer_write|layer_save)' --warm-up-time 1 --measurement-time 1 --sample-size 10
 ```
+
+`save_retention` measures source ownership across warming, saving, reopening and
+reading again. It copies a source to a fresh destination, warms its array
+properties, edits documentation metadata and saves the dirty root. Assertions
+check that save marks the layer clean, preserves its authored generation and emits
+no scene edit. With `snapshot`, an authored snapshot holds the old sources until
+the final phase; without it, the probe checks that reload releases their decoded
+arrays. Destinations must not exist.
+
+```sh
+cargo run --release -p wind_tunnel --example save_retention -- source.usdc fresh.usdc
+cargo run --release -p wind_tunnel --example save_retention -- source.usdc fresh-snapshot.usdc snapshot
+cargo run --release -p wind_tunnel --example workflow_fixtures -- metadata-fixtures 64 16384
+```
+
+The last command produces a wide 16,384-prim scene with four 64-element arrays;
+deep and animated fixtures keep 256 prims. Two independent runs per configuration
+on the same host/profile, after the integer optimization, show:
+
+| Ownership workload | Four million floats, 256 prims | 256 floats, 16,384 prims |
+|---|---:|---:|
+| Save, including filesystem write | 21.9–23.4 ms | 364–369 ms |
+| Open saved crate tables, per call | 33–35 µs | 2.32–2.40 ms |
+| Explicit reload, cold | 2.10–2.11 ms | 126–143 ms |
+| Read all arrays again | 6.1–7.6 ms | 14–16 µs |
+| Decoded bytes retained after save | 16,000,000 | 1,024 |
+
+Table opening is measured over 100 calls with saved bytes already in memory;
+divide the `open_saved_tables_100` wall time by 100. It includes decoding structural
+tables and building the crate lookup index, but excludes high-level layer assembly
+and stage composition. The metadata workload was run without an old snapshot;
+the numeric workload includes both snapshot configurations. These are phase probes,
+not statistical latency benchmarks.
+
+Save retains the old decoded arrays. Explicit reload drops them when no snapshot
+holds them, starts the new source at zero decodes and decodes four arrays on the
+next complete read. A held snapshot keeps all 16 MB of old arrays through that
+read, alongside the new 16 MB; dropping it releases the old arrays. The inspection
+handle deliberately keeps the old encoded owner (7,290 bytes) alive throughout.
+RSS does not fall when native buffers are released: allocator retention and the
+reload's temporary ownership affect process residency. Native element counters
+measure these buffers' ownership, not total live allocation.
+
+Explicit reload is a measurement surrogate, not a silent post-save rebind: it
+reopens the source, assembles layers, recomposes, advances generation and publishes
+a resync. Writer-table reuse and silent post-save rebinding are not implemented.
+The writer owns encoded output and its tables; the I/O layer owns successful write
+publication; authored generations and scene notices describe edits. Any storage
+rebind must preserve those distinctions and existing snapshots. Keeping warmed
+caches avoids the measured decode cost; replacing them trades that latency for
+released native ownership. Reusing tables alone addresses the much smaller table
+opening cost and does not release decoded arrays. Raw results are in
+`retention-plain-*.csv`, `retention-snapshot-*.csv` and `retention-metadata-*.csv`.

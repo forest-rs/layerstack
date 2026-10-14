@@ -89,6 +89,8 @@ fn sampled_cameras_match_openusd_including_conformed_transforms_and_culling() {
             .unwrap()
             .compute_camera(&mut XformCache::new(time))
             .unwrap();
+        let frustum = camera.prepare_frustum();
+        assert_eq!(frustum.planes(), &camera.frustum_planes());
         eprintln!("{} {time:?}", row.path);
         close(
             camera.camera_to_world().iter().flatten().copied(),
@@ -127,20 +129,21 @@ fn sampled_cameras_match_openusd_including_conformed_transforms_and_culling() {
                 row.path,
                 p.point
             );
+            assert_eq!(frustum.contains_world_point(p.point), p.inside);
         }
         for b in row.boxes {
-            assert_eq!(
-                camera.intersects_world_bound(&BoundingBox {
-                    range: Range3d {
-                        min: b.min,
-                        max: b.max
-                    },
-                    matrix: b.matrix
-                }),
-                b.intersects
-            );
+            let bound = BoundingBox {
+                range: Range3d {
+                    min: b.min,
+                    max: b.max,
+                },
+                matrix: b.matrix,
+            };
+            assert_eq!(camera.intersects_world_bound(&bound), b.intersects);
+            assert_eq!(frustum.intersects_world_bound(&bound), b.intersects);
         }
         assert!(!camera.intersects_world_bound(&BoundingBox::default()));
+        assert!(!frustum.intersects_world_bound(&BoundingBox::default()));
         for p in camera.frustum_planes() {
             close([p[0] * p[0] + p[1] * p[1] + p[2] * p[2]], [1.]);
         }
@@ -153,6 +156,62 @@ fn compute(attributes: &str, time: Time) -> Result<ComputedCamera, CameraError> 
     Camera::new(&Scene::new(live.stage(), &store), path)
         .unwrap()
         .compute_camera(&mut XformCache::new(time))
+}
+
+#[test]
+fn prepared_frusta_own_planes_and_preserve_degenerate_and_nonfinite_query_policy() {
+    for projection in ["perspective", "orthographic"] {
+        let camera = compute(&format!("token projection = \"{projection}\" float2 clippingRange = (1,100) float4[] clippingPlanes = [(0,0,0,-1)]"), Time::Default).unwrap();
+        let frustum = camera.prepare_frustum();
+        let planes = camera.frustum_planes();
+        drop(camera);
+        assert_eq!(frustum.planes(), &planes);
+        // Additional authored planes would reject every point; primary-frustum
+        // queries intentionally leave their execution to consumers.
+        assert!(frustum.contains_world_point([0., 0., -5.]));
+        for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            for axis in 0..3 {
+                let mut point = [0., 0., -5.];
+                point[axis] = value;
+                assert!(!frustum.contains_world_point(point));
+            }
+        }
+        let identity = [
+            [1., 0., 0., 0.],
+            [0., 1., 0., 0.],
+            [0., 0., 1., 0.],
+            [0., 0., -5., 1.],
+        ];
+        let point = BoundingBox {
+            range: Range3d {
+                min: [0.; 3],
+                max: [0.; 3],
+            },
+            matrix: identity,
+        };
+        assert!(frustum.intersects_world_bound(&point));
+        for scale in [-1., 0., 1.] {
+            let mut matrix = identity;
+            matrix[0][0] = scale;
+            matrix[0][1] = 0.25;
+            let mut bound = BoundingBox {
+                range: Range3d {
+                    min: [-0.25; 3],
+                    max: [0.25; 3],
+                },
+                matrix,
+            };
+            assert!(frustum.intersects_world_bound(&bound));
+            bound.matrix[3][0] = 100.;
+            assert!(!frustum.intersects_world_bound(&bound));
+        }
+        for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            let mut bound = point;
+            bound.matrix[0][0] = value;
+            assert!(!frustum.intersects_world_bound(&bound));
+        }
+        assert!(!frustum.intersects_world_bound(&BoundingBox::default()));
+    }
 }
 #[test]
 fn invalid_parameters_error_instead_of_returning_partial_frusta() {
@@ -239,6 +298,8 @@ fn edits_and_undo_refresh_lens_and_shared_ancestor_transforms() {
         .unwrap()
         .compute_camera(&mut xforms)
         .unwrap();
+    let before_frustum = before.prepare_frustum();
+    let before_planes = *before_frustum.planes();
     let mut t = Transaction::new();
     for (path, name, value) in [
         (path, "horizontalAperture", Value::Float(72.)),
@@ -257,6 +318,8 @@ fn edits_and_undo_refresh_lens_and_shared_ancestor_transforms() {
     assert_ne!(before.view_matrix(), changed.view_matrix());
     assert_eq!(changed.aperture()[0], 72.);
     assert_ne!(before.projection_matrix(), changed.projection_matrix());
+    assert_eq!(before_frustum.planes(), &before_planes);
+    assert_ne!(changed.prepare_frustum().planes(), before_frustum.planes());
     let undo = live.apply(&mut store, &edit.inverse).unwrap();
     let scene = Scene::new(live.stage(), &store);
     xforms.apply_changes(&scene, &undo.changes);
@@ -266,6 +329,7 @@ fn edits_and_undo_refresh_lens_and_shared_ancestor_transforms() {
         .unwrap();
     assert_eq!(restored.view_matrix(), before.view_matrix());
     assert_eq!(restored.projection_matrix(), before.projection_matrix());
+    assert_eq!(restored.prepare_frustum().planes(), before_frustum.planes());
 }
 #[test]
 fn shutter_intervals_preserve_sampling_policy_and_reversed_exposure() {

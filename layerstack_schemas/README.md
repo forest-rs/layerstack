@@ -637,6 +637,14 @@ Recompute snapshots after edits and pass ancestor changes to `XformCache`. Unkno
 projection tokens and invalid geometric parameters return `CameraError`. See the
 `camera_frustum` example for moving point instances sampled across a shutter.
 
+For repeated culling, call `camera.prepare_frustum()` once and reuse its owned
+`camera::PreparedFrustum` for `contains_world_point` and `intersects_world_bound`.
+It retains six normalized world planes without allocations or scene borrows.
+Prepare again after recomputing the camera; retained frusta keep their original
+snapshot. Bound intersection remains conservative, and additional authored
+clipping planes remain consumer-owned. The `wind_tunnel` `camera_frustum`
+benchmark separates one-shot queries, preparation, and plane reuse.
+
 Retained computed queries are available in `retained` with `usd-geom` and
 `usd-shade`. Caller-owned `RetainedQueries` observe a host-owned `LiveStage`, retaining world
 transforms, world bounds and shading providers through edits and time changes.

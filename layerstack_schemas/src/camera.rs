@@ -48,6 +48,30 @@ fn transform(point: [f64; 3], matrix: &Matrix) -> [f64; 3] {
         point[0] * matrix[0][j] + point[1] * matrix[1][j] + point[2] * matrix[2][j] + matrix[3][j]
     })
 }
+
+#[inline]
+fn contains_planes(planes: &[[f64; 4]; 6], point: [f64; 3]) -> bool {
+    planes
+        .iter()
+        .all(|p| p[0] * point[0] + p[1] * point[1] + p[2] * point[2] + p[3] >= 0.)
+}
+
+#[inline]
+fn intersects_planes(planes: &[[f64; 4]; 6], bound: &BoundingBox) -> bool {
+    planes.iter().all(|plane| {
+        (0..8).any(|corner| {
+            let point = core::array::from_fn(|i| {
+                if corner & (1 << i) == 0 {
+                    bound.range.min[i]
+                } else {
+                    bound.range.max[i]
+                }
+            });
+            let point = transform(point, &bound.matrix);
+            plane[0] * point[0] + plane[1] * point[1] + plane[2] * point[2] + plane[3] >= 0.
+        })
+    })
+}
 /// Sampled camera parameters and primary viewing frustum, detached from the scene.
 /// Matrices use USD row vectors, right-handed eye space looking down `-Z`, and
 /// OpenGL NDC depth `[-1,1]`. Rebuild after camera/ancestor edits. The view conforms
@@ -71,6 +95,43 @@ pub struct ComputedCamera {
     focus_distance: f32,
     shutter_offsets: [f64; 2],
 }
+
+/// Immutable primary-frustum planes prepared for repeated world-space queries.
+///
+/// Owns its six normalized planes without scene borrows or allocations. Prepare
+/// from a [`ComputedCamera`] with [`ComputedCamera::prepare_frustum`], then reuse
+/// across points and bounds. It does not observe camera, time or scene changes;
+/// prepare again from the recomputed camera after such changes. Additional
+/// authored clipping planes are excluded, as in the one-shot camera helpers.
+#[derive(Clone, Debug)]
+pub struct PreparedFrustum {
+    planes: [[f64; 4]; 6],
+}
+
+impl PreparedFrustum {
+    /// Normalized inward world-space planes `[a,b,c,d]`: left, right,
+    /// bottom, top, near, far. Nonnegative signed distance is inside.
+    #[must_use]
+    pub fn planes(&self) -> &[[f64; 4]; 6] {
+        &self.planes
+    }
+
+    /// Whether a finite world point lies inside all six primary planes.
+    #[must_use]
+    pub fn contains_world_point(&self, point: [f64; 3]) -> bool {
+        point.iter().all(|v| v.is_finite()) && contains_planes(&self.planes, point)
+    }
+
+    /// Conservative intersection with an oriented world bound. Rejects a box
+    /// wholly outside any primary plane; crossing boxes can be false positives.
+    /// Empty bounds do not intersect. Uses the same transformed-corner test as
+    /// [`ComputedCamera::intersects_world_bound`], without rebuilding the planes.
+    #[must_use]
+    pub fn intersects_world_bound(&self, bound: &BoundingBox) -> bool {
+        !bound.range.is_empty() && intersects_planes(&self.planes, bound)
+    }
+}
+
 impl ComputedCamera {
     /// Perspective or orthographic projection model.
     #[must_use]
@@ -216,36 +277,29 @@ impl ComputedCamera {
             world.map(|v| v / length)
         })
     }
+    /// Prepare the primary world-space planes once for repeated point and bound
+    /// queries. The owned result retains this camera snapshot's planes; it does
+    /// not observe subsequent scene edits or apply additional clipping planes.
+    #[must_use]
+    #[inline]
+    pub fn prepare_frustum(&self) -> PreparedFrustum {
+        PreparedFrustum {
+            planes: self.frustum_planes(),
+        }
+    }
     /// Whether a finite world point lies inside the six primary frustum planes.
+    /// Use [`Self::prepare_frustum`] to reuse planes across multiple queries.
     #[must_use]
     pub fn contains_world_point(&self, point: [f64; 3]) -> bool {
-        point.iter().all(|v| v.is_finite())
-            && self
-                .frustum_planes()
-                .iter()
-                .all(|p| p[0] * point[0] + p[1] * point[1] + p[2] * point[2] + p[3] >= 0.)
+        point.iter().all(|v| v.is_finite()) && contains_planes(&self.frustum_planes(), point)
     }
     /// Conservative intersection with an oriented world bound. Rejects a box
     /// wholly outside any primary plane; crossing boxes can be false positives.
     /// Empty bounds do not intersect. Additional clipping planes are excluded.
+    /// Use [`Self::prepare_frustum`] to reuse planes across multiple queries.
     #[must_use]
     pub fn intersects_world_bound(&self, bound: &BoundingBox) -> bool {
-        if bound.range.is_empty() {
-            return false;
-        }
-        self.frustum_planes().iter().all(|plane| {
-            (0..8).any(|corner| {
-                let point = core::array::from_fn(|i| {
-                    if corner & (1 << i) == 0 {
-                        bound.range.min[i]
-                    } else {
-                        bound.range.max[i]
-                    }
-                });
-                let point = transform(point, &bound.matrix);
-                plane[0] * point[0] + plane[1] * point[1] + plane[2] * point[2] + plane[3] >= 0.
-            })
-        })
+        !bound.range.is_empty() && intersects_planes(&self.frustum_planes(), bound)
     }
 }
 impl Camera<'_> {

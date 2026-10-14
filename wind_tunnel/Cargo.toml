@@ -67,6 +67,10 @@ name = "bounds"
 harness = false
 
 [[bench]]
+name = "camera_frustum"
+harness = false
+
+[[bench]]
 name = "xform_animation"
 harness = false
 

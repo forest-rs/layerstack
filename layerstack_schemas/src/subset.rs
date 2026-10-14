@@ -11,6 +11,187 @@ use crate::{
 use alloc::{collections::BTreeSet, format, string::String, vec::Vec};
 use layerstack::{ArrayReadError, PathId, PropertyPath, TokenInterner, Value};
 
+/// The ownership contract authored for a geometry subset family.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SubsetFamilyType {
+    /// Members may overlap and need not cover every element.
+    Unrestricted,
+    /// Members may not overlap, but may leave elements unassigned.
+    NonOverlapping,
+    /// Members assign every element exactly once.
+    Partition,
+}
+impl SubsetFamilyType {
+    fn token(self) -> &'static str {
+        match self {
+            Self::Unrestricted => "unrestricted",
+            Self::NonOverlapping => "nonOverlapping",
+            Self::Partition => "partition",
+        }
+    }
+}
+
+/// A subset edit could not be collected; its child group remains unchanged.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SubsetAuthoringError {
+    /// The name must be a nonempty, single prim identifier.
+    InvalidName,
+    /// Geometry or its topology is absent, incompatible, or unreadable.
+    Geometry(SubsetError),
+    /// Supplied indices do not identify elements of the parent geometry.
+    Indices(SubsetProblemKind),
+    /// The family attribute already has a declaration other than scalar token.
+    IncompatibleFamilyDeclaration,
+}
+impl core::fmt::Display for SubsetAuthoringError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "cannot author geometry subset: {self:?}")
+    }
+}
+impl core::error::Error for SubsetAuthoringError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::Geometry(error) => Some(error),
+            _ => None,
+        }
+    }
+}
+impl From<SubsetError> for SubsetAuthoringError {
+    fn from(value: SubsetError) -> Self {
+        Self::Geometry(value)
+    }
+}
+
+impl crate::usd_geom::GeomSubsetEdit {
+    /// Collects a new subset under existing composed geometry, using `name`,
+    /// then `name_1`, `name_2`, … to avoid composed and pending prims.
+    ///
+    /// Checks the requested element type and indices against the parent's
+    /// composed default-time topology, preserving deferred decode errors.
+    /// Edges and segments use flattened pairs. Geometry/topology edits queued
+    /// in this batch are not part of that snapshot. Unrestricted duplicates
+    /// are preserved; this does not validate overlap or partition coverage.
+    /// Apply the transaction, then use `Imageable::try_validate_subset_family`
+    /// to inspect the complete family's contract and animated samples.
+    /// Rejection collects no edits. AOUSD Core §7.3, §12.3–12.5;
+    /// OpenUSD `UsdGeomSubset::CreateUniqueGeomSubset`.
+    #[doc(alias = "CreateUniqueGeomSubset")]
+    pub fn create_unique(
+        edit: &mut crate::SchemaEdit<'_>,
+        parent: PathId,
+        name: &str,
+        element: SubsetElementType,
+        indices: &[i32],
+        family: &str,
+    ) -> Result<Self, SubsetAuthoringError> {
+        edit.group(|edit| {
+            {
+                let scene = edit.scene();
+                let geom = Imageable::new(&scene, parent)
+                    .filter(|geom| valid_geom(geom, &element))
+                    .ok_or(SubsetError::InvalidGeometry)?;
+                match elements(&geom, &element, Time::Default)? {
+                    Elements::Scalar(count) => {
+                        if let Some(&index) = indices.iter().find(|&&index| {
+                            usize::try_from(index).map_or(true, |index| index >= count)
+                        }) {
+                            return Err(SubsetAuthoringError::Indices(
+                                SubsetProblemKind::InvalidIndex(index),
+                            ));
+                        }
+                    }
+                    Elements::Pairs(possible) => {
+                        if !indices.len().is_multiple_of(2) {
+                            return Err(SubsetAuthoringError::Indices(
+                                SubsetProblemKind::OddPairCount,
+                            ));
+                        }
+                        for pair in indices.as_chunks::<2>().0 {
+                            let pair = if element == SubsetElementType::Edge {
+                                [pair[0].min(pair[1]), pair[0].max(pair[1])]
+                            } else {
+                                *pair
+                            };
+                            if !possible.contains(&pair) {
+                                return Err(SubsetAuthoringError::Indices(
+                                    SubsetProblemKind::InvalidPair(pair),
+                                ));
+                            }
+                        }
+                        // Match ValidateFamily's native edge-count bound as
+                        // well as membership, including non-contiguous vertices.
+                        if element == SubsetElementType::Edge
+                            && let Some(&index) = indices.iter().find(|&&index| {
+                                usize::try_from(index).map_or(true, |index| index >= possible.len())
+                            })
+                        {
+                            return Err(SubsetAuthoringError::Indices(
+                                SubsetProblemKind::InvalidIndex(index),
+                            ));
+                        }
+                    }
+                }
+            }
+            let path = edit
+                .unique_child_path(parent, name)
+                .ok_or(SubsetAuthoringError::InvalidName)?;
+            let subset = Subset::define(edit, path);
+            subset
+                .set_element_type(edit, element)
+                .set_family_name(edit, family)
+                .set_indices(edit, indices);
+            Ok(subset)
+        })
+    }
+}
+
+impl crate::usd_geom::ImageableEdit {
+    /// Authors a family's declared ownership contract. An absent attribute is
+    /// created as a uniform token; existing scalar-token declarations retain
+    /// their metadata. Incompatible declarations reject without collecting edits.
+    /// The name must be a nonempty identifier. This collects the declaration;
+    /// it does not claim the family's indices satisfy it. After applying the
+    /// batch, use `Imageable::try_validate_subset_family` for full validation.
+    /// AOUSD Core §12.2–12.5; OpenUSD `UsdGeomSubset::SetFamilyType`.
+    #[doc(alias = "SetFamilyType")]
+    pub fn set_subset_family_type(
+        &self,
+        edit: &mut crate::SchemaEdit<'_>,
+        family: &str,
+        family_type: SubsetFamilyType,
+    ) -> Result<(), SubsetAuthoringError> {
+        edit.group(|edit| {
+            let parsed = layerstack::Path::parse_absolute(&format!("/{family}"), edit.tokens())
+                .map_err(|_| SubsetAuthoringError::InvalidName)?;
+            if parsed.depth() != 1 {
+                return Err(SubsetAuthoringError::InvalidName);
+            }
+            let name = format!("subsetFamily:{family}:familyType");
+            let declared = edit.property_kind(self.path(), &name).is_some();
+            match edit.attribute_type(self.path(), &name) {
+                Some(ty) if ty.is_array || !matches!(ty.default_scalar, Value::Token(_)) => {
+                    return Err(SubsetAuthoringError::IncompatibleFamilyDeclaration);
+                }
+                Some(_) => {}
+                None if declared => {
+                    return Err(SubsetAuthoringError::IncompatibleFamilyDeclaration);
+                }
+                None => {
+                    let fallback = Value::Token(edit.tokens().intern(""));
+                    edit.create_uniform_attribute(
+                        self.path(),
+                        &name,
+                        layerstack::PropertyType::new("token", false, fallback),
+                    );
+                }
+            }
+            let value = crate::value::write_token(family_type.token(), edit.tokens());
+            edit.set_value(self.path(), &name, None, value);
+            Ok(())
+        })
+    }
+}
+
 /// Invalid or unreadable geometry needed for a subset query.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SubsetError {

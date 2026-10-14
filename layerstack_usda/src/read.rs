@@ -4,7 +4,7 @@
 //! Scene import without materializing numeric property arrays as syntax trees.
 
 use alloc::{collections::BTreeMap, vec::Vec};
-use layerstack::{AssetResolver, LayerId, PathInterner, TokenInterner};
+use layerstack::{AssetResolver, LayerId, PathInterner, SchemaRegistry, TokenInterner};
 
 use crate::{
     Span, ast,
@@ -62,6 +62,39 @@ pub fn read_usda(
     paths: &mut PathInterner,
     resolver: &mut dyn AssetResolver,
 ) -> ReadResult {
+    read_with_registry(source, layer_id, tokens, paths, resolver, None)
+}
+
+/// Imports USDA using caller-registered metadata types and spec targets.
+///
+/// Use the registry built with `tokens` to interpret custom metadata literals.
+/// Built-in field definitions retain precedence. Declared scalar, array and
+/// list-op types are checked; invalid literals and targets reject the layer.
+/// Defaults remain un-authored. Numeric property arrays retain the compact
+/// import path and [`ReadStats`] accounting of [`read_usda`].
+///
+/// For storage-backed stages, `layerstack_io::StageDocument::open_in` supplies
+/// `StageOptions::schemas` to this path for every imported USDA layer.
+/// Spec: AOUSD Core §7.4 (metadata), §6.2–6.6 (types), §16.2 (USDA).
+pub fn read_usda_with_registry(
+    source: &str,
+    layer_id: LayerId,
+    tokens: &mut TokenInterner,
+    paths: &mut PathInterner,
+    resolver: &mut dyn AssetResolver,
+    registry: &SchemaRegistry,
+) -> ReadResult {
+    read_with_registry(source, layer_id, tokens, paths, resolver, Some(registry))
+}
+
+fn read_with_registry(
+    source: &str,
+    layer_id: LayerId,
+    tokens: &mut TokenInterner,
+    paths: &mut PathInterner,
+    resolver: &mut dyn AssetResolver,
+    registry: Option<&SchemaRegistry>,
+) -> ReadResult {
     let (parsed, arrays, token_count) = crate::parser::parse_for_read(source);
     let stats = ReadStats {
         tokens: token_count,
@@ -71,8 +104,15 @@ pub fn read_usda(
     };
     let lowered = crate::lower::lower(&parsed.tree, source);
     drop(parsed.tree);
-    let emitted =
-        crate::emit::emit_with_arrays(&lowered.layer, layer_id, tokens, paths, resolver, arrays);
+    let emitted = crate::emit::emit_with_arrays(
+        &lowered.layer,
+        layer_id,
+        tokens,
+        paths,
+        resolver,
+        arrays,
+        registry,
+    );
     ReadResult {
         emitted,
         parse_diagnostics: parsed.diagnostics,

@@ -24,7 +24,9 @@
 //!
 //! For schema fallbacks and typed views, use [`StageDocument::open_in`]: build
 //! the registry using that store's tokens, then pass the same store and its
-//! registry in `StageOptions`. `open` creates a fresh store and cannot share a
+//! registry in `StageOptions`. Its metadata declarations also type and validate
+//! USDA metadata during initial loading, explicit loads and reloads. `open`
+//! creates a fresh store and cannot share a
 //! prebuilt registry's token domain. [`Storage`] supports transports without `std`.
 //! [`StageDocument::parts_mut`] provides explicit access for atomic authoring;
 //! saving, exporting and reloading remain separate operations.
@@ -448,6 +450,7 @@ impl<B: Storage> StageDocument<B> {
             import_policy,
             loading.usdc,
             loading.package,
+            options.schemas.clone(),
         );
         let resolved = reader.load(asset, None, &mut store.tokens, &mut store.paths)?;
         if let Some(layer) = resolved.layer {
@@ -489,6 +492,7 @@ impl<B: Storage> StageDocument<B> {
             self.import_policy,
             self.usdc_options,
             self.package_limits,
+            self.stage.options().schemas.clone(),
         );
         let resolved = reader.load(asset, anchor, &mut self.store.tokens, &mut self.store.paths)?;
         let id = resolved.layer_id;
@@ -738,6 +742,7 @@ impl<B: Storage> StageDocument<B> {
 }
 
 struct Reader<'a, B> {
+    schemas: Option<Arc<layerstack::SchemaRegistry>>,
     storage: &'a mut B,
     catalog: &'a mut Catalog,
     policy: ImportPolicy,
@@ -756,8 +761,10 @@ impl<'a, B: Storage> Reader<'a, B> {
         policy: ImportPolicy,
         usdc_options: UsdcReadOptions,
         package_limits: PackageLimits,
+        schemas: Option<Arc<layerstack::SchemaRegistry>>,
     ) -> Self {
         Self {
+            schemas,
             storage,
             catalog,
             policy,
@@ -892,7 +899,14 @@ impl<'a, B: Storage> Reader<'a, B> {
             Format::Usda => {
                 let source = core::str::from_utf8(&data)
                     .map_err(|e| IoError::new(IoErrorKind::Rejected, e.to_string()))?;
-                let result = layerstack_usda::read_usda(source, id, tokens, paths, self);
+                let schemas = self.schemas.clone();
+                let result = if let Some(registry) = schemas {
+                    layerstack_usda::read_usda_with_registry(
+                        source, id, tokens, paths, self, &registry,
+                    )
+                } else {
+                    layerstack_usda::read_usda(source, id, tokens, paths, self)
+                };
                 self.pending.extend(result.emitted.resolved_layers);
                 for diagnostic in result
                     .parse_diagnostics

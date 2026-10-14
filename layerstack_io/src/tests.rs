@@ -3,6 +3,8 @@
 
 use super::*;
 
+mod registered_metadata;
+
 #[test]
 fn sparse_clip_preparation_covers_advanced_weaker_queries_and_set_reordering() {
     use layerstack::InterpolationType;

@@ -55,6 +55,19 @@ and recognized numeric arrays. Use the parser APIs when you need an inspectable
 AST or lossless editing. The importer still retains structural syntax for
 declarations and metadata; the caller supplies the complete source string.
 
+For plugin-defined metadata, build a `layerstack::SchemaRegistry` with the
+same token interner and use `read_usda_with_registry`, or
+`emit::emit_with_registry` for an AST. These entry points convert registered
+scalar, array and list-op fields to their declared types and reject invalid
+literals or spec targets with source diagnostics. Registered defaults remain
+in the registry; importing does not author them. Built-in field definitions
+retain precedence, and unregistered names keep the ordinary literal inference.
+
+For storage-backed stages, pass that store and registry to
+`layerstack_io::StageDocument::open_in` through `StageOptions::schemas`.
+Initial imports, referenced layers, explicit asset loads, reloads and package
+preparation all use the registry. Asset resolution remains caller-owned.
+
 ## Saving layers
 
 `writer::Document` is an explicit authoring model. To save an existing

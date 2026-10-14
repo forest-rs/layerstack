@@ -611,8 +611,21 @@ impl<'a> Xformable<'a> {
         if start > end || start.is_nan() || end.is_nan() {
             return Vec::new();
         }
+        self.transform_time_samples_in_range(start..=end)
+    }
+
+    /// Effective transform sample times within open, closed or unbounded bounds.
+    /// For example, `1.0..4.0` includes 1 and excludes 4; `..=4.0` has no lower
+    /// bound. `(Bound<f64>, Bound<f64>)` tuples can exclude either endpoint.
+    /// Filters [`Self::transform_time_samples`] without adding evaluation times.
+    /// NaN bounds and reversed intervals select no samples.
+    #[must_use]
+    pub fn transform_time_samples_in_range(
+        &self,
+        interval: impl core::ops::RangeBounds<f64>,
+    ) -> Vec<f64> {
         let mut times = self.transform_time_samples();
-        times.retain(|time| *time >= start && *time <= end);
+        times.retain(|time| interval.contains(time));
         times
     }
 

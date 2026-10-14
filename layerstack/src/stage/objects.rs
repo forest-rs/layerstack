@@ -196,6 +196,18 @@ impl Attribute<'_> {
         self.stage
             .property_sample_times(self.path.prim_path(), self.path.property())
     }
+    /// Effective sample times within open, closed or unbounded stage-time bounds.
+    /// Filters the composed grid; does not add evaluation times or brackets.
+    /// NaN bounds and reversed intervals select no samples.
+    #[doc(alias = "UsdAttribute::GetTimeSamplesInInterval")]
+    #[doc(alias = "GetTimeSamplesInInterval")]
+    pub fn sample_times_in_range(self, interval: impl core::ops::RangeBounds<f64>) -> Vec<f64> {
+        self.stage.property_sample_times_in_range(
+            self.path.prim_path(),
+            self.path.property(),
+            interval,
+        )
+    }
     /// Conservative whether a numeric-time query can vary with time.
     #[doc(alias = "UsdAttribute::ValueMightBeTimeVarying")]
     #[doc(alias = "ValueMightBeTimeVarying")]

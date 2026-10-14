@@ -1117,6 +1117,25 @@ impl Stage {
         self.property_time_info(prim, field).0
     }
 
+    /// Effective property sample times within open, closed or unbounded stage-time bounds.
+    ///
+    /// Uses the same composed grid as [`Self::property_sample_times`], then
+    /// filters it without adding evaluation times or interpolation brackets.
+    /// NaN bounds and reversed intervals select no samples. Standard ranges
+    /// and `(Bound<f64>, Bound<f64>)` tuples implement [`core::ops::RangeBounds`].
+    /// AOUSD Core §12.3.2 (effective stage-time samples and layer offsets).
+    #[must_use]
+    pub fn property_sample_times_in_range(
+        &self,
+        prim: PathId,
+        field: TokenId,
+        interval: impl core::ops::RangeBounds<f64>,
+    ) -> Vec<f64> {
+        let mut times = self.property_sample_times(prim, field);
+        times.retain(|time| interval.contains(time));
+        times
+    }
+
     // AOUSD Core §12.3.2: variability belongs to each contributing series;
     // merging differently timed single samples cannot create animation.
     fn property_time_info(&self, prim: PathId, field: TokenId) -> (Vec<f64>, bool) {

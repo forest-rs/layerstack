@@ -193,27 +193,40 @@ impl Stage {
         self
     }
 
-    /// The [`InstanceKey`] of `instance`: the strongest-first nodes of its
-    /// graph whose arcs are authored at the instance, beneath nodes that are
-    /// not, with its variant selections.
+    /// The [`InstanceKey`] of `instance`: its strongest-first contributing
+    /// direct arc subtrees, variant selections and populated namespace.
+    /// Nested contributing nodes are included when payload participation can
+    /// distinguish otherwise equal outer arcs.
     ///
     /// OpenUSD: `PcpInstanceKey::_Collector`, which records each instanceable
-    /// node that no instanceable node is above (`pxr/usd/pcp/instanceKey.cpp`).
+    /// node, pruning below it only when there are no payload arcs
+    /// (`pxr/usd/pcp/instanceKey.cpp`).
     pub(super) fn instance_key(&self, instance: PathId, store: &dyn LayerStore) -> InstanceKey {
         let depth = u16::try_from(store.paths().resolve(instance).depth()).unwrap_or(u16::MAX);
         let mut arcs = Vec::new();
-        if let Some(graph) = self.explain_prim_graph(instance) {
+        if let Some(index) = self.prims.get(&instance) {
+            let graph = &index.graph;
+            let nodes: HashSet<NodeId> = graph.instanceable_nodes(&index.sources, depth).collect();
+            // Loaded payload participation is part of the key even beneath
+            // another contributing arc (OpenUSD PcpInstanceKey::_Collector).
+            let has_payload = graph
+                .nodes()
+                .any(|(_, node)| node.arc_kind() == ArcKind::Payloads);
             for id in graph.strength_order() {
                 let Some(node) = graph.node(id) else { continue };
-                if id == NodeId::ROOT || node.namespace_depth() < depth {
+                if !nodes.contains(&id) {
                     continue;
                 }
-                let parent_instanceable = node
-                    .parent()
-                    .filter(|&parent| parent != NodeId::ROOT)
-                    .and_then(|parent| graph.node(parent))
-                    .is_some_and(|parent| parent.namespace_depth() >= depth);
-                if parent_instanceable {
+                let mut parent = node.parent();
+                let mut parent_instanceable = false;
+                while let Some(id) = parent {
+                    if nodes.contains(&id) {
+                        parent_instanceable = true;
+                        break;
+                    }
+                    parent = graph.node(id).and_then(|node| node.parent());
+                }
+                if !has_payload && parent_instanceable {
                     continue;
                 }
                 let offset = node.layer_offset();

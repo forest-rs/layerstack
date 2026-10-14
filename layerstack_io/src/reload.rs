@@ -207,6 +207,7 @@ impl<B: Storage> StageDocument<B> {
             self.import_policy,
             self.usdc_options,
             self.package_limits,
+            self.stage.options().schemas.clone(),
         );
         reader.reachable_only = root_closure;
         for id in roots {

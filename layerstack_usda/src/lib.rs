@@ -39,6 +39,9 @@
 //! numeric property arrays directly from source ranges into native buffers.
 //! It avoids per-element syntax nodes and generic AST tuples. Use the parser
 //! APIs when the syntax or inspectable AST is needed.
+//! For plugin metadata, [`read_usda_with_registry`] and
+//! [`emit::emit_with_registry`] use caller-registered types and spec targets,
+//! preserving the ordinary literal inference for unregistered field names.
 //!
 //! # Quick start
 //!
@@ -134,7 +137,7 @@ pub mod emit;
 mod numeric;
 mod read;
 mod token_source;
-pub use read::{ReadResult, ReadStats, read_usda};
+pub use read::{ReadResult, ReadStats, read_usda, read_usda_with_registry};
 
 pub mod save;
 mod spline_text;

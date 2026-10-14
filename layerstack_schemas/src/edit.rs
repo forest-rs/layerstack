@@ -185,6 +185,11 @@ impl<'s> SchemaEdit<'s> {
     }
 
     #[cfg(feature = "usd-geom")]
+    pub(crate) fn scene(&self) -> crate::Scene<'_> {
+        crate::Scene::new(self.stage, self.store)
+    }
+
+    #[cfg(feature = "usd-geom")]
     pub(crate) fn inspect_authoring(
         &mut self,
         path: PathId,
@@ -198,6 +203,36 @@ impl<'s> SchemaEdit<'s> {
             &self.target,
             time,
         )
+    }
+
+    /// Reserves a child name against composed prims and earlier definitions in
+    /// this transaction. Interning a path alone does not occupy its name.
+    #[cfg(feature = "usd-geom")]
+    pub(crate) fn unique_child_path(&mut self, parent: PathId, base: &str) -> Option<PathId> {
+        let parsed =
+            layerstack::Path::parse_absolute(&alloc::format!("/{base}"), self.store.tokens_mut())
+                .ok()?;
+        if parsed.depth() != 1 {
+            return None;
+        }
+        let parent = self.store.paths().resolve(parent).clone();
+        for suffix in 0_u64.. {
+            let name = if suffix == 0 {
+                String::from(base)
+            } else {
+                alloc::format!("{base}_{suffix}")
+            };
+            let token = self.store.tokens_mut().intern(name);
+            let path = parent.join(&[token]);
+            if let Some(id) = self.store.paths().lookup(&path) {
+                if self.exists(id) {
+                    continue;
+                }
+                return Some(id);
+            }
+            return Some(self.store.paths_mut().intern(path));
+        }
+        None
     }
 
     fn property(&mut self, path: PathId, name: &str) -> layerstack::edit::Address {
@@ -460,7 +495,7 @@ impl<'s> SchemaEdit<'s> {
         scene.metadata().up_axis().unwrap_or("Y")
     }
 
-    #[cfg(feature = "usd-lux")]
+    #[cfg(any(feature = "usd-lux", feature = "usd-geom"))]
     pub(crate) fn create_uniform_attribute(&mut self, path: PathId, name: &str, ty: PropertyType) {
         let token = self.store.tokens_mut().intern(name);
         let at = self.target.property(PropertyPath::new(path, token));

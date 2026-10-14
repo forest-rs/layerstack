@@ -533,6 +533,16 @@ Edit handles expose `create_primvar` with a declared `PropertyType`.
 through `SchemaEdit`; invalid names, metadata and incompatible declarations
 append no edits. Ordinary transaction validation and undo remain in force.
 
+`GeomSubsetEdit::create_unique` collects a subset under existing composed
+geometry, validates the supplied indices against its default-time topology, and
+reserves a collision-free name across the batch.
+`ImageableEdit::set_subset_family_type` declares
+`subset::SubsetFamilyType::{Unrestricted, NonOverlapping, Partition}`. Creation
+does not certify family-wide overlap or coverage, and queued topology changes
+are outside its validation snapshot. Apply the batch, then call
+`Imageable::try_validate_subset_family` to validate the complete family and its
+samples.
+
 `PointInstancer::compute_mask` matches inactive and invisible IDs against stable
 IDs or array positions. `compute_instance_transforms` retains original indices
 and IDs after masking, includes optional prototype-local transforms and anchors

@@ -30,7 +30,7 @@ hashbrown = { default-features = false, features = [
     "alloc",
     "default-hasher",
 ], version = "0.17.0" }
-invalidation = { default-features = false, version = "0.2.0" }
+invalidation = { default-features = false, version = "0.3.0" }
 layerstack = { path = "layerstack", version = "0.1.0" }
 layerstack_io = { default-features = false, path = "layerstack_io", version = "0.1.0" }
 layerstack_mesh_export = { path = "layerstack_mesh_export", version = "0.1.0" }

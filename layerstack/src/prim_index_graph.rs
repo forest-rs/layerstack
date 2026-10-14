@@ -292,6 +292,53 @@ pub struct PrimIndexGraph {
 }
 
 impl PrimIndexGraph {
+    /// Whether a node is reached through an arc introduced at `depth`, even
+    /// when its own arc is ancestral or was propagated from another node.
+    /// Root opinions and arcs authored only above or below that site are local
+    /// to the occurrence. Callers separately require a contributing source.
+    ///
+    /// AOUSD Core §11.3.3. OpenUSD: `HasTransitiveDirectDependency` and
+    /// `Pcp_ChildNodeIsInstanceable` (`pxr/usd/pcp/instancing.h`).
+    pub(crate) fn has_direct_dependency(&self, node: NodeId, depth: u16) -> bool {
+        let mut pending = Vec::new();
+        let mut origins = Vec::new();
+        let mut cursor = Some(node);
+        while let Some(id) = cursor.take().or_else(|| pending.pop()) {
+            if id == NodeId::ROOT {
+                continue;
+            }
+            let Some(current) = self.node(id) else {
+                continue;
+            };
+            if current.namespace_depth() == depth {
+                return true;
+            }
+            cursor = current.parent();
+            if let Some(origin) = current.origin()
+                && !origins.contains(&origin)
+            {
+                origins.push(origin);
+                pending.push(origin);
+            }
+        }
+        false
+    }
+
+    /// Nodes with surviving specs reached through a direct arc. Graph nodes
+    /// alone may be empty dependencies or inert specializes placeholders;
+    /// registered sources establish actual spec participation. Repeated
+    /// occurrences and layer contributions retain their original node ids.
+    pub(crate) fn instanceable_nodes<'a>(
+        &'a self,
+        sources: &'a [OpinionKey],
+        depth: u16,
+    ) -> impl Iterator<Item = NodeId> + 'a {
+        sources
+            .iter()
+            .map(|source| source.node)
+            .filter(move |&node| self.has_direct_dependency(node, depth))
+    }
+
     pub(crate) fn prepare_layer_offsets(
         &mut self,
         store: &dyn crate::LayerStore,
@@ -988,6 +1035,43 @@ mod tests {
             assert_eq!(graph.cmp_nodes(a, b), Ordering::Less, "{a:?} < {b:?}");
             assert_eq!(graph.cmp_nodes(b, a), Ordering::Greater, "{b:?} > {a:?}");
         }
+    }
+
+    #[test]
+    fn instanceable_nodes_require_specs_and_a_transitive_direct_arc() {
+        let mut graph = graph(vec![
+            (0, arc(ArcKind::References, 1, 0)),
+            (0, arc(ArcKind::References, 2, 0)),
+            (2, arc(ArcKind::Inherits, 1, 0)),
+            (0, arc(ArcKind::References, 3, 0)),
+            (0, arc(ArcKind::Inherits, 2, 0)),
+            (2, arc(ArcKind::Specializes, 1, 0)),
+            (0, arc(ArcKind::Specializes, 1, 0)),
+        ]);
+        // A propagated specializes keeps its direct dependency through the
+        // original placeholder, even when it is attached beneath the root.
+        graph.set_origin(NodeId(7), NodeId(6));
+        let sources: Vec<_> = [0, 1, 2, 3, 4, 7]
+            .into_iter()
+            .map(|id| OpinionKey {
+                node: NodeId(id),
+                layer_strength: 0,
+                layer_id: LayerId(1),
+                lookup_path: PathId::from_raw(0),
+                spec_path: spec_path("/A"),
+            })
+            .collect();
+        assert_eq!(
+            graph.instanceable_nodes(&sources, 2).collect::<Vec<_>>(),
+            vec![NodeId(2), NodeId(3), NodeId(7)]
+        );
+        assert!(graph.has_direct_dependency(NodeId(5), 2));
+        assert!(
+            !graph
+                .instanceable_nodes(&sources, 2)
+                .any(|node| node == NodeId(5)),
+            "an empty dependency node cannot affect instanceability or keys"
+        );
     }
 
     #[test]

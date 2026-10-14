@@ -1,0 +1,103 @@
+#usda 1.0
+
+class "Class" {
+    over "A" {
+        def "Geo" {}
+    }
+}
+
+def "Inherited" (inherits = </Class>) {
+    def "A" (instanceable = true) {
+        def "Local" {}
+    }
+}
+def "Referenced" (references = </Class>) {
+    def "A" (instanceable = true) {
+        def "Local" {}
+    }
+}
+def "Payloaded" (payload = </Class>) {
+    def "A" (instanceable = true) {
+        def "Local" {}
+    }
+}
+
+class "Asset" {
+    def "Geo" {}
+}
+def "DirectInherit" (inherits = </Asset>; instanceable = true) {
+    def "Local" {}
+}
+def "DirectReference" (references = </Asset>; instanceable = true) {
+    def "Local" {}
+}
+def "DirectPayload" (payload = </Asset>; instanceable = true) {
+    def "Local" {}
+}
+def "DirectSpecialize" (specializes = </Asset>; instanceable = true) {
+    def "Local" {}
+}
+over "Empty" {}
+def "EmptyTarget" (inherits = </Empty>; instanceable = true) {
+    def "Local" {}
+}
+def "MissingTarget" (inherits = </Missing>; instanceable = true) {
+    def "Local" {}
+}
+def "EmptyClassAndReference" (
+    inherits = </Missing>
+    references = </Asset>
+    instanceable = true
+) {
+    def "Local" {}
+}
+
+def "Subroot" (references = </Class/A>; instanceable = true) {
+    def "Local" {}
+}
+def "NestedAncestral" (references = </Inherited/A>; instanceable = true) {
+    def "Local" {}
+}
+
+def "InstanceAsset" (instanceable = true) {
+    def "Geo" {}
+}
+def "TaggedTarget" (references = </InstanceAsset>; instanceable = true) {
+    def "Local" {}
+}
+
+def "OuterAsset" {
+    def "Inner" {
+        def "Geo" {}
+    }
+}
+def "Outer" (references = </OuterAsset>; instanceable = true) {
+    over "Inner" (references = </Asset>; instanceable = true) {
+        def "Local" {}
+    }
+}
+
+def "PayloadData" {
+    int marker = 1
+}
+def "PayloadCarrier" (payload = </PayloadData>) {}
+def "PayloadLoaded" (references = </PayloadCarrier>; instanceable = true) {}
+def "PayloadUnloaded" (references = </PayloadCarrier>; instanceable = true) {}
+
+def "VariantOnly" (
+    instanceable = true
+    prepend variantSets = "shape"
+    variants = { string shape = "full" }
+) {
+    def "Local" {}
+    variantSet "shape" = {
+        "full" {
+            def "Geo" {
+                int value = 1
+            }
+        }
+    }
+    over "Geo" {
+        int value = 9
+    }
+}

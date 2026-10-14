@@ -2059,442 +2059,153 @@ fn uncontributed_children(
         .collect()
 }
 
-/// Strips descendant opinions and children for effective instances.
+/// Strips occurrence-local descendant opinions from effective instances.
 ///
-/// A prim is an *effective instance* when it has `instanceable = true`
-/// (strongest opinion) AND at least one composition arc (references,
-/// payloads, inherits). For each effective instance:
+/// The strongest `instanceable` opinion must be true and at least one
+/// contributing source must be reached through a direct composition arc.
+/// Ancestral arcs alone cannot make an instance. The same source predicate
+/// drives prototype identity; target specs marked instanceable remain sources
+/// of the prototype rather than being mistaken for local occurrence opinions.
 ///
-/// 1. Children introduced only by identity (local/instanceable) sources are
-///    removed along with their entire subtrees.
-/// 2. On surviving descendants, local (`is_local == true`) sources whose
-///    `spec_path` is a namespace descendant of an identity path are stripped.
-///    Non-local sources survive only when their arc was introduced at the
-///    instance or below (`namespace_depth` at least the instance's depth):
-///    sites reached through arcs authored on the instance's ancestors are
-///    local to the instance, not brought in by its own arcs. OpenUSD marks
-///    those nodes inert (`pxr/usd/pcp/instancing.h`,
-///    `Pcp_ChildNodeIsInstanceable`). An arc authored beneath the instance
-///    survives only when the node it is authored at does, so the local
-///    opinions' own arcs are stripped with them (see
-///    [`contributes_beneath_instance`]).
-///
-/// Returns the effective instances.
-///
-/// Spec: AOUSD Core §11.3.3 (scene graph instancing: only opinions brought
-/// in by the instance's composition arcs are used), §5.1.14 (instanceable).
+/// Spec: AOUSD Core §11.3.3 (only opinions brought in by the instance's own
+/// composition arcs contribute descendants), §5.1.14 (instanceable).
 fn strip_instance_descendants(
     store: &dyn LayerStore,
     prims: &mut HashMap<PathId, PrimIndex>,
     children: &mut HashMap<PathId, Vec<PathId>>,
     authored_children_opinions: &HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
 ) -> HashSet<PathId> {
-    use hashbrown::HashSet;
-
-    // Step 1: Identify effective instances and their identity paths.
-    //
-    // An "identity path" is a (LayerId, PathId) pair representing the instance
-    // prim's own definition. Sources that are local or whose PrimSpec has
-    // `instanceable == Some(true)` are considered identity.
-    let mut instance_identity: Vec<(PathId, Vec<(LayerId, PathId)>)> = Vec::new();
-
-    let all_prim_paths: Vec<PathId> = prims.keys().copied().collect();
-    for &prim_path in &all_prim_paths {
-        let Some(index) = prims.get(&prim_path) else {
-            continue;
-        };
-
-        // Resolve instanceable: strongest opinion wins.
-        let mut is_instanceable = false;
-        for source in &index.sources {
-            let Some(layer) = store.layer(source.layer_id) else {
-                continue;
-            };
-            let Some(spec) =
-                layer.source_prim_spec(source.lookup_path, &source.spec_path, store.paths())
-            else {
-                continue;
-            };
-            if let Some(val) = spec.instanceable {
-                is_instanceable = val;
-                break; // strongest wins
-            }
-        }
-        if !is_instanceable {
-            continue;
-        }
-
-        // Check for composition arcs (references, payloads, inherits).
-        let has_arcs = index.sources.iter().any(|s| {
-            introducing_arcs(&index.graph, s.node)
-                .first()
-                .is_some_and(|node| {
-                    matches!(
-                        node.arc_kind(),
-                        ArcKind::References | ArcKind::Payloads | ArcKind::Inherits
-                    )
+    let paths: Vec<PathId> = prims.keys().copied().collect();
+    let mut candidates: Vec<PathId> = paths
+        .iter()
+        .copied()
+        .filter(|path| {
+            prims[path].sources.iter().any(|source| {
+                store.layer(source.layer_id).is_some_and(|layer| {
+                    layer
+                        .source_prim_spec(source.lookup_path, &source.spec_path, store.paths())
+                        .is_some_and(|spec| spec.instanceable == Some(true))
                 })
-        });
-        if !has_arcs {
+            })
+        })
+        .collect();
+    // Process candidate ancestors before descendants: stripping an outer
+    // instance can remove a nested prim's local instanceable opinion or its
+    // only direct arc. Ordinary prims need no namespace sorting.
+    candidates.sort_by_key(|path| store.paths().resolve(*path).depth());
+    let mut instances = HashSet::new();
+    for instance in candidates {
+        let Some(index) = prims.get(&instance) else {
+            continue;
+        };
+        let instance_path = store.paths().resolve(instance);
+        let depth = u16::try_from(instance_path.depth()).unwrap_or(u16::MAX);
+        let enabled = index
+            .sources
+            .iter()
+            .find_map(|source| {
+                store
+                    .layer(source.layer_id)?
+                    .source_prim_spec(source.lookup_path, &source.spec_path, store.paths())?
+                    .instanceable
+            })
+            .unwrap_or(false);
+        if !enabled {
             continue;
         }
+        let nodes: HashSet<NodeId> = index
+            .graph
+            .instanceable_nodes(&index.sources, depth)
+            .collect();
+        if nodes.is_empty() {
+            continue;
+        }
+        instances.insert(instance);
 
-        // Collect identity paths: local sources and sources with instanceable=true.
-        let mut identity_paths: Vec<(LayerId, PathId)> = Vec::new();
+        // Child names come from actual contributing specs, including selected
+        // variant specs. Empty or inert graph nodes introduce no children.
+        let mut surviving_names = HashSet::new();
+        if let Some(opinions) = authored_children_opinions.get(&instance) {
+            for (key, names) in opinions {
+                if nodes.contains(&key.node) {
+                    surviving_names.extend(names.iter().copied());
+                }
+            }
+        }
         for source in &index.sources {
-            if source.node == NodeId::ROOT {
-                identity_paths.push((source.layer_id, source.lookup_path));
+            if !nodes.contains(&source.node) {
                 continue;
             }
             let Some(layer) = store.layer(source.layer_id) else {
                 continue;
             };
-            let Some(spec) =
+            // A variant source names the branch spec, not the enclosing prim
+            // spec returned by source_prim_spec. Its child names may exist only
+            // in the branch, with no local counterpart on that prim.
+            if let Some(branch) = layer.variant_spec_at(&source.spec_path, store.paths()) {
+                surviving_names.extend(branch.authored_children.iter().copied());
+            } else if let Some(spec) =
                 layer.source_prim_spec(source.lookup_path, &source.spec_path, store.paths())
-            else {
-                continue;
-            };
-            if spec.instanceable == Some(true) {
-                identity_paths.push((source.layer_id, source.lookup_path));
+            {
+                surviving_names.extend(spec.authored_children.iter().copied());
             }
         }
-
-        if !identity_paths.is_empty() {
-            instance_identity.push((prim_path, identity_paths));
-        }
-    }
-
-    // Step 2: For each effective instance, determine surviving children and
-    // strip descendant local opinions.
-    for (instance_path, identity_paths) in &instance_identity {
-        // 2a. Determine which children survive: a child survives if it appears
-        // in any non-identity source's authored_children or variant children.
-        let non_identity_children = collect_non_identity_children(
-            store,
-            *instance_path,
-            identity_paths,
-            prims,
-            authored_children_opinions,
-        );
-
-        // Find all descendant prim paths.
-        let descendants: Vec<PathId> = all_prim_paths
-            .iter()
-            .copied()
-            .filter(|p| {
-                *p != *instance_path
-                    && store
-                        .paths()
-                        .resolve(*instance_path)
-                        .is_prefix_of(store.paths().resolve(*p))
-            })
-            .collect();
-
-        // Collect variant-introduced children from identity sources.
-        // Descendants under variant-introduced children keep their local
-        // sources because variants are their own arc (V in LIVERPS) and
-        // should survive instancing stripping.
-        let variant_children: HashSet<TokenId> = {
-            let identity_set: HashSet<(LayerId, PathId)> = identity_paths.iter().copied().collect();
-            let mut vc = HashSet::new();
-            if let Some(index) = prims.get(instance_path) {
-                let mut selections: HashMap<TokenId, TokenId> = HashMap::new();
-                for source in &index.sources {
-                    let Some(layer) = store.layer(source.layer_id) else {
-                        continue;
-                    };
-                    let Some(spec) = layer.source_prim_spec(
-                        source.lookup_path,
-                        &source.spec_path,
-                        store.paths(),
-                    ) else {
-                        continue;
-                    };
-                    let context = SiteContext::of_source(index, source);
-                    let authored = site_selections(store, &spec.variant_selections, context);
-                    for (set, variant) in authored.iter() {
-                        selections.entry(*set).or_insert(*variant);
-                    }
-                }
-                for source in &index.sources {
-                    if !identity_set.contains(&(source.layer_id, source.lookup_path)) {
-                        continue;
-                    }
-                    let Some(layer) = store.layer(source.layer_id) else {
-                        continue;
-                    };
-                    let Some(spec) = layer.source_prim_spec(
-                        source.lookup_path,
-                        &source.spec_path,
-                        store.paths(),
-                    ) else {
-                        continue;
-                    };
-                    for branch in spec.selected_variant_branches(&selections) {
-                        vc.extend(branch.spec.authored_children.iter().copied());
-                    }
-                }
-            }
-            vc
-        };
-
-        let instance_resolved = store.paths().resolve(*instance_path).clone();
-        let instance_depth = u16::try_from(instance_resolved.depth()).unwrap_or(u16::MAX);
-
-        // 2b. Strip local sources and opinions on surviving descendants.
-        for &desc_path in &descendants {
-            // Skip stripping for descendants under variant-introduced children.
-            // Variant opinions are their own arc (V in LIVERPS) and survive
-            // instancing, so their descendant local sources should too.
-            let desc_resolved = store.paths().resolve(desc_path);
-            let is_under_variant_child = desc_resolved
-                .strip_prefix(&instance_resolved)
-                .and_then(|rel| rel.first().copied())
-                .is_some_and(|first_name| variant_children.contains(&first_name));
-            if is_under_variant_child {
-                continue;
-            }
-
-            let Some(desc_index) = prims.get_mut(&desc_path) else {
-                continue;
-            };
-
-            // Strip LOCAL sources that are namespace-descendants of identity
-            // paths, and arc sources introduced above the instance, together
-            // with their opinions and property declarations; the property
-            // type then comes from the strongest surviving declaration.
-            // Variant/inherit/reference sources of the instance's own arcs
-            // survive.
-            desc_index.retain_keys(|graph, key| {
-                if key.node != NodeId::ROOT {
-                    return contributes_beneath_instance(graph, key.node, instance_depth);
-                }
-                !is_identity_descendant(store, key.layer_id, key.lookup_path, identity_paths)
+        if let Some(list) = children.get_mut(&instance) {
+            list.retain(|child| {
+                store
+                    .paths()
+                    .resolve(*child)
+                    .leaf()
+                    .is_some_and(|name| surviving_names.contains(&name))
             });
         }
-
-        // 2c. Strip children of the instance that are identity-only.
-        if let Some(child_list) = children.get_mut(instance_path) {
-            child_list.retain(|child| {
-                let child_leaf = store.paths().resolve(*child).leaf();
-                child_leaf.is_some_and(|name| non_identity_children.contains(&name))
-            });
-        }
-
-        // 2d. Also apply child stripping to descendant prims (recursive
-        // instances or descendant prims with identity-introduced children).
-        for &desc_path in &descendants {
-            if let Some(child_list) = children.get_mut(&desc_path) {
-                child_list
-                    .retain(|child| prims.get(child).is_some_and(|idx| !idx.sources.is_empty()));
-            }
-        }
-
-        // 2e. Remove subtrees of stripped children. A descendant is removed
-        // if its first namespace component under the instance is not a
-        // surviving child.
-        let surviving_child_paths: HashSet<PathId> = children
-            .get(instance_path)
+        let surviving_children: HashSet<PathId> = children
+            .get(&instance)
             .map(|list| list.iter().copied().collect())
             .unwrap_or_default();
-
-        for &desc_path in &descendants {
-            let desc_resolved = store.paths().resolve(desc_path);
-            let Some(rel) = desc_resolved.strip_prefix(&instance_resolved) else {
+        for &descendant in &paths {
+            if descendant == instance {
                 continue;
-            };
-            if let Some(first_name) = rel.first().copied() {
-                let child_path_obj = instance_resolved.join(&[first_name]);
-                if let Some(child_id) = store.paths().lookup(&child_path_obj)
-                    && !surviving_child_paths.contains(&child_id)
-                {
-                    prims.remove(&desc_path);
-                    children.remove(&desc_path);
-                }
             }
-        }
-    }
-
-    instance_identity
-        .into_iter()
-        .map(|(instance_path, _)| instance_path)
-        .filter(|instance_path| prims.contains_key(instance_path))
-        .collect()
-}
-
-/// Whether `node` of an instance descendant's graph still contributes
-/// opinions, for an instance at namespace depth `instance_depth`.
-///
-/// Beneath an instance, OpenUSD marks the root node inert, along with every
-/// node reached through an arc authored above the instance: they hold
-/// opinions local to the instance, which are not part of its prototype.
-/// An inert node's own arcs are never evaluated, so an arc authored beneath
-/// the instance survives only when the node it is authored at does. An arc
-/// authored at the instance itself survives: the instance's own arcs bring
-/// in the prototype.
-///
-/// Spec: AOUSD Core §11.3.3 (scene graph instancing). OpenUSD:
-/// `Pcp_ChildNodeIsInstanceable` in `pxr/usd/pcp/instancing.h`, and
-/// `_ConvertNodeForChild` in `pxr/usd/pcp/primIndex.cpp`, which marks the
-/// other nodes inert.
-fn contributes_beneath_instance(graph: &PrimIndexGraph, node: NodeId, instance_depth: u16) -> bool {
-    let mut cursor = node;
-    loop {
-        let Some(current) = graph.node(cursor) else {
-            return false;
-        };
-        let Some(parent) = current.parent() else {
-            // The root node is inert beneath an instance.
-            return false;
-        };
-        match current.namespace_depth().cmp(&instance_depth) {
-            Ordering::Less => return false,
-            Ordering::Equal => return true,
-            Ordering::Greater => cursor = parent,
-        }
-    }
-}
-
-/// Collects child names introduced by non-identity sources for an instance prim.
-///
-/// A child survives instancing if it appears in the `authored_children` of any
-/// source that is NOT an identity source (local or instanceable). This includes
-/// children from reference targets, inherit classes, and variant branches on
-/// non-identity sources.
-fn collect_non_identity_children(
-    store: &dyn LayerStore,
-    instance_path: PathId,
-    identity_paths: &[(LayerId, PathId)],
-    prims: &HashMap<PathId, PrimIndex>,
-    authored_children_opinions: &HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
-) -> HashSet<TokenId> {
-    use hashbrown::HashSet;
-
-    let identity_set: HashSet<(LayerId, PathId)> = identity_paths.iter().copied().collect();
-    let mut surviving = HashSet::new();
-
-    // Check authored_children_opinions: these include both local and variant
-    // authored_children with their OpinionKey provenance.
-    if let Some(opinions) = authored_children_opinions.get(&instance_path) {
-        for (key, children) in opinions {
-            // A non-identity opinion contributes surviving children.
-            // Identity = source whose (layer_id, spec_path) is in identity_paths
-            // (either local or with instanceable=true).
-            let is_identity = identity_set.contains(&(key.layer_id, key.lookup_path));
-            if !is_identity {
-                for child in children {
-                    surviving.insert(*child);
-                }
-            }
-        }
-    }
-
-    // Also check variant-introduced children directly from the PrimSpec
-    // variant branches. These may not all be in authored_children_opinions
-    // because a branch's `authored_children` for the prim itself are not
-    // forwarded there; only those of the prim specs inside branches are.
-    if let Some(index) = prims.get(&instance_path) {
-        // Resolve variant selections from all sources.
-        let mut selections: HashMap<TokenId, TokenId> = HashMap::new();
-        for source in &index.sources {
-            let Some(layer) = store.layer(source.layer_id) else {
-                continue;
-            };
-            let Some(spec) =
-                layer.source_prim_spec(source.lookup_path, &source.spec_path, store.paths())
+            let Some(relative) = store
+                .paths()
+                .resolve(descendant)
+                .strip_prefix(instance_path)
             else {
                 continue;
             };
-            let context = SiteContext::of_source(index, source);
-            for (set, variant) in site_selections(store, &spec.variant_selections, context).iter() {
-                selections.entry(*set).or_insert(*variant);
+            let Some(&first_name) = relative.first() else {
+                continue;
+            };
+            let survives = store
+                .paths()
+                .lookup(&instance_path.join(&[first_name]))
+                .is_some_and(|child| surviving_children.contains(&child));
+            if !survives {
+                prims.remove(&descendant);
+                children.remove(&descendant);
+            } else if let Some(index) = prims.get_mut(&descendant) {
+                // A local descendant's own arcs are inert along with its root
+                // opinions. Arcs nested under a direct source remain active,
+                // including ancestral arcs within a referenced subroot.
+                index.retain_keys(|graph, key| graph.has_direct_dependency(key.node, depth));
             }
         }
-
-        // Collect variant children from non-identity sources.
-        for source in &index.sources {
-            let is_identity = identity_set.contains(&(source.layer_id, source.lookup_path));
-            if is_identity {
-                continue;
-            }
-            let Some(layer) = store.layer(source.layer_id) else {
-                continue;
-            };
-            let Some(spec) =
-                layer.source_prim_spec(source.lookup_path, &source.spec_path, store.paths())
-            else {
-                continue;
-            };
-            for branch in spec.selected_variant_branches(&selections) {
-                surviving.extend(branch.spec.authored_children.iter().copied());
-            }
-        }
-
-        // Also add variant children from identity sources' variant branches,
-        // because variants are their own arc (V in LIVERPS) and should survive
-        // instancing stripping even when authored on identity sources.
-        for source in &index.sources {
-            let is_identity = identity_set.contains(&(source.layer_id, source.lookup_path));
-            if !is_identity {
-                continue;
-            }
-            let Some(layer) = store.layer(source.layer_id) else {
-                continue;
-            };
-            let Some(spec) =
-                layer.source_prim_spec(source.lookup_path, &source.spec_path, store.paths())
-            else {
-                continue;
-            };
-            for branch in spec.selected_variant_branches(&selections) {
-                surviving.extend(branch.spec.authored_children.iter().copied());
-            }
-        }
-
-        // Collect authored_children from non-identity sources directly from
-        // the PrimSpec (supplements authored_children_opinions).
-        for source in &index.sources {
-            let is_identity = identity_set.contains(&(source.layer_id, source.lookup_path));
-            if is_identity {
-                continue;
-            }
-            let Some(layer) = store.layer(source.layer_id) else {
-                continue;
-            };
-            let Some(spec) =
-                layer.source_prim_spec(source.lookup_path, &source.spec_path, store.paths())
-            else {
-                continue;
-            };
-            for child in &spec.authored_children {
-                surviving.insert(*child);
+        for &descendant in &paths {
+            if descendant != instance
+                && instance_path.is_prefix_of(store.paths().resolve(descendant))
+                && let Some(list) = children.get_mut(&descendant)
+            {
+                list.retain(|child| {
+                    prims
+                        .get(child)
+                        .is_some_and(|index| !index.sources.is_empty())
+                });
             }
         }
     }
-
-    surviving
-}
-
-/// Checks if `(layer_id, spec_path)` has a `spec_path` that is a descendant of
-/// any identity path from the same layer.
-fn is_identity_descendant(
-    store: &dyn LayerStore,
-    layer_id: LayerId,
-    spec_path: PathId,
-    identity_paths: &[(LayerId, PathId)],
-) -> bool {
-    let spec_resolved = store.paths().resolve(spec_path);
-    for &(id_layer, id_path) in identity_paths {
-        if layer_id != id_layer {
-            continue;
-        }
-        let id_resolved = store.paths().resolve(id_path);
-        // spec_path must be a STRICT descendant (not equal to) the identity path.
-        if id_resolved.is_prefix_of(spec_resolved) && spec_path != id_path {
-            return true;
-        }
-    }
-    false
+    instances.retain(|instance| prims.contains_key(instance));
+    instances
 }
 
 /// Retains inactive prims for inspection while removing their descendants.

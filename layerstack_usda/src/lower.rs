@@ -1056,6 +1056,10 @@ impl<'a> LowerCtx<'a> {
                 SyntaxKind::Number => {
                     return match parse_number_value(text) {
                         Value::Int(n) => Value::Int(-n),
+                        // The signed minimum has a positive magnitude one past
+                        // i64::MAX, but is still an exact int64 literal. AOUSD
+                        // Core §6.2; OpenUSD `_HelperGetNumericValueFromString`.
+                        Value::UInt(n) if n == i64::MAX as u64 + 1 => Value::Int(i64::MIN),
                         // Below `i64::MIN`: a double, as in OpenUSD.
                         Value::UInt(n) => Value::Number(-(n as f64)),
                         Value::Number(n) => Value::Number(-n),
@@ -2582,6 +2586,25 @@ def Scope \"root\" {
     fn a_minus_without_a_number_is_reported() {
         let cst = parse_cst("#usda 1.0\ndef \"P\" {\n    double x = -nan\n}\n");
         assert_eq!(cst.diagnostics.len(), 1, "{:?}", cst.diagnostics);
+    }
+
+    #[test]
+    fn signed_minimum_integer_remains_exact_before_declared_type_conversion() {
+        let parsed = parse(
+            "#usda 1.0\ndef \"P\" {\n int64 low = -9223372036854775808\n double below = -9223372036854775809\n}\n",
+        );
+        assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
+        let PrimChild::Attribute(low) = &parsed.layer.prims[0].children[0] else {
+            panic!("attribute")
+        };
+        assert!(matches!(low.default, Some(Value::Int(i64::MIN))));
+        let PrimChild::Attribute(below) = &parsed.layer.prims[0].children[1] else {
+            panic!("attribute")
+        };
+        assert!(
+            matches!(below.default, Some(Value::Number(_))),
+            "an out-of-range integer must not become a valid signed minimum"
+        );
     }
 
     #[test]

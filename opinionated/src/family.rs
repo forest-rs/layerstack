@@ -469,7 +469,7 @@ where
     ) -> FamilyMember<Self::Value, Self::Edit<'op>> {
         match op {
             OpinionOp::List(edit) => match &edit.explicit {
-                Some(items) => FamilyMember::Dense(items.clone()),
+                Some(_) => FamilyMember::Dense(edit.apply_to(&[])),
                 None => FamilyMember::Sparse(edit),
             },
             OpinionOp::Block => FamilyMember::Block,

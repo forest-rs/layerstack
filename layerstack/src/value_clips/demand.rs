@@ -138,6 +138,58 @@ impl DemandSet {
     }
 }
 impl Catalog {
+    /// Clip eligibility from prepared metadata, without projecting sample values.
+    pub(crate) fn authoring_sources(
+        &self,
+        prim: PathId,
+        field: TokenId,
+    ) -> Vec<(OpinionKey, Arc<str>, crate::SourceComposability)> {
+        use crate::SourceComposability;
+        let entries = self.properties.get(&(prim, field));
+        let mut sources: Vec<_> = entries
+            .into_iter()
+            .flatten()
+            .map(|entry| {
+                // Non-array composable kinds and incomplete residency need not
+                // have the same shape at every queried bracket. Do not infer a
+                // dense cutoff from the array-only sparse-samples optimization.
+                (
+                    entry.key.clone(),
+                    entry.set_name.clone(),
+                    SourceComposability::Unknown,
+                )
+            })
+            .collect();
+        for set in self.demands.get(&prim).into_iter().flatten() {
+            if sources
+                .iter()
+                .any(|(key, name, _)| key == &set.key && name == &set.name)
+            {
+                continue;
+            }
+            let unknown = |request: &ClipAssetRequest| {
+                matches!(
+                    request.status,
+                    ClipAssetStatus::Unavailable(
+                        ClipAssetUnavailable::Unresolved | ClipAssetUnavailable::NotResident(_)
+                    )
+                )
+            };
+            let unresolved = match &set.manifest {
+                Some(manifest) => unknown(manifest),
+                None => set.template_unresolved || set.requests.iter().any(unknown),
+            };
+            if unresolved {
+                sources.push((
+                    set.key.clone(),
+                    set.name.clone(),
+                    SourceComposability::Unknown,
+                ));
+            }
+        }
+        sources
+    }
+
     pub(crate) fn query_plan(
         &self,
         property: PropertyPath,

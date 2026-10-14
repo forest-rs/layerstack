@@ -259,6 +259,14 @@ impl PrimNode {
             .map(|(_, offset)| self.layer_offset().compose(*offset))
     }
 
+    /// Strength of a resident, unmuted layer, even when it has no spec here.
+    pub(crate) fn layer_strength(&self, layer: LayerId) -> Option<u16> {
+        self.stack_offsets
+            .iter()
+            .position(|(id, _)| *id == layer)
+            .map(|position| u16::try_from(position).unwrap_or(u16::MAX))
+    }
+
     /// The offset that maps this node's layer-stack time domain to stage
     /// times: the offsets of every arc from the root down to
     /// this node, composed, each after the offset of the sublayer that
@@ -626,6 +634,24 @@ impl PrimIndexGraph {
             && entry
                 .origin
                 .is_some_and(|origin| self.same_site(node, origin))
+    }
+
+    /// Placeholders retain ordering/origin evidence but never author opinions.
+    /// Their propagated specializes nodes carry the actual sites, including
+    /// sites whose layers have no specs yet (AOUSD Core §10.4.1).
+    pub(crate) fn is_inert_specializes_site(&self, mut node: NodeId) -> bool {
+        loop {
+            if self
+                .nodes()
+                .any(|(id, entry)| entry.origin == Some(node) && self.is_propagated_specializes(id))
+            {
+                return true;
+            }
+            let Some(parent) = self.node(node).and_then(PrimNode::parent) else {
+                return false;
+            };
+            node = parent;
+        }
     }
 
     /// The node at the start of `node`'s chain of origins, the authored arc

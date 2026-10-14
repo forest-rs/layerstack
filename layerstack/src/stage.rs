@@ -5,7 +5,12 @@
 //!
 //! Spec: AOUSD Core §11–§12 (stage population and value resolution).
 
+mod authoring;
 mod explain;
+pub use authoring::{
+    AuthoringInspection, AuthoringInspectionError, AuthoringSource, AuthoringSourceKind,
+    SourceComposability,
+};
 mod objects;
 mod relationships;
 pub use objects::{

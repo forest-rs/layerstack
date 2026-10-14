@@ -568,6 +568,48 @@ mod tests {
     }
 
     #[test]
+    fn point_based_provider_is_inherited_but_nearer_shape_providers_win() {
+        let mut f = Fixture::new(true);
+        let point_based = f.store.tokens.lookup("PointBased").unwrap();
+        let mut providers = ExtentProviders::default();
+        providers
+            .register(
+                &f.schemas,
+                &f.store.tokens,
+                point_based,
+                Arc::new(InputProvider {
+                    source: f.source,
+                    calls: f.calls.clone(),
+                    external: f.external.clone(),
+                    varying: false,
+                }),
+            )
+            .unwrap();
+        let mut cache =
+            BoundsCache::with_extent_providers(Time::Default, BoundsOptions::default(), providers);
+        for schema in ["Mesh", "TetMesh", "Points"] {
+            let path = f.store.path(&alloc::format!("/{schema}"));
+            let mut edit = Transaction::new();
+            edit.create_prim(
+                EditTarget::for_layer(LayerId(1)).prim(path),
+                layerstack::Specifier::Def,
+                f.store.tokens.lookup(schema),
+            );
+            f.edit(&mut cache, &edit);
+            if schema == "Points" {
+                assert_eq!(
+                    f.query(&mut cache, path),
+                    Err(BoundsError::ExtentUnavailable(path))
+                );
+            } else {
+                assert_eq!(f.query(&mut cache, path).unwrap().max, [2.; 3]);
+                assert_eq!(cache.extent_dependencies(path).unwrap().schema, point_based);
+            }
+        }
+        assert_eq!(f.calls.load(Ordering::Relaxed), 2);
+    }
+
+    #[test]
     fn provider_inputs_invalidate_instancers_with_separate_prototype_cache() {
         for ignore_visibility in [false, true] {
             let mut f = Fixture::new(true);
@@ -698,60 +740,62 @@ mod tests {
 
     #[test]
     fn retained_authored_extent_and_intrinsic_points_fail_without_partial_bounds() {
-        let mut f = Fixture::new(true);
-        let mesh_type = f.store.tokens.lookup("Mesh").unwrap();
-        let mesh = f.store.path("/Mesh");
-        let extent = f.store.property_path("/Mesh.extent");
-        let points = f.store.property_path("/Mesh.points");
-        let target = EditTarget::for_layer(LayerId(1));
-        let error = ArrayReadError::InvalidData("truncated float3 storage".into());
-        let corrupt = Value::TypedArray(layerstack::TypedArray::Deferred(Arc::new(CorruptArray(
-            error.clone(),
-        ))));
-        let mut cache = f.cache(false);
-        let mut create = Transaction::new();
-        create.create_prim(
-            target.prim(mesh),
-            layerstack::Specifier::Def,
-            Some(mesh_type),
-        );
-        create.create_property(
-            target.property(points),
-            PropertySpec::attribute().with_default(corrupt.clone()),
-        );
-        f.edit(&mut cache, &create);
-        assert_eq!(
-            f.query(&mut cache, mesh),
-            Err(BoundsError::ExtentProvider {
-                prim: mesh,
-                source: ExtentError::Decode {
-                    property: points,
-                    error: error.clone()
-                }
-            })
-        );
-        let mut author = Transaction::new();
-        author.create_property(
-            target.property(extent),
-            PropertySpec::attribute().with_default(corrupt),
-        );
-        f.edit(&mut cache, &author);
-        assert_eq!(
-            f.query(&mut cache, mesh),
-            Err(BoundsError::ExtentProvider {
-                prim: mesh,
-                source: ExtentError::Decode {
-                    property: extent,
-                    error
-                }
-            })
-        );
-        let mut repair = Transaction::new();
-        repair.set_default(
-            target.property(extent),
-            Value::from(vec![[-2_f32; 3], [2.; 3]]),
-        );
-        f.edit(&mut cache, &repair);
-        assert_eq!(f.query(&mut cache, mesh).unwrap().max, [2.; 3]);
+        for schema in ["Mesh", "TetMesh"] {
+            let mut f = Fixture::new(true);
+            let mesh_type = f.store.tokens.lookup(schema).unwrap();
+            let mesh = f.store.path("/Mesh");
+            let extent = f.store.property_path("/Mesh.extent");
+            let points = f.store.property_path("/Mesh.points");
+            let target = EditTarget::for_layer(LayerId(1));
+            let error = ArrayReadError::InvalidData("truncated float3 storage".into());
+            let corrupt = Value::TypedArray(layerstack::TypedArray::Deferred(Arc::new(
+                CorruptArray(error.clone()),
+            )));
+            let mut cache = f.cache(false);
+            let mut create = Transaction::new();
+            create.create_prim(
+                target.prim(mesh),
+                layerstack::Specifier::Def,
+                Some(mesh_type),
+            );
+            create.create_property(
+                target.property(points),
+                PropertySpec::attribute().with_default(corrupt.clone()),
+            );
+            f.edit(&mut cache, &create);
+            assert_eq!(
+                f.query(&mut cache, mesh),
+                Err(BoundsError::ExtentProvider {
+                    prim: mesh,
+                    source: ExtentError::Decode {
+                        property: points,
+                        error: error.clone()
+                    }
+                })
+            );
+            let mut author = Transaction::new();
+            author.create_property(
+                target.property(extent),
+                PropertySpec::attribute().with_default(corrupt),
+            );
+            f.edit(&mut cache, &author);
+            assert_eq!(
+                f.query(&mut cache, mesh),
+                Err(BoundsError::ExtentProvider {
+                    prim: mesh,
+                    source: ExtentError::Decode {
+                        property: extent,
+                        error
+                    }
+                })
+            );
+            let mut repair = Transaction::new();
+            repair.set_default(
+                target.property(extent),
+                Value::from(vec![[-2_f32; 3], [2.; 3]]),
+            );
+            f.edit(&mut cache, &repair);
+            assert_eq!(f.query(&mut cache, mesh).unwrap().max, [2.; 3]);
+        }
     }
 }

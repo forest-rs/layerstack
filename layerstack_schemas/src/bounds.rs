@@ -226,10 +226,12 @@ impl<T> Entry<T> {
 /// dirty by indexed dependencies. After an edit, wide static parents retain
 /// range reductions so later leaf edits update only their contribution paths.
 /// It does not observe edits automatically. Clear between unrelated scenes.
-/// Intrinsic extents are computed for meshes, points, curves, cubes, spheres,
-/// cylinders, cones and capsules when a valid authored extent is unavailable. Other extent
-/// providers can be supplied with [`Self::with_extent_providers`]; missing geometry is an
-/// error, never a silently incomplete bound. Computed point-instancer extents
+/// Intrinsic extents are computed for point-based geometry (including meshes
+/// and tetrahedral meshes), points, curves, planes, cubes, spheres, cylinders,
+/// cones and capsules, including `Cylinder_1` and `Capsule_1`, when a valid
+/// authored extent is unavailable. Plane dimensions resolve at the requested
+/// time. Other providers can be supplied with [`Self::with_extent_providers`];
+/// missing geometry is an error, never a silently incomplete bound. Computed point-instancer extents
 /// retain prototype dependencies, including prototypes outside their namespace.
 /// Prototype extent evaluation always uses ordinary visibility and no model
 /// hints, independently of the querying cache. Nested graphs are limited to 64
@@ -1233,6 +1235,10 @@ pub(crate) fn bounds_property(name: &str) -> bool {
                 | "widths"
                 | "size"
                 | "radius"
+                | "radiusTop"
+                | "radiusBottom"
+                | "width"
+                | "length"
                 | "inputs:radius"
                 | "inputs:length"
                 | "inputs:width"

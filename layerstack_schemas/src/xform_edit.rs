@@ -13,7 +13,9 @@ use alloc::{
 };
 use core::fmt;
 
-use layerstack::{PathId, PropertyType, Value, half};
+use layerstack::{
+    AuthoringInspectionError, AuthoringSource, PathId, PropertyType, Time, Value, half,
+};
 
 use crate::edit::SchemaEdit;
 use crate::usd_geom::{Xformable, XformableEdit};
@@ -187,6 +189,61 @@ impl fmt::Display for XformOpError {
     }
 }
 
+/// A compound matrix replacement could not be authored as a contributing edit.
+/// Rejection leaves the collected transaction and its schema overlay unchanged.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum MatrixXformError {
+    /// The prospective destination could not be inspected.
+    Inspection(AuthoringInspectionError),
+    /// The mapped edit target is not in the composed prim's active sources.
+    InactiveTarget,
+    /// A stronger value-bearing source can mask or alter the replacement.
+    StrongerSource {
+        /// `xformOpOrder` or `xformOp:transform`.
+        attribute: &'static str,
+        /// Stronger authoring site and slot, retaining diagnostic provenance.
+        source: AuthoringSource,
+    },
+    /// An existing declaration cannot represent the replacement.
+    IncompatibleType {
+        /// The attribute with the incompatible declaration.
+        attribute: &'static str,
+        /// Its existing USD type name.
+        type_name: String,
+    },
+    /// The supplied matrix contains a nonfinite element.
+    NonfiniteMatrix,
+}
+
+impl fmt::Display for MatrixXformError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Inspection(error) => error.fmt(f),
+            Self::InactiveTarget => f.write_str("matrix edit target does not contribute"),
+            Self::StrongerSource { attribute, source } => write!(
+                f,
+                "{attribute} has a stronger source in {:?} at {:?}",
+                source.key.layer_id, source.key.spec_path
+            ),
+            Self::IncompatibleType {
+                attribute,
+                type_name,
+            } => write!(f, "{attribute} has incompatible type {type_name}"),
+            Self::NonfiniteMatrix => f.write_str("matrix transform requires finite elements"),
+        }
+    }
+}
+
+impl core::error::Error for MatrixXformError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::Inspection(error) => Some(error),
+            _ => None,
+        }
+    }
+}
+
 /// One transform op of a prim, to set the value of. Had from
 /// [`XformableEdit::add_op`] (or its conveniences).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -337,6 +394,115 @@ fn encode(
 }
 
 impl XformableEdit {
+    /// Replaces the local transform stack with one double-precision matrix op.
+    ///
+    /// Preflights both `xformOpOrder` and `xformOp:transform` at this edit target,
+    /// then authors the order, declaration and matrix in one rollback group.
+    /// Existing op attributes remain available but no longer appear in the order.
+    /// Only the matrix default changes; existing numeric samples are retained.
+    /// Requires a composed prim; newly collected definitions must be applied first.
+    ///
+    /// This deliberately rejects any stronger value-bearing source, including
+    /// sparse sources that could alter the proposed result. Raw op/order setters
+    /// remain available for deliberate masked authoring. OpenUSD's
+    /// `MakeMatrixXform` clears the order before discovering a stronger order;
+    /// this operation rejects before collecting any part of the replacement.
+    ///
+    /// AOUSD Core §12.3 (value strength), §13.3.1 (transformable prims).
+    ///
+    /// # Errors
+    /// Returns [`MatrixXformError`] for an inactive or stronger destination,
+    /// incompatible existing declarations, or nonfinite matrix elements.
+    pub fn set_matrix_transform(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        matrix: [[f64; 4]; 4],
+    ) -> Result<XformOpEdit, MatrixXformError> {
+        self.set_matrix_transform_impl(edit, None, matrix)
+    }
+
+    /// As [`Self::set_matrix_transform`], authoring the matrix at stage `time`.
+    /// The uniform order is always authored and inspected at default time.
+    /// Replaces one sample and retains the default and other authored samples.
+    ///
+    /// # Errors
+    /// As [`Self::set_matrix_transform`]; nonfinite times are rejected too.
+    pub fn set_matrix_transform_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        matrix: [[f64; 4]; 4],
+    ) -> Result<XformOpEdit, MatrixXformError> {
+        self.set_matrix_transform_impl(edit, Some(time), matrix)
+    }
+
+    fn set_matrix_transform_impl(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: Option<f64>,
+        matrix: [[f64; 4]; 4],
+    ) -> Result<XformOpEdit, MatrixXformError> {
+        if matrix.iter().flatten().any(|element| !element.is_finite()) {
+            return Err(MatrixXformError::NonfiniteMatrix);
+        }
+        const TRANSFORM: &str = "xformOp:transform";
+        edit.group(|edit| {
+            for (attribute, query, expected, array) in [
+                (Xformable::XFORM_OP_ORDER, Time::Default, "token", true),
+                (
+                    TRANSFORM,
+                    time.map_or(Time::Default, Time::at),
+                    "matrix4d",
+                    false,
+                ),
+            ] {
+                let inspection = edit
+                    .inspect_authoring(self.path(), attribute, query)
+                    .map_err(MatrixXformError::Inspection)?;
+                if inspection.target.is_none() {
+                    return Err(MatrixXformError::InactiveTarget);
+                }
+                if let Some(source) = inspection.stronger_sources.into_iter().next() {
+                    return Err(MatrixXformError::StrongerSource { attribute, source });
+                }
+                match edit.attribute_type(self.path(), attribute) {
+                    Some(ty) if ty.type_name.as_ref() != expected || ty.is_array != array => {
+                        return Err(MatrixXformError::IncompatibleType {
+                            attribute,
+                            type_name: ty.type_name.to_string(),
+                        });
+                    }
+                    None if edit.property_kind(self.path(), attribute).is_some() => {
+                        return Err(MatrixXformError::IncompatibleType {
+                            attribute,
+                            type_name: "untyped attribute or relationship".into(),
+                        });
+                    }
+                    _ => {}
+                }
+            }
+            if edit.attribute_type(self.path(), TRANSFORM).is_none() {
+                edit.create_attribute(
+                    self.path(),
+                    TRANSFORM,
+                    value_type(XformOpType::Transform, XformOpPrecision::Double),
+                );
+            }
+            self.set_order(edit, &[TRANSFORM.into()]);
+            let value = Value::Matrix4d(alloc::boxed::Box::new(core::array::from_fn(|i| {
+                matrix[i / 4][i % 4]
+            })));
+            edit.set_value(self.path(), TRANSFORM, time, value);
+            Ok(XformOpEdit {
+                path: self.path(),
+                attribute: TRANSFORM.into(),
+                op_type: XformOpType::Transform,
+                precision: XformOpPrecision::Double,
+                inverse: false,
+            })
+        })
+    }
+
     /// The prim's `xformOpOrder` as the edit leaves it.
     pub(crate) fn order(&self, edit: &mut SchemaEdit<'_>) -> Vec<String> {
         let tokens = |edit: &mut SchemaEdit<'_>, value: Value| match value {

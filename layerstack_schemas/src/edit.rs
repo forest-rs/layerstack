@@ -184,6 +184,22 @@ impl<'s> SchemaEdit<'s> {
         self.store.tokens_mut()
     }
 
+    #[cfg(feature = "usd-geom")]
+    pub(crate) fn inspect_authoring(
+        &mut self,
+        path: PathId,
+        name: &str,
+        time: layerstack::Time,
+    ) -> Result<layerstack::AuthoringInspection, layerstack::AuthoringInspectionError> {
+        let name = self.tokens().intern(name);
+        self.stage.inspect_property_authoring(
+            &mut *self.store,
+            PropertyPath::new(path, name),
+            &self.target,
+            time,
+        )
+    }
+
     fn property(&mut self, path: PathId, name: &str) -> layerstack::edit::Address {
         let name = self.store.tokens_mut().intern(name);
         self.target.property(PropertyPath::new(path, name))

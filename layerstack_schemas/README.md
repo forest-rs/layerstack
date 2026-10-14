@@ -473,6 +473,14 @@ The `usd-geom` feature provides caller-owned transform and bounds caches:
   complete compatible partial stacks, preserve resets and existing precision,
   and reject incompatible stacks before authoring anything.
 
+`XformableEdit::set_matrix_transform` and `set_matrix_transform_at` replace the
+local op order with one double-precision matrix op. They preflight the current
+order and matrix source strength, then collect the replacement in one atomic
+`SchemaEdit` group. The prim must already be composed; apply newly collected
+definitions first. The default setter retains existing numeric matrix samples,
+and `_at` authors one sample. Raw op and order setters remain available for
+deliberately authoring masked opinions.
+
 Pass every successful `LiveStage` change report to each cache's `apply_changes`,
 or explicitly invalidate after manual edits. Caches do not observe edits
 implicitly; clear them before using an unrelated scene. Bounds source edits

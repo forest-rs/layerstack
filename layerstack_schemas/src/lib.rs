@@ -502,7 +502,7 @@ pub use xform::{
     XformCache, XformCacheStats, XformOp, XformOpType, XformOps, XformProblem, XformProblemKind,
 };
 #[cfg(feature = "usd-geom")]
-pub use xform_edit::{XformOpEdit, XformOpError, XformOpPrecision, XformOpValue};
+pub use xform_edit::{MatrixXformError, XformOpEdit, XformOpError, XformOpPrecision, XformOpValue};
 
 use alloc::vec::Vec;
 

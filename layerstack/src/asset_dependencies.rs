@@ -4,7 +4,8 @@
 //! Authored asset discovery and copy-based path rewriting.
 //!
 //! Discovery visits every variant, including unselected branches, and asset
-//! values in metadata, defaults, samples, dictionaries and sparse edit literals.
+//! values in metadata, defaults, samples, dictionaries, reference custom data
+//! and sparse edit literals.
 //! It does not compose, load files or evaluate resolver-specific patterns.
 //! Hosts resolve expressions, UDIMs and clip templates through the explicit
 //! callback in [`collect_dependencies`]. Source layers remain untouched.
@@ -50,7 +51,8 @@ pub struct AssetDependency {
     pub layer: LayerId,
     /// Variant-qualified prim/property spec, or `None` for layer metadata.
     pub spec: Option<SpecPath>,
-    /// Metadata/property name, where applicable.
+    /// Metadata/property name, where applicable. Reference custom data retains
+    /// its authoring spec but has no token field identity.
     pub field: Option<TokenId>,
     /// Authored identifier, before expression/pattern evaluation.
     pub identifier: Arc<str>,
@@ -322,6 +324,11 @@ fn arcs(
             kind,
             Some(arc.layer),
         );
+        // AOUSD Core §9.4: relative asset values retain their authoring layer,
+        // including values nested in reference customData (§16.2.17.5).
+        for (_, value) in &arc.custom_data {
+            values(value, layer, Some(spec), None, out, false);
+        }
     }
 }
 fn fields(
@@ -672,6 +679,9 @@ fn rewrite_arcs(
             && &**new != old
         {
             arc.asset = Some(String::from(&**new));
+        }
+        for (_, value) in &mut arc.custom_data {
+            rewrite_value(value, layer, Some(spec), None, map, false);
         }
     }
 }

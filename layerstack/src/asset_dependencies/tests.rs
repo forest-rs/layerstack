@@ -5,6 +5,133 @@ use super::*;
 use crate::{ArrayIndex, InMemoryStore, PropertySpec, PropertyType, VariantSpec};
 use alloc::vec;
 
+fn custom_data_arcs(layer: LayerId, path: PathId, prefix: &str) -> ListOp<Reference> {
+    let reference = |bucket| {
+        Reference::new(layer, path).with_custom_data(vec![
+            (
+                "nested".into(),
+                Value::Dictionary(vec![(
+                    "images".into(),
+                    Value::Array(vec![
+                        Value::Asset(alloc::format!("{prefix}/{bucket}.png").into()),
+                        Value::Asset(alloc::format!("{prefix}/shared.png").into()),
+                        Value::string("literal.png"),
+                    ]),
+                )]),
+            ),
+            ("templateAssetPath".into(), Value::string("literal.#.usd")),
+        ])
+    };
+    ListOp {
+        explicit: Some(vec![reference("explicit")]),
+        prepend: vec![reference("prepend")],
+        append: vec![reference("append")],
+        delete: vec![reference("delete")],
+        add: vec![reference("add")],
+        reorder: vec![reference("reorder")],
+    }
+}
+
+#[test]
+fn reference_custom_data_assets_cover_inactive_buckets_and_unselected_variants() {
+    let mut store = InMemoryStore::default();
+    let path = store.path("/Model");
+    let target = store.path("/Source");
+    let mode = store.tokens.intern("mode");
+    let hidden = store.tokens.intern("hidden");
+    let mut prim = PrimSpec::def();
+    prim.references = custom_data_arcs(LayerId(1), target, "references");
+    prim.payloads = custom_data_arcs(LayerId(1), target, "payloads");
+    prim.variant_sets.insert(
+        mode,
+        VariantSetSpec {
+            variants: crate::HashMap::from([(
+                hidden,
+                VariantSpec {
+                    references: custom_data_arcs(LayerId(1), target, "variant"),
+                    ..VariantSpec::default()
+                },
+            )]),
+        },
+    );
+    let mut layer = Layer::new(LayerId(1));
+    layer.insert_prim(path, prim);
+    layer.insert_prim(target, PrimSpec::def());
+    let uses = extract_layer_dependencies(&layer, &store.paths, &store.tokens);
+    assert_eq!(
+        uses.len(),
+        21,
+        "six bucket assets and one shared asset per context"
+    );
+    for prefix in ["references", "payloads", "variant"] {
+        for bucket in [
+            "explicit", "prepend", "append", "delete", "add", "reorder", "shared",
+        ] {
+            let identifier = alloc::format!("{prefix}/{bucket}.png");
+            let use_ = uses
+                .iter()
+                .find(|use_| *use_.identifier == identifier)
+                .unwrap();
+            assert_eq!(use_.kind, AssetDependencyKind::Value);
+            assert_eq!(use_.layer_hint, None);
+            assert_eq!(use_.field, None);
+            assert_eq!(
+                use_.spec.as_ref().unwrap().display(&store.tokens),
+                if prefix == "variant" {
+                    "/Model{mode=hidden}"
+                } else {
+                    "/Model"
+                }
+            );
+        }
+    }
+    let before = layer.clone();
+    let mut visited = Vec::new();
+    let rewritten = rewrite_layer_assets(&layer, &store.paths, &store.tokens, |use_| {
+        visited.push(use_.clone());
+        Ok::<_, ()>(alloc::format!("copy/{}", use_.identifier).into())
+    })
+    .unwrap();
+    assert_eq!(visited, uses);
+    assert_eq!(layer, before);
+    assert_eq!(rewritten.generation(), layer.generation() + 1);
+    let rewritten_uses = extract_layer_dependencies(&rewritten, &store.paths, &store.tokens);
+    assert_eq!(rewritten_uses.len(), uses.len());
+    assert!(
+        rewritten_uses
+            .iter()
+            .all(|use_| use_.identifier.starts_with("copy/"))
+    );
+
+    let mut calls = 0;
+    assert!(
+        rewrite_layer_assets(&layer, &store.paths, &store.tokens, |use_| {
+            calls += 1;
+            if calls == 2 {
+                Err("rejected")
+            } else {
+                Ok(use_.identifier.clone())
+            }
+        })
+        .is_err()
+    );
+    assert_eq!(calls, 2);
+    assert_eq!(layer, before);
+    let same = rewrite_layer_assets(&layer, &store.paths, &store.tokens, |use_| {
+        Ok::<_, ()>(use_.identifier.clone())
+    })
+    .unwrap();
+    assert_eq!(same, layer);
+    assert_eq!(same.generation(), layer.generation());
+
+    store.insert_layer(layer);
+    let report = collect_dependencies(&store, LayerId(1), |use_| {
+        vec![DependencyTarget::Unresolved(use_.identifier.clone())]
+    });
+    assert_eq!(report.dependencies.len(), 21);
+    assert!(!report.is_complete());
+}
+
 #[test]
 fn recursive_inventory_visits_unselected_variants_and_reports_partial_resolution() {
     let mut store = InMemoryStore::default();

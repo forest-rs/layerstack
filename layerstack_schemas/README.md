@@ -481,6 +481,17 @@ definitions first. The default setter retains existing numeric matrix samples,
 and `_at` authors one sample. Raw op and order setters remain available for
 deliberately authoring masked opinions.
 
+Sample enumeration accepts Rust interval bounds through `*_in_range` on
+transforms, primvars and skeleton animation, and `sample_times_in_range` on
+generic attributes. Use `1.0..4.0` for an excluded upper endpoint, `..=4.0` for
+an unbounded lower endpoint, or `(Bound::Excluded(1.0), Bound::Included(4.0))`
+to exclude the lower endpoint. `LabelInterval` also implements `RangeBounds<f64>`.
+These calls filter the complete effective stage-time grid, including layer
+offsets and contributing value/index sources; they add no interpolation brackets
+or evaluation times and promise no bounded enumeration work. Existing
+`*_in_interval(start, end)` helpers remain inclusive. NaN bounds and reversed
+intervals select no samples.
+
 Pass every successful `LiveStage` change report to each cache's `apply_changes`,
 or explicitly invalidate after manual edits. Caches do not observe edits
 implicitly; clear them before using an unrelated scene. Bounds source edits

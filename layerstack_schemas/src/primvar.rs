@@ -365,10 +365,16 @@ impl<'a> Primvar<'a> {
     /// return an empty set; infinite bounds select the corresponding full range.
     #[must_use]
     pub fn sample_times_in_interval(&self, start: f64, end: f64) -> Vec<f64> {
-        self.sample_times()
-            .into_iter()
-            .filter(|t| start <= *t && *t <= end)
-            .collect()
+        self.sample_times_in_range(start..=end)
+    }
+    /// Value and index sample times within open, closed or unbounded stage-time bounds.
+    /// Filters [`Self::sample_times`] without adding evaluation times or brackets.
+    /// NaN bounds and reversed intervals select no samples.
+    #[must_use]
+    pub fn sample_times_in_range(&self, interval: impl core::ops::RangeBounds<f64>) -> Vec<f64> {
+        let mut times = self.sample_times();
+        times.retain(|time| interval.contains(time));
+        times
     }
     /// Whether effective values or indexed indices might vary at numeric times.
     /// Multiple samples or a spline count even when their values agree.

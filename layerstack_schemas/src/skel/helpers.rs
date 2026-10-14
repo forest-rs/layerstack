@@ -44,11 +44,8 @@ fn samples(prim: &PrimView<'_>, names: &[&str]) -> Vec<f64> {
 fn varying(prim: &PrimView<'_>, names: &[&str]) -> bool {
     sample_info(prim, names).1
 }
-fn interval(mut samples: Vec<f64>, start: f64, end: f64) -> Vec<f64> {
-    if start.is_nan() || end.is_nan() || start > end {
-        return Vec::new();
-    }
-    samples.retain(|t| *t >= start && *t <= end);
+fn interval(mut samples: Vec<f64>, bounds: impl core::ops::RangeBounds<f64>) -> Vec<f64> {
+    samples.retain(|time| bounds.contains(time));
     samples
 }
 impl SkelAnimation<'_> {
@@ -71,7 +68,17 @@ impl SkelAnimation<'_> {
     /// NaN endpoints return no samples.
     #[must_use]
     pub fn joint_transform_time_samples_in_interval(&self, start: f64, end: f64) -> Vec<f64> {
-        interval(self.joint_transform_time_samples(), start, end)
+        self.joint_transform_time_samples_in_range(start..=end)
+    }
+    /// Joint transform sample times within open, closed or unbounded stage-time bounds.
+    /// Filters [`Self::joint_transform_time_samples`] without adding evaluation times.
+    /// NaN bounds and reversed intervals select no samples.
+    #[must_use]
+    pub fn joint_transform_time_samples_in_range(
+        &self,
+        bounds: impl core::ops::RangeBounds<f64>,
+    ) -> Vec<f64> {
+        interval(self.joint_transform_time_samples(), bounds)
     }
     /// Whether effective TRS sources have multiple samples or a spline.
     /// One sample is constant across numeric times, but may differ at default
@@ -88,7 +95,17 @@ impl SkelAnimation<'_> {
     /// Blend-shape weight samples within an inclusive interval.
     #[must_use]
     pub fn blend_shape_weight_time_samples_in_interval(&self, start: f64, end: f64) -> Vec<f64> {
-        interval(self.blend_shape_weight_time_samples(), start, end)
+        self.blend_shape_weight_time_samples_in_range(start..=end)
+    }
+    /// Blend-shape weight samples within open, closed or unbounded stage-time bounds.
+    /// Filters [`Self::blend_shape_weight_time_samples`] without adding evaluation times.
+    /// NaN bounds and reversed intervals select no samples.
+    #[must_use]
+    pub fn blend_shape_weight_time_samples_in_range(
+        &self,
+        bounds: impl core::ops::RangeBounds<f64>,
+    ) -> Vec<f64> {
+        interval(self.blend_shape_weight_time_samples(), bounds)
     }
     /// Whether the effective weight source has multiple samples or a spline.
     /// A single numeric sample may still differ from the default-time value.

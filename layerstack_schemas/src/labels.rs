@@ -51,6 +51,27 @@ impl LabelInterval {
     }
 }
 
+/// Allows a validated label interval to select sample times in other domains.
+/// Label queries additionally evaluate the held value at the lower boundary;
+/// sample-grid queries select only effective sample times inside the bounds.
+impl core::ops::RangeBounds<f64> for LabelInterval {
+    fn start_bound(&self) -> core::ops::Bound<&f64> {
+        if self.include_start {
+            core::ops::Bound::Included(&self.start)
+        } else {
+            core::ops::Bound::Excluded(&self.start)
+        }
+    }
+
+    fn end_bound(&self) -> core::ops::Bound<&f64> {
+        if self.include_end {
+            core::ops::Bound::Included(&self.end)
+        } else {
+            core::ops::Bound::Excluded(&self.end)
+        }
+    }
+}
+
 /// Invalid semantic label query configuration.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LabelQueryError {

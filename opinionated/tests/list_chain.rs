@@ -3,10 +3,92 @@
 
 //! List-chain semantics vectors.
 //!
-//! These cases mirror the AOUSD Core §12.4 `ListOps` supplemental reference
+//! These cases mirror the AOUSD Core §6.6.3 `ListOps` supplemental reference
 //! vectors that `layerstack` relies on; `layerstack` re-exports this kernel.
 
 use opinionated::{ListOp, resolve_list_chain};
+
+#[test]
+fn explicit_lists_keep_first_occurrences_and_ignore_other_edits() {
+    // AOUSD Core §6.6.3.2 requires unique inputs. For duplicate inputs,
+    // OpenUSD SdfListOp::ApplyOperations / _AddKeys keeps first occurrences.
+    let op = ListOp::explicit(vec![1, 2, 1, 3, 2])
+        .with_deleted(vec![1])
+        .with_added(vec![4])
+        .with_prepended(vec![5])
+        .with_appended(vec![6])
+        .with_reordered(vec![3, 1]);
+    assert_eq!(op.apply_to(&[99]), [1, 2, 3]);
+    let mut owned = Vec::with_capacity(16);
+    owned.push(99);
+    let allocation = owned.as_ptr();
+    op.apply_in_place(&mut owned);
+    assert_eq!(owned, [1, 2, 3]);
+    assert_eq!(owned.as_ptr(), allocation);
+    assert_eq!(op.explicit.as_deref(), Some(&[1, 2, 1, 3, 2][..]));
+}
+
+#[test]
+fn explicit_uniqueness_agrees_across_resolvers_and_reports() {
+    use opinionated::{
+        ChainOpinion, ListFamily, OpinionOp, ResolvedValue, SparseComposer, resolve_family_chain,
+        resolve_family_chain_report, resolve_list_chain_report, resolve_ordered_chain,
+        resolve_ordered_chain_report,
+    };
+
+    let edits = [
+        ListOp::appended(vec![1]),
+        ListOp::explicit(vec![1, 2, 1, 3, 2]),
+        ListOp::prepended(vec![99]),
+    ];
+    let expected = vec![2, 3, 1]; // Stronger append still moves the existing 1.
+    assert_eq!(resolve_list_chain(&[98], &edits), expected);
+    assert_eq!(
+        resolve_list_chain_report(&[98], edits.iter().enumerate().map(|(i, op)| (op, i))).value,
+        expected
+    );
+
+    let opinions: Vec<OpinionOp<(), u32, ()>> = edits.into_iter().map(OpinionOp::List).collect();
+    let provenance = [0, 1, 2];
+    let family_chain = || opinions.iter().zip(&provenance);
+    let family = resolve_family_chain(&ListFamily, family_chain());
+    assert_eq!(
+        resolve_family_chain_report(&ListFamily, family_chain()).resolution,
+        family
+    );
+    assert_eq!(family.resolved(), Some((expected.clone(), 0)));
+
+    let chain = || family_chain().map(|(op, provenance)| ChainOpinion { op, provenance });
+    let resolved = resolve_ordered_chain(chain());
+    assert_eq!(resolve_ordered_chain_report(chain()).resolution, resolved);
+    assert_eq!(
+        resolved.resolved().unwrap().value,
+        ResolvedValue::List(expected.clone())
+    );
+
+    let mut composer = SparseComposer::try_new([0, 1, 2]).unwrap();
+    for (layer, op) in opinions.into_iter().enumerate() {
+        composer.set_opinion(layer, (), (), op, layer).unwrap();
+    }
+    let resolved = composer.resolve((), ());
+    assert_eq!(composer.explain((), ()).resolution, resolved);
+    assert_eq!(
+        resolved.resolved().unwrap().value,
+        ResolvedValue::List(expected)
+    );
+}
+
+#[test]
+fn repeated_prepend_and_append_items_keep_their_distinct_ordering() {
+    assert_eq!(
+        ListOp::prepended(vec![1, 2, 1, 3]).apply_to(&[4]),
+        [1, 2, 3, 4]
+    );
+    assert_eq!(
+        ListOp::appended(vec![1, 2, 1, 3]).apply_to(&[4]),
+        [4, 2, 1, 3]
+    );
+}
 
 #[test]
 fn stronger_explicit_overrides_weaker_edits() {
@@ -187,7 +269,7 @@ fn add_applies_after_delete_and_before_prepend() {
 
 #[test]
 fn explicit_cutoff_does_not_pull_hidden_operations() {
-    let explicit = ListOp::explicit(vec![1]);
+    let explicit = ListOp::explicit(vec![1, 1]);
     let ops = core::iter::once(&explicit).chain(core::iter::from_fn(|| {
         panic!("an explicit list must hide weaker operations")
     }));
@@ -254,7 +336,7 @@ fn in_place_edits_retain_allocation_without_cloning_untouched_items() {
 #[test]
 fn family_explicit_cutoff_is_dense_and_does_not_classify_weaker_edits() {
     use opinionated::{FamilyEvent, ListFamily, OpinionOp, resolve_family_chain_report};
-    let op = OpinionOp::<(), u32, ()>::List(ListOp::explicit(vec![1]));
+    let op = OpinionOp::<(), u32, ()>::List(ListOp::explicit(vec![1, 1]));
     let chain = core::iter::once((&op, &0)).chain(core::iter::from_fn(|| {
         panic!("the family must stop at an explicit list")
     }));
@@ -263,6 +345,7 @@ fn family_explicit_cutoff_is_dense_and_does_not_classify_weaker_edits() {
         report.events,
         vec![FamilyEvent::ContributedDense { provenance: 0 }]
     );
+    assert_eq!(report.resolution.resolved(), Some((vec![1], 0)));
 }
 
 #[test]

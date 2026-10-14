@@ -146,10 +146,12 @@ non-block operation selects the resolved value family; weaker incompatible
 operations are ignored and reported. A scalar `Set` is strongest-wins. A
 `Block` stops all weaker opinions.
 
-List edits follow the `ListOps` semantics of AOUSD Core §12.4 as implemented
-by `layerstack`: an authored explicit list makes the other edits in the same
-operation spurious, and re-inserting an existing item moves it to the
-requested position.
+List edits follow the `ListOps` semantics of AOUSD Core §6.6.3 as implemented
+by `layerstack`. The specification requires unique item sequences. For duplicate
+explicit inputs, application follows OpenUSD: keep the first occurrence of each
+item in authored order. The stored input is unchanged. An explicit list makes
+the other edits in the same operation spurious. Re-inserting an existing item
+moves it to the requested position.
 
 ## Dictionaries
 

@@ -226,8 +226,10 @@ impl<A, F> OpinionKey<A, F> {
 /// position; adding one leaves it where it is.
 ///
 /// An authored `explicit` list makes the other edits spurious: applying the
-/// operation yields the explicit list unchanged. This matches the `ListOps`
-/// semantics of AOUSD Core §12.4 as implemented by `layerstack`.
+/// operation keeps the first occurrence of each explicit item, in authored
+/// order, matching OpenUSD's `SdfListOp::_AddKeys`. AOUSD Core §6.6.3.2
+/// requires unique item sequences; first-occurrence normalization of duplicate
+/// input is OpenUSD compatibility behavior, not a rule for valid spec inputs.
 ///
 /// Build one from the list it authors, [`ListOp::explicit`],
 /// [`ListOp::prepended`], [`ListOp::appended`], [`ListOp::deleted`],
@@ -236,8 +238,8 @@ impl<A, F> OpinionKey<A, F> {
 /// every item it names with [`ListOp::items`].
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ListOp<T> {
-    /// Optional explicit list replacement. When present, the other edits in
-    /// this operation are spurious.
+    /// Optional explicit list replacement. Application keeps only the first
+    /// occurrence of each item. When present, the other edits are spurious.
     pub explicit: Option<Vec<T>>,
     /// Items to move or insert at the front, in authored order.
     pub prepend: Vec<T>,
@@ -482,7 +484,7 @@ impl<T: Clone + Eq> ListOp<T> {
     /// its order, after every item that precedes the first item it names;
     /// items it names that the list does not hold are ignored.
     ///
-    /// Spec: AOUSD Core §12.4 (list ops). OpenUSD:
+    /// Spec: AOUSD Core §6.6.3 (list ops). OpenUSD:
     /// `SdfListOp::ApplyOperations`, `_AddKeys` and `_ReorderKeysHelper` in
     /// `pxr/usd/sdf/listOp.cpp`.
     #[must_use]
@@ -501,10 +503,20 @@ impl<T: Clone + Eq> ListOp<T> {
     /// This has the same semantics as [`Self::apply_to`], but does not clone
     /// unchanged elements. Only authored elements inserted or replaced by
     /// this operation are cloned. An explicit list replaces the result and
-    /// makes the operation's other edits spurious.
+    /// makes the operation's other edits spurious. Repeated explicit items
+    /// are skipped, retaining first-occurrence order.
     pub fn apply_in_place(&self, out: &mut Vec<T>) {
         if let Some(explicit) = &self.explicit {
-            out.clone_from(explicit);
+            // AOUSD Core §6.6.3.2 requires unique sequences. For duplicate
+            // input, match OpenUSD SdfListOp::ApplyOperations / _AddKeys:
+            // preserve first-occurrence order without changing authored data.
+            out.clear();
+            out.reserve(explicit.len());
+            for item in explicit {
+                if !out.contains(item) {
+                    out.push(item.clone());
+                }
+            }
             return;
         }
 
@@ -535,7 +547,7 @@ impl<T: Clone + Eq> ListOp<T> {
 /// Resolves a strongest-to-weakest chain of owned or borrowed list operations.
 ///
 /// Stops pulling opinions at the first explicit list, which hides the
-/// fallback and every weaker operation (AOUSD Core §12.4, list ops). Stronger
+/// fallback and every weaker operation (AOUSD Core §6.6.3, list ops). Stronger
 /// edits are applied weakest-first to one owned result; the authored operations
 /// are never cloned. Without an explicit list, the fallback is cloned once.
 ///
@@ -552,8 +564,8 @@ pub fn resolve_list_chain<T: Clone + Eq>(
     let mut ops = Vec::new();
     let mut out = None;
     for op in ops_strong_to_weak {
-        if let Some(explicit) = &op.borrow().explicit {
-            out = Some(explicit.clone());
+        if op.borrow().explicit.is_some() {
+            out = Some(op.borrow().apply_to(&[]));
             break;
         }
         ops.push(op);

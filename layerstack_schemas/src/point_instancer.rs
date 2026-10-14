@@ -15,6 +15,251 @@ use alloc::{sync::Arc, vec::Vec};
 use core::num::NonZeroUsize;
 use layerstack::{PathId, TargetPath, TokenInterner, Value};
 
+/// An ID edit encountered incompatible or unreadable authored data.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum InstanceIdEditError {
+    /// Target-local `inactiveIds` is not an int64 list operation.
+    InvalidInactiveIds,
+    /// The composed default of `invisibleIds` is not an int64 array.
+    InvalidInvisibleIds,
+    /// Retained invisible ID storage failed to decode.
+    Decode(layerstack::ArrayReadError),
+}
+impl core::fmt::Display for InstanceIdEditError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "cannot edit instance IDs: {self:?}")
+    }
+}
+impl core::error::Error for InstanceIdEditError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::Decode(error) => Some(error),
+            _ => None,
+        }
+    }
+}
+
+/// A visibility mask does not match the array's grouped element layout.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct InstanceMaskError {
+    /// Number of values in the array before compaction.
+    pub array_len: usize,
+    /// Number of instance entries in the nonempty mask.
+    pub mask_len: usize,
+    /// Number of consecutive values belonging to one instance.
+    pub element_size: usize,
+}
+impl core::fmt::Display for InstanceMaskError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(
+            f,
+            "{} values do not match {} mask entries of size {}",
+            self.array_len, self.mask_len, self.element_size
+        )
+    }
+}
+impl core::error::Error for InstanceMaskError {}
+
+impl PointInstancer<'_> {
+    /// Applies a computed mask to consecutive groups of `element_size` values.
+    /// Empty masks mean every instance survives and leave the array unchanged.
+    /// A nonempty mask must describe the complete array; mismatch is reported
+    /// before mutation. Compaction preserves order and reuses the allocation,
+    /// without cloning values. AOUSD Core §13 (point instancing);
+    /// OpenUSD `UsdGeomPointInstancer::ApplyMaskToArray`.
+    #[doc(alias = "ApplyMaskToArray")]
+    pub fn apply_mask_to_array<T>(
+        mask: &[bool],
+        values: &mut Vec<T>,
+        element_size: NonZeroUsize,
+    ) -> Result<(), InstanceMaskError> {
+        if mask.is_empty() {
+            return Ok(());
+        }
+        let size = element_size.get();
+        if !values.len().is_multiple_of(size) || values.len() / size != mask.len() {
+            return Err(InstanceMaskError {
+                array_len: values.len(),
+                mask_len: mask.len(),
+                element_size: size,
+            });
+        }
+        let mut at = 0;
+        values.retain(|_| {
+            let keep = mask[at / size];
+            at += 1;
+            keep
+        });
+        Ok(())
+    }
+}
+
+fn unique_ids(ids: &[i64]) -> Vec<i64> {
+    let mut seen = alloc::collections::BTreeSet::new();
+    ids.iter().copied().filter(|id| seen.insert(*id)).collect()
+}
+
+impl crate::usd_geom::PointInstancerEdit {
+    /// Reactivates IDs with target-local deletions from `inactiveIds`.
+    /// Preserves weaker-layer participation; repeated calls in one batch see
+    /// earlier collected operations. No composed list is flattened into this
+    /// target. AOUSD Core §6.6.3, §12.2.6; OpenUSD `UsdGeomPointInstancer::ActivateIds`.
+    #[doc(alias = "ActivateIds")]
+    pub fn activate_ids<'a>(
+        &'a self,
+        edit: &mut crate::SchemaEdit<'_>,
+        ids: &[i64],
+    ) -> Result<&'a Self, InstanceIdEditError> {
+        self.edit_inactive_ids(edit, ids, true)?;
+        Ok(self)
+    }
+    /// Deactivates IDs using a canonical target-local list operation.
+    /// Incoming duplicates retain their first occurrence. Existing legacy
+    /// added/reordered lists are normalized as sets before the new append.
+    /// AOUSD Core §6.6.3, §12.2.6; OpenUSD `UsdGeomPointInstancer::DeactivateIds`.
+    #[doc(alias = "DeactivateIds")]
+    pub fn deactivate_ids<'a>(
+        &'a self,
+        edit: &mut crate::SchemaEdit<'_>,
+        ids: &[i64],
+    ) -> Result<&'a Self, InstanceIdEditError> {
+        self.edit_inactive_ids(edit, ids, false)?;
+        Ok(self)
+    }
+    fn edit_inactive_ids(
+        &self,
+        edit: &mut crate::SchemaEdit<'_>,
+        ids: &[i64],
+        activate: bool,
+    ) -> Result<(), InstanceIdEditError> {
+        edit.group(|edit| {
+            let current = match edit.local_prim_metadata(self.path(), "inactiveIds") {
+                None => layerstack::ListOp::default(),
+                Some(layerstack::FieldValue::Int64ListOp(op)) => op,
+                Some(_) => return Err(InstanceIdEditError::InvalidInactiveIds),
+            };
+            let ids = unique_ids(ids);
+            let requested: alloc::collections::BTreeSet<_> = ids.iter().copied().collect();
+            let result = if current.explicit.is_some() {
+                let change = if activate {
+                    layerstack::ListOp::default().with_deleted(ids)
+                } else {
+                    layerstack::ListOp::appended(ids)
+                };
+                layerstack::ListOp::explicit(change.apply_to(&current.apply_to(&[])))
+            } else {
+                let mut added = current.apply_to(&[]);
+                added.sort_unstable();
+                added.dedup();
+                added.retain(|id| !requested.contains(id));
+                let deleted = if activate {
+                    unique_ids(
+                        &current
+                            .delete
+                            .iter()
+                            .chain(&ids)
+                            .copied()
+                            .collect::<Vec<_>>(),
+                    )
+                } else {
+                    unique_ids(
+                        &current
+                            .delete
+                            .iter()
+                            .copied()
+                            .filter(|id| !requested.contains(id))
+                            .collect::<Vec<_>>(),
+                    )
+                };
+                let mut result = layerstack::ListOp::prepended(added).with_deleted(deleted);
+                if !activate {
+                    result.append = ids;
+                }
+                result
+            };
+            edit.set_prim_metadata(
+                self.path(),
+                "inactiveIds",
+                layerstack::FieldValue::Int64ListOp(result),
+            );
+            Ok(())
+        })
+    }
+    /// Authors an explicit empty inactive list, including a cutoff of weaker
+    /// and future weaker deactivations. OpenUSD `ActivateAllIds`; AOUSD Core §6.6.3, §12.2.6.
+    #[doc(alias = "ActivateAllIds")]
+    pub fn activate_all_ids(&self, edit: &mut crate::SchemaEdit<'_>) -> &Self {
+        edit.set_prim_metadata(
+            self.path(),
+            "inactiveIds",
+            layerstack::FieldValue::Int64ListOp(layerstack::ListOp::explicit(Vec::new())),
+        );
+        self
+    }
+    fn invisible_ids(
+        &self,
+        edit: &mut crate::SchemaEdit<'_>,
+    ) -> Result<Vec<i64>, InstanceIdEditError> {
+        match edit.default_value(self.path(), "invisibleIds") {
+            None => Ok(Vec::new()),
+            Some(value) => {
+                crate::value::try_read_array(&value, edit.tokens(), crate::value::read_int64)
+                    .map_err(InstanceIdEditError::Decode)?
+                    .ok_or(InstanceIdEditError::InvalidInvisibleIds)
+            }
+        }
+    }
+    /// Adds IDs to the default-time invisible list, retaining first-occurrence
+    /// order and removing duplicates. Numeric samples are unchanged; use the
+    /// generated sample setters for time-varying visibility. Decode failures
+    /// collect no edits. OpenUSD `InvisIds`; AOUSD Core §12.3–12.5.
+    #[doc(alias = "InvisIds")]
+    pub fn make_invisible<'a>(
+        &'a self,
+        edit: &mut crate::SchemaEdit<'_>,
+        ids: &[i64],
+    ) -> Result<&'a Self, InstanceIdEditError> {
+        edit.group(|edit| {
+            let mut values = self.invisible_ids(edit)?;
+            values.extend_from_slice(ids);
+            let values = unique_ids(&values);
+            self.set_invisible_ids(edit, &values);
+            Ok(())
+        })?;
+        Ok(self)
+    }
+    /// Removes IDs from default-time invisibility. When any ID is removed the
+    /// remaining set is sorted, matching OpenUSD `VisIds`. Incoming and retained
+    /// duplicates are normalized. Numeric samples are unchanged. AOUSD §12.3–12.5.
+    #[doc(alias = "VisIds")]
+    pub fn make_visible<'a>(
+        &'a self,
+        edit: &mut crate::SchemaEdit<'_>,
+        ids: &[i64],
+    ) -> Result<&'a Self, InstanceIdEditError> {
+        edit.group(|edit| {
+            let mut values = self.invisible_ids(edit)?;
+            let before = values.len();
+            let requested: alloc::collections::BTreeSet<_> = ids.iter().copied().collect();
+            values.retain(|id| !requested.contains(id));
+            if values.len() != before {
+                values.sort_unstable();
+            }
+            let values = unique_ids(&values);
+            self.set_invisible_ids(edit, &values);
+            Ok(())
+        })?;
+        Ok(self)
+    }
+    /// Authors an empty default-time invisible array. Numeric samples remain.
+    /// OpenUSD `VisAllIds`; AOUSD Core §12.3–12.5.
+    #[doc(alias = "VisAllIds")]
+    pub fn make_all_visible(&self, edit: &mut crate::SchemaEdit<'_>) -> &Self {
+        self.set_invisible_ids(edit, &[]);
+        self
+    }
+}
+
 fn read<'a, T>(
     prim: &crate::PrimView<'a>,
     name: &str,

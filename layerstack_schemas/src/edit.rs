@@ -66,6 +66,9 @@ pub struct SchemaEdit<'s> {
     created: Vec<(PathId, TokenId, Option<PropertyType>)>,
     /// The defaults this edit sets, latest last.
     defaults: Vec<(PathId, TokenId, Value)>,
+    /// Prim metadata this edit authors, including target-local list operations.
+    #[cfg(feature = "usd-geom")]
+    metadata: Vec<(PathId, TokenId, layerstack::FieldValue)>,
     /// Local property specs removed during this edit.
     removed: Vec<(PathId, TokenId)>,
     #[cfg(feature = "usd-ui")]
@@ -94,6 +97,8 @@ impl<'s> SchemaEdit<'s> {
             applied: Vec::new(),
             created: Vec::new(),
             defaults: Vec::new(),
+            #[cfg(feature = "usd-geom")]
+            metadata: Vec::new(),
             removed: Vec::new(),
             #[cfg(feature = "usd-ui")]
             ui_hints: Vec::new(),
@@ -161,6 +166,8 @@ impl<'s> SchemaEdit<'s> {
             applied: self.applied.clone(),
             created: self.created.clone(),
             defaults: self.defaults.clone(),
+            #[cfg(feature = "usd-geom")]
+            metadata: self.metadata.clone(),
             removed: self.removed.clone(),
             #[cfg(feature = "usd-ui")]
             ui_hints: self.ui_hints.clone(),
@@ -171,6 +178,10 @@ impl<'s> SchemaEdit<'s> {
         self.applied = child.applied;
         self.created = child.created;
         self.defaults = child.defaults;
+        #[cfg(feature = "usd-geom")]
+        {
+            self.metadata = child.metadata;
+        }
         self.removed = child.removed;
         #[cfg(feature = "usd-ui")]
         {
@@ -233,6 +244,58 @@ impl<'s> SchemaEdit<'s> {
             return Some(self.store.paths_mut().intern(path));
         }
         None
+    }
+
+    /// The target site's authored metadata, never a flattened composed list.
+    #[cfg(feature = "usd-geom")]
+    pub(crate) fn local_prim_metadata(
+        &mut self,
+        path: PathId,
+        name: &str,
+    ) -> Option<layerstack::FieldValue> {
+        let name = self.tokens().intern(name);
+        if let Some((_, _, value)) = self
+            .metadata
+            .iter()
+            .rev()
+            .find(|(p, n, _)| *p == path && *n == name)
+        {
+            return Some(value.clone());
+        }
+        let mapped = self.target.map_to_spec_path(path, self.store.paths_mut())?;
+        let layer = self.store.layer(self.target.layer())?;
+        let fields = if mapped
+            .components()
+            .last()
+            .is_some_and(|c| matches!(c, layerstack::SpecComponent::VariantSelection { .. }))
+        {
+            &layer.variant_spec_at(&mapped, self.store.paths())?.fields
+        } else {
+            &layer
+                .prim_specs(mapped.prim_path())
+                .find(|spec| {
+                    layerstack::SpecPath::from_variant_selection_sites(
+                        mapped.prim_path(),
+                        &spec.outer_variant_sites,
+                        self.store.paths(),
+                    ) == mapped
+                })?
+                .fields
+        };
+        layerstack::get_field(fields, &name).cloned()
+    }
+
+    #[cfg(feature = "usd-geom")]
+    pub(crate) fn set_prim_metadata(
+        &mut self,
+        path: PathId,
+        name: &str,
+        value: layerstack::FieldValue,
+    ) {
+        let name = self.tokens().intern(name);
+        self.transaction
+            .set_metadata(self.target.prim(path), name, value.clone());
+        self.metadata.push((path, name, value));
     }
 
     fn property(&mut self, path: PathId, name: &str) -> layerstack::edit::Address {

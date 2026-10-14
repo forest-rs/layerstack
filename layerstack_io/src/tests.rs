@@ -489,6 +489,150 @@ def "P" (clips = { dictionary default = {
 }
 
 #[test]
+fn reference_custom_data_resources_are_localized_and_missing_assets_prevent_export() {
+    // Scope this resolver to the fixture: existing Memory tests intentionally
+    // use opaque identifiers, while these resources must retain the layer anchor.
+    struct AnchoredMemory(Memory);
+    impl Storage for AnchoredMemory {
+        fn identify(&self, asset: &str, anchor: Option<&str>) -> Result<String, IoError> {
+            Ok(anchor
+                .and_then(|anchor| layerstack::asset::anchor_asset_path(asset, anchor))
+                .unwrap_or_else(|| asset.into()))
+        }
+        fn read(&mut self, identifier: &str) -> Result<Vec<u8>, IoError> {
+            self.0.read(identifier)
+        }
+        fn read_bounded(&mut self, identifier: &str, max_bytes: u64) -> Result<Vec<u8>, IoError> {
+            self.0.read_bounded(identifier, max_bytes)
+        }
+        fn write(&mut self, identifier: &str, bytes: &[u8]) -> Result<(), IoError> {
+            self.0.write(identifier, bytes)
+        }
+    }
+    let source = r#"#usda 1.0
+def "Library" {
+ int answer = 42
+}
+def "Root" (
+ references = </Library> (
+  customData = {
+   dictionary images = {
+    asset preview = @./preview.png@
+    asset[] details = [@./detail.png@, @./preview.png@]
+    string label = "literal.png"
+   }
+  }
+ )
+) {}
+"#;
+    let memory = AnchoredMemory(Memory::with(&[
+        ("source/root.usda", source),
+        ("source/preview.png", "preview pixels"),
+        ("source/detail.png", "detail pixels"),
+    ]));
+    let mut doc = StageDocument::open(memory, "source/root.usda", StageOptions::default()).unwrap();
+    let root = doc.stage.stage().root_layer().unwrap();
+    let original = doc.store.layers[&root].clone();
+    let package = doc
+        .prepare_package(
+            root,
+            "scenes/scene.usda",
+            PackagePreparationLimits::default(),
+            |_| PackageInclusion::Include,
+        )
+        .unwrap();
+    assert!(package.report().is_complete(), "{:?}", package.report());
+    assert_eq!(package.report().dependencies.len(), 2);
+    let plan = package.plan().unwrap();
+    assert_eq!(plan.layers.len(), 1, "the reference is internal");
+    assert_eq!(plan.assets.len(), 2, "duplicate uses share resource bytes");
+    let dependencies = layerstack::asset_dependencies::extract_layer_dependencies(
+        &plan.layers[0].layer,
+        &doc.store.paths,
+        &doc.store.tokens,
+    );
+    assert_eq!(dependencies.len(), 2);
+    assert!(
+        dependencies
+            .iter()
+            .all(|dependency| dependency.identifier.starts_with("../assets/"))
+    );
+    assert_eq!(
+        doc.store.layers[&root], original,
+        "preparation leaves source data intact"
+    );
+    assert_eq!(doc.store.layers[&root].generation(), original.generation());
+    assert!(doc.storage.0.writes.is_empty());
+    doc.export_package("out.usdz", &package).unwrap();
+
+    let mut output = Memory::default();
+    output
+        .files
+        .insert("out.usdz".into(), doc.storage.0.files["out.usdz"].clone());
+    let mut reopened = StageDocument::open(output, "out.usdz", StageOptions::default()).unwrap();
+    let reopened_root = reopened.stage.stage().root_layer().unwrap();
+    let dependencies = layerstack::asset_dependencies::extract_layer_dependencies(
+        &reopened.store.layers[&reopened_root],
+        &reopened.store.paths,
+        &reopened.store.tokens,
+    );
+    assert_eq!(
+        dependencies.len(),
+        2,
+        "custom data survives serialization and import"
+    );
+    let mut contents = Vec::new();
+    for dependency in dependencies {
+        assert!(dependency.identifier.starts_with("../assets/"));
+        let resource = reopened
+            .read_asset_bytes(&dependency.identifier, Some(reopened_root))
+            .unwrap();
+        contents.push(resource.bytes.as_ref().to_vec());
+    }
+    contents.sort();
+    assert_eq!(
+        contents,
+        vec![b"detail pixels".to_vec(), b"preview pixels".to_vec()]
+    );
+    let answer = reopened.store.property_path("/Root.answer");
+    assert_eq!(
+        reopened
+            .stage
+            .stage()
+            .resolve_field_path(answer)
+            .unwrap()
+            .value,
+        Value::Int(42)
+    );
+
+    doc.storage.0.files.remove("source/detail.png");
+    let missing = doc
+        .prepare_package(
+            root,
+            "scenes/scene.usda",
+            PackagePreparationLimits::default(),
+            |_| PackageInclusion::Include,
+        )
+        .unwrap();
+    assert!(!missing.report().is_complete(), "{:?}", missing.report());
+    assert!(missing.plan().is_none());
+    assert!(missing.report().dependencies.iter().any(|dependency| {
+        dependency.source.identifier.as_ref() == "./detail.png"
+            && dependency.targets.iter().any(|target| {
+                matches!(
+                    target,
+                    layerstack::asset_dependencies::DependencyTarget::Unresolved(_)
+                )
+            })
+    }));
+    assert!(doc.export_package("missing.usdz", &missing).is_err());
+    assert!(!doc.storage.0.files.contains_key("missing.usdz"));
+    assert_eq!(doc.storage.0.writes, vec!["out.usdz"]);
+    assert_eq!(doc.store.layers[&root], original);
+    assert_eq!(doc.store.layers[&root].generation(), original.generation());
+}
+
+#[test]
 fn package_preparation_includes_unsaved_layers_and_reports_missing_resources_without_publication() {
     let memory = Memory::with(&[
         (

@@ -69,51 +69,155 @@ pub(crate) fn read(
         .collect()
 }
 
-fn default_value(ty: &str, value: &Json, tokens: &mut TokenInterner) -> Result<Value, String> {
+fn element_type(ty: &str) -> Option<&str> {
+    ty.strip_suffix("[]").or(match ty {
+        "tokenlistop" => Some("token"),
+        "stringlistop" => Some("string"),
+        "intlistop" => Some("int"),
+        "uintlistop" => Some("uint"),
+        "int64listop" => Some("int64"),
+        "uint64listop" => Some("uint64"),
+        _ => None,
+    })
+}
+
+fn primitive(ty: &str, tokens: &mut TokenInterner) -> Result<Value, String> {
     Ok(match ty {
-        "token" => {
-            Value::Token(tokens.intern(value.as_str().ok_or("token default must be a string")?))
+        "bool" => Value::Bool(false),
+        "uchar" => Value::UChar(0),
+        "int" => Value::Int(0),
+        "uint" => Value::UInt(0),
+        "int64" => Value::Int64(0),
+        "uint64" => Value::UInt64(0),
+        "half" => Value::Half(0),
+        "float" => Value::Float(0.),
+        "double" => Value::Double(0.),
+        "timecode" => Value::TimeCode(0.),
+        "string" => Value::string(""),
+        "token" => Value::Token(tokens.intern("")),
+        "asset" => Value::Asset("".into()),
+        "pathExpression" => Value::PathExpression("".into()),
+        _ => return Err(format!("no typed metadata conversion for {ty}")),
+    })
+}
+
+fn default_value(ty: &str, value: &Json, tokens: &mut TokenInterner) -> Result<Value, String> {
+    if let Some(element) = element_type(ty) {
+        let items = value
+            .as_array()
+            .ok_or_else(|| format!("{ty} default must be an array"))?
+            .iter()
+            .map(|value| default_value(element, value, tokens))
+            .collect::<Result<Vec<_>, _>>()?;
+        return Ok(Value::array_with_element(
+            items,
+            Some(&primitive(element, tokens)?),
+        ));
+    }
+    let signed = || {
+        value
+            .as_i64()
+            .ok_or_else(|| format!("{ty} default must be a signed integer"))
+    };
+    let unsigned = || {
+        value
+            .as_u64()
+            .ok_or_else(|| format!("{ty} default must be an unsigned integer"))
+    };
+    let float = || {
+        let number = serde_json::from_value::<f32>(value.clone())
+            .map_err(|_| format!("{ty} default must be numeric"))?;
+        if !number.is_finite() {
+            return Err(format!("{ty} default must fit f32"));
         }
-        "string" => Value::string(value.as_str().ok_or("string default must be a string")?),
+        Ok(number)
+    };
+    let text = || {
+        value
+            .as_str()
+            .ok_or_else(|| format!("{ty} default must be a string"))
+    };
+    Ok(match ty {
+        "token" => Value::Token(tokens.intern(text()?)),
+        "string" => Value::string(text()?),
+        "asset" => Value::Asset(text()?.into()),
+        "pathExpression" => Value::PathExpression(text()?.into()),
         "bool" => Value::Bool(value.as_bool().ok_or("bool default must be a boolean")?),
-        "int" => Value::Int(
-            value
-                .as_i64()
-                .and_then(|v| i32::try_from(v).ok())
-                .ok_or("int default must fit i32")?,
-        ),
-        "float" => {
-            let number = serde_json::from_value::<f32>(value.clone())
-                .map_err(|_| "float default must be numeric")?;
-            if !number.is_finite() {
-                return Err("float default must fit f32".into());
-            }
-            Value::Float(number)
+        "uchar" => {
+            Value::UChar(u8::try_from(unsigned()?).map_err(|_| "uchar default must fit u8")?)
         }
+        "int" => Value::Int(i32::try_from(signed()?).map_err(|_| "int default must fit i32")?),
+        "uint" => Value::UInt(u32::try_from(unsigned()?).map_err(|_| "uint default must fit u32")?),
+        "int64" => Value::Int64(signed()?),
+        "uint64" => Value::UInt64(unsigned()?),
+        "half" => {
+            let bits = layerstack::half::from_f32(float()?);
+            if !layerstack::half::to_f32(bits).is_finite() {
+                return Err("half default must fit f16".into());
+            }
+            Value::Half(bits)
+        }
+        "float" => Value::Float(float()?),
         "double" => Value::Double(value.as_f64().ok_or("double default must be numeric")?),
+        "timecode" => Value::TimeCode(value.as_f64().ok_or("timecode default must be numeric")?),
+        "dictionary" => dictionary_default(value)?,
         _ => return Err(format!("cannot emit a {ty} metadata default")),
     })
 }
 
-fn conversion(ty: &str) -> Result<(&'static str, &'static str), String> {
-    Ok(match ty {
-        "token" => ("&'a str", "crate::value::read_token"),
-        "string" => ("::alloc::sync::Arc<str>", "crate::value::read_string"),
-        "bool" => ("bool", "crate::value::read_bool"),
-        "int" => ("i32", "crate::value::read_int"),
-        "float" => ("f32", "crate::value::read_float"),
-        "double" => ("f64", "crate::value::read_double"),
-        "tokenlistop" => (
-            "::alloc::vec::Vec<&'a str>",
-            "|v, t| crate::value::read_array(v, t, crate::value::read_token)",
-        ),
-        "int64listop" => ("::alloc::vec::Vec<i64>", "crate::value::read_int64_array"),
-        "dictionary" => (
-            "::alloc::vec::Vec<(::alloc::sync::Arc<str>, ::layerstack::Value)>",
-            "|v, _| match v { ::layerstack::Value::Dictionary(entries) => Some(entries.clone()), _ => None }",
-        ),
-        _ => return Err(format!("no typed metadata conversion for {ty}")),
-    })
+fn dictionary_default(value: &Json) -> Result<Value, String> {
+    fn entry(value: &Json) -> Result<Value, String> {
+        match value {
+            Json::Bool(value) => Ok(Value::Bool(*value)),
+            Json::String(value) => Ok(Value::string(value.as_str())),
+            Json::Number(value) if value.is_i64() => {
+                Ok(Value::Int64(value.as_i64().expect("i64 number")))
+            }
+            Json::Number(value) if value.is_u64() => {
+                Ok(Value::UInt64(value.as_u64().expect("u64 number")))
+            }
+            Json::Number(value) => Ok(Value::Double(
+                value.as_f64().ok_or("dictionary number must fit f64")?,
+            )),
+            Json::Array(items) => Ok(Value::Array(
+                items.iter().map(entry).collect::<Result<_, _>>()?,
+            )),
+            Json::Object(_) => dictionary_default(value),
+            Json::Null => Err("dictionary defaults cannot contain null".into()),
+        }
+    }
+    let entries = value
+        .as_object()
+        .ok_or("dictionary default must be an object")?;
+    Ok(Value::Dictionary(
+        entries
+            .iter()
+            .map(|(key, value)| Ok((key.as_str().into(), entry(value)?)))
+            .collect::<Result<_, String>>()?,
+    ))
+}
+
+fn conversion(ty: &str) -> Result<(String, String), String> {
+    // Preserve existing generated getter signatures and spellings.
+    match ty {
+        "tokenlistop" => return Ok(("::alloc::vec::Vec<&'a str>".into(), "|v, t| crate::value::read_array(v, t, crate::value::read_token)".into())),
+        "int64listop" => return Ok(("::alloc::vec::Vec<i64>".into(), "crate::value::read_int64_array".into())),
+        "dictionary" => return Ok(("::alloc::vec::Vec<(::alloc::sync::Arc<str>, ::layerstack::Value)>".into(), "|v, _| match v { ::layerstack::Value::Dictionary(entries) => Some(entries.clone()), _ => None }".into())),
+        _ => {}
+    }
+    let mut tokens = TokenInterner::default();
+    if let Some(element) = element_type(ty) {
+        primitive(element, &mut tokens)?;
+        let (ty, read) = conversion(element)?;
+        return Ok((
+            format!("::alloc::vec::Vec<{ty}>"),
+            format!("|v, t| crate::value::read_array(v, t, {read})"),
+        ));
+    }
+    let zero = primitive(ty, &mut tokens)?;
+    let conversion =
+        crate::views::rust_type(&zero, false)?.expect("metadata primitive has a Rust type");
+    Ok((conversion.read, conversion.read_fn))
 }
 
 pub(crate) fn files(model: &Model) -> Result<Vec<(String, String)>, String> {
@@ -173,6 +277,146 @@ mod tests {
                 &mut tokens
             )
             .is_err()
+        );
+    }
+
+    #[test]
+    fn primitive_arrays_and_list_defaults_keep_element_types_and_ranges() {
+        let mut tokens = TokenInterner::default();
+        for (ty, literal, expected) in [
+            ("uchar", serde_json::json!(255), Value::UChar(u8::MAX)),
+            (
+                "uint",
+                serde_json::json!(4294967295_u64),
+                Value::UInt(u32::MAX),
+            ),
+            ("int64", serde_json::json!(i64::MIN), Value::Int64(i64::MIN)),
+            (
+                "uint64",
+                serde_json::json!(u64::MAX),
+                Value::UInt64(u64::MAX),
+            ),
+            (
+                "half",
+                serde_json::json!(0.5),
+                Value::Half(layerstack::half::from_f32(0.5)),
+            ),
+            ("timecode", serde_json::json!(3), Value::TimeCode(3.)),
+            (
+                "asset",
+                serde_json::json!("texture.png"),
+                Value::Asset("texture.png".into()),
+            ),
+            (
+                "pathExpression",
+                serde_json::json!("/World/**"),
+                Value::PathExpression("/World/**".into()),
+            ),
+        ] {
+            assert_eq!(
+                default_value(ty, &literal, &mut tokens).unwrap(),
+                expected,
+                "{ty}"
+            );
+            assert_eq!(
+                default_value(
+                    &format!("{ty}[]"),
+                    &serde_json::json!([literal]),
+                    &mut tokens
+                )
+                .unwrap()
+                .array_ref()
+                .unwrap()
+                .get(0)
+                .unwrap()
+                .as_ref(),
+                &expected,
+                "{ty}[]"
+            );
+        }
+        for (ty, literal) in [
+            ("tokenlistop", serde_json::json!(["red", "green"])),
+            ("stringlistop", serde_json::json!(["one", "two"])),
+            ("intlistop", serde_json::json!([i32::MIN, i32::MAX])),
+            ("uintlistop", serde_json::json!([0, u32::MAX])),
+            ("int64listop", serde_json::json!([i64::MIN, i64::MAX])),
+            ("uint64listop", serde_json::json!([0, u64::MAX])),
+        ] {
+            let declarations = read(&serde_json::json!({"hostField": {"type": ty, "appliesTo": "prims", "default": literal}}), &mut tokens).unwrap();
+            assert_eq!(
+                declarations[0]
+                    .default
+                    .as_ref()
+                    .unwrap()
+                    .array_ref()
+                    .unwrap()
+                    .len(),
+                2,
+                "{ty}"
+            );
+            assert_eq!(
+                default_value(ty, &serde_json::json!([]), &mut tokens)
+                    .unwrap()
+                    .array_ref()
+                    .unwrap()
+                    .len(),
+                0
+            );
+        }
+    }
+
+    #[test]
+    fn malformed_defaults_fail_generation_without_silent_coercion() {
+        let mut tokens = TokenInterner::default();
+        for (ty, literal) in [
+            ("uchar", serde_json::json!(256)),
+            ("uint", serde_json::json!(-1)),
+            ("int", serde_json::json!(2147483648_i64)),
+            ("int64", serde_json::json!(u64::MAX)),
+            ("half", serde_json::json!(70000)),
+            ("float", serde_json::json!(1e100)),
+            ("float[]", serde_json::json!([1, "bad"])),
+            ("token[]", serde_json::json!("not an array")),
+            ("uintlistop", serde_json::json!([-1])),
+            ("dictionary", serde_json::json!([])),
+            ("dictionary", serde_json::json!({"nested": null})),
+        ] {
+            assert!(read(&serde_json::json!({"hostField": {"type": ty, "appliesTo": "prims", "default": literal}}), &mut tokens).is_err(), "{ty}");
+        }
+        for ty in ["float3", "dictionary[]", "intlistop[]", "hostOpaque"] {
+            assert!(
+                read(
+                    &serde_json::json!({"hostField": {"type": ty, "appliesTo": "prims"}}),
+                    &mut tokens
+                )
+                .is_err(),
+                "unsupported {ty} must not generate a foreign-kind reader"
+            );
+        }
+    }
+
+    #[test]
+    fn dictionary_defaults_preserve_nested_json_types() {
+        let mut tokens = TokenInterner::default();
+        let value = default_value(
+            "dictionary",
+            &serde_json::json!({"nested": {"enabled": true, "count": 3, "items": ["red", 0.5]}}),
+            &mut tokens,
+        )
+        .unwrap();
+        assert_eq!(
+            value,
+            Value::Dictionary(vec![(
+                "nested".into(),
+                Value::Dictionary(vec![
+                    ("count".into(), Value::Int64(3)),
+                    ("enabled".into(), Value::Bool(true)),
+                    (
+                        "items".into(),
+                        Value::Array(vec![Value::string("red"), Value::Double(0.5)])
+                    ),
+                ])
+            )])
         );
     }
 }

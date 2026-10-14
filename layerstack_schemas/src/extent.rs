@@ -15,14 +15,17 @@ use layerstack::{PathId, TokenInterner, Value};
 pub(crate) fn has_builtin(schema: &str) -> bool {
     matches!(
         schema,
-        "Mesh"
+        "PointBased"
             | "Points"
             | "Curves"
             | "Cube"
             | "Sphere"
             | "Cylinder"
+            | "Cylinder_1"
             | "Cone"
             | "Capsule"
+            | "Capsule_1"
+            | "Plane"
             | "PointInstancer"
     ) || cfg!(feature = "usd-lux")
         && matches!(
@@ -90,7 +93,7 @@ pub(crate) fn checked_compute(
         return Ok(Some(extent));
     }
     let prim = PrimView::new(*scene, path);
-    if scene.is_a(path, "Mesh") || scene.is_a(path, "Points") || scene.is_a(path, "Curves") {
+    if scene.is_a(path, "PointBased") {
         prim.try_read_value("points", time, crate::value::read_float3_array_shared)
             .map_err(|error| decode_error(&prim, "points", error))?;
         if scene.is_a(path, "Points") || scene.is_a(path, "Curves") {
@@ -141,7 +144,10 @@ pub(crate) fn compute(scene: &Scene<'_>, path: PathId, time: Time) -> Option<(Ra
         |names: &[&str]| extent_varying || names.iter().any(|name| prim.property_might_vary(name));
     let points_schema = scene.is_a(path, "Points");
     let curves = scene.is_a(path, "Curves");
-    if scene.is_a(path, "Mesh") || points_schema || curves {
+    // PointBased owns the inherited provider, including Mesh, TetMesh and host
+    // concrete descendants; Points and Curves supply their width-aware variants.
+    // OpenUSD pointBased.cpp::_ComputeExtentForPointBased; AOUSD Core §13.3.1.
+    if scene.is_a(path, "PointBased") {
         let points = read(
             &prim,
             "points",
@@ -238,14 +244,36 @@ pub(crate) fn compute(scene: &Scene<'_>, path: PathId, time: Time) -> Option<(Ra
         ([(number("size")? * 0.5) as f32; 3], &["size"])
     } else if scene.is_a(path, "Sphere") {
         ([number("radius")? as f32; 3], &["radius"])
+    } else if scene.is_a(path, "Plane") {
+        // Resolve varying dimensions at the requested time (AOUSD Core
+        // §12.3–12.5). OpenUSD 26.8's Plane plugin omits time on these reads;
+        // its static formula still supplies the numerical extent contract.
+        let half_width = (number("width")? * 0.5) as f32;
+        let half_length = (number("length")? * 0.5) as f32;
+        let max = match read(&prim, "axis", time, crate::value::read_token)? {
+            "X" => [0., half_length, half_width],
+            "Y" => [half_width, 0., half_length],
+            "Z" => [half_width, half_length, 0.],
+            _ => return None,
+        };
+        (max, &["width", "length", "axis"])
     } else {
-        let capsule = scene.is_a(path, "Capsule");
-        if !capsule && !scene.is_a(path, "Cylinder") && !scene.is_a(path, "Cone") {
+        let capsule = scene.is_a(path, "Capsule") || scene.is_a(path, "Capsule_1");
+        let separate_radii = scene.is_a(path, "Cylinder_1") || scene.is_a(path, "Capsule_1");
+        if !capsule && !separate_radii && !scene.is_a(path, "Cylinder") && !scene.is_a(path, "Cone")
+        {
             return None;
         }
-        // UsdGeom{Cylinder,Cone,Capsule}::_ComputeExtentMax. Match the float
+        // UsdGeom{Cylinder,Cone,Capsule} (including _1)::_ComputeExtentMax. Match the float
         // extent rounding and signed dimensions; do not silently take abs().
-        let radius = number("radius")?;
+        let radius = if separate_radii {
+            let top = number("radiusTop")?;
+            let bottom = number("radiusBottom")?;
+            // Preserve std::max's first-argument choice for ties and NaNs.
+            if top < bottom { bottom } else { top }
+        } else {
+            number("radius")?
+        };
         let height = number("height")?;
         let axis = read(&prim, "axis", time, crate::value::read_token)?;
         let index = match axis {
@@ -256,7 +284,12 @@ pub(crate) fn compute(scene: &Scene<'_>, path: PathId, time: Time) -> Option<(Ra
         };
         let mut max = [radius as f32; 3];
         max[index] = (height * 0.5 + if capsule { radius } else { 0.0 }) as f32;
-        (max, &["radius", "height", "axis"])
+        let inputs: &[&str] = if separate_radii {
+            &["radiusTop", "radiusBottom", "height", "axis"]
+        } else {
+            &["radius", "height", "axis"]
+        };
+        (max, inputs)
     };
     Some((
         Range3d {
@@ -352,6 +385,98 @@ mod tests {
             );
             let scene = Scene::new(&stage, &store);
             assert_eq!(compute(&scene, path, Time::Default).is_some(), accepted);
+        }
+    }
+
+    #[test]
+    fn custom_concrete_point_based_schema_inherits_intrinsic_extent() {
+        let mut store = InMemoryStore::default();
+        let path = store.path("/Shape");
+        let mut builder = layerstack::SchemaRegistry::builder();
+        crate::register(&mut builder, &[crate::Domain::UsdGeom], &mut store.tokens).unwrap();
+        let schema = store.tokens.intern("HostPointGeometry");
+        builder.register(
+            layerstack::SchemaDefinition::typed(schema)
+                .with_parent(store.tokens.lookup("PointBased").unwrap()),
+        );
+        let schemas = builder.build(&mut store.tokens);
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(
+            path,
+            PrimSpec::def().with_type_name(schema).with_property(
+                store.tokens.intern("points"),
+                PropertySpec::attribute()
+                    .with_default(Value::from(alloc::vec![[-1_f32, 2., 3.], [4., -5., 6.]])),
+            ),
+        );
+        store.insert_layer(layer);
+        let stage = Stage::compose(
+            &mut store,
+            LayerId(1),
+            StageOptions {
+                schemas: Some(Arc::new(schemas)),
+                ..StageOptions::default()
+            },
+        );
+        assert_eq!(
+            checked_compute(&Scene::new(&stage, &store), path, Time::Default),
+            Ok(Some((
+                Range3d {
+                    min: [-1., -5., 3.],
+                    max: [4., 2., 6.]
+                },
+                false
+            ))),
+        );
+    }
+
+    #[test]
+    fn shape_provider_preserves_signed_cpp_endpoints_before_aggregation() {
+        // OpenUSD 26.8 ComputeExtentFromPlugins, Z axis. BBoxCache discards
+        // these empty inverted ranges; the intrinsic formula must not abs().
+        for (schema, max) in [
+            ("Plane", [-3., 5., 0.]),
+            ("Cylinder_1", [-1., -1., -2.]),
+            ("Capsule_1", [-1., -1., -3.]),
+        ] {
+            let mut store = InMemoryStore::default();
+            let path = store.path("/Shape");
+            let mut prim = PrimSpec::def().with_type_name(store.tokens.intern(schema));
+            for (name, value) in [
+                ("width", -6.),
+                ("length", 10.),
+                ("height", -4.),
+                ("radiusTop", -1.),
+                ("radiusBottom", -3.),
+            ] {
+                prim = prim.with_property(
+                    store.tokens.intern(name),
+                    PropertySpec::attribute().with_default(Value::Double(value)),
+                );
+            }
+            let mut layer = Layer::new(LayerId(1));
+            layer.insert_prim(path, prim);
+            store.insert_layer(layer);
+            let schemas = crate::openusd(&mut store.tokens);
+            let stage = Stage::compose(
+                &mut store,
+                LayerId(1),
+                StageOptions {
+                    schemas: Some(Arc::new(schemas)),
+                    ..StageOptions::default()
+                },
+            );
+            assert_eq!(
+                checked_compute(&Scene::new(&stage, &store), path, Time::Default),
+                Ok(Some((
+                    Range3d {
+                        min: max.map(|v| -v),
+                        max
+                    },
+                    false
+                ))),
+                "{schema}"
+            );
         }
     }
 }

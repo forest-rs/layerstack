@@ -257,7 +257,19 @@ fn convert_number(number: Number, ty: &str) -> Result<Value, String> {
             Number::Int(n) => i128::from(n),
             Number::UInt(n) => i128::from(n),
             // `as` truncates toward zero.
-            Number::Float(f) if f.is_finite() => f as i128,
+            Number::Float(f) if f.is_finite() => {
+                // OpenUSD GfNumericCast checks the open floating interval
+                // (lowest - 1, max + 1) before truncation. For i64/u64 these
+                // endpoints round, so a double at the apparent integer limit
+                // may be out of range. Do not let a rounded overflow literal
+                // impersonate an exact integer boundary. AOUSD Core §6.2.
+                let low = min as f64 - 1.;
+                let high = max as f64 + 1.;
+                if f <= low || f >= high {
+                    return Err(alloc::format!("{f} is out of range for `{ty}`"));
+                }
+                f as i128
+            }
             Number::Float(f) => return Err(alloc::format!("{f} is not a `{ty}`")),
         };
         if (min..=max).contains(&n) {

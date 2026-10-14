@@ -147,6 +147,12 @@ impl<'a> LexicalCursor<'a> {
                     match value {
                         ast::Value::Int(0) if text == "0" => ast::Value::Number(-0.0),
                         ast::Value::Int(n) => ast::Value::Int(-n),
+                        // Match structural lowering: the signed minimum is an
+                        // exact integer despite its unsigned magnitude. AOUSD
+                        // Core §6.2; OpenUSD numeric literal classification.
+                        ast::Value::UInt(n) if n == i64::MAX as u64 + 1 => {
+                            ast::Value::Int(i64::MIN)
+                        }
                         ast::Value::UInt(n) => ast::Value::Number(-(n as f64)),
                         ast::Value::Number(n) => ast::Value::Number(-n),
                         _ => unreachable!("numeric literal"),

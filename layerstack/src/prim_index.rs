@@ -317,12 +317,22 @@ impl PrimIndex {
     }
 
     pub(crate) fn add_opinion(&mut self, opinion: Opinion) {
-        debug_assert!(self.fields.is_empty(), "append before finalization");
-        // Sparse prims should not reserve four large records on first use.
-        if self.opinions.capacity() == 0 {
-            self.opinions.reserve_exact(1);
+        self.add_opinions(core::iter::once(opinion));
+    }
+
+    /// Appends one known-size batch before finalization, preserving equal-key
+    /// insertion order. Detach shared snapshots once and reserve the first
+    /// batch exactly, so sparse prims do not reserve four large records.
+    pub(crate) fn add_opinions(&mut self, opinions: impl ExactSizeIterator<Item = Opinion>) {
+        if opinions.len() == 0 {
+            return;
         }
-        self.opinions.push(opinion);
+        let data = Arc::make_mut(&mut self.data);
+        debug_assert!(data.fields.is_empty(), "append before finalization");
+        if data.opinions.capacity() == 0 {
+            data.opinions.reserve_exact(opinions.len());
+        }
+        data.opinions.extend(opinions);
     }
 
     /// The opinions of the property `name`.
@@ -490,6 +500,51 @@ impl PrimIndex {
 mod tests {
     use super::*;
     use crate::InMemoryStore;
+
+    #[test]
+    fn batched_opinions_preserve_shared_snapshots_and_equal_key_order() {
+        let mut store = InMemoryStore::default();
+        let prim = store.path("/Emitter");
+        let field = store.tokens.intern("value");
+        let site = SpecPath::from_prim_path(prim, &store.paths);
+        let mut index = PrimIndex::new(PrimIndexGraph::from_arcs(&site, 1, []));
+        let opinion = |value| Opinion {
+            key: OpinionKey {
+                node: NodeId::ROOT,
+                layer_strength: 0,
+                layer_id: LayerId(1),
+                lookup_path: prim,
+                spec_path: site.with_property(field),
+            },
+            field,
+            value: PropertySpec::attribute()
+                .with_default(Value::Int(value))
+                .into(),
+            layer_offset: LayerOffset::IDENTITY,
+        };
+        index.add_opinion(opinion(1));
+        let mut snapshot = index.clone();
+        index.add_opinions([opinion(2), opinion(3)].into_iter());
+        snapshot.finalize();
+        index.finalize();
+        let values = |index: &PrimIndex| {
+            index
+                .property_opinions(field)
+                .unwrap()
+                .iter()
+                .map(|op| op.value.as_property().unwrap().default.clone())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(values(&snapshot), alloc::vec![Some(Value::Int(1))]);
+        assert_eq!(
+            values(&index),
+            alloc::vec![
+                Some(Value::Int(1)),
+                Some(Value::Int(2)),
+                Some(Value::Int(3))
+            ]
+        );
+    }
 
     #[test]
     fn field_identity_strength_and_removal_survive_grouping() {

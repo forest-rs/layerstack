@@ -6890,9 +6890,6 @@ fn add_reference_edge_opinions(
 
         let snapshots = snapshot_arc_specs(remote_layer, &mapping);
 
-        let mut pending_sources = Vec::new();
-        let mut pending_fields: Vec<(PathId, TokenId, OpinionKey, OpinionValue, LayerOffset)> =
-            Vec::new();
         for (remote_path_id, dest_path_id, remote_spec) in snapshots {
             if let Some(d) = deps.as_deref_mut() {
                 d.add_layer_opinion(remote_layer_id, dest_path_id);
@@ -6910,19 +6907,36 @@ fn add_reference_edge_opinions(
                     provenance_remap,
                 ),
             };
-            pending_sources.push((dest_path_id, base_key.clone()));
-
-            for (field, value) in remote_spec.entries {
-                pending_fields.push((
-                    dest_path_id,
+            let index = out.get_mut(&dest_path_id).expect("path exists");
+            index.add_source(base_key.clone());
+            let targets = nodes.target_map(cycles.stage_layer_stack(), &[]);
+            index.add_opinions(remote_spec.entries.into_iter().map(|(field, mut value)| {
+                let key = base_key
+                    .clone()
+                    .with_spec_path(base_key.spec_path.with_property(field));
+                map_arc_targets(
+                    store,
+                    &mut value,
+                    ArcPathMap {
+                        arc: ArcKind::References,
+                        source: &target_root,
+                        map: &|store, path| targets.map(store, path),
+                    },
+                    TargetOwner {
+                        prim: dest_path_id,
+                        property: field,
+                        layer: key.layer_id,
+                        spec: key.spec_path.clone(),
+                    },
+                    cycles,
+                );
+                Opinion {
+                    key,
                     field,
-                    base_key
-                        .clone()
-                        .with_spec_path(base_key.spec_path.with_property(field)),
                     value,
-                    ref_offset,
-                ));
-            }
+                    layer_offset: ref_offset,
+                }
+            }));
 
             if let Some(order) = remote_spec.prim_order {
                 prim_order_out.entry(dest_path_id).or_default().push((
@@ -6966,39 +6980,6 @@ fn add_reference_edge_opinions(
             if remote_spec.has_variant_sets && late_seen.insert((remote_path_id, dest_path_id)) {
                 late_sites.push((remote_path_id, dest_path_id));
             }
-        }
-
-        for (dest_path_id, key) in pending_sources {
-            out.get_mut(&dest_path_id)
-                .expect("path exists")
-                .add_source(key);
-        }
-        let targets = nodes.target_map(cycles.stage_layer_stack(), &[]);
-        for (dest_path_id, field, key, value, offset) in pending_fields {
-            let mut value = value;
-            map_arc_targets(
-                store,
-                &mut value,
-                ArcPathMap {
-                    arc: ArcKind::References,
-                    source: &target_root,
-                    map: &|store, path| targets.map(store, path),
-                },
-                TargetOwner {
-                    prim: dest_path_id,
-                    property: field,
-                    layer: key.layer_id,
-                    spec: key.spec_path.clone(),
-                },
-                cycles,
-            );
-            let index = out.get_mut(&dest_path_id).expect("path exists");
-            index.add_opinion(Opinion {
-                key,
-                field,
-                value,
-                layer_offset: offset,
-            });
         }
     }
 
@@ -7797,7 +7778,6 @@ fn add_payload_edge_opinions(
 
         let snapshots = snapshot_arc_specs(remote_layer, &mapping);
 
-        let mut pending_sources = Vec::new();
         for (remote_path_id, dest_path_id, remote_spec) in snapshots {
             if let Some(d) = deps.as_deref_mut() {
                 d.add_layer_opinion(remote_layer_id, dest_path_id);
@@ -7815,9 +7795,10 @@ fn add_payload_edge_opinions(
                     provenance_remap,
                 ),
             };
-            pending_sources.push((dest_path_id, base_key.clone()));
-
-            for (field, value) in remote_spec.entries {
+            let index = out.get_mut(&dest_path_id).expect("path exists");
+            index.add_source(base_key.clone());
+            let targets = nodes.target_map(cycles.stage_layer_stack(), &[]);
+            index.add_opinions(remote_spec.entries.into_iter().map(|(field, mut value)| {
                 let key = OpinionKey {
                     node,
                     layer_strength,
@@ -7825,34 +7806,29 @@ fn add_payload_edge_opinions(
                     lookup_path: remote_path_id,
                     spec_path: base_key.spec_path.with_property(field),
                 };
-                let index = out.get_mut(&dest_path_id).expect("path exists");
-                index.add_opinion(Opinion {
-                    key: key.clone(),
-                    field,
-                    value: {
-                        let mut value = value;
-                        let targets = nodes.target_map(cycles.stage_layer_stack(), &[]);
-                        map_arc_targets(
-                            store,
-                            &mut value,
-                            ArcPathMap {
-                                arc: ArcKind::Payloads,
-                                source: &target_root,
-                                map: &|store, path| targets.map(store, path),
-                            },
-                            TargetOwner {
-                                prim: dest_path_id,
-                                property: field,
-                                layer: remote_layer_id,
-                                spec: key.spec_path.clone(),
-                            },
-                            cycles,
-                        );
-                        value
+                map_arc_targets(
+                    store,
+                    &mut value,
+                    ArcPathMap {
+                        arc: ArcKind::Payloads,
+                        source: &target_root,
+                        map: &|store, path| targets.map(store, path),
                     },
+                    TargetOwner {
+                        prim: dest_path_id,
+                        property: field,
+                        layer: remote_layer_id,
+                        spec: key.spec_path.clone(),
+                    },
+                    cycles,
+                );
+                Opinion {
+                    key,
+                    field,
+                    value,
                     layer_offset: payload_offset,
-                });
-            }
+                }
+            }));
 
             if let Some(order) = remote_spec.prim_order {
                 prim_order_out.entry(dest_path_id).or_default().push((
@@ -7898,12 +7874,6 @@ fn add_payload_edge_opinions(
             if remote_spec.has_variant_sets && late_seen.insert((remote_path_id, dest_path_id)) {
                 late_sites.push((remote_path_id, dest_path_id));
             }
-        }
-
-        for (dest_path_id, key) in pending_sources {
-            out.get_mut(&dest_path_id)
-                .expect("path exists")
-                .add_source(key);
         }
     }
 

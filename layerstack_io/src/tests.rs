@@ -1579,6 +1579,45 @@ fn repeated_references_identify_each_asset_once_per_operation() {
     assert_eq!(doc.storage.identifies.get(), 3);
 }
 #[test]
+fn value_edits_in_one_variant_branch_refresh_without_recomposing_sibling_branches() {
+    let backend = Memory::with(&[
+        (
+            "root.usda",
+            "#usda 1.0\ndef \"Red\" (references = @asset.usda@</Asset>\n variants = { string look = \"red\" }) {}\ndef \"Blue\" (references = @asset.usda@</Asset>\n variants = { string look = \"blue\" }) {}\n",
+        ),
+        (
+            "asset.usda",
+            "#usda 1.0\ndef \"Asset\" (variantSets = [\"look\"]) {\n variantSet \"look\" = {\n \"red\" { def \"Geom\" { double size = 1 } }\n \"blue\" { def \"Geom\" { double size = 2 } }\n }\n}\n",
+        ),
+    ]);
+    let mut doc = StageDocument::open(backend, "root.usda", StageOptions::default()).unwrap();
+    let asset = *doc
+        .store
+        .layers
+        .keys()
+        .find(|&&id| doc.identifier(id) == Some("asset.usda"))
+        .unwrap();
+    let red = doc.store.property_path("/Red/Geom.size");
+    let blue = doc.store.property_path("/Blue/Geom.size");
+    let spec = layerstack::SpecPath::parse(
+        "/Asset{look=red}Geom.size",
+        &mut doc.store.tokens,
+        &mut doc.store.paths,
+    )
+    .unwrap();
+    let mut edit = Transaction::new();
+    edit.set_default(layerstack::Address::spec(asset, spec), Value::Double(5.0));
+    let (store, stage) = doc.parts_mut();
+    let applied = stage.apply(store, &edit).unwrap();
+    // `/Blue/Geom` composes the sibling branch's spec of the same prim in
+    // the same layer; it keeps its slots rather than forcing composition.
+    assert_eq!(applied.recomposed, [red.prim_path()]);
+    assert_eq!(applied.changes.changed_info_only, [red.prim_path()]);
+    let resolved = |path| doc.stage.stage().resolve_field_path(path).unwrap().value;
+    assert_eq!(resolved(red), Value::Double(5.0));
+    assert_eq!(resolved(blue), Value::Double(2.0));
+}
+#[test]
 fn expression_assets_open_with_the_primary_stack_and_retained_bindings() {
     let backend = Memory::with(&[
         (

@@ -1413,6 +1413,15 @@ impl Stage {
     /// caller supplies only source dependents and verifies their generations.
     /// Ambiguous provenance takes the ordinary composition path. Preparation
     /// is atomic: no cached opinion changes unless every mapping is known.
+    /// Returns the prims whose value slots changed, sorted, or `None` when
+    /// the edit needs composition.
+    ///
+    /// Source dependents are keyed by prim path without variant context, so a
+    /// dependent may compose a sibling variant branch of the edited spec.
+    /// Value edits only rewrite existing properties, so a prim whose opinions
+    /// from that site all name another branch cannot gain the edited one:
+    /// it keeps its slots. A prim with no opinion from the site at all stays
+    /// on the composition path.
     ///
     /// Spec: AOUSD Core §12.3 (attribute value resolution is distinct from
     /// prim composition). OpenUSD's `PcpChanges::DidChange` skips property-only
@@ -1422,31 +1431,26 @@ impl Stage {
         store: &dyn LayerStore,
         edits: &[crate::edit::PropertyValueEdit],
         dependents: &[Vec<PathId>],
-    ) -> bool {
+    ) -> Option<Vec<PathId>> {
         // An empty edit has no records to detach or reshare. In particular, avoid
         // revisiting every native prototype member on unchanged publication.
         if edits.is_empty() {
-            return true;
+            return Some(Vec::new());
         }
         if edits
             .iter()
             .any(|edit| self.clips.layers().contains(&edit.layer))
         {
-            return false;
+            return None;
         }
         let mut patches = Vec::new();
         for (edit_index, (edit, prims)) in edits.iter().zip(dependents).enumerate() {
-            let Some(authored) = edit.property(store) else {
-                return false;
-            };
+            let authored = edit.property(store)?;
             for &prim in prims {
-                let Some(index) = self.prims.get(&prim) else {
-                    return false;
-                };
-                let Some(opinions) = index.property_opinions(edit.name) else {
-                    return false;
-                };
+                let index = self.prims.get(&prim)?;
+                let opinions = index.property_opinions(edit.name)?;
                 let mut matched = false;
+                let mut sibling_branch = false;
                 for (position, opinion) in opinions.iter().enumerate() {
                     let key = &opinion.key;
                     if key.layer_id != edit.layer
@@ -1455,12 +1459,19 @@ impl Stage {
                     {
                         continue;
                     }
-                    // Remapped source paths and mixed variant contexts need
-                    // composition to recover their exact authored locator.
-                    if key.spec_path != edit.path
-                        || !matches!(opinion.value, OpinionValue::Property(_))
-                    {
-                        return false;
+                    if key.spec_path != edit.path {
+                        // An unremapped locator names its authored spec
+                        // exactly; differing only in variant context, it is
+                        // another branch's spec. Remapped source paths need
+                        // composition to recover their authored locator.
+                        if key.spec_path.prim_path() != key.lookup_path {
+                            return None;
+                        }
+                        sibling_branch = true;
+                        continue;
+                    }
+                    if !matches!(opinion.value, OpinionValue::Property(_)) {
+                        return None;
                     }
                     matched = true;
                     let mut default = edit.default.then(|| authored.default.clone());
@@ -1497,8 +1508,8 @@ impl Stage {
                         prim, edit.name, position, default, samples, edit_index, shareable,
                     ));
                 }
-                if !matched {
-                    return false;
+                if !matched && !sibling_branch {
+                    return None;
                 }
             }
         }
@@ -1536,7 +1547,9 @@ impl Stage {
             }
         }
         self.reshare_changed_prototype_records(&changed);
-        true
+        let mut changed: Vec<PathId> = changed.into_iter().collect();
+        changed.sort_unstable();
+        Some(changed)
     }
 
     /// Returns `true` if a partial composition shows that recomposing

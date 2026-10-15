@@ -645,6 +645,28 @@ fn stack_selections(
     (selections, parent_selections)
 }
 
+/// A site's arcs come from its prim specs (including child specs in ancestor
+/// variants) or its own variant headers. Without direct list edits or own
+/// variant sets, selection resolution cannot reveal an arc. Sites with variant
+/// sets use general resolution rather than scanning branches to prove absence.
+/// AOUSD Core §7.3.6 (variant specs), §10 (composition arcs).
+fn site_may_have_arcs<T>(
+    store: &dyn LayerStore,
+    stack: &LayerStack,
+    prim: PathId,
+    direct: fn(&PrimSpec) -> &ListOp<T>,
+) -> bool {
+    stack
+        .layers
+        .iter()
+        .filter_map(|id| store.layer(*id))
+        .any(|layer| {
+            layer
+                .prim_specs(prim)
+                .any(|spec| !direct(spec).is_empty() || !spec.variant_sets.is_empty())
+        })
+}
+
 pub(crate) fn resolve_inherits_for_prim(
     store: &dyn LayerStore,
     fallbacks: &VariantFallbacks,
@@ -652,6 +674,9 @@ pub(crate) fn resolve_inherits_for_prim(
     prim: PathId,
     scope: SelectionScope<'_>,
 ) -> Vec<Sited<PathId>> {
+    if !site_may_have_arcs(store, local_stack, prim, |s| &s.inherits) {
+        return Vec::new();
+    }
     let (selections, parent_selections) = stack_selections(store, fallbacks, local_stack, prim);
     resolve_inherits_for_prim_in(
         store,
@@ -679,6 +704,9 @@ pub(crate) fn resolve_inherits_for_prim_in(
     parent_selections: &HashMap<TokenId, TokenId>,
     scope: SelectionScope<'_>,
 ) -> Vec<Sited<PathId>> {
+    if !site_may_have_arcs(store, local_stack, prim, |s| &s.inherits) {
+        return Vec::new();
+    }
     let mut ops = NodeLists::new();
     for layer_id in &local_stack.layers {
         let Some(layer) = store.layer(*layer_id) else {
@@ -891,6 +919,9 @@ pub(crate) fn resolve_references_for_prim(
     scope: SelectionScope<'_>,
     anchor: ArcAnchor<'_>,
 ) -> Vec<Sited<Reference>> {
+    if !site_may_have_arcs(store, local_stack, prim, |s| &s.references) {
+        return Vec::new();
+    }
     let selections = resolve_variant_selections_for_prim(store, fallbacks, local_stack, prim);
     resolve_references_for_prim_selected(
         store,
@@ -917,6 +948,9 @@ pub(crate) fn resolve_references_for_prim_selected(
     anchor: ArcAnchor<'_>,
     selections: &HashMap<TokenId, TokenId>,
 ) -> Vec<Sited<Reference>> {
+    if !site_may_have_arcs(store, local_stack, prim, |s| &s.references) {
+        return Vec::new();
+    }
     let mut ops = NodeLists::new();
     for layer_id in &local_stack.layers {
         let Some(layer) = store.layer(*layer_id) else {
@@ -1487,6 +1521,9 @@ pub(crate) fn resolve_specializes_for_prim(
     prim: PathId,
     scope: SelectionScope<'_>,
 ) -> Vec<Sited<PathId>> {
+    if !site_may_have_arcs(store, local_stack, prim, |s| &s.specializes) {
+        return Vec::new();
+    }
     let (selections, parent_selections) = stack_selections(store, fallbacks, local_stack, prim);
     resolve_specializes_for_prim_in(
         store,
@@ -1510,6 +1547,9 @@ pub(crate) fn resolve_specializes_for_prim_in(
     parent_selections: &HashMap<TokenId, TokenId>,
     scope: SelectionScope<'_>,
 ) -> Vec<Sited<PathId>> {
+    if !site_may_have_arcs(store, local_stack, prim, |s| &s.specializes) {
+        return Vec::new();
+    }
     let mut ops = NodeLists::new();
     for layer_id in &local_stack.layers {
         let Some(layer) = store.layer(*layer_id) else {
@@ -1569,6 +1609,9 @@ pub(crate) fn resolve_payloads_for_prim(
     scope: SelectionScope<'_>,
     anchor: ArcAnchor<'_>,
 ) -> Vec<Sited<Reference>> {
+    if !site_may_have_arcs(store, local_stack, prim, |s| &s.payloads) {
+        return Vec::new();
+    }
     let anchor = anchor.payloads();
     let (_, parent_selections) = stack_selections(store, fallbacks, local_stack, prim);
     resolve_payloads_for_prim_in(
@@ -1593,6 +1636,9 @@ pub(crate) fn resolve_payloads_for_prim_in(
     scope: SelectionScope<'_>,
     anchor: ArcAnchor<'_>,
 ) -> Vec<Sited<Reference>> {
+    if !site_may_have_arcs(store, local_stack, prim, |s| &s.payloads) {
+        return Vec::new();
+    }
     let anchor = anchor.payloads();
     let mut ops = NodeLists::new();
     for layer_id in &local_stack.layers {
@@ -1634,6 +1680,101 @@ pub(crate) fn resolve_payloads_for_prim_in(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn absent_strong_arcs_do_not_hide_weaker_arcs_or_explicit_clears() {
+        let mut store = crate::InMemoryStore::default();
+        let prim = store.path("/P");
+        let class = store.path("/Class");
+        let mut weak = Layer::new(LayerId(2));
+        let mut spec = PrimSpec::def();
+        spec.inherits = ListOp::explicit(alloc::vec![class]);
+        weak.insert_prim(prim, spec);
+        store.insert_layer(weak);
+        let mut strong = Layer::new(LayerId(1));
+        strong.sublayers.push(crate::SublayerEntry::new(LayerId(2)));
+        strong.insert_prim(prim, PrimSpec::over());
+        store.insert_layer(strong);
+        let stack = LayerStack::gather(&store, LayerId(1));
+        let fallbacks = VariantFallbacks::default();
+        assert_eq!(
+            arcs_of(resolve_inherits_for_prim(
+                &store,
+                &fallbacks,
+                &stack,
+                prim,
+                SelectionScope::Stack
+            )),
+            alloc::vec![class]
+        );
+        store
+            .layers
+            .get_mut(&LayerId(1))
+            .unwrap()
+            .prims
+            .get_mut(&prim)
+            .unwrap()
+            .inherits = ListOp::explicit(Vec::new());
+        assert!(
+            resolve_inherits_for_prim(&store, &fallbacks, &stack, prim, SelectionScope::Stack)
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn absence_checks_include_nested_variant_headers_and_branch_child_specs() {
+        let mut store = crate::InMemoryStore::default();
+        let prim = store.path("/P");
+        let child = store.path("/P/C");
+        let class = store.path("/Class");
+        let mode = store.tokens.intern("mode");
+        let detail = store.tokens.intern("detail");
+        let on = store.tokens.intern("on");
+        let inner = VariantSpec {
+            inherits: ListOp::explicit(alloc::vec![class]),
+            ..VariantSpec::default()
+        };
+        let mut outer = VariantSpec::default();
+        outer.variant_sets.insert(
+            detail,
+            crate::VariantSetSpec {
+                variants: HashMap::from([(on, inner)]),
+            },
+        );
+        let mut spec = PrimSpec::def();
+        spec.variant_sets.insert(
+            mode,
+            crate::VariantSetSpec {
+                variants: HashMap::from([(on, outer)]),
+            },
+        );
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(prim, spec);
+        let mut branch_child = PrimSpec::def();
+        branch_child.outer_variant_sites.push(VariantSelectionSite {
+            host_path: prim,
+            set: mode,
+            variant: on,
+        });
+        branch_child.inherits = ListOp::explicit(alloc::vec![class]);
+        layer.insert_prim(child, branch_child);
+        store.insert_layer(layer);
+        let stack = LayerStack::gather(&store, LayerId(1));
+        let fallbacks = VariantFallbacks::default();
+        // Discovery must see unselected branches too, including nested headers.
+        for path in [prim, child] {
+            assert_eq!(
+                arcs_of(resolve_inherits_for_prim(
+                    &store,
+                    &fallbacks,
+                    &stack,
+                    path,
+                    SelectionScope::Discover
+                )),
+                alloc::vec![class]
+            );
+        }
+    }
 
     #[test]
     fn unauthored_lists_preserve_node_order_and_weaker_arcs() {

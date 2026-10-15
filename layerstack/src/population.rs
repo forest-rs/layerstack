@@ -96,6 +96,97 @@ impl VisitedClasses {
     }
 }
 
+/// The arcs population follows from one prim of a layer stack that a
+/// reference or payload reaches, in every variant branch.
+#[derive(Debug, Default)]
+struct RemoteArcs {
+    inherits: Vec<PathId>,
+    specializes: Vec<PathId>,
+    references: Vec<Reference>,
+    /// References authored for the prim in its parent's branches.
+    branch_children: Vec<Reference>,
+    /// References authored on the prim's own branches.
+    branch_references: Vec<Reference>,
+    /// Payloads authored on the prim's own branches.
+    branch_payloads: Vec<Reference>,
+    payloads: Vec<Reference>,
+}
+
+impl RemoteArcs {
+    /// Reads the arcs of `prim` in `stack`, anchored and evaluated as
+    /// `anchor` says.
+    fn read(
+        store: &dyn LayerStore,
+        stack: &LayerStack,
+        prim: PathId,
+        anchor: ArcAnchor<'_>,
+    ) -> Self {
+        // No variant fallbacks, as in `gather_populated_paths`.
+        let fallbacks = &VariantFallbacks::default();
+        let discover = SelectionScope::Discover;
+        Self {
+            inherits: arcs_of(resolve_inherits_for_prim(
+                store, fallbacks, stack, prim, discover,
+            )),
+            specializes: arcs_of(resolve_specializes_for_prim(
+                store, fallbacks, stack, prim, discover,
+            )),
+            references: arcs_of(resolve_references_for_prim(
+                store, fallbacks, stack, prim, discover, anchor,
+            )),
+            branch_children: collect_all_variant_child_references(store, stack, prim, anchor),
+            branch_references: collect_all_variant_branch_references(
+                store, fallbacks, stack, prim, anchor,
+            ),
+            branch_payloads: collect_all_variant_branch_payloads(
+                store, fallbacks, stack, prim, anchor,
+            ),
+            payloads: arcs_of(resolve_payloads_for_prim(
+                store, fallbacks, stack, prim, discover, anchor,
+            )),
+        }
+    }
+}
+
+/// The [`RemoteArcs`] population has read, shared by every arc that reaches
+/// a prim in the same context: the layer that anchors internal arcs, and
+/// the layer stacks whose expression variables apply
+/// (`ArcChain::stacks_for`), which also gather the prim's layer stack. Each
+/// placement of an asset reads the same arcs.
+#[derive(Debug, Default)]
+struct RemoteArcCache {
+    contexts: HashMap<(LayerId, Vec<LayerStackIdentifier>), usize>,
+    arcs: HashMap<(usize, PathId), Rc<RemoteArcs>>,
+}
+
+impl RemoteArcCache {
+    /// The number of the context `stacks` reached with `anchor`.
+    fn context(&mut self, anchor: LayerId, stacks: &[LayerStackIdentifier]) -> usize {
+        let next = self.contexts.len();
+        *self
+            .contexts
+            .entry((anchor, stacks.to_vec()))
+            .or_insert(next)
+    }
+
+    /// The arcs of `prim` in `stack`, reached in `context` (see
+    /// [`Self::context`]), read with `anchor` the first time.
+    fn arcs(
+        &mut self,
+        store: &dyn LayerStore,
+        context: usize,
+        stack: &LayerStack,
+        prim: PathId,
+        anchor: ArcAnchor<'_>,
+    ) -> Rc<RemoteArcs> {
+        Rc::clone(
+            self.arcs
+                .entry((context, prim))
+                .or_insert_with(|| Rc::new(RemoteArcs::read(store, stack, prim, anchor))),
+        )
+    }
+}
+
 /// Raw authored namespaces shared within one composition. Arc mapping,
 /// relocation and variant admission remain the callers' responsibility.
 #[derive(Debug, Default)]
@@ -493,10 +584,17 @@ fn gather_populated_paths(
     let mut visited_inherits = VisitedClasses::default();
     let mut mapped_from = MappedFrom::new();
     let mut implied_inherits: HashSet<(PathId, PathId)> = HashSet::new();
+    let mut remote_arcs = RemoteArcCache::default();
     while idx < queue.len() {
         let path = queue[idx];
         idx += 1;
-        let mut chain = Chain::new(stage_layer_stack, path, relocations, inventory);
+        let mut chain = Chain::new(
+            stage_layer_stack,
+            path,
+            relocations,
+            inventory,
+            &mut remote_arcs,
+        );
         // Discovery evaluates asset path expressions as composition does;
         // composition reports what they find.
         let expressions = chain.expression_scope();
@@ -535,7 +633,7 @@ fn gather_populated_paths(
             expand_reference_paths(
                 store,
                 path,
-                reference,
+                &reference,
                 &mut paths,
                 &mut queue,
                 &mut visited_refs,
@@ -554,7 +652,7 @@ fn gather_populated_paths(
             expand_reference_paths(
                 store,
                 path,
-                reference,
+                &reference,
                 &mut paths,
                 &mut queue,
                 &mut visited_refs,
@@ -572,7 +670,7 @@ fn gather_populated_paths(
             expand_reference_paths(
                 store,
                 path,
-                reference,
+                &reference,
                 &mut paths,
                 &mut queue,
                 &mut visited_refs,
@@ -603,7 +701,7 @@ fn gather_populated_paths(
             expand_reference_paths(
                 store,
                 path,
-                payload,
+                &payload,
                 &mut paths,
                 &mut queue,
                 &mut visited_refs,
@@ -627,7 +725,7 @@ fn gather_populated_paths(
             expand_reference_paths(
                 store,
                 path,
-                payload,
+                &payload,
                 &mut paths,
                 &mut queue,
                 &mut visited_refs,
@@ -684,7 +782,13 @@ fn gather_populated_paths(
     while idx < queue.len() {
         let path = queue[idx];
         idx += 1;
-        let mut chain = Chain::new(stage_layer_stack, path, relocations, inventory);
+        let mut chain = Chain::new(
+            stage_layer_stack,
+            path,
+            relocations,
+            inventory,
+            &mut remote_arcs,
+        );
 
         let inherits = arcs_of(resolve_inherits_for_prim(
             store,
@@ -823,7 +927,7 @@ fn expand_inherit_paths(
             expand_reference_paths(
                 store,
                 dest_path_id,
-                nested,
+                &nested,
                 paths,
                 queue,
                 &mut HashSet::new(),
@@ -851,7 +955,7 @@ fn expand_inherit_paths(
 fn expand_reference_paths(
     store: &mut dyn LayerStore,
     dest_root: PathId,
-    reference: Reference,
+    reference: &Reference,
     paths: &mut BTreeSet<PathId>,
     queue: &mut Vec<PathId>,
     visited: &mut HashSet<VisitedArc>,
@@ -859,8 +963,6 @@ fn expand_reference_paths(
     chain: &mut Chain<'_>,
     mapped_from: &mut MappedFrom,
 ) {
-    // No variant fallbacks, as in `gather_populated_paths`.
-    let fallbacks = &VariantFallbacks::default();
     let Some(reference_path) = reference.target_path(store) else {
         return;
     };
@@ -898,6 +1000,7 @@ fn expand_reference_paths(
     chain.push(store, &remote_stack, reference_path, dest_root);
     let expressions = chain.expression_scope();
     let anchor = ArcAnchor::new(reference.layer, Some(&expressions));
+    let context = chain.remote.context(reference.layer, &stacks);
 
     let target = store.paths().resolve(reference_path).clone();
     let base = store.paths().resolve(dest_root).clone();
@@ -930,14 +1033,10 @@ fn expand_reference_paths(
         // Referenced content has specs of its own at this path.
         mapped_from.remove(&dest_path_id);
 
-        let inherits = arcs_of(resolve_inherits_for_prim(
-            store,
-            fallbacks,
-            &remote_stack,
-            remote_path_id,
-            SelectionScope::Discover,
-        ));
-        for inherited_root in inherits {
+        let arcs = chain
+            .remote
+            .arcs(store, context, &remote_stack, remote_path_id, anchor);
+        for &inherited_root in &arcs.inherits {
             expand_inherit_paths(
                 store,
                 &remote_stack,
@@ -955,14 +1054,7 @@ fn expand_reference_paths(
         // inherits, as they do at the stage's own layer stack.
         //
         // Spec: AOUSD Core §10 (specializes arc), §11 (population).
-        let specializes = arcs_of(resolve_specializes_for_prim(
-            store,
-            fallbacks,
-            &remote_stack,
-            remote_path_id,
-            SelectionScope::Discover,
-        ));
-        for specialized_root in specializes {
+        for &specialized_root in &arcs.specializes {
             expand_inherit_paths(
                 store,
                 &remote_stack,
@@ -976,15 +1068,14 @@ fn expand_reference_paths(
             );
         }
 
-        let nested_refs = arcs_of(resolve_references_for_prim(
-            store,
-            fallbacks,
-            &remote_stack,
-            remote_path_id,
-            SelectionScope::Discover,
-            anchor,
-        ));
-        for nested in nested_refs {
+        // References on the prim, and from ALL variant branches: those
+        // authored for it in its parent's branches and on its own.
+        let references = arcs
+            .references
+            .iter()
+            .chain(&arcs.branch_children)
+            .chain(&arcs.branch_references);
+        for nested in references {
             expand_reference_paths(
                 store,
                 dest_path_id,
@@ -998,54 +1089,9 @@ fn expand_reference_paths(
             );
         }
 
-        // Expand variant-scoped child references from ALL variant branches.
-        let variant_refs =
-            collect_all_variant_child_references(store, &remote_stack, remote_path_id, anchor);
-        for nested in variant_refs {
-            expand_reference_paths(
-                store,
-                dest_path_id,
-                nested,
-                paths,
-                queue,
-                visited,
-                visited_inherits,
-                chain,
-                mapped_from,
-            );
-        }
-
-        // Expand variant branch-level references from ALL variant branches.
-        let branch_refs = collect_all_variant_branch_references(
-            store,
-            fallbacks,
-            &remote_stack,
-            remote_path_id,
-            anchor,
-        );
-        for nested in branch_refs {
-            expand_reference_paths(
-                store,
-                dest_path_id,
-                nested,
-                paths,
-                queue,
-                visited,
-                visited_inherits,
-                chain,
-                mapped_from,
-            );
-        }
-
-        // Expand variant branch-level payloads from ALL variant branches.
-        let branch_payloads = collect_all_variant_branch_payloads(
-            store,
-            fallbacks,
-            &remote_stack,
-            remote_path_id,
-            anchor,
-        );
-        for nested in branch_payloads {
+        // Payloads from ALL variant branches of the prim, then its direct
+        // ones.
+        for nested in arcs.branch_payloads.iter().chain(&arcs.payloads) {
             if !chain
                 .inventory
                 .load_rules
@@ -1057,36 +1103,6 @@ fn expand_reference_paths(
                 store,
                 dest_path_id,
                 nested,
-                paths,
-                queue,
-                visited,
-                visited_inherits,
-                chain,
-                mapped_from,
-            );
-        }
-
-        // Expand direct payloads from the remote prim.
-        let payloads = arcs_of(resolve_payloads_for_prim(
-            store,
-            fallbacks,
-            &remote_stack,
-            remote_path_id,
-            SelectionScope::Discover,
-            anchor,
-        ));
-        for payload in payloads {
-            if !chain
-                .inventory
-                .load_rules
-                .is_loaded(store.paths().resolve(dest_path_id))
-            {
-                continue;
-            }
-            expand_reference_paths(
-                store,
-                dest_path_id,
-                payload,
                 paths,
                 queue,
                 visited,
@@ -1275,7 +1291,7 @@ fn expand_ancestral_paths_from(
             expand_reference_paths(
                 store,
                 dest_root,
-                reference,
+                &reference,
                 paths,
                 queue,
                 visited_refs,
@@ -1336,6 +1352,7 @@ struct Chain<'r> {
     arcs: ArcChain,
     relocations: &'r mut Relocations,
     inventory: &'r mut SourceInventory,
+    remote: &'r mut RemoteArcCache,
     stage: Rc<LiftedSet>,
     /// The relocations lifted by each arc on the chain, outermost first.
     lifted: Vec<Option<Rc<LiftedSet>>>,
@@ -1351,12 +1368,14 @@ impl<'r> Chain<'r> {
         prim: PathId,
         relocations: &'r mut Relocations,
         inventory: &'r mut SourceInventory,
+        remote: &'r mut RemoteArcCache,
     ) -> Self {
         let stage = relocations.stage();
         Self {
             arcs: ArcChain::new(layer_stack, prim),
             relocations,
             inventory,
+            remote,
             stage,
             lifted: Vec::new(),
             implied: Vec::new(),

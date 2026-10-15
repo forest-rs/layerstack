@@ -708,13 +708,24 @@ pub(crate) fn read_selections(
         return (errors, reads);
     }
     let tokens = store.tokens();
-    for index in prims.values() {
+    // Prims in namespace order and each source's selections by set name, so
+    // the errors are found in one order.
+    let mut indexes: Vec<_> = prims.iter().collect();
+    indexes.sort_by(|(a, _), (b, _)| {
+        let paths = store.paths();
+        paths
+            .resolve(**a)
+            .cmp_with_tokens(paths.resolve(**b), tokens)
+    });
+    for (_, index) in indexes {
         let declared = declared_variant_sets(store, index);
         let mut decided: HashSet<TokenId> = HashSet::new();
         for source in &index.sources {
             let Some(selections) = authored_source_selections(store, source) else {
                 continue;
             };
+            let mut selections: Vec<_> = selections.iter().collect();
+            selections.sort_by(|(a, _), (b, _)| tokens.resolve(**a).cmp(tokens.resolve(**b)));
             for (set, variant) in selections {
                 if !declared.contains(set) || decided.contains(set) {
                     continue;

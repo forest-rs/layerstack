@@ -3752,14 +3752,12 @@ mod tests {
     }
 
     /// Asserts that `live` reports the same composition errors as a fresh
-    /// composition, in any order.
+    /// composition, in the same order.
     fn assert_errors_match_fresh(live: &LiveStage, store: &mut InMemoryStore) {
         let fresh = Stage::compose(store, live.root, live.options.clone());
-        let as_set =
-            |errors: &[crate::CompositionError]| errors.iter().cloned().collect::<HashSet<_>>();
         assert_eq!(
-            as_set(live.stage().composition_errors()),
-            as_set(fresh.composition_errors()),
+            live.stage().composition_errors(),
+            fresh.composition_errors(),
             "composition errors differ"
         );
     }

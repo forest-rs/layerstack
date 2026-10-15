@@ -535,7 +535,7 @@ pub(crate) fn compose_stage_retained(
             inspected_source_paths,
             indexed_source_paths,
         })
-        .with_composition_errors(errors)
+        .with_composition_errors(store, errors)
         .with_instances(instances)
         .with_variant_fallbacks(options.variant_fallbacks.clone())
 }

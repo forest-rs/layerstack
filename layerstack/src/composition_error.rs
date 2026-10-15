@@ -13,11 +13,14 @@
 //! [`Stage::composition_errors`]: crate::Stage::composition_errors
 
 use alloc::{string::String, vec::Vec};
+use core::cmp::Ordering;
+
+use hashbrown::HashMap;
 
 use crate::{
     doc::LayerId,
-    interner::TokenId,
-    path::{PathId, TargetPath},
+    interner::{TokenId, TokenInterner},
+    path::{PathId, PathInterner, TargetPath},
     prim_index::ArcKind,
     property::PropertyKind,
     spec_path::SpecPath,
@@ -97,6 +100,62 @@ impl CompositionError {
             Self::VariableExpressionError(error) => error.prim,
         }
     }
+
+    /// The position of this error's kind in the order the variants are
+    /// declared.
+    fn rank(&self) -> u8 {
+        match self {
+            Self::SublayerCycle(_) => 0,
+            Self::ArcCycle(_) => 1,
+            Self::UnresolvedDefaultPrim(_) => 2,
+            Self::UnresolvedPrimPath(_) => 3,
+            Self::UnresolvedAsset(_) => 4,
+            Self::UnresolvedSublayer(_) => 5,
+            Self::InvalidAuthoredRelocation(_) => 6,
+            Self::InvalidConflictingRelocation(_) => 7,
+            Self::InvalidSameTargetRelocations(_) => 8,
+            Self::OpinionAtRelocationSource(_) => 9,
+            Self::ArcToProhibitedChild(_) => 10,
+            Self::InconsistentPropertyType(_) => 11,
+            Self::InvalidExternalTargetPath(_) => 12,
+            Self::InvalidInstanceTargetPath(_) => 13,
+            Self::VariableExpressionError(_) => 14,
+        }
+    }
+}
+
+/// Puts `errors` in the order a stage reports them (see
+/// [`Stage::composition_errors`]): the errors in layer stacks first, then
+/// each composed prim's, in stage traversal order (`position`) and then, for
+/// prims traversal does not reach, in namespace order
+/// ([`Path::cmp_with_tokens`]); each prim's by kind and then in the order
+/// found.
+///
+/// Composition finds errors in an order that depends on how it visits
+/// hashed collections, and a stage recomposed in part merges in the errors
+/// of the prims it recomposed. Sorting by what each error is about gives one
+/// order for both.
+///
+/// [`Stage::composition_errors`]: crate::Stage::composition_errors
+/// [`Path::cmp_with_tokens`]: crate::Path::cmp_with_tokens
+pub(crate) fn order_errors(
+    errors: &mut [CompositionError],
+    position: &HashMap<PathId, usize>,
+    paths: &PathInterner,
+    tokens: &TokenInterner,
+) {
+    let place = |prim: PathId| position.get(&prim).copied().unwrap_or(usize::MAX);
+    errors.sort_by(|a, b| {
+        let prims = match (a.prim(), b.prim()) {
+            (None, None) => Ordering::Equal,
+            (None, Some(_)) => Ordering::Less,
+            (Some(_), None) => Ordering::Greater,
+            (Some(a), Some(b)) => place(a)
+                .cmp(&place(b))
+                .then_with(|| paths.resolve(a).cmp_with_tokens(paths.resolve(b), tokens)),
+        };
+        prims.then_with(|| a.rank().cmp(&b.rank()))
+    });
 }
 
 /// A reference or payload with no authored prim path

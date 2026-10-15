@@ -1249,15 +1249,23 @@ fn inherit_ancestral_nodes(
         let Some(parent_index) = prims.get(&parent) else {
             continue;
         };
-        let graph = parent_index.graph.clone();
-        let mut mapped: HashMap<NodeId, NodeId> = HashMap::from([(NodeId::ROOT, NodeId::ROOT)]);
-        let mut inserted = Vec::new();
-        for (id, node) in graph.nodes().filter(|(id, _)| *id != NodeId::ROOT) {
-            let Some(&child_parent) = node.parent().and_then(|parent| mapped.get(&parent)) else {
+        if parent_index.graph.len() <= 1 {
+            continue;
+        }
+        // Resolve selected branches before borrowing the disjoint parent/child.
+        // Attaching source-free ancestral nodes changes no selection opinions.
+        let mut selected = alloc::vec![false; parent_index.graph.len()];
+        selected[NodeId::ROOT.index()] = true;
+        for (id, node) in parent_index
+            .graph
+            .nodes()
+            .filter(|(id, _)| *id != NodeId::ROOT)
+        {
+            if !node.parent().is_some_and(|parent| selected[parent.index()]) {
                 continue;
-            };
-            if node.arc_kind() == ArcKind::Variants
-                && [BranchHosts::Ancestors, BranchHosts::Own]
+            }
+            selected[id.index()] = node.arc_kind() != ArcKind::Variants
+                || ![BranchHosts::Ancestors, BranchHosts::Own]
                     .iter()
                     .any(|hosts| {
                         !spec_path_branches_selected(
@@ -1272,13 +1280,24 @@ fn inherit_ancestral_nodes(
                             node.site(),
                             *hosts,
                         )
-                    })
-            {
+                    });
+        }
+        let [Some(parent_index), Some(child)] = prims.get_disjoint_mut([&parent, &path]) else {
+            continue;
+        };
+        let graph = &parent_index.graph;
+        let mut mapped: HashMap<NodeId, NodeId> = HashMap::from([(NodeId::ROOT, NodeId::ROOT)]);
+        let mut inserted = Vec::new();
+        for (id, node) in graph
+            .nodes()
+            .filter(|(id, _)| *id != NodeId::ROOT && selected[id.index()])
+        {
+            let Some(&child_parent) = node.parent().and_then(|parent| mapped.get(&parent)) else {
                 continue;
-            }
+            };
             let mut arc = node.arc.clone();
             arc.site = arc.site.join_prims(&[name], store.paths_mut());
-            let child_graph = &mut prims.get_mut(&path).expect("existing child").graph;
+            let child_graph = &mut child.graph;
             let existing = child_graph
                 .node(child_parent)
                 .expect("mapped parent")
@@ -1298,7 +1317,6 @@ fn inherit_ancestral_nodes(
             mapped.insert(id, child);
         }
         if !inserted.is_empty() {
-            let child = prims.get_mut(&path).expect("existing child");
             // Origins can be sibling nodes inserted later in arena order.
             // Preserve existing child origins; only copied nodes need remapping.
             for (source, target) in inserted {

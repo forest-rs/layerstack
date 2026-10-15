@@ -298,3 +298,145 @@ fn missing_loaded_layers_and_empty_host_results_cannot_claim_completeness() {
     assert_eq!(report.missing_layers, [LayerId(8)]);
     assert!(!report.is_complete());
 }
+
+#[test]
+fn direct_prim_asset_identity_stays_distinct_from_identical_nested_resources() {
+    let mut store = InMemoryStore::default();
+    let path = store.path("/Model");
+    let asset_info = store.tokens.intern("assetInfo");
+    let attr = store.tokens.intern("value");
+    let dictionary = Value::Dictionary(vec![
+        ("identifier".into(), Value::Asset("same.usda".into())),
+        ("preview".into(), Value::Asset("image.png".into())),
+        (
+            "nested".into(),
+            Value::Dictionary(vec![(
+                "identifier".into(),
+                Value::Asset("same.usda".into()),
+            )]),
+        ),
+    ]);
+    let mut layer = Layer::new(LayerId(1));
+    layer.insert_prim(
+        path,
+        PrimSpec::def()
+            .with_field(asset_info, FieldValue::Value(dictionary.clone()))
+            .with_property(
+                attr,
+                PropertySpec::attribute().with_metadata(asset_info, FieldValue::Value(dictionary)),
+            ),
+    );
+    let uses = extract_layer_dependencies(&layer, &store.paths, &store.tokens);
+    let identities: Vec<_> = uses
+        .iter()
+        .filter(|use_| use_.kind == AssetDependencyKind::Identity)
+        .collect();
+    assert_eq!(
+        identities.len(),
+        1,
+        "only direct prim identity is classified specially"
+    );
+    assert_eq!(
+        uses.iter()
+            .filter(|use_| use_.identifier.as_ref() == "same.usda")
+            .count(),
+        3,
+        "identical identity, nested resource and property resource remain distinct"
+    );
+    let copy = rewrite_layer_assets(&layer, &store.paths, &store.tokens, |use_| {
+        Ok::<_, ()>(if use_.kind == AssetDependencyKind::Identity {
+            "identity-copy.usda".into()
+        } else {
+            "resource-copy.bin".into()
+        })
+    })
+    .unwrap();
+    let copied = extract_layer_dependencies(&copy, &store.paths, &store.tokens);
+    assert!(
+        copied
+            .iter()
+            .filter(|use_| use_.kind == AssetDependencyKind::Identity)
+            .all(|use_| use_.identifier.as_ref() == "identity-copy.usda"),
+        "identity rewrite uses its own authored role"
+    );
+    assert!(
+        copied
+            .iter()
+            .filter(|use_| use_.kind == AssetDependencyKind::Value)
+            .all(|use_| use_.identifier.as_ref() == "resource-copy.bin"),
+        "nested and property identifiers use the resource rewrite"
+    );
+    assert_eq!(
+        extract_layer_dependencies(&layer, &store.paths, &store.tokens),
+        uses,
+        "copy rewriting leaves source unchanged"
+    );
+}
+
+#[test]
+fn unselected_variant_identities_are_scoped_to_prim_metadata() {
+    let mut store = InMemoryStore::default();
+    let path = store.path("/Model");
+    let asset_info = store.tokens.intern("assetInfo");
+    let set = store.tokens.intern("mode");
+    let hidden = store.tokens.intern("hidden");
+    let value = FieldValue::Value(Value::Dictionary(vec![(
+        "identifier".into(),
+        Value::Asset("identity.usda".into()),
+    )]));
+    let field = FieldEntry {
+        name: asset_info,
+        value,
+    };
+    let mut prim = PrimSpec::def();
+    prim.variant_sets.insert(
+        set,
+        VariantSetSpec {
+            variants: crate::HashMap::from([(
+                hidden,
+                VariantSpec {
+                    fields: vec![field.clone()],
+                    ..VariantSpec::default()
+                },
+            )]),
+        },
+    );
+    let mut layer = Layer::new(LayerId(1));
+    layer.metadata.push(field);
+    layer.insert_prim(path, prim);
+    let uses = extract_layer_dependencies(&layer, &store.paths, &store.tokens);
+    assert_eq!(
+        uses.len(),
+        2,
+        "layer metadata and unselected prim variant remain inventoried"
+    );
+    assert!(
+        uses.iter()
+            .any(|use_| use_.kind == AssetDependencyKind::Value && use_.spec.is_none()),
+        "layer metadata does not acquire a prim identity role"
+    );
+    let identity = uses
+        .iter()
+        .find(|use_| use_.kind == AssetDependencyKind::Identity)
+        .unwrap();
+    assert_eq!(
+        identity.spec.as_ref().unwrap().display(&store.tokens),
+        "/Model{mode=hidden}",
+        "identity retains variant-qualified provenance"
+    );
+    let copy = rewrite_layer_assets(&layer, &store.paths, &store.tokens, |use_| {
+        Ok::<_, ()>(if use_.kind == AssetDependencyKind::Identity {
+            "renamed.usda".into()
+        } else {
+            use_.identifier.clone()
+        })
+    })
+    .unwrap();
+    assert!(
+        extract_layer_dependencies(&copy, &store.paths, &store.tokens)
+            .iter()
+            .any(|use_| use_.kind == AssetDependencyKind::Identity
+                && use_.identifier.as_ref() == "renamed.usda"),
+        "unselected variant identity is rewritten explicitly"
+    );
+}

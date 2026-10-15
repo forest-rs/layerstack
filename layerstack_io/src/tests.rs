@@ -3,6 +3,7 @@
 
 use super::*;
 
+mod package_identity;
 mod registered_metadata;
 
 #[test]

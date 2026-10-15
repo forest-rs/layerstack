@@ -38,6 +38,10 @@ pub enum AssetDependencyKind {
     Payload,
     /// Asset-typed value in scene description.
     Value,
+    /// A direct asset-valued prim `assetInfo.identifier`, describing identity
+    /// rather than a resource required to reproduce the scene. Generic authored
+    /// discovery/rewriting includes it; packaging preserves it without loading.
+    Identity,
     /// A `templateAssetPath` string inside clip metadata; a host expands it.
     ClipTemplate,
 }
@@ -363,6 +367,47 @@ fn properties(
         }
     }
 }
+// Identity classification is scoped to a direct prim metadata dictionary key.
+// AOUSD Core §7.6.2.4 (prim metadata), §9 (asset resolution). It does not apply
+// to property/layer metadata, reference customData or nested identifier keys.
+fn extract_prim_field(
+    field: &FieldEntry,
+    layer: LayerId,
+    spec: &SpecPath,
+    tokens: &TokenInterner,
+    out: &mut Vec<AssetDependency>,
+) {
+    if tokens.resolve(field.name) == "assetInfo"
+        && let FieldValue::Value(Value::Dictionary(entries)) = &field.value
+    {
+        for (key, value) in entries {
+            if key.as_ref() == "identifier"
+                && let Value::Asset(asset) = value
+            {
+                push(
+                    out,
+                    layer,
+                    Some(spec),
+                    Some(field.name),
+                    asset,
+                    AssetDependencyKind::Identity,
+                    None,
+                );
+            } else {
+                values(value, layer, Some(spec), Some(field.name), out, false);
+            }
+        }
+    } else {
+        fields(
+            core::slice::from_ref(field),
+            layer,
+            Some(spec),
+            out,
+            tokens.resolve(field.name) == "clips",
+        );
+    }
+}
+
 fn extract_prim(
     prim: &PrimSpec,
     path: PathId,
@@ -373,13 +418,7 @@ fn extract_prim(
 ) {
     let spec = SpecPath::from_variant_selection_sites(path, &prim.outer_variant_sites, paths);
     for field in &prim.fields {
-        fields(
-            core::slice::from_ref(field),
-            layer,
-            Some(&spec),
-            out,
-            tokens.resolve(field.name) == "clips",
-        );
+        extract_prim_field(field, layer, &spec, tokens, out);
     }
     properties(&prim.properties, layer, &spec, out);
     arcs(
@@ -400,13 +439,7 @@ fn extract_prim(
         let sites = branch.sites(&prim.outer_variant_sites, path);
         let at = SpecPath::from_variant_selection_sites(path, &sites, paths);
         for field in &branch.spec.fields {
-            fields(
-                core::slice::from_ref(field),
-                layer,
-                Some(&at),
-                out,
-                tokens.resolve(field.name) == "clips",
-            );
+            extract_prim_field(field, layer, &at, tokens, out);
         }
         properties(&branch.spec.properties, layer, &at, out);
         arcs(
@@ -685,6 +718,40 @@ fn rewrite_arcs(
         }
     }
 }
+fn rewrite_prim_field(
+    field: &mut FieldEntry,
+    layer: LayerId,
+    spec: &SpecPath,
+    tokens: &TokenInterner,
+    map: &Replacements,
+) {
+    if tokens.resolve(field.name) == "assetInfo"
+        && let FieldValue::Value(Value::Dictionary(entries)) = &mut field.value
+    {
+        for (key, value) in entries {
+            if key.as_ref() == "identifier"
+                && let Value::Asset(asset) = value
+            {
+                if let Some(new) = map.get(&dependency(
+                    layer,
+                    Some(spec),
+                    Some(field.name),
+                    asset,
+                    AssetDependencyKind::Identity,
+                    None,
+                )) {
+                    *asset = new.clone();
+                }
+            } else {
+                rewrite_value(value, layer, Some(spec), Some(field.name), map, false);
+            }
+        }
+    } else {
+        let clip = tokens.resolve(field.name) == "clips";
+        rewrite_fields(core::slice::from_mut(field), layer, Some(spec), map, clip);
+    }
+}
+
 fn rewrite_sets(
     sets: &mut crate::HashMap<TokenId, VariantSetSpec>,
     sites: &[VariantSelectionSite],
@@ -704,8 +771,7 @@ fn rewrite_sets(
             });
             let at = SpecPath::from_variant_selection_sites(path, &sites, paths);
             for field in &mut branch.fields {
-                let clip = tokens.resolve(field.name) == "clips";
-                rewrite_fields(core::slice::from_mut(field), layer, Some(&at), map, clip);
+                rewrite_prim_field(field, layer, &at, tokens, map);
             }
             rewrite_properties(&mut branch.properties, layer, &at, map);
             rewrite_arcs(
@@ -744,8 +810,7 @@ fn rewrite_prim(
 ) {
     let at = SpecPath::from_variant_selection_sites(path, &prim.outer_variant_sites, paths);
     for field in &mut prim.fields {
-        let clip = tokens.resolve(field.name) == "clips";
-        rewrite_fields(core::slice::from_mut(field), layer, Some(&at), map, clip);
+        rewrite_prim_field(field, layer, &at, tokens, map);
     }
     rewrite_properties(&mut prim.properties, layer, &at, map);
     rewrite_arcs(

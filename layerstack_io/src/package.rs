@@ -87,7 +87,10 @@ impl<B: Storage> StageDocument<B> {
     /// Loads and inventories a dependency closure in an isolated candidate,
     /// then localizes copies. Resident unsaved layers take precedence over disk;
     /// all variants and inactive list items participate. The callback controls
-    /// inclusion. Missing resources and unexpanded expressions/patterns remain
+    /// inclusion of resource dependencies. Direct prim `assetInfo.identifier`
+    /// assets are reported as ignored identity uses, retained verbatim and never
+    /// passed to the callback or loaded. Other assetInfo assets remain resources.
+    /// Missing resources and unexpanded expressions/patterns remain
     /// inspectable and prevent export. For custom pattern expansion use the
     /// lower-level `layerstack_usdz::localize::localize_asset` callback.
     /// AOUSD Core §9.4, §9.7, §16.4; `UsdUtilsCreateNewUsdzPackage`.
@@ -146,7 +149,11 @@ impl<B: Storage> StageDocument<B> {
             }
             report.layers.push(id);
             for dependency in extract_layer_dependencies(layer, &store.paths, &store.tokens) {
-                let resource = if include(&dependency) == PackageInclusion::KeepExternal {
+                let resource = if dependency.kind == AssetDependencyKind::Identity {
+                    // Identity is preserved verbatim and requires no transport.
+                    // AOUSD Core §7.6.2.4; OpenUSD assetInfo identifier convention.
+                    Resource::External(dependency.identifier.clone())
+                } else if include(&dependency) == PackageInclusion::KeepExternal {
                     if dependency.identifier.starts_with('`')
                         || dependency.kind == AssetDependencyKind::ClipTemplate
                         || dependency.identifier.contains(['<', '#', '*'])

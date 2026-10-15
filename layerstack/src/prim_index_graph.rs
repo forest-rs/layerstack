@@ -815,9 +815,9 @@ impl PrimIndexGraph {
     ///
     /// OpenUSD: `PcpPrimIndex_Graph::_InsertChildInStrengthOrder` in
     /// `pxr/usd/pcp/primIndex_Graph.cpp`.
-    fn strength_ordered(&self, siblings: Vec<NodeId>) -> Vec<NodeId> {
-        let mut ordered: Vec<NodeId> = Vec::with_capacity(siblings.len());
-        for sibling in siblings {
+    fn order_siblings(&self, siblings: &[NodeId], ordered: &mut Vec<NodeId>) {
+        ordered.clear();
+        for &sibling in siblings {
             let stronger = |other: &NodeId| self.cmp_siblings(sibling, *other).is_lt();
             let at = match (ordered.first(), ordered.last()) {
                 (Some(first), _) if stronger(first) => 0,
@@ -826,7 +826,6 @@ impl PrimIndexGraph {
             };
             ordered.insert(at, sibling);
         }
-        ordered
     }
 
     /// Ranks every node by a strong-to-weak depth-first walk of the graph.
@@ -851,24 +850,38 @@ impl PrimIndexGraph {
     fn walk_ranks(&self) -> Vec<u32> {
         let mut ranks = alloc::vec![0; self.nodes.len()];
         let mut next = 0_u32;
-        let mut stack: Vec<Vec<NodeId>> = self
-            .root()
-            .map(|root| alloc::vec![root])
-            .into_iter()
-            .collect();
-        while let Some(group) = stack.pop() {
-            let mut children = Vec::new();
-            for id in &group {
+        // The sibling sets left to walk, each the nodes of `pending` from its
+        // start on: the set on top of `sets` is the strongest left and ends
+        // `pending`.
+        let mut pending: Vec<NodeId> = self.root().into_iter().collect();
+        let mut sets: Vec<usize> = alloc::vec![0; pending.len()];
+        let mut children = Vec::new();
+        let mut ordered = Vec::new();
+        while let Some(start) = sets.pop() {
+            children.clear();
+            for id in &pending[start..] {
                 ranks[id.index()] = next;
                 children.extend_from_slice(&self.nodes[id.index()].children);
             }
+            pending.truncate(start);
             next += 1;
-            let children = self.strength_ordered(children);
-            let groups: Vec<Vec<NodeId>> = children
-                .chunk_by(|a, b| self.cmp_siblings(*a, *b).is_eq())
-                .map(<[NodeId]>::to_vec)
-                .collect();
-            stack.extend(groups.into_iter().rev());
+            self.order_siblings(&children, &mut ordered);
+            // Each run of siblings that compare equal is one set; the weakest
+            // goes on first, so the strongest is walked next.
+            let mut end = ordered.len();
+            while end > 0 {
+                let mut begin = end - 1;
+                while begin > 0
+                    && self
+                        .cmp_siblings(ordered[begin - 1], ordered[begin])
+                        .is_eq()
+                {
+                    begin -= 1;
+                }
+                sets.push(pending.len());
+                pending.extend_from_slice(&ordered[begin..end]);
+                end = begin;
+            }
         }
         ranks
     }
@@ -970,10 +983,11 @@ impl PrimIndexGraph {
     pub fn depth_first(&self) -> Vec<NodeId> {
         let mut order = Vec::with_capacity(self.nodes.len());
         let mut stack: Vec<NodeId> = self.root().into_iter().collect();
+        let mut children = Vec::new();
         while let Some(id) = stack.pop() {
             order.push(id);
-            let children = self.strength_ordered(self.nodes[id.index()].children.clone());
-            stack.extend(children.into_iter().rev());
+            self.order_siblings(&self.nodes[id.index()].children, &mut children);
+            stack.extend(children.iter().rev());
         }
         order
     }

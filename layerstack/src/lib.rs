@@ -126,6 +126,14 @@
 //! synchronization conservative. Retained queries check current composition
 //! records independently of cursor replay.
 //!
+//! [`Stage::layer_dependency_storage`] reports contributor-set sharing when
+//! `with_dependencies` is enabled; [`LiveStage::layer_dependency_storage`] reports
+//! its retained dependency catalog. Equal sorted layer lists share immutable
+//! storage across prims and incremental batches. Counts distinguish logical
+//! references from physical references and exclude reverse indexes, arc topology
+//! and allocator costs. Changing a prim's contributors preserves older snapshots;
+//! weak cache entries do not retain obsolete contributor payloads.
+//!
 //! [repo]: https://github.com/forest-rs/layerstack
 //! [conformance]: https://github.com/forest-rs/layerstack/tree/main/layerstack_conformance
 //!
@@ -208,7 +216,7 @@ pub use composition_error::{
     UnresolvedAsset, UnresolvedDefaultPrim, UnresolvedPrimPath, UnresolvedSublayer,
     VariableExpressionError,
 };
-pub use dependency_map::ArcDependency;
+pub use dependency_map::{ArcDependency, LayerDependencyStorage};
 pub use doc::{
     AssetAvailability, FieldEntry, FieldValue, InMemoryStore, InterpolationType, Layer, LayerId,
     LayerOffset, LayerStore, PrimSpec, Reference, ReferenceTarget, Relocate, Specifier,

@@ -2108,7 +2108,7 @@ fn strip_instance_descendants(
     children: &mut HashMap<PathId, Vec<PathId>>,
     authored_children_opinions: &HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
 ) -> HashSet<PathId> {
-    let paths: Vec<PathId> = prims.keys().copied().collect();
+    let mut paths: Vec<PathId> = prims.keys().copied().collect();
     let mut candidates: Vec<PathId> = paths
         .iter()
         .copied()
@@ -2126,6 +2126,10 @@ fn strip_instance_descendants(
     // instance can remove a nested prim's local instanceable opinion or its
     // only direct arc. Ordinary prims need no namespace sorting.
     candidates.sort_by_key(|path| store.paths().resolve(*path).depth());
+    // Every prim in segment order, where a path sorts directly before its
+    // descendants: an instance's descendants are one run of it. Sorted for
+    // the first instance.
+    let mut ordered: Option<Vec<PathId>> = None;
     let mut instances = HashSet::new();
     for instance in candidates {
         let Some(index) = prims.get(&instance) else {
@@ -2196,7 +2200,17 @@ fn strip_instance_descendants(
             .get(&instance)
             .map(|list| list.iter().copied().collect())
             .unwrap_or_default();
-        for &descendant in &paths {
+        let ordered = ordered.get_or_insert_with(|| {
+            let mut ordered = core::mem::take(&mut paths);
+            ordered
+                .sort_unstable_by(|a, b| store.paths().resolve(*a).cmp(store.paths().resolve(*b)));
+            ordered
+        });
+        let first = ordered.partition_point(|path| store.paths().resolve(*path) < instance_path);
+        let subtree = &ordered[first..];
+        let subtree = &subtree[..subtree
+            .partition_point(|path| instance_path.is_prefix_of(store.paths().resolve(*path)))];
+        for &descendant in subtree {
             if descendant == instance {
                 continue;
             }
@@ -2224,9 +2238,8 @@ fn strip_instance_descendants(
                 index.retain_keys(|graph, key| graph.has_direct_dependency(key.node, depth));
             }
         }
-        for &descendant in &paths {
+        for &descendant in subtree {
             if descendant != instance
-                && instance_path.is_prefix_of(store.paths().resolve(descendant))
                 && let Some(list) = children.get_mut(&descendant)
             {
                 list.retain(|child| {

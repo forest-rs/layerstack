@@ -2767,7 +2767,7 @@ fn admitted_arcs(
 }
 
 /// Whether a spec of `path` in `stack`, outside or inside any variant
-/// branch, authors an arc or a variant set, whose branches may author arcs.
+/// branch, authors an arc, directly or in a branch of its own variant sets.
 /// [`arcs_admitted_by`] admits nothing for a prim without one, whatever is
 /// selected.
 fn may_author_arcs(store: &dyn LayerStore, stack: &LayerStack, path: PathId) -> bool {
@@ -2781,7 +2781,21 @@ fn may_author_arcs(store: &dyn LayerStore, stack: &LayerStack, path: PathId) -> 
                 || !spec.payloads.is_empty()
                 || !spec.inherits.is_empty()
                 || !spec.specializes.is_empty()
-                || !spec.variant_sets.is_empty()
+                || branches_author_arcs(&spec.variant_sets)
+        })
+}
+
+/// Whether a branch of `sets`, or of the sets nested in a branch, authors an
+/// arc.
+fn branches_author_arcs(sets: &HashMap<TokenId, crate::doc::VariantSetSpec>) -> bool {
+    sets.values()
+        .flat_map(|set| set.variants.values())
+        .any(|branch| {
+            !branch.references.is_empty()
+                || !branch.payloads.is_empty()
+                || !branch.inherits.is_empty()
+                || !branch.specializes.is_empty()
+                || branches_author_arcs(&branch.variant_sets)
         })
 }
 

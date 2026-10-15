@@ -831,6 +831,7 @@ struct Memory {
     files: BTreeMap<String, Vec<u8>>,
     writes: Vec<String>,
     reads: Vec<String>,
+    identifies: core::cell::Cell<usize>,
     fail_write: bool,
 }
 impl Memory {
@@ -846,6 +847,7 @@ impl Memory {
 }
 impl Storage for Memory {
     fn identify(&self, asset: &str, _: Option<&str>) -> Result<String, IoError> {
+        self.identifies.set(self.identifies.get() + 1);
         Ok(asset.into())
     }
     fn read(&mut self, identifier: &str) -> Result<Vec<u8>, IoError> {
@@ -1556,6 +1558,25 @@ fn resolution_does_not_dirty_clean_sources_or_clear_authored_dirtiness() {
     set_value(&mut doc, root, 4);
     doc.load_asset("other.usda", Some(root)).unwrap();
     assert!(doc.is_dirty(root));
+}
+#[test]
+fn repeated_references_identify_each_asset_once_per_operation() {
+    let backend = Memory::with(&[
+        (
+            "root.usda",
+            "#usda 1.0\ndef \"A\" (references = @asset.usda@</Asset>) {}\ndef \"B\" (references = @asset.usda@</Asset>) {}\ndef \"C\" (payload = @asset.usda@</Asset>) {}\n",
+        ),
+        ("asset.usda", "#usda 1.0\ndef \"Asset\" {}\n"),
+    ]);
+    let mut doc = StageDocument::open(backend, "root.usda", StageOptions::default()).unwrap();
+    assert!(doc.stage.stage().has_prim(doc.store.path("/C")));
+    // The root and one shared asset; the three arcs share one identity.
+    assert_eq!(doc.storage.identifies.get(), 2);
+    // A later operation asks the transport again rather than trusting a
+    // cache that could hide files created or removed since.
+    let root = doc.stage.stage().root_layer().unwrap();
+    doc.load_asset("asset.usda", Some(root)).unwrap();
+    assert_eq!(doc.storage.identifies.get(), 3);
 }
 #[test]
 fn expression_assets_open_with_the_primary_stack_and_retained_bindings() {

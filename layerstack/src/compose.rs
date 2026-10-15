@@ -202,6 +202,20 @@ pub(crate) fn compose_stage_selected(
     compose_stage_retained(store, root, options, populated, exact_mask, None, false)
 }
 
+/// AOUSD Core §9–§11: a stack containing only local specs has no other
+/// composition sites. Missing sources and any authored arc/variant/relocate
+/// conservatively use ordinary discovery. No property or activation shortcuts.
+fn stack_has_only_local_specs(store: &dyn LayerStore, stack: &LayerStack) -> bool {
+    !stack.layers.is_empty()
+        && stack.layers.iter().all(|id| {
+            store.layer(*id).is_some_and(|layer| {
+                layer.relocates.is_empty()
+                    && layer.variant_prims.is_empty()
+                    && layer.prims.values().all(crate::arcs::is_local_spec)
+            })
+        })
+}
+
 pub(crate) fn compose_stage_retained(
     store: &mut dyn LayerStore,
     root: LayerId,
@@ -231,6 +245,13 @@ pub(crate) fn compose_stage_retained(
             .set_scope(store, options.mask.as_ref(), exact_mask);
     }
     let layer_stack = cycles.gather_layer_stack(store, cycles.stage_layer_stack());
+    // Full unmasked composition already enumerates its sources. Prove absence
+    // once rather than repeatedly resolving empty arcs/variants for every prim.
+    // Scoped edits keep bounded discovery and never scan whole layers for this.
+    let arc_free = local_only
+        || (!bounded && options.mask.is_none() && stack_has_only_local_specs(store, &layer_stack));
+    cycles.source_inventory().local_stack_only = arc_free;
+
     // Spec: AOUSD Core §10.3.2.6 (relocates are computed per layer stack;
     // invalid ones are composition errors of the layer stack authoring
     // them).
@@ -259,7 +280,7 @@ pub(crate) fn compose_stage_retained(
     let stage_relocates = cycles.relocations().stage();
     cycles.report_source_opinions(store, &stage_relocates);
 
-    let reuse = if local_only || options.session_layer.is_some() {
+    let reuse = if arc_free || options.session_layer.is_some() {
         instances::InstanceReuse::default()
     } else {
         instances::InstanceReuse::discover(store, root, &mut paths, &options)
@@ -306,12 +327,11 @@ pub(crate) fn compose_stage_retained(
         &mut prim_order_opinions,
         &mut authored_children_opinions,
         dep_builder.as_mut(),
-        local_only,
+        arc_free,
     );
-    // The local namespace index proves these arcs absent, including in the
-    // resulting source after a successful transaction. Do not rediscover that
-    // absence for every supporting ancestor (AOUSD Core §9–§12).
-    if !local_only {
+    // The retained local namespace or complete stack inspection proves these
+    // arcs absent. Do not rediscover that absence for each prim (Core §9–§12).
+    if !arc_free {
         add_relocated_variant_opinions(
             store,
             &layer_stack,
@@ -411,7 +431,7 @@ pub(crate) fn compose_stage_retained(
     }
     cycles.report_relocate_node_opinions(store, &prims);
 
-    if !local_only {
+    if !arc_free {
         prune_unselected_variant_specs(store, resolver, &layer_stack, &mut prims);
         inherit_ancestral_nodes(store, resolver, &layer_stack, &mut prims);
     }
@@ -430,7 +450,7 @@ pub(crate) fn compose_stage_retained(
         &mut children,
     );
 
-    let mut instances = if local_only {
+    let mut instances = if arc_free {
         HashSet::new()
     } else {
         filter_variant_children(store, resolver, &prims, &mut children);
@@ -10496,3 +10516,6 @@ mod property_snapshot_tests {
         );
     }
 }
+
+#[cfg(test)]
+mod sparse_tests;

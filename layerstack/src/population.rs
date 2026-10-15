@@ -55,6 +55,9 @@ pub(crate) struct SourceInventory {
     pub(crate) inspected_paths: usize,
     pub(crate) indexed_paths: usize,
     pub(crate) load_rules: crate::PayloadLoadRules,
+    /// The caller inspected every root-stack spec and proved arcs, variants and
+    /// relocates absent. No source outside that stack can expand its namespace.
+    pub(crate) local_stack_only: bool,
 }
 
 /// Retained raw layer namespaces. Paths use interned segment ordering only for
@@ -399,6 +402,9 @@ fn gather_populated_paths(
         .clone()
         .unwrap_or_else(|| alloc::vec![Path::root()]);
     paths.extend(inventory.raw_paths(store, local_stack, &roots));
+    if inventory.local_stack_only {
+        return paths;
+    }
 
     // Expand using references and inherits (including descendants and nested arcs).
     //

@@ -238,5 +238,6 @@ transfer, not file I/O bandwidth or whole-stage opening.
 
 The `graph_storage` benchmark measures diagnostic graph cloning, composition of
 sparse referenced hierarchies, and retained layer-dependency construction over
-one- and four-layer stacks. Fixture setup and stage destruction are outside the
+one- and four-layer stacks, both fieldless and with three typed transform
+properties per prim. Fixture setup and stage destruction are outside the
 composition timer. Composition assertions check child and dependency coverage.

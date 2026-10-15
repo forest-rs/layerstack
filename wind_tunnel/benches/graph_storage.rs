@@ -99,70 +99,99 @@ fn layer_dependencies(c: &mut Criterion) {
     group.measurement_time(Duration::from_secs(1));
     for prims in [1024, 4096] {
         for layers in [1_u64, 4] {
-            let mut store = InMemoryStore::default();
-            let paths: Vec<_> = (0..prims)
-                .map(|i| store.path(&format!("/World/P{i}")))
-                .collect();
-            for id in 1..=layers {
-                let mut layer = Layer::new(LayerId(id));
-                for path in &paths {
-                    layer.insert_prim(*path, PrimSpec::def());
-                }
-                if id == 1 {
-                    layer.sublayers = (2..=layers)
-                        .map(|id| layerstack::SublayerEntry::new(LayerId(id)))
-                        .collect();
-                }
-                store.insert_layer(layer);
-            }
-            let stage = Stage::compose(
-                &mut store,
-                LayerId(1),
-                StageOptions {
-                    with_dependencies: true,
-                    ..Default::default()
-                },
-            );
-            assert_eq!(
-                stage.layers_affecting_prim(paths[0]).len(),
-                usize::try_from(layers).unwrap(),
-                "every layer contributes dependency evidence"
-            );
-            let storage = stage.layer_dependency_storage().unwrap();
-            assert_eq!(
-                storage.unique_layer_sets, 1,
-                "equivalent contributor sets share one allocation"
-            );
-            assert_eq!(
-                storage.physical_layer_references,
-                usize::try_from(layers).unwrap(),
-                "physical references scale with distinct contributor sets"
-            );
-            assert_eq!(
-                storage.logical_layer_references,
-                storage.prims * usize::try_from(layers).unwrap(),
-                "sharing preserves every dependency edge"
-            );
-            group.bench_function(BenchmarkId::new(format!("{layers}layers"), prims), |b| {
-                b.iter_custom(|iterations| {
-                    let mut elapsed = Duration::ZERO;
-                    for _ in 0..iterations {
-                        let start = Instant::now();
-                        let stage = Stage::compose(
-                            &mut store,
-                            LayerId(1),
-                            StageOptions {
-                                with_dependencies: true,
-                                ..Default::default()
-                            },
-                        );
-                        elapsed += start.elapsed();
-                        black_box(&stage);
-                        drop(stage);
+            for properties in [0, 3] {
+                let mut store = InMemoryStore::default();
+                let paths: Vec<_> = (0..prims)
+                    .map(|i| store.path(&format!("/World/P{i}")))
+                    .collect();
+                let fields: Vec<_> = (0..properties)
+                    .map(|i| store.tokens.intern(format!("transform{i}")))
+                    .collect();
+                for id in 1..=layers {
+                    let mut layer = Layer::new(LayerId(id));
+                    for path in &paths {
+                        let mut spec = PrimSpec::def();
+                        for &field in &fields {
+                            spec = spec.with_property(
+                                field,
+                                layerstack::PropertySpec::typed_attribute(
+                                    layerstack::PropertyType::new(
+                                        "float3",
+                                        false,
+                                        layerstack::Value::Vec3f([0.0; 3]),
+                                    ),
+                                )
+                                .with_default(layerstack::Value::Vec3f([0.0; 3])),
+                            );
+                        }
+                        layer.insert_prim(*path, spec);
                     }
-                    elapsed
+                    if id == 1 {
+                        layer.sublayers = (2..=layers)
+                            .map(|id| layerstack::SublayerEntry::new(LayerId(id)))
+                            .collect();
+                    }
+                    store.insert_layer(layer);
+                }
+                let stage = Stage::compose(
+                    &mut store,
+                    LayerId(1),
+                    StageOptions {
+                        with_dependencies: true,
+                        ..Default::default()
+                    },
+                );
+                assert_eq!(
+                    stage.layers_affecting_prim(paths[0]).len(),
+                    usize::try_from(layers).unwrap(),
+                    "every layer contributes dependency evidence"
+                );
+                let storage = stage.layer_dependency_storage().unwrap();
+                assert_eq!(
+                    storage.unique_layer_sets, 1,
+                    "equivalent contributor sets share one allocation"
+                );
+                assert_eq!(
+                    storage.physical_layer_references,
+                    usize::try_from(layers).unwrap(),
+                    "physical references scale with distinct contributor sets"
+                );
+                assert_eq!(
+                    storage.logical_layer_references,
+                    storage.prims * usize::try_from(layers).unwrap(),
+                    "sharing preserves every dependency edge"
+                );
+                assert_eq!(
+                    stage.authored_property_names(paths[0], &store).len(),
+                    properties,
+                    "every transform property composes"
+                );
+                let case = if properties == 0 {
+                    format!("{layers}layers")
+                } else {
+                    format!("{layers}layers_{properties}properties")
+                };
+                group.bench_function(BenchmarkId::new(case, prims), |b| {
+                    b.iter_custom(|iterations| {
+                        let mut elapsed = Duration::ZERO;
+                        for _ in 0..iterations {
+                            let start = Instant::now();
+                            let stage = Stage::compose(
+                                &mut store,
+                                LayerId(1),
+                                StageOptions {
+                                    with_dependencies: true,
+                                    ..Default::default()
+                                },
+                            );
+                            elapsed += start.elapsed();
+                            black_box(&stage);
+                            drop(stage);
+                        }
+                        elapsed
+                    });
                 });
-            });
+            }
         }
     }
     group.finish();

@@ -142,6 +142,13 @@ pub trait Storage {
     fn identify(&self, asset: &str, anchor: Option<&str>) -> Result<String, IoError>;
     /// Reads a complete source.
     fn read(&mut self, identifier: &str) -> Result<Vec<u8>, IoError>;
+    /// Reads immutable encoded storage, permitting an ownership-preserving
+    /// transport or cache hit. The default transfers [`Self::read`]'s vector
+    /// without copying payload bytes. Source owners and their views stay valid
+    /// independently of later reads or filesystem replacement.
+    fn read_encoded(&mut self, identifier: &str) -> Result<EncodedBytes, IoError> {
+        self.read(identifier).map(EncodedBytes::from)
+    }
     /// Reads at most `max_bytes` of a resource, rejecting excessive size before
     /// allocating its complete payload. Implementations may read one extra byte
     /// to detect growth. The default fails without reading; it never falls back
@@ -151,6 +158,18 @@ pub trait Storage {
             IoErrorKind::Unsupported,
             "storage does not implement bounded resource reads",
         ))
+    }
+    /// Reads bounded immutable encoded storage without copying a returned vector.
+    /// The default uses [`Self::read_bounded`], including its unsupported result;
+    /// it never falls back to an unbounded read. Overrides must enforce the bound
+    /// before allocating or returning the payload. AOUSD Core §9 (host transport).
+    fn read_encoded_bounded(
+        &mut self,
+        identifier: &str,
+        max_bytes: u64,
+    ) -> Result<EncodedBytes, IoError> {
+        self.read_bounded(identifier, max_bytes)
+            .map(EncodedBytes::from)
     }
     /// Writes a complete source.
     fn write(&mut self, identifier: &str, bytes: &[u8]) -> Result<(), IoError>;
@@ -1249,16 +1268,9 @@ impl<B: Storage> Reader<'_, B> {
                 layer: None,
             });
         }
-        let bytes = self.storage.read(&outer)?;
-        self.catalog.cache_work.encoded_bytes_copied += bytes.len() as u64;
+        let bytes = self.storage.read_encoded(&outer)?;
         self.catalog.states.insert(id, State::Loading);
-        match self.read_layer(
-            Arc::<[u8]>::from(bytes).into(),
-            &identifier,
-            id,
-            tokens,
-            paths,
-        ) {
+        match self.read_layer(bytes, &identifier, id, tokens, paths) {
             Ok(layer) => {
                 self.catalog.states.insert(id, State::Loaded);
                 Ok(ResolvedAsset {

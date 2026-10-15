@@ -239,12 +239,13 @@ pub(super) fn read<B: Storage>(
             }
             None => {
                 let bytes = match limits {
-                    Some(limits) => storage.read_bounded(&identifier, limits.package_bytes)?,
-                    None => storage.read(&identifier)?,
+                    Some(limits) => {
+                        storage.read_encoded_bounded(&identifier, limits.package_bytes)?
+                    }
+                    None => storage.read_encoded(&identifier)?,
                 };
-                catalog.cache_work.encoded_bytes_copied += bytes.len() as u64;
                 let archive = Arc::new(
-                    PackageSnapshot::new(Arc::<[u8]>::from(bytes).into(), package_limits)
+                    PackageSnapshot::new(bytes, package_limits)
                         .map_err(|e| IoError::new(IoErrorKind::Rejected, e.to_string()))?,
                 );
                 catalog.cache_work.opens += 1;
@@ -255,12 +256,11 @@ pub(super) fn read<B: Storage>(
         return package_entry(&archive, &identifier, &member, anchor, limits);
     }
     let bytes = match limits {
-        Some(limits) => storage.read_bounded(&identifier, limits.bytes)?,
-        None => storage.read(&identifier)?,
+        Some(limits) => storage.read_encoded_bounded(&identifier, limits.bytes)?,
+        None => storage.read_encoded(&identifier)?,
     };
-    catalog.cache_work.encoded_bytes_copied += bytes.len() as u64;
     Ok(AssetBytes {
-        bytes: Arc::<[u8]>::from(bytes).into(),
+        bytes,
         identifier,
         source: AssetByteSource::Storage,
         anchor,

@@ -235,3 +235,8 @@ into shared immutable encoded storage, excluding input allocation, initializatio
 and output destruction. Vector capacity remains retained and accounted; explicit
 detachment releases a view's large backing owner. This measures ownership
 transfer, not file I/O bandwidth or whole-stage opening.
+
+The `graph_storage` benchmark measures diagnostic graph cloning, composition of
+sparse referenced hierarchies, and retained layer-dependency construction over
+one- and four-layer stacks. Fixture setup and stage destruction are outside the
+composition timer. Composition assertions check child and dependency coverage.

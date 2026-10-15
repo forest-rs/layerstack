@@ -129,3 +129,7 @@ harness = false
 [[bench]]
 name = "encoded_ownership"
 harness = false
+
+[[bench]]
+name = "graph_storage"
+harness = false

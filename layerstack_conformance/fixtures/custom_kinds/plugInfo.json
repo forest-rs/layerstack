@@ -1,0 +1,11 @@
+{
+  "Plugins": [{
+    "Type": "resource",
+    "Name": "LayerstackKindFixture",
+    "Info": { "Kinds": {
+      "stack_leaf": { "baseKind": "stack_branch" },
+      "stack_branch": { "baseKind": "component" },
+      "stack_root": {}
+    }}
+  }]
+}

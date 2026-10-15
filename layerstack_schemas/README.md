@@ -802,3 +802,17 @@ samples against a fixed topology/mask base, retaining original indices and IDs.
 Sparse default/sample edits participate in motion anchoring without bypassing
 stage composition; dense sources mask weaker sample grids. Any bad sample
 returns an error without a partial batch.
+
+Plugin model kinds can be generated from explicit `plugInfo.json` inputs:
+
+```sh
+cargo run -p layerstack_schemagen -- --kind-plugin path/to/plugInfo.json --out kinds.rs
+```
+
+Repeat `--kind-plugin` to include bases declared by other plugins. Include the
+module and call `kinds::register(&mut registry)`, then supply the registry with
+`Scene::with_kinds`. Generation and `KindRegistry::register_all` reject duplicate
+names, missing bases and cycles; failed batches leave the registry unchanged.
+The existing incremental `register` method still accepts staged declarations;
+call `validate` before publishing a manually assembled hierarchy. No runtime
+plugin loading is required.

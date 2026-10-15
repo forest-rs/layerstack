@@ -39,6 +39,7 @@
 //! differ from what it would write.
 
 mod emit;
+mod kinds;
 mod library;
 mod metadata;
 mod model;
@@ -69,6 +70,7 @@ pub fn run() -> Result<String, String> {
     let mut definitions = None;
     let mut output = None;
     let mut materialx = None;
+    let mut kind_plugins = Vec::new();
     let mut selected = Vec::new();
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
     let mut args = std::env::args().skip(1);
@@ -80,9 +82,37 @@ pub fn run() -> Result<String, String> {
             "--shader-defs" => definitions = args.next().map(PathBuf::from),
             "--out" => output = args.next().map(PathBuf::from),
             "--materialx" => materialx = args.next().map(PathBuf::from),
+            "--kind-plugin" => kind_plugins.push(PathBuf::from(
+                args.next()
+                    .ok_or("--kind-plugin requires a plugInfo.json path")?,
+            )),
             "--node" => selected.push(args.next().ok_or("--node requires a NodeDef name")?),
             other => return Err(format!("unknown argument {other}; see the crate docs")),
         }
+    }
+    if !kind_plugins.is_empty() {
+        if pxr.is_some()
+            || source.is_some()
+            || definitions.is_some()
+            || materialx.is_some()
+            || !selected.is_empty()
+        {
+            return Err("--kind-plugin cannot be combined with schema or shader generation".into());
+        }
+        let output = output.ok_or("--out <Rust file> is required for kind libraries")?;
+        let text = rustfmt(&generate_kind_library(&kind_plugins)?)?;
+        if check {
+            if fs::read_to_string(&output).ok().as_deref() != Some(text.as_str()) {
+                return Err(format!("{} is stale", output.display()));
+            }
+        } else {
+            fs::write(&output, text).map_err(|e| format!("{}: {e}", output.display()))?;
+        }
+        return Ok(format!(
+            "{} kind library {}",
+            if check { "checked" } else { "wrote" },
+            output.display()
+        ));
     }
     if definitions.is_some() && materialx.is_some() {
         return Err("select either --shader-defs or --materialx".into());
@@ -302,6 +332,24 @@ fn render_library(
         tokens,
     };
     Ok(shader_nodes::render(&model, true)?.remove(0).1)
+}
+
+/// Generates a kind-registration module from explicit `plugInfo.json` files.
+///
+/// Reads OpenUSD `Info.Kinds` declarations across all supplied plugins, accepting
+/// forward references within that input set. Rejects duplicate/invalid names,
+/// malformed declarations, unknown bases and cycles before returning Rust source.
+/// No plugin discovery or execution occurs. Whole-line `#` comments are accepted.
+/// The generated `KINDS` and `register` function require `layerstack_schemas`,
+/// support `no_std`, and register atomically into a caller-owned `KindRegistry`.
+/// Built-in kinds remain runtime-owned. Returns unformatted Rust for build scripts.
+/// CLI: `--kind-plugin <plugInfo.json> [--kind-plugin ...] --out <file> [--check]`.
+/// AOUSD Core §7.6.2.4.4 and §11.4 (kind/model hierarchy).
+///
+/// # Errors
+/// Returns an error for unreadable files or an invalid complete hierarchy.
+pub fn generate_kind_library(paths: &[impl AsRef<Path>]) -> Result<String, String> {
+    kinds::generate(paths)
 }
 
 /// Generates typed USD APIs for explicitly selected `MaterialX` `NodeDefs`.

@@ -680,7 +680,7 @@ fn definitions(pxr: &Path, source: &Path, plugin: &str, origin: Origin) -> PathB
 }
 
 /// A `plugInfo.json`, without its `#` comment lines, which JSON has not.
-fn plug_info(path: &Path) -> Result<Json, String> {
+pub(crate) fn plug_info(path: &Path) -> Result<Json, String> {
     let text = fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
     let json: String = text
         .lines()

@@ -21,5 +21,10 @@ fn main() {
         module, materialx_module
     );
     std::fs::write(directory.join("custom_modules.rs"), bridge).unwrap();
+    let kinds =
+        layerstack_schemagen::generate_kind_library(&["fixtures/custom_kinds/plugInfo.json"])
+            .expect("generate plugin kinds");
+    std::fs::write(directory.join("custom_kinds.rs"), kinds).unwrap();
+    println!("cargo:rerun-if-changed=fixtures/custom_kinds");
     println!("cargo:rerun-if-changed=fixtures/custom_nodes");
 }

@@ -2736,6 +2736,10 @@ fn admitted_arcs(
     // Its asset path expressions evaluate in the chain's scope.
     cycles: &mut CycleDetector,
 ) -> AdmittedArcs {
+    // Most prims author no arcs; their hosts' selections cannot admit any.
+    if !may_author_arcs(store, data_stack, remote_path) {
+        return AdmittedArcs::default();
+    }
     let enclosing = enclosing_variant_selections(
         store,
         resolver,
@@ -2760,6 +2764,25 @@ fn admitted_arcs(
     );
     cycles.absorb(scope, dest_path);
     arcs
+}
+
+/// Whether a spec of `path` in `stack`, outside or inside any variant
+/// branch, authors an arc or a variant set, whose branches may author arcs.
+/// [`arcs_admitted_by`] admits nothing for a prim without one, whatever is
+/// selected.
+fn may_author_arcs(store: &dyn LayerStore, stack: &LayerStack, path: PathId) -> bool {
+    stack
+        .layers
+        .iter()
+        .filter_map(|id| store.layer(*id))
+        .flat_map(|layer| layer.prim_specs(path))
+        .any(|spec| {
+            !spec.references.is_empty()
+                || !spec.payloads.is_empty()
+                || !spec.inherits.is_empty()
+                || !spec.specializes.is_empty()
+                || !spec.variant_sets.is_empty()
+        })
 }
 
 /// The arcs authored for `remote_path` in `data_stack`, admitted for the

@@ -17,9 +17,9 @@ use layerstack::interner::TokenInterner;
 use layerstack::path::PathInterner;
 use layerstack::{AssetResolveError, AssetResolver, ResolvedAsset};
 
+use crate::access::PackageAccess;
 use crate::diagnostic::{ImportDiagnostic, MemberDiagnostic};
 use crate::error::{LayerReadError, UsdzError};
-use crate::snapshot::PackageSnapshot;
 use layerstack::{asset::PackagePath, encoded_bytes::EncodedBytes};
 
 /// USDC magic bytes used for format sniffing.
@@ -52,8 +52,8 @@ const USDC_MAGIC: &[u8; 8] = b"PXR-USDC";
 /// alongside the ones the root layer resolved.
 ///
 /// [`read_usdz`]: crate::read_usdz
-pub(crate) struct UsdzResolver<'a> {
-    archive: &'a PackageSnapshot,
+pub(crate) struct UsdzResolver<'a, P: PackageAccess> {
+    archive: &'a mut P,
     /// The package's root layer, which stands for the package itself when
     /// a path goes to the outer resolver.
     root: LayerId,
@@ -65,7 +65,7 @@ pub(crate) struct UsdzResolver<'a> {
     descendants: Vec<Layer>,
     /// Why the package cannot be read, which a failed resolution cannot
     /// report itself: parsers keep an unresolvable arc and carry on.
-    failure: Option<UsdzError>,
+    failure: Option<P::Error>,
     /// Diagnostics from members loaded beneath the root.
     diagnostics: Vec<MemberDiagnostic>,
     /// Resolves paths outside the package, and allocates the layer IDs of
@@ -76,12 +76,12 @@ pub(crate) struct UsdzResolver<'a> {
     retained_values: BTreeMap<LayerId, layerstack_usdc::RetainedValues>,
 }
 
-impl<'a> UsdzResolver<'a> {
+impl<'a, P: PackageAccess> UsdzResolver<'a, P> {
     /// Creates a resolver scoped to `archive`, whose root layer is the
     /// member `root_member`, loaded as `root`. Members it loads get layer
     /// IDs from `outer`.
     pub(crate) fn new(
-        archive: &'a PackageSnapshot,
+        archive: &'a mut P,
         root_member: Arc<str>,
         root: LayerId,
         outer: &'a mut dyn AssetResolver,
@@ -114,7 +114,7 @@ impl<'a> UsdzResolver<'a> {
         member: &str,
         tokens: &mut TokenInterner,
         paths: &mut PathInterner,
-    ) -> Result<(), UsdzError> {
+    ) -> Result<(), P::Error> {
         let resolved =
             self.load_member(member, tokens, paths)
                 .ok_or_else(|| UsdzError::MissingMember {
@@ -127,18 +127,18 @@ impl<'a> UsdzResolver<'a> {
                 }
                 Ok(())
             }
-            Err(_) => Err(self
-                .failure
-                .clone()
-                .unwrap_or_else(|| UsdzError::MissingMember {
+            Err(_) => Err(self.failure.take().unwrap_or_else(|| {
+                UsdzError::MissingMember {
                     member: Arc::from(member),
-                })),
+                }
+                .into()
+            })),
         }
     }
 
     /// Returns what this resolver loaded, or why the package cannot be
     /// read.
-    pub(crate) fn finish(self) -> Result<Loaded, UsdzError> {
+    pub(crate) fn finish(self) -> Result<Loaded, P::Error> {
         match self.failure {
             Some(failure) => Err(failure),
             None => Ok(Loaded {
@@ -151,6 +151,15 @@ impl<'a> UsdzResolver<'a> {
         }
     }
 
+    fn loaded_member(&self, member: &str) -> Option<ResolvedAsset> {
+        let &id = self.by_member.get(member)?;
+        Some(ResolvedAsset {
+            layer_id: id,
+            resolved_path: self.member_paths[&id].clone(),
+            layer: None,
+        })
+    }
+
     /// Loads the member at `member`, a normalized path in the package, or
     /// returns the layer it was already loaded as; `None` when the package
     /// has no such member.
@@ -160,21 +169,24 @@ impl<'a> UsdzResolver<'a> {
         tokens: &mut TokenInterner,
         paths: &mut PathInterner,
     ) -> Option<Result<ResolvedAsset, AssetResolveError>> {
+        // A fixed source and an imported layer already establish this identity.
+        // Repeated arcs must not spend transport/CRC budget on the same payload.
+        // AOUSD Core §9.7 (canonical package-member identity).
+        if let Some(resolved) = self.loaded_member(member) {
+            return Some(Ok(resolved));
+        }
         let selected = match self.archive.layer(member) {
             Ok(selected) => selected,
-            Err(UsdzError::MissingMember { .. }) => return None,
+            Err(error) if P::is_missing(&error) => return None,
             Err(error) => {
                 let message = Arc::from(alloc::format!("{error}"));
                 self.failure.get_or_insert(error);
                 return Some(Err(AssetResolveError::LoadError(message)));
             }
         };
-        if let Some((name, &id)) = self.by_member.get_key_value(selected.path.as_str()) {
-            return Some(Ok(ResolvedAsset {
-                layer_id: id,
-                resolved_path: name.clone(),
-                layer: None,
-            }));
+        if let Some(resolved) = self.loaded_member(&selected.path) {
+            self.by_member.insert(Arc::from(member), resolved.layer_id);
+            return Some(Ok(resolved));
         }
         let data = selected.bytes;
         let name: Arc<str> = Arc::from(selected.path);
@@ -186,12 +198,15 @@ impl<'a> UsdzResolver<'a> {
                 member: name.clone(),
             };
             let error = AssetResolveError::LoadError(Arc::from(alloc::format!("{failure}")));
-            self.failure.get_or_insert(failure);
+            self.failure.get_or_insert(failure.into());
             return Some(Err(error));
         };
         // Registered before parsing, so a member that it loads in turn and
         // that references it back finds it.
         self.by_member.insert(name.clone(), layer_id);
+        if member != name.as_ref() {
+            self.by_member.insert(Arc::from(member), layer_id);
+        }
         self.member_paths.insert(layer_id, name.clone());
 
         let options = self.options;
@@ -202,7 +217,7 @@ impl<'a> UsdzResolver<'a> {
                 // Parsers preserve unresolved arcs and continue, but a found
                 // member's decoding failure must reach the package caller.
                 // AOUSD Core §9.7: the member is part of this package read.
-                self.failure.get_or_insert(e);
+                self.failure.get_or_insert(e.into());
                 return Some(Err(AssetResolveError::LoadError(message)));
             }
         };
@@ -238,7 +253,7 @@ pub(crate) struct Loaded {
     pub(crate) retained_values: BTreeMap<LayerId, layerstack_usdc::RetainedValues>,
 }
 
-impl AssetResolver for UsdzResolver<'_> {
+impl<P: PackageAccess> AssetResolver for UsdzResolver<'_, P> {
     /// Resolves `asset_path`, authored in the layer `anchor` (the root layer
     /// when `None`), as described on [`UsdzResolver`].
     ///
@@ -521,6 +536,7 @@ mod tests {
     /// both for the layers it finds and for package members; with
     /// `next_id` at `None` it allocates none for members, and with
     /// `reuse` it hands out the ID of every layer it finds twice.
+    #[derive(Clone)]
     struct Outside {
         files: &'static [&'static str],
         next_id: Option<u64>,
@@ -597,13 +613,42 @@ mod tests {
             .map(|(path, text)| PackageFile::new(path, text.as_bytes()))
             .collect();
         let package = write_usdz(&files).expect("package");
-        read_usdz(
+        let mut range_outside = outside.clone();
+        let mut ranges = crate::range::RangePackage::open(
+            EncodedBytes::from(package.clone()),
+            crate::range::RangeLimits::default(),
+        )
+        .unwrap();
+        let ranged = crate::read_usdz_ranges(
+            &mut ranges,
+            None,
+            LayerId(1),
+            &mut TokenInterner::default(),
+            &mut PathInterner::default(),
+            &mut range_outside,
+            &[],
+            crate::UsdcReadOptions::default(),
+        );
+        let complete = read_usdz(
             &package,
             LayerId(1),
             &mut TokenInterner::default(),
             &mut PathInterner::default(),
             outside,
-        )
+        );
+        match (&complete, &ranged) {
+            (Ok(a), Ok(b)) => {
+                assert_eq!(a.layer, b.layer);
+                assert_eq!(a.resolved_layers, b.resolved_layers);
+                assert_eq!(a.member_paths, b.member_paths);
+                assert_eq!(a.diagnostics.len(), b.diagnostics.len());
+                assert_eq!(a.has_errors(), b.has_errors());
+            }
+            (Err(a), Err(crate::range::RangeError::Format(b))) => assert_eq!(a, b),
+            _ => panic!("complete/range import differ: {complete:?} / {ranged:?}"),
+        }
+        assert_eq!(outside.asked, range_outside.asked);
+        complete
     }
 
     fn read(files: &[(&str, &str)]) -> (UsdzResult, Outside) {

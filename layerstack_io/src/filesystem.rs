@@ -21,6 +21,9 @@ use std::{
 /// platforms; WASI relies on host-granted filesystem rights. On macOS
 /// the standard library also copies extended metadata. Other platforms' extended
 /// access controls require a host-specific [`Storage`] backend.
+/// Range sources retain an open handle across atomic replacement. Hosts must
+/// exclude external in-place writes for their lifetime; size/mtime checks reject
+/// observed changes but do not provide a filesystem snapshot.
 #[derive(Clone, Debug)]
 pub struct Filesystem {
     root: PathBuf,
@@ -115,8 +118,75 @@ impl Storage for Filesystem {
         }
         Ok(bytes)
     }
+    fn open_ranges(
+        &mut self,
+        identifier: &str,
+    ) -> Result<Arc<dyn layerstack_usdz::range::RangeSource<Error = IoError> + Send + Sync>, IoError>
+    {
+        let file = fs::File::open(identifier).map_err(storage_error)?;
+        let metadata = file.metadata().map_err(storage_error)?;
+        if !metadata.is_file() {
+            return Err(IoError::new(
+                IoErrorKind::Unsupported,
+                "range source must be a regular file",
+            ));
+        }
+        Ok(Arc::new(FileRanges {
+            length: metadata.len(),
+            modified: metadata.modified().map_err(storage_error)?,
+            file: std::sync::Mutex::new(file),
+        }))
+    }
     fn write(&mut self, identifier: &str, bytes: &[u8]) -> Result<(), IoError> {
         atomic_write(Path::new(identifier), |file| file.write_all(bytes)).map_err(storage_error)
+    }
+}
+
+/// A retained open handle survives atomic replacement. Callers must exclude
+/// external in-place writes; length/mtime checks detect ordinary changes but are
+/// not a filesystem snapshot or a defense against writers restoring timestamps.
+/// A private cursor lock keeps concurrent range reads independent on all platforms.
+struct FileRanges {
+    file: std::sync::Mutex<fs::File>,
+    length: u64,
+    modified: std::time::SystemTime,
+}
+impl layerstack_usdz::range::RangeSource for FileRanges {
+    type Error = IoError;
+    fn byte_len(&self) -> u64 {
+        self.length
+    }
+    fn read_range(&self, range: core::ops::Range<u64>) -> Result<EncodedBytes, IoError> {
+        use std::io::{Read, Seek, SeekFrom};
+        let size = range
+            .end
+            .checked_sub(range.start)
+            .filter(|_| range.end <= self.length)
+            .and_then(|n| usize::try_from(n).ok())
+            .ok_or_else(|| IoError::new(IoErrorKind::Rejected, "invalid source range"))?;
+        let mut file = self
+            .file
+            .lock()
+            .map_err(|_| IoError::new(IoErrorKind::Storage, "range source lock poisoned"))?;
+        let check = |file: &fs::File| -> Result<(), IoError> {
+            let metadata = file.metadata().map_err(storage_error)?;
+            if metadata.len() != self.length
+                || metadata.modified().map_err(storage_error)? != self.modified
+            {
+                return Err(IoError::new(
+                    IoErrorKind::Storage,
+                    "range source changed in place",
+                ));
+            }
+            Ok(())
+        };
+        check(&file)?;
+        file.seek(SeekFrom::Start(range.start))
+            .map_err(storage_error)?;
+        let mut bytes = alloc::vec![0; size];
+        file.read_exact(&mut bytes).map_err(storage_error)?;
+        check(&file)?;
+        Ok(bytes.into())
     }
 }
 
@@ -229,6 +299,43 @@ fn normalize(path: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn range_sources_keep_old_handles_and_views_after_atomic_replacement() {
+        #[cfg(target_os = "wasi")]
+        let base = std::env::current_dir().unwrap();
+        #[cfg(not(target_os = "wasi"))]
+        let base = std::env::temp_dir();
+        let root = base.join(alloc::format!(
+            "layerstack-ranges-{}",
+            NEXT_CANDIDATE.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let target = root.join("scene.usdz");
+        let identifier = target.to_str().unwrap();
+        let mut storage = Filesystem::new(&root, []).unwrap();
+        storage.write(identifier, b"old bytes").unwrap();
+        let source = storage.open_ranges(identifier).unwrap();
+        let view = source.read_range(0..3).unwrap();
+        assert!(
+            source
+                .read_range(core::ops::Range { start: 4, end: 2 })
+                .is_err()
+        );
+        assert!(source.read_range(0..10).is_err());
+        storage.write(identifier, b"new bytes").unwrap();
+        assert_eq!(source.read_range(4..9).unwrap().as_ref(), b"bytes");
+        assert_eq!(source.read_range(0..3).unwrap().as_ref(), b"old");
+        let new = storage.open_ranges(identifier).unwrap();
+        assert_eq!(new.read_range(0..3).unwrap().as_ref(), b"new");
+        // A length change deterministically detects an external in-place write.
+        fs::write(&target, b"changed length").unwrap();
+        assert_eq!(new.read_range(0..3).unwrap_err().kind, IoErrorKind::Storage);
+        drop(source);
+        drop(new);
+        fs::remove_dir_all(root).unwrap();
+        assert_eq!(view.as_ref(), b"old");
+    }
+
     // wasm32-wasip1 has no thread spawning support.
     #[cfg(not(target_family = "wasm"))]
     #[test]

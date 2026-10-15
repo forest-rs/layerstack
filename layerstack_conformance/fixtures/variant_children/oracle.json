@@ -356,6 +356,54 @@
     ]
    ],
    "children": []
+  },
+  {
+   "path": "/Shell",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Shell"
+    ]
+   ],
+   "children": [
+    "Spiral"
+   ]
+  },
+  {
+   "path": "/Shell/Spiral",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Shell/Spiral"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/Reef",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Reef"
+    ],
+    [
+     "boulder.usda",
+     "/Reef"
+    ]
+   ],
+   "children": [
+    "Polyp"
+   ]
+  },
+  {
+   "path": "/Reef/Polyp",
+   "prim_stack": [
+    [
+     "boulder.usda",
+     "/Reef/Polyp"
+    ]
+   ],
+   "children": []
   }
  ],
  "values": {
@@ -368,7 +416,9 @@
   "/Lantern/Shade/Bulb.watts": 40,
   "/Boulder/Moss.patches": 2,
   "/Pine/Cone.scales": 5,
-  "/Pebble/Chip.size": 1
+  "/Pebble/Chip.size": 1,
+  "/Shell/Spiral.turns": 4,
+  "/Reef/Polyp.arms": 6
  },
  "switched": {
   "selections": [
@@ -761,6 +811,54 @@
      ]
     ],
     "children": []
+   },
+   {
+    "path": "/Shell",
+    "prim_stack": [
+     [
+      "root.usda",
+      "/Shell"
+     ]
+    ],
+    "children": [
+     "Spiral"
+    ]
+   },
+   {
+    "path": "/Shell/Spiral",
+    "prim_stack": [
+     [
+      "root.usda",
+      "/Shell/Spiral"
+     ]
+    ],
+    "children": []
+   },
+   {
+    "path": "/Reef",
+    "prim_stack": [
+     [
+      "root.usda",
+      "/Reef"
+     ],
+     [
+      "boulder.usda",
+      "/Reef"
+     ]
+    ],
+    "children": [
+     "Polyp"
+    ]
+   },
+   {
+    "path": "/Reef/Polyp",
+    "prim_stack": [
+     [
+      "boulder.usda",
+      "/Reef/Polyp"
+     ]
+    ],
+    "children": []
    }
   ],
   "values": {
@@ -773,7 +871,9 @@
    "/Lantern/Shade/Bulb.watts": 40,
    "/Boulder/Moss.patches": 2,
    "/Pine/Cone.scales": 5,
-   "/Pebble/Chip.size": 1
+   "/Pebble/Chip.size": 1,
+   "/Shell/Spiral.turns": 4,
+   "/Reef/Polyp.arms": 6
   }
  }
 }

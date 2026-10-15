@@ -637,6 +637,15 @@ Recompute snapshots after edits and pass ancestor changes to `XformCache`. Unkno
 projection tokens and invalid geometric parameters return `CameraError`. See the
 `camera_frustum` example for moving point instances sampled across a shutter.
 
+`CameraEdit::set_from_camera` and `_at` copy a `ComputedCamera` snapshot's
+world transform, lens fields and shutter offsets as one checked group. The
+helper converts world space through the composed destination parent and replaces
+the local op order with one matrix. Stronger field/order opinions, incompatible
+declarations and invalid parent transforms reject without collecting a partial
+camera. Apply pending ancestor edits first; retained camera snapshots do not
+observe later changes. Numeric calls replace one sample; default calls retain
+existing numeric slots.
+
 For repeated culling, call `camera.prepare_frustum()` once and reuse its owned
 `camera::PreparedFrustum` for `contains_world_point` and `intersects_world_bound`.
 It retains six normalized world planes without allocations or scene borrows.

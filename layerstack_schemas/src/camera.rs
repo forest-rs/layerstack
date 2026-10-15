@@ -471,3 +471,219 @@ impl Camera<'_> {
         Ok(camera)
     }
 }
+
+/// A whole-camera edit could not be collected. Failed edits preserve the batch.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum CameraWriteError {
+    /// Destination is not an existing composed Camera with schema definitions.
+    InvalidDestination,
+    /// The destination parent transform is missing, invalid or noninvertible.
+    InvalidParentTransform,
+    /// A retained camera contains nonfinite additional clipping planes.
+    InvalidClippingPlanes,
+    /// A field's prospective authoring site could not be inspected.
+    Inspection {
+        /// Camera attribute being inspected.
+        attribute: &'static str,
+        /// The underlying inspection failure.
+        error: layerstack::AuthoringInspectionError,
+    },
+    /// The edit target does not contribute at the camera's site.
+    InactiveTarget {
+        /// Camera attribute being inspected.
+        attribute: &'static str,
+    },
+    /// A stronger value-bearing source could alter the replacement.
+    StrongerSource {
+        /// Camera attribute being inspected.
+        attribute: &'static str,
+        /// The stronger source and its composition provenance.
+        source: layerstack::AuthoringSource,
+    },
+    /// A destination property has an incompatible or missing type declaration.
+    IncompatibleType {
+        /// Camera attribute being inspected.
+        attribute: &'static str,
+    },
+    /// The guarded matrix replacement failed.
+    Transform(crate::MatrixXformError),
+}
+impl core::fmt::Display for CameraWriteError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "cannot author whole camera: {self:?}")
+    }
+}
+impl core::error::Error for CameraWriteError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::Inspection { error, .. } => Some(error),
+            Self::Transform(error) => Some(error),
+            _ => None,
+        }
+    }
+}
+
+impl crate::usd_geom::CameraEdit {
+    /// Collects a retained camera's world transform and lens fields atomically.
+    ///
+    /// Requires an existing composed Camera and its schema registry. Converts the
+    /// supplied world transform through the destination's composed parent, then
+    /// replaces its local op order with one matrix op, clearing any reset marker.
+    /// Copies projection, apertures/offsets, focal length, clipping range/planes,
+    /// f-stop, focus distance and shutter offsets. Other attributes are retained.
+    /// Defaults change without removing numeric samples. Raw setters remain
+    /// available for deliberately masked or partial edits.
+    ///
+    /// All destinations are checked for stronger sources and compatible types
+    /// before collecting lens values. Parent transforms come from the composed
+    /// snapshot; apply pending ancestor edits/definitions first. Parent evaluation
+    /// may decode transform values. Rejection leaves prior batch edits intact.
+    /// OpenUSD `UsdGeomCamera::SetFromCamera` uses the same world-to-parent matrix;
+    /// this helper additionally guards every field and includes shutter offsets.
+    /// AOUSD Core §12.3 (value strength), §13.3.1 (transformable schemas).
+    ///
+    /// # Errors
+    /// Returns [`CameraWriteError`] for invalid destinations, stronger sources,
+    /// incompatible declarations, invalid parent transforms or clipping planes.
+    pub fn set_from_camera(
+        &self,
+        edit: &mut crate::SchemaEdit<'_>,
+        camera: &ComputedCamera,
+    ) -> Result<(), CameraWriteError> {
+        self.set_from_camera_impl(edit, None, camera)
+    }
+
+    /// As [`Self::set_from_camera`], replacing one sample at stage `time`.
+    /// The transform order is authored at default time; lens fields, matrix and
+    /// shutter offsets use the numeric slot. Existing other samples are retained.
+    ///
+    /// # Errors
+    /// As [`Self::set_from_camera`]; nonfinite numeric times are rejected too.
+    pub fn set_from_camera_at(
+        &self,
+        edit: &mut crate::SchemaEdit<'_>,
+        time: f64,
+        camera: &ComputedCamera,
+    ) -> Result<(), CameraWriteError> {
+        self.set_from_camera_impl(edit, Some(time), camera)
+    }
+
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "computed clipping range is widened from the original authored float2"
+    )]
+    fn set_from_camera_impl(
+        &self,
+        edit: &mut crate::SchemaEdit<'_>,
+        time: Option<f64>,
+        camera: &ComputedCamera,
+    ) -> Result<(), CameraWriteError> {
+        edit.group(|edit| {
+            let query = time.map_or(Time::Default, Time::at);
+            for (attribute, expected, array) in [
+                ("projection", "token", false),
+                ("horizontalAperture", "float", false),
+                ("verticalAperture", "float", false),
+                ("horizontalApertureOffset", "float", false),
+                ("verticalApertureOffset", "float", false),
+                ("focalLength", "float", false),
+                ("clippingRange", "float2", false),
+                ("clippingPlanes", "float4", true),
+                ("fStop", "float", false),
+                ("focusDistance", "float", false),
+                ("shutter:open", "double", false),
+                ("shutter:close", "double", false),
+            ] {
+                let inspection = edit
+                    .inspect_authoring(self.path(), attribute, query)
+                    .map_err(|error| CameraWriteError::Inspection { attribute, error })?;
+                if inspection.target.is_none() {
+                    return Err(CameraWriteError::InactiveTarget { attribute });
+                }
+                if let Some(source) = inspection.stronger_sources.into_iter().next() {
+                    return Err(CameraWriteError::StrongerSource { attribute, source });
+                }
+                if !edit
+                    .attribute_type(self.path(), attribute)
+                    .is_some_and(|ty| ty.type_name.as_ref() == expected && ty.is_array == array)
+                {
+                    return Err(CameraWriteError::IncompatibleType { attribute });
+                }
+            }
+            if camera
+                .clipping_planes
+                .iter()
+                .flatten()
+                .any(|v| !v.is_finite())
+            {
+                return Err(CameraWriteError::InvalidClippingPlanes);
+            }
+            let local = {
+                let scene = edit.scene();
+                if Camera::new(&scene, self.path()).is_none() {
+                    return Err(CameraWriteError::InvalidDestination);
+                }
+                let mut cache = XformCache::new(query);
+                let mut ancestor = scene.parent(self.path());
+                while let Some(path) = ancestor {
+                    let local = cache
+                        .local_transform(&scene, path)
+                        .ok_or(CameraWriteError::InvalidParentTransform)?;
+                    if !local.problems.is_empty() {
+                        return Err(CameraWriteError::InvalidParentTransform);
+                    }
+                    if local.resets_xform_stack {
+                        break;
+                    }
+                    ancestor = scene.parent(path);
+                }
+                let parent = cache
+                    .parent_to_world(&scene, self.path())
+                    .ok_or(CameraWriteError::InvalidParentTransform)?;
+                let (inverse, determinant) = gf::inverse(&parent);
+                if !determinant.is_finite()
+                    || determinant == 0.
+                    || inverse.iter().flatten().any(|v| !v.is_finite())
+                {
+                    return Err(CameraWriteError::InvalidParentTransform);
+                }
+                gf::mul(&camera.camera_to_world, &inverse)
+            };
+            match time {
+                Some(time) => self.set_matrix_transform_at(edit, time, local),
+                None => self.set_matrix_transform(edit, local),
+            }
+            .map_err(CameraWriteError::Transform)?;
+            let projection = camera.projection.clone();
+            let projection = CameraProjection::write(projection, edit.tokens());
+            let planes = crate::value::write_float4_array(&camera.clipping_planes, edit.tokens());
+            for (name, value) in [
+                ("projection", projection),
+                ("horizontalAperture", Value::Float(camera.aperture[0])),
+                ("verticalAperture", Value::Float(camera.aperture[1])),
+                (
+                    "horizontalApertureOffset",
+                    Value::Float(camera.aperture_offset[0]),
+                ),
+                (
+                    "verticalApertureOffset",
+                    Value::Float(camera.aperture_offset[1]),
+                ),
+                ("focalLength", Value::Float(camera.focal_length)),
+                (
+                    "clippingRange",
+                    Value::Vec2f(camera.clipping_range.map(|v| v as f32)),
+                ),
+                ("clippingPlanes", planes),
+                ("fStop", Value::Float(camera.f_stop)),
+                ("focusDistance", Value::Float(camera.focus_distance)),
+                ("shutter:open", Value::Double(camera.shutter_offsets[0])),
+                ("shutter:close", Value::Double(camera.shutter_offsets[1])),
+            ] {
+                edit.set_value(self.path(), name, time, value);
+            }
+            Ok(())
+        })
+    }
+}

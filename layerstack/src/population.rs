@@ -13,6 +13,7 @@ use alloc::{
     rc::Rc,
     vec::Vec,
 };
+use core::ops::Bound;
 
 use hashbrown::{HashMap, HashSet};
 
@@ -28,6 +29,7 @@ use crate::{
     doc::LayerStore,
     doc::{LayerId, Reference, ReferenceTarget},
     expression_variables::{ArcAnchor, ExpressionScope, composed_variables},
+    interner::TokenId,
     layer_stack::{LayerStack, LayerStackIdentifier},
     path::{Path, PathId, PathInterner},
     relocates::{LiftedSet, Relocations, Walk},
@@ -43,6 +45,56 @@ type VisitedArc = (PathId, LayerStackIdentifier, PathId, ExpressionVariables);
 /// An inherit or specializes population followed: the destination, the
 /// class path and the expression variables of its layer stack.
 type VisitedClass = (PathId, PathId, ExpressionVariables);
+
+/// The inherit and specializes arcs population followed, with their
+/// `(destination, class)` pairs indexed by destination path.
+///
+/// Each expanded reference re-expands the classes whose destination lies
+/// in its namespace (see `expand_reference_paths`). A path sorts directly
+/// before its descendants, so that namespace is one range of the index,
+/// rather than a scan of every class followed so far.
+#[derive(Debug, Default)]
+struct VisitedClasses {
+    followed: HashSet<VisitedClass>,
+    by_dest: BTreeMap<Path, (PathId, Vec<PathId>)>,
+}
+
+impl VisitedClasses {
+    /// Records a followed class arc; `false` if it was already followed.
+    fn insert(&mut self, paths: &PathInterner, (dest, class, variables): VisitedClass) -> bool {
+        if !self.followed.insert((dest, class, variables)) {
+            return false;
+        }
+        let (_, classes) = self
+            .by_dest
+            .entry(paths.resolve(dest).clone())
+            .or_insert_with(|| (dest, Vec::new()));
+        if !classes.contains(&class) {
+            classes.push(class);
+        }
+        true
+    }
+
+    /// The followed `(destination, class)` pairs whose destination is `root`
+    /// or beneath it, sorted.
+    fn beneath(&self, root: &Path) -> Vec<(PathId, PathId)> {
+        let mut pairs: Vec<(PathId, PathId)> = self
+            .by_dest
+            .range::<[TokenId], _>((Bound::Included(root.segments()), Bound::Unbounded))
+            .take_while(|(dest, _)| root.is_prefix_of(dest))
+            .flat_map(|(_, (dest, classes))| classes.iter().map(move |class| (*dest, *class)))
+            .collect();
+        pairs.sort_unstable();
+        pairs
+    }
+
+    /// Every followed `(destination, class)` pair, unordered.
+    fn pairs(&self) -> impl Iterator<Item = (PathId, PathId)> + '_ {
+        self.by_dest
+            .values()
+            .flat_map(|(dest, classes)| classes.iter().map(move |class| (*dest, *class)))
+    }
+}
 
 /// Raw authored namespaces shared within one composition. Arc mapping,
 /// relocation and variant admission remain the callers' responsibility.
@@ -438,7 +490,7 @@ fn gather_populated_paths(
     let mut queue: Vec<PathId> = paths.iter().copied().collect();
     let mut idx = 0_usize;
     let mut visited_refs: HashSet<VisitedArc> = HashSet::new();
-    let mut visited_inherits: HashSet<VisitedClass> = HashSet::new();
+    let mut visited_inherits = VisitedClasses::default();
     let mut mapped_from = MappedFrom::new();
     let mut implied_inherits: HashSet<(PathId, PathId)> = HashSet::new();
     while idx < queue.len() {
@@ -616,11 +668,8 @@ fn gather_populated_paths(
     // The visited_inherits set contains all (dest, src) inherit/specializes
     // pairs discovered during population, and the classes they imply into
     // the stronger layer stacks, in the stage namespace.
-    let mut inherit_pairs: Vec<(PathId, PathId)> = visited_inherits
-        .into_iter()
-        .map(|(dest, class, _)| (dest, class))
-        .chain(implied_inherits)
-        .collect();
+    let mut inherit_pairs: Vec<(PathId, PathId)> =
+        visited_inherits.pairs().chain(implied_inherits).collect();
     inherit_pairs.sort_unstable();
     inherit_pairs.dedup();
     propagate_populated_through_inherits(
@@ -652,7 +701,7 @@ fn gather_populated_paths(
                 inherited_root,
                 &mut paths,
                 &mut queue,
-                &mut HashSet::new(),
+                &mut VisitedClasses::default(),
                 &mut chain,
                 &mut mapped_from,
             );
@@ -669,7 +718,7 @@ fn expand_inherit_paths(
     inherited_root: PathId,
     paths: &mut BTreeSet<PathId>,
     queue: &mut Vec<PathId>,
-    visited: &mut HashSet<VisitedClass>,
+    visited: &mut VisitedClasses,
     chain: &mut Chain<'_>,
     mapped_from: &mut MappedFrom,
 ) {
@@ -682,7 +731,7 @@ fn expand_inherit_paths(
     // The same class in another expression variable context may bring
     // other sublayers and arcs.
     let variables = composed_variables(store, &chain.arcs.stacks_for(layer_stack));
-    if !visited.insert((dest_root, inherited_root, variables)) {
+    if !visited.insert(store.paths(), (dest_root, inherited_root, variables)) {
         return;
     }
     // The class is implied into each stronger layer stack on the chain, and
@@ -806,7 +855,7 @@ fn expand_reference_paths(
     paths: &mut BTreeSet<PathId>,
     queue: &mut Vec<PathId>,
     visited: &mut HashSet<VisitedArc>,
-    visited_inherits: &mut HashSet<VisitedClass>,
+    visited_inherits: &mut VisitedClasses,
     chain: &mut Chain<'_>,
     mapped_from: &mut MappedFrom,
 ) {
@@ -1068,22 +1117,9 @@ fn expand_reference_paths(
     // to expand those here so the mapped paths get populated.
     //
     // Spec: AOUSD Core §10 (inherit propagation through references).
-    let mut new_inherits: Vec<(PathId, PathId)> = visited_inherits
-        .iter()
-        .map(|(dest, class, _)| (*dest, *class))
-        .filter(|(dest, _src)| {
-            // Only process inherits whose destination is under (or equal to)
-            // our reference destination root.
-            *dest == dest_root || {
-                let dest_path = store.paths().resolve(*dest);
-                base.is_prefix_of(dest_path)
-            }
-        })
-        .collect();
-    new_inherits.sort_unstable();
-    new_inherits.dedup();
-
-    for (inherit_dest, inherit_src) in new_inherits {
+    // Only inherits whose destination is under (or equal to) our reference
+    // destination root.
+    for (inherit_dest, inherit_src) in visited_inherits.beneath(&base) {
         // Use a fresh visited set: the same (dest, src) pair may have been
         // expanded in a deeper reference stack but not yet in this one.
         expand_inherit_paths(
@@ -1093,7 +1129,7 @@ fn expand_reference_paths(
             inherit_src,
             paths,
             queue,
-            &mut HashSet::new(),
+            &mut VisitedClasses::default(),
             chain,
             mapped_from,
         );
@@ -1120,7 +1156,7 @@ fn expand_ancestral_paths(
     paths: &mut BTreeSet<PathId>,
     queue: &mut Vec<PathId>,
     visited_refs: &mut HashSet<VisitedArc>,
-    visited_inherits: &mut HashSet<VisitedClass>,
+    visited_inherits: &mut VisitedClasses,
     chain: &mut Chain<'_>,
     mapped_from: &mut MappedFrom,
 ) {
@@ -1155,7 +1191,7 @@ fn expand_ancestral_paths_from(
     paths: &mut BTreeSet<PathId>,
     queue: &mut Vec<PathId>,
     visited_refs: &mut HashSet<VisitedArc>,
-    visited_inherits: &mut HashSet<VisitedClass>,
+    visited_inherits: &mut VisitedClasses,
     chain: &mut Chain<'_>,
     mapped_from: &mut MappedFrom,
     skip: usize,

@@ -17,7 +17,7 @@ use layerstack::spline::{
     CurveType, Extrapolation, Knot, KnotInterp, LoopParams, SplineData, SplineDataType,
 };
 
-use crate::compression::read_compressed_ints;
+use crate::compression::{read_compressed_ints, read_compressed_ints_as};
 use crate::error::UsdcError;
 use crate::section::CrateSections;
 use crate::value_type::ValueType;
@@ -352,7 +352,6 @@ pub fn decode_value_within(
 pub(crate) enum DecodedField<'a> {
     Value(CrateValue),
     MathArray(MathArray<'a>),
-    IntegerArray(IntegerArray),
     FloatArray(FloatArray),
 }
 
@@ -360,7 +359,7 @@ impl DecodedField<'_> {
     pub(crate) fn value(&self) -> Option<&CrateValue> {
         match self {
             Self::Value(value) => Some(value),
-            Self::MathArray(_) | Self::IntegerArray(_) | Self::FloatArray(_) => None,
+            Self::MathArray(_) | Self::FloatArray(_) => None,
         }
     }
 }
@@ -395,17 +394,18 @@ pub(crate) fn decode_field_within<'a>(
             ) {
                 return decode_float_array(rep, data, vtype, budget).map(DecodedField::FloatArray);
             }
-            let width = match vtype {
-                ValueType::Bool | ValueType::UChar => Some(1),
-                ValueType::Int | ValueType::UInt => Some(4),
-                ValueType::Int64 | ValueType::UInt64 => Some(8),
-                _ => None,
-            };
-            if let Some(width) = width {
-                return Ok(DecodedField::IntegerArray(IntegerArray {
-                    value_type: vtype,
-                    values: read_integer_array(rep, data, width, false, budget)?,
-                }));
+            if matches!(
+                vtype,
+                ValueType::Bool
+                    | ValueType::UChar
+                    | ValueType::Int
+                    | ValueType::UInt
+                    | ValueType::Int64
+                    | ValueType::UInt64
+            ) {
+                return decode_integer_field(rep, data, vtype, budget)
+                    .map(CrateValue::TypedArray)
+                    .map(DecodedField::Value);
             }
         }
         decode_one(rep, data, sections, budget, DecodeMode::Compact).map(DecodedField::Value)
@@ -552,9 +552,6 @@ fn decode_nested(
             DecodedField::FloatArray(array) => {
                 CrateValue::TypedArray(crate::numeric_array::float_array(array))
             }
-            DecodedField::IntegerArray(array) => {
-                CrateValue::TypedArray(crate::numeric_array::integer_array(array))
-            }
             DecodedField::MathArray(array) => {
                 CrateValue::TypedArray(crate::numeric_array::math_array(&array))
             }
@@ -688,7 +685,7 @@ fn decode_bool(
         return Ok(CrateValue::Bool(rep.payload()[0] != 0));
     }
     if rep.is_array() {
-        let values = read_integer_array(rep, data, 1, false, budget)?;
+        let values = read_integer_array(rep, data, 1, budget)?;
         let arr = values
             .into_iter()
             .map(|v| CrateValue::Bool(v != 0))
@@ -708,7 +705,7 @@ fn decode_integer_u8(
         return Ok(CrateValue::UChar(rep.payload()[0]));
     }
     if rep.is_array() {
-        let values = read_integer_array(rep, data, 1, false, budget)?;
+        let values = read_integer_array(rep, data, 1, budget)?;
         let arr = values
             .into_iter()
             .map(|v| {
@@ -733,7 +730,7 @@ fn decode_integer_i32(
         return Ok(CrateValue::Int(v));
     }
     if rep.is_array() {
-        let values = read_integer_array(rep, data, 4, true, budget)?;
+        let values = read_integer_array(rep, data, 4, budget)?;
         #[allow(clippy::cast_possible_truncation, reason = "i32 range")]
         let arr = values
             .into_iter()
@@ -756,7 +753,7 @@ fn decode_integer_u32(
         return Ok(CrateValue::UInt(v));
     }
     if rep.is_array() {
-        let values = read_integer_array(rep, data, 4, false, budget)?;
+        let values = read_integer_array(rep, data, 4, budget)?;
         #[allow(clippy::cast_possible_truncation, reason = "u32 range")]
         let arr = values
             .into_iter()
@@ -783,7 +780,7 @@ fn decode_integer_i64(
         return Ok(CrateValue::Int64(i64::from(v)));
     }
     if rep.is_array() {
-        let values = read_integer_array(rep, data, 8, true, budget)?;
+        let values = read_integer_array(rep, data, 8, budget)?;
         let arr = values.into_iter().map(CrateValue::Int64).collect();
         return Ok(CrateValue::Array(arr));
     }
@@ -804,7 +801,7 @@ fn decode_integer_u64(
         return Ok(CrateValue::UInt64(u64::from(v)));
     }
     if rep.is_array() {
-        let values = read_integer_array(rep, data, 8, false, budget)?;
+        let values = read_integer_array(rep, data, 8, budget)?;
         #[allow(clippy::cast_sign_loss, reason = "unsigned context")]
         let arr = values
             .into_iter()
@@ -816,12 +813,41 @@ fn decode_integer_u64(
     Ok(CrateValue::UInt64(read_u64_at(data, off)?))
 }
 
-/// Integer components decoded by the shared integer-array reader, before
-/// expansion into assembly's type-erased values. Unsigned values retain their
-/// signed bit representation until conversion, just as in the public decoder.
-pub(crate) struct IntegerArray {
-    pub(crate) value_type: ValueType,
-    pub(crate) values: Vec<i64>,
+/// Builds the final integer owner directly. Narrowing is bitwise, including
+/// unsigned values whose encoded deltas use signed arithmetic (Core §16.3.10).
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "integer element bit patterns"
+)]
+fn decode_integer_field(
+    rep: &RawValueRep,
+    data: &[u8],
+    vtype: ValueType,
+    budget: &mut DecodeBudget,
+) -> Result<layerstack::TypedArray, UsdcError> {
+    use alloc::sync::Arc;
+    use layerstack::TypedArray as A;
+    macro_rules! read {
+        ($variant:ident, $width:expr, $convert:expr) => {
+            read_integer_array_as(rep, data, $width, budget, $convert)
+                .map(|values| A::$variant(Arc::new(values)))
+        };
+    }
+    match vtype {
+        ValueType::Bool => read!(Bool, 1, |v| v != 0),
+        ValueType::UChar => read!(UChar, 1, |v| v as u8),
+        ValueType::Int => read!(Int, 4, |v| v as i32),
+        ValueType::UInt => read!(UInt, 4, |v| v as u32),
+        ValueType::Int64 => read!(Int64, 8, core::convert::identity),
+        // Reuse 64-bit reconstruction: only signedness changes, not width.
+        ValueType::UInt64 => read_integer_array(rep, data, 8, budget).map(|values| {
+            A::UInt64(Arc::new(
+                values.into_iter().map(i64::cast_unsigned).collect(),
+            ))
+        }),
+        _ => unreachable!("integer array type checked before dispatch"),
+    }
 }
 
 /// Reads an array of integers from the file data at the payload offset.
@@ -829,9 +855,18 @@ fn read_integer_array(
     rep: &RawValueRep,
     data: &[u8],
     element_size: usize,
-    _signed: bool,
     budget: &mut DecodeBudget,
 ) -> Result<Vec<i64>, UsdcError> {
+    read_integer_array_as(rep, data, element_size, budget, core::convert::identity)
+}
+
+fn read_integer_array_as<T>(
+    rep: &RawValueRep,
+    data: &[u8],
+    element_size: usize,
+    budget: &mut DecodeBudget,
+    mut convert: impl FnMut(i64) -> T,
+) -> Result<Vec<T>, UsdcError> {
     let off = payload_offset_usize(rep, data)?;
     if off == 0 {
         return Ok(vec![]);
@@ -847,12 +882,15 @@ fn read_integer_array(
         let count = usize::try_from(count).map_err(|_| UsdcError::IntegerArrayDecode {
             context: "element count exceeds the address space",
         })?;
-        let (values, _) = read_compressed_ints(bytes_from(data, arr_start)?, count, element_size)?;
+        let (values, _) =
+            read_compressed_ints_as(bytes_from(data, arr_start)?, count, element_size, convert)?;
         Ok(values)
     } else {
         let count = element_count(data, arr_start, count, element_size)?;
         (0..count)
-            .map(|i| read_signed_le_n(data, arr_start + i * element_size, element_size))
+            .map(|i| {
+                read_signed_le_n(data, arr_start + i * element_size, element_size).map(&mut convert)
+            })
             .collect()
     }
 }
@@ -2312,7 +2350,7 @@ fn read_u32_array_or_inlined(
     data: &[u8],
     budget: &mut DecodeBudget,
 ) -> Result<Vec<i64>, UsdcError> {
-    read_integer_array(rep, data, 4, false, budget)
+    read_integer_array(rep, data, 4, budget)
 }
 
 // ---------------------------------------------------------------------------
@@ -2844,25 +2882,26 @@ mod tests {
                             assert_eq!(ordinary.as_ref().err(), compact.as_ref().err());
                             assert_eq!(a.used(), b.used());
                             if let Ok(CrateValue::Array(values)) = ordinary {
-                                let Ok(DecodedField::IntegerArray(array)) = compact else {
+                                let Ok(DecodedField::Value(CrateValue::TypedArray(array))) =
+                                    compact
+                                else {
                                     panic!("compact integer array");
                                 };
-                                assert_eq!(values.len(), array.values.len());
-                                for (decoded, compact) in values.iter().zip(array.values) {
+                                assert_eq!(values.len(), array.len());
+                                let actual = layerstack::Value::TypedArray(array);
+                                for (decoded, compact) in
+                                    values.iter().zip(actual.array_ref().unwrap().iter())
+                                {
                                     let expected = match decoded {
-                                        CrateValue::Bool(v) => {
-                                            assert_eq!(*v, compact != 0);
-                                            continue;
-                                        }
-                                        CrateValue::UChar(v) => i64::from(*v),
-                                        CrateValue::Int(v) => i64::from(*v),
-                                        CrateValue::UInt(v) => i64::from(*v),
-                                        CrateValue::Int64(v) => *v,
-                                        CrateValue::UInt64(v) => v.cast_signed(),
+                                        CrateValue::Bool(v) => layerstack::Value::Bool(*v),
+                                        CrateValue::UChar(v) => layerstack::Value::UChar(*v),
+                                        CrateValue::Int(v) => layerstack::Value::Int(*v),
+                                        CrateValue::UInt(v) => layerstack::Value::UInt(*v),
+                                        CrateValue::Int64(v) => layerstack::Value::Int64(*v),
+                                        CrateValue::UInt64(v) => layerstack::Value::UInt64(*v),
                                         _ => panic!("integer element"),
                                     };
-                                    let bits = compact.to_le_bytes();
-                                    assert_eq!(&expected.to_le_bytes()[..width], &bits[..width]);
+                                    assert_eq!(expected, *compact);
                                 }
                                 assert!(
                                     decode_field_within(&rep, &data[..end], &sections, &mut b)

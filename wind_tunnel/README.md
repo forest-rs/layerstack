@@ -241,3 +241,7 @@ sparse referenced hierarchies, and retained layer-dependency construction over
 one- and four-layer stacks, both fieldless and with three typed transform
 properties per prim. Fixture setup and stage destruction are outside the
 composition timer. Composition assertions check child and dependency coverage.
+
+The `usdc_open` target includes `usdc_integer_import`: signed and unsigned
+32/64-bit arrays at small and mesh-buffer sizes. Input files are prepared outside
+measurement, and complete layer import is timed separately from destruction.

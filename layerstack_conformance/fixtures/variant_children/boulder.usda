@@ -39,3 +39,27 @@ def "Boulder" (
         }
     }
 }
+
+def "Reef" (
+    prepend variantSets = "depth"
+)
+{
+    def "Polyp"
+    {
+        int arms = 6
+    }
+
+    variantSet "depth" = {
+        "Deep" {
+            over "Polyp"
+            {
+                int arms = 8
+            }
+        }
+        "Shallow" {
+            def "Frond"
+            {
+            }
+        }
+    }
+}

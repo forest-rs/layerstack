@@ -243,3 +243,37 @@ def "Pebble" (
         }
     }
 }
+
+# No opinion selects a branch of the set and no fallback names one, so
+# neither branch contributes: not the child one authors, nor the value
+# the other authors on a base child.
+def "Shell" (
+    prepend variantSets = "pattern"
+)
+{
+    def "Spiral"
+    {
+        int turns = 4
+    }
+
+    variantSet "pattern" = {
+        "Banded" {
+            over "Spiral"
+            {
+                int turns = 5
+            }
+        }
+        "Spotted" {
+            def "Spot"
+            {
+            }
+        }
+    }
+}
+
+# The same, with the unselected set in the referenced asset.
+def "Reef" (
+    prepend references = @./boulder.usda@</Reef>
+)
+{
+}

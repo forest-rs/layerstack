@@ -1154,9 +1154,10 @@ fn authored_composed_variant_selections(
 /// stage's layer stack takes the stage's composed selection for that host,
 /// since an arc into that layer stack composes the host's ancestral opinions
 /// the same way; any other layer takes the selection authored on the host in
-/// the source layer. When no selection is known for a set at all (fallback
-/// selections are not modeled yet), the opinion is kept rather than guessed
-/// away.
+/// the source layer. A composed host's selections, completed with the stage's
+/// variant fallbacks, are complete: a set it selects nothing for contributes
+/// no branch. Only the last, source-layer lookup is partial, so a set it finds
+/// no selection for keeps the opinion rather than guessing it away.
 ///
 /// Prims are pruned parents first, and each prim in two steps: sources inside
 /// unselected branches of its ancestors go first, then its own selections are
@@ -1409,41 +1410,34 @@ fn spec_path_branches_selected(
         let host = paths.lookup(&host_path);
         let composed_host =
             stage_host_path(store, &prims[&prim_path].graph, prim_path, node, host_path);
-        let composed_selection = composed_host
+        let composed = composed_host
             .and_then(|p| paths.lookup(&p))
             .filter(|id| prims.contains_key(id))
-            .and_then(|id| {
-                selection_cache
-                    .entry(id)
-                    .or_insert_with(|| {
-                        strength_ordered_variant_selections(store, resolver.fallbacks, &prims[&id])
-                    })
-                    .get(&set)
-                    .copied()
-            });
-        let selection = composed_selection
             .or_else(|| {
-                let host = host.filter(|id| prims.contains_key(id))?;
-                if !stage_stack.layers.contains(&layer_id) {
-                    return None;
-                }
-                selection_cache
-                    .entry(host)
-                    .or_insert_with(|| {
-                        strength_ordered_variant_selections(
-                            store,
-                            resolver.fallbacks,
-                            &prims[&host],
-                        )
-                    })
-                    .get(&set)
-                    .copied()
-            })
-            .or_else(|| {
-                let authored = &store.layer(layer_id)?.prims.get(&host?)?.variant_selections;
-                let context = SiteContext::Node(&prims[&prim_path].graph, node);
-                site_selections(store, authored, context).get(&set).copied()
+                host.filter(|id| prims.contains_key(id))
+                    .filter(|_| stage_stack.layers.contains(&layer_id))
             });
+        if let Some(id) = composed {
+            // Spec: AOUSD Core §10.3.2.5.1; with neither an opinion nor a
+            // fallback, OpenUSD adds no variant arc (`_AddVariantArc` is only
+            // reached for a found selection in `pxr/usd/pcp/primIndex.cpp`).
+            let selection = selection_cache
+                .entry(id)
+                .or_insert_with(|| {
+                    strength_ordered_variant_selections(store, resolver.fallbacks, &prims[&id])
+                })
+                .get(&set)
+                .copied();
+            if selection != Some(variant) {
+                return false;
+            }
+            continue;
+        }
+        let selection = host.and_then(|host| {
+            let authored = &store.layer(layer_id)?.prims.get(&host)?.variant_selections;
+            let context = SiteContext::Node(&prims[&prim_path].graph, node);
+            site_selections(store, authored, context).get(&set).copied()
+        });
         if selection.is_some_and(|selected| selected != variant) {
             return false;
         }

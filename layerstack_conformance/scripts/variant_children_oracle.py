@@ -20,7 +20,8 @@ and never hides a child that a contributing spec authors either.
 
 For every composed prim the vectors record its prim stack, repeats
 included, and its ordered children; for every attribute, its resolved
-default. `switched` records the same after selecting the other branch of
+default. `/Shell` and `/Reef` author variant sets that nothing selects:
+OpenUSD adds no variant node for them. `switched` records the same after selecting the other branch of
 `/Scene` and `/Tree`, as the stage's root layer authors it.
 """
 import json
@@ -279,6 +280,40 @@ def "Pebble" (
         }
     }
 }
+
+# No opinion selects a branch of the set and no fallback names one, so
+# neither branch contributes: not the child one authors, nor the value
+# the other authors on a base child.
+def "Shell" (
+    prepend variantSets = "pattern"
+)
+{
+    def "Spiral"
+    {
+        int turns = 4
+    }
+
+    variantSet "pattern" = {
+        "Banded" {
+            over "Spiral"
+            {
+                int turns = 5
+            }
+        }
+        "Spotted" {
+            def "Spot"
+            {
+            }
+        }
+    }
+}
+
+# The same, with the unselected set in the referenced asset.
+def "Reef" (
+    prepend references = @./boulder.usda@</Reef>
+)
+{
+}
 ''',
     "lamp": '''#usda 1.0
 
@@ -335,6 +370,30 @@ def "Boulder" (
             }
 
             def "Puddle"
+            {
+            }
+        }
+    }
+}
+
+def "Reef" (
+    prepend variantSets = "depth"
+)
+{
+    def "Polyp"
+    {
+        int arms = 6
+    }
+
+    variantSet "depth" = {
+        "Deep" {
+            over "Polyp"
+            {
+                int arms = 8
+            }
+        }
+        "Shallow" {
+            def "Frond"
             {
             }
         }

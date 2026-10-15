@@ -2670,6 +2670,16 @@ struct AdmittedArcs {
     payloads: Vec<(AuthoredReference, Vec<VariantSelectionSite>)>,
 }
 
+impl AdmittedArcs {
+    /// Returns `true` when no arc is admitted.
+    fn is_empty(&self) -> bool {
+        self.inherits.is_empty()
+            && self.specializes.is_empty()
+            && self.references.is_empty()
+            && self.payloads.is_empty()
+    }
+}
+
 /// `arcs` without repeats: an arc of one node, read from two lists that
 /// both read the node, is one arc (see [`NodeLists`]).
 fn unique<T: PartialEq>(arcs: Vec<Sited<T>>) -> Vec<Sited<T>> {
@@ -5065,16 +5075,22 @@ impl AncestralArcs<'_> {
     /// implied here before their origin's ancestral arcs are expanded, so
     /// the sites an implied class reached are left to
     /// [`drop_skipped_duplicates`], which keeps the origin's.
+    ///
+    /// Only the graph's first `before` nodes count: those it had before the
+    /// ancestral arcs were expanded. Nodes are appended and keep their
+    /// parents and origins, so this is the graph as it was then.
     fn used_sites(
         &self,
         store: &mut dyn LayerStore,
         nodes: &ArcNodes,
         own: NodeId,
+        before: usize,
         out: &HashMap<PathId, PrimIndex>,
     ) -> UsedSites {
         let graph = &out[&self.dest_root].graph;
         let mut used: UsedSites = graph
             .nodes()
+            .take(before)
             .filter(|(id, node)| {
                 node.arc_kind() != ArcKind::Variants && !graph.implied_after(own, *id)
             })
@@ -5420,8 +5436,11 @@ impl AncestralArcs<'_> {
         mut deps: Option<&mut DependencyBuilder>,
         skip: usize,
     ) {
-        let used = if self.class_arc {
-            // The arc's node, the origin of the classes implied from it.
+        // The arc's node, the origin of the classes implied from it, and the
+        // size of the graph before any ancestral arc is added. Most
+        // ancestors author no arcs, so the sites they must not add again
+        // are only collected once one does.
+        let origin = self.class_arc.then(|| {
             let mut cursor = PathCursor::root(self.dest_root);
             intern_steps(
                 store,
@@ -5431,10 +5450,9 @@ impl AncestralArcs<'_> {
                 &mut cursor,
                 &nodes.stage_relocates,
             );
-            self.used_sites(store, nodes, cursor.node, out)
-        } else {
-            UsedSites::new()
-        };
+            (cursor.node, out[&self.dest_root].graph.len())
+        });
+        let mut used: Option<UsedSites> = None;
         // The context the ancestral arcs' classes are read in.
         let class_variables = composed_variables(store, &cycles.stacks_for(self.arc_stack));
         let target_path = store.paths().resolve(self.target).clone();
@@ -5474,6 +5492,13 @@ impl AncestralArcs<'_> {
             };
             let namespace_depth = u16::try_from(depth).unwrap_or(u16::MAX);
             let arcs = self.arcs_of(store, nodes, out, ancestor, cycles);
+            if arcs.is_empty() {
+                continue;
+            }
+            let used = &*used.get_or_insert_with(|| match origin {
+                Some((own, before)) => self.used_sites(store, nodes, own, before, out),
+                None => UsedSites::new(),
+            });
             let mapped = |store: &mut dyn LayerStore, path: PathId| {
                 let joined = store.paths().resolve(path).join(&rel);
                 store.paths_mut().intern(joined)
@@ -5483,7 +5508,7 @@ impl AncestralArcs<'_> {
                     store,
                     reference,
                     &rel,
-                    &used,
+                    used,
                     ArcKind::References,
                     cycles,
                     deps.as_deref_mut(),
@@ -5518,7 +5543,7 @@ impl AncestralArcs<'_> {
                     store,
                     payload,
                     &rel,
-                    &used,
+                    used,
                     ArcKind::Payloads,
                     cycles,
                     deps.as_deref_mut(),

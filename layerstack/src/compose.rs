@@ -236,6 +236,7 @@ pub(crate) fn compose_stage_retained(
         root,
         session: options.session_layer,
     });
+    cycles.source_inventory().retain_namespace = namespace.is_some();
     if let Some(namespace) = namespace.as_deref_mut() {
         cycles.source_inventory().namespace = core::mem::take(namespace);
     }

@@ -50,6 +50,8 @@ type VisitedClass = (PathId, PathId, ExpressionVariables);
 pub(crate) struct SourceInventory {
     stacks: HashMap<Vec<LayerId>, HashMap<PathId, Rc<[PathId]>>>,
     pub(crate) namespace: NamespaceInventory,
+    /// Preserve ordered source indexes for future bounded compositions.
+    pub(crate) retain_namespace: bool,
     scope: Option<Vec<Path>>,
     scope_exact: bool,
     pub(crate) inspected_paths: usize,
@@ -99,10 +101,22 @@ impl SourceInventory {
         roots: &[Path],
     ) -> Vec<PathId> {
         let mut result = Vec::new();
+        // A complete local stack has only one namespace query. Enumerate its
+        // authored paths directly, then apply the same USD ordering below
+        // (Core §8, §11). Retained clients still need indexes for later edits.
+        let enumerate = self.local_stack_only
+            && !self.retain_namespace
+            && self.scope.is_none()
+            && roots == [Path::root()];
         for &id in &stack.layers {
             let Some(layer) = store.layer(id) else {
                 continue;
             };
+            if enumerate {
+                self.inspected_paths += layer.prims.len();
+                result.extend(layer.prims.keys().copied());
+                continue;
+            }
             let current = self.namespace.layers.get_mut(&id);
             let rebuild = match current {
                 Some((generation, _structure, _tree)) if *generation == layer.generation() => false,
@@ -168,6 +182,13 @@ impl SourceInventory {
                     parent = path.parent();
                 }
             }
+        }
+        if enumerate {
+            // Collapse shared paths across layers before comparing USD names.
+            // Sorting numeric IDs is cheap and avoids repeatedly comparing the
+            // same namespace when many layers contribute to each prim.
+            result.sort_unstable();
+            result.dedup();
         }
         result.sort_by(|a, b| {
             store

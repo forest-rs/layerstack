@@ -143,3 +143,44 @@ fn local_stack_matches_general_population_with_sessions_offsets_ordering_and_act
         Value::Double(7.0)
     );
 }
+
+#[test]
+fn one_shot_namespace_matches_retained_indexes_before_and_after_structural_edits() {
+    let mut store = InMemoryStore::default();
+    let world = store.path("/World");
+    let a = store.path("/World/A");
+    let b = store.path("/World/B");
+    let options = StageOptions {
+        with_dependencies: true,
+        ..Default::default()
+    };
+    let mut layer = Layer::new(LayerId(1));
+    layer.insert_prim(world, PrimSpec::def());
+    layer.insert_prim(a, PrimSpec::def());
+    store.insert_layer(layer);
+    let mut live = crate::LiveStage::compose(&mut store, LayerId(1), options.clone());
+    assert_eq!(live.stage().composition_work().indexed_source_paths, 2);
+    let stage = Stage::compose(&mut store, LayerId(1), options.clone());
+    assert_eq!(stage.composition_work().indexed_source_paths, 0);
+    assert_eq!(stage.children_of(world), live.stage().children_of(world));
+    assert_eq!(
+        alloc::format!("{:?}", stage.explain_prim_graph(a)),
+        alloc::format!("{:?}", live.stage().explain_prim_graph(a))
+    );
+
+    store
+        .layers
+        .get_mut(&LayerId(1))
+        .unwrap()
+        .insert_prim(b, PrimSpec::def());
+    live.notify_structural_change();
+    live.recompose(&mut store);
+    let stage = Stage::compose(&mut store, LayerId(1), options);
+    assert_eq!(stage.composition_work().indexed_source_paths, 0);
+    assert_eq!(stage.children_of(world), Some(&[a, b][..]));
+    assert_eq!(stage.children_of(world), live.stage().children_of(world));
+    assert_eq!(
+        alloc::format!("{:?}", stage.explain_prim_graph(b)),
+        alloc::format!("{:?}", live.stage().explain_prim_graph(b))
+    );
+}

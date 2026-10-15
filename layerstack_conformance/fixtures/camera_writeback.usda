@@ -1,0 +1,31 @@
+#usda 1.0
+
+def Xform "SourceParent" {
+    double3 xformOp:translate = (10,20,30)
+    uniform token[] xformOpOrder = ["xformOp:translate"]
+    def Camera "Source" {
+        double3 xformOp:translate = (1,2,3)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+        token projection = "orthographic"
+        float horizontalAperture = 40
+        float verticalAperture = 30
+        float horizontalApertureOffset = 2
+        float verticalApertureOffset = -3
+        float focalLength = 60
+        float2 clippingRange = (1,100)
+        float4[] clippingPlanes = [(1,0,0,2)]
+        float fStop = 2.8
+        float focusDistance = 50
+        double shutter:open = -0.25
+        double shutter:close = 0.5
+    }
+}
+def Xform "DestinationParent" {
+    double3 xformOp:scale = (2,3,4)
+    uniform token[] xformOpOrder = ["xformOp:scale"]
+    def Camera "Destination" {
+        double3 xformOp:translate = (9,8,7)
+        uniform token[] xformOpOrder = ["!resetXformStack!", "xformOp:translate"]
+        float horizontalAperture.timeSamples = {1:35}
+    }
+}

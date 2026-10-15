@@ -460,6 +460,9 @@ jobs:
       - name: check common transform authoring oracle
         run: python layerstack_conformance/scripts/common_xform_oracle.py --check
 
+      - name: check whole-camera writeback oracle
+        run: python layerstack_conformance/scripts/camera_writeback_oracle.py --check
+
       - name: check inherited motion settings oracle
         run: python layerstack_conformance/scripts/motion_oracle.py --check
 

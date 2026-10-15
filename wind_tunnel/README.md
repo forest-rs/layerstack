@@ -229,3 +229,9 @@ caches avoids the measured decode cost; replacing them trades that latency for
 released native ownership. Reusing tables alone addresses the much smaller table
 opening cost and does not release decoded arrays. Raw results are in
 `retention-plain-*.csv`, `retention-snapshot-*.csv` and `retention-metadata-*.csv`.
+
+The `encoded_ownership` benchmark measures transferring an already-read vector
+into shared immutable encoded storage, excluding input allocation, initialization
+and output destruction. Vector capacity remains retained and accounted; explicit
+detachment releases a view's large backing owner. This measures ownership
+transfer, not file I/O bandwidth or whole-stage opening.

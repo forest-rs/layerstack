@@ -125,3 +125,7 @@ harness = false
 [[bench]]
 name = "usda_import"
 harness = false
+
+[[bench]]
+name = "encoded_ownership"
+harness = false

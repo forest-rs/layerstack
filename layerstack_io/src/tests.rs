@@ -3,6 +3,7 @@
 
 use super::*;
 
+mod encoded_ownership;
 mod package_identity;
 mod registered_metadata;
 

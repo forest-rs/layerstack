@@ -160,3 +160,13 @@ callback. Other nested assets remain dependencies, including nested dictionaries
 whose keys happen to be `identifier`. Generic authored inventory and rewriting
 retain identity uses as `AssetDependencyKind::Identity`; see
 [the identity contract and caller update](../docs/asset-identity.md).
+
+Storage backends can override `read_encoded` and `read_encoded_bounded` to return
+an existing immutable `EncodedBytes` owner. Their defaults transfer vectors from
+`read`/`read_bounded` without copying payload bytes, so existing backends benefit
+without changes. Bounds remain explicit and never fall back to an unbounded read.
+Package members and retained numeric inputs keep independent shared views.
+`encoded_bytes_copied` counts document-layer copies after transport; copies made
+inside a backend remain outside that counter. Vector owners retain spare capacity,
+which `EncodedBytes::backing_bytes` accounts; `detached` explicitly copies a small
+view when releasing a large owner is preferable.

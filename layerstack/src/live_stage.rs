@@ -203,7 +203,7 @@ pub struct LiveStage {
     /// Layer → prims that receive opinions from that layer.
     layer_to_prims: HashMap<LayerId, HashSet<PathId>>,
     /// Prim → layers that contribute opinions to it.
-    prim_to_layers: HashMap<PathId, HashSet<LayerId>>,
+    prim_to_layers: crate::dependency_map::LayerSets,
     /// Source site `(layer, prim path in that layer)` → composed prims whose
     /// prim index draws specs or opinions from it.
     source_to_prims: HashMap<(LayerId, PathId), HashSet<PathId>>,
@@ -573,7 +573,12 @@ impl LiveStage {
             // An unnotified source edit may have changed more than this
             // transaction's slots. Leave it to ordinary recomposition.
             for prim in &affected {
-                for layer in self.prim_to_layers.get(prim).into_iter().flatten() {
+                for layer in self
+                    .prim_to_layers
+                    .get(prim)
+                    .into_iter()
+                    .flat_map(|layers| layers.iter())
+                {
                     let Some(Some(seen)) = self.generations.get(layer) else {
                         return None;
                     };
@@ -1319,6 +1324,13 @@ impl LiveStage {
         affected
     }
 
+    /// Physical sharing of this retained client's layer-contributor sets.
+    /// Excludes reverse indexes, invalidation topology and allocator overhead.
+    #[must_use]
+    pub fn layer_dependency_storage(&self) -> crate::LayerDependencyStorage {
+        self.prim_to_layers.storage()
+    }
+
     /// Returns a reference to the underlying composed stage.
     #[must_use]
     pub fn stage(&self) -> &Stage {
@@ -1393,7 +1405,7 @@ impl LiveStage {
 
         // Remove old layer-opinion edges for this prim.
         if let Some(old_layers) = self.prim_to_layers.remove(&prim) {
-            for layer in &old_layers {
+            for layer in old_layers.iter() {
                 if let Some(prim_set) = self.layer_to_prims.get_mut(layer) {
                     prim_set.remove(&prim);
                 }
@@ -1401,15 +1413,11 @@ impl LiveStage {
         }
 
         // Add new layer-opinion edges from the partial composition.
-        let mut layers_for_prim = HashSet::new();
         if let Some(partial_layers) = partial.prim_to_layers.get(&prim) {
-            for &layer in partial_layers {
+            for &layer in partial_layers.iter() {
                 self.layer_to_prims.entry(layer).or_default().insert(prim);
-                layers_for_prim.insert(layer);
             }
-        }
-        if !layers_for_prim.is_empty() {
-            self.prim_to_layers.insert(prim, layers_for_prim);
+            self.prim_to_layers.set_shared(prim, partial_layers);
         }
     }
 
@@ -1623,6 +1631,44 @@ mod tests {
         referenced.insert_prim(r_b, child);
         store.insert_layer(referenced);
         (b, c, field_x)
+    }
+
+    #[test]
+    fn layer_contributor_sharing_survives_incremental_namespace_growth() {
+        use crate::{EditTarget, Specifier};
+        let mut store = InMemoryStore::default();
+        let world = store.path("/World");
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(world, PrimSpec::def());
+        store.insert_layer(layer);
+        let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+        for i in 0..32 {
+            let child = store.path(&alloc::format!("/World/C{i}"));
+            let mut transaction = Transaction::new();
+            transaction.create_prim(
+                EditTarget::for_layer(LayerId(1)).prim(child),
+                Specifier::Def,
+                None,
+            );
+            live.apply(&mut store, &transaction).unwrap();
+            assert!(live.stage().has_prim(child));
+            let storage = live.layer_dependency_storage();
+            assert_eq!(storage.unique_layer_sets, 1);
+            assert_eq!(storage.physical_layer_references, 1);
+            assert_eq!(storage.logical_layer_references, storage.prims);
+        }
+        let fresh = Stage::compose(
+            &mut store,
+            LayerId(1),
+            StageOptions {
+                with_dependencies: true,
+                ..Default::default()
+            },
+        );
+        assert_eq!(
+            live.layer_dependency_storage(),
+            fresh.layer_dependency_storage().unwrap()
+        );
     }
 
     #[test]

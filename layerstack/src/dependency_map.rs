@@ -13,6 +13,9 @@
 //! diagnostic and notification queries.
 
 use alloc::vec::Vec;
+mod layer_sets;
+pub use layer_sets::LayerDependencyStorage;
+pub(crate) use layer_sets::{LayerSets, MutableLayerSet};
 
 use hashbrown::{HashMap, HashSet};
 use invalidation::{CycleHandling, InvalidationGraph};
@@ -53,7 +56,7 @@ pub(crate) struct CompositionDeps {
     pub layer_to_prims: HashMap<LayerId, HashSet<PathId>>,
     /// Prim → layers that contribute opinions to it, or author a reference
     /// or payload that reaches it.
-    pub prim_to_layers: HashMap<PathId, HashSet<LayerId>>,
+    pub prim_to_layers: LayerSets,
     /// Layer → prims whose composition follows (or fails to resolve) a
     /// reference or payload targeting that layer's `defaultPrim`.
     pub default_prim_dependents: HashMap<LayerId, HashSet<PathId>>,
@@ -64,6 +67,13 @@ pub(crate) struct CompositionDeps {
     pub expression_variables: VariableReads,
 }
 
+impl CompositionDeps {
+    pub(crate) fn add_layer_opinion(&mut self, layer: LayerId, prim: PathId) {
+        self.layer_to_prims.entry(layer).or_default().insert(prim);
+        self.prim_to_layers.add(prim, layer);
+    }
+}
+
 /// Builder for composition dependency data, used during composition.
 ///
 /// Writes arc dependencies directly into an [`InvalidationGraph`] and
@@ -72,7 +82,7 @@ pub(crate) struct DependencyBuilder {
     graph: InvalidationGraph<PathId>,
     arc_set: HashSet<ArcDependency>,
     layer_to_prims: HashMap<LayerId, HashSet<PathId>>,
-    prim_to_layers: HashMap<PathId, HashSet<LayerId>>,
+    prim_to_layers: HashMap<PathId, MutableLayerSet>,
     default_prim_dependents: HashMap<LayerId, HashSet<PathId>>,
     relocation_layers: HashSet<LayerId>,
     expression_variables: VariableReads,
@@ -128,7 +138,10 @@ impl DependencyBuilder {
     /// from `layer`, or is reached by a reference or payload it authors.
     pub(crate) fn add_layer_opinion(&mut self, layer: LayerId, prim: PathId) {
         self.layer_to_prims.entry(layer).or_default().insert(prim);
-        self.prim_to_layers.entry(prim).or_default().insert(layer);
+        self.prim_to_layers
+            .entry(prim)
+            .and_modify(|layers| layers.add(layer))
+            .or_insert(MutableLayerSet::One(layer));
     }
 
     /// Records that composing `prim` consulted the `defaultPrim` of `layer`,
@@ -183,7 +196,7 @@ impl DependencyBuilder {
             graph: self.graph,
             arcs: self.arc_set,
             layer_to_prims: self.layer_to_prims,
-            prim_to_layers: self.prim_to_layers,
+            prim_to_layers: LayerSets::from_mutable(self.prim_to_layers),
             default_prim_dependents: self.default_prim_dependents,
             relocation_layers: self.relocation_layers,
             expression_variables: self.expression_variables,

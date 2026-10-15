@@ -128,6 +128,21 @@ fn layer_dependencies(c: &mut Criterion) {
                 usize::try_from(layers).unwrap(),
                 "every layer contributes dependency evidence"
             );
+            let storage = stage.layer_dependency_storage().unwrap();
+            assert_eq!(
+                storage.unique_layer_sets, 1,
+                "equivalent contributor sets share one allocation"
+            );
+            assert_eq!(
+                storage.physical_layer_references,
+                usize::try_from(layers).unwrap(),
+                "physical references scale with distinct contributor sets"
+            );
+            assert_eq!(
+                storage.logical_layer_references,
+                storage.prims * usize::try_from(layers).unwrap(),
+                "sharing preserves every dependency edge"
+            );
             group.bench_function(BenchmarkId::new(format!("{layers}layers"), prims), |b| {
                 b.iter_custom(|iterations| {
                     let mut elapsed = Duration::ZERO;

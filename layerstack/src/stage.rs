@@ -772,8 +772,7 @@ impl Stage {
         if let Some(deps) = &mut self.deps {
             for prim in self.prims.keys().copied() {
                 for (layer, _) in self.clips.source_sites(prim) {
-                    deps.layer_to_prims.entry(layer).or_default().insert(prim);
-                    deps.prim_to_layers.entry(prim).or_default().insert(layer);
+                    deps.add_layer_opinion(layer, prim);
                 }
             }
         }
@@ -1681,6 +1680,13 @@ impl Stage {
                     .collect()
             })
             .unwrap_or_default()
+    }
+
+    /// Physical contributor-set sharing when dependency recording is enabled.
+    /// Excludes reverse indexes, invalidation topology and allocator overhead.
+    #[must_use]
+    pub fn layer_dependency_storage(&self) -> Option<crate::LayerDependencyStorage> {
+        self.deps.as_ref().map(|deps| deps.prim_to_layers.storage())
     }
 
     /// Returns prims affected by the given layer: those that receive

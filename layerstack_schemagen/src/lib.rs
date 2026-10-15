@@ -36,13 +36,19 @@
 //! Run it by hand when OpenUSD is upgraded.
 //!
 //! With `--check` it writes nothing, and fails when the checked-in files
-//! differ from what it would write.
+//! differ from what it would write. Normal generation leaves identical files and
+//! their timestamps untouched. Changed files are written completely to unique
+//! siblings before replacement; a write failure preserves that file's old output.
+//! Publication is atomic per file, not a transaction across the generated tree.
+//! Symlink outputs are rejected. This does not promise crash durability or ACL
+//! preservation beyond ordinary file permissions.
 
 mod emit;
 mod kinds;
 mod library;
 mod metadata;
 mod model;
+mod output;
 mod shader_nodes;
 mod views;
 
@@ -106,7 +112,7 @@ pub fn run() -> Result<String, String> {
                 return Err(format!("{} is stale", output.display()));
             }
         } else {
-            fs::write(&output, text).map_err(|e| format!("{}: {e}", output.display()))?;
+            output::write_if_changed(&output, &text)?;
         }
         return Ok(format!(
             "{} kind library {}",
@@ -138,7 +144,7 @@ pub fn run() -> Result<String, String> {
                 return Err(format!("{} is stale", output.display()));
             }
         } else {
-            fs::write(&output, text).map_err(|e| format!("{}: {e}", output.display()))?;
+            output::write_if_changed(&output, &text)?;
         }
         return Ok(format!(
             "{} shader library {}",
@@ -208,10 +214,7 @@ pub fn run() -> Result<String, String> {
 
     for (name, text) in &files {
         let path = root.join(name);
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
-        }
-        fs::write(&path, text).map_err(|e| format!("{}: {e}", path.display()))?;
+        output::write_if_changed(&path, text)?;
     }
     Ok(format!(
         "wrote {} files for OpenUSD {}",

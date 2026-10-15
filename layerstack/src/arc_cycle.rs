@@ -229,6 +229,14 @@ pub(crate) struct CycleDetector {
     chain: ArcChain,
     /// The arc that introduced each site on `chain` after its root.
     arcs: Vec<ArcKind>,
+    /// The layer stacks gathered so far, numbered in the order gathered, by
+    /// the chain of layer stacks that reaches each
+    /// ([`ArcChain::stacks_for`]); see
+    /// [`gather_layer_stack`](Self::gather_layer_stack).
+    layer_stacks: HashMap<Vec<LayerStackIdentifier>, (Rc<LayerStack>, usize)>,
+    /// The gathered layer stacks, by number, whose layers are already
+    /// recorded as used by each chain's composed prim.
+    recorded_uses: HashSet<(Option<PathId>, usize)>,
     /// The relocation tables of the layer stacks reached so far, and the
     /// stage paths relocations prohibit.
     relocations: Relocations,
@@ -257,6 +265,8 @@ impl CycleDetector {
             stage_layer_stack,
             chain: ArcChain { sites: Vec::new() },
             arcs: Vec::new(),
+            layer_stacks: HashMap::new(),
+            recorded_uses: HashSet::new(),
             relocations: Relocations::default(),
             inventory: SourceInventory::default(),
             used_layers: HashSet::new(),
@@ -480,33 +490,57 @@ impl CycleDetector {
     ///
     /// Its sublayer asset path expressions evaluate with the variables
     /// composed along that chain (see [`LayerStack::gather_recording`]).
+    ///
+    /// Composition reads no layer it has not loaded and changes none, so a
+    /// stack is gathered once per chain and shared after that, and its
+    /// layers are recorded as used once per composed prim. Gathering it
+    /// again would record nothing new: its errors are already reported, and
+    /// its variable reads are already kept until composition takes them.
     pub(crate) fn gather_layer_stack(
         &mut self,
         store: &dyn LayerStore,
         root: LayerStackIdentifier,
-    ) -> LayerStack {
-        let mut errors = Vec::new();
+    ) -> Rc<LayerStack> {
         let chain = self.chain.stacks_for(root);
-        let stack = LayerStack::gather_recording(store, &chain, &mut errors, Some(&mut self.reads));
+        let (stack, number) = match self.layer_stacks.get(&chain) {
+            Some((stack, number)) => (Rc::clone(stack), *number),
+            None => {
+                let mut errors = Vec::new();
+                let stack = Rc::new(LayerStack::gather_recording(
+                    store,
+                    &chain,
+                    &mut errors,
+                    Some(&mut self.reads),
+                ));
+                for error in errors {
+                    self.report(error);
+                }
+                let number = self.layer_stacks.len();
+                self.layer_stacks.insert(chain, (Rc::clone(&stack), number));
+                (stack, number)
+            }
+        };
+        let prim = self.chain.sites.first().map(|site| site.dest);
+        if !self.recorded_uses.insert((prim, number)) {
+            return stack;
+        }
         let used = stack
             .layers
             .iter()
             .copied()
             .filter(|id| store.layer(*id).is_some());
-        if let Some(site) = self.chain.sites.first() {
+        if let Some(prim) = prim {
             self.used_layer_sites
-                .entry(site.dest)
+                .entry(prim)
                 .or_default()
                 .extend(used.clone());
         }
         self.used_layers.extend(used);
-        for error in errors {
-            self.report(error);
-        }
         stack
     }
 
     pub(crate) fn take_used_layer_sites(&mut self) -> HashMap<PathId, HashSet<LayerId>> {
+        self.recorded_uses.clear();
         core::mem::take(&mut self.used_layer_sites)
     }
 

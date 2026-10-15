@@ -48,7 +48,7 @@ use invalidation::InvalidationGraph;
 
 use crate::variant_fallbacks::VariantFallbacks;
 use crate::{
-    composition_error::CompositionError,
+    composition_error::{CompositionError, order_errors},
     dependency_map::{ArcDependency, CompositionDeps},
     doc::{
         FieldValue, InterpolationType, LayerId, LayerStore, Specifier, Value,
@@ -56,7 +56,7 @@ use crate::{
     },
     interner::TokenId,
     listop::{ListOp, resolve_list_chain},
-    path::{PathId, PropertyPath, TargetPath},
+    path::{Path, PathId, PropertyPath, TargetPath},
     prim_index::{ArcKind, Opinion, OpinionKey, OpinionValue, PrimIndex},
     prim_index_graph::{NodeId, PrimIndexGraph},
     property::{PropertyKind, PropertySpec, PropertyType, Time, Variability},
@@ -586,6 +586,7 @@ impl Stage {
                 self.children.insert(parent, children);
             }
         }
+        self.order_errors(store);
         self.prepare_prototypes(store);
     }
 
@@ -1308,14 +1309,42 @@ impl Stage {
         self
     }
 
-    /// Attaches the composition errors found while building this stage.
-    pub(crate) fn with_composition_errors(mut self, errors: Vec<CompositionError>) -> Self {
+    /// Attaches the composition errors found while building this stage,
+    /// once its hierarchy is complete.
+    pub(crate) fn with_composition_errors(
+        mut self,
+        store: &dyn LayerStore,
+        errors: Vec<CompositionError>,
+    ) -> Self {
         self.errors = errors;
+        self.order_errors(store);
         self
     }
 
-    /// Returns the composition errors found while composing this stage, in
-    /// the order they were found.
+    /// Puts the composition errors in the order
+    /// [`composition_errors`](Self::composition_errors) reports them, by
+    /// each prim's place in a traversal of every prim
+    /// ([`all_children_of`](Self::all_children_of)).
+    fn order_errors(&mut self, store: &dyn LayerStore) {
+        if self.errors.len() < 2 {
+            return;
+        }
+        let mut position = HashMap::new();
+        let mut pending: Vec<PathId> = store.paths().lookup(&Path::root()).into_iter().collect();
+        while let Some(prim) = pending.pop() {
+            position.insert(prim, position.len());
+            if let Some(children) = self.all_children_of(prim) {
+                pending.extend(children.iter().rev());
+            }
+        }
+        order_errors(&mut self.errors, &position, store.paths(), store.tokens());
+    }
+
+    /// Returns the composition errors found while composing this stage: the
+    /// errors in layer stacks first, then each composed prim's in namespace
+    /// order, each group by kind and then in the order found. A stage
+    /// recomposed in part reports them in the same order as one composed
+    /// anew.
     ///
     /// Composition errors are not fatal: whatever an error names was ignored
     /// and everything else was composed as normal, so the stage is usable
@@ -1406,6 +1435,7 @@ impl Stage {
                 .into_iter()
                 .filter(|error| is_recomposed(error)),
         );
+        self.order_errors(store);
         self.prepare_prototypes(store);
     }
 

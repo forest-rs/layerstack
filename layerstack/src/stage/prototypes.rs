@@ -314,7 +314,7 @@ impl Stage {
         }
         let mut identities = HashMap::new();
         let mut relative_groups: Vec<HashMap<Vec<TokenId>, Vec<PathId>>> = Vec::new();
-        let root = store.paths().lookup(&crate::Path::root());
+        let root = store.paths().lookup(&Path::root());
         let instances: Vec<_> = root
             .into_iter()
             .flat_map(|root| self.traverse(root))

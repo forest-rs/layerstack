@@ -32,6 +32,21 @@ use crate::{
     spec_path::VariantSelectionSite,
 };
 
+/// Conservative absence proof for composition arcs and variant opinions.
+/// Explicit empty edits also fall back to ordinary composition. AOUSD Core
+/// §10 (arcs), §10.5 (variants): local specs alone cannot introduce other sites.
+pub(crate) fn is_local_spec(spec: &PrimSpec) -> bool {
+    spec.references.is_empty()
+        && spec.payloads.is_empty()
+        && spec.inherits.is_empty()
+        && spec.specializes.is_empty()
+        && spec.outer_variant_sites.is_empty()
+        && spec.variant_sets.is_empty()
+        && spec.variant_selections.is_empty()
+        && spec.variant_set_order.is_empty()
+        && spec.deleted_variant_sets.is_empty()
+}
+
 /// Returns the prim path `reference` targets, like
 /// [`Reference::target_path`], without interning: a `defaultPrim` target
 /// whose path has never been interned has no prim spec in any layer and

@@ -6,7 +6,7 @@
 //! It owns source enumeration and eligibility; shared stage composition still
 //! owns child order, activation and pruning (AOUSD Core §11.3.1).
 
-use crate::{LayerId, LayerStore, ListOp, Path, PathId, PrimSpec, StageOptions};
+use crate::{LayerId, LayerStore, Path, PathId, PrimSpec, StageOptions};
 use alloc::vec::Vec;
 use hashbrown::HashMap;
 
@@ -204,15 +204,7 @@ fn compare_paths(store: &dyn LayerStore, a: PathId, b: PathId) -> core::cmp::Ord
 }
 
 fn supported(store: &dyn LayerStore, spec: &PrimSpec) -> bool {
-    spec.references == ListOp::default()
-        && spec.payloads == ListOp::default()
-        && spec.inherits == ListOp::default()
-        && spec.specializes == ListOp::default()
-        && spec.outer_variant_sites.is_empty()
-        && spec.variant_sets.is_empty()
-        && spec.variant_selections.is_empty()
-        && spec.variant_set_order.is_empty()
-        && spec.deleted_variant_sets.is_empty()
+    crate::arcs::is_local_spec(spec)
         && spec.instanceable.is_none()
         && !spec.fields.iter().any(|f| {
             matches!(

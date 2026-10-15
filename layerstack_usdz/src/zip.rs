@@ -61,14 +61,16 @@ pub struct ZipEntry {
 
 // ── Little-endian helpers ───────────────────────────────────────────────
 
-fn read_u16(data: &[u8], off: usize) -> Result<u16, UsdzError> {
-    data.get(off..off + 2)
+pub(crate) fn read_u16(data: &[u8], off: usize) -> Result<u16, UsdzError> {
+    let end = off.checked_add(2).ok_or(UsdzError::UnexpectedEof)?;
+    data.get(off..end)
         .map(|b| u16::from_le_bytes([b[0], b[1]]))
         .ok_or(UsdzError::UnexpectedEof)
 }
 
-fn read_u32(data: &[u8], off: usize) -> Result<u32, UsdzError> {
-    data.get(off..off + 4)
+pub(crate) fn read_u32(data: &[u8], off: usize) -> Result<u32, UsdzError> {
+    let end = off.checked_add(4).ok_or(UsdzError::UnexpectedEof)?;
+    data.get(off..end)
         .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
         .ok_or(UsdzError::UnexpectedEof)
 }
@@ -175,28 +177,28 @@ struct CdParsed {
     next_offset: usize,
 }
 
-/// Parses a single Central Directory File Header at `offset`.
-fn parse_cd_entry(data: &[u8], offset: usize) -> Result<CdParsed, UsdzError> {
-    if offset + CDFH_FIXED_SIZE > data.len() {
+/// Parses one bounded Central Directory File Header.
+pub(crate) fn central_entry(data: &[u8]) -> Result<CentralEntry<'_>, UsdzError> {
+    if CDFH_FIXED_SIZE > data.len() {
         return Err(UsdzError::UnexpectedEof);
     }
 
-    let sig = read_u32(data, offset)?;
+    let sig = read_u32(data, 0)?;
     if sig != CDFH_SIGNATURE {
         return Err(UsdzError::InvalidZip {
             reason: "bad Central Directory entry signature",
         });
     }
 
-    let flags = read_u16(data, offset + 8)?;
-    let compression = read_u16(data, offset + 10)?;
-    let crc32_val = read_u32(data, offset + 16)?;
-    let compressed_size = read_u32(data, offset + 20)? as usize;
-    let uncompressed_size = read_u32(data, offset + 24)? as usize;
-    let name_len = read_u16(data, offset + 28)? as usize;
-    let extra_len = read_u16(data, offset + 30)? as usize;
-    let comment_len = read_u16(data, offset + 32)? as usize;
-    let local_header_offset = read_u32(data, offset + 42)? as usize;
+    let flags = read_u16(data, 8)?;
+    let compression = read_u16(data, 10)?;
+    let crc32_val = read_u32(data, 16)?;
+    let compressed_size = read_u32(data, 20)? as usize;
+    let uncompressed_size = read_u32(data, 24)? as usize;
+    let name_len = read_u16(data, 28)? as usize;
+    let extra_len = read_u16(data, 30)? as usize;
+    let comment_len = read_u16(data, 32)? as usize;
+    let local_header_offset = read_u32(data, 42)? as usize;
 
     // USDZ constraints.
     if compression != 0 {
@@ -224,8 +226,16 @@ fn parse_cd_entry(data: &[u8], offset: usize) -> Result<CdParsed, UsdzError> {
             reason: "compressed size must equal uncompressed size (Stored)",
         });
     }
+    if compressed_size == u32::MAX as usize
+        || local_header_offset == u32::MAX as usize
+        || read_u16(data, 34)? != 0
+    {
+        return Err(UsdzError::ConstraintViolation {
+            reason: "Zip64 or split members are unsupported",
+        });
+    }
     // Read file name.
-    let name_start = offset + CDFH_FIXED_SIZE;
+    let name_start = CDFH_FIXED_SIZE;
     let name_end = name_start + name_len;
     if name_end > data.len() {
         return Err(UsdzError::UnexpectedEof);
@@ -235,60 +245,118 @@ fn parse_cd_entry(data: &[u8], offset: usize) -> Result<CdParsed, UsdzError> {
             reason: "file name is not valid UTF-8",
         })?;
 
-    // Validate the Local File Header and compute data offset.
-    let data_offset = validate_local_header(data, local_header_offset)?;
+    let next_offset = name_end
+        .checked_add(extra_len)
+        .and_then(|n| n.checked_add(comment_len))
+        .ok_or(UsdzError::UnexpectedEof)?;
+    if next_offset > data.len() {
+        return Err(UsdzError::UnexpectedEof);
+    }
+    Ok(CentralEntry {
+        name,
+        flags,
+        crc: crc32_val,
+        size: uncompressed_size,
+        header: local_header_offset,
+        next_offset,
+    })
+}
 
-    // Alignment applies to the entry's data, not to its local file header:
-    // the OpenUSD USDZ specification requires each file's data to begin at a
-    // multiple of 64 bytes ("Layout": <https://openusd.org/dev/spec_usdz.html#layout>).
-    // Writers achieve this by padding the local header's extra field, so
-    // headers themselves generally sit at unaligned offsets. AOUSD Core
-    // §16.4.1.3 words this as "every file header starts at a multiple of 64
-    // bytes"; we follow the reference layout, which is what conforming
-    // packages (e.g. those written by `usdzip`) actually contain.
+/// Borrowed, bounded stored-member metadata, shared by eager and range readers.
+pub(crate) struct CentralEntry<'a> {
+    pub(crate) name: &'a str,
+    pub(crate) flags: u16,
+    pub(crate) crc: u32,
+    pub(crate) size: usize,
+    pub(crate) header: usize,
+    pub(crate) next_offset: usize,
+}
+
+fn parse_cd_entry(data: &[u8], offset: usize) -> Result<CdParsed, UsdzError> {
+    let metadata = central_entry(data.get(offset..).ok_or(UsdzError::UnexpectedEof)?)?;
+    let local = data
+        .get(metadata.header..)
+        .ok_or(UsdzError::UnexpectedEof)?;
+    let relative = stored_local_offset(
+        local,
+        metadata.name,
+        metadata.flags,
+        metadata.crc,
+        metadata.size as u64,
+    )?;
+    let data_offset = metadata
+        .header
+        .checked_add(relative)
+        .ok_or(UsdzError::UnexpectedEof)?;
+    let name_end = LFH_FIXED_SIZE + metadata.name.len();
+    if local.get(LFH_FIXED_SIZE..name_end) != Some(metadata.name.as_bytes()) {
+        return Err(UsdzError::InvalidZip {
+            reason: "local and central member names disagree",
+        });
+    }
+    if data_offset
+        .checked_add(metadata.size)
+        .is_none_or(|end| end > data.len())
+    {
+        return Err(UsdzError::UnexpectedEof);
+    }
     if !data_offset.is_multiple_of(64) {
         return Err(UsdzError::ConstraintViolation {
             reason: "entry data must be 64-byte aligned",
         });
     }
-
-    let next = name_end + extra_len + comment_len;
-
+    // Alignment applies to data, per OpenUSD's USDZ Layout specification.
+    // AOUSD Core §16.4.1.3 uses “header”; interoperable writers pad its extra field.
     Ok(CdParsed {
         zip_entry: ZipEntry {
-            name: Arc::from(name),
+            name: Arc::from(metadata.name),
             data_offset,
-            size: uncompressed_size,
-            crc32: crc32_val,
+            size: metadata.size,
+            crc32: metadata.crc,
         },
-        next_offset: next,
+        next_offset: offset
+            .checked_add(metadata.next_offset)
+            .ok_or(UsdzError::UnexpectedEof)?,
     })
 }
 
 // ── Local File Header validation ────────────────────────────────────────
 
-/// Validates a Local File Header and returns the data offset.
-fn validate_local_header(data: &[u8], offset: usize) -> Result<usize, UsdzError> {
-    if offset + LFH_FIXED_SIZE > data.len() {
+/// Validate fixed stored-member header metadata identically for eager and
+/// range readers. The caller checks the name bytes and its own archive extent.
+/// AOUSD Core §16.4; ZIP APPNOTE stored local/central headers must agree.
+pub(crate) fn stored_local_offset(
+    data: &[u8],
+    name: &str,
+    flags: u16,
+    crc: u32,
+    size: u64,
+) -> Result<usize, UsdzError> {
+    if data.len() < LFH_FIXED_SIZE {
         return Err(UsdzError::UnexpectedEof);
     }
-
-    let sig = read_u32(data, offset)?;
-    if sig != LFH_SIGNATURE {
+    if read_u32(data, 0)? != LFH_SIGNATURE {
         return Err(UsdzError::InvalidZip {
             reason: "bad Local File Header signature",
         });
     }
-
-    let name_len = read_u16(data, offset + 26)? as usize;
-    let extra_len = read_u16(data, offset + 28)? as usize;
-
-    let data_offset = offset + LFH_FIXED_SIZE + name_len + extra_len;
-    if data_offset > data.len() {
-        return Err(UsdzError::UnexpectedEof);
+    if read_u16(data, 6)? != flags
+        || read_u16(data, 8)? != 0
+        || read_u32(data, 14)? != crc
+        || u64::from(read_u32(data, 18)?) != size
+        || u64::from(read_u32(data, 22)?) != size
+    {
+        return Err(UsdzError::InvalidZip {
+            reason: "local and central member metadata disagree",
+        });
     }
-
-    Ok(data_offset)
+    let name_len = usize::from(read_u16(data, 26)?);
+    if name_len != name.len() {
+        return Err(UsdzError::InvalidZip {
+            reason: "local and central member names disagree",
+        });
+    }
+    Ok(LFH_FIXED_SIZE + name_len + usize::from(read_u16(data, 28)?))
 }
 
 #[cfg(test)]

@@ -41,6 +41,7 @@
 extern crate alloc;
 
 use alloc::collections::{BTreeMap, BTreeSet};
+use alloc::string::ToString;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
@@ -49,10 +50,12 @@ use layerstack::doc::{Layer, LayerId};
 use layerstack::interner::TokenInterner;
 use layerstack::path::PathInterner;
 
+mod access;
 pub mod crc32;
 pub mod diagnostic;
 pub mod error;
 pub mod localize;
+pub mod range;
 mod resolver;
 pub mod snapshot;
 pub mod writer;
@@ -282,12 +285,62 @@ pub fn read_usdz_snapshot(
     members: &[&str],
     options: UsdcReadOptions,
 ) -> Result<UsdzResult, UsdzError> {
-    let root = archive.layer(
-        selected
-            .or_else(|| archive.root_member())
-            .ok_or(UsdzError::NoRootLayer)?,
-    )?;
+    read_package(
+        &mut &*archive,
+        selected,
+        layer_id,
+        tokens,
+        paths,
+        resolver,
+        members,
+        options,
+    )
+}
 
+/// Imports reachable and explicitly selected layers through a host range source.
+/// Each returned member is structurally checked and CRC-verified. Unselected
+/// members and enclosing nested archive payloads are not verified; this is an
+/// explicit alternative to [`read_usdz_snapshot`]'s complete integrity contract.
+/// Already imported member identities are reused without additional range reads.
+/// Work and limits remain visible on `archive`. AOUSD Core §9.7, §16.4.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "caller-owned identity, interners, resolver and explicit policy"
+)]
+pub fn read_usdz_ranges<S: range::RangeSource>(
+    archive: &mut range::RangePackage<S>,
+    selected: Option<&str>,
+    layer_id: LayerId,
+    tokens: &mut TokenInterner,
+    paths: &mut PathInterner,
+    resolver: &mut dyn AssetResolver,
+    members: &[&str],
+    options: UsdcReadOptions,
+) -> Result<UsdzResult, range::RangeError<S::Error>>
+where
+    S::Error: core::fmt::Display,
+{
+    read_package(
+        archive, selected, layer_id, tokens, paths, resolver, members, options,
+    )
+}
+
+#[allow(clippy::too_many_arguments, reason = "shared package import pipeline")]
+fn read_package<P: access::PackageAccess>(
+    archive: &mut P,
+    selected: Option<&str>,
+    layer_id: LayerId,
+    tokens: &mut TokenInterner,
+    paths: &mut PathInterner,
+    resolver: &mut dyn AssetResolver,
+    members: &[&str],
+    options: UsdcReadOptions,
+) -> Result<UsdzResult, P::Error> {
+    let selection = selected
+        .or_else(|| archive.root_member())
+        .ok_or(UsdzError::NoRootLayer)?
+        .to_string();
+    let root = archive.layer(&selection)?;
     // 4. Create a package-scoped resolver, which knows the root layer as
     //    the member it anchors to. The outer resolver allocates the layer
     //    IDs of the other members.
@@ -327,7 +380,7 @@ pub fn read_usdz_snapshot(
     //    outer resolver that handed out an ID twice fails the read.
     let mut ids = BTreeSet::from([layer_id]);
     if let Some(layer) = resolved_layers.iter().find(|layer| !ids.insert(layer.id)) {
-        return Err(UsdzError::DuplicateLayerId { id: layer.id });
+        return Err(UsdzError::DuplicateLayerId { id: layer.id }.into());
     }
 
     #[cfg(feature = "std")]

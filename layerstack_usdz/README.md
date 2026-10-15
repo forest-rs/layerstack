@@ -52,6 +52,46 @@ Missing search paths and absolute paths pass to the outer resolver.
 `UsdzResult::member_paths` records loaded package members. USDA/USDC import is limited to the companion readers'
 supported subsets; packaging does not expand their format coverage.
 
+## Verified snapshots
+
+`PackageSnapshot::new` validates all directories and member checksums, including
+unused nested packages, under `PackageLimits`. `read_usdz_snapshot` reuses those
+indexes and shared encoded views. The borrowed reader copies the outer archive
+once to obtain owned storage. Nested identifiers select explicit members or an
+inner archive's first native USD layer; relative dependencies and resources remain
+inside their innermost archive. `PackageStats` reports indexed entries, directory
+parses, verification bytes and backing allocation size. Small views retain the
+outer allocation until dropped or explicitly detached.
+
+## Import selected members through ranges
+
+`range::RangePackage::open(source, RangeLimits::default())` reads the outer
+central directory and end record. `layer(path)` and `member(path)` check a
+selected member's local header, bounds, alignment and CRC before returning owned
+`EncodedBytes`. Nested package directories open only when selected. Returned
+bytes survive the reader; repeated selection reuses local-header metadata but
+reads and verifies the payload again. Clones share immutable directory indexes.
+
+`read_usdz_ranges(&mut package, selected, layer_id, tokens, paths, resolver,
+members, options)` imports reachable and explicitly requested layers using the
+same resolver and format pipeline as `read_usdz_snapshot`. Already imported
+member identities, including nested default-layer aliases, reuse their layers
+without additional payload reads. Insert the returned
+root and resolved layers into a store and inspect diagnostics as above. This
+mode deliberately leaves unselected members and enclosing nested-archive CRCs
+unverified. Use `PackageSnapshot` for complete integrity checks.
+
+A `RangeSource` supplies a fixed length and exact owned range reads. The host
+owns source identity, version stability and transport errors. `EncodedBytes`
+implements the trait for in-memory use; `layerstack_io::Storage::open_ranges`
+provides an optional host transport hook, implemented by `Filesystem`.
+`RangeError::Source` preserves the original transport error; `Format` identifies
+layout, selection, budget or checksum failures. No source error falls back to a
+complete read. `RangeLimits` bounds directory entries, directory bytes, depth,
+single-member size and cumulative CRC bytes before their corresponding reads.
+`RangeStats` reports requests, delivered bytes, directories and checksum work;
+it never implies complete package verification.
+
 ## Features and limits
 
 - Rust **1.89** or later; `no_std` with `alloc` and a global allocator.
@@ -68,21 +108,12 @@ supported subsets; packaging does not expand their format coverage.
 - The writer accepts native USD layers, nested USDZ packages and supported
   image/audio extensions. The first member must be a native USD layer. See the [writer API](https://docs.rs/layerstack_usdz/latest/layerstack_usdz/writer/index.html)
   for the exact accepted member types and errors.
-- The reader requires the full archive in memory; the writer returns a complete
-  `Vec<u8>`. Neither API streams files to or from disk.
+- Complete verification requires the full archive in memory. Explicit range imports
+  read directories and selected members through a host source. The writer returns
+  a complete `Vec<u8>`.
 
 ## License
 
 See [CHANGELOG.md](CHANGELOG.md) for release status.
 
 Licensed under either [Apache-2.0](LICENSE-APACHE) or [MIT](LICENSE-MIT), at your option.
-
-
-`PackageSnapshot::new` validates all directories and member checksums, including
-unused nested packages, under `PackageLimits`. `read_usdz_snapshot` reuses those
-indexes and shared encoded views. The borrowed reader copies the outer archive
-once to obtain owned storage. Nested identifiers select explicit members or an
-inner archive's first native USD layer; relative dependencies and resources remain
-inside their innermost archive. `PackageStats` reports indexed entries, directory
-parses, verification bytes and backing allocation size. Small views retain the
-outer allocation until dropped or explicitly detached.

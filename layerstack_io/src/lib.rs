@@ -171,6 +171,36 @@ pub trait Storage {
         self.read_bounded(identifier, max_bytes)
             .map(EncodedBytes::from)
     }
+    /// Opens a fixed logical source for explicit package range imports through
+    /// [`layerstack_usdz::range::RangePackage`] and [`layerstack_usdz::read_usdz_ranges`].
+    /// The source must satisfy [`layerstack_usdz::range::RangeSource`]'s stability
+    /// contract. The default fails without reading; there is no full-read fallback.
+    /// [`StageDocument`] continues to use complete package verification.
+    ///
+    /// ```no_run
+    /// # #[cfg(feature = "std")]
+    /// # fn example() -> Result<(), Box<dyn core::error::Error>> {
+    /// use layerstack_io::{Filesystem, Storage};
+    /// use layerstack_usdz::range::{RangeLimits, RangePackage};
+    /// let mut storage = Filesystem::new(".", [])?;
+    /// let identifier = storage.identify("scene.usdz", None)?;
+    /// let mut package = RangePackage::open(storage.open_ranges(&identifier)?, RangeLimits::default())?;
+    /// let root = package.root_member().ok_or(layerstack_usdz::UsdzError::NoRootLayer)?.to_owned();
+    /// let selected = package.layer(&root)?;
+    /// println!("{} bytes, {:?}", selected.bytes.len(), package.stats());
+    /// # Ok(())
+    /// # }
+    /// ```
+    fn open_ranges(
+        &mut self,
+        _identifier: &str,
+    ) -> Result<Arc<dyn layerstack_usdz::range::RangeSource<Error = IoError> + Send + Sync>, IoError>
+    {
+        Err(IoError::new(
+            IoErrorKind::Unsupported,
+            "storage does not implement range sources",
+        ))
+    }
     /// Writes a complete source.
     fn write(&mut self, identifier: &str, bytes: &[u8]) -> Result<(), IoError>;
 }

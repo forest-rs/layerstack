@@ -170,3 +170,20 @@ Package members and retained numeric inputs keep independent shared views.
 inside a backend remain outside that counter. Vector owners retain spare capacity,
 which `EncodedBytes::backing_bytes` accounts; `detached` explicitly copies a small
 view when releasing a large owner is preferable.
+
+## Explicit package range imports
+
+`Storage::open_ranges(identifier)` optionally returns a fixed logical byte source
+for `layerstack_usdz::range::RangePackage` and `read_usdz_ranges`. The default
+reports `Unsupported` without reading. `Filesystem` implements exact bounded
+range reads through a retained open file handle; there is no full-read fallback.
+Filesystem sources survive atomic replacement. Hosts must exclude external
+in-place writes during a source's lifetime: length/mtime checks detect ordinary
+changes but do not make the file a snapshot.
+
+This lower-level import path verifies selected member headers and CRCs, including
+reachable layer dependencies. Unselected members and enclosing nested-package
+CRCs remain unverified. Inspect `RangeStats` for actual read and verification
+work and use `RangeLimits` to bound it. `StageDocument` continues to open completely
+verified package snapshots, including unused members. Range transport is an
+explicit choice for hosts assembling their own import/store workflow.

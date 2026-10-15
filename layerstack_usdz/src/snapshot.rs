@@ -111,7 +111,11 @@ impl PackageSnapshot {
         }
         let root = archive
             .entries()
-            .first()
+            .iter()
+            // OpenUSD SdfUsdzFileFormat selects SdfZipFile::begin(), which walks
+            // physical local headers. Central-directory ordering is independent.
+            // AOUSD Core §16.4: first file is the root layer.
+            .min_by_key(|entry| entry.data_offset)
             .filter(|e| crate::is_usd_extension(&e.name))
             .map(|e| e.name.clone());
         let mut entries = BTreeMap::new();
@@ -170,7 +174,7 @@ impl PackageSnapshot {
     pub fn stats(&self) -> PackageStats {
         self.stats
     }
-    /// First entry when it is a native USD layer. Later layers never become a default.
+    /// First physical entry when it is a native USD layer. Later layers never become a default.
     pub fn root_member(&self) -> Option<&str> {
         self.root.as_deref()
     }

@@ -152,3 +152,11 @@ Standard permissions are preserved on native platforms; macOS also preserves
 extended metadata. WASI relies on host-granted filesystem rights, without file
 permission bits.
 Other platforms' extended access controls require a host-specific `Storage`.
+
+Direct asset-valued prim `assetInfo.identifier` entries are identity uses rather
+than required package resources. `prepare_package` reports them as ignored and
+preserves their spelling without loading them or calling the resource inclusion
+callback. Other nested assets remain dependencies, including nested dictionaries
+whose keys happen to be `identifier`. Generic authored inventory and rewriting
+retain identity uses as `AssetDependencyKind::Identity`; see
+[the identity contract and caller update](../docs/asset-identity.md).

@@ -7061,7 +7061,7 @@ fn add_reference_edge_opinions(
             stage_relocates: Rc::clone(&nodes.stage_relocates),
             stage_stack: stage_stack.clone(),
             combined_stack: combined_stack.clone(),
-            remote_stack: remote_stack.clone(),
+            remote_stack: Rc::clone(&remote_stack),
             anchor: target_stack,
             layer_offset: reference.layer_offset,
             target_root: reference_path,
@@ -7259,7 +7259,7 @@ struct LateArc {
     /// `stage_stack`'s layers, then `remote_stack`'s.
     combined_stack: LayerStack,
     /// The arc's target layer stack.
-    remote_stack: LayerStack,
+    remote_stack: Rc<LayerStack>,
     /// Root layer of the target layer stack; internal arcs target it.
     anchor: LayerStackIdentifier,
     /// The arc's offset.
@@ -7954,7 +7954,7 @@ fn add_payload_edge_opinions(
             stage_relocates: Rc::clone(&nodes.stage_relocates),
             stage_stack: stage_stack.clone(),
             combined_stack: combined_stack.clone(),
-            remote_stack: remote_stack.clone(),
+            remote_stack: Rc::clone(&remote_stack),
             anchor: target_stack,
             layer_offset: reference.layer_offset,
             target_root: reference_path,

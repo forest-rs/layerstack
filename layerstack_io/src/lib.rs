@@ -800,6 +800,12 @@ struct Reader<'a, B> {
     pending: Vec<Layer>,
     diagnostics: Vec<MemberDiagnostic>,
     bindings: BTreeMap<(LayerId, String), LayerId>,
+    /// Storage identities already computed by this operation, keyed by anchor
+    /// identifier and authored asset. `Storage::identify` must be stable within
+    /// a document, so a scene that references one asset from many sites asks
+    /// its transport once. Dropped with the operation, so later loads observe
+    /// newly created or removed files.
+    identities: BTreeMap<(Option<String>, String), Result<String, IoError>>,
     failures: Vec<AssetFailure>,
     reachable_only: bool,
 }
@@ -822,6 +828,7 @@ impl<'a, B: Storage> Reader<'a, B> {
             pending: Vec::new(),
             diagnostics: Vec::new(),
             bindings: BTreeMap::new(),
+            identities: BTreeMap::new(),
             failures: Vec::new(),
             reachable_only: false,
         }
@@ -1150,6 +1157,13 @@ impl<'a, B: Storage> Reader<'a, B> {
     }
 }
 impl<B: Storage> Reader<'_, B> {
+    fn identify(&mut self, asset: &str, anchor: Option<String>) -> Result<String, IoError> {
+        let storage = &*self.storage;
+        self.identities
+            .entry((anchor, String::from(asset)))
+            .or_insert_with_key(|(anchor, asset)| storage.identify(asset, anchor.as_deref()))
+            .clone()
+    }
     fn load(
         &mut self,
         asset: &str,
@@ -1256,13 +1270,15 @@ impl<B: Storage> Reader<'_, B> {
         let anchor_identifier = anchor
             .and_then(|id| self.catalog.sources.get(&id))
             .map(|s| {
-                s.identifier
-                    .split_once('[')
-                    .map_or(s.identifier.as_str(), |(outer, _)| outer)
+                String::from(
+                    s.identifier
+                        .split_once('[')
+                        .map_or(s.identifier.as_str(), |(outer, _)| outer),
+                )
             });
         let path = PackagePath::parse(asset, 32)
             .map_err(|reason| IoError::new(IoErrorKind::Rejected, reason))?;
-        let outer = self.storage.identify(path.outer(), anchor_identifier)?;
+        let outer = self.identify(path.outer(), anchor_identifier)?;
         let identifier = path.with_outer(&outer);
         if let Some((first, rest)) = path.members().split_first()
             && let Some(&package) = self.catalog.ids.get(&outer)

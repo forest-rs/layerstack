@@ -199,5 +199,104 @@ fn bench_integer_decode(c: &mut Criterion) {
     }
     group.finish();
 }
-criterion_group!(benches, bench_open, bench_integer_decode);
+fn bench_integer_import(c: &mut Criterion) {
+    let mut group = c.benchmark_group("usdc_integer_import");
+    group.sample_size(15);
+    group.warm_up_time(std::time::Duration::from_millis(300));
+    group.measurement_time(std::time::Duration::from_secs(1));
+    for count in [64_u32, 262_144] {
+        let cases = [
+            (
+                "int",
+                Value::IntArray(
+                    (0..count)
+                        .map(|i| i32::try_from((i * 17) % 65536).unwrap())
+                        .collect(),
+                ),
+            ),
+            (
+                "uint",
+                Value::UIntArray((0..count).map(|i| (i * 17) % 65536).collect()),
+            ),
+            (
+                "int64",
+                Value::Int64Array((0..count).map(|i| i64::from((i * 17) % 65536)).collect()),
+            ),
+            (
+                "uint64",
+                Value::UInt64Array((0..count).map(|i| u64::from((i * 17) % 65536)).collect()),
+            ),
+        ];
+        for (kind, values) in cases {
+            let bytes = write_crate(&[
+                Spec::new("/", SpecForm::PseudoRoot),
+                Spec::new("/Mesh", SpecForm::Prim).with_field(
+                    "specifier",
+                    Value::Specifier(layerstack_usdc::writer::Specifier::Def),
+                ),
+                Spec::new("/Mesh.indices", SpecForm::Attribute)
+                    .with_field("typeName", Value::Token(format!("{kind}[]")))
+                    .with_field("default", values),
+            ])
+            .unwrap();
+            let mut tokens = TokenInterner::default();
+            let mut paths = PathInterner::default();
+            let read = layerstack_usdc::read_usdc(
+                &bytes,
+                LayerId(1),
+                &mut tokens,
+                &mut paths,
+                &mut NoAssets,
+            )
+            .unwrap();
+            assert!(read.diagnostics.is_empty(), "fixture imports completely");
+            let field = tokens.intern("indices");
+            let value = read
+                .layer
+                .prims
+                .values()
+                .next()
+                .unwrap()
+                .property(field)
+                .unwrap()
+                .default
+                .as_ref()
+                .unwrap();
+            assert_eq!(
+                value.array_ref().unwrap().len(),
+                usize::try_from(count).unwrap(),
+                "all integer elements survive import"
+            );
+            group.bench_function(BenchmarkId::new(kind, count), |b| {
+                b.iter_custom(|iterations| {
+                    let mut elapsed = std::time::Duration::ZERO;
+                    for _ in 0..iterations {
+                        let mut tokens = TokenInterner::default();
+                        let mut paths = PathInterner::default();
+                        let start = std::time::Instant::now();
+                        let read = layerstack_usdc::read_usdc(
+                            black_box(&bytes),
+                            LayerId(1),
+                            &mut tokens,
+                            &mut paths,
+                            &mut NoAssets,
+                        )
+                        .unwrap();
+                        elapsed += start.elapsed();
+                        black_box(&read);
+                        drop(read);
+                    }
+                    elapsed
+                });
+            });
+        }
+    }
+    group.finish();
+}
+criterion_group!(
+    benches,
+    bench_open,
+    bench_integer_decode,
+    bench_integer_import
+);
 criterion_main!(benches);

@@ -122,21 +122,33 @@ pub fn decode_integer_array(
     count: usize,
     int_size: usize,
 ) -> Result<Vec<i64>, UsdcError> {
+    decode_integer_array_as(data, count, int_size, core::convert::identity)
+}
+
+/// Reconstructs signed deltas directly into the caller's element storage.
+/// The conversion preserves the public decoder's arithmetic and error checks.
+fn decode_integer_array_as<T>(
+    data: &[u8],
+    count: usize,
+    int_size: usize,
+    convert: impl FnMut(i64) -> T,
+) -> Result<Vec<T>, UsdcError> {
     // Dispatch once so the common integer widths have fixed delta sizes
     // throughout the inner loop, as in OpenUSD's typed _DecodeNHelper.
     match int_size {
-        4 => decode_integer_array_width(data, count, 4),
-        8 => decode_integer_array_width(data, count, 8),
-        _ => decode_integer_array_width(data, count, int_size),
+        4 => decode_integer_array_width(data, count, 4, convert),
+        8 => decode_integer_array_width(data, count, 8, convert),
+        _ => decode_integer_array_width(data, count, int_size, convert),
     }
 }
 
 #[inline(always)]
-fn decode_integer_array_width(
+fn decode_integer_array_width<T>(
     data: &[u8],
     count: usize,
     int_size: usize,
-) -> Result<Vec<i64>, UsdcError> {
+    mut convert: impl FnMut(i64) -> T,
+) -> Result<Vec<T>, UsdcError> {
     if count == 0 {
         return Ok(vec![]);
     }
@@ -173,7 +185,7 @@ fn decode_integer_array_width(
                     let wrapped = prev as i32;
                     prev = i64::from(wrapped);
                 }
-                prev
+                convert(prev)
             })
             .collect());
     }
@@ -236,7 +248,7 @@ fn decode_integer_array_width(
             let wrapped = prev as i32;
             prev = i64::from(wrapped);
         }
-        elements.push(prev);
+        elements.push(convert(prev));
     }
 
     Ok(elements)
@@ -255,6 +267,17 @@ pub fn read_compressed_ints(
     count: usize,
     int_size: usize,
 ) -> Result<(Vec<i64>, usize), UsdcError> {
+    read_compressed_ints_as(data, count, int_size, core::convert::identity)
+}
+
+/// Reads compressed deltas into final element storage without an i64 staging
+/// buffer. Framing and decompression validation are shared with the public API.
+pub(crate) fn read_compressed_ints_as<T>(
+    data: &[u8],
+    count: usize,
+    int_size: usize,
+    convert: impl FnMut(i64) -> T,
+) -> Result<(Vec<T>, usize), UsdcError> {
     if data.len() < 8 {
         return Err(UsdcError::UnexpectedEof {
             section: "compressed int array",
@@ -284,7 +307,7 @@ pub fn read_compressed_ints(
             context: "element count exceeds the address space",
         })?;
     let decompressed = lz4_decompress(compressed, encoded_size)?;
-    let elements = decode_integer_array(&decompressed, count, int_size)?;
+    let elements = decode_integer_array_as(&decompressed, count, int_size, convert)?;
     Ok((elements, total))
 }
 
@@ -425,6 +448,33 @@ mod tests {
         data.extend_from_slice(&i32::MIN.to_le_bytes());
         let result = decode_integer_array(&data, 2, 4).unwrap();
         assert_eq!(result, vec![i64::from(i32::MIN), i64::from(i32::MAX)]);
+    }
+
+    #[test]
+    fn native_integer_outputs_keep_mixed_delta_wrapping_and_errors() {
+        let mut data = i32::MAX.to_le_bytes().to_vec();
+        data.push(0xe4); // common, quarter, half, full
+        data.push(127);
+        data.extend_from_slice(&32767_i16.to_le_bytes());
+        data.extend_from_slice(&i32::MAX.to_le_bytes());
+        let signed = decode_integer_array_as(&data, 4, 4, |v| {
+            i32::try_from(v).expect("32-bit arithmetic")
+        })
+        .unwrap();
+        assert_eq!(signed, [2147483647, -2147483522, -2147450755, 32892]);
+        let unsigned =
+            decode_integer_array_as(&data, 4, 4, |v| i32::try_from(v).unwrap().cast_unsigned())
+                .unwrap();
+        assert_eq!(unsigned, [2147483647, 2147483774, 2147516541, 32892]);
+        for end in 0..data.len() {
+            assert_eq!(
+                decode_integer_array_as(&data[..end], 4, 4, |v| {
+                    i32::try_from(v).unwrap().cast_unsigned()
+                })
+                .unwrap_err(),
+                decode_integer_array(&data[..end], 4, 4).unwrap_err(),
+            );
+        }
     }
 
     #[test]

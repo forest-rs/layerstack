@@ -463,9 +463,6 @@ impl<'a> AssembleCtx<'a> {
                     DecodedField::FloatArray(array) => {
                         DecodedField::Value(CrateValue::TypedArray(float_array(array)))
                     }
-                    DecodedField::IntegerArray(array) => {
-                        DecodedField::Value(CrateValue::TypedArray(integer_array(array)))
-                    }
                     other => other,
                 };
                 result.push((field_name, value));
@@ -1033,9 +1030,6 @@ impl<'a> AssembleCtx<'a> {
                     layerstack::TypedArray::TimeCode(Arc::new(values.clone()))
                 }
             }),
-            DecodedField::IntegerArray(array) => {
-                convert_integer_array(array.value_type, &array.values)
-            }
             DecodedField::MathArray(array) => convert_math_array(array),
         }
     }
@@ -2268,8 +2262,8 @@ mod tests {
     }
 
     #[test]
-    fn compact_integer_conversion_preserves_width_and_signedness() {
-        let values = [-1, 0, 1, i64::MIN, i64::MAX];
+    fn compact_integer_decode_preserves_width_and_signedness() {
+        let values = [-1_i64, 0, 1, i64::MIN, i64::MAX];
         for (ty, expected) in [
             (
                 ValueType::Bool,
@@ -2277,7 +2271,7 @@ mod tests {
                     Value::Bool(true),
                     Value::Bool(false),
                     Value::Bool(true),
-                    Value::Bool(true),
+                    Value::Bool(false),
                     Value::Bool(true)
                 ],
             ),
@@ -2332,7 +2326,40 @@ mod tests {
                 ],
             ),
         ] {
-            assert_eq!(convert_integer_array(ty, &values), Value::Array(expected));
+            let width = match ty {
+                ValueType::Bool | ValueType::UChar => 1,
+                ValueType::Int | ValueType::UInt => 4,
+                _ => 8,
+            };
+            let mut data = alloc::vec![0; 8];
+            data.extend_from_slice(&(values.len() as u64).to_le_bytes());
+            for value in values {
+                data.extend_from_slice(&value.to_le_bytes()[..width]);
+            }
+            let mut raw = [0; 8];
+            raw[0] = 8;
+            raw[6] = ty as u8;
+            raw[7] = 0x80;
+            let sections = CrateSections {
+                tokens: Vec::new(),
+                strings: Vec::new(),
+                fields: Vec::new(),
+                fieldsets: Vec::new(),
+                paths: Vec::new(),
+                specs: Vec::new(),
+                version: CrateVersion::NEWEST_READABLE,
+            };
+            let decoded = decode_field_within(
+                &RawValueRep::new(raw),
+                &data,
+                &sections,
+                &mut DecodeBudget::with_limit(100),
+            )
+            .unwrap();
+            let DecodedField::Value(CrateValue::TypedArray(array)) = decoded else {
+                panic!("native integer array")
+            };
+            assert_eq!(Value::TypedArray(array), Value::Array(expected));
         }
     }
 
@@ -2406,7 +2433,15 @@ mod tests {
             assert!(result.diagnostics.is_empty());
             let prim = result.layer.prims.values().next().unwrap();
             let expected = if tag <= 6 {
-                convert_integer_array(ty, &[i64::from_le_bytes([0x81; 8])])
+                Value::Array(alloc::vec![match ty {
+                    ValueType::Bool => Value::Bool(true),
+                    ValueType::UChar => Value::UChar(0x81),
+                    ValueType::Int => Value::Int(i32::from_le_bytes([0x81; 4])),
+                    ValueType::UInt => Value::UInt(u32::from_le_bytes([0x81; 4])),
+                    ValueType::Int64 => Value::Int64(i64::from_le_bytes([0x81; 8])),
+                    ValueType::UInt64 => Value::UInt64(u64::from_le_bytes([0x81; 8])),
+                    _ => unreachable!(),
+                }])
             } else if matches!(tag, 7 | 8 | 9 | 56) {
                 Value::Array(alloc::vec![match ty {
                     ValueType::Half => Value::Half(u16::from_le_bytes([0x81; 2])),

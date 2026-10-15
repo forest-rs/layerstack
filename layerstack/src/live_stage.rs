@@ -588,9 +588,7 @@ impl LiveStage {
                     }
                 }
             }
-            self.stage
-                .refresh_values(store, edits, &dependents)
-                .then_some(affected)
+            self.stage.refresh_values(store, edits, &dependents)
         });
         if refreshed.is_none() {
             if outcome.structural

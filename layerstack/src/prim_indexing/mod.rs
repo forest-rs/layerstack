@@ -907,7 +907,14 @@ fn prim_index(
                 implied: is_class_based(node.arc_kind) && node.origin != node.parent,
                 skips_duplicates: false,
             };
-            (to_id(node.parent), origin, arc, node.map_to_root.offset())
+            let stack_offsets = ctx.stacks.get(node.site.stack).layer_offsets.clone();
+            (
+                to_id(node.parent),
+                origin,
+                arc,
+                node.map_to_root.offset(),
+                stack_offsets,
+            )
         })
         .collect();
     let mut index = PrimIndex::new(PrimIndexGraph::from_ordered(nodes));

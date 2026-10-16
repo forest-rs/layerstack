@@ -292,8 +292,14 @@ impl PrimNode {
     }
 }
 
-pub(crate) type LayerOffsetCache =
-    hashbrown::HashMap<Vec<LayerStackIdentifier>, Arc<[(LayerId, LayerOffset)]>>;
+/// One node for [`PrimIndexGraph::from_ordered`].
+pub(crate) type OrderedNode = (
+    Option<NodeId>,
+    Option<NodeId>,
+    NodeArc,
+    LayerOffset,
+    Arc<[(LayerId, LayerOffset)]>,
+);
 
 /// The composition graph of one composed prim.
 ///
@@ -354,37 +360,13 @@ impl PrimIndexGraph {
             .filter(move |&node| self.has_direct_dependency(node, depth))
     }
 
-    pub(crate) fn prepare_layer_offsets(
-        &mut self,
-        store: &dyn crate::LayerStore,
-        cache: &mut LayerOffsetCache,
-    ) {
-        for at in 0..self.nodes.len() {
-            let chain = crate::expression_variables::node_chain(self, NodeId::from_index(at));
-            let offsets = cache.entry(chain).or_insert_with_key(|chain| {
-                let stack =
-                    crate::LayerStack::gather_recording(store, chain, &mut Vec::new(), None);
-                Arc::from(
-                    stack
-                        .layers
-                        .into_iter()
-                        .zip(stack.offsets)
-                        .filter(|(id, _)| store.layer(*id).is_some())
-                        .collect::<Vec<_>>(),
-                )
-            });
-            self.nodes[at].stack_offsets = offsets.clone();
-        }
-    }
-
     /// A graph of `nodes`, listed in strength order: each node after its
     /// parent, and a node's children in the order they rank. Each entry is
-    /// the node's parent, origin, arc and layer offset.
-    pub(crate) fn from_ordered(
-        nodes: impl IntoIterator<Item = (Option<NodeId>, Option<NodeId>, NodeArc, LayerOffset)>,
-    ) -> Self {
+    /// the node's parent, origin, arc, layer offset, and the resident layers
+    /// of its layer stack with their offsets.
+    pub(crate) fn from_ordered(nodes: impl IntoIterator<Item = OrderedNode>) -> Self {
         let mut out: Vec<PrimNode> = Vec::new();
-        for (parent, origin, arc, layer_offset) in nodes {
+        for (parent, origin, arc, layer_offset, stack_offsets) in nodes {
             let id = NodeId::from_index(out.len());
             if let Some(parent) = parent {
                 out[parent.index()].children.push(id);
@@ -395,7 +377,7 @@ impl PrimIndexGraph {
                 children: Vec::new(),
                 arc,
                 layer_offset: Some(layer_offset),
-                stack_offsets: Arc::default(),
+                stack_offsets,
             });
         }
         Self { nodes: out }
@@ -577,6 +559,7 @@ impl PrimIndexGraph {
                 None,
                 arc(ArcKind::Local, namespace_depth),
                 LayerOffset::IDENTITY,
+                Arc::default(),
             ))
             .chain(arcs.into_iter().map(|(parent, arc_kind, depth)| {
                 (
@@ -584,6 +567,7 @@ impl PrimIndexGraph {
                     None,
                     arc(arc_kind, depth),
                     LayerOffset::IDENTITY,
+                    Arc::default(),
                 )
             })),
         )
@@ -622,16 +606,22 @@ mod tests {
     /// arc)`, in strength order. Node ids follow `arcs`, starting at 1.
     fn graph(arcs: Vec<(u32, Option<u32>, NodeArc)>) -> PrimIndexGraph {
         PrimIndexGraph::from_ordered(
-            core::iter::once((None, None, arc(ArcKind::Local, 1, 0), LayerOffset::IDENTITY)).chain(
-                arcs.into_iter().map(|(parent, origin, arc)| {
-                    (
-                        Some(NodeId(parent)),
-                        origin.map(NodeId),
-                        arc,
-                        LayerOffset::IDENTITY,
-                    )
-                }),
-            ),
+            core::iter::once((
+                None,
+                None,
+                arc(ArcKind::Local, 1, 0),
+                LayerOffset::IDENTITY,
+                Arc::default(),
+            ))
+            .chain(arcs.into_iter().map(|(parent, origin, arc)| {
+                (
+                    Some(NodeId(parent)),
+                    origin.map(NodeId),
+                    arc,
+                    LayerOffset::IDENTITY,
+                    Arc::default(),
+                )
+            })),
         )
     }
 

@@ -1269,8 +1269,6 @@ impl LiveStage {
         let mut partial = loop {
             let partial = self.compose_scoped(store, &affected);
             self.work.composed_prim_indexes += partial.composition_work().composed_prim_indexes;
-            self.work.inspected_source_paths += partial.composition_work().inspected_source_paths;
-            self.work.indexed_source_paths += partial.composition_work().indexed_source_paths;
 
             // An opinion edit that turns out to change hierarchy (activation,
             // child ordering, ...) cannot be patched from a masked
@@ -1495,8 +1493,6 @@ impl LiveStage {
 
         self.work.full_rebuild = true;
         self.work.composed_prim_indexes += stage.composition_work().composed_prim_indexes;
-        self.work.inspected_source_paths += stage.composition_work().inspected_source_paths;
-        self.work.indexed_source_paths += stage.composition_work().indexed_source_paths;
         self.work.replaced_prim_indexes = old_prims.len()
             + stage
                 .prim_paths()

@@ -159,10 +159,6 @@ pub struct CompositionWork {
     pub composed_prim_indexes: usize,
     /// Descendant indexes materialized from a proven equivalent representative.
     pub reused_prim_indexes: usize,
-    /// Authored namespace entries visited by discovery queries (duplicates count).
-    pub inspected_source_paths: usize,
-    /// Source slots indexed, including initial indexing and journal updates.
-    pub indexed_source_paths: usize,
 }
 
 /// Counts retained composed records, excluding payload allocations and graphs.

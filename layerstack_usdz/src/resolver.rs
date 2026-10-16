@@ -326,6 +326,10 @@ impl<P: PackageAccess> AssetResolver for UsdzResolver<'_, P> {
     fn allocate_package_layer_id(&mut self, package: LayerId, member: &str) -> Option<LayerId> {
         self.outer.allocate_package_layer_id(package, member)
     }
+
+    fn defers_variant_arcs(&self) -> bool {
+        self.outer.defers_variant_arcs()
+    }
 }
 
 /// Whether `path` (with `/` separators) is absolute: from the root, or from

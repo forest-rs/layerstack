@@ -52,7 +52,11 @@ pub(super) fn prepare(
                 .references
                 .items()
                 .chain(spec.payloads.items())
-                .any(|r| store.layer(r.layer).is_none() || r.is_expression())
+                .any(|r| {
+                    r.stored_target_layer(store)
+                        .is_none_or(|target| store.layer(target).is_none())
+                        || r.is_expression()
+                })
             {
                 return Err(NamespaceError::UnsupportedComposition(
                     "unloaded or expression-based assets require resolved dependency coordination",

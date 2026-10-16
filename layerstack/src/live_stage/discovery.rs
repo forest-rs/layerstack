@@ -23,12 +23,12 @@ struct ArcReads {
     expressions: bool,
 }
 impl ArcReads {
-    fn at(layer: &crate::Layer, path: PathId) -> Self {
+    fn at(store: &dyn LayerStore, layer: &crate::Layer, path: PathId) -> Self {
         let mut result = Self::default();
         for spec in layer.prim_specs(path) {
-            result.add(&spec.references, &spec.payloads);
+            result.add(store, &spec.references, &spec.payloads);
             for branch in spec.variant_branches() {
-                result.add(&branch.spec.references, &branch.spec.payloads);
+                result.add(store, &branch.spec.references, &branch.spec.payloads);
             }
         }
         result.targets.sort_unstable();
@@ -37,12 +37,13 @@ impl ArcReads {
     }
     fn add(
         &mut self,
+        store: &dyn LayerStore,
         references: &crate::ListOp<crate::Reference>,
         payloads: &crate::ListOp<crate::Reference>,
     ) {
         for arc in references.inserted_items().chain(payloads.inserted_items()) {
             self.expressions |= arc.is_expression();
-            self.targets.push(arc.layer);
+            self.targets.extend(arc.stored_target_layer(store));
         }
     }
 }
@@ -68,7 +69,7 @@ impl LayerDiscovery {
             }
             if let Some(changed) = layer.changed_paths_since(reads.generation) {
                 for path in changed {
-                    let arcs = ArcReads::at(layer, path);
+                    let arcs = ArcReads::at(store, layer, path);
                     if arcs.targets.is_empty() && !arcs.expressions {
                         reads.arcs.remove(&path);
                     } else {
@@ -84,7 +85,7 @@ impl LayerDiscovery {
             .prims
             .keys()
             .copied()
-            .map(|path| (path, ArcReads::at(layer, path)))
+            .map(|path| (path, ArcReads::at(store, layer, path)))
             .filter(|(_, arcs)| !arcs.targets.is_empty() || arcs.expressions)
             .collect();
         self.layers.insert(

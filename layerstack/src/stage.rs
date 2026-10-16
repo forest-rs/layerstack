@@ -392,6 +392,7 @@ pub struct Stage {
     with_provenance: bool,
     deps: Option<CompositionDeps>,
     errors: Vec<CompositionError>,
+    asset_requests: Vec<crate::AssetRequest>,
     /// The prims composed as instances, whose descendants hold only the
     /// opinions of the instance's own arcs.
     instances: HashSet<PathId>,
@@ -1259,6 +1260,7 @@ impl Stage {
             with_provenance,
             deps,
             errors: Vec::new(),
+            asset_requests: Vec::new(),
             instances: HashSet::new(),
             variant_fallbacks: VariantFallbacks::default(),
             schemas: None,
@@ -1321,6 +1323,13 @@ impl Stage {
         self
     }
 
+    /// Attaches the assets of deferred arcs composition asked for.
+    pub(crate) fn with_asset_requests(mut self, mut requests: Vec<crate::AssetRequest>) -> Self {
+        sort_asset_requests(&mut requests);
+        self.asset_requests = requests;
+        self
+    }
+
     /// Puts the composition errors in the order
     /// [`composition_errors`](Self::composition_errors) reports them, by
     /// each prim's place in a traversal of every prim
@@ -1354,6 +1363,26 @@ impl Stage {
     #[must_use]
     pub fn composition_errors(&self) -> &[CompositionError] {
         &self.errors
+    }
+
+    /// Returns the assets of the deferred references and payloads
+    /// ([`Reference::deferred`](crate::Reference::deferred)) composition
+    /// followed but the store does not resolve yet, by anchor layer, then
+    /// asset path, then prim, then arc.
+    ///
+    /// Each such arc contributes nothing yet. A host loads the assets these
+    /// name, records them in the store (for example
+    /// [`InMemoryStore::insert_asset_layer`](crate::InMemoryStore::insert_asset_layer))
+    /// and composes again, until none is left: the layers it loads may
+    /// author deferred arcs of their own. Arcs composition does not follow,
+    /// such as those in variant branches no selection names, ask for
+    /// nothing.
+    ///
+    /// Spec: AOUSD Core §10.3.2.1 (references), §10.3.2.2 (payloads),
+    /// §10.3.2.5 (only the selected variant contributes).
+    #[must_use]
+    pub fn asset_requests(&self) -> &[crate::AssetRequest] {
+        &self.asset_requests
     }
 
     /// Replaces the prim indexes of `recomposed` with those from a partial
@@ -1436,6 +1465,15 @@ impl Stage {
                 .filter(|error| is_recomposed(error)),
         );
         self.order_errors(store);
+        self.asset_requests
+            .retain(|request| !recomposed.contains(&request.prim));
+        self.asset_requests.extend(
+            partial
+                .asset_requests
+                .into_iter()
+                .filter(|request| recomposed.contains(&request.prim)),
+        );
+        sort_asset_requests(&mut self.asset_requests);
         self.prepare_prototypes(store);
     }
 
@@ -3792,6 +3830,20 @@ pub(crate) fn dictionary_chain(
             Value::Dictionary(entries) => Some((position, entries.as_slice())),
             _ => None,
         })
+}
+
+/// Sorts asset requests by anchor layer, then asset path, then prim, then
+/// arc.
+fn sort_asset_requests(requests: &mut [crate::AssetRequest]) {
+    fn key(request: &crate::AssetRequest) -> (LayerId, &str, PathId, u8) {
+        (
+            request.anchor,
+            &request.asset_path,
+            request.prim,
+            request.arc.strength_rank(),
+        )
+    }
+    requests.sort_unstable_by(|a, b| key(a).cmp(&key(b)));
 }
 
 #[cfg(test)]

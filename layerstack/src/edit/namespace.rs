@@ -687,29 +687,27 @@ fn reachable_layers(stage: &Stage, store: &dyn LayerStore, root: LayerId) -> Vec
             .chain(layer.variant_prims.values().flatten())
         {
             for refs in [&spec.references, &spec.payloads] {
-                collect_ref_layers(refs, &mut pending);
+                collect_ref_layers(store, refs, &mut pending);
             }
-            collect_variant_layers(&spec.variant_sets, &mut pending);
+            collect_variant_layers(store, &spec.variant_sets, &mut pending);
         }
     }
     found.sort_unstable();
     found
 }
-fn collect_ref_layers(refs: &ListOp<Reference>, layers: &mut Vec<LayerId>) {
-    let _ = refs.map_lists(|items| {
-        layers.extend(items.iter().map(|r| r.layer));
-        Vec::<Reference>::new()
-    });
+fn collect_ref_layers(store: &dyn LayerStore, refs: &ListOp<Reference>, layers: &mut Vec<LayerId>) {
+    layers.extend(refs.items().filter_map(|r| r.stored_target_layer(store)));
 }
 fn collect_variant_layers(
+    store: &dyn LayerStore,
     sets: &crate::HashMap<TokenId, VariantSetSpec>,
     layers: &mut Vec<LayerId>,
 ) {
     for set in sets.values() {
         for v in set.variants.values() {
-            collect_ref_layers(&v.references, layers);
-            collect_ref_layers(&v.payloads, layers);
-            collect_variant_layers(&v.variant_sets, layers);
+            collect_ref_layers(store, &v.references, layers);
+            collect_ref_layers(store, &v.payloads, layers);
+            collect_variant_layers(store, &v.variant_sets, layers);
         }
     }
 }
@@ -892,9 +890,10 @@ fn repair_refs(
         ));
     }
     map_list(refs, |r| {
+        let target = r.stored_target_layer(&*store);
         let mapping = if r.layer == author && r.asset.is_none() {
             local.or_else(|| (r.layer == edited).then_some(source))
-        } else if r.layer == edited {
+        } else if target == Some(edited) {
             Some(source)
         } else {
             None

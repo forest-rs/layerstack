@@ -152,6 +152,7 @@ pub fn flatten_layer_stack(
         origins: Vec::new(),
         clip_timelines: Vec::new(),
         asset_layers: Vec::new(),
+        deferred_assets: Vec::new(),
     };
     let mut result = Layer::new(output_id);
     for (&id, &offset) in stack.layers.iter().zip(&stack.offsets) {
@@ -248,6 +249,9 @@ struct Context<'a, F> {
     origins: Vec<Origin>,
     clip_timelines: Vec<(Site, LayerOffset)>,
     asset_layers: Vec<(String, LayerId)>,
+    /// The output asset paths of deferred arcs whose asset the store does
+    /// not resolve: they stay deferred, anchored to the output layer.
+    deferred_assets: Vec<String>,
 }
 impl<F: FnMut(LayerId, &str) -> Option<String>> Context<'_, F> {
     fn asset(&mut self, layer: LayerId, path: &str) -> Result<String, LayerStackFlattenError> {
@@ -444,22 +448,33 @@ impl<F: FnMut(LayerId, &str) -> Option<String>> Context<'_, F> {
             }
             if let Some(path) = &reference.asset {
                 let mapped = self.asset(layer, path)?;
+                // A deferred arc's layer is the layer that authors it; its
+                // target is the layer the store records for its asset.
+                let target = reference
+                    .stored_target_layer(self.store)
+                    .unwrap_or(LayerId::UNRESOLVED);
+                if reference.deferred
+                    && target == LayerId::UNRESOLVED
+                    && !self.deferred_assets.contains(&mapped)
+                {
+                    self.deferred_assets.push(mapped.clone());
+                }
                 if let Some((_, canonical)) = self
                     .asset_layers
                     .iter_mut()
                     .find(|(asset, _)| *asset == mapped)
                 {
-                    if self.store.layer(*canonical).is_none()
-                        && self.store.layer(reference.layer).is_some()
+                    if self.store.layer(*canonical).is_none() && self.store.layer(target).is_some()
                     {
-                        *canonical = reference.layer;
+                        *canonical = target;
                     }
                 } else {
-                    self.asset_layers.push((mapped.clone(), reference.layer));
+                    self.asset_layers.push((mapped.clone(), target));
                 }
                 // Loaded hints do not participate in native authored identity.
                 // Restore the canonical loaded layer after list reduction.
                 reference.layer = LayerId::UNRESOLVED;
+                reference.deferred = false;
                 reference.asset = Some(mapped);
             } else if reference.layer == layer {
                 reference.layer = self.output;
@@ -609,6 +624,13 @@ impl<F: FnMut(LayerId, &str) -> Option<String>> Context<'_, F> {
                 && let Some((_, layer)) = self.asset_layers.iter().find(|(path, _)| path == asset)
             {
                 reference.layer = *layer;
+                // An asset no loaded layer stands for stays for composition
+                // to resolve, now relative to the output layer
+                // (`Reference::deferred`).
+                if *layer == LayerId::UNRESOLVED && self.deferred_assets.contains(asset) {
+                    reference.layer = self.output;
+                    reference.deferred = true;
+                }
             }
         }
     }
@@ -980,6 +1002,46 @@ mod tests {
                 .unwrap()[0]
                 .0,
             0.
+        );
+    }
+
+    /// A deferred arc the store resolves flattens to its loaded layer; one
+    /// it does not stays deferred, for composition to resolve relative to
+    /// the output layer.
+    #[test]
+    fn deferred_arcs_stay_deferred_unless_the_store_resolves_them() {
+        let mut store = InMemoryStore::default();
+        let path = store.path("/P");
+        let target = store.path("/Target");
+        let deferred = |asset: &str| {
+            Reference::deferred(
+                LayerId(1),
+                asset,
+                crate::ReferenceTarget::Prim(target),
+                LayerOffset::IDENTITY,
+            )
+        };
+        let mut root = Layer::new(LayerId(1));
+        let mut spec = PrimSpec::def();
+        spec.references =
+            ListOp::prepended(vec![deferred("./loaded.usda"), deferred("./later.usda")]);
+        root.insert_prim(path, spec);
+        store.insert_layer(root);
+        store.insert_layer(Layer::new(LayerId(9)));
+        store.insert_asset_layer(LayerId(1), "./loaded.usda", LayerId(9));
+        let result = flatten_layer_stack(&store, LayerId(1).into(), LayerId(3), &mut |_, path| {
+            Some(alloc::format!("assets/{path}"))
+        })
+        .unwrap();
+        let refs = &result.layer.prims[&path].references.prepend;
+        assert_eq!(refs.len(), 2);
+        assert_eq!(
+            (refs[0].layer, refs[0].deferred, refs[0].asset.as_deref()),
+            (LayerId(9), false, Some("assets/./loaded.usda"))
+        );
+        assert_eq!(
+            (refs[1].layer, refs[1].deferred, refs[1].asset.as_deref()),
+            (LayerId(3), true, Some("assets/./later.usda"))
         );
     }
 

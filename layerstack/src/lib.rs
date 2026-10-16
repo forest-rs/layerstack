@@ -205,8 +205,8 @@ pub mod live_stage;
 
 pub use array_edit::{ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex, TypedArrayEdit};
 pub use asset::{
-    AssetResolveError, AssetResolver, ExpressionAssetPath, ResolvedAsset, expression_asset_paths,
-    expression_asset_paths_for_stack,
+    AssetRequest, AssetResolveError, AssetResolver, ExpressionAssetPath, ResolvedAsset,
+    expression_asset_paths, expression_asset_paths_for_stack, resolve_selected_deferred_arcs,
 };
 pub use composition_error::{
     ArcCycle, ArcCycleSite, ArcToProhibitedChild, CompositionError, ExpressionContext,

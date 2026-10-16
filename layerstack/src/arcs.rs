@@ -164,6 +164,8 @@ pub(crate) fn anchor_internal_arcs(
                         layer: anchor.layer,
                         ..reference.clone()
                     })
+                } else if reference.deferred {
+                    Some(resolve_deferred(store, reference))
                 } else if reference.is_expression() {
                     anchor.evaluate(store, reference, layer).map(anchored_asset)
                 } else {
@@ -173,6 +175,31 @@ pub(crate) fn anchor_internal_arcs(
             .collect()
     };
     op.map_lists(anchored)
+}
+
+/// Returns the deferred arc `reference` ([`Reference::deferred`]) resolved
+/// through `store`, anchored for list editing as an importer's resolved or
+/// unresolved arc is ([`anchored_asset`]): the layer the host loaded for its
+/// asset, or [`LayerId::UNRESOLVED`] for an asset the host confirmed
+/// missing. An asset the host has not examined keeps the arc deferred, for
+/// composition to ask for when it follows the arc.
+///
+/// Spec: AOUSD Core §9.4 (relative asset paths are anchored to the layer
+/// that authors them), §10.3.2.1. OpenUSD resolves each arc's asset path
+/// relative to its layer as it composes it (`_EvalRefOrPayloadArcs` in
+/// `pxr/usd/pcp/primIndex.cpp`).
+fn resolve_deferred(store: &dyn LayerStore, reference: &Reference) -> Reference {
+    let asset = reference.asset.as_deref().unwrap_or_default();
+    let layer = match store.asset_availability(reference.layer, asset) {
+        crate::AssetAvailability::Loaded(layer) => layer,
+        crate::AssetAvailability::Missing => LayerId::UNRESOLVED,
+        crate::AssetAvailability::Unresolved => return reference.clone(),
+    };
+    anchored_asset(Reference {
+        layer,
+        deferred: false,
+        ..reference.clone()
+    })
 }
 
 /// Where arc resolution takes the variant selections that decide whether arcs

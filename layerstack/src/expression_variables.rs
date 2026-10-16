@@ -510,6 +510,12 @@ pub(crate) fn walk_identifier(store: &dyn LayerStore, root: LayerStackIdentifier
                             continue;
                         }
                     }
+                } else if arc.deferred {
+                    // Followed once the host loads its asset.
+                    match arc.stored_target_layer(store) {
+                        Some(target) => target,
+                        None => continue,
+                    }
                 } else if arc.is_unresolved() || arc.asset.is_none() {
                     // Unresolved, or internal: its target is this layer
                     // stack.

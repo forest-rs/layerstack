@@ -96,6 +96,8 @@ pub fn assemble(
         sections,
         tokens,
         paths,
+        defer_variant_arcs: resolver.defers_variant_arcs(),
+        in_branch: false,
         resolver,
         layer_id,
         resolved_layers: Vec::new(),
@@ -122,6 +124,12 @@ struct AssembleCtx<'a> {
     tokens: &'a mut TokenInterner,
     paths: &'a mut PathInterner,
     resolver: &'a mut dyn AssetResolver,
+    /// Whether arcs inside variant branches are left for composition to
+    /// resolve ([`AssetResolver::defers_variant_arcs`]).
+    defer_variant_arcs: bool,
+    /// Whether the arcs being converted are authored inside a variant
+    /// branch.
+    in_branch: bool,
     layer_id: LayerId,
     resolved_layers: Vec<Layer>,
     diagnostics: Vec<AssembleDiagnostic>,
@@ -381,6 +389,15 @@ impl<'a> AssembleCtx<'a> {
             }
         }
 
+        if self.defer_variant_arcs {
+            let resolved = layerstack::resolve_selected_deferred_arcs(
+                &mut layer,
+                self.resolver,
+                self.tokens,
+                self.paths,
+            );
+            self.resolved_layers.extend(resolved);
+        }
         Ok(layer)
     }
 
@@ -593,6 +610,7 @@ impl<'a> AssembleCtx<'a> {
     ) -> Result<(PrimSpec, Option<Vec<TokenId>>), UsdcError> {
         let mut spec = PrimSpec::default();
         let mut property_children = None;
+        self.in_branch = spec_path.contains('{');
 
         for (name, value) in fields {
             match *name {
@@ -905,6 +923,7 @@ impl<'a> AssembleCtx<'a> {
     ) -> Result<VariantSpec, UsdcError> {
         let mut variant = VariantSpec::default();
         let mut property_children = None;
+        self.in_branch = true;
         for (name, value) in fields {
             match *name {
                 "primChildren" => {
@@ -1706,6 +1725,7 @@ impl<'a> AssembleCtx<'a> {
                     asset: None,
                     layer_offset,
                     custom_data,
+                    deferred: false,
                 });
             }
             // An asset path that is a variable expression is evaluated
@@ -1713,6 +1733,16 @@ impl<'a> AssembleCtx<'a> {
             if is_expression(&asset_path) {
                 return Some(
                     Reference::expression(self.layer_id, asset_path, target, layer_offset)
+                        .with_custom_data(custom_data),
+                );
+            }
+            // An arc inside a variant branch may never be composed;
+            // resolving the branches the layer selects is left until the
+            // whole layer is read (`resolve_selected_deferred_arcs`), the
+            // rest to composition.
+            if self.in_branch && self.defer_variant_arcs {
+                return Some(
+                    Reference::deferred(self.layer_id, asset_path, target, layer_offset)
                         .with_custom_data(custom_data),
                 );
             }
@@ -1731,6 +1761,7 @@ impl<'a> AssembleCtx<'a> {
                 asset: Some(asset_path),
                 layer_offset,
                 custom_data,
+                deferred: false,
             })
         } else {
             None

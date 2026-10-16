@@ -39,6 +39,14 @@
 //! ranges into one immutable archive owner. Numeric payload failures surface through
 //! checked attribute reads and [`IoErrorKind::Decode`] during save/export.
 //!
+//! Opening reads only the layers the stage's variant selections reach, as
+//! OpenUSD does: an arc inside a variant branch its own layer does not select
+//! is deferred, and composition asks for those its selections reach
+//! ([`layerstack::Stage::asset_requests`]), which opening loads. After an edit
+//! or reload selects another variant, [`StageDocument::load_requested_assets`]
+//! loads what it needs; [`VariantArcLoading::All`] resolves every branch's
+//! arcs up front instead.
+//!
 //! [`StageDocument::prepare_reload`] separates import/validation from publication.
 //! Dropping its candidate rejects it; [`PreparedReload::commit`] reuses the
 //! candidate composition and preserves stage observers. Both document and
@@ -213,8 +221,25 @@ pub enum ImportPolicy {
     /// Preserve available content and retain all recovery diagnostics.
     AllowRecovery,
 }
+/// Which references and payloads authored inside variant branches import
+/// resolves as it reads a layer.
+///
+/// Spec: AOUSD Core §10.3.2.5 (only the selected variant contributes).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum VariantArcLoading {
+    /// Those in the branches the authoring layer selects itself. The rest
+    /// are deferred ([`layerstack::Reference::deferred`]): composition asks
+    /// for those its selections reach ([`layerstack::Stage::asset_requests`]),
+    /// which opening loads before it returns and
+    /// [`StageDocument::load_requested_assets`] loads after an edit. Opening
+    /// reads only the layers the stage can use, as OpenUSD does.
+    #[default]
+    Selected,
+    /// Every branch's, so that selecting another variant reads no source.
+    All,
+}
 /// Document import policy applied consistently to root, dependencies and package members.
-/// Existing opening methods use strict, eager import. Set these options explicitly
+/// Existing opening methods use strict import. Set these options explicitly
 /// to defer USDC numeric decoding; checked reads then report payload errors later.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct LoadOptions {
@@ -224,6 +249,8 @@ pub struct LoadOptions {
     pub usdc: UsdcReadOptions,
     /// Cumulative directory, nesting and checksum work limits for each package.
     pub package: PackageLimits,
+    /// Which arcs authored inside variant branches import resolves.
+    pub variant_arcs: VariantArcLoading,
 }
 /// Explicit protection against overwriting unsaved authored state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -245,6 +272,12 @@ pub struct LoadReport {
     pub asset_failures: Vec<AssetFailure>,
 }
 impl LoadReport {
+    /// Appends the evidence of a later load of the same document.
+    fn merge(&mut self, other: Self) {
+        self.layers.extend(other.layers);
+        self.diagnostics.extend(other.diagnostics);
+        self.asset_failures.extend(other.asset_failures);
+    }
     /// Whether imported content was malformed or omitted during recovery.
     pub fn has_errors(&self) -> bool {
         !self.asset_failures.is_empty() || self.diagnostics.iter().any(|d| d.diagnostic.is_error())
@@ -376,6 +409,7 @@ pub struct StageDocument<B> {
     import_policy: ImportPolicy,
     usdc_options: UsdcReadOptions,
     package_limits: PackageLimits,
+    variant_arcs: VariantArcLoading,
     load_report: LoadReport,
 }
 impl<B: core::fmt::Debug> core::fmt::Debug for StageDocument<B> {
@@ -385,6 +419,7 @@ impl<B: core::fmt::Debug> core::fmt::Debug for StageDocument<B> {
             .field("catalog", &self.catalog)
             .field("import_policy", &self.import_policy)
             .field("usdc_options", &self.usdc_options)
+            .field("variant_arcs", &self.variant_arcs)
             .field("load_report", &self.load_report)
             .finish_non_exhaustive()
     }
@@ -437,6 +472,7 @@ impl<B: Storage> StageDocument<B> {
             import_policy: ImportPolicy::Strict,
             usdc_options: UsdcReadOptions::default(),
             package_limits: PackageLimits::default(),
+            variant_arcs: VariantArcLoading::default(),
             load_report: LoadReport::default(),
         })
     }
@@ -501,6 +537,7 @@ impl<B: Storage> StageDocument<B> {
             loading.package,
             options.schemas.clone(),
         );
+        reader.variant_arcs = loading.variant_arcs;
         let resolved = reader.load(asset, None, &mut store.tokens, &mut store.paths)?;
         if let Some(layer) = resolved.layer {
             reader.pending.push(layer);
@@ -514,7 +551,7 @@ impl<B: Storage> StageDocument<B> {
         )?;
         let report = reader.commit(&mut store);
         let stage = LiveStage::compose(&mut store, resolved.layer_id, options);
-        Ok(Self {
+        let mut document = Self {
             store,
             stage,
             storage,
@@ -522,8 +559,95 @@ impl<B: Storage> StageDocument<B> {
             import_policy,
             usdc_options: loading.usdc,
             package_limits: loading.package,
+            variant_arcs: loading.variant_arcs,
             load_report: report,
-        })
+        };
+        let requested = document.load_requested_assets()?;
+        document.load_report.merge(requested);
+        Ok(document)
+    }
+    /// Loads the assets the stage's deferred arcs ask for
+    /// ([`layerstack::Stage::asset_requests`]), each anchored to the layer
+    /// authoring the arc, and composes again, until none is left: a newly
+    /// loaded layer may author deferred arcs of its own.
+    ///
+    /// Opening a stage does this before it returns. After an edit or a
+    /// reload selects a variant whose arcs import deferred
+    /// ([`VariantArcLoading::Selected`]), those arcs contribute nothing until
+    /// this loads their assets; nothing is read implicitly. Each round
+    /// composes only the prims whose arcs name the loaded assets. An asset
+    /// that fails to load is recorded as missing, so composition reports it
+    /// ([`layerstack::CompositionError::UnresolvedAsset`]); strict import
+    /// returns the error instead, keeping the layers earlier rounds loaded.
+    ///
+    /// Returns the layers loaded, with their diagnostics and failures.
+    ///
+    /// Spec: AOUSD Core §10.3.2.1 (references), §10.3.2.2 (payloads),
+    /// §10.3.2.5 (only the selected variant contributes).
+    pub fn load_requested_assets(&mut self) -> Result<LoadReport, IoError> {
+        let mut report = LoadReport::default();
+        let mut attempted = BTreeSet::new();
+        loop {
+            let requests: Vec<(LayerId, String)> = self
+                .stage
+                .stage()
+                .asset_requests()
+                .iter()
+                .map(|request| (request.anchor, request.asset_path.clone()))
+                .filter(|key| attempted.insert(key.clone()))
+                .collect();
+            if requests.is_empty() {
+                return Ok(report);
+            }
+            let mut catalog = self.catalog.clone();
+            catalog.reserved.extend(self.store.layers.keys().copied());
+            let mut reader = Reader::new(
+                &mut self.storage,
+                &mut catalog,
+                self.import_policy,
+                self.usdc_options,
+                self.package_limits,
+                self.stage.options().schemas.clone(),
+            );
+            reader.variant_arcs = self.variant_arcs;
+            for (anchor, asset) in requests {
+                let result = reader.load(
+                    &asset,
+                    Some(anchor),
+                    &mut self.store.tokens,
+                    &mut self.store.paths,
+                );
+                match result {
+                    Ok(resolved) => {
+                        reader.bindings.insert((anchor, asset), resolved.layer_id);
+                        if let Some(layer) = resolved.layer {
+                            reader.pending.push(layer);
+                        }
+                    }
+                    Err(error) => {
+                        if self.import_policy == ImportPolicy::Strict {
+                            return Err(error);
+                        }
+                        reader.failures.push(AssetFailure {
+                            asset: asset.clone(),
+                            anchor: Some(anchor),
+                            error,
+                        });
+                        reader.bindings.insert((anchor, asset), LayerId::UNRESOLVED);
+                    }
+                }
+            }
+            reader.resolve_expressions(
+                &mut self.store,
+                layerstack::LayerStackIdentifier {
+                    root: self.stage.stage().root_layer().expect("document root"),
+                    session: self.stage.stage().session_layer(),
+                },
+            )?;
+            report.merge(reader.commit(&mut self.store));
+            self.catalog = catalog;
+            self.synchronize();
+        }
     }
     /// Loads an explicitly requested source, anchored to a resident layer.
     /// Useful for host-selected value-clip or expression-asset requests. New
@@ -543,6 +667,7 @@ impl<B: Storage> StageDocument<B> {
             self.package_limits,
             self.stage.options().schemas.clone(),
         );
+        reader.variant_arcs = self.variant_arcs;
         let resolved = reader.load(asset, anchor, &mut self.store.tokens, &mut self.store.paths)?;
         let id = resolved.layer_id;
         if let Some(anchor) = anchor {
@@ -569,6 +694,7 @@ impl<B: Storage> StageDocument<B> {
             import_policy: self.import_policy,
             usdc: self.usdc_options,
             package: self.package_limits,
+            variant_arcs: self.variant_arcs,
         }
     }
     /// Cache inspection for a retained USDC layer without decoding arrays.
@@ -808,6 +934,9 @@ struct Reader<'a, B> {
     identities: BTreeMap<(Option<String>, String), Result<String, IoError>>,
     failures: Vec<AssetFailure>,
     reachable_only: bool,
+    /// Which arcs inside variant branches the layers read resolve
+    /// ([`AssetResolver::defers_variant_arcs`]).
+    variant_arcs: VariantArcLoading,
 }
 impl<'a, B: Storage> Reader<'a, B> {
     fn new(
@@ -831,6 +960,7 @@ impl<'a, B: Storage> Reader<'a, B> {
             identities: BTreeMap::new(),
             failures: Vec::new(),
             reachable_only: false,
+            variant_arcs: VariantArcLoading::All,
         }
     }
     fn resolve_expressions(
@@ -1361,6 +1491,9 @@ impl<B: Storage> AssetResolver for Reader<'_, B> {
     }
     fn resolved_path(&self, id: LayerId) -> Option<&str> {
         self.catalog.sources.get(&id).map(|s| s.identifier.as_str())
+    }
+    fn defers_variant_arcs(&self) -> bool {
+        self.variant_arcs == VariantArcLoading::Selected
     }
     fn allocate_layer_id(&mut self) -> Option<LayerId> {
         self.catalog.allocate().ok()

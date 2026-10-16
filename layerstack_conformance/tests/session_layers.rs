@@ -33,6 +33,7 @@ fn fixture() -> InMemoryStore {
         target: ReferenceTarget::Prim(asset),
         layer_offset: layerstack::LayerOffset::IDENTITY,
         custom_data: Vec::new(),
+        deferred: false,
     }]);
     root.insert_prim(external, spec);
     store.insert_layer(root);

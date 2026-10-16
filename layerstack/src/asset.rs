@@ -48,10 +48,15 @@ use alloc::{string::String, sync::Arc, vec::Vec};
 mod package_path;
 pub use package_path::PackagePath;
 
+use hashbrown::{HashMap, HashSet};
+
 use crate::{
-    doc::{Layer, LayerId, LayerStore},
-    interner::TokenInterner,
-    path::PathInterner,
+    doc::{Layer, LayerId, LayerStore, Reference, VariantSetSpec},
+    interner::{TokenId, TokenInterner},
+    listop::ListOp,
+    path::{PathId, PathInterner},
+    prim_index::ArcKind,
+    spec_path::VariantSelectionSite,
 };
 
 /// An asset path a variable expression evaluates to, and the layer that
@@ -63,6 +68,31 @@ pub struct ExpressionAssetPath {
     pub anchor: LayerId,
     /// The evaluated asset path.
     pub asset_path: String,
+}
+
+/// An asset a deferred reference or payload ([`Reference::deferred`]) that
+/// composition followed names, which the store does not resolve yet
+/// ([`crate::AssetAvailability::Unresolved`]); see
+/// [`Stage::asset_requests`](crate::Stage::asset_requests).
+///
+/// The arc contributes nothing until the host loads `asset_path`, anchored
+/// to `anchor`, records the result for [`LayerStore::asset_layer`] (for
+/// example [`InMemoryStore::insert_asset_layer`], or
+/// [`InMemoryStore::mark_asset_missing`] when it does not exist) and
+/// composes again. A newly loaded layer may author deferred arcs of its own.
+///
+/// [`InMemoryStore::insert_asset_layer`]: crate::InMemoryStore::insert_asset_layer
+/// [`InMemoryStore::mark_asset_missing`]: crate::InMemoryStore::mark_asset_missing
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct AssetRequest {
+    /// The layer that authors the arc, which a relative path is anchored to.
+    pub anchor: LayerId,
+    /// The authored asset path.
+    pub asset_path: String,
+    /// The composed prim whose arc reached the asset.
+    pub prim: PathId,
+    /// The kind of arc: [`ArcKind::References`] or [`ArcKind::Payloads`].
+    pub arc: ArcKind,
 }
 
 /// Returns the asset paths that composing the layer stack rooted at `root`
@@ -100,6 +130,130 @@ pub fn expression_asset_paths_for_stack(
     stack: crate::LayerStackIdentifier,
 ) -> Vec<ExpressionAssetPath> {
     crate::expression_variables::walk_identifier(store, stack).unresolved
+}
+
+/// Resolves the deferred references and payloads ([`Reference::deferred`])
+/// of `layer` that `layer` selects itself, with `resolver`, and returns the
+/// layers resolved anew, which the caller inserts into its store.
+///
+/// An arc inside a variant branch is resolved when, for that branch and
+/// every branch enclosing it, `layer` authors the selection of that branch:
+/// on a spec of the prim hosting its variant set, or in one of that prim's
+/// variant branches. Composition may still select differently, through a
+/// stronger layer or an arc; it asks for the arcs left deferred
+/// ([`crate::Stage::asset_requests`]). An arc whose asset does not resolve
+/// becomes [`Reference::unresolved`], as an importer records any other.
+///
+/// Importers call this once they have read the whole layer, when
+/// [`AssetResolver::defers_variant_arcs`] is `true`.
+///
+/// Spec: AOUSD Core §10.3.2.5 (only the selected variant contributes).
+pub fn resolve_selected_deferred_arcs(
+    layer: &mut Layer,
+    resolver: &mut dyn AssetResolver,
+    tokens: &mut TokenInterner,
+    paths: &mut PathInterner,
+) -> Vec<Layer> {
+    let mut selected = HashSet::new();
+    for (&host, spec) in layer.prims.iter().chain(
+        layer
+            .variant_prims
+            .iter()
+            .flat_map(|(host, specs)| specs.iter().map(move |spec| (host, spec))),
+    ) {
+        let mut add = |selections: &HashMap<TokenId, TokenId>| {
+            selected.extend(
+                selections
+                    .iter()
+                    .map(|(&set, &variant)| VariantSelectionSite {
+                        host_path: host,
+                        set,
+                        variant,
+                    }),
+            );
+        };
+        add(&spec.variant_selections);
+        for branch in spec.variant_branches() {
+            add(&branch.spec.variant_selections);
+        }
+    }
+    let anchor = layer.id;
+    let mut resolved_layers = Vec::new();
+    let mut resolve = |op: &mut ListOp<Reference>| {
+        let lists = op.explicit.iter_mut().chain([
+            &mut op.prepend,
+            &mut op.append,
+            &mut op.delete,
+            &mut op.add,
+            &mut op.reorder,
+        ]);
+        for arc in lists.flatten().filter(|arc| arc.deferred) {
+            let asset = arc.asset.clone().unwrap_or_default();
+            *arc = match resolver.resolve(&asset, Some(anchor), tokens, paths) {
+                Ok(resolved) => {
+                    resolved_layers.extend(resolved.layer);
+                    Reference {
+                        layer: resolved.layer_id,
+                        deferred: false,
+                        ..arc.clone()
+                    }
+                }
+                Err(_) => Reference {
+                    layer: LayerId::UNRESOLVED,
+                    deferred: false,
+                    ..arc.clone()
+                },
+            };
+        }
+    };
+    let specs = layer
+        .prims
+        .iter_mut()
+        .map(|(path, spec)| (*path, spec))
+        .chain(
+            layer
+                .variant_prims
+                .iter_mut()
+                .flat_map(|(path, specs)| specs.iter_mut().map(move |spec| (*path, spec))),
+        );
+    for (path, spec) in specs {
+        if !spec
+            .outer_variant_sites
+            .iter()
+            .all(|site| selected.contains(site))
+        {
+            continue;
+        }
+        resolve(&mut spec.references);
+        resolve(&mut spec.payloads);
+        resolve_branch_arcs(&mut spec.variant_sets, path, &selected, &mut resolve);
+    }
+    resolved_layers
+}
+
+/// Resolves the deferred arcs of the branches of `sets`, variant sets of
+/// the prim `host`, that `selected` selects (see
+/// [`resolve_selected_deferred_arcs`]), and of the sets nested in them.
+fn resolve_branch_arcs(
+    sets: &mut HashMap<TokenId, VariantSetSpec>,
+    host: PathId,
+    selected: &HashSet<VariantSelectionSite>,
+    resolve: &mut impl FnMut(&mut ListOp<Reference>),
+) {
+    for (&set, set_spec) in sets {
+        for (&variant, branch) in &mut set_spec.variants {
+            if !selected.contains(&VariantSelectionSite {
+                host_path: host,
+                set,
+                variant,
+            }) {
+                continue;
+            }
+            resolve(&mut branch.references);
+            resolve(&mut branch.payloads);
+            resolve_branch_arcs(&mut branch.variant_sets, host, selected, resolve);
+        }
+    }
 }
 
 /// The result of successfully resolving an asset path.
@@ -222,6 +376,28 @@ pub trait AssetResolver {
     /// must never share an identity. AOUSD Core §9.7 (package asset identity).
     fn allocate_package_layer_id(&mut self, _package: LayerId, _member: &str) -> Option<LayerId> {
         self.allocate_layer_id()
+    }
+
+    /// Whether importers using this resolver defer the references and
+    /// payloads authored inside variant branches that the authoring layer
+    /// does not select itself ([`Reference::deferred`]), instead of
+    /// resolving every arc as they read the layer.
+    ///
+    /// A layer often authors a variant set whose branches each reference
+    /// their own assets, and selects one of them, so resolving every branch
+    /// reads assets composition never uses. An importer that defers resolves
+    /// an arc inside a branch only when the layer's own selections select
+    /// that branch and every branch enclosing it
+    /// ([`resolve_selected_deferred_arcs`]); composition asks for the rest as
+    /// it reaches them ([`Stage::asset_requests`]).
+    ///
+    /// The default, `false`, resolves every arc.
+    ///
+    /// Spec: AOUSD Core §10.3.2.5 (only the selected variant contributes).
+    ///
+    /// [`Stage::asset_requests`]: crate::Stage::asset_requests
+    fn defers_variant_arcs(&self) -> bool {
+        false
     }
 
     /// Returns `asset_path`, authored in the layer `anchor`, anchored to that

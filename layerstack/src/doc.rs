@@ -1996,7 +1996,11 @@ pub struct Layer {
 pub(crate) struct LayerChange {
     generation: u64,
     paths: Option<Vec<PathId>>,
-    scope_ignored: Option<PathId>,
+    /// Changed prims whose specs only support existing children, as an
+    /// inert `over` created for an edit beneath it does: their own prim
+    /// indexes change, not the namespace beneath them (see
+    /// [`Layer::changed_supports_since`]).
+    scope_ignored: Vec<PathId>,
 }
 impl crate::change_history::Record for LayerChange {
     fn revision(&self) -> u64 {
@@ -2008,6 +2012,7 @@ impl crate::change_history::Record for LayerChange {
                 .paths
                 .as_ref()
                 .map_or(0, |p| p.capacity() * size_of::<PathId>())
+            + self.scope_ignored.capacity() * size_of::<PathId>()
     }
     fn items(&self) -> usize {
         self.paths.as_ref().map_or(0, Vec::len)
@@ -2150,14 +2155,16 @@ impl Layer {
 
     /// Records an atomic authored batch. Unknown edits invalidate history precision.
     pub(crate) fn record_change(&mut self, structural: bool, paths: Option<Vec<PathId>>) {
-        self.record_scoped_change(structural, paths, None);
+        self.record_scoped_change(structural, paths, Vec::new());
     }
 
+    /// Records an atomic authored batch whose changed prims `scope_ignored`
+    /// (among `paths`) only support existing children.
     pub(crate) fn record_scoped_change(
         &mut self,
         structural: bool,
         paths: Option<Vec<PathId>>,
-        scope_ignored: Option<PathId>,
+        scope_ignored: Vec<PathId>,
     ) {
         self.generation += 1;
         self.structure += u64::from(structural);
@@ -2175,6 +2182,23 @@ impl Layer {
 
     pub(crate) fn changed_scopes_since(&self, generation: u64) -> Option<Vec<PathId>> {
         self.changed_paths(generation, true)
+    }
+
+    /// The changed prims since `generation` whose specs only support
+    /// existing children, left out of [`Self::changed_scopes_since`]: their
+    /// own prim indexes change, the namespace beneath them does not. None
+    /// after unknown writes or history expiry.
+    pub(crate) fn changed_supports_since(&self, generation: u64) -> Option<Vec<PathId>> {
+        self.changed_paths(generation, true)?;
+        let mut paths: Vec<PathId> = self
+            .change_history
+            .iter()
+            .filter(|c| c.generation > generation)
+            .flat_map(|c| c.scope_ignored.iter().copied())
+            .collect();
+        paths.sort_unstable();
+        paths.dedup();
+        Some(paths)
     }
 
     fn changed_paths(&self, generation: u64, scoped: bool) -> Option<Vec<PathId>> {
@@ -2197,7 +2221,7 @@ impl Layer {
                     .as_ref()?
                     .iter()
                     .copied()
-                    .filter(|p| !scoped || change.scope_ignored != Some(*p)),
+                    .filter(|p| !scoped || !change.scope_ignored.contains(p)),
             );
         }
         paths.sort_unstable();

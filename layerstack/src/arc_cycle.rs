@@ -527,7 +527,20 @@ impl CycleDetector {
                 (stack, number)
             }
         };
-        let prim = self.chain.sites.first().map(|site| site.dest);
+        // The use belongs to the deepest prim the chain maps onto: the prim
+        // whose arc reaches this layer stack. Population walks arcs from a
+        // high prim down to the descendants they introduce, so recording at
+        // the chain's start would keep a use that only the descendant's arc
+        // makes, past the descendant's own recomposition.
+        let sites = &self.chain.sites;
+        let prim = match sites.as_slice() {
+            [] => None,
+            [site] => Some(site.dest),
+            _ => sites
+                .iter()
+                .map(|site| site.dest)
+                .max_by_key(|dest| store.paths().resolve(*dest).depth()),
+        };
         if !self.recorded_uses.insert((prim, number)) {
             return stack;
         }

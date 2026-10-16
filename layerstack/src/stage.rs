@@ -537,6 +537,7 @@ impl Stage {
         affected: &[PathId],
         hierarchy: &[PathId],
         boundary_children: Vec<(PathId, Vec<PathId>)>,
+        composed_roots: &[PathId],
     ) {
         for path in affected {
             if let Some(old) = self.prims.remove(path) {
@@ -561,7 +562,7 @@ impl Stage {
                 }
             }
         }
-        self.merge_prims_from(store, partial, affected);
+        self.merge_prims_from(store, partial, affected, composed_roots);
         for (parent, mut children) in boundary_children {
             let Some(index) = self.prims.get(&parent) else {
                 self.children.remove(&parent);
@@ -1398,13 +1399,35 @@ impl Stage {
     /// Arc errors of the recomposed prims are replaced by the partial
     /// composition's. Sublayer cycle errors are kept: layer stacks change
     /// only through structural edits, which rebuild the whole stage.
+    ///
+    /// The layers a recomposed prim uses are replaced by the partial
+    /// composition's when it lies beneath `composed_roots`, the subtrees
+    /// the partial composition composed in full; a prim above them was
+    /// composed only as far as the mask reaches, so its new uses are added
+    /// to its existing ones.
     pub(crate) fn merge_prims_from(
         &mut self,
         store: &dyn LayerStore,
         mut partial: Self,
         recomposed: &[PathId],
+        composed_roots: &[PathId],
     ) {
-        for path in recomposed {
+        let roots: HashSet<PathId> = composed_roots.iter().copied().collect();
+        let complete = |path: PathId| {
+            let mut at = Some(store.paths().resolve(path).clone());
+            while let Some(path) = at {
+                if store
+                    .paths()
+                    .lookup(&path)
+                    .is_some_and(|id| roots.contains(&id))
+                {
+                    return true;
+                }
+                at = path.parent();
+            }
+            false
+        };
+        for path in recomposed.iter().filter(|path| complete(**path)) {
             if let Some(layers) = self.used_layer_sites.remove(path) {
                 for layer in layers {
                     let count = self.used_layer_counts.get_mut(&layer).expect("counted use");
@@ -1424,7 +1447,8 @@ impl Stage {
         // A masked composition also composes the ancestors of the prims it
         // recomposes, and records there the layers the arcs it follows from
         // them reach, the recomposed prims' new layers among them. Those
-        // uses are kept, beside the ancestors' existing ones.
+        // uses are kept, beside the ancestors' existing ones, whether or not
+        // the ancestors' indexes are replaced.
         for (path, layers) in partial.used_layer_sites.drain() {
             let site = self.used_layer_sites.entry(path).or_default();
             for layer in layers {

@@ -723,7 +723,7 @@ pub(crate) fn read_selections(
             .resolve(**a)
             .cmp_with_tokens(paths.resolve(**b), tokens)
     });
-    for (_, index) in indexes {
+    for (&prim, index) in indexes {
         let declared = declared_variant_sets(store, index);
         let mut decided: HashSet<TokenId> = HashSet::new();
         for source in &index.sources {
@@ -752,7 +752,7 @@ pub(crate) fn read_selections(
                     Err(error) => errors.push(expression_error(
                         ExpressionContext::VariantSelection,
                         source.layer_id,
-                        None,
+                        Some(prim),
                         expression,
                         error,
                     )),

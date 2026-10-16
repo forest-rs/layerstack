@@ -273,6 +273,35 @@ fn errors_match_openusd() {
     assert_eq!(errors, expected);
 }
 
+/// A variant selection that fails to evaluate is an error of each prim
+/// whose index reads it, as OpenUSD reports it among that prim index's
+/// errors (`_ComposeVariantSelectionForNode` in
+/// `pxr/usd/pcp/primIndex.cpp`).
+#[test]
+fn variant_selection_errors_name_the_prim_reading_them() {
+    let oracle = oracle();
+    let mut loaded = load(&oracle);
+    let stage = Stage::compose(&mut loaded.store, loaded.root_layer, options());
+    let prims: BTreeSet<String> = stage
+        .composition_errors()
+        .iter()
+        .filter_map(|error| match error {
+            CompositionError::VariableExpressionError(error)
+                if error.context == ExpressionContext::VariantSelection =>
+            {
+                Some(error.prim.map_or_else(String::new, |prim| {
+                    loaded.store.paths.display(prim, &loaded.store.tokens)
+                }))
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        prims,
+        BTreeSet::from(["/Clay", "/Orchard", "/Thicket"].map(String::from))
+    );
+}
+
 /// Editing a layer's `expressionVariables` recomposes what read them: the
 /// live stage matches a full composition afterwards, and an edit of a
 /// variable composition did not read recomposes nothing.

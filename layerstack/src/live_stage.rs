@@ -109,6 +109,7 @@ fn participating_layers(
     muted: &BTreeSet<LayerId>,
 ) -> HashSet<LayerId> {
     fn arc_layers(
+        store: &dyn LayerStore,
         references: &crate::ListOp<crate::Reference>,
         payloads: &crate::ListOp<crate::Reference>,
         pending: &mut Vec<LayerId>,
@@ -117,7 +118,7 @@ fn participating_layers(
         for list in [references, payloads] {
             for arc in list.inserted_items() {
                 *expressions |= arc.is_expression();
-                pending.push(arc.layer);
+                pending.extend(arc.stored_target_layer(store));
             }
         }
     }
@@ -141,6 +142,7 @@ fn participating_layers(
             .chain(layer.variant_prims.values().flatten())
         {
             arc_layers(
+                store,
                 &spec.references,
                 &spec.payloads,
                 &mut pending,
@@ -148,6 +150,7 @@ fn participating_layers(
             );
             for branch in spec.variant_branches() {
                 arc_layers(
+                    store,
                     &branch.spec.references,
                     &branch.spec.payloads,
                     &mut pending,

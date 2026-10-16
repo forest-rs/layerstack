@@ -185,6 +185,7 @@ impl<B: Storage> StageDocument<B> {
                         self.package_limits,
                         self.stage.options().schemas.clone(),
                     );
+                    reader.variant_arcs = self.variant_arcs;
                     match reader.load(
                         &dependency.identifier,
                         Some(id),

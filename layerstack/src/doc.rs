@@ -955,7 +955,9 @@ pub struct Reference {
     /// An arc whose [`Reference::asset`] is a variable expression
     /// ([`Reference::expression`]) names no layer until composition
     /// evaluates it; its `layer` is the layer that authors it, which the
-    /// evaluated path is anchored to.
+    /// evaluated path is anchored to. So does a deferred arc
+    /// ([`Reference::deferred`]): composition resolves its asset path
+    /// relative to `layer`.
     pub layer: LayerId,
     /// The authored target within that layer/document.
     pub target: ReferenceTarget,
@@ -965,6 +967,10 @@ pub struct Reference {
     pub layer_offset: LayerOffset,
     /// Authored reference custom data (AOUSD Core §16.2.17.5). Payloads have none.
     pub custom_data: Vec<(Arc<str>, Value)>,
+    /// Whether the importer left [`Reference::asset`] for composition to
+    /// resolve, relative to [`Reference::layer`] (see
+    /// [`Reference::deferred`]).
+    pub deferred: bool,
 }
 
 // Reference list identity must be reflexive even for metadata NaNs, just as
@@ -973,6 +979,7 @@ impl PartialEq for Reference {
     fn eq(&self, other: &Self) -> bool {
         use crate::edit::same::Same;
         self.layer == other.layer
+            && self.deferred == other.deferred
             && self.target == other.target
             && self.asset == other.asset
             && self.layer_offset == other.layer_offset
@@ -1006,6 +1013,7 @@ impl Reference {
             asset: None,
             layer_offset: LayerOffset::IDENTITY,
             custom_data: Vec::new(),
+            deferred: false,
         }
     }
 
@@ -1017,6 +1025,7 @@ impl Reference {
             asset: Some(asset.into()),
             layer_offset: LayerOffset::IDENTITY,
             custom_data: Vec::new(),
+            deferred: false,
         }
     }
 
@@ -1029,6 +1038,7 @@ impl Reference {
             asset: None,
             layer_offset: LayerOffset::IDENTITY,
             custom_data: Vec::new(),
+            deferred: false,
         }
     }
 
@@ -1041,6 +1051,7 @@ impl Reference {
             asset: Some(asset.into()),
             layer_offset: LayerOffset::IDENTITY,
             custom_data: Vec::new(),
+            deferred: false,
         }
     }
 
@@ -1067,6 +1078,7 @@ impl Reference {
             asset: Some(asset.into()),
             layer_offset,
             custom_data: Vec::new(),
+            deferred: false,
         }
     }
 
@@ -1099,6 +1111,44 @@ impl Reference {
             asset: Some(asset.into()),
             layer_offset,
             custom_data: Vec::new(),
+            deferred: false,
+        }
+    }
+
+    /// Creates a reference or payload, authored in `layer`, whose asset path
+    /// `asset` the importer leaves for composition to resolve.
+    ///
+    /// An importer may defer an arc that composition might never follow,
+    /// such as one inside a variant branch, so that opening a stage reads
+    /// only the layers its selections reach. The arc targets no layer stack
+    /// as authored ([`Reference::is_unresolved`]): composition asks the
+    /// store for `asset` relative to `layer`
+    /// ([`LayerStore::asset_availability`]) and follows the arc to the layer
+    /// the host loaded. An asset the host confirmed missing is reported as
+    /// [`CompositionError::UnresolvedAsset`]; one the host has not examined
+    /// contributes nothing yet and is listed by
+    /// [`Stage::asset_requests`](crate::Stage::asset_requests), for the host
+    /// to load and compose again.
+    ///
+    /// Spec: AOUSD Core §10.3.2.1 (references), §10.3.2.2 (payloads),
+    /// §10.3.2.5 (only the selected variant contributes). OpenUSD opens the
+    /// layer of each arc it composes, in `_EvalRefOrPayloadArcs`
+    /// (`pxr/usd/pcp/primIndex.cpp`).
+    ///
+    /// [`CompositionError::UnresolvedAsset`]: crate::CompositionError::UnresolvedAsset
+    pub fn deferred(
+        layer: LayerId,
+        asset: impl Into<String>,
+        target: ReferenceTarget,
+        layer_offset: LayerOffset,
+    ) -> Self {
+        Self {
+            layer,
+            target,
+            asset: Some(asset.into()),
+            layer_offset,
+            custom_data: Vec::new(),
+            deferred: true,
         }
     }
 
@@ -1112,12 +1162,25 @@ impl Reference {
     }
 
     /// Returns `true` when this arc targets no layer stack as authored: its
-    /// asset path could not be resolved (see [`Reference::unresolved`]), or
-    /// it is a variable expression that composition has yet to evaluate
-    /// ([`Reference::is_expression`]).
+    /// asset path could not be resolved (see [`Reference::unresolved`]), it
+    /// is a variable expression that composition has yet to evaluate
+    /// ([`Reference::is_expression`]), or the importer deferred it
+    /// ([`Reference::deferred`]).
     #[must_use]
     pub fn is_unresolved(&self) -> bool {
-        self.layer == LayerId::UNRESOLVED || self.is_expression()
+        self.layer == LayerId::UNRESOLVED || self.deferred || self.is_expression()
+    }
+
+    /// Returns the root layer of the layer stack this arc targets as the
+    /// store resolves it: [`Reference::layer`], or for a deferred arc
+    /// ([`Reference::deferred`]) the layer `store` records for its asset
+    /// ([`LayerStore::asset_layer`]), `None` while it records none.
+    pub(crate) fn stored_target_layer(&self, store: &dyn LayerStore) -> Option<LayerId> {
+        if self.deferred {
+            store.asset_layer(self.layer, self.asset.as_deref().unwrap_or_default())
+        } else {
+            Some(self.layer)
+        }
     }
 
     /// Returns the prim path this arc targets in the layer stack rooted at
@@ -2201,6 +2264,41 @@ impl Layer {
         Some(Path::root().join(&segments))
     }
 
+    /// Returns the paths of the prim specs whose deferred references or
+    /// payloads ([`Reference::deferred`]) name one of `assets`, in their own
+    /// lists or in their variant branches, sorted.
+    fn deferred_arc_paths(&self, assets: &[&str]) -> Vec<PathId> {
+        let names = |op: &ListOp<Reference>| {
+            op.items().any(|arc| {
+                arc.deferred
+                    && arc
+                        .asset
+                        .as_deref()
+                        .is_some_and(|asset| assets.contains(&asset))
+            })
+        };
+        let mut paths: Vec<PathId> = self
+            .prims
+            .iter()
+            .chain(
+                self.variant_prims
+                    .iter()
+                    .flat_map(|(path, specs)| specs.iter().map(move |spec| (path, spec))),
+            )
+            .filter(|(_, spec)| {
+                names(&spec.references)
+                    || names(&spec.payloads)
+                    || spec.variant_branches().any(|branch| {
+                        names(&branch.spec.references) || names(&branch.spec.payloads)
+                    })
+            })
+            .map(|(path, _)| *path)
+            .collect();
+        paths.sort_unstable();
+        paths.dedup();
+        paths
+    }
+
     /// Returns every prim spec this layer authors at `path`: the
     /// [`Layer::prims`] spec, then those of other variant branches.
     pub fn prim_specs(&self, path: PathId) -> impl Iterator<Item = &PrimSpec> {
@@ -2602,16 +2700,37 @@ impl InMemoryStore {
 
     /// Records that `asset_path`, anchored to the layer `anchor`, resolves
     /// to the layer `layer` (see [`LayerStore::asset_layer`]).
+    ///
+    /// A changed binding is a structural change of `anchor`. When deferred
+    /// arcs ([`Reference::deferred`]) name the asset, it is recorded at the
+    /// prims that author them, so a live stage recomposes only what those
+    /// arcs reach; otherwise at no known prim, which composes the stage
+    /// anew.
     pub fn insert_asset_layer(&mut self, anchor: LayerId, asset_path: &str, layer: LayerId) {
-        let previous = self
-            .asset_layers
-            .entry(anchor)
-            .or_default()
-            .insert(Arc::from(asset_path), layer);
-        if previous != Some(layer)
+        self.insert_asset_layers(anchor, [(asset_path, layer)]);
+    }
+
+    /// Records the layers several asset paths, anchored to the layer
+    /// `anchor`, resolve to, as [`Self::insert_asset_layer`] does for each,
+    /// recording one change of `anchor` for all of them.
+    /// [`LayerId::UNRESOLVED`] records a confirmed missing asset.
+    pub fn insert_asset_layers<'a>(
+        &mut self,
+        anchor: LayerId,
+        bindings: impl IntoIterator<Item = (&'a str, LayerId)>,
+    ) {
+        let assets = self.asset_layers.entry(anchor).or_default();
+        let mut changed = Vec::new();
+        for (asset_path, layer) in bindings {
+            if assets.insert(Arc::from(asset_path), layer) != Some(layer) {
+                changed.push(asset_path);
+            }
+        }
+        if !changed.is_empty()
             && let Some(source) = self.layers.get_mut(&anchor)
         {
-            source.touch_structure();
+            let paths = source.deferred_arc_paths(&changed);
+            source.record_change(true, (!paths.is_empty()).then_some(paths));
         }
     }
 

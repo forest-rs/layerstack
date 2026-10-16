@@ -153,6 +153,7 @@ pub(crate) fn emit_with_arrays(
     let mut ctx = EmitCtx {
         tokens,
         paths,
+        defer_variant_arcs: resolver.defers_variant_arcs(),
         resolver,
         layer_id,
         resolved_layers: Vec::new(),
@@ -179,6 +180,9 @@ struct EmitCtx<'a> {
     tokens: &'a mut TokenInterner,
     paths: &'a mut PathInterner,
     resolver: &'a mut dyn AssetResolver,
+    /// Whether arcs inside variant branches are left for composition to
+    /// resolve ([`AssetResolver::defers_variant_arcs`]).
+    defer_variant_arcs: bool,
     layer_id: LayerId,
     resolved_layers: Vec<Layer>,
     diagnostics: Vec<Diagnostic>,
@@ -307,6 +311,15 @@ impl EmitCtx<'_> {
             layer.insert_prim(root_path_id, root_spec);
         }
 
+        if self.defer_variant_arcs {
+            let resolved = layerstack::resolve_selected_deferred_arcs(
+                &mut layer,
+                self.resolver,
+                self.tokens,
+                self.paths,
+            );
+            self.resolved_layers.extend(resolved);
+        }
         layer
     }
 
@@ -405,11 +418,15 @@ impl EmitCtx<'_> {
         for meta in metadata {
             match meta {
                 ast::PrimMeta::References(arc) => {
-                    spec.references
-                        .merge(self.emit_arc_listop(arc, "Reference"));
+                    spec.references.merge(self.emit_arc_listop(
+                        arc,
+                        "Reference",
+                        !sites.is_empty(),
+                    ));
                 }
                 ast::PrimMeta::Payload(arc) => {
-                    spec.payloads.merge(self.emit_arc_listop(arc, "Payload"));
+                    spec.payloads
+                        .merge(self.emit_arc_listop(arc, "Payload", !sites.is_empty()));
                 }
                 ast::PrimMeta::Inherits(paths) => {
                     spec.inherits
@@ -1062,12 +1079,12 @@ impl EmitCtx<'_> {
                 ast::PrimMeta::References(arc) => {
                     variant_spec
                         .references
-                        .merge(self.emit_arc_listop(arc, "Reference"));
+                        .merge(self.emit_arc_listop(arc, "Reference", true));
                 }
                 ast::PrimMeta::Payload(arc) => {
                     variant_spec
                         .payloads
-                        .merge(self.emit_arc_listop(arc, "Payload"));
+                        .merge(self.emit_arc_listop(arc, "Payload", true));
                 }
                 ast::PrimMeta::Inherits(paths) => {
                     variant_spec.inherits.merge(self.emit_path_listop(
@@ -1114,8 +1131,14 @@ impl EmitCtx<'_> {
     // ── Composition arcs ────────────────────────────────────────────
 
     /// Converts a reference or payload list; `arc` names the arc in
-    /// OpenUSD's messages (`Reference` or `Payload`).
-    fn emit_arc_listop(&mut self, arc_list: &ast::ListOpArc<'_>, arc: &str) -> ListOp<Reference> {
+    /// OpenUSD's messages (`Reference` or `Payload`), and `in_branch` tells
+    /// whether the list is authored inside a variant branch.
+    fn emit_arc_listop(
+        &mut self,
+        arc_list: &ast::ListOpArc<'_>,
+        arc: &str,
+        in_branch: bool,
+    ) -> ListOp<Reference> {
         let Some(items) = &arc_list.items else {
             // `= None` clears the arc list.
             return ListOp::explicit(Vec::new());
@@ -1123,7 +1146,7 @@ impl EmitCtx<'_> {
 
         let refs: Vec<Reference> = items
             .iter()
-            .filter_map(|r| self.emit_arc_ref(r, arc))
+            .filter_map(|r| self.emit_arc_ref(r, arc, in_branch))
             .collect();
 
         let mut listop = ListOp::default();
@@ -1138,7 +1161,12 @@ impl EmitCtx<'_> {
         listop
     }
 
-    fn emit_arc_ref(&mut self, arc_ref: &ast::ArcRef<'_>, arc: &str) -> Option<Reference> {
+    fn emit_arc_ref(
+        &mut self,
+        arc_ref: &ast::ArcRef<'_>,
+        arc: &str,
+        in_branch: bool,
+    ) -> Option<Reference> {
         let custom_data = arc_ref
             .custom_data
             .iter()
@@ -1190,6 +1218,7 @@ impl EmitCtx<'_> {
                 asset: None,
                 layer_offset,
                 custom_data,
+                deferred: false,
             });
         };
         // An asset path that is a variable expression is evaluated during
@@ -1197,6 +1226,15 @@ impl EmitCtx<'_> {
         if is_expression(asset) {
             return Some(
                 Reference::expression(self.layer_id, asset, target, layer_offset)
+                    .with_custom_data(custom_data),
+            );
+        }
+        // An arc inside a variant branch may never be composed; resolving
+        // the branches the layer selects is left until the whole layer is
+        // read (`resolve_selected_deferred_arcs`), the rest to composition.
+        if in_branch && self.defer_variant_arcs {
+            return Some(
+                Reference::deferred(self.layer_id, asset, target, layer_offset)
                     .with_custom_data(custom_data),
             );
         }
@@ -1214,6 +1252,7 @@ impl EmitCtx<'_> {
             asset: Some(String::from(asset)),
             layer_offset,
             custom_data,
+            deferred: false,
         })
     }
 
@@ -3799,5 +3838,110 @@ def \"A\" (
         assert_eq!(absolute_path("../B.attr", "/A/C"), "/A/B.attr");
         assert_eq!(absolute_path("../..", "/A/B"), "/");
         assert_eq!(absolute_path("./C", "/A"), "/A/C");
+    }
+
+    /// A resolver that defers arcs inside variant branches and records
+    /// the asset paths it resolves.
+    #[derive(Default)]
+    struct DeferringResolver {
+        resolved: Vec<String>,
+    }
+
+    impl AssetResolver for DeferringResolver {
+        fn resolve(
+            &mut self,
+            asset_path: &str,
+            _anchor: Option<LayerId>,
+            _tokens: &mut TokenInterner,
+            _paths: &mut PathInterner,
+        ) -> Result<ResolvedAsset, layerstack::AssetResolveError> {
+            self.resolved.push(asset_path.into());
+            let id = LayerId(100 + self.resolved.len() as u64);
+            Ok(ResolvedAsset {
+                layer_id: id,
+                resolved_path: Arc::from(asset_path),
+                layer: Some(Layer::new(id)),
+            })
+        }
+
+        fn resolved_path(&self, _id: LayerId) -> Option<&str> {
+            None
+        }
+
+        fn defers_variant_arcs(&self) -> bool {
+            true
+        }
+    }
+
+    /// Arcs inside variant branches the layer selects itself, at every
+    /// enclosing set, resolve; the rest are deferred to composition.
+    ///
+    /// Spec: AOUSD Core §10.3.2.5 (only the selected variant contributes).
+    #[test]
+    fn deferring_resolvers_resolve_only_locally_selected_branch_arcs() {
+        let src = r#"#usda 1.0
+def "P" (
+    variants = { string a = "x" }
+    prepend variantSets = "a"
+    prepend references = @outside.usda@
+) {
+    variantSet "a" = {
+        "x" (
+            variants = { string b = "u" }
+            prepend variantSets = "b"
+            prepend references = @ax.usda@
+        ) {
+            variantSet "b" = {
+                "u" (prepend references = @bu.usda@) {}
+                "v" (prepend references = @bv.usda@) {}
+            }
+            def "C" (prepend references = @child.usda@) {}
+        }
+        "y" (prepend references = @ay.usda@) {
+            def "C" (prepend references = @other.usda@) {}
+        }
+    }
+}
+"#;
+        let cst = parse_cst(src);
+        let ast = crate::lower::lower(&cst.tree, src);
+        let mut tokens = TokenInterner::default();
+        let mut paths = PathInterner::default();
+        let mut resolver = DeferringResolver::default();
+        let result = emit(
+            &ast.layer,
+            LayerId(1),
+            &mut tokens,
+            &mut paths,
+            &mut resolver,
+        );
+        let mut resolved = resolver.resolved.clone();
+        resolved.sort();
+        assert_eq!(
+            resolved,
+            ["ax.usda", "bu.usda", "child.usda", "outside.usda"]
+        );
+        assert_eq!(result.resolved_layers.len(), 4);
+
+        let p = paths
+            .lookup(&Path::parse_absolute("/P", &mut tokens).unwrap())
+            .unwrap();
+        let (a, y) = (tokens.intern("a"), tokens.intern("y"));
+        let spec = result.layer.prims.get(&p).unwrap();
+        let deferred = spec.variant_spec(&[(a, y)]).unwrap().references.prepend[0].clone();
+        assert!(deferred.deferred && deferred.is_unresolved());
+        assert_eq!(deferred.layer, LayerId(1));
+        assert_eq!(deferred.asset.as_deref(), Some("ay.usda"));
+        let c = paths
+            .lookup(&Path::parse_absolute("/P/C", &mut tokens).unwrap())
+            .unwrap();
+        let deferred_children: Vec<_> = result
+            .layer
+            .prim_specs(c)
+            .flat_map(|spec| spec.references.prepend.iter())
+            .filter(|arc| arc.deferred)
+            .map(|arc| arc.asset.clone().unwrap())
+            .collect();
+        assert_eq!(deferred_children, ["other.usda"]);
     }
 }

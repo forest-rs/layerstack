@@ -49,6 +49,13 @@ a filesystem dependency example. Backends implement three operations:
 package-relative resolution, expression-asset discovery and source tracking
 stay in this crate.
 
+Opening reads only the layers the stage's variant selections reach, as OpenUSD
+does: an arc inside a variant branch its own layer does not select is deferred,
+and composition asks for those its selections reach (`Stage::asset_requests`),
+which opening loads. After an edit or reload selects another variant,
+`StageDocument::load_requested_assets` loads what it needs;
+`VariantArcLoading::All` resolves every branch's arcs up front instead.
+
 For large USDC scenes, `StageDocument::open_with` or `open_in_with` accepts
 `LoadOptions` with `UsdcArrayLoading::Retained` and an optional per-file decoder
 budget. The policy also applies to dependencies, package members and reloads.

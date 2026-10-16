@@ -32,6 +32,7 @@ use alloc::{rc::Rc, vec::Vec};
 use hashbrown::{HashMap, HashSet};
 
 use crate::{
+    asset::AssetRequest,
     compose::LateBranches,
     composition_error::{ArcCycle, ArcCycleSite, CompositionError, OpinionAtRelocationSource},
     doc::{LayerId, LayerStore},
@@ -245,6 +246,10 @@ pub(crate) struct CycleDetector {
     used_layer_sites: HashMap<PathId, HashSet<LayerId>>,
     errors: Vec<CompositionError>,
     seen: HashSet<CompositionError>,
+    /// The assets of deferred arcs the store does not resolve yet, in the
+    /// order found (see [`Self::request_asset`]).
+    asset_requests: Vec<AssetRequest>,
+    requested: HashSet<AssetRequest>,
     /// Target paths authored inside the class an inherit maps, as
     /// `(composed prim, property, mapped target)`: they target no instance
     /// of the class (see `composition_checks::drop_instance_targets`).
@@ -273,6 +278,8 @@ impl CycleDetector {
             used_layer_sites: HashMap::new(),
             errors: Vec::new(),
             seen: HashSet::new(),
+            asset_requests: Vec::new(),
+            requested: HashSet::new(),
             class_internal_targets: HashSet::new(),
             reads: VariableReads::default(),
             late_branches: Vec::new(),
@@ -748,9 +755,18 @@ impl CycleDetector {
             .contains(&(prim, property, target))
     }
 
-    /// Returns the recorded errors in the order they were found.
-    pub(crate) fn into_errors(self) -> Vec<CompositionError> {
-        self.errors
+    /// Records that a deferred arc composition follows names an asset the
+    /// store does not resolve yet, unless it was already recorded.
+    pub(crate) fn request_asset(&mut self, request: AssetRequest) {
+        if self.requested.insert(request.clone()) {
+            self.asset_requests.push(request);
+        }
+    }
+
+    /// Returns the recorded errors and asset requests, each in the order
+    /// they were found.
+    pub(crate) fn into_findings(self) -> (Vec<CompositionError>, Vec<AssetRequest>) {
+        (self.errors, self.asset_requests)
     }
 }
 

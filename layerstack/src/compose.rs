@@ -518,12 +518,16 @@ pub(crate) fn compose_stage_retained(
     if let Some(namespace) = namespace {
         *namespace = core::mem::take(&mut cycles.source_inventory().namespace);
     }
-    let errors = cycles
-        .into_errors()
+    let (errors, asset_requests) = cycles.into_findings();
+    let errors = errors
         .into_iter()
         .filter(|error| error.prim().is_none_or(|prim| prims.contains_key(&prim)))
         // Target path errors of specs a stronger explicit list replaces.
         .filter(|error| target_error_applies(error, &prims))
+        .collect();
+    let asset_requests = asset_requests
+        .into_iter()
+        .filter(|request| prims.contains_key(&request.prim))
         .collect();
     Stage::from_parts(prims, children, options.with_provenance, dependencies)
         .with_loadable(resolver.loadable.take())
@@ -536,6 +540,7 @@ pub(crate) fn compose_stage_retained(
             indexed_source_paths,
         })
         .with_composition_errors(store, errors)
+        .with_asset_requests(asset_requests)
         .with_instances(instances)
         .with_variant_fallbacks(options.variant_fallbacks.clone())
 }
@@ -3616,6 +3621,18 @@ fn resolve_arc_target(
     // (`anchor_internal_arcs`); one read without an expression scope
     // targets nothing and is not an error.
     if reference.is_expression() {
+        return None;
+    }
+    // Arc resolution resolves a deferred arc whose asset the store knows
+    // (`anchor_internal_arcs`); one it does not know yet is asked for, and
+    // contributes once the host loads it.
+    if reference.deferred {
+        cycles.request_asset(crate::AssetRequest {
+            anchor: reference.layer,
+            asset_path: reference.asset.clone().unwrap_or_default(),
+            prim: dest_root,
+            arc,
+        });
         return None;
     }
     if reference.is_unresolved() {
@@ -10559,3 +10576,160 @@ mod property_snapshot_tests {
 
 #[cfg(test)]
 mod sparse_tests;
+
+/// References and payloads an importer deferred ([`Reference::deferred`]),
+/// which composition resolves through the store.
+///
+/// Spec: AOUSD Core §10.3.2.1 (references), §10.3.2.2 (payloads),
+/// §10.3.2.5 (only the selected variant contributes).
+#[cfg(test)]
+mod deferred_arc_tests {
+    use super::*;
+    use crate::{
+        AssetRequest,
+        composition_error::UnresolvedAsset,
+        doc::{InMemoryStore, Layer, PrimSpec, VariantSetSpec, VariantSpec},
+    };
+    use alloc::vec;
+
+    const ROOT: LayerId = LayerId(1);
+    const ASSET: LayerId = LayerId(2);
+
+    #[test]
+    fn deferred_arcs_follow_the_store_and_ask_for_unexamined_assets() {
+        let mut store = InMemoryStore::default();
+        let value = store.tokens.intern("value");
+        let target = store.path("/Target");
+        let deferred = |asset: &str| {
+            Reference::deferred(
+                ROOT,
+                asset,
+                ReferenceTarget::Prim(target),
+                LayerOffset::IDENTITY,
+            )
+        };
+        let mut asset = Layer::new(ASSET);
+        asset.insert_prim(
+            target,
+            PrimSpec::def()
+                .with_property(value, crate::PropertySpec::attribute().with_default(3_i64)),
+        );
+        store.insert_layer(asset);
+        store.insert_asset_layer(ROOT, "./loaded.usda", ASSET);
+        store.mark_asset_missing(ROOT, "./missing.usda");
+
+        // A branch no selection names asks for nothing.
+        let set = store.tokens.intern("look");
+        let (x, y) = (store.tokens.intern("x"), store.tokens.intern("y"));
+        let mut host = PrimSpec::def();
+        let branch = VariantSpec {
+            references: crate::ListOp::prepended(vec![deferred("./never.usda")]),
+            ..VariantSpec::default()
+        };
+        host.variant_sets.insert(
+            set,
+            VariantSetSpec {
+                variants: [(x, branch), (y, VariantSpec::default())]
+                    .into_iter()
+                    .collect(),
+            },
+        );
+        host.variant_set_order.push(set);
+        host.variant_selections.insert(set, y);
+
+        let mut root = Layer::new(ROOT);
+        for (path, spec) in [
+            (
+                "/Loaded",
+                PrimSpec::def().with_reference(deferred("./loaded.usda")),
+            ),
+            (
+                "/Missing",
+                PrimSpec::def().with_reference(deferred("./missing.usda")),
+            ),
+            (
+                "/Pending",
+                PrimSpec::def().with_payload(deferred("./pending.usda")),
+            ),
+            ("/Unselected", host),
+        ] {
+            let path = store.path(path);
+            root.insert_prim(path, spec);
+        }
+        store.insert_layer(root);
+        let stage = Stage::compose(&mut store, ROOT, StageOptions::default());
+
+        let loaded = store.path("/Loaded");
+        assert_eq!(
+            stage
+                .resolve_field_path(crate::path::PropertyPath::new(loaded, value))
+                .map(|resolved| resolved.value),
+            Some(crate::Value::Int64(3))
+        );
+        let missing = store.path("/Missing");
+        assert_eq!(
+            stage.composition_errors(),
+            [CompositionError::UnresolvedAsset(UnresolvedAsset {
+                prim: missing,
+                arc: ArcKind::References,
+                asset: "./missing.usda".into(),
+            })]
+        );
+        let pending = store.path("/Pending");
+        assert_eq!(
+            stage.asset_requests(),
+            [AssetRequest {
+                anchor: ROOT,
+                asset_path: "./pending.usda".into(),
+                prim: pending,
+                arc: ArcKind::Payloads,
+            }]
+        );
+        assert!(stage.used_layers(false).contains(&ASSET));
+    }
+
+    /// A deferred arc and an importer's resolved arc to the same layer are
+    /// one item for list editing once composition resolves the deferred
+    /// one, so a stronger layer's deferred `delete` removes a weaker
+    /// layer's resolved arc.
+    #[test]
+    fn resolved_deferred_arcs_list_edit_like_resolved_arcs() {
+        let mut store = InMemoryStore::default();
+        let value = store.tokens.intern("value");
+        let target = store.path("/Target");
+        let model = store.path("/Model");
+        let mut asset = Layer::new(ASSET);
+        asset.insert_prim(
+            target,
+            PrimSpec::def()
+                .with_property(value, crate::PropertySpec::attribute().with_default(3_i64)),
+        );
+        store.insert_layer(asset);
+        let weak = LayerId(3);
+        let mut weak_layer = Layer::new(weak);
+        weak_layer.insert_prim(
+            model,
+            PrimSpec::def().with_reference(Reference::with_asset(ASSET, target, "./asset.usda")),
+        );
+        store.insert_layer(weak_layer);
+        store.insert_asset_layer(ROOT, "./asset.usda", ASSET);
+        let mut root = Layer::new(ROOT);
+        root.sublayers.push(crate::SublayerEntry::new(weak));
+        let mut spec = PrimSpec::over();
+        spec.references.delete = vec![Reference::deferred(
+            ROOT,
+            "./asset.usda",
+            ReferenceTarget::Prim(target),
+            LayerOffset::IDENTITY,
+        )];
+        root.insert_prim(model, spec);
+        store.insert_layer(root);
+        let stage = Stage::compose(&mut store, ROOT, StageOptions::default());
+        assert!(
+            stage
+                .resolve_field_path(crate::path::PropertyPath::new(model, value))
+                .is_none()
+        );
+        assert!(stage.asset_requests().is_empty());
+    }
+}

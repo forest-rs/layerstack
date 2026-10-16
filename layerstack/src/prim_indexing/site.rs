@@ -437,14 +437,14 @@ pub(crate) fn compose_child_names_in(
                 }
                 // Child specs a list leaves out still exist; they follow
                 // every named child.
-                for name in children.children(store, layer, site) {
+                for &name in children.children(store, layer, site) {
                     if !authored.contains(&name) {
                         unlisted.push(name);
                     }
                 }
             }
             _ => {
-                for name in children.children(store, layer, site) {
+                for &name in children.children(store, layer, site) {
                     if names.insert(name) {
                         order.push(name);
                     }
@@ -470,28 +470,31 @@ fn has_child_spec(store: &dyn LayerStore, layer: &Layer, site: &SpecPath, name: 
             .get(&child)
             .is_some_and(|spec| spec.outer_variant_sites.is_empty());
     }
-    let sites: Vec<_> = site.variant_selection_sites().collect();
-    layer
-        .prim_specs(child)
-        .any(|spec| spec.outer_variant_sites == sites)
+    layer.prim_specs(child).any(|spec| {
+        spec.outer_variant_sites
+            .iter()
+            .copied()
+            .eq(site.variant_selection_sites())
+    })
 }
 
 /// The child prim specs of each prim spec of a layer, for specs that list
 /// no children of their own (layers built through `Layer::insert_prim`).
 #[derive(Default)]
 pub(crate) struct ChildIndex {
-    /// Per layer, its generation and the children under each parent site,
-    /// keyed by the parent's prim names and enclosing variant selections.
-    layers: HashMap<LayerId, (u64, HashMap<ParentKey, Vec<TokenId>>)>,
+    /// Per layer, its generation and the children under each parent site.
+    layers: HashMap<LayerId, (u64, LayerChildren)>,
 }
 
-/// A parent site: its prim names and the variant selections enclosing its
-/// children, by names rather than interned paths, since a spec's
-/// ancestors need not be interned.
-type ParentKey = (Vec<TokenId>, Vec<crate::spec_path::VariantSelectionSite>);
+/// The children of a layer's parent sites, keyed by the parent's prim
+/// names (rather than interned paths, since a spec's ancestors need not be
+/// interned), then by the variant selections enclosing them, which most
+/// parents have one set of.
+type LayerChildren =
+    HashMap<Vec<TokenId>, Vec<(Vec<crate::spec_path::VariantSelectionSite>, Vec<TokenId>)>>;
 
 impl ChildIndex {
-    fn children(&mut self, store: &dyn LayerStore, layer: &Layer, site: &SpecPath) -> Vec<TokenId> {
+    fn children(&mut self, store: &dyn LayerStore, layer: &Layer, site: &SpecPath) -> &[TokenId] {
         let generation = layer.generation();
         let entry = self
             .layers
@@ -501,20 +504,25 @@ impl ChildIndex {
             entry.0 = generation;
             entry.1 = index_layer(store, layer);
         }
-        let key = (
-            store.paths().resolve(site.prim_path()).segments().to_vec(),
-            site.variant_selection_sites().collect(),
-        );
-        entry.1.get(&key).cloned().unwrap_or_default()
+        let segments = store.paths().resolve(site.prim_path()).segments();
+        entry
+            .1
+            .get(segments)
+            .and_then(|branches| {
+                branches
+                    .iter()
+                    .find(|(sites, _)| sites.iter().copied().eq(site.variant_selection_sites()))
+            })
+            .map_or(&[], |(_, names)| names.as_slice())
     }
 }
 
 /// Every prim spec of `layer` listed under its parent site, by name; the
 /// ancestors of a spec outside variant branches are listed too, so specs
 /// authored without their ancestors still form a hierarchy.
-fn index_layer(store: &dyn LayerStore, layer: &Layer) -> HashMap<ParentKey, Vec<TokenId>> {
+fn index_layer(store: &dyn LayerStore, layer: &Layer) -> LayerChildren {
     let paths = store.paths();
-    let mut index: HashMap<ParentKey, Vec<TokenId>> = HashMap::new();
+    let mut index: LayerChildren = HashMap::new();
     for spec_path in layer.prims.keys().chain(layer.variant_prims.keys()) {
         let segments = paths.resolve(*spec_path).segments();
         for spec in layer.prim_specs(*spec_path) {
@@ -525,9 +533,15 @@ fn index_layer(store: &dyn LayerStore, layer: &Layer) -> HashMap<ParentKey, Vec<
                 segments.len() - 1
             };
             for depth in first..segments.len() {
-                let names = index
-                    .entry((segments[..depth].to_vec(), outer.clone()))
-                    .or_default();
+                let branches = index.entry(segments[..depth].to_vec()).or_default();
+                let at = match branches.iter().position(|(sites, _)| sites == outer) {
+                    Some(at) => at,
+                    None => {
+                        branches.push((outer.clone(), Vec::new()));
+                        branches.len() - 1
+                    }
+                };
+                let names = &mut branches[at].1;
                 if !names.contains(&segments[depth]) {
                     names.push(segments[depth]);
                 }
@@ -535,7 +549,7 @@ fn index_layer(store: &dyn LayerStore, layer: &Layer) -> HashMap<ParentKey, Vec<
         }
     }
     let tokens = store.tokens();
-    for names in index.values_mut() {
+    for (_, names) in index.values_mut().flatten() {
         names.sort_by(|a, b| tokens.resolve(*a).cmp(tokens.resolve(*b)));
     }
     index

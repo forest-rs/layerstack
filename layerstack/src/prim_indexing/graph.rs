@@ -24,6 +24,9 @@ pub(crate) type NodeIndex = u32;
 /// No node.
 pub(crate) const NONE: NodeIndex = NodeIndex::MAX;
 
+/// A node's children, collected ([`Graph::child_list`]).
+pub(crate) type ChildList = smallvec::SmallVec<[NodeIndex; 8]>;
+
 /// The [`NodeIndex`] of the node at `at` in a graph's node list.
 pub(crate) fn node_index(at: usize) -> NodeIndex {
     NodeIndex::try_from(at).expect("prim index node count")
@@ -167,8 +170,9 @@ impl Graph {
         }
     }
 
-    /// The children of `parent`, collected.
-    pub(crate) fn child_list(&self, parent: NodeIndex) -> Vec<NodeIndex> {
+    /// The children of `parent`, collected, without allocating for the
+    /// few children most nodes have.
+    pub(crate) fn child_list(&self, parent: NodeIndex) -> ChildList {
         self.children(parent).collect()
     }
 

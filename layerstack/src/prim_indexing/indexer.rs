@@ -2212,19 +2212,21 @@ impl Indexer<'_, '_, '_> {
         start: NodeIndex,
         start_path: &SpecPath,
     ) -> Vec<(NodeIndex, Option<PathId>)> {
-        let mut out = Vec::new();
-        let mut translated: HashMap<NodeIndex, Option<PathId>> = HashMap::new();
-        translated.insert(start, Some(start_path.prim_path()));
-        for node in self.graph().subtree(start) {
+        let subtree = self.graph().subtree(start);
+        // Each node's translated path, by node: a parent precedes its
+        // children in the subtree.
+        let mut translated: Vec<Option<PathId>> = alloc::vec![None; self.graph().len()];
+        let mut out = Vec::with_capacity(subtree.len());
+        for node in subtree {
             let path = if node == start {
                 Some(start_path.prim_path())
             } else {
-                let parent = self.graph().node(node).parent;
-                let in_parent = translated.get(&parent).copied().flatten();
-                let map = self.graph().node(node).map_to_parent.clone();
+                let entry = self.graph().node(node);
+                let in_parent = translated[entry.parent as usize];
+                let map = entry.map_to_parent.clone();
                 in_parent.and_then(|p| map.map_target_to_source(self.ctx.store.paths_mut(), p))
             };
-            translated.insert(node, path);
+            translated[node as usize] = path;
             out.push((node, path));
         }
         out

@@ -887,36 +887,32 @@ fn prim_index(
     graph: &Graph,
     checks: &mut crate::composition_checks::Findings,
 ) -> PrimIndex {
-    let nodes: Vec<_> = graph
-        .nodes
-        .iter()
-        .map(|node| {
-            let to_id =
-                |index: NodeIndex| (index != NONE).then(|| NodeId::from_raw_index(index as usize));
-            let origin = if node.origin == node.parent {
-                None
-            } else {
-                to_id(node.origin)
-            };
-            let arc = NodeArc {
-                arc_kind: node.arc_kind,
-                layer_stack: ctx.stacks.get(node.site.stack).identifier,
-                site: node.site.path.clone(),
-                namespace_depth: node.namespace_depth,
-                sibling_index: node.sibling_num,
-                implied: is_class_based(node.arc_kind) && node.origin != node.parent,
-                skips_duplicates: false,
-            };
-            let stack_offsets = ctx.stacks.get(node.site.stack).layer_offsets.clone();
-            (
-                to_id(node.parent),
-                origin,
-                arc,
-                node.map_to_root.offset(),
-                stack_offsets,
-            )
-        })
-        .collect();
+    let nodes = graph.nodes.iter().map(|node| {
+        let to_id =
+            |index: NodeIndex| (index != NONE).then(|| NodeId::from_raw_index(index as usize));
+        let origin = if node.origin == node.parent {
+            None
+        } else {
+            to_id(node.origin)
+        };
+        let arc = NodeArc {
+            arc_kind: node.arc_kind,
+            layer_stack: ctx.stacks.get(node.site.stack).identifier,
+            site: node.site.path.clone(),
+            namespace_depth: node.namespace_depth,
+            sibling_index: node.sibling_num,
+            implied: is_class_based(node.arc_kind) && node.origin != node.parent,
+            skips_duplicates: false,
+        };
+        let stack_offsets = ctx.stacks.get(node.site.stack).layer_offsets.clone();
+        (
+            to_id(node.parent),
+            origin,
+            arc,
+            node.map_to_root.offset(),
+            stack_offsets,
+        )
+    });
     let mut index = PrimIndex::new(PrimIndexGraph::from_ordered(nodes));
     for (at, node) in graph.nodes.iter().enumerate() {
         if !node.can_contribute_specs() || !node.has_specs {

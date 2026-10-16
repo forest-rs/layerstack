@@ -1101,3 +1101,159 @@ fn crate_fixtures_compose_like_their_usda_copies() {
             .join("\n")
     );
 }
+
+/// The targets OpenUSD 26.8 resolves for `properties` of fixture `name`,
+/// and the `(kind, prim)` of each composition error it reports.
+fn assert_targets_and_errors(
+    name: &str,
+    properties: &[(&str, &[&str])],
+    expected_errors: &[(&str, &str)],
+) {
+    let (mut loaded, _) = load_fixture(name);
+    let stage = Stage::compose(
+        &mut loaded.store,
+        loaded.root_layer,
+        StageOptions::default(),
+    );
+    for (property, expected) in properties {
+        let path = loaded.store.property_path(property);
+        let targets: Vec<String> = stage
+            .resolve_target_list_path(path)
+            .map(|resolved| resolved.value)
+            .unwrap_or_default()
+            .iter()
+            .map(|target| target.display(&loaded.store.paths, &loaded.store.tokens))
+            .collect();
+        assert_eq!(&targets, expected, "{name}: targets of {property}");
+    }
+    let mut errors: Vec<(&str, String)> = stage
+        .composition_errors()
+        .iter()
+        .filter_map(|error| {
+            let kind = match error {
+                CompositionError::InvalidExternalTargetPath(_) => "InvalidExternalTargetPath",
+                CompositionError::InvalidInstanceTargetPath(_) => "InvalidInstanceTargetPath",
+                _ => return None,
+            };
+            let prim = error.prim()?;
+            Some((kind, loaded.store.paths.display(prim, &loaded.store.tokens)))
+        })
+        .collect();
+    errors.sort();
+    errors.dedup();
+    let mut expected: Vec<(&str, String)> = expected_errors
+        .iter()
+        .map(|(kind, prim)| (*kind, (*prim).to_owned()))
+        .collect();
+    expected.sort();
+    assert_eq!(errors, expected, "{name}: target path errors");
+}
+
+/// Target paths authored in an inherited class map through the arcs and
+/// relocations above the class one mapping at a time, as OpenUSD composes
+/// a relocations mapping by deferring (`PcpMapFunction::DeferredComposition`),
+/// each step checking that its result maps back. A target the class
+/// authors outside itself that only an instance's relocation reaches is
+/// external to the instance; one inside the class keeps its relocated path.
+///
+/// Spec: AOUSD Core §10.3.2.6.1 (relocates map target paths).
+#[test]
+fn class_targets_map_through_relocations_one_mapping_at_a_time() {
+    assert_targets_and_errors(
+        "ErrorInvalidInstanceTargetPath_root",
+        &[
+            (
+                "/FaceRig/BrowRig/SymBrow/BrowInnUDPosBrowInnUDNeg_sculpt.amount",
+                &[
+                    "/FaceRig/Anim/Face/Eyes/RBrow.InnUD",
+                    "/FaceRig/Anim/Face/Eyes/LBrow.InnUD",
+                ],
+            ),
+            (
+                "/FaceRig/BrowRig/LBrow/BrowInnUDPosBrowInnUDNeg_sculpt.amount",
+                &[],
+            ),
+            (
+                "/FaceRig/BrowRig/RBrow/BrowInnUDPosBrowInnUDNeg_sculpt.amount",
+                &[],
+            ),
+        ],
+        &[
+            (
+                "InvalidExternalTargetPath",
+                "/ConnectionToLocalClass/Instance_1",
+            ),
+            (
+                "InvalidExternalTargetPath",
+                "/ConnectionToLocalClass/Instance_2",
+            ),
+            (
+                "InvalidExternalTargetPath",
+                "/FaceRig/BrowRig/LBrow/BrowInnUDPosBrowInnUDNeg_sculpt",
+            ),
+            (
+                "InvalidExternalTargetPath",
+                "/FaceRig/BrowRig/RBrow/BrowInnUDPosBrowInnUDNeg_sculpt",
+            ),
+            (
+                "InvalidInstanceTargetPath",
+                "/ConnectionToLocalClass/Instance_1",
+            ),
+            (
+                "InvalidInstanceTargetPath",
+                "/ConnectionToLocalClass/Instance_2",
+            ),
+            (
+                "InvalidInstanceTargetPath",
+                "/FaceRig/BrowRig/LBrow/BrowInnUDPosBrowInnUDNeg_sculpt",
+            ),
+            (
+                "InvalidInstanceTargetPath",
+                "/FaceRig/BrowRig/RBrow/BrowInnUDPosBrowInnUDNeg_sculpt",
+            ),
+        ],
+    );
+    assert_targets_and_errors(
+        "TrickyConnectionToRelocatedAttribute_root",
+        &[
+            (
+                "/HumanRig/rig/Face/rig/LEyeRig/rig/Mover.bar",
+                &[
+                    "/HumanRig/Anim/Face/LEye.foo",
+                    "/HumanRig/Anim/Face/LEye.baz",
+                ],
+            ),
+            (
+                "/HumanRig/rig/Face/rig/REyeRig/rig/Mover.bar",
+                &[
+                    "/HumanRig/Anim/Face/REye.foo",
+                    "/HumanRig/Anim/Face/REye.baz",
+                ],
+            ),
+        ],
+        &[],
+    );
+}
+
+/// A relocation source moved by an ancestor's relocation is traced back to
+/// where it was authored through the nearest relocation at or above it, so
+/// a target beneath it maps through the whole chain (OpenUSD
+/// `_ComputeSourceOriginForTargetIfNeeded` in `pxr/usd/pcp/layerStack.cpp`).
+///
+/// Spec: AOUSD Core §10.3.2.6.
+#[test]
+fn chained_relocation_sources_trace_back_to_their_origin() {
+    assert_targets_and_errors(
+        "TrickyMultipleRelocations4_root",
+        &[(
+            "/RearLegRig/Legs/LeftRig/Leg_bone/Leg_bone.bones",
+            &[
+                "/RearLegRig/Legs/RightRig",
+                "/RearLegRig/Legs/LeftRig/Leg_bone/Leg_bone",
+                "/RearLegRig/Knee_bone",
+                "/RearLegRig/Knee_bone/Ankle_bone_phrbv",
+            ],
+        )],
+        &[],
+    );
+}

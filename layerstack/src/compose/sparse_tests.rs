@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use super::*;
+use crate::doc::{LayerOffset, Reference};
 use crate::{
     InMemoryStore, InterpolationType, Layer, PrimSpec, PropertyPath, PropertySpec, PropertyType,
     SublayerEntry, Value,
@@ -159,9 +160,7 @@ fn one_shot_namespace_matches_retained_indexes_before_and_after_structural_edits
     layer.insert_prim(a, PrimSpec::def());
     store.insert_layer(layer);
     let mut live = crate::LiveStage::compose(&mut store, LayerId(1), options.clone());
-    assert_eq!(live.stage().composition_work().indexed_source_paths, 2);
     let stage = Stage::compose(&mut store, LayerId(1), options.clone());
-    assert_eq!(stage.composition_work().indexed_source_paths, 0);
     assert_eq!(stage.children_of(world), live.stage().children_of(world));
     assert_eq!(
         alloc::format!("{:?}", stage.explain_prim_graph(a)),
@@ -176,7 +175,6 @@ fn one_shot_namespace_matches_retained_indexes_before_and_after_structural_edits
     live.notify_structural_change();
     live.recompose(&mut store);
     let stage = Stage::compose(&mut store, LayerId(1), options);
-    assert_eq!(stage.composition_work().indexed_source_paths, 0);
     assert_eq!(stage.children_of(world), Some(&[a, b][..]));
     assert_eq!(stage.children_of(world), live.stage().children_of(world));
     assert_eq!(

@@ -269,14 +269,7 @@ impl LiveStage {
                 with_dependencies: true,
                 ..self.options.clone()
             };
-            let partial = Stage::compose_retained(
-                store,
-                self.root,
-                options,
-                false,
-                Some(&mut self.namespace_inventory),
-                true,
-            );
+            let partial = Stage::compose_retained(store, self.root, options, false);
             self.work.composed_prim_indexes += partial.composition_work().composed_prim_indexes;
             self.work.inspected_source_paths += partial.composition_work().inspected_source_paths;
             self.work.indexed_source_paths += partial.composition_work().indexed_source_paths;

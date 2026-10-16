@@ -24,16 +24,19 @@
 //!
 //! # Strength order
 //!
-//! A prim's opinions are ranked by a strong-to-weak depth-first walk of its
-//! graph ([`PrimIndexGraph::strength_order`]), then by layer strength within
-//! each node's layer stack: a node is stronger than every node beneath it,
-//! and a node's children are ordered by arc kind (LIVERPS), then deeper
-//! namespace depth, then the strength of their origins, then their position
-//! among the arcs authored beside them (`PcpCompareSiblingNodeStrength`). A
-//! class arc authored inside a reference or payload target is also implied
-//! beneath the node of each stronger layer stack, with the class node it is
-//! implied from as its origin ([`PrimNode::origin`]; AOUSD Core §10.4.2.4),
-//! so it ranks with that layer stack.
+//! A graph lists its nodes in strength order, as composition builds it: a
+//! node is stronger than every node beneath it, and a node's children are
+//! ordered by arc kind (LIVERPS), then deeper namespace depth, then the
+//! strength of their origins, then their position among the arcs authored
+//! beside them (`PcpCompareSiblingNodeStrength`), so the nodes beneath a
+//! child come before that child's weaker siblings. A
+//! prim's opinions are ranked by their nodes in that order
+//! ([`PrimIndexGraph::strength_order`]), then by layer strength within each
+//! node's layer stack. A class arc authored inside a reference or payload
+//! target is also implied beneath the node of each stronger layer stack,
+//! with the class node it is implied from as its origin
+//! ([`PrimNode::origin`]; AOUSD Core §10.4.2.4), so it ranks with that layer
+//! stack.
 //!
 //! Specializes are weaker than every other arc (AOUSD Core §10.4.1). A
 //! specializes arc authored beneath the root leaves an inert placeholder
@@ -62,7 +65,7 @@
 use crate::layer_stack::LayerStackIdentifier;
 
 use alloc::sync::Arc;
-use alloc::{borrow::Cow, vec::Vec};
+use alloc::vec::Vec;
 use core::cmp::Ordering;
 
 use crate::{
@@ -89,10 +92,9 @@ impl NodeId {
         self.0 as usize
     }
 
-    /// The node with index `raw`.
-    #[cfg(test)]
-    pub(crate) const fn from_raw(raw: u32) -> Self {
-        Self(raw)
+    /// The node with arena index `index`.
+    pub(crate) fn from_raw_index(index: usize) -> Self {
+        Self::from_index(index)
     }
 
     fn from_index(index: usize) -> Self {
@@ -259,6 +261,12 @@ impl PrimNode {
             .map(|(_, offset)| self.layer_offset().compose(*offset))
     }
 
+    /// The resident, unmuted layers of the node's layer stack, strongest
+    /// first, as composition gathered them.
+    pub(crate) fn stack_layers(&self) -> impl Iterator<Item = LayerId> + '_ {
+        self.stack_offsets.iter().map(|(id, _)| *id)
+    }
+
     /// Strength of a resident, unmuted layer, even when it has no spec here.
     pub(crate) fn layer_strength(&self, layer: LayerId) -> Option<u16> {
         self.stack_offsets
@@ -292,11 +300,10 @@ pub(crate) type LayerOffsetCache =
 /// See the [module docs](self) for how it relates to strength order.
 #[derive(Clone, Debug, Default)]
 pub struct PrimIndexGraph {
+    /// The nodes in strength order: each node after its parent and the
+    /// nodes beneath its stronger siblings, each node's children strongest
+    /// first, as prim indexing lists them.
     nodes: Vec<PrimNode>,
-    /// Each node's position in the strength walk, once ranked: equal for
-    /// nodes whose opinions interleave (see [`Self::rank`]). Empty or stale
-    /// while composition adds nodes.
-    ranks: Vec<u32>,
 }
 
 impl PrimIndexGraph {
@@ -370,250 +377,61 @@ impl PrimIndexGraph {
         }
     }
 
-    /// A graph holding only a root node reached by `arc`.
-    pub(crate) fn new(arc: NodeArc) -> Self {
-        Self {
-            nodes: alloc::vec![PrimNode {
-                parent: None,
-                origin: None,
+    /// A graph of `nodes`, listed in strength order: each node after its
+    /// parent, and a node's children in the order they rank. Each entry is
+    /// the node's parent, origin, arc and layer offset.
+    pub(crate) fn from_ordered(
+        nodes: impl IntoIterator<Item = (Option<NodeId>, Option<NodeId>, NodeArc, LayerOffset)>,
+    ) -> Self {
+        let mut out: Vec<PrimNode> = Vec::new();
+        for (parent, origin, arc, layer_offset) in nodes {
+            let id = NodeId::from_index(out.len());
+            if let Some(parent) = parent {
+                out[parent.index()].children.push(id);
+            }
+            out.push(PrimNode {
+                parent,
+                origin,
                 children: Vec::new(),
                 arc,
-                layer_offset: Some(LayerOffset::IDENTITY),
+                layer_offset: Some(layer_offset),
                 stack_offsets: Arc::default(),
-            }],
-            ranks: Vec::new(),
+            });
         }
+        Self { nodes: out }
     }
 
-    /// Changes the occurrence root after context-free prototype composition.
-    /// The caller proves all other sites and namespace depths identical.
-    pub(crate) fn set_root_site(&mut self, site: SpecPath) {
-        self.nodes[0].arc.site = site;
-    }
-
-    /// Returns the child of `parent` reached by `arc`, adding it if needed.
-    pub(crate) fn intern_child(&mut self, parent: NodeId, arc: NodeArc) -> NodeId {
-        if let Some(existing) = self.nodes[parent.index()]
-            .children
-            .iter()
-            .copied()
-            .find(|child| self.nodes[child.index()].arc == arc)
-        {
-            return existing;
-        }
-        let id = NodeId::from_index(self.nodes.len());
-        self.nodes.push(PrimNode {
-            parent: Some(parent),
-            origin: None,
-            children: Vec::new(),
-            arc,
-            layer_offset: None,
-            stack_offsets: Arc::default(),
-        });
-        self.nodes[parent.index()].children.push(id);
-        id
-    }
-
-    /// Records `origin` as the node `node` is implied from, unless it has
-    /// one.
-    pub(crate) fn set_origin(&mut self, node: NodeId, origin: NodeId) {
-        let slot = &mut self.nodes[node.index()].origin;
-        if slot.is_none() {
-            *slot = Some(origin);
-            self.ranks.clear();
-        }
-    }
-
-    /// Records `offset` as the layer offset of `node` (see
-    /// [`PrimNode::layer_offset`]), unless it has one: every expansion that
-    /// shares a node reaches it through the same arcs.
-    pub(crate) fn set_layer_offset(&mut self, node: NodeId, offset: LayerOffset) {
-        self.nodes[node.index()].layer_offset.get_or_insert(offset);
-    }
-
-    /// Removes every node `keep` rejects, returning the new id of each old
-    /// node, `None` for a removed one. A node is kept whenever one of its
-    /// descendants is, so the graph stays a tree, and so is the origin of a
-    /// kept node, so it still ranks by that origin. The graph is ranked
-    /// again once it is complete (see [`Self::rank`]): the order siblings
-    /// are placed in depends on the siblings present.
-    pub(crate) fn retain_nodes(
+    /// Moves the sites of `stage_stack`'s nodes beneath `from` to beneath
+    /// `to`: the graph of a prototype's descendant, from one instance to
+    /// another.
+    pub(crate) fn reroot_stage_sites(
         &mut self,
-        mut keep: impl FnMut(NodeId, &PrimNode) -> bool,
-    ) -> Vec<Option<NodeId>> {
-        let mut kept = alloc::vec![false; self.nodes.len()];
-        let mut pending: Vec<NodeId> = self
-            .nodes()
-            .filter(|(id, node)| keep(*id, node))
-            .map(|(id, _)| id)
-            .collect();
-        while let Some(id) = pending.pop() {
-            if core::mem::replace(&mut kept[id.index()], true) {
+        paths: &mut crate::path::PathInterner,
+        stage_stack: LayerStackIdentifier,
+        from: crate::path::PathId,
+        to: crate::path::PathId,
+    ) {
+        let (from_site, to_site) = (SpecPath::from_prim_path(from), SpecPath::from_prim_path(to));
+        for node in &mut self.nodes {
+            if node.arc.layer_stack != stage_stack {
                 continue;
             }
-            let node = &self.nodes[id.index()];
-            pending.extend(node.parent);
-            pending.extend(node.origin);
-        }
-        let mut remap = alloc::vec![None; self.nodes.len()];
-        let mut next = 0;
-        for (index, kept) in kept.iter().enumerate() {
-            if *kept {
-                remap[index] = Some(NodeId::from_index(next));
-                next += 1;
-            }
-        }
-        let map = |id: NodeId| remap[id.index()];
-        let nodes = core::mem::take(&mut self.nodes);
-        self.ranks.clear();
-        for (index, mut node) in nodes.into_iter().enumerate() {
-            if !kept[index] {
+            let prim = node.arc.site.prim_path();
+            if prim != from
+                && !paths
+                    .resolve(prim)
+                    .segments()
+                    .starts_with(paths.resolve(from).segments())
+            {
                 continue;
             }
-            node.parent = node.parent.and_then(map);
-            node.children.retain(|child| kept[child.index()]);
-            for child in &mut node.children {
-                *child = map(*child).expect("kept child");
-            }
-            node.origin = node.origin.and_then(map);
-            self.nodes.push(node);
+            node.arc.site = crate::prim_indexing::site_paths::replace_prefix(
+                paths,
+                &node.arc.site,
+                &from_site,
+                &to_site,
+            );
         }
-        remap
-    }
-
-    /// The nodes from beneath the root down to `node`, outermost first:
-    /// the arc path of `node`, empty for the root.
-    pub(crate) fn arc_path(&self, node: NodeId) -> Vec<&PrimNode> {
-        let mut path = Vec::new();
-        let mut cursor = &self.nodes[node.index()];
-        while let Some(parent) = cursor.parent {
-            path.push(cursor);
-            cursor = &self.nodes[parent.index()];
-        }
-        path.reverse();
-        path
-    }
-
-    /// Compares two children of one node with "strongest first" ordering:
-    /// by arc kind (LIVERPS), then deeper namespace depth, then the strength
-    /// of their origins, then their position among the arcs authored beside
-    /// them.
-    ///
-    /// An authored arc's origin is the parent itself, which is stronger than
-    /// every node beneath it, so an arc authored at a site outranks a class
-    /// implied there from deeper in the graph; implied classes rank by where
-    /// their origins sit. Specializes rank by their origins as
-    /// [`Self::cmp_specializes`] describes.
-    ///
-    /// The branches of different variant sets at one site rank by their
-    /// sets' declared order, which their sibling index carries.
-    ///
-    /// Spec: AOUSD Core §10.4. OpenUSD: `PcpCompareSiblingNodeStrength` in
-    /// `pxr/usd/pcp/strengthOrdering.cpp`.
-    fn cmp_siblings(&self, a: NodeId, b: NodeId) -> Ordering {
-        let (node_a, node_b) = (&self.nodes[a.index()], &self.nodes[b.index()]);
-        let (arc_a, arc_b) = (&node_a.arc, &node_b.arc);
-        let by_kind = arc_a
-            .arc_kind
-            .strength_rank()
-            .cmp(&arc_b.arc_kind.strength_rank());
-        if by_kind.is_ne() {
-            return by_kind;
-        }
-        if arc_a.arc_kind == ArcKind::Specializes {
-            return self
-                .cmp_specializes(a, b)
-                .then_with(|| arc_a.sibling_index.cmp(&arc_b.sibling_index));
-        }
-        arc_b
-            .namespace_depth
-            .cmp(&arc_a.namespace_depth)
-            .then_with(|| {
-                let origin_a = node_a.origin.or(node_a.parent);
-                let origin_b = node_b.origin.or(node_b.parent);
-                match (origin_a, origin_b) {
-                    (Some(origin_a), Some(origin_b)) if origin_a != origin_b => {
-                        self.cmp_positions(origin_a, origin_b)
-                    }
-                    _ => Ordering::Equal,
-                }
-            })
-            .then_with(|| arc_a.sibling_index.cmp(&arc_b.sibling_index))
-    }
-
-    /// Compares two sibling specializes nodes with "strongest first"
-    /// ordering, before their positions among the arcs authored beside
-    /// them.
-    ///
-    /// Specializes nodes propagated to the root, and specializes implied
-    /// there, rank by the authored specializes arcs they come from: a deeper
-    /// namespace depth first, unless one origin lies beneath the other, then
-    /// by where those authored arcs sit in the graph. Nodes that come from
-    /// the same authored arc rank the node implied into the root layer stack
-    /// before the node propagated there, a class hierarchy started at a
-    /// shallower prim first, and a node implied further from that arc first,
-    /// then by where their origins sit.
-    ///
-    /// Spec: AOUSD Core §10.4.1. OpenUSD: the specializes case of
-    /// `PcpCompareSiblingNodeStrength` in
-    /// `pxr/usd/pcp/strengthOrdering.cpp`.
-    fn cmp_specializes(&self, a: NodeId, b: NodeId) -> Ordering {
-        let (root_a, chain_a) = self.origin_root(a);
-        let (root_b, chain_b) = self.origin_root(b);
-        if !self.nested_origins(root_a, root_b) {
-            let (depth_a, depth_b) = (self.namespace_depth(a), self.namespace_depth(b));
-            if depth_a != depth_b {
-                return depth_b.cmp(&depth_a);
-            }
-        }
-        let origin_a = self.nodes[a.index()].origin;
-        let origin_b = self.nodes[b.index()].origin;
-        let implied_first = || {
-            let implied = |node: NodeId, origin: NodeId| !self.same_site(node, origin);
-            match (origin_a, origin_b) {
-                (Some(origin_a), Some(origin_b)) => implied(b, origin_b).cmp(&implied(a, origin_a)),
-                _ => Ordering::Equal,
-            }
-        };
-        let (Some(origin_a), Some(origin_b)) = (
-            origin_a.or(self.nodes[a.index()].parent),
-            origin_b.or(self.nodes[b.index()].parent),
-        ) else {
-            return Ordering::Equal;
-        };
-        if origin_a == origin_b {
-            // Both authored at the parent, or one implied into the root layer
-            // stack and one propagated from the same placeholder.
-            return implied_first();
-        }
-        if root_a != root_b {
-            return self.cmp_positions(root_a, root_b);
-        }
-        let hierarchy_depth = |node: NodeId, origin: NodeId| {
-            if self.nodes[node.index()].origin.is_some() {
-                self.class_hierarchy_depth(origin)
-            } else {
-                0
-            }
-        };
-        let root_layer_stack = self.nodes[NodeId::ROOT.index()].arc.layer_stack;
-        hierarchy_depth(a, origin_a)
-            .cmp(&hierarchy_depth(b, origin_b))
-            .then_with(|| chain_b.cmp(&chain_a))
-            .then_with(|| {
-                let in_root_stack =
-                    |node: NodeId| self.nodes[node.index()].arc.layer_stack == root_layer_stack;
-                if in_root_stack(a) && in_root_stack(b) {
-                    implied_first()
-                } else {
-                    Ordering::Equal
-                }
-            })
-            .then_with(|| self.cmp_positions(origin_a, origin_b))
-    }
-
-    fn namespace_depth(&self, node: NodeId) -> u16 {
-        self.nodes[node.index()].arc.namespace_depth
     }
 
     /// `true` when two nodes read the same site of the same layer stack.
@@ -654,276 +472,27 @@ impl PrimIndexGraph {
         }
     }
 
-    /// The node at the start of `node`'s chain of origins, the authored arc
-    /// it comes from, and the number of origins on the way.
-    ///
-    /// OpenUSD: `_GetOriginRootNode` in `pxr/usd/pcp/strengthOrdering.cpp`.
-    fn origin_root(&self, node: NodeId) -> (NodeId, usize) {
-        let mut cursor = node;
-        let mut count = 0;
-        while let Some(origin) = self.nodes[cursor.index()].origin {
-            cursor = origin;
-            count += 1;
-        }
-        (cursor, count)
-    }
-
-    /// `true` when one of two nodes lies beneath the other, reading a
-    /// propagated specializes node as beneath its placeholder.
-    ///
-    /// OpenUSD: `_OriginsAreNestedArcs` in
-    /// `pxr/usd/pcp/strengthOrdering.cpp`.
-    fn nested_origins(&self, a: NodeId, b: NodeId) -> bool {
-        let beneath = |mut cursor: NodeId, ancestor: NodeId| loop {
-            if cursor == ancestor {
-                return true;
-            }
-            let next = if self.is_propagated_specializes(cursor) {
-                self.nodes[cursor.index()].origin
-            } else {
-                self.nodes[cursor.index()].parent
-            };
-            match next {
-                Some(next) => cursor = next,
-                None => return false,
-            }
-        };
-        beneath(a, b) || beneath(b, a)
-    }
-
-    /// `true` when OpenUSD adds `a` to the prim index before `b` because
-    /// `b` lies beneath a class implied from a node whose subtree holds `a`,
-    /// outside that subtree's variant branches.
-    ///
-    /// A class node is added with the recursive index of its site, every
-    /// arc but the variant branches at once, and its implied class is added
-    /// after it, by the parent's `EvalImpliedClasses` task: so every node of
-    /// the origin's subtree outside a variant branch comes before the
-    /// implied class and all beneath it. This holds through a chain of
-    /// origins, as each implied class comes after its own origin's subtree.
-    ///
-    /// OpenUSD: `_AddArc` (`includeAncestralOpinions`), `_EvalImpliedClasses`
-    /// and `Task::PriorityOrder` in `pxr/usd/pcp/primIndex.cpp`.
-    pub(crate) fn implied_after(&self, a: NodeId, b: NodeId) -> bool {
-        // `a`'s ancestors up to the first variant branch: the nodes whose
-        // recursive index adds `a`.
-        let mut holders = Vec::new();
-        let mut cursor = Some(a);
-        while let Some(node) = cursor {
-            holders.push(node);
-            let entry = &self.nodes[node.index()];
-            if entry.arc.arc_kind == ArcKind::Variants {
-                break;
-            }
-            cursor = entry.parent;
-        }
-        let mut pending = alloc::vec![b];
-        let mut seen = Vec::new();
-        while let Some(node) = pending.pop() {
-            let mut cursor = Some(node);
-            while let Some(current) = cursor {
-                let entry = &self.nodes[current.index()];
-                if entry.arc.implied
-                    && let Some(origin) = entry.origin
-                    && !seen.contains(&origin)
-                {
-                    if holders.contains(&origin) {
-                        return true;
-                    }
-                    seen.push(origin);
-                    pending.push(origin);
-                }
-                cursor = entry.parent;
-            }
-        }
-        false
-    }
-
-    /// How far a node is below the prim its arc is authored on.
-    ///
-    /// OpenUSD: `PcpNodeRef::GetDepthBelowIntroduction`.
-    fn depth_below_introduction(&self, node: NodeId) -> u16 {
-        let root_depth = self.nodes[NodeId::ROOT.index()].arc.namespace_depth;
-        root_depth.saturating_sub(self.namespace_depth(node))
-    }
-
-    /// The namespace depth of the node that inherits or specializes the
-    /// class hierarchy `node` is a member of: `0` for the root, which no arc
-    /// introduces.
-    ///
-    /// OpenUSD: `_GetNamespaceDepthForClassHierarchy` in
-    /// `pxr/usd/pcp/strengthOrdering.cpp`, and
-    /// `Pcp_FindStartingNodeOfClassHierarchy` in `pxr/usd/pcp/utils.cpp`.
-    fn class_hierarchy_depth(&self, node: NodeId) -> u16 {
-        let hop = |node: NodeId| {
-            if self.is_propagated_specializes(node) {
-                self.nodes[node.index()].origin.unwrap_or(node)
-            } else {
-                node
-            }
-        };
-        let mut instance = hop(node);
-        let depth = self.depth_below_introduction(instance);
-        while matches!(
-            self.nodes[instance.index()].arc.arc_kind,
-            ArcKind::Inherits | ArcKind::Specializes
-        ) && self.depth_below_introduction(instance) == depth
-        {
-            let Some(parent) = self.nodes[instance.index()].parent else {
-                break;
-            };
-            instance = hop(parent);
-        }
-        if instance == NodeId::ROOT {
-            0
-        } else {
-            self.namespace_depth(instance)
-        }
-    }
-
-    /// Compares where two nodes sit in the strong-to-weak depth-first walk of
-    /// the graph: a node before the nodes beneath it, and the nodes beneath
-    /// two siblings in [`Self::cmp_siblings`] order.
-    ///
-    /// OpenUSD: `_OriginIsStronger` in `pxr/usd/pcp/strengthOrdering.cpp`.
-    fn cmp_positions(&self, a: NodeId, b: NodeId) -> Ordering {
-        let ancestry = |node: NodeId| {
-            let mut path = alloc::vec![node];
-            let mut cursor = node;
-            while let Some(parent) = self.nodes[cursor.index()].parent {
-                path.push(parent);
-                cursor = parent;
-            }
-            path.reverse();
-            path
-        };
-        let (path_a, path_b) = (ancestry(a), ancestry(b));
-        match path_a.iter().zip(&path_b).find(|(a, b)| a != b) {
-            Some((a, b)) => self.cmp_siblings(*a, *b),
-            None => path_a.len().cmp(&path_b.len()),
-        }
-    }
-
-    /// Orders sibling nodes strongest first, inserting each, in the order
-    /// they were added, before the first sibling already placed that it is
-    /// stronger than.
-    ///
-    /// [`Self::cmp_siblings`] is not a total order for specializes nodes
-    /// (a namespace depth decides only between origins that do not lie
-    /// beneath one another), so this places siblings as OpenUSD inserts
-    /// them rather than sorting.
-    ///
-    /// OpenUSD: `PcpPrimIndex_Graph::_InsertChildInStrengthOrder` in
-    /// `pxr/usd/pcp/primIndex_Graph.cpp`.
-    fn order_siblings(&self, siblings: &[NodeId], ordered: &mut Vec<NodeId>) {
-        ordered.clear();
-        for &sibling in siblings {
-            let stronger = |other: &NodeId| self.cmp_siblings(sibling, *other).is_lt();
-            let at = match (ordered.first(), ordered.last()) {
-                (Some(first), _) if stronger(first) => 0,
-                (_, Some(last)) if !stronger(last) => ordered.len(),
-                _ => ordered.iter().position(stronger).unwrap_or(ordered.len()),
-            };
-            ordered.insert(at, sibling);
-        }
-    }
-
-    /// Ranks every node by a strong-to-weak depth-first walk of the graph.
-    ///
-    /// A node ranks above every node beneath it, and each node's children
-    /// rank in [`Self::cmp_siblings`] order, so the nodes beneath a child
-    /// rank before that child's weaker siblings. Siblings that compare equal
-    /// share a rank, and their children are walked as one sibling set.
-    ///
-    /// Composition calls this once the graph is complete, and before
-    /// comparing opinions while it still adds nodes.
-    ///
-    /// Spec: AOUSD Core §10.4. OpenUSD: `PcpCompareNodeStrength` in
-    /// `pxr/usd/pcp/strengthOrdering.cpp`.
-    pub(crate) fn rank(&mut self) {
-        if self.ranks.len() != self.nodes.len() {
-            self.ranks = self.walk_ranks();
-        }
-    }
-
-    /// The rank of every node in the strength walk (see [`Self::rank`]).
-    fn walk_ranks(&self) -> Vec<u32> {
-        let mut ranks = alloc::vec![0; self.nodes.len()];
-        let mut next = 0_u32;
-        // The sibling sets left to walk, each the nodes of `pending` from its
-        // start on: the set on top of `sets` is the strongest left and ends
-        // `pending`.
-        let mut pending: Vec<NodeId> = self.root().into_iter().collect();
-        let mut sets: Vec<usize> = alloc::vec![0; pending.len()];
-        let mut children = Vec::new();
-        let mut ordered = Vec::new();
-        while let Some(start) = sets.pop() {
-            children.clear();
-            for id in &pending[start..] {
-                ranks[id.index()] = next;
-                children.extend_from_slice(&self.nodes[id.index()].children);
-            }
-            pending.truncate(start);
-            next += 1;
-            self.order_siblings(&children, &mut ordered);
-            // Each run of siblings that compare equal is one set; the weakest
-            // goes on first, so the strongest is walked next.
-            let mut end = ordered.len();
-            while end > 0 {
-                let mut begin = end - 1;
-                while begin > 0
-                    && self
-                        .cmp_siblings(ordered[begin - 1], ordered[begin])
-                        .is_eq()
-                {
-                    begin -= 1;
-                }
-                sets.push(pending.len());
-                pending.extend_from_slice(&ordered[begin..end]);
-                end = begin;
-            }
-        }
-        ranks
-    }
-
-    /// Sorts `keys` strongest first, as [`Self::cmp_keys`] orders them,
-    /// whether or not the graph is ranked.
+    /// Sorts `keys` strongest first, as [`Self::cmp_keys`] orders them.
     pub(crate) fn sort_keys(&self, keys: &mut [OpinionKey]) {
-        let ranks = if self.ranks.len() == self.nodes.len() {
-            Cow::Borrowed(self.ranks.as_slice())
-        } else {
-            Cow::Owned(self.walk_ranks())
-        };
-        keys.sort_by(|a, b| self.cmp_keys_by(&ranks, a, b));
+        keys.sort_by(|a, b| self.cmp_keys(a, b));
     }
 
     /// Compares two nodes' opinions with "strongest first" ordering: by
-    /// their rank in the strength walk.
+    /// their place in strength order.
     ///
-    /// Needs the graph to be ranked ([`Self::rank`]).
+    /// Spec: AOUSD Core §10.4. OpenUSD: `PcpCompareNodeStrength` in
+    /// `pxr/usd/pcp/strengthOrdering.cpp`.
     pub(crate) fn cmp_nodes(&self, a: NodeId, b: NodeId) -> Ordering {
-        debug_assert_eq!(self.ranks.len(), self.nodes.len(), "graph is ranked");
-        self.cmp_nodes_by(&self.ranks, a, b)
-    }
-
-    fn cmp_nodes_by(&self, ranks: &[u32], a: NodeId, b: NodeId) -> Ordering {
-        ranks[a.index()].cmp(&ranks[b.index()])
+        a.index().cmp(&b.index())
     }
 
     /// Compares two opinions of this prim with "strongest first" ordering:
     /// by their nodes ([`Self::cmp_nodes`]), then by layer strength within
     /// the layer stack, then by stable ids.
     ///
-    /// Needs the graph to be ranked ([`Self::rank`]).
-    ///
     /// Spec: AOUSD Core §10.4 (strength ordering and tie-breakers).
     pub(crate) fn cmp_keys(&self, a: &OpinionKey, b: &OpinionKey) -> Ordering {
-        debug_assert_eq!(self.ranks.len(), self.nodes.len(), "graph is ranked");
-        self.cmp_keys_by(&self.ranks, a, b)
-    }
-
-    fn cmp_keys_by(&self, ranks: &[u32], a: &OpinionKey, b: &OpinionKey) -> Ordering {
-        self.cmp_nodes_by(ranks, a.node, b.node)
+        self.cmp_nodes(a.node, b.node)
             .then_with(|| a.layer_strength.cmp(&b.layer_strength))
             .then_with(|| a.layer_id.cmp(&b.layer_id))
             .then_with(|| a.spec_path.cmp(&b.spec_path))
@@ -962,32 +531,22 @@ impl PrimIndexGraph {
             .map(|(index, node)| (NodeId::from_index(index), node))
     }
 
-    /// Returns every node in the order the prim's opinions are ranked:
-    /// strongest first, ties in the order nodes were added.
-    ///
-    /// Opinions of nodes that rank equal interleave by layer strength.
+    /// Returns every node in the order the prim's opinions are ranked,
+    /// strongest first.
     #[must_use]
     pub fn strength_order(&self) -> Vec<NodeId> {
-        let mut order: Vec<NodeId> = self.nodes().map(|(id, _)| id).collect();
-        order.sort_by(|a, b| self.cmp_nodes(*a, *b));
-        order
+        self.nodes().map(|(id, _)| id).collect()
     }
 
     /// Returns every node in depth-first preorder from the root, each node's
-    /// children strongest first.
-    ///
-    /// This is [`Self::strength_order`], except that the nodes beneath
-    /// siblings that rank equal are visited one sibling after the other
-    /// rather than interleaved.
+    /// children strongest first: [`Self::strength_order`].
     #[must_use]
     pub fn depth_first(&self) -> Vec<NodeId> {
         let mut order = Vec::with_capacity(self.nodes.len());
         let mut stack: Vec<NodeId> = self.root().into_iter().collect();
-        let mut children = Vec::new();
         while let Some(id) = stack.pop() {
             order.push(id);
-            self.order_siblings(&self.nodes[id.index()].children, &mut children);
-            stack.extend(children.iter().rev());
+            stack.extend(self.nodes[id.index()].children.iter().rev());
         }
         order
     }
@@ -995,9 +554,9 @@ impl PrimIndexGraph {
 
 #[cfg(test)]
 impl PrimIndexGraph {
-    /// A ranked graph whose root, at `site`, is at `namespace_depth`, with
-    /// one node per entry of `arcs`, `(parent, arc kind, namespace depth)`,
-    /// all at `site`. Node ids follow `arcs`, starting at 1.
+    /// A graph whose root, at `site`, is at `namespace_depth`, with one node
+    /// per entry of `arcs`, `(parent, arc kind, namespace depth)`, all at
+    /// `site`, in strength order. Node ids follow `arcs`, starting at 1.
     pub(crate) fn from_arcs(
         site: &SpecPath,
         namespace_depth: u16,
@@ -1012,21 +571,22 @@ impl PrimIndexGraph {
             implied: false,
             skips_duplicates: false,
         };
-        let mut graph = Self::new(arc(ArcKind::Local, namespace_depth));
-        for (parent, arc_kind, namespace_depth) in arcs {
-            let id = NodeId::from_index(graph.nodes.len());
-            graph.nodes.push(PrimNode {
-                parent: Some(parent),
-                origin: None,
-                children: Vec::new(),
-                arc: arc(arc_kind, namespace_depth),
-                layer_offset: None,
-                stack_offsets: Arc::default(),
-            });
-            graph.nodes[parent.index()].children.push(id);
-        }
-        graph.rank();
-        graph
+        Self::from_ordered(
+            core::iter::once((
+                None,
+                None,
+                arc(ArcKind::Local, namespace_depth),
+                LayerOffset::IDENTITY,
+            ))
+            .chain(arcs.into_iter().map(|(parent, arc_kind, depth)| {
+                (
+                    Some(parent),
+                    None,
+                    arc(arc_kind, depth),
+                    LayerOffset::IDENTITY,
+                )
+            })),
+        )
     }
 }
 
@@ -1058,39 +618,36 @@ mod tests {
         }
     }
 
-    /// A graph with a root and the nodes `arcs`, each `(parent, arc)`,
-    /// ranked. Node ids follow `arcs`, starting at 1.
-    fn graph(arcs: Vec<(u32, NodeArc)>) -> PrimIndexGraph {
-        let mut graph = PrimIndexGraph::new(arc(ArcKind::Local, 1, 0));
-        for (parent, arc) in arcs {
-            graph.intern_child(NodeId(parent), arc);
-        }
-        graph.rank();
-        graph
-    }
-
-    fn assert_order(graph: &PrimIndexGraph, order: &[u32]) {
-        for pair in order.windows(2) {
-            let (a, b) = (NodeId(pair[0]), NodeId(pair[1]));
-            assert_eq!(graph.cmp_nodes(a, b), Ordering::Less, "{a:?} < {b:?}");
-            assert_eq!(graph.cmp_nodes(b, a), Ordering::Greater, "{b:?} > {a:?}");
-        }
+    /// A graph with a root and the nodes `arcs`, each `(parent, origin,
+    /// arc)`, in strength order. Node ids follow `arcs`, starting at 1.
+    fn graph(arcs: Vec<(u32, Option<u32>, NodeArc)>) -> PrimIndexGraph {
+        PrimIndexGraph::from_ordered(
+            core::iter::once((None, None, arc(ArcKind::Local, 1, 0), LayerOffset::IDENTITY)).chain(
+                arcs.into_iter().map(|(parent, origin, arc)| {
+                    (
+                        Some(NodeId(parent)),
+                        origin.map(NodeId),
+                        arc,
+                        LayerOffset::IDENTITY,
+                    )
+                }),
+            ),
+        )
     }
 
     #[test]
     fn instanceable_nodes_require_specs_and_a_transitive_direct_arc() {
-        let mut graph = graph(vec![
-            (0, arc(ArcKind::References, 1, 0)),
-            (0, arc(ArcKind::References, 2, 0)),
-            (2, arc(ArcKind::Inherits, 1, 0)),
-            (0, arc(ArcKind::References, 3, 0)),
-            (0, arc(ArcKind::Inherits, 2, 0)),
-            (2, arc(ArcKind::Specializes, 1, 0)),
-            (0, arc(ArcKind::Specializes, 1, 0)),
-        ]);
         // A propagated specializes keeps its direct dependency through the
         // original placeholder, even when it is attached beneath the root.
-        graph.set_origin(NodeId(7), NodeId(6));
+        let graph = graph(vec![
+            (0, None, arc(ArcKind::References, 1, 0)),
+            (0, None, arc(ArcKind::References, 2, 0)),
+            (2, None, arc(ArcKind::Inherits, 1, 0)),
+            (0, None, arc(ArcKind::References, 3, 0)),
+            (0, None, arc(ArcKind::Inherits, 2, 0)),
+            (2, None, arc(ArcKind::Specializes, 1, 0)),
+            (0, Some(6), arc(ArcKind::Specializes, 1, 0)),
+        ]);
         let sources: Vec<_> = [0, 1, 2, 3, 4, 7]
             .into_iter()
             .map(|id| OpinionKey {
@@ -1114,194 +671,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn siblings_follow_liverps_then_depth_then_list_order() {
-        // Spec: AOUSD Core §10.4. Local opinions first, then arcs in LIVERPS
-        // order; a deeper arc wins a tie; then the earlier arc of a list.
-        let graph = graph(vec![
-            (0, arc(ArcKind::Payloads, 1, 0)),
-            (0, arc(ArcKind::References, 1, 1)),
-            (0, arc(ArcKind::References, 1, 0)),
-            (0, arc(ArcKind::References, 2, 3)),
-            (0, arc(ArcKind::Variants, 1, 0)),
-            (0, arc(ArcKind::Inherits, 1, 0)),
-        ]);
-        assert_order(&graph, &[0, 6, 5, 4, 3, 2, 1]);
-    }
-
-    #[test]
-    fn a_node_ranks_its_descendants_before_its_weaker_siblings() {
-        // Spec: AOUSD Core §10.4. A reference authored inside a payload
-        // inside a reference ranks with that reference, before the prim's
-        // second reference, and after the payload's own site.
-        let graph = graph(vec![
-            (0, arc(ArcKind::References, 1, 0)),
-            (0, arc(ArcKind::References, 1, 1)),
-            (1, arc(ArcKind::Payloads, 1, 0)),
-            (3, arc(ArcKind::References, 1, 0)),
-            (1, arc(ArcKind::Inherits, 1, 0)),
-        ]);
-        assert_order(&graph, &[0, 1, 5, 3, 4, 2]);
-    }
-
-    #[test]
-    fn equal_siblings_share_a_rank_and_their_children() {
-        // The branches of two variant sets hosted at one site.
-        let other_set = NodeArc {
-            layer_stack: LayerId(2).into(),
-            ..arc(ArcKind::Variants, 1, 0)
-        };
-        let graph = graph(vec![
-            (0, arc(ArcKind::Variants, 1, 0)),
-            (0, other_set),
-            (2, arc(ArcKind::References, 1, 0)),
-            (1, arc(ArcKind::Inherits, 1, 0)),
-        ]);
-        assert_eq!(graph.cmp_nodes(NodeId(1), NodeId(2)), Ordering::Equal);
-        assert_order(&graph, &[0, 1, 4, 3]);
-        assert_order(&graph, &[2, 4]);
-    }
-
-    #[test]
-    fn implied_classes_rank_after_authored_ones_and_by_their_origins() {
-        // Spec: AOUSD Core §10.4.2.4. `/A` references two targets that each
-        // inherit a class, implied beneath the root with the class nodes as
-        // origins; an inherit authored at `/A` has the root as its origin and
-        // outranks both (`PcpCompareSiblingNodeStrength`).
-        let implied = NodeArc {
-            implied: true,
-            ..arc(ArcKind::Inherits, 1, 0)
-        };
-        let mut graph = graph(vec![
-            (0, arc(ArcKind::References, 1, 0)),
-            (0, arc(ArcKind::References, 1, 1)),
-            (1, arc(ArcKind::Inherits, 1, 0)),
-            (2, arc(ArcKind::Inherits, 1, 0)),
-            (0, implied.clone()),
-            (
-                0,
-                NodeArc {
-                    layer_stack: LayerId(2).into(),
-                    ..implied
-                },
-            ),
-            (
-                0,
-                NodeArc {
-                    layer_stack: LayerId(3).into(),
-                    ..arc(ArcKind::Inherits, 1, 0)
-                },
-            ),
-        ]);
-        // The class of the second reference is implied first.
-        graph.set_origin(NodeId(5), NodeId(4));
-        graph.set_origin(NodeId(6), NodeId(3));
-        graph.rank();
-        assert_eq!(
-            graph.node(NodeId(5)).and_then(PrimNode::origin),
-            Some(NodeId(4))
-        );
-        assert_order(&graph, &[0, 7, 6, 5, 1, 3, 2, 4]);
-    }
-
-    #[test]
-    fn implied_classes_come_after_their_origins_subtrees() {
-        // OpenUSD adds a class node with its recursive index, then implies
-        // it (`_AddArc`, `_EvalImpliedClasses`): the class `2`'s subtree
-        // comes before its implied class `5` and everything beneath it,
-        // except the variant branch `8`, which is selected last.
-        let in_stack = |layer_stack, arc_kind| NodeArc {
-            layer_stack: LayerId(layer_stack).into(),
-            ..arc(arc_kind, 1, 0)
-        };
-        let mut graph = graph(vec![
-            (0, in_stack(1, ArcKind::Inherits)),
-            (1, in_stack(2, ArcKind::Inherits)),
-            (2, in_stack(3, ArcKind::Inherits)),
-            (3, in_stack(4, ArcKind::References)),
-            (
-                0,
-                NodeArc {
-                    implied: true,
-                    ..in_stack(5, ArcKind::Inherits)
-                },
-            ),
-            (5, in_stack(6, ArcKind::Inherits)),
-            (6, in_stack(4, ArcKind::References)),
-            (2, in_stack(7, ArcKind::Variants)),
-            (8, in_stack(8, ArcKind::References)),
-        ]);
-        graph.set_origin(NodeId(5), NodeId(2));
-        let after = |a, b| graph.implied_after(NodeId(a), NodeId(b));
-        assert!(after(4, 7));
-        assert!(after(2, 5));
-        assert!(after(3, 6));
-        assert!(!after(7, 4));
-        assert!(!after(5, 2));
-        assert!(!after(9, 7));
-        assert!(!after(1, 7));
-    }
-
-    #[test]
-    fn retained_nodes_keep_their_origins() {
-        let mut graph = graph(vec![
-            (0, arc(ArcKind::References, 1, 0)),
-            (1, arc(ArcKind::Inherits, 1, 0)),
-            (
-                0,
-                NodeArc {
-                    implied: true,
-                    ..arc(ArcKind::Inherits, 1, 0)
-                },
-            ),
-        ]);
-        graph.set_origin(NodeId(3), NodeId(2));
-        let remap = graph.retain_nodes(|id, _| id == NodeId(0) || id == NodeId(3));
-        assert_eq!(
-            remap,
-            [
-                Some(NodeId(0)),
-                Some(NodeId(1)),
-                Some(NodeId(2)),
-                Some(NodeId(3))
-            ]
-        );
-        assert_eq!(
-            graph.node(NodeId(3)).and_then(PrimNode::origin),
-            Some(NodeId(2))
-        );
-    }
-
-    #[test]
-    fn retained_nodes_keep_their_ancestors() {
-        let mut graph = graph(vec![
-            (0, arc(ArcKind::References, 1, 0)),
-            (0, arc(ArcKind::Inherits, 1, 0)),
-            (1, arc(ArcKind::Payloads, 1, 0)),
-            (2, arc(ArcKind::References, 1, 0)),
-        ]);
-        let remap = graph.retain_nodes(|id, _| id == NodeId(0) || id == NodeId(3));
-        assert_eq!(
-            remap,
-            [
-                Some(NodeId(0)),
-                Some(NodeId(1)),
-                None,
-                Some(NodeId(2)),
-                None
-            ]
-        );
-        assert_eq!(graph.len(), 3);
-        let payload = graph.node(NodeId(2)).expect("payload");
-        assert_eq!(payload.parent(), Some(NodeId(1)));
-        assert_eq!(
-            graph.node(NodeId(1)).expect("reference").children(),
-            [NodeId(2)]
-        );
-        graph.rank();
-        assert_order(&graph, &[0, 1, 2]);
-    }
-
     fn key(node: NodeId, layer_strength: u16, layer_id: u64, spec_path: SpecPath) -> OpinionKey {
         OpinionKey {
             node,
@@ -1323,7 +692,7 @@ mod tests {
             SpecPath::from_prim_path(path)
         };
         let (a, b) = (path("/A"), path("/B"));
-        let graph = graph(vec![(0, arc(ArcKind::Variants, 1, 0))]);
+        let graph = graph(vec![(0, None, arc(ArcKind::Variants, 1, 0))]);
         let variant = NodeId(1);
         let order = [
             key(NodeId::ROOT, 0, 1, a.clone()),
@@ -1336,92 +705,6 @@ mod tests {
             assert_eq!(graph.cmp_keys(&pair[0], &pair[1]), Ordering::Less);
             assert_eq!(graph.cmp_keys(&pair[1], &pair[0]), Ordering::Greater);
         }
-    }
-
-    #[test]
-    fn traversals_visit_every_node_strongest_first() {
-        let graph = graph(vec![
-            (0, arc(ArcKind::Specializes, 1, 0)),
-            (0, arc(ArcKind::Variants, 3, 0)),
-            (0, arc(ArcKind::References, 1, 0)),
-        ]);
-        let kinds = |order: Vec<NodeId>| -> Vec<ArcKind> {
-            order
-                .into_iter()
-                .map(|id| graph.node(id).expect("node").arc_kind())
-                .collect()
-        };
-        let expected = [
-            ArcKind::Local,
-            ArcKind::Variants,
-            ArcKind::References,
-            ArcKind::Specializes,
-        ];
-        assert_eq!(kinds(graph.strength_order()), expected);
-        assert_eq!(kinds(graph.depth_first()), expected);
-    }
-
-    /// `arc` in the layer stack `layer_stack`.
-    fn in_stack(layer_stack: u64, arc: NodeArc) -> NodeArc {
-        NodeArc {
-            layer_stack: LayerId(layer_stack).into(),
-            ..arc
-        }
-    }
-
-    #[test]
-    fn propagated_specializes_are_weaker_than_payloads() {
-        // Spec: AOUSD Core §10.4.1: a specializes authored inside a
-        // reference target is weaker than every other arc, not only than
-        // that reference. Its placeholder (3) stays beneath the reference;
-        // the node propagated to the root (4) ranks after the payload.
-        let mut graph = graph(vec![
-            (0, in_stack(2, arc(ArcKind::References, 1, 0))),
-            (0, in_stack(3, arc(ArcKind::Payloads, 1, 0))),
-            (1, in_stack(2, arc(ArcKind::Specializes, 1, 0))),
-            (0, in_stack(2, arc(ArcKind::Specializes, 1, 0))),
-        ]);
-        graph.set_origin(NodeId(4), NodeId(3));
-        graph.rank();
-        assert_order(&graph, &[0, 1, 3, 2, 4]);
-    }
-
-    #[test]
-    fn propagated_specializes_follow_their_placeholders() {
-        // `/A` specializes `[B, C]` and `B` specializes `D`: `D`'s
-        // placeholder (3) sits beneath `B`, so `D` (4) ranks after `B` and
-        // before `C` (`_OriginIsStronger`).
-        let mut graph = graph(vec![
-            (0, in_stack(1, arc(ArcKind::Specializes, 1, 0))),
-            (0, in_stack(1, arc(ArcKind::Specializes, 1, 1))),
-            (1, in_stack(4, arc(ArcKind::Specializes, 1, 0))),
-            (0, in_stack(4, arc(ArcKind::Specializes, 1, 0))),
-        ]);
-        graph.set_origin(NodeId(4), NodeId(3));
-        graph.rank();
-        assert_order(&graph, &[0, 1, 4, 2]);
-    }
-
-    #[test]
-    fn implied_specializes_outrank_the_node_propagated_beside_them() {
-        // A specializes authored inside a reference target (2) is implied
-        // into the root layer stack (3) and propagated to the root (4), both
-        // with the placeholder as their origin: the implied node ranks first
-        // (`PcpCompareSiblingNodeStrength`).
-        let implied = NodeArc {
-            implied: true,
-            ..arc(ArcKind::Specializes, 1, 0)
-        };
-        let mut graph = graph(vec![
-            (0, in_stack(2, arc(ArcKind::References, 1, 0))),
-            (1, in_stack(2, arc(ArcKind::Specializes, 1, 0))),
-            (0, in_stack(2, arc(ArcKind::Specializes, 1, 0))),
-            (0, implied),
-        ]);
-        graph.set_origin(NodeId(3), NodeId(2));
-        graph.set_origin(NodeId(4), NodeId(2));
-        graph.rank();
-        assert_order(&graph, &[0, 1, 4, 3]);
     }
 
     /// Every opinion of every prim is read with its node's layer offset

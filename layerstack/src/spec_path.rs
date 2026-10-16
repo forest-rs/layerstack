@@ -356,6 +356,58 @@ impl SpecPath {
         }
     }
 
+    /// The variant selections with the namespace depth of each one's host,
+    /// outermost first.
+    pub(crate) fn selection_entries(&self) -> &[(u32, VariantSelectionSite)] {
+        self.selections()
+    }
+
+    /// This path cut back to its ancestor `prim_path`, `depth` prim names
+    /// deep: the selections hosted beneath it are dropped.
+    #[must_use]
+    pub(crate) fn truncated_to(&self, prim_path: PathId, depth: usize) -> Self {
+        let kept = self
+            .selections()
+            .iter()
+            .take_while(|(host_depth, _)| *host_depth as usize <= depth)
+            .count();
+        let selections = match self.selections.as_ref() {
+            Some(all) if kept == all.len() => Some(all.clone()),
+            Some(all) if kept > 0 => Some(all[..kept].into()),
+            _ => None,
+        };
+        Self {
+            prim_path,
+            selections,
+            property: None,
+        }
+    }
+
+    /// This prim spec path with the variant selection `site`, hosted on its
+    /// prim at namespace depth `depth`, appended.
+    #[must_use]
+    pub(crate) fn with_trailing_selection(&self, site: VariantSelectionSite, depth: u32) -> Self {
+        let mut selections: Vec<(u32, VariantSelectionSite)> = self.selections().to_vec();
+        selections.push((depth, site));
+        Self {
+            prim_path: self.prim_path,
+            selections: Some(selections.into()),
+            property: None,
+        }
+    }
+
+    /// This path with its prim path replaced by `prim_path` and the
+    /// selections of `selections` (another path, whose prim path is
+    /// `prim_path` or an ancestor of it).
+    #[must_use]
+    pub(crate) fn with_prim_and_selections(prim_path: PathId, selections: &Self) -> Self {
+        Self {
+            prim_path,
+            selections: selections.selections.clone(),
+            property: None,
+        }
+    }
+
     /// Returns this prim spec path with the prim names `names` appended:
     /// `/Rock{shape=jagged}` joined with `[Child]` is
     /// `/Rock{shape=jagged}Child`. The property suffix is kept.

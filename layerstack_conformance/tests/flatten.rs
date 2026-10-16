@@ -918,5 +918,7 @@ fn native_instance_fixture_reuses_descendants_before_composition() {
         .find(|case| case.name == "instance_reuse")
         .unwrap();
     let flattened = flatten(&case).unwrap();
-    assert_eq!(flattened.stage.composition_work().reused_prim_indexes, 4);
+    // `/Right` and `/Group/Deep` reach `/Asset` as `/Left` does and reuse
+    // its four descendants; `/Offset`'s offset keys a prototype of its own.
+    assert_eq!(flattened.stage.composition_work().reused_prim_indexes, 8);
 }

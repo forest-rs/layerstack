@@ -13,73 +13,65 @@
 
 use alloc::{sync::Arc, vec::Vec};
 
-use hashbrown::HashMap;
+use hashbrown::{HashMap, HashSet};
 
 use crate::{
-    arc_cycle::CycleDetector,
     composition_error::{
         CompositionError, InconsistentPropertyType, InvalidExternalTargetPath,
-        InvalidInstanceTargetPath, UnresolvedPrimPath,
+        InvalidInstanceTargetPath,
     },
-    doc::{FieldValue, LayerId, LayerStore, Reference, ReferenceTarget},
+    doc::{FieldValue, LayerId, LayerStore},
     interner::TokenId,
     path::{Path, PathId, PropertyPath, TargetPath},
     prim_index::{ArcKind, FieldKey, OpinionKey, OpinionValue, PrimIndex},
     spec_path::SpecPath,
 };
 
-/// Checks that a reference or payload followed while composing `prim`
-/// brings in specs, reporting [`UnresolvedPrimPath`] when it does not.
-///
-/// The arc's node has specs when its target site, or any site beneath its
-/// node (the arcs authored on the target and on its ancestors), provides a
-/// prim spec: [`Self::begin`] notes the sources `prim` has before the arc is
-/// expanded and [`Self::finish`] reports the arc when the expansion added
-/// none. An arc to a target that exists only through a cycle adds none and
-/// is reported, as in OpenUSD.
-///
-/// Only arcs authored on `prim` itself are checked; an arc its ancestors
-/// author is checked when composing them, where it is introduced.
-///
-/// Spec: AOUSD Core §10.3.2.1 (a reference to a path without specs in the
-/// referenced layer stack is a composition error), §10.3.2.2. OpenUSD:
-/// `_EvalUnresolvedPrimPathError` and `_PrimSpecExistsUnderNodeAtIntroduction`
-/// in `pxr/usd/pcp/primIndex.cpp`.
-pub(crate) struct TargetSpecsCheck {
-    error: UnresolvedPrimPath,
-    sources: usize,
+/// The composition errors found, deduplicated and kept in the order found,
+/// and the target paths found authored inside the class an inherit maps.
+#[derive(Debug, Default)]
+pub(crate) struct Findings {
+    errors: Vec<CompositionError>,
+    seen: HashSet<CompositionError>,
+    /// `(composed prim, property, mapped target)` for each target path
+    /// authored inside the class an inherit maps: it targets no instance of
+    /// the class (see [`drop_instance_targets`]).
+    class_internal_targets: HashSet<(PathId, TokenId, TargetPath)>,
 }
 
-impl TargetSpecsCheck {
-    /// Starts the check of `reference`, which targets `path` for `prim` and
-    /// is authored at namespace depth `namespace_depth`; `None` when it is
-    /// not checked (a `defaultPrim` target, reported as
-    /// [`crate::CompositionError::UnresolvedDefaultPrim`], or an arc
-    /// authored on an ancestor).
-    pub(crate) fn begin(
-        store: &dyn LayerStore,
-        out: &HashMap<PathId, PrimIndex>,
-        reference: &Reference,
-        error: UnresolvedPrimPath,
-        namespace_depth: u16,
-    ) -> Option<Self> {
-        if reference.target == ReferenceTarget::DefaultPrim
-            || usize::from(namespace_depth) != store.paths().resolve(error.prim).depth()
-        {
-            return None;
+impl Findings {
+    /// Records `error` unless it was already recorded.
+    pub(crate) fn report(&mut self, error: CompositionError) {
+        if self.seen.insert(error.clone()) {
+            self.errors.push(error);
         }
-        let sources = out.get(&error.prim).map_or(0, |index| index.sources.len());
-        Some(Self { error, sources })
     }
 
-    /// Reports the arc when expanding it added no source to the prim.
-    pub(crate) fn finish(self, out: &HashMap<PathId, PrimIndex>, cycles: &mut CycleDetector) {
-        let sources = out
-            .get(&self.error.prim)
-            .map_or(0, |index| index.sources.len());
-        if sources == self.sources {
-            cycles.report(CompositionError::UnresolvedPrimPath(self.error));
-        }
+    /// Records that the target path `target` of `prim`'s `property` was
+    /// authored inside the class an inherit maps.
+    pub(crate) fn note_class_internal_target(
+        &mut self,
+        prim: PathId,
+        property: TokenId,
+        target: TargetPath,
+    ) {
+        self.class_internal_targets.insert((prim, property, target));
+    }
+
+    /// Whether [`Self::note_class_internal_target`] recorded `target`.
+    pub(crate) fn is_class_internal_target(
+        &self,
+        prim: PathId,
+        property: TokenId,
+        target: TargetPath,
+    ) -> bool {
+        self.class_internal_targets
+            .contains(&(prim, property, target))
+    }
+
+    /// The recorded errors, in the order found.
+    pub(crate) fn into_errors(self) -> Vec<CompositionError> {
+        self.errors
     }
 }
 
@@ -95,7 +87,7 @@ impl TargetSpecsCheck {
 pub(crate) fn drop_inconsistent_property_kinds(
     prim: PathId,
     index: &mut PrimIndex,
-    cycles: &mut CycleDetector,
+    findings: &mut Findings,
 ) {
     let mut removed = Vec::new();
     for (field, range) in &index.fields {
@@ -117,7 +109,7 @@ pub(crate) fn drop_inconsistent_property_kinds(
             .map(|(key, _)| key.clone())
             .collect();
         for key in &conflicting {
-            cycles.report(CompositionError::InconsistentPropertyType(
+            findings.report(CompositionError::InconsistentPropertyType(
                 InconsistentPropertyType {
                     prim,
                     property,
@@ -209,7 +201,7 @@ pub(crate) fn map_arc_targets(
     value: &mut OpinionValue,
     map: ArcPathMap<'_>,
     owner: TargetOwner,
-    cycles: &mut CycleDetector,
+    findings: &mut Findings,
 ) {
     let list = match value {
         OpinionValue::Property(spec) if spec.targets.is_none() => return,
@@ -230,7 +222,7 @@ pub(crate) fn map_arc_targets(
     // Paths authored inside a class, which name no instance of it.
     let mut internal = Vec::new();
     let mut report = |target: TargetPath| {
-        cycles.report(CompositionError::InvalidExternalTargetPath(
+        findings.report(CompositionError::InvalidExternalTargetPath(
             InvalidExternalTargetPath {
                 prim: owner.prim,
                 property: owner.property,
@@ -258,7 +250,7 @@ pub(crate) fn map_arc_targets(
             .collect();
     }
     for target in internal {
-        cycles.note_class_internal_target(owner.prim, owner.property, target);
+        findings.note_class_internal_target(owner.prim, owner.property, target);
     }
     // A deleted or reordered path that cannot be mapped names nothing
     // mapped, and is dropped silently.
@@ -353,7 +345,7 @@ struct InstanceTarget {
 pub(crate) fn drop_instance_targets(
     store: &dyn LayerStore,
     prims: &mut HashMap<PathId, PrimIndex>,
-    cycles: &mut CycleDetector,
+    findings: &mut Findings,
 ) {
     let paths = store.paths();
     let prefix = |path: &Path, depth: usize| Path::root().join(&path.segments()[..depth]);
@@ -384,7 +376,7 @@ pub(crate) fn drop_instance_targets(
                 let site = paths.resolve(node.arc.site.prim_path());
                 let class = prefix(site, site.depth().saturating_sub(below));
                 for target in targets.inserted_items() {
-                    if cycles.is_class_internal_target(prim, property, *target) {
+                    if findings.is_class_internal_target(prim, property, *target) {
                         continue;
                     }
                     let target_prim = paths.resolve(target.prim_path());
@@ -433,7 +425,7 @@ pub(crate) fn drop_instance_targets(
         for items in targets.inserted_lists_mut() {
             items.retain(|item| *item != target);
         }
-        cycles.report(CompositionError::InvalidInstanceTargetPath(
+        findings.report(CompositionError::InvalidInstanceTargetPath(
             InvalidInstanceTargetPath {
                 prim,
                 property,

@@ -32,13 +32,11 @@ use alloc::{
     vec::Vec,
 };
 
-use hashbrown::HashMap;
-
 use super::{Expr, PathExpression, RefPath};
 use crate::{
-    doc::{FieldValue, InterpolationType, LayerStore, Value},
+    doc::{InterpolationType, LayerStore, Value},
     path::PathId,
-    prim_index::{ArcKind, Opinion, OpinionValue, PrimIndex},
+    prim_index::{ArcKind, Opinion},
     prim_index_graph::{NodeId, PrimIndexGraph},
     spec_path::SpecPath,
     stage::value_at_time,
@@ -131,6 +129,17 @@ pub(crate) fn anchor_and_map(
     anchor: &[String],
     maps: &[ArcMap],
 ) -> PathExpression {
+    anchor_and_map_with(expr, anchor, &mut |path| map_path(maps, path))
+}
+
+/// [`anchor_and_map`] with the arcs' mapping given as `map`, which maps an
+/// absolute prim path (by names) into the stage namespace, or returns
+/// `None` outside its domain.
+pub(crate) fn anchor_and_map_with(
+    expr: PathExpression,
+    anchor: &[String],
+    map: &mut dyn FnMut(&[String]) -> Option<Vec<String>>,
+) -> PathExpression {
     expr.rebuild(&mut |atom| match atom {
         Expr::Pattern(mut pattern) => {
             if !pattern.prefix.absolute {
@@ -147,7 +156,7 @@ pub(crate) fn anchor_and_map(
             if pattern.has_leading_stretch() {
                 return PathExpression::pattern(pattern);
             }
-            match map_path(maps, &pattern.prefix.prims) {
+            match map(&pattern.prefix.prims) {
                 Some(prims) => {
                     pattern.prefix.prims = prims;
                     PathExpression::pattern(pattern)
@@ -164,7 +173,7 @@ pub(crate) fn anchor_and_map(
             } else {
                 anchor_names(anchor, path.prims)
             };
-            match prims.and_then(|prims| map_path(maps, &prims)) {
+            match prims.and_then(|prims| map(&prims)) {
                 Some(prims) => {
                     reference.path = Some(RefPath {
                         absolute: true,
@@ -194,10 +203,6 @@ fn anchor_names(anchor: &[String], relative: Vec<String>) -> Option<Vec<String>>
     }
     Some(prims)
 }
-
-/// A node's site prim, which anchors its relative expressions, and the
-/// maps from its namespace to the stage namespace.
-type NodeNamespace = (Vec<String>, Vec<ArcMap>);
 
 /// The prim names of `site`, without its variant selections.
 fn prim_names(store: &dyn LayerStore, site: &SpecPath) -> Vec<String> {
@@ -327,91 +332,28 @@ pub(crate) fn has_path_expression(value: &Value) -> bool {
 /// Anchors expressions in place, leaving other values and unsupported
 /// expression text untouched. Arrays keep their already owned storage.
 fn anchor_value(value: &mut Value, anchor: &[String], maps: &[ArcMap]) {
+    anchor_value_with(value, anchor, &mut |path| map_path(maps, path));
+}
+
+/// Anchors the path expressions of `value` at the prim `anchor` and maps
+/// them with `map` (see [`anchor_and_map_with`]).
+pub(crate) fn anchor_value_with(
+    value: &mut Value,
+    anchor: &[String],
+    map: &mut dyn FnMut(&[String]) -> Option<Vec<String>>,
+) {
     match value {
         Value::PathExpression(text) => {
             if let Some(expression) = parse(text) {
-                *text = Arc::from(anchor_and_map(expression, anchor, maps).lossless_text());
+                *text = Arc::from(anchor_and_map_with(expression, anchor, map).lossless_text());
             }
         }
         Value::Array(items) if items.iter().any(|v| matches!(v, Value::PathExpression(_))) => {
             for item in items {
-                anchor_value(item, anchor, maps);
+                anchor_value_with(item, anchor, map);
             }
         }
         _ => {}
-    }
-}
-
-/// Anchors every path expression an opinion of `prims` authors at the prim
-/// that authors it, and maps it through the arcs into the stage namespace,
-/// so value resolution composes them in one namespace.
-///
-/// Spec: AOUSD Core §10 (composition arcs map namespace). OpenUSD:
-/// `PcpMapFunction::MapSourceToTarget(SdfPathExpression)`, applied to each
-/// node's opinions by `UsdStage` value resolution.
-pub(crate) fn anchor_opinions(store: &dyn LayerStore, prims: &mut HashMap<PathId, PrimIndex>) {
-    for (path, index) in prims.iter_mut() {
-        // Context-free prototype occurrences already share these records.
-        // Inspect before detaching: only expressions require namespace mapping.
-        if !index.opinions.iter().any(|opinion| match &opinion.value {
-            OpinionValue::Field(FieldValue::Value(value)) => has_path_expression(value),
-            OpinionValue::Property(spec) => {
-                spec.default.as_ref().is_some_and(has_path_expression)
-                    || spec.time_samples.as_ref().is_some_and(|samples| {
-                        samples.iter().any(|(_, value)| has_path_expression(value))
-                    })
-            }
-            OpinionValue::Field(_) => false,
-        }) {
-            continue;
-        }
-        let prim_depth = store.paths().resolve(*path).depth();
-        let graph = &index.graph;
-        let mut maps: HashMap<NodeId, Option<NodeNamespace>> = HashMap::new();
-        for opinion in &mut Arc::make_mut(&mut index.data).opinions {
-            // Inspect shared storage before detaching: ordinary authored values
-            // must retain their source payload across all placements.
-            let (default, samples) = match &opinion.value {
-                OpinionValue::Field(FieldValue::Value(value)) => (Some(value), None),
-                OpinionValue::Property(spec) => (spec.default.as_ref(), spec.time_samples.as_ref()),
-                OpinionValue::Field(_) => continue,
-            };
-            let default_changes = default.is_some_and(has_path_expression);
-            let samples_change = samples
-                .is_some_and(|samples| samples.iter().any(|(_, value)| has_path_expression(value)));
-            if !default_changes && !samples_change {
-                continue;
-            }
-            let node = opinion.key.node;
-            let Some((anchor, node_maps)) = maps
-                .entry(node)
-                .or_insert_with(|| {
-                    let anchor = prim_names(store, graph.node(node)?.site());
-                    Some((anchor, node_maps(store, graph, node, prim_depth)?))
-                })
-                .as_ref()
-            else {
-                continue;
-            };
-            let (default, samples) = match &mut opinion.value {
-                OpinionValue::Field(FieldValue::Value(value)) => (Some(value), None),
-                OpinionValue::Property(spec) => {
-                    let spec = Arc::make_mut(spec);
-                    (spec.default.as_mut(), spec.time_samples.as_mut())
-                }
-                OpinionValue::Field(_) => unreachable!("inspected value opinion"),
-            };
-            if let Some(value) = default.filter(|_| default_changes) {
-                anchor_value(value, anchor, node_maps);
-            }
-            if let Some(samples) = samples.filter(|_| samples_change) {
-                for (_, value) in samples.make_mut() {
-                    if has_path_expression(value) {
-                        anchor_value(value, anchor, node_maps);
-                    }
-                }
-            }
-        }
     }
 }
 

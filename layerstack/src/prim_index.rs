@@ -316,6 +316,7 @@ impl PrimIndex {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn add_opinion(&mut self, opinion: Opinion) {
         self.add_opinions(core::iter::once(opinion));
     }
@@ -469,23 +470,9 @@ impl PrimIndex {
             .find_map(|opinion| opinion.value.as_property()?.type_name.as_ref())
     }
 
-    /// Keeps sources and opinions, including their declarations, whose key
-    /// satisfies `keep`, dropping fields left without opinions. `keep` also
-    /// sees the prim's graph.
-    pub(crate) fn retain_keys(
-        &mut self,
-        mut keep: impl FnMut(&PrimIndexGraph, &OpinionKey) -> bool,
-    ) {
-        Arc::make_mut(&mut self.data)
-            .sources
-            .retain(|key| keep(&self.graph, key));
-        self.retain_opinions(|graph, opinion| keep(graph, &opinion.key));
-    }
-
     /// Groups opinions by field, sorting each stack and the sources
     /// strongest first by [`PrimIndexGraph::cmp_keys`].
     pub(crate) fn finalize(&mut self) {
-        self.graph.rank();
         self.group_by_field();
         let graph = &self.graph;
         let data = Arc::make_mut(&mut self.data);
@@ -645,15 +632,6 @@ mod tests {
             index.metadata_opinions(a).unwrap()[0].value,
             OpinionValue::Field(FieldValue::Value(Value::Int(3))),
             "a property removal preserves metadata with the same token and key"
-        );
-        index.retain_keys(|_, _| false);
-        assert!(
-            index.property_opinions(a).is_none(),
-            "retiring all sources removes property ranges"
-        );
-        assert!(
-            index.metadata_opinions(a).is_none(),
-            "retiring all sources removes metadata ranges"
         );
     }
 }

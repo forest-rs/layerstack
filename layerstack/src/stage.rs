@@ -467,7 +467,7 @@ impl Stage {
         options: StageOptions,
         exact_mask: bool,
     ) -> Self {
-        Self::compose_retained(store, root, options, exact_mask, None, false)
+        Self::compose_retained(store, root, options, exact_mask)
     }
 
     pub(crate) fn compose_retained(
@@ -475,8 +475,6 @@ impl Stage {
         root: LayerId,
         mut options: StageOptions,
         exact_mask: bool,
-        namespace: Option<&mut crate::population::NamespaceInventory>,
-        bounded: bool,
     ) -> Self {
         options.muted_layers.remove(&root);
         let captured = options.clone();
@@ -487,9 +485,8 @@ impl Stage {
             muted: &captured.muted_layers,
         };
         let store: &mut dyn LayerStore = &mut controlled;
-        let mut stage = crate::compose::compose_stage_retained(
-            store, root, options, None, exact_mask, namespace, bounded,
-        );
+        let mut stage =
+            crate::compose::compose_stage_retained(store, root, options, None, exact_mask);
         stage.options = captured.clone();
         stage.store_identity = Some(store.identity());
         stage.root_layer = Some(root);
@@ -572,7 +569,7 @@ impl Stage {
                 self.children.remove(&parent);
                 continue;
             }
-            crate::compose::order_local_children(store, index, &mut children);
+            crate::prim_indexing::order_children(store, index, &mut children);
             // Ordinary composition orders before pruning inactive children:
             // invisible names can delimit reorder groups of visible names.
             children.retain(|child| self.prims.contains_key(child));

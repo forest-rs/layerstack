@@ -826,7 +826,7 @@ mod early_reuse_tests {
     }
 
     #[test]
-    fn namespace_dependent_targets_and_expressions_use_full_composition() {
+    fn namespace_dependent_targets_and_expressions_reroot_in_reused_descendants() {
         let (mut store, source, field) = scene();
         let target = TargetPath::prim(source);
         store.layers.get_mut(&LayerId(2)).unwrap().insert_prim(
@@ -836,7 +836,7 @@ mod early_reuse_tests {
                 PropertySpec::relationship().with_targets(ListOp::explicit(vec![target])),
             ),
         );
-        let stage = assert_matches_full(&mut store, 0);
+        let stage = assert_matches_full(&mut store, 4);
         for name in ["Left", "Right"] {
             let child = store.path(&alloc::format!("/{name}/A/B"));
             assert_eq!(
@@ -859,7 +859,7 @@ mod early_reuse_tests {
                 .with_default(Value::PathExpression(Arc::from("../C"))),
             ),
         );
-        let stage = assert_matches_full(&mut store, 0);
+        let stage = assert_matches_full(&mut store, 4);
         for name in ["Left", "Right"] {
             let child = store.path(&alloc::format!("/{name}/A/B"));
             assert_eq!(
@@ -919,7 +919,7 @@ mod early_reuse_tests {
     }
 
     #[test]
-    fn clips_and_nested_arcs_exclude_early_reuse() {
+    fn clips_exclude_early_reuse_and_nested_arcs_do_not() {
         let (mut store, source, _) = scene();
         let clips = store.tokens.intern("clips");
         store.layers.get_mut(&LayerId(2)).unwrap().insert_prim(
@@ -935,7 +935,8 @@ mod early_reuse_tests {
             source,
             PrimSpec::def().with_reference(Reference::with_asset(LayerId(3), remote, "other.usda")),
         );
-        assert_matches_full(&mut store, 0);
+        // A nested arc is one more instanceable site, alike for both.
+        assert_matches_full(&mut store, 4);
     }
     #[test]
     fn retargeting_one_instance_rebuilds_its_group_without_changing_others() {
@@ -1005,7 +1006,9 @@ mod early_reuse_tests {
             .get_mut(&LayerId(2))
             .unwrap()
             .insert_prim(source, spec);
-        let stage = assert_matches_full(&mut store, 0);
+        // Both instances select the same branch through the same sites:
+        // the second reuses the first's descendants.
+        let stage = assert_matches_full(&mut store, 4);
         for name in ["Left", "Right"] {
             let child = store.path(&alloc::format!("/{name}/A/B"));
             assert_eq!(

@@ -560,11 +560,6 @@ pub(crate) enum SiteContext<'a> {
 }
 
 impl SiteContext<'_> {
-    /// The context of `source`, a site of the prim index `index`.
-    pub(crate) fn of_source<'a>(index: &'a PrimIndex, source: &OpinionKey) -> SiteContext<'a> {
-        SiteContext::Node(&index.graph, source.node)
-    }
-
     /// The root layers of the layer stacks whose variables apply,
     /// outermost first.
     fn chain(self) -> Vec<LayerStackIdentifier> {
@@ -596,20 +591,6 @@ pub(crate) fn node_chain(graph: &PrimIndexGraph, node: NodeId) -> Vec<LayerStack
     }
     stacks.dedup();
     stacks
-}
-
-/// Whether the nodes `a` and `b` of `graph` read their layer stacks with
-/// the same expression variables ([`node_chain`], [`composed_variables`]):
-/// two nodes of one root layer are sites of one layer stack only then.
-///
-/// OpenUSD: `PcpLayerStackIdentifier::expressionVariablesOverrideSource`.
-pub(crate) fn same_context(
-    store: &dyn LayerStore,
-    graph: &PrimIndexGraph,
-    a: NodeId,
-    b: NodeId,
-) -> bool {
-    a == b || node_variables(store, graph, a) == node_variables(store, graph, b)
 }
 
 /// The expression variables `node` of `graph` reads its layer stack with:

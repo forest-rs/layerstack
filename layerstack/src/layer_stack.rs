@@ -105,21 +105,6 @@ impl LayerStack {
             .map_or(&[], |chain| chain)
     }
 
-    /// This stack followed by `weaker`, each layer keeping its offset and
-    /// chain.
-    pub(crate) fn joined(&self, weaker: &Self) -> Self {
-        Self {
-            layers: self.layers.iter().chain(&weaker.layers).copied().collect(),
-            offsets: self
-                .offsets
-                .iter()
-                .chain(&weaker.offsets)
-                .copied()
-                .collect(),
-            chains: self.chains.iter().chain(&weaker.chains).cloned().collect(),
-        }
-    }
-
     /// Gathers a stack with an optional session root. Missing or muted layers
     /// are governed by the supplied store view; composition performs no I/O.
     #[must_use]

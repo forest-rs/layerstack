@@ -172,8 +172,8 @@ fn values_match_openusd() {
 #[test]
 fn implied_classes_reached_through_an_arc_keep_their_origins() {
     // `/Shade` and `/Shore` reach the implied class of `/Bank/Sprout` and
-    // `/Marsh/Sprout` through a reference: it is implied from the class
-    // `bed.usda` authors, and ranks by where that origin sits.
+    // `/Marsh/Sprout` through a reference: its chain of origins ends at the
+    // class `bed.usda` authors, and it ranks by where that origin sits.
     let oracle = oracle();
     let (mut loaded, stage) = compose(&oracle);
     for prim in ["/Shade", "/Shore"] {
@@ -184,17 +184,29 @@ fn implied_classes_reached_through_an_arc_keep_their_origins() {
             .filter(|(_, node)| node.is_implied())
             .collect();
         assert!(!implied.is_empty(), "{prim} has an implied class");
+        // An implied class implied again names the class it was implied
+        // from; the chain of the class `bed.usda` authors ends there, the
+        // others at inherits `root.usda` authors itself.
+        let mut ends = Vec::new();
         for (id, node) in implied {
-            let origin = node
+            let mut origin = node
                 .origin()
                 .and_then(|origin| graph.node(origin))
                 .unwrap_or_else(|| panic!("{prim}: implied node {id:?} has no origin"));
-            assert_eq!(
-                layer_name(&loaded, origin.layer_stack()),
-                "bed.usda",
-                "{prim}: implied node {id:?} is implied from `bed.usda`"
-            );
+            while let Some(next) = origin.origin().and_then(|origin| graph.node(origin)) {
+                origin = next;
+            }
+            ends.push(layer_name(&loaded, origin.layer_stack()));
         }
+        assert!(
+            ends.iter().any(|layer| layer == "bed.usda"),
+            "{prim}: a class is implied from `bed.usda`: {ends:?}"
+        );
+        assert!(
+            ends.iter()
+                .all(|layer| layer == "bed.usda" || layer == "root.usda"),
+            "{prim}: {ends:?}"
+        );
     }
 }
 

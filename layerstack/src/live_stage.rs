@@ -248,7 +248,6 @@ pub struct LiveStage {
     /// ([`crate::Layer::changed_supports_since`]): their prim indexes need
     /// refreshing, not the namespace beneath them.
     support_sources: Vec<(LayerId, PathId)>,
-    namespace_inventory: crate::population::NamespaceInventory,
     layer_discovery: discovery::LayerDiscovery,
     work: RecompositionWork,
     notices: notices::Journal,
@@ -262,15 +261,7 @@ impl LiveStage {
             with_dependencies: true,
             ..options.clone()
         };
-        let mut namespace_inventory = crate::population::NamespaceInventory::default();
-        let mut stage = Stage::compose_retained(
-            store,
-            root,
-            opts,
-            false,
-            Some(&mut namespace_inventory),
-            false,
-        );
+        let mut stage = Stage::compose_retained(store, root, opts, false);
         let deps = stage.take_deps().unwrap_or_default();
         let tracker =
             InvalidationTracker::from_graph_with_cycle_handling(deps.graph, CycleHandling::Ignore);
@@ -296,7 +287,6 @@ impl LiveStage {
             structural_roots: Vec::new(),
             structural_sources: Vec::new(),
             support_sources: Vec::new(),
-            namespace_inventory,
             layer_discovery: discovery::LayerDiscovery::default(),
             work: RecompositionWork::default(),
             notices: notices::Journal::default(),
@@ -1476,23 +1466,7 @@ impl LiveStage {
             load_rules: self.options.load_rules.clone(),
             muted_layers: self.options.muted_layers.clone(),
         };
-        let bounded = !self
-            .stage
-            .composition_errors()
-            .iter()
-            .any(|e| e.prim().is_none())
-            && !self
-                .relocation_layers
-                .iter()
-                .any(|id| store.layer(*id).is_some_and(|l| !l.relocates.is_empty()));
-        Stage::compose_retained(
-            store,
-            self.root,
-            scoped_opts,
-            true,
-            Some(&mut self.namespace_inventory),
-            bounded,
-        )
+        Stage::compose_retained(store, self.root, scoped_opts, true)
     }
 
     /// Recomposes the whole stage and returns every path in the new stage
@@ -1508,10 +1482,6 @@ impl LiveStage {
         self.structural_roots.clear();
         self.structural_sources.clear();
         self.support_sources.clear();
-        // Unknown authoring or source replacement invalidates retained identity
-        // evidence. A recreated LayerId can reuse the departed layer's counters;
-        // full resynchronization must rediscover its namespace and potential arcs.
-        self.namespace_inventory = crate::population::NamespaceInventory::default();
         self.layer_discovery = discovery::LayerDiscovery::default();
         self.tracker.clear(OPINION_EDIT);
         let old_prims: HashSet<PathId> = self.stage.prim_paths().collect();
@@ -1520,14 +1490,7 @@ impl LiveStage {
             with_dependencies: true,
             ..self.options.clone()
         };
-        let mut stage = Stage::compose_retained(
-            store,
-            self.root,
-            opts,
-            false,
-            Some(&mut self.namespace_inventory),
-            false,
-        );
+        let mut stage = Stage::compose_retained(store, self.root, opts, false);
         let deps = stage.take_deps().unwrap_or_default();
 
         self.work.full_rebuild = true;

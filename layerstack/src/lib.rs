@@ -152,7 +152,6 @@ extern crate std;
 
 pub use hashbrown::{HashMap, HashSet};
 
-pub(crate) mod arc_cycle;
 pub(crate) mod arcs;
 pub mod array_edit;
 pub mod asset;
@@ -186,9 +185,9 @@ pub use layer_stack_flatten::{
 pub mod listop;
 pub mod path;
 pub mod path_expression;
-pub(crate) mod population;
 pub mod prim_index;
 pub mod prim_index_graph;
+pub(crate) mod prim_indexing;
 pub mod property;
 pub mod relocates;
 pub mod schema;

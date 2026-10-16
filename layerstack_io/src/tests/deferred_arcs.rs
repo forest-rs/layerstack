@@ -152,6 +152,12 @@ fn selecting_a_deferred_branch_asks_for_its_assets_until_they_load() {
     assert_eq!(doc.identifier(report.layers[0]), Some("b.usda"));
     assert_eq!(name(&doc, "/Model"), Some(Value::string("b")));
     assert!(doc.stage.stage().asset_requests().is_empty());
+    assert!(
+        doc.stage
+            .stage()
+            .used_layers(true)
+            .contains(&report.layers[0])
+    );
     // Loading composes only the prim whose arc names the asset, and the
     // pseudo-root holding it, not its siblings.
     let work = doc.stage.recomposition_work();
@@ -299,4 +305,97 @@ fn packages_hold_deferred_assets_and_load_their_members_on_request() {
             .is_some_and(|identifier| identifier.starts_with("out.usdz["))
     );
     assert_eq!(name(&doc, "/Model"), Some(Value::string("b")));
+}
+
+#[test]
+fn switching_an_instance_to_a_deferred_branch_uses_the_loaded_payload() {
+    let asset = r#"#usda 1.0
+(
+    defaultPrim = "Asset"
+)
+def "Asset" (
+    variants = { string geo = "render" }
+    prepend variantSets = "geo"
+) {
+    def "Geo" {}
+    variantSet "geo" = {
+        "render" { over "Geo" (payload = @render.usda@) {} }
+        "deform" { over "Geo" (payload = @deform.usda@) {} }
+    }
+}
+"#;
+    let mesh = |name: &str| {
+        format!(
+            "#usda 1.0\n(\n defaultPrim = \"Mesh\"\n)\ndef \"Mesh\" {{\n string name = \"{name}\"\n}}\n"
+        )
+    };
+    let render = mesh("render");
+    let deform = mesh("deform");
+    let backend = Memory::with(&[
+        (
+            "root.usda",
+            "#usda 1.0\ndef \"A\" (instanceable = true\n references = @asset.usda@) {}\ndef \"B\" (instanceable = true\n references = @asset.usda@) {}\n",
+        ),
+        ("asset.usda", asset),
+        ("render.usda", &render),
+        ("deform.usda", &deform),
+    ]);
+    let mut doc = StageDocument::open(backend, "root.usda", StageOptions::default()).unwrap();
+    assert!(!read(&doc, "deform.usda"));
+    let root = doc.stage.stage().root_layer().unwrap();
+    let prim = doc.store.path("/A");
+    let set = doc.store.tokens.intern("geo");
+    let variant = doc.store.tokens.intern("deform");
+    let mut edit = Transaction::new();
+    edit.set_variant_selection(EditTarget::for_layer(root).prim(prim), set, Some(variant));
+    let (store, stage) = doc.parts_mut();
+    stage.apply(store, &edit).unwrap();
+    let report = doc.load_requested_assets().unwrap();
+    assert_eq!(report.layers.len(), 1);
+    assert_eq!(doc.identifier(report.layers[0]), Some("deform.usda"));
+    assert_eq!(name(&doc, "/A/Geo"), Some(Value::string("deform")));
+    assert_eq!(name(&doc, "/B/Geo"), Some(Value::string("render")));
+    assert!(
+        doc.stage
+            .stage()
+            .used_layers(true)
+            .contains(&report.layers[0])
+    );
+}
+
+#[test]
+fn layers_loaded_beneath_a_referenced_ancestor_count_as_used() {
+    // The model sits inside a referenced set, so composing the set's root
+    // reaches the model's arcs too.
+    let a = look("a");
+    let b = look("b");
+    let backend = Memory::with(&[
+        (
+            "root.usda",
+            "#usda 1.0\ndef \"Set\" (references = @set.usda@</Set>) {}\n",
+        ),
+        (
+            "set.usda",
+            "#usda 1.0\ndef \"Set\" {\n def \"Shelf\" {\n def \"Model\" (references = @model.usda@</Model>) {}\n }\n}\n",
+        ),
+        ("model.usda", MODEL),
+        ("a.usda", &a),
+        ("b.usda", &b),
+    ]);
+    let mut doc = StageDocument::open(backend, "root.usda", StageOptions::default()).unwrap();
+    assert!(!read(&doc, "b.usda"));
+    let root = doc.stage.stage().root_layer().unwrap();
+    let prim = doc.store.path("/Set/Shelf/Model");
+    let set = doc.store.tokens.intern("look");
+    let variant = doc.store.tokens.intern("b");
+    let mut edit = Transaction::new();
+    edit.set_variant_selection(EditTarget::for_layer(root).prim(prim), set, Some(variant));
+    let (store, stage) = doc.parts_mut();
+    stage.apply(store, &edit).unwrap();
+    let report = doc.load_requested_assets().unwrap();
+    assert_eq!(report.layers.len(), 1);
+    assert_eq!(name(&doc, "/Set/Shelf/Model"), Some(Value::string("b")));
+    assert!(!doc.stage.recomposition_work().full_rebuild);
+    let fresh = layerstack::Stage::compose(&mut doc.store, root, StageOptions::default());
+    assert_eq!(doc.stage.stage().used_layers(true), fresh.used_layers(true));
 }

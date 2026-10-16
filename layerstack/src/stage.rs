@@ -1421,6 +1421,18 @@ impl Stage {
                 self.used_layer_sites.insert(*path, layers);
             }
         }
+        // A masked composition also composes the ancestors of the prims it
+        // recomposes, and records there the layers the arcs it follows from
+        // them reach, the recomposed prims' new layers among them. Those
+        // uses are kept, beside the ancestors' existing ones.
+        for (path, layers) in partial.used_layer_sites.drain() {
+            let site = self.used_layer_sites.entry(path).or_default();
+            for layer in layers {
+                if site.insert(layer) {
+                    *self.used_layer_counts.entry(layer).or_default() += 1;
+                }
+            }
+        }
         self.used_layers = self
             .local_layers
             .iter()

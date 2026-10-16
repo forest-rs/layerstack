@@ -491,10 +491,6 @@ impl Stage {
         stage.store_identity = Some(store.identity());
         stage.root_layer = Some(root);
         stage.schemas = schemas;
-        let mut offsets = HashMap::new();
-        for index in stage.prims.values_mut() {
-            index.graph.prepare_layer_offsets(store, &mut offsets);
-        }
         stage.prepare_type_info(store);
         stage.prepare_clips(store);
         stage.prepare_prototypes(store);
@@ -514,10 +510,6 @@ impl Stage {
         stage.store_identity = Some(store.identity());
         stage.root_layer = Some(root);
         stage.schemas = schemas;
-        let mut offsets = HashMap::new();
-        for index in stage.prims.values_mut() {
-            index.graph.prepare_layer_offsets(store, &mut offsets);
-        }
         stage.prepare_type_info(store);
         stage.prepare_clips(store);
         stage.prepare_prototypes(store);

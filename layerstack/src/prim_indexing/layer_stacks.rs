@@ -12,7 +12,7 @@
 //! per layer stack). OpenUSD: `PcpLayerStack`, `PcpLayerStackRegistry`
 //! (`pxr/usd/pcp/layerStack.cpp`).
 
-use alloc::{rc::Rc, vec::Vec};
+use alloc::{rc::Rc, sync::Arc, vec::Vec};
 
 use hashbrown::HashMap;
 
@@ -39,6 +39,9 @@ pub(crate) struct ComputedStack {
     /// The resident layers, strongest first, and their offsets.
     pub(crate) layers: Vec<LayerId>,
     pub(crate) offsets: Vec<LayerOffset>,
+    /// `layers` with their offsets, shared by the stage's nodes of this
+    /// layer stack ([`crate::prim_index_graph::PrimNode::stack_layers`]).
+    pub(crate) layer_offsets: Arc<[(LayerId, LayerOffset)]>,
     /// Valid relocations, source to target and back.
     pub(crate) relocations: RelocationTable,
     /// Relocation sources mapped to their targets, each source traced back
@@ -112,12 +115,18 @@ impl LayerStacks {
             .zip(stack.offsets.iter().copied())
             .filter(|(layer, _)| store.layer(*layer).is_some())
             .unzip();
+        let layer_offsets = layers
+            .iter()
+            .copied()
+            .zip(offsets.iter().copied())
+            .collect();
         let id = StackId(u32::try_from(self.stacks.len()).expect("layer stack count"));
         self.stacks.push(ComputedStack {
             identifier,
             chain: chain.clone(),
             layers,
             offsets,
+            layer_offsets,
             relocations,
             combined_source_to_target,
         });

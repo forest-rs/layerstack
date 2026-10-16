@@ -968,11 +968,27 @@ impl<'a, B: Storage> Reader<'a, B> {
         store: &mut InMemoryStore,
         stack: layerstack::LayerStackIdentifier,
     ) -> Result<(), IoError> {
+        // Only an asset path authored as an expression needs evaluating;
+        // without one the walk over every layer stack finds nothing.
+        if !self
+            .pending
+            .iter()
+            .chain(store.layers.values())
+            .any(authors_expressions)
+        {
+            return Ok(());
+        }
         let mut attempted = BTreeSet::new();
         loop {
             let overlay = Overlay {
                 store,
                 layers: &self.pending,
+                index: self
+                    .pending
+                    .iter()
+                    .enumerate()
+                    .map(|(at, layer)| (layer.id, at))
+                    .collect(),
                 bindings: &self.bindings,
             };
             let requests = layerstack::expression_asset_paths_for_stack(&overlay, stack);
@@ -1563,18 +1579,42 @@ fn package_member_path(identifier: &str) -> Option<String> {
 #[cfg(test)]
 mod tests;
 
+/// Whether `layer` authors a sublayer, reference or payload whose asset path
+/// is a variable expression ([`layerstack::variable_expression`]).
+fn authors_expressions(layer: &Layer) -> bool {
+    let arcs = |spec_arcs: [&layerstack::ListOp<layerstack::Reference>; 2]| {
+        spec_arcs
+            .into_iter()
+            .any(|op| op.items().any(layerstack::Reference::is_expression))
+    };
+    layer
+        .sublayers
+        .iter()
+        .any(layerstack::SublayerEntry::is_expression)
+        || layer
+            .prims
+            .values()
+            .chain(layer.variant_prims.values().flatten())
+            .any(|spec| {
+                arcs([&spec.references, &spec.payloads])
+                    || spec
+                        .variant_branches()
+                        .any(|branch| arcs([&branch.spec.references, &branch.spec.payloads]))
+            })
+}
 struct Overlay<'a> {
     store: &'a InMemoryStore,
     layers: &'a [Layer],
+    /// Where each of `layers` is, by ID: the last one read for an ID wins.
+    index: layerstack::HashMap<LayerId, usize>,
     bindings: &'a BTreeMap<(LayerId, String), LayerId>,
 }
 impl LayerStore for Overlay<'_> {
     fn layer(&self, id: LayerId) -> Option<&Layer> {
-        self.layers
-            .iter()
-            .rev()
-            .find(|l| l.id == id)
-            .or_else(|| self.store.layer(id))
+        match self.index.get(&id) {
+            Some(&at) => Some(&self.layers[at]),
+            None => self.store.layer(id),
+        }
     }
     fn layer_mut(&mut self, _: LayerId) -> Option<&mut Layer> {
         None
@@ -1596,7 +1636,7 @@ impl LayerStore for Overlay<'_> {
             Some(&id) => (id != LayerId::UNRESOLVED).then_some(id),
             // Fresh authored layers must rediscover evaluated expression assets;
             // published bindings describe the old source snapshot. AOUSD Core §9.
-            None if self.layers.iter().any(|layer| layer.id == anchor) => None,
+            None if self.index.contains_key(&anchor) => None,
             None => self.store.asset_layer(anchor, asset),
         }
     }

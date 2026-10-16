@@ -13,6 +13,11 @@ use core::{borrow::Borrow, cmp::Ordering};
 
 use crate::interner::{TokenId, TokenInterner};
 use hashbrown::HashMap;
+use smallvec::SmallVec;
+
+/// The segments of a path being assembled, inline up to a depth few prim
+/// paths exceed, so a lookup of a joined or moved path does not allocate.
+pub(crate) type Segments = SmallVec<[TokenId; 16]>;
 
 /// A stable identifier for an interned path.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -410,6 +415,64 @@ impl PathInterner {
     #[must_use]
     pub fn lookup(&self, path: &Path) -> Option<PathId> {
         self.by_path.get(path).copied()
+    }
+
+    /// Looks up the path made of `segments` without interning or allocating.
+    #[must_use]
+    pub(crate) fn lookup_segments(&self, segments: &[TokenId]) -> Option<PathId> {
+        self.by_path.get(segments).copied()
+    }
+
+    /// Interns the path made of `segments`, allocating only for a path not
+    /// interned yet.
+    pub(crate) fn intern_segments(&mut self, segments: &[TokenId]) -> PathId {
+        match self.lookup_segments(segments) {
+            Some(id) => id,
+            None => self.intern(Path {
+                segments: segments.into(),
+            }),
+        }
+    }
+
+    fn joined(&self, base: PathId, extra: &[TokenId]) -> Segments {
+        let mut segments = Segments::from_slice(self.resolve(base).segments());
+        segments.extend_from_slice(extra);
+        segments
+    }
+
+    /// Looks up `base` joined with `extra` (see [`Path::join`]) without
+    /// interning or allocating.
+    #[must_use]
+    pub(crate) fn lookup_joined(&self, base: PathId, extra: &[TokenId]) -> Option<PathId> {
+        if extra.is_empty() {
+            return Some(base);
+        }
+        self.lookup_segments(&self.joined(base, extra))
+    }
+
+    /// Interns `base` joined with `extra` (see [`Path::join`]).
+    pub(crate) fn intern_joined(&mut self, base: PathId, extra: &[TokenId]) -> PathId {
+        if extra.is_empty() {
+            return base;
+        }
+        let segments = self.joined(base, extra);
+        self.intern_segments(&segments)
+    }
+
+    /// Interns `path` moved from beneath `from` to beneath `to`: `to` itself
+    /// for `from`, and `None` for a path outside `from`.
+    pub(crate) fn intern_reparented(
+        &mut self,
+        path: PathId,
+        from: PathId,
+        to: PathId,
+    ) -> Option<PathId> {
+        if path == from {
+            return Some(to);
+        }
+        let rel = self.resolve(path).strip_prefix(self.resolve(from))?;
+        let segments = self.joined(to, rel);
+        Some(self.intern_segments(&segments))
     }
 
     /// Looks up the namespace parent of `id` without allocating a path.

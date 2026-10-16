@@ -28,6 +28,7 @@ use core::cmp::Ordering;
 
 use hashbrown::{HashMap, HashSet};
 
+use crate::path::Segments;
 use crate::{
     compose::ChildOrderOpinions,
     composition_error::{
@@ -446,8 +447,7 @@ impl LiftedSet {
             let blocking = source_rel.as_deref().and_then(|rel| {
                 let (last, parent) = rel.split_last()?;
                 let (parent, _) = outer.place(store, dest_root, parent)?;
-                let at = store.paths().resolve(parent).join(&[*last]);
-                let at = store.paths_mut().intern(at);
+                let at = store.paths_mut().intern_joined(parent, &[*last]);
                 Some((at, *outer.outer_source(at)?))
             });
             let stage_source = match blocking {
@@ -594,22 +594,21 @@ impl<'a> Walk<'a> {
         dest_root: PathId,
         rel: &[TokenId],
     ) -> Option<(PathId, bool)> {
-        let mut current = store.paths().resolve(dest_root).clone();
         if self.is_empty() {
-            let joined = current.join(rel);
-            return Some((store.paths_mut().intern(joined), false));
+            return Some((store.paths_mut().intern_joined(dest_root, rel), false));
         }
+        let mut current = Segments::from_slice(store.paths().resolve(dest_root).segments());
         let mut moved = false;
         for &name in rel {
-            let next = current.join(&[name]);
+            current.push(name);
             let paths = store.paths();
-            if let Some(id) = paths.lookup(&next) {
+            if let Some(id) = paths.lookup_segments(&current) {
                 if self.own.is_some_and(|own| own.source(id).is_some()) {
                     return None;
                 }
                 if let Some(relocate) = self.outer.iter().rev().find_map(|set| set.source(id)) {
                     let target = relocate.stage_target?;
-                    current = paths.resolve(target).clone();
+                    current = Segments::from_slice(paths.resolve(target).segments());
                     moved = true;
                     continue;
                 }
@@ -618,14 +617,13 @@ impl<'a> Walk<'a> {
                 }
                 if let Some(relocate) = self.spooky.iter().rev().find_map(|set| set.source(id)) {
                     let target = relocate.stage_target?;
-                    current = paths.resolve(target).clone();
+                    current = Segments::from_slice(paths.resolve(target).segments());
                     moved = true;
                     continue;
                 }
             }
-            current = next;
         }
-        Some((store.paths_mut().intern(current), moved))
+        Some((store.paths_mut().intern_segments(&current), moved))
     }
 
     /// Maps the path `rel` beneath the stage path `dest_root` through the
@@ -653,33 +651,32 @@ impl<'a> Walk<'a> {
         dest_root: PathId,
         rel: &[TokenId],
     ) -> Option<PathId> {
-        let mut current = store.paths().resolve(dest_root).clone();
         if self.is_empty() {
-            let joined = current.join(rel);
-            return Some(store.paths_mut().intern(joined));
+            return Some(store.paths_mut().intern_joined(dest_root, rel));
         }
+        let mut current = Segments::from_slice(store.paths().resolve(dest_root).segments());
         for &name in rel {
-            let next = current.join(&[name]);
+            current.push(name);
             let paths = store.paths();
-            let relocate = paths.lookup(&next).and_then(|id| {
+            let relocate = paths.lookup_segments(&current).and_then(|id| {
                 self.outer
                     .iter()
                     .rev()
                     .chain(self.spooky.iter().rev())
                     .find_map(|set| set.source(id))
             });
-            current = match relocate {
+            match relocate {
                 Some(LiftedRelocate {
                     stage_target: Some(target),
                     ..
-                }) => paths.resolve(*target).clone(),
+                }) => current = Segments::from_slice(paths.resolve(*target).segments()),
                 Some(LiftedRelocate {
                     target: Some(_), ..
                 }) => return None,
-                _ => next,
-            };
+                _ => {}
+            }
         }
-        Some(store.paths_mut().intern(current))
+        Some(store.paths_mut().intern_segments(&current))
     }
 
     /// The `outer` relocations a walk from `host` took to reach the stage

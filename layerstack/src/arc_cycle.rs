@@ -39,7 +39,7 @@ use crate::{
     expression_variables::{ExpressionScope, VariableReads, expression_error},
     interner::TokenId,
     layer_stack::{LayerStack, LayerStackIdentifier},
-    path::{Path, PathId, PathInterner, TargetPath},
+    path::{PathId, PathInterner, Segments, TargetPath},
     population::SourceInventory,
     prim_index::{ArcKind, PrimIndex},
     prim_index_graph::PrimNode,
@@ -120,13 +120,8 @@ impl ArcChain {
     /// class across each arc with `PcpMapExpression::AddRootIdentity`.
     pub(crate) fn stage_path(&self, paths: &mut PathInterner, path: PathId) -> PathId {
         for site in self.sites[1..].iter().rev() {
-            let rel = paths
-                .resolve(path)
-                .strip_prefix(paths.resolve(site.site))
-                .map(<[_]>::to_vec);
-            if let Some(rel) = rel {
-                let joined = paths.resolve(site.dest).join(&rel);
-                return paths.intern(joined);
+            if let Some(stage) = paths.intern_reparented(path, site.site, site.dest) {
+                return stage;
             }
         }
         path
@@ -197,10 +192,9 @@ impl ArcChain {
         self.sites
             .iter()
             .map(|site| {
-                let path = match translate(paths, site, dest) {
-                    Some(path) => paths.intern(path),
-                    None => site.site,
-                };
+                let path = paths
+                    .intern_reparented(dest, site.dest, site.site)
+                    .unwrap_or(site.site);
                 (site.layer_stack, path)
             })
             .collect()
@@ -787,9 +781,11 @@ impl CycleDetector {
 ///
 /// A site maps onto its `dest`; the namespace descendant of `dest` at
 /// `dest/rel` is contributed by the site's own descendant at `site/rel`.
-fn translate(paths: &PathInterner, site: &ChainSite, dest: PathId) -> Option<Path> {
+fn translate(paths: &PathInterner, site: &ChainSite, dest: PathId) -> Option<Segments> {
     let rel = paths.resolve(dest).strip_prefix(paths.resolve(site.dest))?;
-    Some(paths.resolve(site.site).join(rel))
+    let mut translated = Segments::from_slice(paths.resolve(site.site).segments());
+    translated.extend_from_slice(rel);
+    Some(translated)
 }
 
 /// Returns `true` when `path` is prefix-related to one of `sites`,
@@ -802,18 +798,19 @@ fn reaches(
     path: PathId,
     in_stack: impl Fn(LayerStackIdentifier) -> bool,
 ) -> bool {
-    let path = paths.resolve(path);
+    let path = paths.resolve(path).segments();
     sites
         .iter()
         .filter(|site| in_stack(site.layer_stack))
         .filter_map(|site| translate(paths, site, dest))
-        .any(|site| site.is_prefix_of(path) || path.is_prefix_of(&site))
+        .any(|site| path.starts_with(&site) || site.starts_with(path))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::interner::TokenInterner;
+    use crate::path::Path;
 
     fn path(paths: &mut PathInterner, tokens: &mut TokenInterner, s: &str) -> PathId {
         paths.intern(Path::parse_absolute(s, tokens).expect("path"))

@@ -856,12 +856,12 @@ fn expand_inherit_paths(
         .mapped_paths(store, stack, inherited_root, dest_root);
 
     for remote_path_id in remote_paths.iter().copied() {
-        let rel: Vec<_> = {
+        let rel = {
             let remote_path = store.paths().resolve(remote_path_id);
             let Some(rel) = remote_path.strip_prefix(&src_root) else {
                 continue;
             };
-            rel.to_vec()
+            crate::path::Segments::from_slice(rel)
         };
 
         let Some((dest_path_id, moved)) = chain.walk().place(store, dest_root, &rel) else {
@@ -1011,12 +1011,12 @@ fn expand_reference_paths(
             .mapped_paths(store, &remote_stack, reference_path, dest_root);
 
     for remote_path_id in remote_paths.iter().copied() {
-        let rel: Vec<_> = {
+        let rel = {
             let remote_path = store.paths().resolve(remote_path_id);
             let Some(rel) = remote_path.strip_prefix(&target) else {
                 continue;
             };
-            rel.to_vec()
+            crate::path::Segments::from_slice(rel)
         };
 
         let Some((dest_path_id, moved)) = chain.walk().place(store, dest_root, &rel) else {
@@ -1254,10 +1254,8 @@ fn expand_ancestral_paths_from(
             .strip_prefix(&ancestor_path)
             .expect("an ancestor prefixes its descendant")
             .to_vec();
-        let mapped = |store: &mut dyn LayerStore, path: PathId| {
-            let joined = store.paths().resolve(path).join(&rel);
-            store.paths_mut().intern(joined)
-        };
+        let mapped =
+            |store: &mut dyn LayerStore, path: PathId| store.paths_mut().intern_joined(path, &rel);
         let scope = SelectionScope::Discover;
         let mut references = arcs_of(resolve_references_for_prim(
             store, fallbacks, stack, ancestor, scope, anchor,
@@ -1328,8 +1326,7 @@ fn expand_ancestral_paths_from(
         .strip_prefix(store.paths().resolve(relocated_at))
         .expect("the relocation target is at or above the target")
         .to_vec();
-    let joined = store.paths().resolve(source).join(&rel);
-    let source_view = store.paths_mut().intern(joined);
+    let source_view = store.paths_mut().intern_joined(source, &rel);
     expand_ancestral_paths_from(
         store,
         stack,
@@ -1477,7 +1474,7 @@ fn propagate_populated_through_inherits(
             let src_root = store.paths().resolve(*src).clone();
             let mut to_add = Vec::new();
             for populated in &snapshot {
-                let rel: Vec<_> = {
+                let rel = {
                     let pop_path = store.paths().resolve(*populated);
                     let Some(rel) = pop_path.strip_prefix(&src_root) else {
                         continue;
@@ -1485,7 +1482,7 @@ fn propagate_populated_through_inherits(
                     if rel.is_empty() {
                         continue;
                     }
-                    rel.to_vec()
+                    crate::path::Segments::from_slice(rel)
                 };
                 let dest_path = dest_root.join(&rel);
                 if propagation_closes_cycle(

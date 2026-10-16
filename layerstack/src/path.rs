@@ -74,6 +74,22 @@ impl PropertyPath {
         tokens: &mut TokenInterner,
         paths: &mut PathInterner,
     ) -> Result<Self, PropertyPathError> {
+        let (prim, property) = Self::split(s)?;
+        let prim_path = Path::parse_absolute(prim, tokens)?;
+        Ok(Self {
+            prim_path: paths.intern(prim_path),
+            property: tokens.intern(property),
+        })
+    }
+
+    /// Splits `s` into its prim path text and property name, checking
+    /// everything [`Self::parse`] does except that the prim path text
+    /// parses as an absolute prim path ([`Path::parse_absolute`]), and
+    /// interning nothing.
+    ///
+    /// A reader of many properties of one prim can check that prim's path
+    /// once.
+    pub fn split(s: &str) -> Result<(&str, &str), PropertyPathError> {
         let Some(dot_pos) = s.rfind('.') else {
             return Err(PropertyPathError::MissingProperty);
         };
@@ -98,11 +114,7 @@ impl PropertyPath {
         if prim.contains('.') {
             return Err(PropertyPathError::InvalidPrimPath);
         }
-        let prim_path = Path::parse_absolute(prim, tokens)?;
-        Ok(Self {
-            prim_path: paths.intern(prim_path),
-            property: tokens.intern(property),
-        })
+        Ok((prim, property))
     }
 
     /// Returns the concrete prim path.

@@ -268,6 +268,9 @@ impl<'a> AssembleCtx<'a> {
         // Process Attribute and Relationship specs — add them to their
         // parent prim. Specs under variant paths are handled with the
         // variant specs below.
+        // Whether each prim path text properties are authored on parses, as
+        // `PropertyPath::parse` requires; checked once per prim.
+        let mut prim_paths_valid: HashMap<&str, bool> = HashMap::new();
         for (i, spec) in self.sections.specs.iter().enumerate() {
             let is_attribute = spec.form == SpecForm::Attribute;
             if !is_attribute && spec.form != SpecForm::Relationship {
@@ -288,14 +291,13 @@ impl<'a> AssembleCtx<'a> {
                     }
                 }
             } else {
-                let Ok(_) = PropertyPath::parse(path_str, self.tokens, self.paths) else {
+                // Validate without normalizing the spelling: borrow the
+                // original text instead of formatting a parsed path back.
+                let Some(parts) = self.split_property_path(path_str, &mut prim_paths_valid) else {
                     self.report(path_str, None, "property spec path could not be parsed")?;
                     continue;
                 };
-                // Parsing validates and interns without normalizing the spelling.
-                // Borrow the original text
-                // instead of formatting the interned path back into a String.
-                path_str.rsplit_once('.').expect("validated property path")
+                parts
             };
             let Some(prim) = prim_specs_map.get_mut(prim_path) else {
                 self.report(path_str, None, "property spec has no owning prim spec")?;
@@ -313,13 +315,12 @@ impl<'a> AssembleCtx<'a> {
         for (i, spec) in self.sections.specs.iter().enumerate() {
             if spec.form == SpecForm::Connection {
                 let path_str = self.lookup_path(spec.path_index)?;
-                if PropertyPath::parse(path_str, self.tokens, self.paths).is_ok() {
-                    let (prim_path, attr_name) =
-                        path_str.rsplit_once('.').expect("validated property path");
-                    if let Some(prim) = prim_specs_map.get_mut(prim_path) {
-                        self.collect_spec_fields(i, &mut decoded, &mut fields)?;
-                        self.apply_connection_fields(&fields, attr_name, prim)?;
-                    }
+                if let Some((prim_path, attr_name)) =
+                    self.split_property_path(path_str, &mut prim_paths_valid)
+                    && let Some(prim) = prim_specs_map.get_mut(prim_path)
+                {
+                    self.collect_spec_fields(i, &mut decoded, &mut fields)?;
+                    self.apply_connection_fields(&fields, attr_name, prim)?;
                 }
             }
         }
@@ -1832,6 +1833,23 @@ impl<'a> AssembleCtx<'a> {
     ///
     /// The path is borrowed, but each lookup is charged by its length: every
     /// pass that looks a spec's path up parses, splits or copies it.
+    /// Splits the property path text `path` into its prim path text and
+    /// property name when it is a valid property path
+    /// ([`PropertyPath::parse`]), checking each prim path text once
+    /// (`valid`).
+    fn split_property_path(
+        &mut self,
+        path: &'a str,
+        valid: &mut HashMap<&'a str, bool>,
+    ) -> Option<(&'a str, &'a str)> {
+        let (prim, name) = PropertyPath::split(path).ok()?;
+        let tokens = &mut *self.tokens;
+        let ok = *valid
+            .entry(prim)
+            .or_insert_with(|| Path::parse_absolute(prim, tokens).is_ok());
+        ok.then_some((prim, name))
+    }
+
     fn lookup_path(&mut self, index: u32) -> Result<&'a str, UsdcError> {
         let sections = self.sections;
         let path = sections

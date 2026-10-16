@@ -619,8 +619,7 @@ pub enum ExpressionContext {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct VariableExpressionError {
     /// The composed prim whose composition reached the expression, or
-    /// `None` for one found in a layer stack: a sublayer asset path, or a
-    /// variant selection.
+    /// `None` for a sublayer asset path, found gathering a layer stack.
     pub prim: Option<PathId>,
     /// Where the expression is authored.
     pub context: ExpressionContext,

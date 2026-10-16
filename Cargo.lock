@@ -308,6 +308,7 @@ dependencies = [
  "invalidation",
  "libm",
  "opinionated",
+ "smallvec",
  "unicode-ident",
 ]
 

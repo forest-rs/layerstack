@@ -23,5 +23,6 @@ hashbrown = { workspace = true }
 invalidation = { workspace = true }
 libm = { workspace = true }
 opinionated = { workspace = true }
+smallvec = { workspace = true }
 # `XID_Start` and `XID_Continue`, which USD identifiers are made of.
 unicode-ident = { workspace = true }

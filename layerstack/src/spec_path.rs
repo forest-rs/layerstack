@@ -15,7 +15,7 @@ use alloc::{string::String, sync::Arc, vec::Vec};
 
 use crate::{
     interner::{TokenId, TokenInterner},
-    path::{Path, PathError, PathId, PathInterner, PropertyPath},
+    path::{PathError, PathId, PathInterner, PropertyPath},
 };
 
 /// A variant selection applied at a specific prim host path.
@@ -227,11 +227,7 @@ impl SpecPath {
             }
         }
 
-        let prim_path = if prim_segments.is_empty() {
-            paths.intern(Path::root())
-        } else {
-            paths.intern(Path::root().join(&prim_segments))
-        };
+        let prim_path = paths.intern_segments(&prim_segments);
 
         Ok(Self {
             prim_path,
@@ -316,7 +312,7 @@ impl SpecPath {
         if names.is_empty() {
             return self.clone();
         }
-        let prim_path = paths.intern(paths.resolve(self.prim_path).join(names));
+        let prim_path = paths.intern_joined(self.prim_path, names);
         let components = self
             .components
             .iter()
@@ -395,6 +391,7 @@ impl From<PathError> for SpecPathError {
 mod tests {
     use super::*;
     use crate::interner::TokenInterner;
+    use crate::path::Path;
 
     #[test]
     fn from_variant_qualified_prim_path_formats_expected_string() {

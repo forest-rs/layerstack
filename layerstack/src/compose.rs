@@ -1397,7 +1397,7 @@ fn spec_path_branches_selected(
         .count();
     let paths = store.paths();
 
-    let mut host_segments: Vec<TokenId> = Vec::new();
+    let mut host_segments = crate::path::Segments::new();
     for component in components {
         let (set, variant) = match *component {
             SpecComponent::Prim(segment) => {
@@ -1411,12 +1411,15 @@ fn spec_path_branches_selected(
             continue;
         }
 
-        let host_path = crate::path::Path::root().join(&host_segments);
-        let host = paths.lookup(&host_path);
-        let composed_host =
-            stage_host_path(store, &prims[&prim_path].graph, prim_path, node, host_path);
+        let host = paths.lookup_segments(&host_segments);
+        let composed_host = stage_host_path(
+            store,
+            &prims[&prim_path].graph,
+            prim_path,
+            node,
+            &host_segments,
+        );
         let composed = composed_host
-            .and_then(|p| paths.lookup(&p))
             .filter(|id| prims.contains_key(id))
             .or_else(|| {
                 host.filter(|id| prims.contains_key(id))
@@ -1479,8 +1482,8 @@ fn stage_host_path(
     graph: &PrimIndexGraph,
     dest: PathId,
     node: NodeId,
-    host: crate::path::Path,
-) -> Option<crate::path::Path> {
+    host: &[TokenId],
+) -> Option<PathId> {
     let paths = store.paths();
     let site_depth = |node: &PrimNode| paths.resolve(node.site().prim_path()).depth();
     // The depth of `dest` as each node on the way to the root sees it,
@@ -1502,59 +1505,64 @@ fn stage_host_path(
             depth = (depth + site_depth(node)).saturating_sub(site_depth(parent));
         }
     }
-    let mut host = host;
+    let mut host = crate::path::Segments::from_slice(host);
     for (at, pair) in chain.windows(2).enumerate() {
         let (cursor, parent) = (pair[0], pair[1]);
         if cursor.arc_kind() == ArcKind::Variants {
             continue;
         }
         if cursor.arc_kind() == ArcKind::Relocates {
-            host = relocated_path(store, cursor.layer_stack_identifier(), host);
+            relocated_path(store, cursor.layer_stack_identifier(), &mut host);
             continue;
         }
         let levels = depths[at].saturating_sub(usize::from(cursor.namespace_depth()));
-        let ancestor = |path: &crate::path::Path| {
-            let depth = path.depth().checked_sub(levels)?;
-            Some(crate::path::Path::root().join(&path.segments()[..depth]))
+        let ancestor = |path: PathId| {
+            let segments = paths.resolve(path).segments();
+            Some(&segments[..segments.len().checked_sub(levels)?])
         };
-        let site = paths.resolve(cursor.site().prim_path());
-        let parent_site = paths.resolve(parent.site().prim_path());
-        let mapped = ancestor(site)
-            .zip(ancestor(parent_site))
-            .and_then(|(target, source)| Some(source.join(host.strip_prefix(&target)?)));
-        host = match mapped {
-            Some(mapped) => mapped,
-            None if matches!(cursor.arc_kind(), ArcKind::Inherits | ArcKind::Specializes)
-                || cursor.layer_stack_identifier() == parent.layer_stack_identifier() =>
-            {
-                host
+        let mapped = ancestor(cursor.site().prim_path())
+            .zip(ancestor(parent.site().prim_path()))
+            .filter(|(target, _)| host.starts_with(target));
+        match mapped {
+            Some((target, source)) => {
+                replace_prefix(&mut host, target.len(), source);
             }
+            None if matches!(cursor.arc_kind(), ArcKind::Inherits | ArcKind::Specializes)
+                || cursor.layer_stack_identifier() == parent.layer_stack_identifier() => {}
             None => return None,
-        };
+        }
     }
-    Some(host)
+    paths.lookup_segments(&host)
 }
 
-/// `path`, in the namespace of the layer stack rooted at `layer_stack`,
-/// moved by the relocation of that layer stack whose source is at or above
-/// it: the path that relocation gives it, as the arcs that reach the layer
-/// stack map it (AOUSD Core §10.3.2.6.1). A path no relocation moves, or
-/// one a relocation removes, is kept.
+/// Moves `path`, in the namespace of the layer stack rooted at
+/// `layer_stack`, by the relocation of that layer stack whose source is at
+/// or above it: to the path that relocation gives it, as the arcs that
+/// reach the layer stack map it (AOUSD Core §10.3.2.6.1). A path no
+/// relocation moves, or one a relocation removes, is kept.
 fn relocated_path(
     store: &dyn LayerStore,
     layer_stack: LayerStackIdentifier,
-    path: crate::path::Path,
-) -> crate::path::Path {
+    path: &mut crate::path::Segments,
+) {
     let stack = LayerStack::gather_identifier(store, layer_stack);
     let table = crate::relocates::RelocationTable::compute(store, &stack, &mut Vec::new());
     let paths = store.paths();
-    table
-        .iter()
-        .find_map(|relocate| {
-            let rel = path.strip_prefix(paths.resolve(relocate.source))?;
-            Some(paths.resolve(relocate.target?).join(rel))
-        })
-        .unwrap_or(path)
+    let moved = table.iter().find_map(|relocate| {
+        let source = paths.resolve(relocate.source).segments();
+        let target = relocate.target.filter(|_| path.starts_with(source))?;
+        Some((source.len(), paths.resolve(target).segments()))
+    });
+    if let Some((len, target)) = moved {
+        replace_prefix(path, len, target);
+    }
+}
+
+/// Replaces the first `len` segments of `path` with `with`.
+fn replace_prefix(path: &mut crate::path::Segments, len: usize, with: &[TokenId]) {
+    let mut out = crate::path::Segments::from_slice(with);
+    out.extend_from_slice(&path[len..]);
+    *path = out;
 }
 
 /// Filters children maps by removing the children only unselected variant
@@ -1831,10 +1839,7 @@ fn filter_variant_children(
             else {
                 continue;
             };
-            let Some(child_path) = store
-                .paths()
-                .lookup(&store.paths().resolve(source.lookup_path).join(&[leaf]))
-            else {
+            let Some(child_path) = store.paths().lookup_joined(source.lookup_path, &[leaf]) else {
                 continue;
             };
             if spec.variant_sets.is_empty() {
@@ -1969,11 +1974,7 @@ fn filter_variant_children(
                             // if the source prim originally had a path with this leaf
                             // as a child. If the source no longer has it (filtered),
                             // but the source's parent's variants had it, remove it.
-                            let src_child_path = {
-                                let sp = store.paths().resolve(*src_path).clone();
-                                sp.join(&[leaf])
-                            };
-                            let src_child_id = store.paths().lookup(&src_child_path);
+                            let src_child_id = store.paths().lookup_joined(*src_path, &[leaf]);
                             if let Some(sc_id) = src_child_id {
                                 // Source namespace has this path, but it's not in
                                 // source's filtered children → it was filtered out,
@@ -3420,8 +3421,7 @@ fn add_relocated_variant_opinions(
             continue;
         };
         let namespace_depth = u16::try_from(target_depth).unwrap_or(u16::MAX);
-        let joined = store.paths().resolve(source).join(&rel);
-        let source_view = store.paths_mut().intern(joined);
+        let source_view = store.paths_mut().intern_joined(source, &rel);
         let step = ArcStep {
             arc_kind: ArcKind::Relocates,
             layer_stack,
@@ -4001,21 +4001,10 @@ fn map_namespace(
     dest_root: PathId,
     target_root: PathId,
 ) -> PathId {
-    if dest == dest_root {
-        return target_root;
-    }
-    let rel = store
-        .paths()
-        .resolve(dest)
-        .strip_prefix(store.paths().resolve(dest_root))
-        .map(<[_]>::to_vec);
-    match rel {
-        Some(rel) => {
-            let target = store.paths().resolve(target_root).join(&rel);
-            store.paths_mut().intern(target)
-        }
-        None => target_root,
-    }
+    store
+        .paths_mut()
+        .intern_reparented(dest, dest_root, target_root)
+        .unwrap_or(target_root)
 }
 
 /// The branches of `site`'s host among `outer`, the variant selections
@@ -4243,8 +4232,9 @@ fn relocate_nodes(
 fn authored_target(store: &mut dyn LayerStore, arc: &Reference, depth: usize) -> Option<PathId> {
     let target = arc.target_path(store)?;
     let segments = store.paths().resolve(target).segments();
-    let authored = crate::path::Path::root().join(&segments[..segments.len().checked_sub(depth)?]);
-    Some(store.paths_mut().intern(authored))
+    let authored =
+        crate::path::Segments::from_slice(&segments[..segments.len().checked_sub(depth)?]);
+    Some(store.paths_mut().intern_segments(&authored))
 }
 
 fn outer_relocates<'a>(
@@ -4836,18 +4826,17 @@ fn map_across(
         let Some(rel) = paths
             .resolve(path)
             .strip_prefix(paths.resolve(authored))
-            .map(<[_]>::to_vec)
+            .map(crate::path::Segments::from_slice)
         else {
             return path;
         };
-        let joined = paths.resolve(ancestor).join(&rel);
-        return store.paths_mut().intern(joined);
+        return store.paths_mut().intern_joined(ancestor, &rel);
     }
     let paths = store.paths();
     let Some(rel) = paths
         .resolve(path)
         .strip_prefix(paths.resolve(arc_target))
-        .map(<[_]>::to_vec)
+        .map(crate::path::Segments::from_slice)
     else {
         return path;
     };
@@ -4855,10 +4844,7 @@ fn map_across(
     // beneath the destination.
     let stage_path = Walk::new(relocates.across.iter().map(|set| &**set), None)
         .map(store, arc_dest, &rel)
-        .unwrap_or_else(|| {
-            let joined = store.paths().resolve(arc_dest).join(&rel);
-            store.paths_mut().intern(joined)
-        });
+        .unwrap_or_else(|| store.paths_mut().intern_joined(arc_dest, &rel));
     // Arc steps map from the composed prim's namespace; the outer mapping
     // maps into the namespace of the authoring site.
     match outer {
@@ -5308,7 +5294,7 @@ impl AncestralArcs<'_> {
                 continue;
             };
             if let Some(rel) = host_path.strip_prefix(paths.resolve(target_root)) {
-                return paths.lookup(&paths.resolve(dest_root).join(rel));
+                return paths.lookup_joined(dest_root, rel);
             }
             let authoring_stack = nodes.path[..index]
                 .iter()
@@ -5345,8 +5331,7 @@ impl AncestralArcs<'_> {
     ) -> Option<AuthoredReference> {
         let reference = &arc.reference;
         let path = resolve_arc_target(store, reference, self.dest_root, kind, cycles, deps)?;
-        let joined = store.paths().resolve(path).join(rel);
-        let path = store.paths_mut().intern(joined);
+        let path = store.paths_mut().intern_joined(path, rel);
         let target_stack = if reference.asset.is_none() {
             self.arc_stack
         } else {
@@ -5567,8 +5552,7 @@ impl AncestralArcs<'_> {
                 None => UsedSites::new(),
             });
             let mapped = |store: &mut dyn LayerStore, path: PathId| {
-                let joined = store.paths().resolve(path).join(&rel);
-                store.paths_mut().intern(joined)
+                store.paths_mut().intern_joined(path, &rel)
             };
             for (index, (reference, sites)) in arcs.references.into_iter().enumerate() {
                 let Some(reference) = self.retarget(
@@ -5706,8 +5690,7 @@ impl AncestralArcs<'_> {
             .strip_prefix(store.paths().resolve(relocated_at))
             .expect("the relocation target is at or above the target")
             .to_vec();
-        let joined = store.paths().resolve(source).join(&rel);
-        let source_view = store.paths_mut().intern(joined);
+        let source_view = store.paths_mut().intern_joined(source, &rel);
         let arc = nodes.step();
         let step = ArcStep {
             arc_kind: ArcKind::Relocates,
@@ -5746,8 +5729,7 @@ impl AncestralArcs<'_> {
                 .collect();
             beneath.sort_unstable();
             for (prim, rel) in beneath {
-                let joined = store.paths().resolve(source_view).join(&rel);
-                dests.push((prim, store.paths_mut().intern(joined)));
+                dests.push((prim, store.paths_mut().intern_joined(source_view, &rel)));
             }
         }
         for (dest, view) in dests {
@@ -6093,12 +6075,12 @@ fn add_inherit_edge_opinions(
     let mut mapping: Vec<(PathId, PathId)> = Vec::new();
     let walk = parent.class_walk(&stage_relocates, step.relocates.as_deref());
     for remote_path_id in remote_paths.iter().copied() {
-        let rel: Vec<_> = {
+        let rel = {
             let remote_path = store.paths().resolve(remote_path_id);
             let Some(rel) = remote_path.strip_prefix(&inherited_path) else {
                 continue;
             };
-            rel.to_vec()
+            crate::path::Segments::from_slice(rel)
         };
         let Some((dest_path_id, moved)) = walk.place(store, dest_root, &rel) else {
             continue;
@@ -6526,7 +6508,7 @@ impl TargetMap<'_> {
             paths
                 .resolve(path)
                 .strip_prefix(paths.resolve(root))
-                .map(<[_]>::to_vec)
+                .map(crate::path::Segments::from_slice)
         };
         let mut innermost = true;
         for (at, step) in steps.iter().enumerate().rev() {
@@ -6553,8 +6535,7 @@ impl TargetMap<'_> {
             if let Some((ancestor, authored)) = step.ancestral
                 && let Some(rel) = within(store, path, authored)
             {
-                let joined = store.paths().resolve(ancestor).join(&rel);
-                path = store.paths_mut().intern(joined);
+                path = store.paths_mut().intern_joined(ancestor, &rel);
                 innermost = false;
                 continue;
             }
@@ -6579,10 +6560,8 @@ impl TargetMap<'_> {
                 let dest = match (step.ancestral, above) {
                     (Some((ancestor, _)), _) => Some(ancestor),
                     (None, Some((_, above_dest, above_target))) => {
-                        within(store, dest_root, above_dest).map(|rel| {
-                            let joined = store.paths().resolve(above_target).join(&rel);
-                            store.paths_mut().intern(joined)
-                        })
+                        within(store, dest_root, above_dest)
+                            .map(|rel| store.paths_mut().intern_joined(above_target, &rel))
                     }
                     (None, None) => Some(dest_root),
                 };
@@ -6611,12 +6590,15 @@ fn remap_path_id(
     src_root: &crate::path::Path,
     path: PathId,
 ) -> PathId {
-    let rel: Option<Vec<_>> = {
+    let rel = {
         let p = store.paths().resolve(path);
-        p.strip_prefix(src_root).map(<[_]>::to_vec)
+        p.strip_prefix(src_root)
+            .map(crate::path::Segments::from_slice)
     };
     if let Some(rel) = rel {
-        return store.paths_mut().intern(dest_root.join(&rel));
+        let mut joined = crate::path::Segments::from_slice(dest_root.segments());
+        joined.extend_from_slice(&rel);
+        return store.paths_mut().intern_segments(&joined);
     }
 
     path
@@ -6632,9 +6614,7 @@ fn spec_path_selection_sites(
         match component {
             crate::spec_path::SpecComponent::Prim(segment) => prefix.push(segment),
             crate::spec_path::SpecComponent::VariantSelection { set, variant } => {
-                let host_path = store
-                    .paths_mut()
-                    .intern(crate::path::Path::root().join(&prefix));
+                let host_path = store.paths_mut().intern_segments(&prefix);
                 sites.push(VariantSelectionSite {
                     host_path,
                     set,
@@ -6937,12 +6917,12 @@ fn add_reference_edge_opinions(
     let mut mapping: Vec<(PathId, PathId)> = Vec::new();
     let walk = arc_walk(&nodes.stage_relocates, &nodes.path);
     for remote_path_id in remote_paths.iter().copied() {
-        let rel: Vec<_> = {
+        let rel = {
             let remote_path = store.paths().resolve(remote_path_id);
             let Some(rel) = remote_path.strip_prefix(&target_root) else {
                 continue;
             };
-            rel.to_vec()
+            crate::path::Segments::from_slice(rel)
         };
         let Some((dest_path_id, moved)) = walk.place(store, dest_root, &rel) else {
             continue;
@@ -7830,12 +7810,12 @@ fn add_payload_edge_opinions(
     let mut mapping: Vec<(PathId, PathId)> = Vec::new();
     let walk = arc_walk(&nodes.stage_relocates, &nodes.path);
     for remote_path_id in remote_paths.iter().copied() {
-        let rel: Vec<_> = {
+        let rel = {
             let remote_path = store.paths().resolve(remote_path_id);
             let Some(rel) = remote_path.strip_prefix(&target_root) else {
                 continue;
             };
-            rel.to_vec()
+            crate::path::Segments::from_slice(rel)
         };
         let Some((dest_path_id, moved)) = walk.place(store, dest_root, &rel) else {
             continue;
@@ -8292,12 +8272,12 @@ fn add_specializes_edge_opinions(
     let mut mapping: Vec<(PathId, PathId)> = Vec::new();
     let walk = parent.class_walk(&stage_relocates, relocates.as_deref());
     for remote_path_id in remote_paths.iter().copied() {
-        let rel: Vec<_> = {
+        let rel = {
             let remote_path = store.paths().resolve(remote_path_id);
             let Some(rel) = remote_path.strip_prefix(&specialized_path) else {
                 continue;
             };
-            rel.to_vec()
+            crate::path::Segments::from_slice(rel)
         };
         let Some((dest_path_id, moved)) = walk.place(store, dest_root, &rel) else {
             continue;
@@ -9067,11 +9047,10 @@ fn source_authors_child(store: &dyn LayerStore, key: &OpinionKey, name: TokenId)
         return false;
     };
     let paths = store.paths();
-    let Some(child_lookup) = paths.lookup(&paths.resolve(key.lookup_path).join(&[name])) else {
+    let Some(child_lookup) = paths.lookup_joined(key.lookup_path, &[name]) else {
         return false;
     };
-    let Some(child_prim) = paths.lookup(&paths.resolve(key.spec_path.prim_path()).join(&[name]))
-    else {
+    let Some(child_prim) = paths.lookup_joined(key.spec_path.prim_path(), &[name]) else {
         return false;
     };
     let spec = key.spec_path.prim_spec().child(name, child_prim);

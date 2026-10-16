@@ -28,7 +28,7 @@ use crate::{
     interner::TokenId,
     layer_stack::LayerStack,
     listop::{ListOp, resolve_list_chain},
-    path::{Path, PathId},
+    path::PathId,
     spec_path::VariantSelectionSite,
 };
 
@@ -71,7 +71,7 @@ pub(crate) fn lookup_reference_target_path(
                 .into_iter()
                 .map(|name| store.tokens().lookup(name))
                 .collect::<Option<Vec<_>>>()?;
-            store.paths().lookup(&Path::root().join(&segments))
+            store.paths().lookup_segments(&segments)
         }
     }
 }
@@ -472,9 +472,7 @@ fn parent_of(store: &dyn LayerStore, prim: PathId) -> Option<PathId> {
 /// interned (a path never interned has no spec).
 fn child_of(store: &dyn LayerStore, host: PathId, prim: PathId) -> Option<PathId> {
     let leaf = store.paths().resolve(prim).leaf()?;
-    store
-        .paths()
-        .lookup(&store.paths().resolve(host).join(&[leaf]))
+    store.paths().lookup_joined(host, &[leaf])
 }
 
 /// An arc with the variant branches of the node that authors it, outermost

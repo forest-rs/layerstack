@@ -138,7 +138,8 @@ pub(crate) struct NodeArc {
 pub struct PrimNode {
     parent: Option<NodeId>,
     origin: Option<NodeId>,
-    children: Vec<NodeId>,
+    /// Most nodes have few children; they are kept inline.
+    children: smallvec::SmallVec<[NodeId; 4]>,
     pub(crate) arc: NodeArc,
     /// The offset from the layers of the node's layer stack to the stage,
     /// before their sublayer offsets; `None` until composition records it.
@@ -365,7 +366,8 @@ impl PrimIndexGraph {
     /// the node's parent, origin, arc, layer offset, and the resident layers
     /// of its layer stack with their offsets.
     pub(crate) fn from_ordered(nodes: impl IntoIterator<Item = OrderedNode>) -> Self {
-        let mut out: Vec<PrimNode> = Vec::new();
+        let nodes = nodes.into_iter();
+        let mut out: Vec<PrimNode> = Vec::with_capacity(nodes.size_hint().0);
         for (parent, origin, arc, layer_offset, stack_offsets) in nodes {
             let id = NodeId::from_index(out.len());
             if let Some(parent) = parent {
@@ -374,7 +376,7 @@ impl PrimIndexGraph {
             out.push(PrimNode {
                 parent,
                 origin,
-                children: Vec::new(),
+                children: smallvec::SmallVec::new(),
                 arc,
                 layer_offset: Some(layer_offset),
                 stack_offsets,

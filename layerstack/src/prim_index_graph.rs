@@ -379,7 +379,7 @@ impl PrimIndexGraph {
                 children: Vec::new(),
                 arc,
                 layer_offset: Some(LayerOffset::IDENTITY),
-                stack_offsets: Arc::from([]),
+                stack_offsets: Arc::default(),
             }],
             ranks: Vec::new(),
         }
@@ -408,7 +408,7 @@ impl PrimIndexGraph {
             children: Vec::new(),
             arc,
             layer_offset: None,
-            stack_offsets: Arc::from([]),
+            stack_offsets: Arc::default(),
         });
         self.nodes[parent.index()].children.push(id);
         id
@@ -1021,7 +1021,7 @@ impl PrimIndexGraph {
                 children: Vec::new(),
                 arc: arc(arc_kind, namespace_depth),
                 layer_offset: None,
-                stack_offsets: Arc::from([]),
+                stack_offsets: Arc::default(),
             });
             graph.nodes[parent.index()].children.push(id);
         }

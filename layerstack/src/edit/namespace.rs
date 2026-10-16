@@ -21,8 +21,8 @@ use super::{
 };
 use crate::{
     FieldEntry, FieldValue, Layer, LayerId, LayerStack, LayerStore, ListOp, Path, PathId, PrimSpec,
-    PropertyEntry, PropertyPath, Reference, ReferenceTarget, SpecComponent, SpecPath, Stage,
-    TargetPath, TokenId, Value, VariantSetSpec, VariantSpec,
+    PropertyEntry, PropertyPath, Reference, ReferenceTarget, SpecPath, Stage, TargetPath, TokenId,
+    Value, VariantSetSpec, VariantSpec,
 };
 
 /// A validated namespace move, including dependent authored path repairs.
@@ -151,12 +151,7 @@ impl NamespaceEdit {
         }
         let from = mapped_source;
         let to = mapped_destination;
-        if from
-            .components()
-            .iter()
-            .chain(to.components())
-            .any(|c| matches!(c, SpecComponent::VariantSelection { .. }))
-        {
+        if from.has_variant_selections() || to.has_variant_selections() {
             return Err(NamespaceError::UnsupportedComposition(
                 "variant-qualified namespace moves are not supported",
             ));
@@ -227,7 +222,7 @@ impl NamespaceEdit {
             }
 
             let previous_len = transaction.len();
-            append_delta(store, &original, &edited, &mut transaction, &mut specs);
+            append_delta(&original, &edited, &mut transaction, &mut specs);
             if original.default_prim != edited.default_prim
                 || !original.metadata.same(&edited.metadata)
             {
@@ -484,21 +479,13 @@ fn validate_opinions(
                 let relevant = from.property_path().is_none()
                     || store
                         .layer(*l)
-                        .and_then(|l| {
-                            Loc::lookup(spec, store.paths()).and_then(|loc| spec_at(l, &loc))
-                        })
+                        .and_then(|l| spec_at(l, &Loc::of(spec)))
                         .is_some_and(|s| {
                             s.properties()
                                 .iter()
                                 .any(|p| Some(p.name) == source.property())
                         });
-                if relevant
-                    && (*l != layer
-                        || !spec
-                            .components()
-                            .iter()
-                            .all(|c| matches!(c, SpecComponent::Prim(_))))
-                {
+                if relevant && (*l != layer || spec.has_variant_selections()) {
                     return Err(NamespaceError::SplitOpinions {
                         layer: *l,
                         spec: spec.clone(),
@@ -513,9 +500,7 @@ fn validate_opinions(
                 p.prim_path() == source.prim_path()
                     && store
                         .layer(*l)
-                        .and_then(|l| {
-                            Loc::lookup(p, store.paths()).and_then(|loc| spec_at(l, &loc))
-                        })
+                        .and_then(|l| spec_at(l, &Loc::of(p)))
                         .is_some_and(|s| s.properties().iter().any(|p| p.name == property))
             } else {
                 store
@@ -543,8 +528,7 @@ fn inactive_prim(stage: &Stage, store: &dyn LayerStore, prim: PathId) -> bool {
         .unwrap_or_default()
         .into_iter()
         .find_map(|(layer, path)| {
-            let spec = Loc::lookup(&path, store.paths())
-                .and_then(|loc| spec_at(store.layer(layer)?, &loc))?;
+            let spec = spec_at(store.layer(layer)?, &Loc::of(&path))?;
             if let SpecRef::Prim(prim) = spec
                 && prim.active.is_some()
             {
@@ -718,8 +702,8 @@ fn move_specs(
     from: &SpecPath,
     to: &SpecPath,
 ) -> Result<(), NamespaceError> {
-    let from_loc = Loc::of(from, store.paths_mut());
-    let to_loc = Loc::of(to, store.paths_mut());
+    let from_loc = Loc::of(from);
+    let to_loc = Loc::of(to);
     if spec_at(layer, &from_loc).is_none() {
         return Err(NamespaceError::NoSuchObject);
     }
@@ -1110,7 +1094,6 @@ fn push(transaction: &mut Transaction, step: Raw, written: Raw) {
         .push(Op::Raw(Box::new(Guarded { step, written })));
 }
 fn append_delta(
-    store: &dyn LayerStore,
     original: &Layer,
     edited: &Layer,
     transaction: &mut Transaction,
@@ -1151,7 +1134,7 @@ fn append_delta(
                 .same(&edited.variant_prims.get(&path).cloned())
         {
             push(transaction, after, before);
-            specs.push((original.id, SpecPath::from_prim_path(path, store.paths())));
+            specs.push((original.id, SpecPath::from_prim_path(path)));
         }
     }
 }

@@ -1175,7 +1175,7 @@ fn clip_sources_explain_both_actual_layers_and_do_not_define_properties() {
     let raw = store.property_path("/C.x");
     assert_eq!(
         source.lower.spec_path,
-        layerstack::SpecPath::from_property_path(raw, &store.paths)
+        layerstack::SpecPath::from_property_path(raw)
     );
     let resolved = stage
         .resolve_property_path_at_time(property, 5., InterpolationType::Linear)
@@ -1605,7 +1605,7 @@ fn missing_clip_property_reports_manifest_default_source() {
     assert_eq!(source.upper.layer, Some(LayerId(4)));
     assert_eq!(
         source.lower.spec_path,
-        layerstack::SpecPath::from_property_path(store.property_path("/C.x"), &store.paths)
+        layerstack::SpecPath::from_property_path(store.property_path("/C.x"))
     );
 }
 

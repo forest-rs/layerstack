@@ -264,11 +264,7 @@ impl<'s> SchemaEdit<'s> {
         }
         let mapped = self.target.map_to_spec_path(path, self.store.paths_mut())?;
         let layer = self.store.layer(self.target.layer())?;
-        let fields = if mapped
-            .components()
-            .last()
-            .is_some_and(|c| matches!(c, layerstack::SpecComponent::VariantSelection { .. }))
-        {
+        let fields = if !mapped.variant_chain().is_empty() {
             &layer.variant_spec_at(&mapped, self.store.paths())?.fields
         } else {
             &layer
@@ -633,28 +629,14 @@ impl<'s> SchemaEdit<'s> {
                     None => variant.fields.as_slice(),
                 }
             } else {
-                let last_prim = mapped
-                    .components()
-                    .iter()
-                    .rposition(|c| matches!(c, layerstack::spec_path::SpecComponent::Prim(_)))?;
-                let mut segments = Vec::new();
-                let mut sites = Vec::new();
-                for component in &mapped.components()[..last_prim] {
-                    match *component {
-                        layerstack::spec_path::SpecComponent::Prim(name) => segments.push(name),
-                        layerstack::spec_path::SpecComponent::VariantSelection { set, variant } => {
-                            let host_path = self
-                                .store
-                                .paths()
-                                .lookup(&layerstack::Path::root().join(&segments))?;
-                            sites.push(layerstack::spec_path::VariantSelectionSite {
-                                host_path,
-                                set,
-                                variant,
-                            });
-                        }
-                    }
+                if self.store.paths().resolve(mapped.prim_path()).depth() == 0 {
+                    return None;
                 }
+                // The branches enclosing the prim, hosted above it.
+                let sites: Vec<_> = mapped
+                    .variant_selection_sites()
+                    .filter(|site| site.host_path != mapped.prim_path())
+                    .collect();
                 let prim = layer.prim_spec_in(mapped.prim_path(), &sites)?;
                 match mapped.property() {
                     Some(name) => prim.property(name)?.metadata.as_slice(),
@@ -760,29 +742,7 @@ impl<'s> SchemaEdit<'s> {
                         .variant_spec_at(mapped, self.store.paths())
                         .is_some_and(|v| v.properties.iter().any(|p| p.name == path.property()))
                 } else {
-                    let mut segments = Vec::new();
-                    let mut sites = Vec::new();
-                    for component in mapped.components() {
-                        match *component {
-                            layerstack::spec_path::SpecComponent::Prim(name) => segments.push(name),
-                            layerstack::spec_path::SpecComponent::VariantSelection {
-                                set,
-                                variant,
-                            } => {
-                                if let Some(host_path) = self
-                                    .store
-                                    .paths()
-                                    .lookup(&layerstack::Path::root().join(&segments))
-                                {
-                                    sites.push(layerstack::spec_path::VariantSelectionSite {
-                                        host_path,
-                                        set,
-                                        variant,
-                                    });
-                                }
-                            }
-                        }
-                    }
+                    let sites: Vec<_> = mapped.variant_selection_sites().collect();
                     layer
                         .prim_spec_in(mapped.prim_path(), &sites)
                         .is_some_and(|p| p.property(path.property()).is_some())
@@ -863,10 +823,7 @@ impl<'s> SchemaEdit<'s> {
             .as_ref()
             .and_then(|mapped| {
                 let layer = self.store.layer(self.target.layer())?;
-                if matches!(
-                    mapped.components().last(),
-                    Some(layerstack::SpecComponent::VariantSelection { .. })
-                ) {
+                if !mapped.variant_chain().is_empty() {
                     layer
                         .variant_spec_at(mapped, self.store.paths())?
                         .properties

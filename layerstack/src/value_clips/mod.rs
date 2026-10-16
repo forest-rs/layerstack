@@ -585,7 +585,10 @@ impl Catalog {
             }) && target.layer_stack_identifier() == anchor_node.layer_stack_identifier()
                 // C++ _ClipsApplyToNode compares variant-qualified paths. A
                 // variant clip belongs at that arc, below local layer opinions.
-                && target.site().components().starts_with(source_spec.components())
+                && target
+                    .site()
+                    .components(store.paths())
+                    .starts_with(&source_spec.components(store.paths()))
                 && source_prefix.is_prefix_of(store.paths().resolve(target.site().prim_path()))
                 && crate::expression_variables::node_variables(store, &index.graph, node)
                     == crate::expression_variables::node_variables(
@@ -744,8 +747,7 @@ impl Catalog {
             };
             let mut key = set.definition.anchor.clone();
             key.node = node;
-            let spec =
-                SpecPath::from_property_path(PropertyPath::new(clip_path, field), store.paths());
+            let spec = SpecPath::from_property_path(PropertyPath::new(clip_path, field));
             self.properties
                 .entry((prim, field))
                 .or_default()
@@ -1385,13 +1387,13 @@ mod tests {
     fn prepared_entry_ordinals_distinguish_sets_sharing_one_anchor() {
         let (mut store, _, prim, field) = template_stage(true);
         let property_path = store.property_path("/Clip.x");
-        let spec = SpecPath::from_property_path(property_path, store.paths());
+        let spec = SpecPath::from_property_path(property_path);
         let key = OpinionKey {
             node: crate::prim_index_graph::NodeId::ROOT,
             layer_strength: 0,
             layer_id: LayerId(1),
             lookup_path: prim,
-            spec_path: SpecPath::from_prim_path(prim, store.paths()),
+            spec_path: SpecPath::from_prim_path(prim),
         };
         let prepared = |name: &str, layer, times: Vec<(f64, Value)>| {
             let mut raw = PropertySpec::attribute();

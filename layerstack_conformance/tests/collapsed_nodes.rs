@@ -136,7 +136,8 @@ fn prim_stacks_repeat_each_occurrence_of_a_site() {
             .map(|key| {
                 (
                     layer_name(&loaded, key.layer_id),
-                    key.spec_path.display(&loaded.store.tokens),
+                    key.spec_path
+                        .display(&loaded.store.paths, &loaded.store.tokens),
                 )
             })
             .collect();
@@ -172,7 +173,10 @@ fn each_occurrence_keeps_its_own_layer_offset() {
             .map(|opinion| {
                 (
                     layer_name(&loaded, opinion.key.layer_id),
-                    opinion.key.spec_path.display(&loaded.store.tokens),
+                    opinion
+                        .key
+                        .spec_path
+                        .display(&loaded.store.paths, &loaded.store.tokens),
                     opinion.layer_offset.offset,
                     opinion.layer_offset.scale,
                 )
@@ -266,7 +270,8 @@ fn snapshot(loaded: &mut LoadedStage, stage: &Stage) -> Vec<String> {
                 format!(
                     "{} {}",
                     layer_name(loaded, key.layer_id),
-                    key.spec_path.display(&loaded.store.tokens)
+                    key.spec_path
+                        .display(&loaded.store.paths, &loaded.store.tokens)
                 )
             })
             .collect();

@@ -363,10 +363,10 @@ impl GeneratedMesh {
             .layer(target.layer())
             .ok_or(MeshPublicationError::InvalidTarget)?;
         let generation = layer.generation();
-        let exists = layer.has_spec_at(&mapped, store.paths());
+        let exists = layer.has_spec_at(&mapped);
         // AOUSD Core §8 (spec paths) and §10.5 (variant selection): the
         // mapped authored branch can differ from the selected composed branch.
-        let local = layer.prim_at(&mapped, store.paths());
+        let local = layer.prim_at(&mapped);
         let type_name = local
             .and_then(|spec| spec.type_name)
             .or_else(|| stage.resolve_type_name(path, store));
@@ -463,7 +463,7 @@ impl GeneratedMesh {
                 .ok_or(MeshPublicationError::InvalidTarget)?;
             let local = store
                 .layer(target.layer())
-                .and_then(|l| l.property_at(&site, store.paths()));
+                .and_then(|l| l.property_at(&site));
             if let Some(local) = local {
                 if local.kind != desired.kind
                     || local.type_name.as_ref().map(|t| (&t.type_name, t.is_array))

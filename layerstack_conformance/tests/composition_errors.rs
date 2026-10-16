@@ -229,7 +229,7 @@ fn stacks_targets_and_values_match_openusd() {
             let site = |loaded: &LoadedStage, layer, spec: &layerstack::SpecPath| {
                 (
                     layer_name(loaded, layer),
-                    spec.display(&loaded.store.tokens),
+                    spec.display(&loaded.store.paths, &loaded.store.tokens),
                 )
             };
             let stack: Vec<(String, String)> = stage
@@ -340,7 +340,8 @@ fn selection_snapshot(loaded: &LoadedStage, stage: &Stage) -> Vec<String> {
                 .map(|key| {
                     (
                         layer_name(loaded, key.layer_id),
-                        key.spec_path.display(&loaded.store.tokens),
+                        key.spec_path
+                            .display(&loaded.store.paths, &loaded.store.tokens),
                     )
                 })
                 .collect();

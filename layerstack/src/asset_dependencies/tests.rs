@@ -76,7 +76,10 @@ fn reference_custom_data_assets_cover_inactive_buckets_and_unselected_variants()
             assert_eq!(use_.layer_hint, None);
             assert_eq!(use_.field, None);
             assert_eq!(
-                use_.spec.as_ref().unwrap().display(&store.tokens),
+                use_.spec
+                    .as_ref()
+                    .unwrap()
+                    .display(&store.paths, &store.tokens),
                 if prefix == "variant" {
                     "/Model{mode=hidden}"
                 } else {
@@ -187,7 +190,11 @@ fn recursive_inventory_visits_unselected_variants_and_reports_partial_resolution
         .find(|d| &*d.source.identifier == "missing.png")
         .unwrap();
     assert_eq!(
-        use_.source.spec.as_ref().unwrap().display(&store.tokens),
+        use_.source
+            .spec
+            .as_ref()
+            .unwrap()
+            .display(&store.paths, &store.tokens),
         "/Model{mode=hidden}.file"
     );
 }
@@ -420,7 +427,11 @@ fn unselected_variant_identities_are_scoped_to_prim_metadata() {
         .find(|use_| use_.kind == AssetDependencyKind::Identity)
         .unwrap();
     assert_eq!(
-        identity.spec.as_ref().unwrap().display(&store.tokens),
+        identity
+            .spec
+            .as_ref()
+            .unwrap()
+            .display(&store.paths, &store.tokens),
         "/Model{mode=hidden}",
         "identity retains variant-qualified provenance"
     );

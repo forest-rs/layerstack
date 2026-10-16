@@ -1043,7 +1043,7 @@ mod tests {
         let mut tokens = TokenInterner::default();
         let mut paths = PathInterner::default();
         let path = paths.intern(Path::parse_absolute(text, &mut tokens).expect("path"));
-        SpecPath::from_prim_path(path, &paths)
+        SpecPath::from_prim_path(path)
     }
 
     fn arc(arc_kind: ArcKind, namespace_depth: u16, sibling_index: u16) -> NodeArc {
@@ -1320,7 +1320,7 @@ mod tests {
         let mut paths = PathInterner::default();
         let mut path = |text: &str| {
             let path = paths.intern(Path::parse_absolute(text, &mut tokens).expect("path"));
-            SpecPath::from_prim_path(path, &paths)
+            SpecPath::from_prim_path(path)
         };
         let (a, b) = (path("/A"), path("/B"));
         let graph = graph(vec![(0, arc(ArcKind::Variants, 1, 0))]);

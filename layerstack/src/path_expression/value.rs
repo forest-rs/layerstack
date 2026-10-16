@@ -40,7 +40,7 @@ use crate::{
     path::PathId,
     prim_index::{ArcKind, Opinion, OpinionValue, PrimIndex},
     prim_index_graph::{NodeId, PrimIndexGraph},
-    spec_path::{SpecComponent, SpecPath},
+    spec_path::SpecPath,
     stage::value_at_time,
 };
 
@@ -201,12 +201,12 @@ type NodeNamespace = (Vec<String>, Vec<ArcMap>);
 
 /// The prim names of `site`, without its variant selections.
 fn prim_names(store: &dyn LayerStore, site: &SpecPath) -> Vec<String> {
-    site.components()
+    store
+        .paths()
+        .resolve(site.prim_path())
+        .segments()
         .iter()
-        .filter_map(|component| match component {
-            SpecComponent::Prim(name) => Some(store.tokens().resolve(*name).to_owned()),
-            SpecComponent::VariantSelection { .. } => None,
-        })
+        .map(|name| store.tokens().resolve(*name).to_owned())
         .collect()
 }
 

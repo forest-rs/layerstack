@@ -505,7 +505,7 @@ mod tests {
                 layer: ROOT,
                 path: missing,
                 introducing_layer: Some(ROOT),
-                introducing_spec: SpecPath::from_prim_path(stone, &store.paths),
+                introducing_spec: SpecPath::from_prim_path(stone),
             }),
             CompositionError::UnresolvedPrimPath(UnresolvedPrimPath {
                 prim: brook,
@@ -513,7 +513,7 @@ mod tests {
                 layer: ASSET,
                 path: nowhere,
                 introducing_layer: Some(ROOT),
-                introducing_spec: SpecPath::from_prim_path(brook, &store.paths),
+                introducing_spec: SpecPath::from_prim_path(brook),
             }),
         ];
         expected.sort_by_key(|error| error.prim());
@@ -579,9 +579,8 @@ mod tests {
                 .map(|d| d.kind),
             Some(PropertyKind::Relationship)
         );
-        let lantern_spec =
-            |name| SpecPath::from_prim_path(lantern, &store.paths).with_property(name);
-        let lamp_spec = |name| SpecPath::from_prim_path(lamp, &store.paths).with_property(name);
+        let lantern_spec = |name| SpecPath::from_prim_path(lantern).with_property(name);
+        let lamp_spec = |name| SpecPath::from_prim_path(lamp).with_property(name);
         let mut errors = stage.composition_errors().to_vec();
         errors.sort_by_key(|error| match error {
             CompositionError::InconsistentPropertyType(error) => error.defining_kind as u8,

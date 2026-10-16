@@ -262,7 +262,7 @@ mod tests {
             .explain_prim(mast)
             .unwrap_or_default()
             .iter()
-            .map(|key| key.spec_path.display(&store.tokens))
+            .map(|key| key.spec_path.display(&store.paths, &store.tokens))
             .collect();
         // The stage reports the selections composition made, fallbacks
         // included, as `UsdVariantSet::GetVariantSelection` does.

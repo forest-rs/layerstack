@@ -113,7 +113,7 @@ fn check_opinion(
         store.paths.display(prim, &store.tokens),
         store.tokens.resolve(name),
         key.layer_id.0,
-        key.spec_path.display(&store.tokens)
+        key.spec_path.display(&store.paths, &store.tokens)
     );
     let node = stage
         .explain_prim_graph(prim)
@@ -155,7 +155,7 @@ fn check_opinion(
     if mapped.as_ref() != Some(&key.spec_path) {
         tally.failures.push(format!(
             "{context}: target maps to {:?}",
-            mapped.map(|p| p.display(&store.tokens))
+            mapped.map(|p| p.display(&store.paths, &store.tokens))
         ));
     }
 }

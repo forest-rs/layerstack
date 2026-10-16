@@ -22,7 +22,7 @@ use crate::{
         PropertyEntry, PropertySpec, PropertyType, get_property, get_property_mut, remove_property,
         set_property_vec,
     },
-    spec_path::{SpecComponent, SpecPath, VariantSelectionSite},
+    spec_path::{SpecPath, VariantSelectionSite},
 };
 
 /// Identifies a layer by stable ID.
@@ -2434,27 +2434,14 @@ impl Layer {
         spec_path: &SpecPath,
         paths: &PathInterner,
     ) -> Option<&PrimSpec> {
-        let depth = paths.resolve(lookup_path).depth();
-        let mut segments = Vec::new();
-        let mut sites = Vec::new();
-        for component in spec_path.components() {
-            match *component {
-                SpecComponent::Prim(segment) => segments.push(segment),
-                SpecComponent::VariantSelection { set, variant } => {
-                    if segments.len() >= depth {
-                        break;
-                    }
-                    let Some(host_path) = paths.lookup(&Path::root().join(&segments)) else {
-                        continue;
-                    };
-                    sites.push(VariantSelectionSite {
-                        host_path,
-                        set,
-                        variant,
-                    });
-                }
-            }
+        if !spec_path.has_variant_selections() {
+            return self.prim_spec_in(lookup_path, &[]);
         }
+        let depth = paths.resolve(lookup_path).depth();
+        let sites: Vec<_> = spec_path
+            .variant_selection_sites()
+            .take_while(|site| paths.resolve(site.host_path).depth() < depth)
+            .collect();
         self.prim_spec_in(lookup_path, &sites)
     }
 

@@ -22,7 +22,7 @@ fn arc_path(
         path.push((
             entry.arc_kind(),
             entry.layer_stack(),
-            entry.site().display(&store.tokens),
+            entry.site().display(&store.paths, &store.tokens),
         ));
         let Some(parent) = entry.parent() else {
             break;

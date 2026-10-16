@@ -123,7 +123,7 @@ fn prim_spec_path(
     outer_variant_sites: &[VariantSelectionSite],
 ) -> SpecPath {
     if outer_variant_sites.is_empty() {
-        SpecPath::from_prim_path(prim_path, store.paths())
+        SpecPath::from_prim_path(prim_path)
     } else {
         SpecPath::from_variant_selection_sites(prim_path, outer_variant_sites, store.paths())
     }
@@ -299,7 +299,7 @@ pub(crate) fn compose_stage_retained(
             let root_node = NodeArc {
                 arc_kind: ArcKind::Local,
                 layer_stack: cycles.stage_layer_stack(),
-                site: SpecPath::from_prim_path(path, store.paths()),
+                site: SpecPath::from_prim_path(path),
                 namespace_depth,
                 sibling_index: 0,
                 implied: false,
@@ -1385,44 +1385,31 @@ fn spec_path_branches_selected(
     spec_path: &SpecPath,
     hosts: BranchHosts,
 ) -> bool {
-    use crate::spec_path::SpecComponent;
-
-    let components = spec_path.components();
-    if !spec_path.has_variant_selections() {
-        return true;
-    }
-    let spec_depth = components
-        .iter()
-        .filter(|c| matches!(c, SpecComponent::Prim(_)))
-        .count();
     let paths = store.paths();
-
-    let mut host_segments = crate::path::Segments::new();
-    for component in components {
-        let (set, variant) = match *component {
-            SpecComponent::Prim(segment) => {
-                host_segments.push(segment);
-                continue;
-            }
-            SpecComponent::VariantSelection { set, variant } => (set, variant),
-        };
-        let own = host_segments.len() == spec_depth;
+    for site in spec_path.variant_selection_sites() {
+        let VariantSelectionSite {
+            host_path,
+            set,
+            variant,
+        } = site;
+        let own = host_path == spec_path.prim_path();
         if own != (hosts == BranchHosts::Own) {
             continue;
         }
 
-        let host = paths.lookup_segments(&host_segments);
+        let host_segments = paths.resolve(host_path).segments();
         let composed_host = stage_host_path(
             store,
             &prims[&prim_path].graph,
             prim_path,
             node,
-            &host_segments,
+            host_segments,
         );
         let composed = composed_host
             .filter(|id| prims.contains_key(id))
             .or_else(|| {
-                host.filter(|id| prims.contains_key(id))
+                Some(host_path)
+                    .filter(|id| prims.contains_key(id))
                     .filter(|_| stage_stack.layers.contains(&layer_id))
             });
         if let Some(id) = composed {
@@ -1441,11 +1428,15 @@ fn spec_path_branches_selected(
             }
             continue;
         }
-        let selection = host.and_then(|host| {
-            let authored = &store.layer(layer_id)?.prims.get(&host)?.variant_selections;
-            let context = SiteContext::Node(&prims[&prim_path].graph, node);
-            site_selections(store, authored, context).get(&set).copied()
-        });
+        let selection = store
+            .layer(layer_id)
+            .and_then(|layer| layer.prims.get(&host_path))
+            .and_then(|spec| {
+                let context = SiteContext::Node(&prims[&prim_path].graph, node);
+                site_selections(store, &spec.variant_selections, context)
+                    .get(&set)
+                    .copied()
+            });
         if selection.is_some_and(|selected| selected != variant) {
             return false;
         }
@@ -3951,10 +3942,7 @@ impl ArcStep {
             } => {
                 cursor.prim = map_namespace(store, dest, dest_root, target_root);
                 cursor.variants.clear();
-                (
-                    SpecPath::from_prim_path(cursor.prim, store.paths()),
-                    self.namespace_depth,
-                )
+                (SpecPath::from_prim_path(cursor.prim), self.namespace_depth)
             }
             StepTarget::Variant(site) | StepTarget::LocalVariant(site) => {
                 let paths = store.paths();
@@ -4203,7 +4191,7 @@ fn relocate_nodes(
         let namespace_depth = relocate.stage_target.map_or(0, |target| {
             u16::try_from(store.paths().resolve(target).depth()).unwrap_or(u16::MAX)
         });
-        let site = SpecPath::from_prim_path(site, store.paths());
+        let site = SpecPath::from_prim_path(site);
         let graph = &mut out.get_mut(&dest).expect("path exists").graph;
         let arc = NodeArc {
             arc_kind: ArcKind::Relocates,
@@ -6604,28 +6592,6 @@ fn remap_path_id(
     path
 }
 
-fn spec_path_selection_sites(
-    store: &mut dyn LayerStore,
-    spec_path: &SpecPath,
-) -> Vec<VariantSelectionSite> {
-    let mut sites = Vec::new();
-    let mut prefix = Vec::new();
-    for component in spec_path.components().iter().copied() {
-        match component {
-            crate::spec_path::SpecComponent::Prim(segment) => prefix.push(segment),
-            crate::spec_path::SpecComponent::VariantSelection { set, variant } => {
-                let host_path = store.paths_mut().intern_segments(&prefix);
-                sites.push(VariantSelectionSite {
-                    host_path,
-                    set,
-                    variant,
-                });
-            }
-        }
-    }
-    sites
-}
-
 fn remap_spec_path(
     store: &mut dyn LayerStore,
     spec_path: &SpecPath,
@@ -6633,8 +6599,8 @@ fn remap_spec_path(
     src_root: &crate::path::Path,
 ) -> SpecPath {
     let prim_path = remap_path_id(store, dest_root, src_root, spec_path.prim_path());
-    let selection_sites = spec_path_selection_sites(store, spec_path)
-        .into_iter()
+    let selection_sites = spec_path
+        .variant_selection_sites()
         .map(|site| VariantSelectionSite {
             host_path: remap_path_id(store, dest_root, src_root, site.host_path),
             set: site.set,
@@ -6642,7 +6608,7 @@ fn remap_spec_path(
         })
         .collect::<Vec<_>>();
     let mut out = if selection_sites.is_empty() {
-        SpecPath::from_prim_path(prim_path, store.paths())
+        SpecPath::from_prim_path(prim_path)
     } else {
         SpecPath::from_variant_selection_sites(prim_path, &selection_sites, store.paths())
     };
@@ -9053,7 +9019,7 @@ fn source_authors_child(store: &dyn LayerStore, key: &OpinionKey, name: TokenId)
     let Some(child_prim) = paths.lookup_joined(key.spec_path.prim_path(), &[name]) else {
         return false;
     };
-    let spec = key.spec_path.prim_spec().child(name, child_prim);
+    let spec = key.spec_path.prim_spec().child(child_prim);
     layer.branch_prim_spec(child_lookup, &spec, paths).is_some()
 }
 

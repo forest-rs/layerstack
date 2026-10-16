@@ -97,7 +97,7 @@ fn prim_stacks_match_openusd() {
             .map(|(layer, spec)| {
                 (
                     layer_name(&loaded, layer),
-                    spec.display(&loaded.store.tokens),
+                    spec.display(&loaded.store.paths, &loaded.store.tokens),
                 )
             })
             .collect();

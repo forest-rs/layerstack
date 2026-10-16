@@ -854,7 +854,7 @@ def Xform "Asset" (variants = { string shape = "mesh" }; prepend variantSets = "
     assert_eq!(
         store.tokens.resolve(
             store.layers[&support::ROOT]
-                .prim_at(&mapped, &store.paths)
+                .prim_at(&mapped)
                 .unwrap()
                 .type_name
                 .unwrap()

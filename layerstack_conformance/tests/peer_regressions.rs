@@ -47,7 +47,9 @@ fn missing_internal_targets_retain_introducing_sites_and_selected_variants_resol
             "the authored layer remains explicit"
         );
         let name = loaded.store.paths.display(error.prim, &loaded.store.tokens);
-        let spec = error.introducing_spec.display(&loaded.store.tokens);
+        let spec = error
+            .introducing_spec
+            .display(&loaded.store.paths, &loaded.store.tokens);
         found.insert((name, spec));
     }
     assert_eq!(
@@ -95,7 +97,7 @@ fn missing_external_root_and_subroot_targets_name_the_target_and_introducing_lay
         );
         assert_eq!(
             error.introducing_spec,
-            SpecPath::from_prim_path(error.prim, &loaded.store.paths),
+            SpecPath::from_prim_path(error.prim),
             "direct arc keeps its authored spec"
         );
     }
@@ -176,7 +178,9 @@ fn nested_variant_arc_errors_keep_the_variant_qualified_authored_spec() {
             "root authors the variant arc"
         );
         assert_eq!(
-            error.introducing_spec.display(&loaded.store.tokens),
+            error
+                .introducing_spec
+                .display(&loaded.store.paths, &loaded.store.tokens),
             "/Template{shape=on}Part",
             "source evidence preserves variant selection and authored namespace"
         );

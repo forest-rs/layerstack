@@ -9,7 +9,7 @@ use crate::{
     path::{PathId, PathInterner, PropertyPath, TargetPath},
     prim_index::ArcKind,
     prim_index_graph::{NodeId, PrimIndexGraph, PrimNode},
-    spec_path::{SpecComponent, SpecPath},
+    spec_path::SpecPath,
     stage::Stage,
 };
 
@@ -41,7 +41,7 @@ impl NamespaceMap {
     /// The spec path of the stage prim `path`, if the map covers it.
     pub(crate) fn map_prim(&self, path: PathId, paths: &mut PathInterner) -> Option<SpecPath> {
         match self {
-            Self::Identity => Some(SpecPath::from_prim_path(path, paths)),
+            Self::Identity => Some(SpecPath::from_prim_path(path)),
             Self::Prefix {
                 stage_root,
                 spec_root,
@@ -57,16 +57,13 @@ impl NamespaceMap {
                 if !root_identity {
                     return None;
                 }
-                let plain_root = spec_root
-                    .components()
-                    .iter()
-                    .all(|c| matches!(c, SpecComponent::Prim(_)));
+                let plain_root = !spec_root.has_variant_selections();
                 let shadowed = plain_root
                     && paths
                         .resolve(path)
                         .strip_prefix(paths.resolve(spec_root.prim_path()))
                         .is_some();
-                (!shadowed).then(|| SpecPath::from_prim_path(path, paths))
+                (!shadowed).then(|| SpecPath::from_prim_path(path))
             }
         }
     }

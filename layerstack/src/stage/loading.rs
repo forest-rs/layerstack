@@ -395,6 +395,7 @@ impl super::Stage {
             affected,
             hierarchy,
             boundaries.into_iter().collect(),
+            roots,
         );
     }
 }

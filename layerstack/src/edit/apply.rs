@@ -727,12 +727,17 @@ pub(crate) fn apply(
                     };
                     supports(&g.written) && supports(&g.step)
                 });
+        let mut ignored: Vec<PathId> = root
+            .filter(|_| root_only_supports_children)
+            .into_iter()
+            .collect();
+        if let Some(stage) = stage
+            && stage.layer_stack().contains(id)
+        {
+            ignored.extend(support_only_prims(store, &journal.steps, *id, stage, root));
+        }
         if let Some(layer) = store.layer_mut(*id) {
-            layer.record_scoped_change(
-                journal.structural_layers.contains(id),
-                paths,
-                root.filter(|_| root_only_supports_children),
-            );
+            layer.record_scoped_change(journal.structural_layers.contains(id), paths, ignored);
         }
     }
     let Journal {
@@ -801,6 +806,90 @@ pub(crate) fn apply(
         touched,
         structural: !structural_layers.is_empty(),
     })
+}
+
+/// The prims of `layer`, a layer of `stage`'s own layer stack, whose specs
+/// the journal's steps only created, removed or listed as the parent of a
+/// child, keeping them inert (`over`, no opinions, no branches) and listing
+/// only children that compose already, at prims that compose from other
+/// specs too. Authoring at a deep prim
+/// creates such an `over` for every ancestor without a spec.
+///
+/// An inert spec changes its prim's own spec stack, not the namespace
+/// beneath it: its children compose already, and a stronger spec listing
+/// names a weaker one lists already adds nothing to the composed child
+/// order. The pseudo-root is handled by its caller.
+///
+/// Spec: AOUSD Core §10 (namespace composition: a prim exists where any
+/// site holds a spec). OpenUSD records such a spec as `didAddInertPrim` or
+/// `didRemoveInertPrim` in `SdfChangeList`, which `PcpChanges` treats as a
+/// spec stack change of the prim alone, not a resync of its namespace.
+fn support_only_prims(
+    store: &dyn LayerStore,
+    steps: &[Guarded],
+    layer: LayerId,
+    stage: &Stage,
+    root: Option<PathId>,
+) -> Vec<PathId> {
+    let inert = |spec: &PrimSpec| {
+        let mut spec = spec.clone();
+        spec.authored_children.clear();
+        if spec.specifier == Some(Specifier::Over) {
+            spec.specifier = None;
+        }
+        spec == PrimSpec::default()
+    };
+    let supports = |step: &Raw, path: PathId| match step {
+        Raw::PrimSlots {
+            path: at,
+            main,
+            branches,
+            ..
+        } if *at == path => {
+            branches.as_ref().is_none_or(|b| b.is_empty()) && main.as_ref().is_none_or(inert)
+        }
+        Raw::Child { .. } => true,
+        _ => false,
+    };
+    let steps: Vec<&Guarded> = steps
+        .iter()
+        .filter(|g| g.written.layer() == layer)
+        .collect();
+    let mut candidates: Vec<PathId> = steps
+        .iter()
+        .filter(|g| matches!(g.written, Raw::PrimSlots { .. } | Raw::Child { .. }))
+        .filter_map(|g| g.written.change_path(store))
+        .filter(|path| Some(*path) != root)
+        .collect();
+    candidates.sort_unstable();
+    candidates.dedup();
+    candidates.retain(|&path| {
+        steps
+            .iter()
+            .filter(|g| {
+                g.written.change_path(store) == Some(path)
+                    || g.step.change_path(store) == Some(path)
+            })
+            .all(|g| supports(&g.written, path) && supports(&g.step, path))
+            && stage.prim_stack(path).is_some_and(|stack| {
+                stack
+                    .iter()
+                    .any(|(id, spec)| *id != layer || spec.prim_path() != path)
+            })
+            && store
+                .layer(layer)
+                .and_then(|l| l.prim_spec_in(path, &[]))
+                .is_none_or(|spec| {
+                    spec.authored_children.iter().all(|name| {
+                        let child = store.paths().resolve(path).join(&[*name]);
+                        store
+                            .paths()
+                            .lookup(&child)
+                            .is_some_and(|child| stage.has_prim(child))
+                    })
+                })
+    });
+    candidates
 }
 
 fn check_preconditions(store: &mut dyn LayerStore, txn: &Transaction) -> Result<(), EditError> {

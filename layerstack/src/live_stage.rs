@@ -45,6 +45,21 @@ pub const STRUCTURAL: Channel = Channel::new(1);
 /// [`Layer::structural_generation`](crate::Layer::structural_generation).
 type LayerGenerations = (u64, u64);
 
+/// The scopes of the structural changes of `layer` since `generation`, and
+/// the changed prims whose specs only support existing children; None when
+/// its history does not reach back that far.
+fn source_changes(
+    store: &dyn LayerStore,
+    layer: LayerId,
+    generation: u64,
+) -> Option<(Vec<PathId>, Vec<PathId>)> {
+    let layer = store.layer(layer)?;
+    Some((
+        layer.changed_scopes_since(generation)?,
+        layer.changed_supports_since(generation)?,
+    ))
+}
+
 fn generations_of(store: &dyn LayerStore, layer: LayerId) -> Option<LayerGenerations> {
     store
         .layer(layer)
@@ -229,6 +244,10 @@ pub struct LiveStage {
     controls_pending: bool,
     structural_roots: Vec<PathId>,
     structural_sources: Vec<(LayerId, PathId)>,
+    /// Changed source prims whose specs only support existing children
+    /// ([`crate::Layer::changed_supports_since`]): their prim indexes need
+    /// refreshing, not the namespace beneath them.
+    support_sources: Vec<(LayerId, PathId)>,
     namespace_inventory: crate::population::NamespaceInventory,
     layer_discovery: discovery::LayerDiscovery,
     work: RecompositionWork,
@@ -276,6 +295,7 @@ impl LiveStage {
             controls_pending: false,
             structural_roots: Vec::new(),
             structural_sources: Vec::new(),
+            support_sources: Vec::new(),
             namespace_inventory,
             layer_discovery: discovery::LayerDiscovery::default(),
             work: RecompositionWork::default(),
@@ -498,7 +518,8 @@ impl LiveStage {
             || pending_opinions
             || self.controls_pending
             || !self.structural_roots.is_empty()
-            || !self.structural_sources.is_empty();
+            || !self.structural_sources.is_empty()
+            || !self.support_sources.is_empty();
         // Precision is valid only against the source generations we composed.
         // Unknown external edits must not be hidden behind this transaction.
         let sources_current = self
@@ -600,14 +621,16 @@ impl LiveStage {
                 && !self.needs_full_rebuild
             {
                 for &layer in &outcome.layers {
-                    let paths = self
+                    let changes = self
                         .generations
                         .get(&layer)
                         .copied()
                         .flatten()
-                        .and_then(|seen| store.layer(layer)?.changed_scopes_since(seen.0));
-                    match paths {
-                        Some(paths) => self.queue_source_structure(store, layer, &paths),
+                        .and_then(|seen| source_changes(store, layer, seen.0));
+                    match changes {
+                        Some((paths, supports)) => {
+                            self.queue_source_structure(store, layer, &paths, &supports);
+                        }
                         None => self.notify_structural_change(),
                     }
                     self.generations.insert(layer, generations_of(store, layer));
@@ -771,8 +794,14 @@ impl LiveStage {
         changes.changed_info_only.dedup();
         let mut affected: Vec<_> = affected.into_iter().collect();
         affected.sort_unstable();
-        self.stage
-            .merge_local_subtrees(store, partial, &affected, &hierarchy, boundary_children);
+        self.stage.merge_local_subtrees(
+            store,
+            partial,
+            &affected,
+            &hierarchy,
+            boundary_children,
+            &affected,
+        );
         self.update_prim_edges(&affected, &deps);
         for &path in &affected {
             if !self.stage.has_prim(path) {
@@ -830,19 +859,16 @@ impl LiveStage {
         for &(layer, found) in &changed {
             let seen = self.generations.insert(layer, found).flatten();
             match (seen, found) {
-                (Some(seen), Some(found)) => {
-                    let paths = store
-                        .layer(layer)
-                        .and_then(|l| l.changed_scopes_since(seen.0));
-                    match paths {
-                        Some(paths) if seen.1 == found.1 => {
-                            self.notify_layer_prim_edits(layer, &paths);
-                        }
-                        Some(paths) => self.queue_source_structure(store, layer, &paths),
-                        None if seen.1 == found.1 => self.notify_layer_edit(layer),
-                        None => self.notify_structural_change(),
+                (Some(seen), Some(found)) => match source_changes(store, layer, seen.0) {
+                    Some((paths, _)) if seen.1 == found.1 => {
+                        self.notify_layer_prim_edits(layer, &paths);
                     }
-                }
+                    Some((paths, supports)) => {
+                        self.queue_source_structure(store, layer, &paths, &supports);
+                    }
+                    None if seen.1 == found.1 => self.notify_layer_edit(layer),
+                    None => self.notify_structural_change(),
+                },
                 _ => self.notify_structural_change(),
             }
         }
@@ -1232,6 +1258,7 @@ impl LiveStage {
         if self.controls_pending
             || !self.structural_roots.is_empty()
             || !self.structural_sources.is_empty()
+            || !self.support_sources.is_empty()
         {
             return self.recompose_controls(store, changes);
         }
@@ -1299,7 +1326,8 @@ impl LiveStage {
 
         self.work.replaced_prim_indexes = affected.len();
         // Replace only the recomposed prim indexes; hierarchy is unchanged.
-        self.stage.merge_prims_from(store, partial, &affected);
+        self.stage
+            .merge_prims_from(store, partial, &affected, &affected);
         // A metadata-only clip edit can introduce an already resident layer.
         // Start watching it without acknowledging unrelated, unnotified edits
         // to layers whose generations were already tracked.
@@ -1479,6 +1507,7 @@ impl LiveStage {
         self.controls_pending = false;
         self.structural_roots.clear();
         self.structural_sources.clear();
+        self.support_sources.clear();
         // Unknown authoring or source replacement invalidates retained identity
         // evidence. A recreated LayerId can reuse the departed layer's counters;
         // full resynchronization must rediscover its namespace and potential arcs.
@@ -1670,6 +1699,138 @@ mod tests {
             live.layer_dependency_storage(),
             fresh.layer_dependency_storage().unwrap()
         );
+    }
+
+    /// Asserts that `live` composes what a fresh composition of `store`
+    /// does: every prim, its prim stack, its children and `value`.
+    fn assert_fresh(live: &LiveStage, store: &mut InMemoryStore, value: TokenId) {
+        let fresh = Stage::compose(store, LayerId(1), StageOptions::default());
+        let mut prims: Vec<_> = fresh.prim_paths().collect();
+        let mut live_prims: Vec<_> = live.stage().prim_paths().collect();
+        prims.sort_unstable();
+        live_prims.sort_unstable();
+        assert_eq!(live_prims, prims);
+        for prim in prims {
+            assert_eq!(
+                live.stage().prim_stack(prim),
+                fresh.prim_stack(prim),
+                "{prim:?}"
+            );
+            assert_eq!(
+                live.stage().children_of(prim),
+                fresh.children_of(prim),
+                "{prim:?}"
+            );
+            let property = PropertyPath::new(prim, value);
+            assert_eq!(
+                live.stage().resolve_field_path(property).map(|r| r.value),
+                fresh.resolve_field_path(property).map(|r| r.value),
+                "{prim:?}"
+            );
+        }
+    }
+
+    /// Authoring at a deep prim creates an inert `over` for each ancestor
+    /// the layer has no spec for; those change the ancestors' spec stacks,
+    /// not their namespace, so only the edited prim's subtree recomposes.
+    ///
+    /// Spec: AOUSD Core §10 (namespace composition), §10.3.2.5 (variant
+    /// selections). OpenUSD treats an added inert prim spec as a spec stack
+    /// change of that prim (`PcpChanges::DidChange`).
+    #[test]
+    fn authoring_beneath_referenced_ancestors_recomposes_only_the_edited_subtree() {
+        use crate::{EditTarget, VariantSetSpec, VariantSpec};
+        let mut store = InMemoryStore::default();
+        let value = store.tokens.intern("value");
+        let look = store.tokens.intern("look");
+        let (a, b) = (store.tokens.intern("a"), store.tokens.intern("b"));
+        let set = p(&mut store, "/Set");
+        let mut asset = Layer::new(LayerId(2));
+        let names = ["Other", "Model", "Last"];
+        let children: Vec<_> = names.iter().map(|n| store.tokens.intern(n)).collect();
+        asset.insert_prim(
+            set,
+            PrimSpec::def().with_children(vec![
+                store.tokens.intern("Shelf"),
+                store.tokens.intern("Side"),
+            ]),
+        );
+        let shelf = p(&mut store, "/Set/Shelf");
+        asset.insert_prim(shelf, PrimSpec::def().with_children(children));
+        for name in ["Other", "Last"] {
+            let path = p(&mut store, &alloc::format!("/Set/Shelf/{name}"));
+            asset.insert_prim(path, PrimSpec::def().with_property(value, attr(0)));
+        }
+        let side = p(&mut store, "/Set/Side");
+        asset.insert_prim(side, PrimSpec::def().with_property(value, attr(0)));
+        let model = p(&mut store, "/Set/Shelf/Model");
+        let branch = |v: i64| VariantSpec {
+            properties: vec![crate::property::PropertyEntry {
+                name: value,
+                spec: Arc::new(attr(v)),
+            }],
+            ..VariantSpec::default()
+        };
+        let mut spec = PrimSpec::def();
+        spec.variant_sets.insert(
+            look,
+            VariantSetSpec {
+                variants: [(a, branch(1)), (b, branch(2))].into_iter().collect(),
+            },
+        );
+        spec.variant_set_order.push(look);
+        spec.variant_selections.insert(look, a);
+        asset.insert_prim(model, spec);
+        store.insert_layer(asset);
+        let mut root = Layer::new(LayerId(1));
+        root.insert_prim(
+            set,
+            PrimSpec::def().with_reference(Reference::with_asset(LayerId(2), set, "asset.usda")),
+        );
+        store.insert_layer(root);
+        let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+
+        let mut edit = Transaction::new();
+        edit.set_variant_selection(EditTarget::for_layer(LayerId(1)).prim(model), look, Some(b));
+        let applied = live.apply(&mut store, &edit).unwrap();
+        assert!(
+            store.layers[&LayerId(1)].prims.contains_key(&shelf),
+            "an over supports /Set/Shelf/Model"
+        );
+        let work = live.recomposition_work();
+        assert!(!work.full_rebuild, "{work:?}");
+        for sibling in ["/Set/Side", "/Set/Shelf/Other", "/Set/Shelf/Last"] {
+            let sibling = p(&mut store, sibling);
+            assert!(
+                !applied.recomposed.contains(&sibling),
+                "{sibling:?} in {:?}",
+                applied.recomposed
+            );
+        }
+        assert_eq!(applied.changes.resynced, [model]);
+        assert_eq!(applied.changes.changed_info_only, [shelf]);
+        assert_fresh(&live, &mut store, value);
+        // The stronger `over` lists only `Model`; the composed order stays
+        // the weaker layer's, as in OpenUSD 26.08.
+        let order: Vec<_> = names
+            .iter()
+            .map(|n| p(&mut store, &alloc::format!("/Set/Shelf/{n}")))
+            .collect();
+        assert_eq!(live.stage().children_of(shelf), Some(order.as_slice()));
+
+        // Undoing removes the supporting `over` again.
+        let undone = live.apply(&mut store, &applied.inverse).unwrap();
+        assert!(!store.layers[&LayerId(1)].prims.contains_key(&shelf));
+        assert!(!live.recomposition_work().full_rebuild);
+        for sibling in ["/Set/Side", "/Set/Shelf/Other", "/Set/Shelf/Last"] {
+            let sibling = p(&mut store, sibling);
+            assert!(
+                !undone.recomposed.contains(&sibling),
+                "{sibling:?} in {:?}",
+                undone.recomposed
+            );
+        }
+        assert_fresh(&live, &mut store, value);
     }
 
     #[test]

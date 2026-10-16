@@ -30,14 +30,19 @@ impl LiveStage {
         self.work
     }
 
+    /// Queues the structural changes of `layer` at `paths`, and at
+    /// `supports` the prims whose specs only support existing children.
     pub(super) fn queue_source_structure(
         &mut self,
         _store: &dyn LayerStore,
         layer: LayerId,
         paths: &[PathId],
+        supports: &[PathId],
     ) {
         self.structural_sources
             .extend(paths.iter().map(|p| (layer, *p)));
+        self.support_sources
+            .extend(supports.iter().map(|p| (layer, *p)));
     }
 
     /// Map new/deleted source slots through the nearest retained source sites.
@@ -97,7 +102,9 @@ impl LiveStage {
         }
     }
 
-    fn control_roots(&mut self, store: &mut dyn LayerStore) -> Option<Vec<PathId>> {
+    /// The roots of the namespace to recompose, and the prims beyond them
+    /// whose prim indexes alone need refreshing; None for a full rebuild.
+    fn control_roots(&mut self, store: &mut dyn LayerStore) -> Option<(Vec<PathId>, Vec<PathId>)> {
         // Unnotified authoring and relocation changes need a unified rebuild.
         if self
             .generations
@@ -156,6 +163,40 @@ impl LiveStage {
                 }
             }
         }
+        // A prim whose spec only supports existing children keeps its
+        // namespace; when it is an ancestor of what is recomposed, the
+        // masked composition composes its index too, and that is all it
+        // needs. Any other is recomposed with its namespace.
+        let pseudo_root = store.paths().lookup(&crate::Path::root());
+        let mut refreshed = Vec::new();
+        for (layer, prim) in core::mem::take(&mut self.support_sources) {
+            let local = self.stage.layer_stack().contains(&layer);
+            // The pseudo-root's spec stack follows the root layer stack's
+            // pseudo-root specs; with nothing beneath it recomposed, a
+            // change of only those leaves its composed opinions as they are.
+            if Some(prim) == pseudo_root {
+                if local && !roots.is_empty() {
+                    refreshed.push(prim);
+                }
+                continue;
+            }
+            if local
+                && self.stage.has_prim(prim)
+                && roots
+                    .iter()
+                    .any(|root| *root != prim && is_beneath(store, *root, &[prim]))
+            {
+                refreshed.push(prim);
+            } else if local {
+                roots.push(prim);
+            } else {
+                self.map_source_structure(store, layer, &[prim]);
+                roots.append(&mut self.structural_roots);
+                if self.needs_full_rebuild {
+                    return None;
+                }
+            }
+        }
         // A new deep spec can introduce previously absent ancestors. Replace
         // the highest missing ancestor too, rather than only its new leaf.
         for root in &mut roots {
@@ -172,7 +213,11 @@ impl LiveStage {
             }
             *root = store.paths_mut().intern(path);
         }
-        Some(minimal_roots(store, &roots))
+        let roots = minimal_roots(store, &roots);
+        refreshed.retain(|prim| !is_beneath(store, *prim, &roots));
+        refreshed.sort_unstable();
+        refreshed.dedup();
+        Some((roots, refreshed))
     }
 
     pub(super) fn recompose_controls(
@@ -180,8 +225,12 @@ impl LiveStage {
         store: &mut dyn LayerStore,
         changes: Option<&mut Changes>,
     ) -> Vec<PathId> {
-        let local_structure_changed = self.structural_sources.iter().any(|(l, _)| *l == self.root);
-        let Some(mut roots) = self.control_roots(store) else {
+        let local_structure_changed = self
+            .structural_sources
+            .iter()
+            .chain(&self.support_sources)
+            .any(|(l, _)| *l == self.root);
+        let Some((mut roots, mut refreshed)) = self.control_roots(store) else {
             return self.full_rebuild(store, changes);
         };
         self.controls_pending = false;
@@ -258,6 +307,20 @@ impl LiveStage {
                 roots = minimal_roots(store, &roots);
                 continue;
             }
+            // A supporting ancestor the masked composition left out is
+            // recomposed with its namespace instead.
+            let unrefreshed: Vec<_> = refreshed
+                .iter()
+                .copied()
+                .filter(|prim| !partial.has_prim(*prim))
+                .collect();
+            if !unrefreshed.is_empty() {
+                refreshed.retain(|prim| partial.has_prim(*prim));
+                roots.extend(unrefreshed);
+                roots = minimal_roots(store, &roots);
+                refreshed.retain(|prim| !is_beneath(store, *prim, &roots));
+                continue;
+            }
             // Newly discovered prims may already be sources of retained arcs.
             for prim in partial
                 .prim_paths()
@@ -312,6 +375,7 @@ impl LiveStage {
                 affected.push(parent);
             }
         }
+        affected.extend(refreshed.iter().copied());
         affected.sort_unstable();
         affected.dedup();
         self.work.replaced_prim_indexes = affected.len();
@@ -339,6 +403,7 @@ impl LiveStage {
             changes.removed = old.difference(&new).copied().collect();
             changes.created.sort_unstable();
             changes.removed.sort_unstable();
+            changes.changed_info_only = refreshed;
             changes.resynced = roots;
         }
         affected

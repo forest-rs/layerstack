@@ -197,7 +197,7 @@ impl InstanceReuse {
             let mut occurrence = index.clone();
             occurrence
                 .graph
-                .set_root_site(SpecPath::from_prim_path(dest, store.paths()));
+                .set_root_site(SpecPath::from_prim_path(dest));
             if let Some(builder) = deps.as_deref_mut() {
                 builder.add_layer_opinion(root, dest);
                 for key in &occurrence.sources {

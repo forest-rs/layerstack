@@ -121,7 +121,8 @@ fn prim_stacks_and_values_match_openusd() {
             .map(|key| {
                 (
                     layer_name(&loaded, key.layer_id),
-                    key.spec_path.display(&loaded.store.tokens),
+                    key.spec_path
+                        .display(&loaded.store.paths, &loaded.store.tokens),
                 )
             })
             .collect();

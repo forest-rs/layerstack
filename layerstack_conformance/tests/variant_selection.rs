@@ -242,7 +242,7 @@ def "SelectsA" (
             .map(|op| {
                 (
                     op.key.layer_id,
-                    op.key.spec_path.display(&store.tokens),
+                    op.key.spec_path.display(&store.paths, &store.tokens),
                     op.value.default_value().cloned(),
                 )
             })

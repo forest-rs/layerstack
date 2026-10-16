@@ -160,7 +160,10 @@ fn assert_pcp_composing_except(loaded: &mut LoadedStage, pcp_path: &Path, skippe
                     eprintln!("  Prim stack for {prim_path}:");
                     for (lid, sid) in &actual {
                         let lname = loaded.layer_names.get(lid).cloned().unwrap_or_default();
-                        eprintln!("    {lname}: {}", sid.display(&loaded.store.tokens));
+                        eprintln!(
+                            "    {lname}: {}",
+                            sid.display(&loaded.store.paths, &loaded.store.tokens)
+                        );
                     }
                 }
                 assert!(
@@ -942,7 +945,7 @@ fn assert_error_arc_cycle_root_composes(load: fn(&str) -> (LoadedStage, PathBuf)
                 format!(
                     "{} {}",
                     loaded.layer_names[layer],
-                    spec.display(&loaded.store.tokens)
+                    spec.display(&loaded.store.paths, &loaded.store.tokens)
                 )
             })
             .collect();

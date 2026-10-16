@@ -34,8 +34,7 @@ use std::collections::BTreeMap;
 use layerstack::edit::{EditError, EditTarget, Rejection, Transaction};
 use layerstack::{
     ArcKind, HashMap, InMemoryStore, Layer, LayerId, ListOp, PathId, PrimSpec, PropertyPath,
-    Reference, SpecComponent, SpecPath, Stage, StageOptions, TargetPath, VariantSetSpec,
-    VariantSpec,
+    Reference, SpecPath, Stage, StageOptions, TargetPath, VariantSetSpec, VariantSpec,
 };
 use serde_json::{Value as Json, json};
 
@@ -125,10 +124,8 @@ fn edit_target(store: &mut InMemoryStore, stage: &Stage, prim: PathId, arc: &str
 /// on a prim or directly inside one variant of it.
 fn authored_targets(store: &InMemoryStore, layer: LayerId, path: &SpecPath) -> Option<Vec<String>> {
     let prim = &store.layers[&layer].prims[&path.prim_path()];
-    let properties = match path.components().last() {
-        Some(SpecComponent::VariantSelection { set, variant }) => {
-            &prim.variant_sets[set].variants[variant].properties
-        }
+    let properties = match path.variant_chain().last() {
+        Some((set, variant)) => &prim.variant_sets[set].variants[variant].properties,
         _ => &prim.properties,
     };
     let name = path.property()?;
@@ -206,7 +203,7 @@ fn edit_targets_map_as_openusd_does() {
         for (path, expected) in case["spec_paths"].as_object().expect("spec paths") {
             let got = target
                 .map_to_spec_path(store.path(path), &mut store.paths)
-                .map(|spec| spec.display(&store.tokens));
+                .map(|spec| spec.display(&store.paths, &store.tokens));
             if json!(got) != *expected {
                 failures.push(format!(
                     "{name}: MapToSpecPath({path}) is {got:?}, OpenUSD {expected}"

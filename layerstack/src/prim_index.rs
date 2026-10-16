@@ -506,7 +506,7 @@ mod tests {
         let mut store = InMemoryStore::default();
         let prim = store.path("/Emitter");
         let field = store.tokens.intern("value");
-        let site = SpecPath::from_prim_path(prim, &store.paths);
+        let site = SpecPath::from_prim_path(prim);
         let mut index = PrimIndex::new(PrimIndexGraph::from_arcs(&site, 1, []));
         let opinion = |value| Opinion {
             key: OpinionKey {
@@ -552,7 +552,7 @@ mod tests {
         let prim = store.path("/Emitter");
         let a = store.tokens.intern("a");
         let b = store.tokens.intern("b");
-        let site = SpecPath::from_prim_path(prim, &store.paths);
+        let site = SpecPath::from_prim_path(prim);
         let mut index = PrimIndex::new(PrimIndexGraph::from_arcs(&site, 1, []));
         let key = |strength| OpinionKey {
             node: NodeId::ROOT,

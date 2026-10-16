@@ -127,7 +127,9 @@ fn stronger_dense_value_shadows_weaker_ones() {
     assert_eq!(explained.contributors().count(), 1);
     assert_eq!(explained.opinions[0].arc_kind(), Some(ArcKind::Local));
     assert_eq!(
-        explained.opinions[0].spec_path().display(&store.tokens),
+        explained.opinions[0]
+            .spec_path()
+            .display(&store.paths, &store.tokens),
         "/Tree.height"
     );
 }
@@ -599,7 +601,7 @@ fn opinions_name_the_arc_that_reaches_them() {
         ]
     );
     let node = height.opinions[1].node.expect("graph node");
-    assert_eq!(node.site().display(&store.tokens), "/Tree");
+    assert_eq!(node.site().display(&store.paths, &store.tokens), "/Tree");
     assert_eq!(node.layer_stack(), LayerId(2));
 
     let bark = stage
@@ -612,7 +614,10 @@ fn opinions_name_the_arc_that_reaches_them() {
     assert_eq!(bark.opinions.len(), 1);
     let node = bark.opinions[0].node.expect("graph node");
     assert_eq!(node.arc_kind(), ArcKind::Inherits);
-    assert_eq!(node.site().display(&store.tokens), "/_class_Tree");
+    assert_eq!(
+        node.site().display(&store.paths, &store.tokens),
+        "/_class_Tree"
+    );
     assert_eq!(bark.opinions[0].layer(), LayerId(2));
 }
 

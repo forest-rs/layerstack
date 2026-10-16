@@ -207,7 +207,7 @@ pub(super) fn prepare(
         let layer = &edited[&id];
         transaction.expect_generation(id, original.generation());
         let previous = transaction.len();
-        append_delta(store, original, layer, &mut transaction, &mut specs);
+        append_delta(original, layer, &mut transaction, &mut specs);
         if original.default_prim != layer.default_prim || !original.metadata.same(&layer.metadata) {
             push(
                 &mut transaction,
@@ -330,11 +330,7 @@ fn gather_dependent_moves(
             if source.from.property_path().is_some() && !suffix.is_empty() {
                 continue;
             }
-            if node
-                .site()
-                .components()
-                .iter()
-                .any(|c| matches!(c, SpecComponent::VariantSelection { .. }))
+            if node.site().has_variant_selections()
                 || node.parent() != Some(NodeId::ROOT)
                 || node.is_implied()
             {
@@ -453,8 +449,9 @@ fn requires_relocate(
             stack.layers.contains(l)
                 && path == node.site()
                 && source.property_path().is_none_or(|p| {
-                    Loc::lookup(path, store.paths())
-                        .and_then(|loc| spec_at(store.layer(*l)?, &loc))
+                    store
+                        .layer(*l)
+                        .and_then(|layer| spec_at(layer, &Loc::of(path)))
                         .is_some_and(|s| s.properties().iter().any(|e| e.name == p.property()))
                 })
         });
@@ -546,8 +543,8 @@ fn move_local(
     if !layer.prims.contains_key(&mapping.from.prim_path()) {
         layer.insert_prim(mapping.from.prim_path(), PrimSpec::over());
     }
-    let from = SpecPath::from_prim_path(mapping.from.prim_path(), store.paths());
-    let to = SpecPath::from_prim_path(mapping.to.prim_path(), store.paths());
+    let from = SpecPath::from_prim_path(mapping.from.prim_path());
+    let to = SpecPath::from_prim_path(mapping.to.prim_path());
     let from = mapping
         .from
         .property_path()

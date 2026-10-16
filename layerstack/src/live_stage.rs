@@ -4336,7 +4336,7 @@ mod tests {
         let instance = store.tokens.intern("SlotAPI:left:upper");
         let mut edit = Transaction::new();
         edit.set_metadata(
-            Address::spec(LayerId(1), SpecPath::from_prim_path(prim, &store.paths)),
+            Address::spec(LayerId(1), SpecPath::from_prim_path(prim)),
             api_schemas,
             FieldValue::TokenListOp(ListOp::prepended(vec![instance])),
         );

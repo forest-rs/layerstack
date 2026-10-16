@@ -39,7 +39,7 @@ use layerstack::interner::TokenInterner;
 use layerstack::listop::ListOp;
 use layerstack::path::{Path, PathInterner, PropertyPath};
 use layerstack::property::PropertyEntry;
-use layerstack::spec_path::{SpecComponent, SpecPath, VariantSelectionSite};
+use layerstack::spec_path::SpecPath;
 use layerstack::{
     AssetResolveError, AssetResolver, InMemoryStore, InterpolationType, ResolvedAsset,
     ResolvedValue, Stage, StageOptions,
@@ -874,23 +874,12 @@ fn stack_properties<'a>(
     if !spec_path.variant_chain().is_empty() {
         return Some(&layer.variant_spec_at(spec_path, &store.paths)?.properties);
     }
-    let mut segments = Vec::new();
-    let mut sites = Vec::new();
-    for component in spec_path.components() {
-        match *component {
-            SpecComponent::Prim(name) => segments.push(name),
-            SpecComponent::VariantSelection { set, variant } => {
-                let host_path = store.paths.lookup(&Path::root().join(&segments))?;
-                sites.push(VariantSelectionSite {
-                    host_path,
-                    set,
-                    variant,
-                });
-            }
-        }
-    }
-    let id = store.paths.lookup(&Path::root().join(&segments))?;
-    Some(&layer.prim_spec_in(id, &sites)?.properties)
+    let sites: Vec<_> = spec_path.variant_selection_sites().collect();
+    Some(
+        &layer
+            .prim_spec_in(spec_path.prim_path(), &sites)?
+            .properties,
+    )
 }
 
 /// A value with its tokens spelled out.

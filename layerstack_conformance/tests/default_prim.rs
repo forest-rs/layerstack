@@ -184,7 +184,7 @@ fn default_prim_arcs_match_openusd() {
                 .map(|(layer, spec)| {
                     (
                         layer_name(&loaded, layer),
-                        spec.display(&loaded.store.tokens),
+                        spec.display(&loaded.store.paths, &loaded.store.tokens),
                     )
                 })
                 .collect();
@@ -267,7 +267,7 @@ fn placements_do_not_copy_other_root_prims() {
                 format!(
                     "{} {}",
                     layer_name(&loaded, layer),
-                    spec.display(&loaded.store.tokens)
+                    spec.display(&loaded.store.paths, &loaded.store.tokens)
                 )
             })
             .collect();

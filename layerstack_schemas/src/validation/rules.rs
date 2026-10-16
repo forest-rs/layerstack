@@ -104,7 +104,7 @@ pub(super) fn validate(
                         push(
                             &mut out,
                             rule,
-                            composition_site(scene, error),
+                            composition_site(error),
                             None,
                             ValidationProblemKind::Composition(error.clone()),
                         );
@@ -573,7 +573,7 @@ fn material_subsets(
     }
 }
 
-fn composition_site(scene: &Scene<'_>, error: &CompositionError) -> ValidationSite {
+fn composition_site(error: &CompositionError) -> ValidationSite {
     let mut site = ValidationSite {
         prim: error.prim(),
         property: None,
@@ -588,7 +588,7 @@ fn composition_site(scene: &Scene<'_>, error: &CompositionError) -> ValidationSi
         CompositionError::OpinionAtRelocationSource(e) => {
             site.source = Some(ValidationSource {
                 layer: e.layer,
-                spec: Some(SpecPath::from_prim_path(e.path, scene.store().paths())),
+                spec: Some(SpecPath::from_prim_path(e.path)),
             });
             None
         }

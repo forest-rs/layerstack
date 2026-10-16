@@ -420,18 +420,16 @@ impl Raw {
             Self::LayerMetadata { key, .. } => (
                 SpecPath::from_prim_path(
                     paths.lookup(&crate::Path::root()).expect("interned root"),
-                    paths,
                 ),
                 Slot::Metadata(*key),
             ),
             Self::LayerRelocates { .. } | Self::LayerFields { .. } => (
                 SpecPath::from_prim_path(
                     paths.lookup(&crate::Path::root()).expect("interned root"),
-                    paths,
                 ),
                 Slot::Spec,
             ),
-            Self::PrimSlots { path, .. } => (SpecPath::from_prim_path(*path, paths), Slot::Spec),
+            Self::PrimSlots { path, .. } => (SpecPath::from_prim_path(*path), Slot::Spec),
             Self::Child { parent: loc, .. } | Self::Variant { host: loc, .. } => {
                 (loc.spec_path(paths), Slot::Spec)
             }
@@ -513,7 +511,7 @@ pub(crate) struct PropertyValueEdit {
 
 impl PropertyValueEdit {
     pub(crate) fn property<'a>(&self, store: &'a dyn LayerStore) -> Option<&'a PropertySpec> {
-        let loc = Loc::lookup(&self.path, store.paths())?;
+        let loc = Loc::of(&self.path);
         let spec = spec_at(store.layer(self.layer)?, &loc)?;
         get_property(spec.properties(), self.name)
     }
@@ -906,7 +904,7 @@ fn check_preconditions(store: &mut dyn LayerStore, txn: &Transaction) -> Result<
                     let root = store.paths_mut().intern(crate::Path::root());
                     return Err(EditError::StaleValue {
                         layer: *layer,
-                        path: SpecPath::from_prim_path(root, store.paths()),
+                        path: SpecPath::from_prim_path(root),
                         slot: Slot::Metadata(*key),
                     });
                 }
@@ -949,7 +947,7 @@ fn resolve(store: &mut dyn LayerStore, at: &Address) -> Result<(SpecPath, Loc), 
         return Err(Rejection::NoSuchLayer(at.layer()));
     }
     let path = at.resolve(store.paths_mut()).ok_or(Rejection::Unmappable)?;
-    let loc = Loc::of(&path, store.paths_mut());
+    let loc = Loc::of(&path);
     Ok((path, loc))
 }
 

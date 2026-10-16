@@ -143,7 +143,8 @@ fn prim_stacks_include_the_ancestral_arcs_of_subroot_targets() {
             .map(|key| {
                 (
                     layer_name(&loaded, key.layer_id),
-                    key.spec_path.display(&loaded.store.tokens),
+                    key.spec_path
+                        .display(&loaded.store.paths, &loaded.store.tokens),
                 )
             })
             .collect();
@@ -273,7 +274,8 @@ fn snapshot(loaded: &mut LoadedStage, stage: &Stage) -> Vec<String> {
                 format!(
                     "{} {}",
                     layer_name(loaded, key.layer_id),
-                    key.spec_path.display(&loaded.store.tokens)
+                    key.spec_path
+                        .display(&loaded.store.paths, &loaded.store.tokens)
                 )
             })
             .collect();

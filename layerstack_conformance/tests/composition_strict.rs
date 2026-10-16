@@ -218,7 +218,7 @@ fn render_site(loaded: &LoadedStage, layer: LayerId, spec: &SpecPath) -> String 
     format!(
         "{} {}",
         loaded.layer_names.get(&layer).cloned().unwrap_or_default(),
-        spec.display(&loaded.store.tokens)
+        spec.display(&loaded.store.paths, &loaded.store.tokens)
     )
 }
 
@@ -261,7 +261,7 @@ fn authored_default(loaded: &LoadedStage, layer: LayerId, spec: &SpecPath) -> Au
     let Some(name) = spec.property() else {
         return Authored::Unknown;
     };
-    let components = spec.components();
+    let components = spec.components(&loaded.store.paths);
     let Some(at) = components
         .iter()
         .position(|c| matches!(c, SpecComponent::VariantSelection { .. }))

@@ -110,7 +110,7 @@ use crate::{
     path::{Path, PathId, PropertyPath, TargetPath},
     prim_index::{ArcKind, FieldKey, Opinion},
     property::{PropertyEntry, PropertyKind, PropertySpec, PropertyType, Variability},
-    spec_path::SpecComponent,
+    spec_path::VariantSelectionSite,
 };
 
 /// A flattened stage: the layer, and the report of how it was written.
@@ -368,7 +368,7 @@ impl Flattener<'_, '_> {
         };
         FindingSource {
             layer: opinion.key.layer_id,
-            spec: spec.display(self.store.tokens()),
+            spec: spec.display(self.store.paths(), self.store.tokens()),
         }
     }
 
@@ -547,8 +547,8 @@ impl Flattener<'_, '_> {
             if node.arc_kind() != ArcKind::Variants || node.namespace_depth() != depth {
                 continue;
             }
-            if let Some(SpecComponent::VariantSelection { set, variant }) =
-                node.site().components().last().copied()
+            if let Some(VariantSelectionSite { set, variant, .. }) =
+                node.site().trailing_selection()
             {
                 let selection = (
                     String::from(tokens.resolve(set)),

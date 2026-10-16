@@ -17,9 +17,9 @@ use crate::{
     HashMap,
     doc::{FieldEntry, FieldValue, Layer, PrimSpec, Value, VariantSetSpec, VariantSpec, get_field},
     interner::TokenId,
-    path::{Path, PathId, PathInterner},
+    path::{PathId, PathInterner},
     property::{PropertyEntry, PropertySpec, PropertyType, get_property},
-    spec_path::{SpecComponent, SpecPath, VariantSelectionSite},
+    spec_path::{SpecPath, VariantSelectionSite},
 };
 
 /// Where a prim-like spec (one that holds fields, properties and variant
@@ -44,44 +44,15 @@ pub(crate) enum Loc {
 
 impl Loc {
     /// The storage location of the prim or variant spec path `path` (its
-    /// property suffix is ignored), interning the variant hosts' paths.
-    /// A variant spec may be nested in other branches of the same prim
-    /// (`/Rock{a=x}{b=y}`).
-    pub(crate) fn of(path: &SpecPath, paths: &mut PathInterner) -> Self {
-        Self::with_hosts(path, |host| Some(paths.intern(host)))
-            .expect("interning names every variant host")
-    }
-
-    /// [`Loc::of`] without interning: also `None` if a variant host's path
-    /// was never interned, since no spec is stored there then.
-    pub(crate) fn lookup(path: &SpecPath, paths: &PathInterner) -> Option<Self> {
-        Self::with_hosts(path, |host| paths.lookup(&host))
-    }
-
-    fn with_hosts(
-        path: &SpecPath,
-        mut host_id: impl FnMut(Path) -> Option<PathId>,
-    ) -> Option<Self> {
-        let mut prefix = Vec::new();
-        let mut sites = Vec::new();
-        let mut last_is_variant = false;
-        for component in path.components() {
-            match *component {
-                SpecComponent::Prim(name) => {
-                    prefix.push(name);
-                    last_is_variant = false;
-                }
-                SpecComponent::VariantSelection { set, variant } => {
-                    sites.push(VariantSelectionSite {
-                        host_path: host_id(Path::root().join(&prefix))?,
-                        set,
-                        variant,
-                    });
-                    last_is_variant = true;
-                }
-            }
-        }
-        Some(if last_is_variant {
+    /// property suffix is ignored). A variant spec may be nested in other
+    /// branches of the same prim (`/Rock{a=x}{b=y}`).
+    pub(crate) fn of(path: &SpecPath) -> Self {
+        let sites: Vec<_> = path.variant_selection_sites().collect();
+        // A path ending in a selection names the variant spec of its prim.
+        if sites
+            .last()
+            .is_some_and(|site| site.host_path == path.prim_path())
+        {
             Self::Variant {
                 host: path.prim_path(),
                 sites,
@@ -91,7 +62,7 @@ impl Loc {
                 path: path.prim_path(),
                 sites,
             }
-        })
+        }
     }
 
     /// The variant branches enclosing this spec, outermost first; for a
@@ -403,11 +374,11 @@ impl Layer {
     /// AOUSD Core §7.3.5–§7.3.6 (prim and variant specs);
     /// OpenUSD `SdfLayer::GetPrimAtPath`.
     #[must_use]
-    pub fn prim_at(&self, path: &SpecPath, paths: &PathInterner) -> Option<&PrimSpec> {
+    pub fn prim_at(&self, path: &SpecPath) -> Option<&PrimSpec> {
         if path.property().is_some() {
             return None;
         }
-        match spec_at(self, &Loc::lookup(path, paths)?)? {
+        match spec_at(self, &Loc::of(path))? {
             SpecRef::Prim(prim) => Some(prim),
             SpecRef::Variant(_) => None,
         }
@@ -424,8 +395,8 @@ impl Layer {
     ///
     /// OpenUSD: `SdfLayer::GetPropertyAtPath`.
     #[must_use]
-    pub fn property_at(&self, path: &SpecPath, paths: &PathInterner) -> Option<&PropertySpec> {
-        let loc = Loc::lookup(path, paths)?;
+    pub fn property_at(&self, path: &SpecPath) -> Option<&PropertySpec> {
+        let loc = Loc::of(path);
         get_property(spec_at(self, &loc)?.properties(), path.property()?)
     }
 
@@ -434,13 +405,8 @@ impl Layer {
     ///
     /// OpenUSD: `SdfSpec::GetInfo`.
     #[must_use]
-    pub fn metadata_at(
-        &self,
-        path: &SpecPath,
-        key: TokenId,
-        paths: &PathInterner,
-    ) -> Option<&FieldValue> {
-        let loc = Loc::lookup(path, paths)?;
+    pub fn metadata_at(&self, path: &SpecPath, key: TokenId) -> Option<&FieldValue> {
+        let loc = Loc::of(path);
         let spec = spec_at(self, &loc)?;
         match path.property() {
             Some(name) => get_property(spec.properties(), name)?.metadata(key),
@@ -453,13 +419,8 @@ impl Layer {
     ///
     /// OpenUSD: `SdfPrimSpec::GetVariantSelections`.
     #[must_use]
-    pub fn variant_selection_at(
-        &self,
-        path: &SpecPath,
-        set: TokenId,
-        paths: &PathInterner,
-    ) -> Option<TokenId> {
-        let loc = Loc::lookup(path, paths)?;
+    pub fn variant_selection_at(&self, path: &SpecPath, set: TokenId) -> Option<TokenId> {
+        let loc = Loc::of(path);
         spec_at(self, &loc)?.variant_selection(set)
     }
 
@@ -468,8 +429,8 @@ impl Layer {
     ///
     /// OpenUSD: `SdfLayer::HasSpec` for a prim or variant path.
     #[must_use]
-    pub fn has_spec_at(&self, path: &SpecPath, paths: &PathInterner) -> bool {
-        Loc::lookup(path, paths).is_some_and(|loc| spec_at(self, &loc).is_some())
+    pub fn has_spec_at(&self, path: &SpecPath) -> bool {
+        spec_at(self, &Loc::of(path)).is_some()
     }
 }
 

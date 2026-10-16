@@ -146,7 +146,7 @@ impl Scene {
                 format!(
                     "{} {}",
                     self.layer(*layer),
-                    spec.display(&self.store.tokens)
+                    spec.display(&self.store.paths, &self.store.tokens)
                 )
             })
             .collect()

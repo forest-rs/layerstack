@@ -12,6 +12,7 @@
 //! provenance.
 
 use alloc::{string::String, sync::Arc, vec::Vec};
+use core::cmp::Ordering;
 
 use crate::{
     interner::{TokenId, TokenInterner},
@@ -51,38 +52,75 @@ pub enum SpecComponent {
 ///
 /// Unlike [`Path`], this can represent variant selections and property suffixes
 /// while still preserving the concrete prim path used to look up authored data.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+///
+/// A spec path is its concrete prim path, the variant selections inserted
+/// into it (see [`Self::variant_selection_sites`]) and its property suffix.
+/// A plain prim spec path holds no selections; building one, or appending
+/// prim names to any spec path, allocates nothing beyond interning the prim
+/// path. Spec paths order as their components do (see [`Self::components`]).
+///
+/// [`Path`]: crate::Path
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct SpecPath {
     prim_path: PathId,
-    // Opinion keys clone source paths frequently. Components are immutable;
-    // share them while keeping the prim and property identities independent.
-    components: Arc<[SpecComponent]>,
+    /// The variant selections, outermost first, each with its host's
+    /// namespace depth; `None` for none. Opinion keys clone source paths
+    /// frequently, so they are shared.
+    selections: Option<Arc<[(u32, VariantSelectionSite)]>>,
     property: Option<TokenId>,
+}
+
+impl Ord for SpecPath {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.prim_path
+            .cmp(&other.prim_path)
+            .then_with(|| cmp_selections(self.selections(), other.selections()))
+            .then_with(|| self.property.cmp(&other.property))
+    }
+}
+
+impl PartialOrd for SpecPath {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+/// Orders the selections of two spec paths of one prim path as their
+/// components order: a prim name before a variant selection, and a path
+/// before the longer paths it is a prefix of.
+fn cmp_selections(
+    a: &[(u32, VariantSelectionSite)],
+    b: &[(u32, VariantSelectionSite)],
+) -> Ordering {
+    for (a, b) in a.iter().zip(b) {
+        let (a_depth, a_site) = a;
+        let (b_depth, b_site) = b;
+        // The shallower selection meets a prim name of the other path.
+        let order = b_depth
+            .cmp(a_depth)
+            .then_with(|| (a_site.set, a_site.variant).cmp(&(b_site.set, b_site.variant)));
+        if order.is_ne() {
+            return order;
+        }
+    }
+    a.len().cmp(&b.len())
 }
 
 impl SpecPath {
     /// Builds a plain prim spec path from a concrete prim path.
     #[must_use]
-    pub fn from_prim_path(prim_path: PathId, paths: &PathInterner) -> Self {
-        let components = paths
-            .resolve(prim_path)
-            .segments()
-            .iter()
-            .copied()
-            .map(SpecComponent::Prim)
-            .collect();
+    pub const fn from_prim_path(prim_path: PathId) -> Self {
         Self {
             prim_path,
-            components,
+            selections: None,
             property: None,
         }
     }
 
     /// Builds a plain property spec path from a concrete [`PropertyPath`].
     #[must_use]
-    pub fn from_property_path(property_path: PropertyPath, paths: &PathInterner) -> Self {
-        Self::from_prim_path(property_path.prim_path(), paths)
-            .with_property(property_path.property())
+    pub fn from_property_path(property_path: PropertyPath) -> Self {
+        Self::from_prim_path(property_path.prim_path()).with_property(property_path.property())
     }
 
     /// Builds a variant-qualified spec path by inserting `selections` after
@@ -120,36 +158,22 @@ impl SpecPath {
         paths: &PathInterner,
     ) -> Self {
         let prim = paths.resolve(prim_path);
-        let mut components = Vec::with_capacity(prim.depth() + selection_sites.len());
-        let mut emitted_sites = 0_usize;
-
-        for depth in 0..prim.depth() {
-            let segment = prim.segments()[depth];
-            components.push(SpecComponent::Prim(segment));
-
-            while emitted_sites < selection_sites.len()
-                && paths
-                    .resolve(selection_sites[emitted_sites].host_path)
-                    .segments()
-                    == &prim.segments()[..=depth]
-            {
-                let site = selection_sites[emitted_sites];
-                components.push(SpecComponent::VariantSelection {
-                    set: site.set,
-                    variant: site.variant,
-                });
-                emitted_sites += 1;
-            }
-        }
-
-        assert!(
-            emitted_sites == selection_sites.len(),
-            "variant selection site host must be equal to or a prefix of the concrete prim path"
-        );
-
+        let mut depth = 0;
+        let selections: Vec<_> = selection_sites
+            .iter()
+            .map(|site| {
+                let host = paths.resolve(site.host_path);
+                assert!(
+                    host.depth() >= depth && host.depth() > 0 && host.is_prefix_of(prim),
+                    "variant selection site host must be equal to or a prefix of the concrete prim path"
+                );
+                depth = host.depth();
+                (u32::try_from(depth).expect("namespace depth"), *site)
+            })
+            .collect();
         Self {
             prim_path,
-            components: components.into(),
+            selections: (!selections.is_empty()).then(|| selections.into()),
             property: None,
         }
     }
@@ -164,7 +188,7 @@ impl SpecPath {
             return Err(SpecPathError::NotAbsolute);
         }
 
-        let mut components = Vec::new();
+        let mut selections = Vec::new();
         let mut prim_segments = Vec::new();
         let bytes = s.as_bytes();
         let mut idx = 1_usize;
@@ -196,10 +220,13 @@ impl SpecPath {
                     }
                     let variant = &s[variant_start..idx];
                     idx += 1;
-                    components.push(SpecComponent::VariantSelection {
+                    let site = VariantSelectionSite {
+                        host_path: paths.intern_segments(&prim_segments),
                         set: tokens.intern(set),
                         variant: tokens.intern(variant),
-                    });
+                    };
+                    let depth = u32::try_from(prim_segments.len()).expect("namespace depth");
+                    selections.push((depth, site));
                 }
                 b'.' => {
                     if idx + 1 >= len {
@@ -220,9 +247,7 @@ impl SpecPath {
                     if segment.is_empty() {
                         return Err(SpecPathError::EmptySegment);
                     }
-                    let token = tokens.intern(segment);
-                    prim_segments.push(token);
-                    components.push(SpecComponent::Prim(token));
+                    prim_segments.push(tokens.intern(segment));
                 }
             }
         }
@@ -231,7 +256,7 @@ impl SpecPath {
 
         Ok(Self {
             prim_path,
-            components: components.into(),
+            selections: (!selections.is_empty()).then(|| selections.into()),
             property,
         })
     }
@@ -248,6 +273,20 @@ impl SpecPath {
         self.property
     }
 
+    fn selections(&self) -> &[(u32, VariantSelectionSite)] {
+        self.selections.as_deref().unwrap_or_default()
+    }
+
+    /// Returns the variant selections inserted into the prim path, outermost
+    /// first, each with the prim hosting its variant set: `/A{a=x}B{b=y}`
+    /// has `a=x` at `/A` and `b=y` at `/A/B`. Each host is the prim path or
+    /// one of its ancestors.
+    pub fn variant_selection_sites(
+        &self,
+    ) -> impl ExactSizeIterator<Item = VariantSelectionSite> + '_ {
+        self.selections().iter().map(|(_, site)| *site)
+    }
+
     /// Returns the variant selections this path ends in, after its last
     /// prim name, outermost first: `[(a, x), (b, y)]` for `/P{a=x}{b=y}`
     /// (and for `/P{a=x}{b=y}.attr`), empty for `/P` or `/P{a=x}C`. They
@@ -255,31 +294,46 @@ impl SpecPath {
     /// [`crate::PrimSpec::variant_spec`]).
     #[must_use]
     pub fn variant_chain(&self) -> Vec<(TokenId, TokenId)> {
-        let start = self
-            .components
-            .iter()
-            .rposition(|component| matches!(component, SpecComponent::Prim(_)))
-            .map_or(0, |index| index + 1);
-        self.components[start..]
-            .iter()
-            .filter_map(|component| match *component {
-                SpecComponent::VariantSelection { set, variant } => Some((set, variant)),
-                SpecComponent::Prim(_) => None,
-            })
+        self.variant_selection_sites()
+            .filter(|site| site.host_path == self.prim_path)
+            .map(|site| (site.set, site.variant))
             .collect()
     }
 
-    /// Returns the structured components.
-    #[must_use]
-    pub fn components(&self) -> &[SpecComponent] {
-        &self.components
+    /// The variant selection this path ends in, after its last prim name:
+    /// the innermost of [`Self::variant_chain`].
+    pub(crate) fn trailing_selection(&self) -> Option<VariantSelectionSite> {
+        self.variant_selection_sites()
+            .last()
+            .filter(|site| site.host_path == self.prim_path)
     }
 
-    /// Whether this path names an authored variant branch.
-    pub(crate) fn has_variant_selections(&self) -> bool {
-        self.components
-            .iter()
-            .any(|component| matches!(component, SpecComponent::VariantSelection { .. }))
+    /// Returns the structured components: each prim name of the prim path,
+    /// with the variant selections after the names of their hosts.
+    #[must_use]
+    pub fn components(&self, paths: &PathInterner) -> Vec<SpecComponent> {
+        let names = paths.resolve(self.prim_path).segments();
+        let mut components = Vec::with_capacity(names.len() + self.selections().len());
+        let mut selections = self.selections().iter().peekable();
+        for depth in 0..=names.len() {
+            while let Some((_, site)) = selections.next_if(|(at, _)| *at as usize == depth) {
+                components.push(SpecComponent::VariantSelection {
+                    set: site.set,
+                    variant: site.variant,
+                });
+            }
+            if let Some(name) = names.get(depth) {
+                components.push(SpecComponent::Prim(*name));
+            }
+        }
+        components
+    }
+
+    /// Whether this path has a variant selection: it names a spec inside an
+    /// authored variant branch.
+    #[must_use]
+    pub fn has_variant_selections(&self) -> bool {
+        self.selections.is_some()
     }
 
     /// Returns a copy of this path without its property suffix: the prim
@@ -291,15 +345,13 @@ impl SpecPath {
         out
     }
 
-    /// Returns the spec path of the child prim `name` of this prim spec,
-    /// whose concrete prim path is `child_prim_path`.
+    /// Returns the spec path of a child prim of this prim spec, whose
+    /// concrete prim path is `child_prim_path`.
     #[must_use]
-    pub(crate) fn child(&self, name: TokenId, child_prim_path: PathId) -> Self {
-        let mut components = self.components.to_vec();
-        components.push(SpecComponent::Prim(name));
+    pub(crate) fn child(&self, child_prim_path: PathId) -> Self {
         Self {
             prim_path: child_prim_path,
-            components: components.into(),
+            selections: self.selections.clone(),
             property: None,
         }
     }
@@ -309,19 +361,9 @@ impl SpecPath {
     /// `/Rock{shape=jagged}Child`. The property suffix is kept.
     #[must_use]
     pub(crate) fn join_prims(&self, names: &[TokenId], paths: &mut PathInterner) -> Self {
-        if names.is_empty() {
-            return self.clone();
-        }
-        let prim_path = paths.intern_joined(self.prim_path, names);
-        let components = self
-            .components
-            .iter()
-            .copied()
-            .chain(names.iter().copied().map(SpecComponent::Prim))
-            .collect();
         Self {
-            prim_path,
-            components,
+            prim_path: paths.intern_joined(self.prim_path, names),
+            selections: self.selections.clone(),
             property: self.property,
         }
     }
@@ -336,10 +378,10 @@ impl SpecPath {
 
     /// Formats this path in AOUSD-style spec-path syntax.
     #[must_use]
-    pub fn display(&self, tokens: &TokenInterner) -> String {
+    pub fn display(&self, paths: &PathInterner, tokens: &TokenInterner) -> String {
         let mut out = String::from("/");
         let mut need_slash = false;
-        for component in self.components.iter().copied() {
+        for component in self.components(paths) {
             match component {
                 SpecComponent::Prim(segment) => {
                     if need_slash {
@@ -405,7 +447,7 @@ mod tests {
         let spec = SpecPath::from_variant_qualified_prim_path(concrete, host, &[selection], &paths);
 
         assert_eq!(
-            spec.display(&tokens),
+            spec.display(&paths, &tokens),
             "/Sarah{modelComplexity=full}FaceRig/EyesRig"
         );
         assert_eq!(spec.prim_path(), concrete);
@@ -440,7 +482,10 @@ mod tests {
             &paths,
         );
 
-        assert_eq!(spec.display(&tokens), "/Foo{which=A}A/Number{count=one}");
+        assert_eq!(
+            spec.display(&paths, &tokens),
+            "/Foo{which=A}A/Number{count=one}"
+        );
     }
 
     #[test]
@@ -484,7 +529,7 @@ mod tests {
         );
 
         assert_eq!(
-            spec.display(&tokens),
+            spec.display(&paths, &tokens),
             "/DirectlyNestedVariants{standin=anim}{shadingVariant=spooky}{standin=anim}anim_spooky_anim_sphere"
         );
     }
@@ -502,7 +547,7 @@ mod tests {
         .expect("spec path");
 
         assert_eq!(
-            spec.display(&tokens),
+            spec.display(&paths, &tokens),
             "/A{nestedVariantSet=nestedVariant}.test"
         );
         let prim = paths.resolve(spec.prim_path());
@@ -516,9 +561,65 @@ mod tests {
         let property = PropertyPath::parse("/Robot.visibility", &mut tokens, &mut paths)
             .expect("property path");
 
-        let spec = SpecPath::from_property_path(property, &paths);
+        let spec = SpecPath::from_property_path(property);
 
-        assert_eq!(spec.display(&tokens), "/Robot.visibility");
+        assert_eq!(spec.display(&paths, &tokens), "/Robot.visibility");
         assert_eq!(spec.prim_path(), property.prim_path());
+    }
+    #[test]
+    fn spec_paths_order_as_their_components() {
+        let mut tokens = TokenInterner::default();
+        let mut paths = PathInterner::default();
+        let specs = [
+            "/A/B/C",
+            "/A/B/C.attr",
+            "/A{v=x}B/C",
+            "/A{v=y}B/C",
+            "/A{w=x}B/C",
+            "/A{v=x}{w=y}B/C",
+            "/A/B{v=x}C",
+            "/A/B/C{v=x}",
+            "/A/B/C{v=x}{w=y}",
+            "/A{v=x}B{w=y}C",
+            "/A{v=x}B/C{w=y}",
+            "/A{v=x}B/C{w=y}.attr",
+        ]
+        .map(|s| SpecPath::parse(s, &mut tokens, &mut paths).expect("spec path"));
+        for a in &specs {
+            for b in &specs {
+                let by_components = (a.prim_path(), a.components(&paths), a.property()).cmp(&(
+                    b.prim_path(),
+                    b.components(&paths),
+                    b.property(),
+                ));
+                assert_eq!(
+                    a.cmp(b),
+                    by_components,
+                    "{} vs {}",
+                    a.display(&paths, &tokens),
+                    b.display(&paths, &tokens)
+                );
+                assert_eq!(a == b, by_components.is_eq());
+            }
+        }
+    }
+
+    #[test]
+    fn appending_prims_keeps_the_selections() {
+        let mut tokens = TokenInterner::default();
+        let mut paths = PathInterner::default();
+        let spec = SpecPath::parse("/Rock{shape=jagged}", &mut tokens, &mut paths).expect("spec");
+        let child = tokens.intern("Child");
+        let joined = spec.join_prims(&[child], &mut paths);
+        assert_eq!(joined.display(&paths, &tokens), "/Rock{shape=jagged}Child");
+        assert_eq!(
+            joined,
+            SpecPath::parse("/Rock{shape=jagged}Child", &mut tokens, &mut paths).expect("spec")
+        );
+        assert!(joined.variant_chain().is_empty());
+        assert_eq!(
+            spec.variant_chain(),
+            [(tokens.intern("shape"), tokens.intern("jagged"))]
+        );
     }
 }

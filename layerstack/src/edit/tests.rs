@@ -136,10 +136,7 @@ fn layers(store: &InMemoryStore) -> Vec<Layer> {
 
 fn authored_default(store: &mut InMemoryStore, layer: LayerId, path: &str) -> Option<Value> {
     let path = spec(store, path);
-    store.layers[&layer]
-        .property_at(&path, &store.paths)?
-        .default
-        .clone()
+    store.layers[&layer].property_at(&path)?.default.clone()
 }
 
 #[test]
@@ -163,7 +160,7 @@ fn targets_map_through_reference_and_variant_nodes() {
     let mapped = |target: &EditTarget, store: &mut InMemoryStore, path| {
         target
             .map_to_spec_path(path, &mut store.paths)
-            .map(|spec| spec.display(&store.tokens))
+            .map(|spec| spec.display(&store.paths, &store.tokens))
     };
     assert_eq!(
         mapped(&reference, &mut store, rock_b).as_deref(),
@@ -187,7 +184,7 @@ fn targets_map_through_reference_and_variant_nodes() {
     assert_eq!(
         variant
             .map_property_to_spec_path(size, &mut store.paths)
-            .map(|spec| spec.display(&store.tokens))
+            .map(|spec| spec.display(&store.paths, &store.tokens))
             .as_deref(),
         Some("/Rock{shape=round}.roughness")
     );
@@ -261,7 +258,7 @@ fn edits_write_through_targets_and_undo_exactly() {
     let spin = spec(&mut store, "/Rock.spin");
     let samples = |store: &InMemoryStore| {
         store.layers[&ROCK]
-            .property_at(&spin, &store.paths)
+            .property_at(&spin)
             .and_then(|p| p.time_samples.as_deref().map(<[_]>::to_vec))
     };
     assert_eq!(
@@ -282,9 +279,7 @@ fn edits_write_through_targets_and_undo_exactly() {
     );
     let size_a_spec = spec(&mut store, "/World/RockA.size");
     assert!(
-        store.layers[&SCENE]
-            .property_at(&size_a_spec, &store.paths)
-            .is_none(),
+        store.layers[&SCENE].property_at(&size_a_spec).is_none(),
         "undo removes the created spec"
     );
     redo.apply(&mut store).expect("redo applies");
@@ -312,7 +307,7 @@ fn a_sample_inverse_touches_only_its_key() {
     let path = spec(&mut store, "/Rock.spin");
     assert_eq!(
         store.layers[&ROCK]
-            .property_at(&path, &store.paths)
+            .property_at(&path)
             .and_then(|p| p.time_samples.as_deref().map(<[_]>::to_vec)),
         Some(vec![
             (0.0, Value::Double(0.0)),
@@ -331,7 +326,7 @@ fn a_sample_inverse_touches_only_its_key() {
     let undo = remove.apply(&mut store).expect("applies");
     assert_eq!(
         store.layers[&ROCK]
-            .property_at(&path, &store.paths)
+            .property_at(&path)
             .map(|p| p.time_samples.as_deref().map(<[_]>::to_vec)),
         Some(None),
         "removing the last sample removes the field"
@@ -559,7 +554,7 @@ fn prims_variants_and_selections_are_created_and_removed() {
     );
     let rock_a = spec(&mut store, "/World/RockA");
     assert_eq!(
-        store.layers[&SCENE].variant_selection_at(&rock_a, shape, &store.paths),
+        store.layers[&SCENE].variant_selection_at(&rock_a, shape),
         Some(jagged)
     );
     let rock = store.path("/Rock");
@@ -573,9 +568,9 @@ fn prims_variants_and_selections_are_created_and_removed() {
         spec(&mut store, "/Rock{shape=smooth}Moss"),
         spec(&mut store, "/Rock{shape=smooth}"),
     );
-    assert!(store.layers[&ROCK].has_spec_at(&moss, &store.paths));
+    assert!(store.layers[&ROCK].has_spec_at(&moss));
     assert_eq!(
-        store.layers[&ROCK].metadata_at(&smooth_branch, kind, &store.paths),
+        store.layers[&ROCK].metadata_at(&smooth_branch, kind),
         Some(&FieldValue::Value(Value::string("component")))
     );
 
@@ -607,7 +602,7 @@ fn prims_variants_and_selections_are_created_and_removed() {
         !store.layers[&SCENE].prims.contains_key(&tree),
         "the subtree goes"
     );
-    assert!(!store.layers[&ROCK].has_spec_at(&moss, &store.paths));
+    assert!(!store.layers[&ROCK].has_spec_at(&moss));
     undo_remove.apply(&mut store).expect("applies");
     assert_eq!(layers(&store), before_remove);
 
@@ -641,7 +636,7 @@ fn metadata_is_set_blocked_and_cleared() {
     let undo = edit.apply(&mut store).expect("applies");
     let size_path = spec(&mut store, "/Rock.size");
     assert_eq!(
-        store.layers[&ROCK].metadata_at(&size_path, interpolation, &store.paths),
+        store.layers[&ROCK].metadata_at(&size_path, interpolation),
         Some(&FieldValue::Value(Value::Blocked))
     );
     let mut clear = Transaction::new();
@@ -1108,7 +1103,7 @@ fn an_inverse_applies_after_unrelated_edits() {
     let spin_path = spec(&mut store, "/Rock.spin");
     assert_eq!(
         store.layers[&ROCK]
-            .property_at(&spin_path, &store.paths)
+            .property_at(&spin_path)
             .and_then(|p| p.time_samples.as_deref().map(<[_]>::to_vec)),
         Some(vec![
             (0.0, Value::Double(0.0)),
@@ -1388,7 +1383,7 @@ fn relocated_prims_edit_through_the_nodes_they_read() {
     assert_eq!(
         target
             .map_property_to_spec_path(size, &mut store.paths)
-            .map(|p| p.display(&store.tokens))
+            .map(|p| p.display(&store.paths, &store.tokens))
             .as_deref(),
         Some("/Rock/Chip.size")
     );
@@ -2164,16 +2159,11 @@ fn attribute_block_clears_animation_and_preserves_unrelated_edits_on_undo() {
     let mut store = rocks();
     let spin = Address::spec(ROCK, spec(&mut store, "/Rock.spin"));
     let path = spec(&mut store, "/Rock.spin");
-    let original = store.layers[&ROCK]
-        .property_at(&path, &store.paths)
-        .unwrap()
-        .clone();
+    let original = store.layers[&ROCK].property_at(&path).unwrap().clone();
     let mut block = Transaction::new();
     block.block_attribute(spin.clone());
     let inverse = block.apply(&mut store).unwrap();
-    let attr = store.layers[&ROCK]
-        .property_at(&path, &store.paths)
-        .unwrap();
+    let attr = store.layers[&ROCK].property_at(&path).unwrap();
     assert_eq!(attr.default, Some(Value::Blocked));
     assert!(attr.time_samples.is_none() && attr.spline.is_none());
     let note = store.tokens.intern("annotation");
@@ -2181,9 +2171,7 @@ fn attribute_block_clears_animation_and_preserves_unrelated_edits_on_undo() {
     later.set_metadata(spin.clone(), note, FieldValue::Value(Value::string("keep")));
     later.apply(&mut store).unwrap();
     inverse.apply(&mut store).unwrap();
-    let attr = store.layers[&ROCK]
-        .property_at(&path, &store.paths)
-        .unwrap();
+    let attr = store.layers[&ROCK].property_at(&path).unwrap();
     assert_eq!(attr.time_samples, original.time_samples);
     assert_eq!(attr.default, original.default);
     assert_eq!(
@@ -2230,14 +2218,10 @@ fn attribute_block_preserves_empty_sample_fields_and_splines_on_undo() {
     let mut block = Transaction::new();
     block.block_attribute(at);
     let inverse = block.apply(&mut store).unwrap();
-    let blocked = store.layers[&ROCK]
-        .property_at(&path, &store.paths)
-        .unwrap();
+    let blocked = store.layers[&ROCK].property_at(&path).unwrap();
     assert!(blocked.time_samples.is_none() && blocked.spline.is_none());
     inverse.apply(&mut store).unwrap();
-    let restored = store.layers[&ROCK]
-        .property_at(&path, &store.paths)
-        .unwrap();
+    let restored = store.layers[&ROCK].property_at(&path).unwrap();
     assert!(
         same::Same::same(restored, &attr),
         "all authored bits survive block/undo"

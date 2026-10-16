@@ -171,7 +171,7 @@ fn print<T: std::fmt::Debug>(
                 format!(
                     "{:?} {}",
                     node.arc_kind(),
-                    node.site().display(&store.tokens)
+                    node.site().display(&store.paths, &store.tokens)
                 )
             })
             .unwrap_or_default();
@@ -196,7 +196,7 @@ fn print<T: std::fmt::Debug>(
         };
         println!(
             "  - {layer} {} via {arc} (offset {}, scale {}): {role}",
-            opinion.spec_path().display(&store.tokens),
+            opinion.spec_path().display(&store.paths, &store.tokens),
             offset.offset,
             offset.scale,
         );

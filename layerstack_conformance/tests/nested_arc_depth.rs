@@ -105,7 +105,8 @@ fn prim_stacks_rank_nested_arcs_beneath_their_arc() {
             .map(|key| {
                 (
                     layer_name(&loaded, key.layer_id),
-                    key.spec_path.display(&loaded.store.tokens),
+                    key.spec_path
+                        .display(&loaded.store.paths, &loaded.store.tokens),
                 )
             })
             .collect();

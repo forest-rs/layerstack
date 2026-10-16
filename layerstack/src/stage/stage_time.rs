@@ -358,7 +358,7 @@ mod tests {
             layer_strength: 0,
             layer_id: LayerId(1),
             lookup_path: path,
-            spec_path: SpecPath::from_prim_path(path, &paths),
+            spec_path: SpecPath::from_prim_path(path),
         };
         let opinion = |spec: PropertySpec| Opinion {
             key: key.clone(),

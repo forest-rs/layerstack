@@ -2884,10 +2884,7 @@ impl Stage {
         for source in &index.sources {
             // A site inside one of the prim's own variants (`/P{v=x}`) is
             // walked from the prim's spec, through its selections.
-            if matches!(
-                source.spec_path.components().last(),
-                Some(crate::spec_path::SpecComponent::VariantSelection { .. })
-            ) {
+            if source.spec_path.trailing_selection().is_some() {
                 continue;
             }
             let Some(spec) = store.layer(source.layer_id).and_then(|layer| {
@@ -4704,7 +4701,7 @@ mod tests {
             .iter()
             .map(|key| (key.layer_id, key.spec_path.clone()))
             .collect();
-        let spec = SpecPath::from_prim_path(prim, &store.paths);
+        let spec = SpecPath::from_prim_path(prim);
         assert_eq!(
             full,
             [(LayerId(2), spec.clone()), (LayerId(2), spec.clone())]

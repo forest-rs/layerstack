@@ -240,7 +240,8 @@ fn mismatches(case: &Case) -> Vec<String> {
                         .get(&key.layer_id)
                         .cloned()
                         .unwrap_or_else(|| format!("{:?}", key.layer_id)),
-                    key.spec_path.display(&loaded.store.tokens),
+                    key.spec_path
+                        .display(&loaded.store.paths, &loaded.store.tokens),
                 )
             })
             .collect();

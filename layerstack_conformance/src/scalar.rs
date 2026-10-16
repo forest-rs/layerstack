@@ -59,7 +59,9 @@ pub fn check_scalar_values(
         if actual_layer != *layer_name || provenance.spec_path != expected_spec {
             failures.push(format!(
                 "wrong winning opinion for {prop_path}: got {actual_layer} {}, expected {layer_name} {spec}",
-                provenance.spec_path.display(&loaded.store.tokens)
+                provenance
+                    .spec_path
+                    .display(&loaded.store.paths, &loaded.store.tokens)
             ));
         }
     }

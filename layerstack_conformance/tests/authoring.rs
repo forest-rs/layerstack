@@ -229,7 +229,7 @@ fn probe(stage: &Stage, store: &mut InMemoryStore) -> BTreeMap<String, Probe> {
     }
     let authored = |store: &mut InMemoryStore, layer: LayerId, path: &str| {
         let path = spec(store, path);
-        match store.layers[&layer].property_at(&path, &store.paths) {
+        match store.layers[&layer].property_at(&path) {
             Some(spec) => spec.default.as_ref().map_or(Probe::Absent, num),
             None => Probe::Text("<absent>".into()),
         }
@@ -248,14 +248,14 @@ fn probe(stage: &Stage, store: &mut InMemoryStore) -> BTreeMap<String, Probe> {
         out.insert(key.into(), value);
     }
     let rock_a = spec(store, "/World/RockA");
-    let selection = store.layers[&SCENE].variant_selection_at(&rock_a, shape, &store.paths);
+    let selection = store.layers[&SCENE].variant_selection_at(&rock_a, shape);
     out.insert(
         "scene:/World/RockA{shape}".into(),
         Probe::Text(selection.map_or("<absent>".into(), |v| store.tokens.resolve(v).to_string())),
     );
     let spin = spec(store, "/Rock.spin");
     let samples = store.layers[&ROCK]
-        .property_at(&spin, &store.paths)
+        .property_at(&spin)
         .and_then(|p| p.time_samples.clone())
         .unwrap_or_default()
         .iter()
@@ -423,7 +423,7 @@ fn rocks_authoring_session_matches_openusd() {
     assert_eq!(
         through_b
             .map_property_to_spec_path(size_b, &mut s.store.paths)
-            .map(|p| p.display(&s.store.tokens))
+            .map(|p| p.display(&s.store.paths, &s.store.tokens))
             .as_deref(),
         Some("/Rock.size")
     );
@@ -443,7 +443,7 @@ fn rocks_authoring_session_matches_openusd() {
     assert_eq!(
         in_jagged
             .map_property_to_spec_path(roughness_a, &mut s.store.paths)
-            .map(|p| p.display(&s.store.tokens))
+            .map(|p| p.display(&s.store.paths, &s.store.tokens))
             .as_deref(),
         Some("/Rock{shape=jagged}.roughness")
     );

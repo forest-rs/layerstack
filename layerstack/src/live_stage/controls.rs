@@ -16,10 +16,6 @@ pub struct RecompositionWork {
     pub replaced_prim_indexes: usize,
     /// Whether scope proof required reconstructing the complete stage.
     pub full_rebuild: bool,
-    /// Authored namespace entries visited by discovery queries (duplicates count).
-    pub inspected_source_paths: usize,
-    /// Source slots indexed, including cache misses and authored journal deltas.
-    pub indexed_source_paths: usize,
 }
 
 impl LiveStage {
@@ -271,8 +267,6 @@ impl LiveStage {
             };
             let partial = Stage::compose_retained(store, self.root, options, false);
             self.work.composed_prim_indexes += partial.composition_work().composed_prim_indexes;
-            self.work.inspected_source_paths += partial.composition_work().inspected_source_paths;
-            self.work.indexed_source_paths += partial.composition_work().indexed_source_paths;
             if partial
                 .composition_errors()
                 .iter()

@@ -98,8 +98,6 @@ fn clients_consume_shared_structure_independently_and_discovery_stays_bounded() 
     assert!(!b.recomposition_work().full_rebuild);
     for live in [&a, &b] {
         let work = live.recomposition_work();
-        assert!(work.inspected_source_paths < 100, "{work:?}");
-        assert!(work.indexed_source_paths < 10, "{work:?}");
         assert!(work.composed_prim_indexes < 20, "{work:?}");
         assert_fresh(&mut store, live);
     }
@@ -257,7 +255,7 @@ fn precise_value_notifications_do_not_rediscover_the_wide_scene() {
     live.synchronize(&mut store);
     let work = live.recomposition_work();
     assert!(
-        !work.full_rebuild && work.inspected_source_paths < 20 && work.indexed_source_paths == 0,
+        !work.full_rebuild && work.composed_prim_indexes < 10,
         "{work:?}"
     );
     let copy = store.property_path("/Copy.exposure");

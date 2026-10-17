@@ -5,7 +5,7 @@ fixture plugins; run with usd-core 26.8.
 
 Usage: schema_compiler_oracle.py [--check]
 
-`fixtures/schema_compiler/lab` and `fixtures/schema_compiler/bench` each
+`fixtures/schema_compiler/lab` and `fixtures/schema_compiler/observatory` each
 hold a `schema.usda` and the `generatedSchema.usda` and `plugInfo.json`
 `layerstack_schemagen compile` writes for it, and
 `fixtures/schema_compiler/installed/<plugin>/resources` what
@@ -30,7 +30,7 @@ from pathlib import Path
 from pxr import Gf, Plug, Sdf, Tf, Usd
 
 FIXTURE = Path(__file__).resolve().parent.parent / "fixtures" / "schema_compiler"
-PLUGINS = ["lab", "bench"]
+PLUGINS = ["lab", "observatory"]
 INSTANCES = ["red", "fixture"]
 INSTANCE_PROBES = ["red", "green", "blue", "fixture", "outer:inner", "gain", "1st"]
 
@@ -146,7 +146,7 @@ def main():
     args = parser.parse_args()
     registered = Plug.Registry().RegisterPlugins([str(resources(p)) for p in PLUGINS])
     names = sorted(p.name for p in registered)
-    if names != ["labBenches", "labInstruments"]:
+    if names != ["labInstruments", "observatory"]:
         raise SystemExit(f"registered {names}")
     registry = Usd.SchemaRegistry()
     auto_apply = Usd.SchemaRegistry.GetAutoApplyAPISchemas()

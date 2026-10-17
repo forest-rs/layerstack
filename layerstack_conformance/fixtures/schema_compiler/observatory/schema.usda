@@ -1,6 +1,6 @@
 #usda 1.0
 (
-    """Lab bench schemas, which build on OpenUSD's `Xformable`: a codeless
+    """Observatory schemas, which build on OpenUSD's `Xformable`: a codeless
     library compiled against OpenUSD's own schema sources."""
     subLayers = [
         @usdGeom/schema.usda@
@@ -9,7 +9,7 @@
 
 over "GLOBAL" (
     customData = {
-        string libraryName = "labBenches"
+        string libraryName = "observatory"
         string libraryPath = "."
         bool skipCodeGeneration = true
     }
@@ -17,21 +17,21 @@ over "GLOBAL" (
 {
 }
 
-class Bench "Bench" (
+class Telescope "Telescope" (
     inherits = </Xformable>
-    doc = "A lab bench, placed in the room."
+    doc = "A telescope, placed on its pier."
     prepend apiSchemas = ["VisibilityAPI"]
 )
 {
-    float bench:height = 0.9 (
-        doc = "Work surface height, in meters."
+    float telescope:aperture = 0.2 (
+        doc = "Primary mirror diameter, in meters."
     )
-    uniform token bench:surface = "epoxy" (
-        allowedTokens = ["epoxy", "steel", "wood"]
+    uniform token telescope:mount = "equatorial" (
+        allowedTokens = ["altAz", "equatorial", "fork"]
     )
 }
 
-class "BenchMountAPI" (
+class "MountedOnAPI" (
     inherits = </APISchemaBase>
     doc = "What an instrument is mounted on."
     customData = {
@@ -40,7 +40,7 @@ class "BenchMountAPI" (
     }
 )
 {
-    rel mount:bench (
-        doc = "The bench."
+    rel mount:telescope (
+        doc = "The telescope."
     )
 }

@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 //! Generates `layerstack_schemas`' tables and typed views from OpenUSD's own
-//! schema definitions.
+//! schema definitions, and compiles downstream schemas the way OpenUSD's
+//! `usdGenSchema` does ([`compile`]).
 //!
 //! ```text
 //! cargo run -p layerstack_schemagen -- --pxr <site-packages>/pxr --source <OpenUSD> [--check]
@@ -43,6 +44,7 @@
 //! Symlink outputs are rejected. This does not promise crash durability or ACL
 //! preservation beyond ordinary file permissions.
 
+pub mod compile;
 mod emit;
 mod kinds;
 mod library;

@@ -36,7 +36,9 @@
 //!   `instanceable`, `reorder nameChildren` and `reorder properties`; a
 //!   composed list op, such as `apiSchemas`, is written as the explicit
 //!   list it resolves to. Inactive prims are not composed, so they are not
-//!   written. Class prims are written as classes.
+//!   written. Class prims are written as classes. Properties are written
+//!   in name order (`TfDictionaryLessThan`), with the prim's `reorder
+//!   properties` kept as its field rather than applied to them.
 //! - An attribute keeps its composed type, variability and metadata. Its
 //!   `custom` is the weakest opinion's, as OpenUSD's flatten writes it,
 //!   although the stage reports a property custom when any opinion is
@@ -631,7 +633,11 @@ impl Flattener<'_, '_> {
             }
         }
 
-        let mut names = self.stage.authored_property_names(source, &*self.store);
+        // In name order, not the `reorder properties` order: the prim spec
+        // keeps that order as its own field, as `UsdStage::Flatten`
+        // writes it (`UsdPrim::_GetPropertyNames` without `applyOrder`).
+        let mut names = self.stage.authored_names(source);
+        super::sort_property_names(&mut names, self.store.tokens());
         for name in self.stage.clips.property_names(source) {
             if !names.contains(&name) {
                 names.push(name);

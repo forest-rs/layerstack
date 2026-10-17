@@ -694,3 +694,44 @@ fn instances_share_a_prototype_or_expand() {
         ]
     );
 }
+
+/// Properties are written in name order and the prim keeps its `reorder
+/// properties`, as `UsdStage::Flatten` writes them (OpenUSD's
+/// `testUsdGenSchema` baseline flattens `reorder properties = ["b", "a"]`
+/// to `a` then `b`); composing the layer applies the order again.
+#[test]
+fn properties_are_flattened_in_name_order_with_their_order_kept() {
+    let mut store = InMemoryStore::default();
+    let (a, b, c) = (
+        store.tokens.intern("a"),
+        store.tokens.intern("b"),
+        store.tokens.intern("C"),
+    );
+    let prim = store.path("/P");
+    let mut spec = PrimSpec::def()
+        .with_property(b, PropertySpec::typed_attribute(double()))
+        .with_property(c, PropertySpec::typed_attribute(double()))
+        .with_property(a, PropertySpec::typed_attribute(double()));
+    spec.property_order = Some(vec![b, a]);
+    let mut root = Layer::new(LayerId(1));
+    root.insert_prim(prim, spec);
+    store.insert_layer(root);
+
+    let flat = flatten(&mut store, &FlattenRequirements::default()).expect("flattens");
+    let flattened = &flat.layer.prims[&prim];
+    let names: Vec<TokenId> = flattened.properties.iter().map(|p| p.name).collect();
+    assert_eq!(names, [a, b, c], "dictionary order, ignoring case");
+    assert_eq!(
+        flattened.property_order,
+        Some(vec![b, a]),
+        "the order is kept"
+    );
+
+    store.insert_layer(flat.layer);
+    let stage = Stage::compose(&mut store, LayerId(9), StageOptions::default());
+    assert_eq!(
+        stage.property_names(prim, &store),
+        [b, a, c],
+        "and applies again"
+    );
+}

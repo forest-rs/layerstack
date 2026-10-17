@@ -6,146 +6,6 @@
  "openusd_version": "0.26.8",
  "schemas": [
   {
-   "definitions": [
-    {
-     "applied": [],
-     "applied_schemas": [
-      "VisibilityAPI"
-     ],
-     "properties": {
-      "bench:height": {
-       "allowed_tokens": [],
-       "fallback": 0.8999999761581421,
-       "kind": "attribute",
-       "type_name": "float",
-       "variability": "varying"
-      },
-      "bench:surface": {
-       "allowed_tokens": [
-        "epoxy",
-        "steel",
-        "wood"
-       ],
-       "fallback": "epoxy",
-       "kind": "attribute",
-       "type_name": "token",
-       "variability": "uniform"
-      },
-      "guideVisibility": {
-       "allowed_tokens": [
-        "inherited",
-        "invisible",
-        "visible"
-       ],
-       "fallback": "invisible",
-       "kind": "attribute",
-       "type_name": "token",
-       "variability": "uniform"
-      },
-      "proxyPrim": {
-       "kind": "relationship"
-      },
-      "proxyVisibility": {
-       "allowed_tokens": [
-        "inherited",
-        "invisible",
-        "visible"
-       ],
-       "fallback": "inherited",
-       "kind": "attribute",
-       "type_name": "token",
-       "variability": "uniform"
-      },
-      "purpose": {
-       "allowed_tokens": [
-        "default",
-        "render",
-        "proxy",
-        "guide"
-       ],
-       "fallback": "default",
-       "kind": "attribute",
-       "type_name": "token",
-       "variability": "uniform"
-      },
-      "renderVisibility": {
-       "allowed_tokens": [
-        "inherited",
-        "invisible",
-        "visible"
-       ],
-       "fallback": "inherited",
-       "kind": "attribute",
-       "type_name": "token",
-       "variability": "uniform"
-      },
-      "visibility": {
-       "allowed_tokens": [
-        "inherited",
-        "invisible"
-       ],
-       "fallback": "inherited",
-       "kind": "attribute",
-       "type_name": "token",
-       "variability": "varying"
-      },
-      "xformOpOrder": {
-       "allowed_tokens": [],
-       "fallback": null,
-       "kind": "attribute",
-       "type_name": "token[]",
-       "variability": "uniform"
-      }
-     },
-     "type": "Bench"
-    }
-   ],
-   "family": "Bench",
-   "is_a": [
-    "Bench",
-    "Imageable",
-    "Typed",
-    "Xformable"
-   ],
-   "kind": "ConcreteTyped",
-   "name": "Bench",
-   "plugin": "bench",
-   "version": 0
-  },
-  {
-   "auto_apply_to": [],
-   "can_only_apply_to": [
-    [
-     "",
-     [
-      "Xformable"
-     ]
-    ]
-   ],
-   "definitions": [
-    {
-     "applied": [
-      "BenchMountAPI"
-     ],
-     "applied_schemas": [
-      "BenchMountAPI"
-     ],
-     "properties": {
-      "mount:bench": {
-       "kind": "relationship"
-      }
-     },
-     "type": ""
-    }
-   ],
-   "family": "BenchMountAPI",
-   "is_a": [],
-   "kind": "SingleApplyAPI",
-   "name": "BenchMountAPI",
-   "plugin": "bench",
-   "version": 0
-  },
-  {
    "auto_apply_to": [
     "Centrifuge"
    ],
@@ -588,6 +448,39 @@
    "version": 0
   },
   {
+   "auto_apply_to": [],
+   "can_only_apply_to": [
+    [
+     "",
+     [
+      "Xformable"
+     ]
+    ]
+   ],
+   "definitions": [
+    {
+     "applied": [
+      "MountedOnAPI"
+     ],
+     "applied_schemas": [
+      "MountedOnAPI"
+     ],
+     "properties": {
+      "mount:telescope": {
+       "kind": "relationship"
+      }
+     },
+     "type": ""
+    }
+   ],
+   "family": "MountedOnAPI",
+   "is_a": [],
+   "kind": "SingleApplyAPI",
+   "name": "MountedOnAPI",
+   "plugin": "observatory",
+   "version": 0
+  },
+  {
    "definitions": [],
    "family": "SampleQueryAPI",
    "is_a": [],
@@ -690,6 +583,113 @@
    "kind": "ConcreteTyped",
    "name": "Spectrometer",
    "plugin": "lab",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [
+      "VisibilityAPI"
+     ],
+     "properties": {
+      "guideVisibility": {
+       "allowed_tokens": [
+        "inherited",
+        "invisible",
+        "visible"
+       ],
+       "fallback": "invisible",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "proxyPrim": {
+       "kind": "relationship"
+      },
+      "proxyVisibility": {
+       "allowed_tokens": [
+        "inherited",
+        "invisible",
+        "visible"
+       ],
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "purpose": {
+       "allowed_tokens": [
+        "default",
+        "render",
+        "proxy",
+        "guide"
+       ],
+       "fallback": "default",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "renderVisibility": {
+       "allowed_tokens": [
+        "inherited",
+        "invisible",
+        "visible"
+       ],
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "telescope:aperture": {
+       "allowed_tokens": [],
+       "fallback": 0.20000000298023224,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "telescope:mount": {
+       "allowed_tokens": [
+        "altAz",
+        "equatorial",
+        "fork"
+       ],
+       "fallback": "equatorial",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "visibility": {
+       "allowed_tokens": [
+        "inherited",
+        "invisible"
+       ],
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "xformOpOrder": {
+       "allowed_tokens": [],
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token[]",
+       "variability": "uniform"
+      }
+     },
+     "type": "Telescope"
+    }
+   ],
+   "family": "Telescope",
+   "is_a": [
+    "Imageable",
+    "Telescope",
+    "Typed",
+    "Xformable"
+   ],
+   "kind": "ConcreteTyped",
+   "name": "Telescope",
+   "plugin": "observatory",
    "version": 0
   }
  ]

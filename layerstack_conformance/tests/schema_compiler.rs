@@ -3,12 +3,12 @@
 
 //! `layerstack_schemagen::compile` against OpenUSD's usdGenSchema.
 //!
-//! - `fixtures/schema_compiler/lab` and `bench` are downstream schema
+//! - `fixtures/schema_compiler/lab` and `observatory` are downstream schema
 //!   libraries: each `schema.usda` with the `generatedSchema.usda` and
 //!   `plugInfo.json` the compiler writes, which usdGenSchema also writes
 //!   for them. `lab` builds on `fixtures/schema_compiler/usd`, the two base
 //!   classes of OpenUSD's `usd/schema.usda`, so it compiles without
-//!   OpenUSD; `bench` builds on OpenUSD's `Xformable`.
+//!   OpenUSD; `observatory` builds on OpenUSD's `Xformable`.
 //! - `fixtures/schema_compiler/oracle.json` records what usd-core 26.8's
 //!   schema registry reads from those files
 //!   (`scripts/schema_compiler_oracle.py`); layerstack's registry must read
@@ -205,13 +205,16 @@ fn plug_info_starts_from_openusd_template() {
 #[test]
 fn unresolved_sublayers_are_named() {
     let root = fixture();
-    let error = compile(&root.join("bench/schema.usda"), &CompileOptions::new())
-        .expect_err("usdGeom is not on the search path");
+    let error = compile(
+        &root.join("observatory/schema.usda"),
+        &CompileOptions::new(),
+    )
+    .expect_err("usdGeom is not on the search path");
     assert!(
         matches!(
             &error,
             CompileError::UnresolvedSublayer { asset, layer }
-                if asset == "usdGeom/schema.usda" && layer.ends_with("bench/schema.usda")
+                if asset == "usdGeom/schema.usda" && layer.ends_with("observatory/schema.usda")
         ),
         "{error:?}"
     );
@@ -400,12 +403,12 @@ fn fixture_registry_matches_openusd() {
         &mut store.tokens,
     )
     .expect("OpenUSD's schemas");
-    for plugin in ["lab", "bench"] {
+    for plugin in ["lab", "observatory"] {
         register_plugin(&fixture().join(plugin), &mut builder, &mut store);
     }
     let registry = builder.build(&mut store.tokens);
     assert!(registry.issues().is_empty(), "{:?}", registry.issues());
-    let declared_types: BTreeMap<String, Json> = ["lab", "bench"]
+    let declared_types: BTreeMap<String, Json> = ["lab", "observatory"]
         .iter()
         .flat_map(|plugin| plug_info_types(&read(&fixture().join(plugin).join("plugInfo.json"))))
         .map(|(_, entry)| {
@@ -700,7 +703,10 @@ fn assert_installed(plugin: &str, options: CompileOptions) {
 fn installed_plugins_are_the_committed_ones() {
     assert_installed("lab", CompileOptions::new().with_search_path(fixture()));
     if let Some(source) = openusd_source() {
-        assert_installed("bench", CompileOptions::new().with_openusd_source(&source));
+        assert_installed(
+            "observatory",
+            CompileOptions::new().with_openusd_source(&source),
+        );
     }
 }
 
@@ -709,7 +715,7 @@ fn fixtures_compile_against_openusd() {
     let Some(source) = openusd_source() else {
         return;
     };
-    for plugin in ["lab", "bench"] {
+    for plugin in ["lab", "observatory"] {
         let directory = fixture().join(plugin);
         let options = CompileOptions::new()
             .with_openusd_source(&source)

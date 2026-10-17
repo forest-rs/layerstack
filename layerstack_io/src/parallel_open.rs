@@ -22,8 +22,9 @@
 use std::sync::Mutex;
 
 use super::{
-    AssetFailure, Format, Identities, ImportPolicy, IoError, IoErrorKind, LooseRead, Reader,
-    Source, State, Storage, String, Vec, asset_error, read_loose,
+    AssetFailure, FileFormat, FileFormats, Format, FormatArgs, Identities, ImportPolicy, IoError,
+    IoErrorKind, LooseRead, Reader, Source, State, Storage, String, Vec, asset_error, read_loose,
+    source_format, source_identifier,
 };
 use alloc::sync::Arc;
 use layerstack::{
@@ -78,6 +79,7 @@ struct Shared<'a, B> {
     paths: &'a PathInterner,
     schemas: Option<&'a layerstack::SchemaRegistry>,
     usdc_options: super::UsdcReadOptions,
+    formats: &'a FileFormats,
     defers_variant_arcs: bool,
     /// [`Reader::identify`]'s cache.
     identities: Mutex<Identities>,
@@ -123,20 +125,29 @@ impl<B: Storage> Shared<'_, B> {
             calls: Vec::new(),
             outcome: Outcome::Package,
         };
-        let bytes = match self.storage.read_encoded(&task.identifier) {
-            Ok(bytes) => bytes,
-            Err(error) => {
-                read.outcome = Outcome::Unread(error);
-                return (task.provisional, read);
+        let format = self.formats.for_identifier(&task.identifier);
+        let bytes = if format.is_none_or(FileFormat::reads_source) {
+            let (outer, _) = match FormatArgs::split(&task.identifier) {
+                Ok(split) => split,
+                Err(error) => {
+                    read.outcome = Outcome::Unread(error);
+                    return (task.provisional, read);
+                }
+            };
+            match self.storage.read_encoded(outer) {
+                Ok(bytes) => bytes,
+                Err(error) => {
+                    read.outcome = Outcome::Unread(error);
+                    return (task.provisional, read);
+                }
             }
-        };
-        let format = if bytes.starts_with(b"PXR-USDC") {
-            Format::Usdc
-        } else if bytes.starts_with(b"PK\x03\x04") {
-            return (task.provisional, read);
         } else {
-            Format::Usda
+            layerstack::encoded_bytes::EncodedBytes::from(Vec::new())
         };
+        let format = source_format(self.formats, &task.identifier, &bytes);
+        if format == Format::Usdz {
+            return (task.provisional, read);
+        }
         let mut resolver = TaskResolver {
             shared: self,
             anchor: &task.identifier,
@@ -154,6 +165,7 @@ impl<B: Storage> Shared<'_, B> {
             &mut resolver,
             self.schemas,
             self.usdc_options,
+            self.formats,
         );
         if !resolver.package {
             read.calls = resolver.calls;
@@ -193,7 +205,11 @@ impl<B: Storage> AssetResolver for TaskResolver<'_, '_, B> {
             });
             Err(asset_error(error))
         };
-        let path = match PackagePath::parse(asset, 32) {
+        let (path, args) = match FormatArgs::split(asset) {
+            Ok(split) => split,
+            Err(error) => return failed(&mut self.calls, error),
+        };
+        let path = match PackagePath::parse(path, 32) {
             Ok(path) => path,
             Err(reason) => {
                 return failed(&mut self.calls, IoError::new(IoErrorKind::Rejected, reason));
@@ -203,11 +219,12 @@ impl<B: Storage> AssetResolver for TaskResolver<'_, '_, B> {
             self.package = true;
             return Err(AssetResolveError::NotFound);
         }
-        let outer = match self.shared.identify(path.outer(), self.anchor) {
+        let anchor = FormatArgs::split(self.anchor).map_or(self.anchor, |(outer, _)| outer);
+        let outer = match self.shared.identify(path.outer(), anchor) {
             Ok(outer) => outer,
             Err(error) => return failed(&mut self.calls, error),
         };
-        let identifier = path.with_outer(&outer);
+        let identifier = source_identifier(self.shared.formats, &path, &outer, args);
         let provisional = self.shared.source(&identifier, self.added);
         self.calls.push(Call::Target {
             asset: String::from(asset),
@@ -249,7 +266,11 @@ impl<B: Storage> Reader<'_, B> {
         if threads <= 1 || self.reachable_only {
             return None;
         }
-        let path = match PackagePath::parse(asset, 32) {
+        let (path, args) = match FormatArgs::split(asset) {
+            Ok(split) => split,
+            Err(error) => return Some(Err(error)),
+        };
+        let path = match PackagePath::parse(path, 32) {
             Ok(path) => path,
             Err(reason) => return Some(Err(IoError::new(IoErrorKind::Rejected, reason))),
         };
@@ -260,7 +281,7 @@ impl<B: Storage> Reader<'_, B> {
             Ok(outer) => outer,
             Err(error) => return Some(Err(error)),
         };
-        let identifier = path.with_outer(&outer);
+        let identifier = source_identifier(&self.formats, &path, &outer, args);
         if self.catalog.ids.contains_key(&identifier) {
             return None;
         }
@@ -270,6 +291,7 @@ impl<B: Storage> Reader<'_, B> {
             paths,
             schemas: self.schemas.as_deref(),
             usdc_options: self.usdc_options,
+            formats: &self.formats,
             defers_variant_arcs: self.defers_variant_arcs(),
             identities: Mutex::new(self.identities.clone()),
             sources: Mutex::default(),

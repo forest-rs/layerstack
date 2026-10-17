@@ -176,7 +176,7 @@ impl<B: Storage> StageDocument<B> {
                     || dependency.identifier.contains(['<', '#', '*'])
                 {
                     Resource::Failed("host expansion required for expression or pattern".into())
-                } else if identifier_format(&dependency.identifier).is_ok() {
+                } else if identifier_format(&dependency.identifier, &self.formats).is_ok() {
                     let mut reader = Reader::new(
                         &mut self.storage,
                         &mut catalog,
@@ -186,6 +186,7 @@ impl<B: Storage> StageDocument<B> {
                         self.stage.options().schemas.clone(),
                     );
                     reader.variant_arcs = self.variant_arcs;
+                    reader.formats = self.formats.clone();
                     match reader.load(
                         &dependency.identifier,
                         Some(id),

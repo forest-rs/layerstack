@@ -1,0 +1,451 @@
+{
+ "cases": [
+  {
+   "accepted": true,
+   "from": [
+    "src",
+    "/A"
+   ],
+   "layer": {
+    "/A": {
+     "inheritPaths": {
+      "append": [],
+      "delete": [],
+      "explicit": null,
+      "prepend": [
+       "/A/Cls",
+       "/Outside"
+      ]
+     },
+     "properties": {
+      "e": {
+       "default": "/A/Child /Outside"
+      },
+      "look": {
+       "targets": {
+        "append": [],
+        "delete": [],
+        "explicit": [
+         "/A/Child",
+         "/Outside",
+         "/A.y"
+        ],
+        "prepend": []
+       }
+      },
+      "y": {
+       "default": 1.0
+      },
+      "z": {
+       "targets": {
+        "append": [],
+        "delete": [],
+        "explicit": [
+         "/A.y"
+        ],
+        "prepend": []
+       }
+      }
+     },
+     "references": {
+      "append": [],
+      "delete": [],
+      "explicit": null,
+      "prepend": [
+       [
+        "",
+        "/A/Child"
+       ],
+       [
+        "asset.usda",
+        "/X"
+       ]
+      ]
+     },
+     "specifier": "def"
+    },
+    "/A/Child": {
+     "properties": {
+      "w": {
+       "default": 2.0
+      }
+     },
+     "specifier": "def"
+    },
+    "/A/Cls": {
+     "specifier": "class"
+    },
+    "/A{v=x}": {},
+    "/A{v=x}InX": {
+     "properties": {
+      "r": {
+       "targets": {
+        "append": [],
+        "delete": [],
+        "explicit": [
+         "/A/Child"
+        ],
+        "prepend": []
+       }
+      }
+     },
+     "specifier": "def"
+    },
+    "/B": {
+     "inheritPaths": {
+      "append": [],
+      "delete": [],
+      "explicit": null,
+      "prepend": [
+       "/B/Cls",
+       "/Outside"
+      ]
+     },
+     "properties": {
+      "e": {
+       "default": "/A/Child /Outside"
+      },
+      "look": {
+       "targets": {
+        "append": [],
+        "delete": [],
+        "explicit": [
+         "/B/Child",
+         "/Outside",
+         "/B.y"
+        ],
+        "prepend": []
+       }
+      },
+      "y": {
+       "default": 1.0
+      },
+      "z": {
+       "targets": {
+        "append": [],
+        "delete": [],
+        "explicit": [
+         "/B.y"
+        ],
+        "prepend": []
+       }
+      }
+     },
+     "references": {
+      "append": [],
+      "delete": [],
+      "explicit": null,
+      "prepend": [
+       [
+        "",
+        "/B/Child"
+       ],
+       [
+        "asset.usda",
+        "/X"
+       ]
+      ]
+     },
+     "specifier": "def"
+    },
+    "/B/Child": {
+     "properties": {
+      "w": {
+       "default": 2.0
+      }
+     },
+     "specifier": "def"
+    },
+    "/B/Cls": {
+     "specifier": "class"
+    },
+    "/B{v=x}": {},
+    "/B{v=x}InX": {
+     "properties": {
+      "r": {
+       "targets": {
+        "append": [],
+        "delete": [],
+        "explicit": [
+         "/B/Child"
+        ],
+        "prepend": []
+       }
+      }
+     },
+     "specifier": "def"
+    },
+    "/Outside": {
+     "specifier": "def"
+    }
+   },
+   "name": "prim_replaces_destination",
+   "to": [
+    "src",
+    "/B"
+   ]
+  },
+  {
+   "accepted": true,
+   "from": [
+    "src",
+    "/A"
+   ],
+   "layer": {
+    "/P": {
+     "properties": {
+      "keep": {
+       "default": 4.0
+      }
+     },
+     "specifier": "over"
+    },
+    "/P/Q": {
+     "inheritPaths": {
+      "append": [],
+      "delete": [],
+      "explicit": null,
+      "prepend": [
+       "/P/Q/Cls",
+       "/Outside"
+      ]
+     },
+     "properties": {
+      "e": {
+       "default": "/A/Child /Outside"
+      },
+      "look": {
+       "targets": {
+        "append": [],
+        "delete": [],
+        "explicit": [
+         "/P/Q/Child",
+         "/Outside",
+         "/P/Q.y"
+        ],
+        "prepend": []
+       }
+      },
+      "y": {
+       "default": 1.0
+      },
+      "z": {
+       "targets": {
+        "append": [],
+        "delete": [],
+        "explicit": [
+         "/P/Q.y"
+        ],
+        "prepend": []
+       }
+      }
+     },
+     "references": {
+      "append": [],
+      "delete": [],
+      "explicit": null,
+      "prepend": [
+       [
+        "",
+        "/P/Q/Child"
+       ],
+       [
+        "asset.usda",
+        "/X"
+       ]
+      ]
+     },
+     "specifier": "def"
+    },
+    "/P/Q/Child": {
+     "properties": {
+      "w": {
+       "default": 2.0
+      }
+     },
+     "specifier": "def"
+    },
+    "/P/Q/Cls": {
+     "specifier": "class"
+    },
+    "/P/Q{v=x}": {},
+    "/P/Q{v=x}InX": {
+     "properties": {
+      "r": {
+       "targets": {
+        "append": [],
+        "delete": [],
+        "explicit": [
+         "/P/Q/Child"
+        ],
+        "prepend": []
+       }
+      }
+     },
+     "specifier": "def"
+    }
+   },
+   "name": "prim_into_another_layer",
+   "to": [
+    "dst",
+    "/P/Q"
+   ]
+  },
+  {
+   "accepted": true,
+   "from": [
+    "src",
+    "/A.y"
+   ],
+   "layer": {
+    "/P": {
+     "properties": {
+      "keep": {
+       "default": 4.0
+      },
+      "y2": {
+       "default": 1.0
+      }
+     },
+     "specifier": "over"
+    },
+    "/P/Q": {
+     "specifier": "def"
+    },
+    "/P/Q/Stale": {
+     "specifier": "def"
+    }
+   },
+   "name": "property",
+   "to": [
+    "dst",
+    "/P.y2"
+   ]
+  },
+  {
+   "accepted": true,
+   "from": [
+    "src",
+    "/A.look"
+   ],
+   "layer": {
+    "/P": {
+     "properties": {
+      "keep": {
+       "default": 4.0
+      },
+      "look": {
+       "targets": {
+        "append": [],
+        "delete": [],
+        "explicit": [
+         "/P/Child",
+         "/Outside",
+         "/P.y"
+        ],
+        "prepend": []
+       }
+      }
+     },
+     "specifier": "over"
+    },
+    "/P/Q": {
+     "specifier": "def"
+    },
+    "/P/Q/Stale": {
+     "specifier": "def"
+    }
+   },
+   "name": "relationship_targets_follow_the_prim",
+   "to": [
+    "dst",
+    "/P.look"
+   ]
+  },
+  {
+   "accepted": false,
+   "from": [
+    "src",
+    "/Nope"
+   ],
+   "layer": {
+    "/P": {
+     "properties": {
+      "keep": {
+       "default": 4.0
+      }
+     },
+     "specifier": "over"
+    },
+    "/P/Q": {
+     "specifier": "def"
+    },
+    "/P/Q/Stale": {
+     "specifier": "def"
+    }
+   },
+   "name": "missing_source",
+   "to": [
+    "dst",
+    "/X"
+   ]
+  },
+  {
+   "accepted": false,
+   "from": [
+    "src",
+    "/Outside"
+   ],
+   "layer": {
+    "/P": {
+     "properties": {
+      "keep": {
+       "default": 4.0
+      }
+     },
+     "specifier": "over"
+    },
+    "/P/Q": {
+     "specifier": "def"
+    },
+    "/P/Q/Stale": {
+     "specifier": "def"
+    }
+   },
+   "name": "prim_to_property",
+   "to": [
+    "dst",
+    "/P.x"
+   ]
+  },
+  {
+   "accepted": false,
+   "from": [
+    "src",
+    "/A.y"
+   ],
+   "layer": {
+    "/P": {
+     "properties": {
+      "keep": {
+       "default": 4.0
+      }
+     },
+     "specifier": "over"
+    },
+    "/P/Q": {
+     "specifier": "def"
+    },
+    "/P/Q/Stale": {
+     "specifier": "def"
+    }
+   },
+   "name": "property_to_missing_prim",
+   "to": [
+    "dst",
+    "/Nope.y"
+   ]
+  }
+ ],
+ "openusd_version": "26.8"
+}

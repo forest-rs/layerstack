@@ -1160,6 +1160,7 @@ fn apply_op(
             prim_fields::remove_applied_schema(store, at, *name, journal)
         }
         Op::SetPrimField { at, value } => prim_fields::set_field(store, at, value.clone(), journal),
+        Op::CopySpec { from, to } => super::copy::copy_spec(store, from, to, journal),
         Op::EditSublayers { layer, edit } => {
             layer_fields::edit_sublayers(store, *layer, edit, journal)
         }
@@ -1671,7 +1672,7 @@ pub(super) fn ensure(
 
 /// Stores the prim spec `spec` at `path`, keeping [`Layer::prims`] for the
 /// spec outside every branch, as [`Layer::insert_prim`] does.
-fn insert_prim_spec(
+pub(super) fn insert_prim_spec(
     store: &mut dyn LayerStore,
     id: LayerId,
     path: PathId,
@@ -1704,7 +1705,7 @@ fn insert_prim_spec(
 }
 
 /// Lists `name` among the children of the spec at `parent`, unless it is.
-fn add_child(
+pub(super) fn add_child(
     store: &mut dyn LayerStore,
     id: LayerId,
     parent: &Loc,
@@ -1730,7 +1731,7 @@ fn add_child(
 
 /// Removes the prim or variant spec at `loc` with every spec authored
 /// beneath it, and its name from its parent's children.
-fn remove_subtree(
+pub(super) fn remove_subtree(
     store: &mut dyn LayerStore,
     id: LayerId,
     loc: &Loc,

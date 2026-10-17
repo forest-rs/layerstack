@@ -19,7 +19,9 @@
 //!   child and property order, and the composition arcs, whose list ops
 //!   it also edits item by item ([`ListPosition`]); and the layer fields
 //!   kept in dedicated members, the sublayers with their offsets and the
-//!   relocates, checked against what composition can use.
+//!   relocates, checked against what composition can use; and it copies
+//!   prim and property specs, remapping the paths they author
+//!   ([`Transaction::copy_spec`]).
 //! - Applying a transaction checks its preconditions, validates and
 //!   applies every edit or none, and returns the inverse transaction,
 //!   which restores each slot only while it holds what was written there.
@@ -86,6 +88,7 @@
 //! §12.3.2.1 (layer offsets), §10.5 (variant selection).
 
 mod apply;
+mod copy;
 mod error;
 mod layer_fields;
 mod namespace;

@@ -740,7 +740,7 @@ fn collect_variant_layers(
     }
 }
 
-fn move_specs(
+pub(super) fn move_specs(
     store: &mut dyn LayerStore,
     layer: &mut Layer,
     from: &SpecPath,
@@ -863,12 +863,12 @@ fn move_specs(
 }
 
 #[derive(Clone)]
-struct PathMove {
+pub(super) struct PathMove {
     from: TargetPath,
     to: TargetPath,
 }
 impl PathMove {
-    fn new(from: TargetPath, to: TargetPath) -> Self {
+    pub(super) fn new(from: TargetPath, to: TargetPath) -> Self {
         Self { from, to }
     }
     fn prim(&self, store: &mut dyn LayerStore, path: PathId) -> PathId {
@@ -1054,7 +1054,7 @@ fn repair_fields(
     Ok(())
 }
 
-fn repair_prim(
+pub(super) fn repair_prim(
     store: &mut dyn LayerStore,
     spec: &mut PrimSpec,
     path: PathId,

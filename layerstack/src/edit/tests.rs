@@ -2436,3 +2436,88 @@ fn relocate_edits_reject_entries_composition_would_ignore() {
         Rejection::DuplicateRelocateSource(rock_a)
     );
 }
+
+#[test]
+fn copies_reject_what_they_cannot_copy() {
+    let mut store = rocks();
+    let reason = |store: &mut InMemoryStore, from: &str, to: &str| {
+        let (from, to) = (spec(store, from), spec(store, to));
+        let mut txn = Transaction::new();
+        txn.copy_spec(Address::spec(SCENE, from), Address::spec(SCENE, to));
+        match txn.apply(store) {
+            Err(EditError::Rejected { reason, .. }) => reason,
+            other => panic!("expected a rejection, got {other:?}"),
+        }
+    };
+    assert_eq!(
+        reason(&mut store, "/World/RockA", "/World/RockA.size"),
+        Rejection::CopyBetweenKinds
+    );
+    assert_eq!(
+        reason(&mut store, "/World/RockA", "/World/RockA/Inside"),
+        Rejection::CopyIntoSource
+    );
+    assert_eq!(
+        reason(&mut store, "/World/RockA", "/World"),
+        Rejection::CopyIntoSource
+    );
+    let mut txn = Transaction::new();
+    let (round, copy) = (
+        spec(&mut store, "/Rock{shape=round}"),
+        spec(&mut store, "/Copy"),
+    );
+    txn.copy_spec(Address::spec(ROCK, round), Address::spec(ROCK, copy));
+    assert!(matches!(
+        txn.apply(&mut store),
+        Err(EditError::Rejected {
+            reason: Rejection::VariantCopy,
+            ..
+        })
+    ));
+}
+
+#[test]
+fn a_prim_copied_to_another_layer_anchors_its_internal_arcs_there() {
+    let mut store = rocks();
+    // `/World/Proxy` references `/World/RockA` internally.
+    let (proxy, rock_a) = (store.path("/World/Proxy"), store.path("/World/RockA"));
+    let proxy_name = store.tokens.intern("Proxy");
+    let mut txn = Transaction::new();
+    txn.create_prim(
+        EditTarget::for_layer(SCENE).prim(proxy),
+        Specifier::Def,
+        None,
+    );
+    txn.add_reference(
+        EditTarget::for_layer(SCENE).prim(proxy),
+        Reference::new(SCENE, rock_a),
+        ListPosition::BackOfPrepend,
+    );
+    txn.apply(&mut store).unwrap();
+    // Copy all of `/World` into the asset layer.
+    let (world, copy) = (spec(&mut store, "/World"), spec(&mut store, "/Copy"));
+    let mut txn = Transaction::new();
+    txn.copy_spec(Address::spec(SCENE, world), Address::spec(ROCK, copy));
+    txn.apply(&mut store).unwrap();
+    let copied_proxy = store.path("/Copy/Proxy");
+    let copied_rock_a = store.path("/Copy/RockA");
+    let spec = &store.layers[&ROCK].prims[&copied_proxy];
+    assert_eq!(
+        spec.references.prepend,
+        vec![Reference::new(ROCK, copied_rock_a)]
+    );
+    let copy_root = store.path("/Copy");
+    assert!(
+        store.layers[&ROCK].prims[&copy_root]
+            .authored_children
+            .contains(&proxy_name)
+    );
+    // Composed from the asset, the copy's internal arc reaches the copied
+    // rock, which references `/Rock` of the same layer.
+    let stage = Stage::compose(&mut store, ROCK, StageOptions::default());
+    let size = store.property_path("/Copy/Proxy.size");
+    assert_eq!(
+        stage.resolve_property_path(size).map(|r| r.value),
+        Some(crate::ResolvedValue::Scalar(Value::Double(1.0)))
+    );
+}

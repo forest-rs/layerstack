@@ -264,6 +264,7 @@ pub use stage::{
     RelationshipQueryWork, Resolved, ResolvedValue, SampleUse, SourceComposability, Stage,
     StageMetadataError, StageOptions, Traverse, ValueExplanation, ValueSource,
 };
+pub use stage::{DropReason, DroppedTarget, TargetOpinion, TargetsExplanation};
 pub use variant_fallbacks::VariantFallbacks;
 
 pub use live_stage::{

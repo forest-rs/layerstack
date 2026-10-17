@@ -393,8 +393,10 @@ jobs:
             cmake/defaults/Version.cmake
             pxr/usd/*/schema.usda
             pxr/usd/*/*.h
-            pxr/usd/usdMtlx/generatedSchema.usda
-            pxr/usd/usdMtlx/plugInfo.json
+            pxr/usd/*/generatedSchema.usda
+            pxr/usd/*/plugInfo.json
+            pxr/usd/*/userDoc/schemaUserDoc.usda
+            pxr/usd/usd/testenv/testUsdGenSchema/**
 
       - name: install stable toolchain
         uses: dtolnay/rust-toolchain@master
@@ -419,6 +421,18 @@ jobs:
         run: |
           pxr="$(python -c 'import os, pxr; print(os.path.dirname(pxr.__file__))')"
           cargo run --locked -p layerstack_schemagen -- --check --pxr "$pxr" --source openusd
+
+      # The schema compiler must write what OpenUSD's usdGenSchema writes:
+      # every schema domain's checked-in generatedSchema.usda and
+      # plugInfo.json, and testUsdGenSchema's baselines and failures.
+      - name: test the schema compiler against OpenUSD
+        env:
+          LAYERSTACK_OPENUSD_SOURCE: ${{ github.workspace }}/openusd
+        run: cargo test --locked -p layerstack_conformance --test schema_compiler
+
+      # The compiled fixture plugins must be what OpenUSD's registry reads.
+      - name: check schema compiler oracle
+        run: python layerstack_conformance/scripts/schema_compiler_oracle.py --check
 
       # The schema views oracle must be what OpenUSD reads from its scene.
       - name: check schema views oracle

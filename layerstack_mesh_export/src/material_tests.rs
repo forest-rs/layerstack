@@ -147,6 +147,7 @@ def Xform "Root"
         }
     }
 }
+
 "#;
     assert_eq!(text, expected, "USDA output");
     assert!(parse(&text).diagnostics.is_empty(), "re-parses");

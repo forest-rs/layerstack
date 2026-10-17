@@ -1,6 +1,6 @@
 [package]
 name = "layerstack_schemagen"
-description = "Generates the layerstack_schemas tables from OpenUSD's own schema definitions."
+description = "Generates the layerstack_schemas tables from OpenUSD's own schema definitions, and compiles schema.usda files as usdGenSchema does."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -12,9 +12,13 @@ publish = false
 
 [dependencies]
 layerstack = { workspace = true }
+# Opens a schema stage with its sublayers from the filesystem, resolving
+# them through search paths as usdGenSchema's resolver does.
+layerstack_io = { features = ["std"], workspace = true }
 layerstack_usda = { workspace = true }
 # Reads each schema's kind, bases and auto-applies from OpenUSD's
-# `plugInfo.json`; this tool is never a dependency of a published crate.
+# `plugInfo.json`, and writes a compiled schema's; this tool is never a
+# dependency of a published crate.
 serde_json = { version = "1.0" }
 
 [lints]

@@ -15,7 +15,14 @@
 //! Output is deterministic: the same document always produces byte-identical
 //! text. Items are written in the order they appear in the document (nothing
 //! is sorted or deduplicated behind the caller's back); invalid input is
-//! rejected with a [`WriteError`] rather than silently repaired.
+//! rejected with a [`WriteError`] rather than silently repaired. Values are
+//! spelled as OpenUSD's `SdfLayer::ExportToString` spells them: strings in
+//! the quotes `Sdf_FileIOUtility::Quote` picks (single quotes around text
+//! with a double quote and no single quote, triple quotes around text with
+//! a line break, which is written as it is), dictionary keys bare when they
+//! are ASCII identifiers, `bool` values as `1` and `0` (metadata fields as
+//! `true` and `false`), and a blank line ending the layer. Written in
+//! OpenUSD's field order, a layer is the text OpenUSD writes for it.
 //!
 //! Scope: prims with their children and property order (`reorder
 //! nameChildren`, `reorder properties`, `reorder rootPrims`); attributes with
@@ -1887,6 +1894,8 @@ enum Elem {
     Matrix,
     Dictionary,
     ListOp,
+    /// `opaque` and `group`: types that hold no value, only a declaration.
+    Valueless,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1901,9 +1910,10 @@ struct Shape {
 /// The accepted names are a subset of the OpenUSD `Sdf` value type registry
 /// (`pxr/usd/sdf/schema.cpp`, `_RegisterStandardTypes`; `pxr/usd/sdf/types.h`,
 /// `SDF_VALUE_TYPES` plus the role aliases), each optionally with `[]`.
-/// Deliberately excluded: `dictionary` (metadata only, never an attribute
-/// type), `opaque`/`group`, and the legacy capitalized
-/// aliases (`Vec3f`, `PointFloat`, ...).
+/// `opaque` and `group` hold no value (`SdfOpaqueValue`), so they are
+/// declarations only and have no array form. Deliberately excluded:
+/// `dictionary` (metadata only, never an attribute type) and the legacy
+/// capitalized aliases (`Vec3f`, `PointFloat`, ...).
 ///
 /// Spec: AOUSD Core §6.2 (scalar types), §6.3 (dimensioned types), §6.5
 /// (semantic aliases).
@@ -1948,6 +1958,7 @@ fn parse_type_name(type_name: &str) -> Option<Shape> {
         "matrix2d" => (Elem::Matrix, 2),
         "matrix3d" => (Elem::Matrix, 3),
         "matrix4d" | "frame4d" => (Elem::Matrix, 4),
+        "opaque" | "group" if !array => (Elem::Valueless, 1),
         _ => return None,
     };
     Some(Shape { elem, arity, array })
@@ -2314,6 +2325,7 @@ impl Writer<'_> {
             self.out.push('\n');
             self.prim(prim, 0);
         }
+        self.out.push('\n');
     }
 
     fn indent(&mut self, depth: usize) {
@@ -2361,6 +2373,7 @@ impl Writer<'_> {
             self.out.push_str(" = ");
             match (key, &entry.value) {
                 ("permission", Value::Token(v) | Value::String(v)) => self.out.push_str(v),
+                (_, Value::Bool(v)) => self.out.push_str(if *v { "true" } else { "false" }),
                 _ => self.value(&entry.value, depth),
             }
             self.out.push('\n');
@@ -2835,7 +2848,7 @@ impl Writer<'_> {
                 }
                 self.out.push(']');
             }
-            Value::Bool(v) => self.out.push_str(if *v { "true" } else { "false" }),
+            Value::Bool(v) => self.out.push_str(if *v { "1" } else { "0" }),
             Value::UChar(v) => self.display(v),
             Value::Int(v) => self.display(v),
             Value::UInt(v) => self.display(v),
@@ -2865,7 +2878,7 @@ impl Writer<'_> {
             Value::Matrix3d(rows) => self.matrix(rows),
             Value::Matrix4d(rows) => self.matrix(rows),
             Value::BoolArray(v) => self.array(v, |w, b| {
-                w.out.push_str(if *b { "true" } else { "false" });
+                w.out.push_str(if *b { "1" } else { "0" });
             }),
             Value::UCharArray(v) => self.array(v, |w, x| w.display(x)),
             Value::IntArray(v) => self.array(v, |w, x| w.display(x)),
@@ -2916,7 +2929,7 @@ impl Writer<'_> {
                     self.indent(depth + 1);
                     self.out.push_str(v.canonical_type_name());
                     self.out.push(' ');
-                    self.string(key);
+                    self.key(key);
                     self.out.push_str(" = ");
                     self.value(v, depth + 1);
                     self.out.push('\n');
@@ -3026,24 +3039,56 @@ impl Writer<'_> {
         self.out.push(']');
     }
 
-    /// Double-quoted string with the escapes of §16.2.5. The grammar has no
-    /// single-character escape for backslash, so it uses the hex form.
+    /// A quoted string with the escapes of §16.2.5, quoted as OpenUSD
+    /// quotes it (`Sdf_FileIOUtility::Quote`): double quotes unless the
+    /// text holds a double quote and no single quote, and triple quotes
+    /// around text with a line break, which is then written as it is.
     fn string(&mut self, s: &str) {
-        self.out.push('"');
+        let quote = if s.contains('"') && !s.contains('\'') {
+            '\''
+        } else {
+            '"'
+        };
+        let triple = s.contains('\n');
+        let open = |out: &mut String| {
+            for _ in 0..if triple { 3 } else { 1 } {
+                out.push(quote);
+            }
+        };
+        open(self.out);
         for c in s.chars() {
             match c {
-                '"' => self.out.push_str("\\\""),
-                '\\' => self.out.push_str("\\x5C"),
+                '\n' if triple => self.out.push('\n'),
                 '\n' => self.out.push_str("\\n"),
                 '\r' => self.out.push_str("\\r"),
                 '\t' => self.out.push_str("\\t"),
+                '\\' => self.out.push_str("\\\\"),
+                c if c == quote => {
+                    self.out.push('\\');
+                    self.out.push(c);
+                }
                 c if u32::from(c) < 0x20 || c == '\u{7F}' => {
-                    let _ = write!(self.out, "\\x{:02X}", u32::from(c));
+                    let _ = write!(self.out, "\\x{:02x}", u32::from(c));
                 }
                 c => self.out.push(c),
             }
         }
-        self.out.push('"');
+        open(self.out);
+    }
+
+    /// A dictionary key: bare when it is an ASCII identifier, as OpenUSD
+    /// writes it, otherwise quoted.
+    fn key(&mut self, key: &str) {
+        let mut chars = key.chars();
+        if chars
+            .next()
+            .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+            && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+        {
+            self.out.push_str(key);
+        } else {
+            self.string(key);
+        }
     }
 
     /// `@path@`; validation guarantees the path has no `@` or line break.
@@ -3145,9 +3190,10 @@ def Xform "Root" (
             interpolation = "vertex"
         )
         uniform token subdivisionScheme = "none"
-        custom string exedra:label = "say \"hi\""
+        custom string exedra:label = 'say "hi"'
     }
 }
+
 "#;
         assert_eq!(text, expected, "writer output");
         assert_eq!(text, mesh_doc().to_usda().unwrap(), "deterministic");
@@ -3324,8 +3370,8 @@ def Xform "Root" (
 over "P" (
     customData = {
         int "a:b" = 1
-        dictionary "nested" = {
-            string "s" = "x\x5Cy"
+        dictionary nested = {
+            string s = "x\\y"
         }
     }
 )
@@ -3333,6 +3379,7 @@ over "P" (
     float[] f = [inf, -inf, nan, 0.1, -0]
     asset tex = @textures/a.png@
 }
+
 "#;
         assert_eq!(text, expected, "scalar spellings");
         let parsed = parse(&text);
@@ -3405,7 +3452,7 @@ over "P" (
         );
         // Legacy capitalized aliases and non-attribute registry entries are
         // not admitted either.
-        for type_name in ["Vec3f", "PointFloat", "opaque", "dictionary[]"] {
+        for type_name in ["Vec3f", "PointFloat", "opaque[]", "dictionary[]"] {
             let declaration = Attribute {
                 value: None,
                 ..Attribute::new("x", type_name, Value::Int(0))
@@ -3516,9 +3563,7 @@ over "P" (
         .to_usda()
         .unwrap();
         assert!(
-            text.contains(
-                "        dictionary \"nested\" = {\n            int \"n\" = 1\n        }"
-            ),
+            text.contains("        dictionary nested = {\n            int n = 1\n        }"),
             "{text}"
         );
         assert!(parse(&text).diagnostics.is_empty(), "re-parses");
@@ -3624,6 +3669,7 @@ def Xform "Root"
         rel exedra:blocked = None
     }
 }
+
 "#;
         assert_eq!(text, expected, "writer output");
     }
@@ -3911,6 +3957,7 @@ def Xform "A"
 over "B"
 {
 }
+
 "#;
         assert_eq!(text, expected, "writer output");
         let parsed = parse(&text);
@@ -4005,13 +4052,14 @@ over "B"
 )
 
 over "P" (
-    "say \"hi\""
+    'say "hi"'
 )
 {
     int a (
         "attr"
     )
 }
+
 "#;
         assert_eq!(text, expected, "comments");
         assert!(parse(&text).diagnostics.is_empty(), "re-parses");
@@ -4109,6 +4157,7 @@ def Xform "P" (
 class "C"
 {
 }
+
 "#;
         assert_eq!(text, expected, "arcs");
         assert!(parse(&text).diagnostics.is_empty(), "re-parses");
@@ -4264,7 +4313,7 @@ class "C"
 
 def Xform "Tree" (
     variants = {
-        string "season" = "summer"
+        string season = "summer"
     }
     prepend variantSets = ["season"]
 )
@@ -4278,7 +4327,7 @@ def Xform "Tree" (
             kind = "component"
             prepend references = @./leaves.usda@
             variants = {
-                string "size" = "tall"
+                string size = "tall"
             }
             prepend variantSets = ["size"]
         ) {
@@ -4298,6 +4347,7 @@ def Xform "Tree" (
         }
     }
 }
+
 "#;
         assert_eq!(text, expected, "variant sets");
         assert!(parse(&text).diagnostics.is_empty(), "re-parses");
@@ -4369,8 +4419,91 @@ def Xform "Tree" (
             empty_selection
                 .to_usda()
                 .unwrap()
-                .contains("string \"season\" = \"\"\n"),
+                .contains("string season = \"\"\n"),
             "an empty selection selects no variant"
+        );
+    }
+
+    /// The text OpenUSD 26.8's `SdfLayer::ExportToString` writes for the
+    /// same strings, dictionary keys and values.
+    #[test]
+    fn values_are_spelled_as_openusd_spells_them() {
+        let entries = [
+            ("b", Value::Bool(true)),
+            ("bs", Value::String("back\\slash".into())),
+            ("ctl", Value::String("a\u{1}b\u{7f}".into())),
+            ("m", Value::String("a\nb".into())),
+            ("m2", Value::String("a\n\"b\"".into())),
+            ("m3", Value::String("a\nb'\"".into())),
+            ("s", Value::String("it's \"q\"".into())),
+            ("q", Value::String("say \"hi\"".into())),
+            ("tab", Value::String("a\tb".into())),
+            ("u", Value::String("\u{e9}t\u{e9}".into())),
+            ("\u{e9}t\u{e9}", Value::Int(4)),
+            ("class", Value::Int(1)),
+        ];
+        let mut prim = Prim::new(Specifier::Class, None, "P");
+        prim.metadata.push(Metadatum::new(
+            "customData",
+            Value::Dictionary(entries.map(|(k, v)| (k.to_string(), v)).to_vec()),
+        ));
+        prim.metadata
+            .push(Metadatum::new("hidden", Value::Bool(true)));
+        prim.push_property(Attribute::new("a", "bool", Value::Bool(false)));
+        prim.push_property(Attribute::new(
+            "flags",
+            "bool[]",
+            Value::BoolArray(vec![true, false]),
+        ));
+        prim.push_property(Attribute::declared("o", "opaque"));
+        let text = Document {
+            prims: vec![prim],
+            ..Document::new()
+        }
+        .to_usda()
+        .unwrap();
+        assert_eq!(
+            text,
+            r#"#usda 1.0
+
+class "P" (
+    customData = {
+        bool b = 1
+        string bs = "back\\slash"
+        string ctl = "a\x01b\x7f"
+        string m = """a
+b"""
+        string m2 = '''a
+"b"'''
+        string m3 = """a
+b'\""""
+        string s = "it's \"q\""
+        string q = 'say "hi"'
+        string tab = "a\tb"
+        string u = "été"
+        int "été" = 4
+        int class = 1
+    }
+    hidden = true
+)
+{
+    bool a = 0
+    bool[] flags = [1, 0]
+    opaque o
+}
+
+"#
+        );
+        assert!(
+            parse(&text).diagnostics.is_empty(),
+            "OpenUSD's spelling reads back"
+        );
+        assert!(
+            matches!(
+                doc_with(Attribute::new("o", "opaque", Value::Int(1))).to_usda(),
+                Err(WriteError::TypeMismatch { .. })
+            ),
+            "an opaque attribute holds no value"
         );
     }
 }

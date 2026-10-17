@@ -1770,17 +1770,40 @@ def Xform "A" (
 
     #[test]
     fn save_layer_rejects_before_writing() {
-        let (layer, tokens, paths) = import_usda("#usda 1.0\ndef \"A\"\n{\n    opaque a\n}\n");
+        let (layer, tokens, paths) = import_usda("#usda 1.0\ndef \"A\"\n{\n    vec3f a\n}\n");
         assert_eq!(
             save_layer(&layer, &tokens, &paths),
             Err(UsdcWriteError::Save(
                 layerstack_usda::save::SaveError::Document(WriteError::UnknownType {
                     path: "/A.a".into(),
-                    type_name: "opaque".into(),
+                    type_name: "vec3f".into(),
                 })
             )),
             "the USDA save's error, before any output"
         );
+    }
+
+    /// `opaque` declares an attribute that holds no value, such as
+    /// `UsdCollectionAPI`'s `collection:__INSTANCE_NAME__`.
+    #[test]
+    fn opaque_attributes_are_declared_without_a_value() {
+        let (layer, tokens, paths) = import_usda("#usda 1.0\ndef \"A\"\n{\n    opaque a\n}\n");
+        let bytes = save_layer(&layer, &tokens, &paths).expect("an opaque declaration saves");
+        let read = crate::read_usdc(
+            &bytes,
+            layerstack::LayerId(2),
+            &tokens,
+            &paths,
+            &mut NoAssets,
+        )
+        .unwrap();
+        let a = layerstack::PropertyPath::parse("/A.a", &tokens, &paths).unwrap();
+        let spec = read.layer.property(a).expect("the attribute reads back");
+        assert_eq!(
+            spec.type_name.as_ref().map(|t| &*t.type_name),
+            Some("opaque")
+        );
+        assert_eq!(spec.default, None, "no value");
     }
 
     #[test]

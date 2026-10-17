@@ -1,0 +1,696 @@
+{
+ "instances": [
+  "red",
+  "fixture"
+ ],
+ "openusd_version": "0.26.8",
+ "schemas": [
+  {
+   "auto_apply_to": [
+    "Centrifuge"
+   ],
+   "can_only_apply_to": [
+    [
+     "",
+     [
+      "Instrument"
+     ]
+    ]
+   ],
+   "definitions": [
+    {
+     "applied": [
+      "CalibrationAPI"
+     ],
+     "applied_schemas": [
+      "CalibrationAPI"
+     ],
+     "properties": {
+      "calibration:certificate": {
+       "allowed_tokens": [],
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "asset",
+       "variability": "varying"
+      },
+      "calibration:interval": {
+       "allowed_tokens": [],
+       "fallback": 30.0,
+       "kind": "attribute",
+       "type_name": "double",
+       "variability": "varying"
+      },
+      "calibration:method": {
+       "allowed_tokens": [
+        "reference",
+        "selfTest"
+       ],
+       "fallback": "reference",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      }
+     },
+     "type": ""
+    }
+   ],
+   "family": "CalibrationAPI",
+   "is_a": [],
+   "kind": "SingleApplyAPI",
+   "name": "CalibrationAPI",
+   "plugin": "lab",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [
+      "CalibrationAPI"
+     ],
+     "properties": {
+      "calibration:certificate": {
+       "allowed_tokens": [],
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "asset",
+       "variability": "varying"
+      },
+      "calibration:interval": {
+       "allowed_tokens": [],
+       "fallback": 30.0,
+       "kind": "attribute",
+       "type_name": "double",
+       "variability": "varying"
+      },
+      "calibration:method": {
+       "allowed_tokens": [
+        "reference",
+        "selfTest"
+       ],
+       "fallback": "reference",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "centrifuge:maxSpeed": {
+       "allowed_tokens": [],
+       "fallback": 15000.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "centrifuge:refrigerated": {
+       "allowed_tokens": [],
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "instrument:serialNumber": {
+       "allowed_tokens": [],
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "string",
+       "variability": "varying"
+      },
+      "instrument:status": {
+       "allowed_tokens": [
+        "idle",
+        "running",
+        "fault"
+       ],
+       "fallback": "idle",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "instrument:temperature": {
+       "allowed_tokens": [],
+       "fallback": 21.5,
+       "kind": "attribute",
+       "type_name": "double",
+       "variability": "varying"
+      }
+     },
+     "type": "Centrifuge"
+    }
+   ],
+   "family": "Centrifuge",
+   "is_a": [
+    "Centrifuge",
+    "Instrument",
+    "Typed"
+   ],
+   "kind": "ConcreteTyped",
+   "name": "Centrifuge",
+   "plugin": "lab",
+   "version": 0
+  },
+  {
+   "allowed_instance_names": [
+    [
+     "red",
+     true
+    ],
+    [
+     "green",
+     true
+    ],
+    [
+     "blue",
+     true
+    ],
+    [
+     "fixture",
+     false
+    ],
+    [
+     "outer:inner",
+     false
+    ],
+    [
+     "gain",
+     false
+    ],
+    [
+     "1st",
+     false
+    ]
+   ],
+   "auto_apply_to": [],
+   "can_only_apply_to": [
+    [
+     "",
+     [
+      "Spectrometer"
+     ]
+    ],
+    [
+     "red",
+     [
+      "ImagingSpectrometer"
+     ]
+    ],
+    [
+     "fixture",
+     [
+      "Spectrometer"
+     ]
+    ]
+   ],
+   "definitions": [
+    {
+     "applied": [
+      "ChannelAPI:red"
+     ],
+     "applied_schemas": [
+      "ChannelAPI:red"
+     ],
+     "properties": {
+      "channel:red": {
+       "allowed_tokens": [],
+       "fallback": true,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "varying"
+      },
+      "channel:red:gain": {
+       "allowed_tokens": [],
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "channel:red:mode": {
+       "allowed_tokens": [
+        "linear",
+        "logarithmic"
+       ],
+       "fallback": "linear",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "channel:red:source": {
+       "kind": "relationship"
+      }
+     },
+     "type": ""
+    },
+    {
+     "applied": [
+      "ChannelAPI:fixture"
+     ],
+     "applied_schemas": [
+      "ChannelAPI:fixture"
+     ],
+     "properties": {
+      "channel:fixture": {
+       "allowed_tokens": [],
+       "fallback": true,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "varying"
+      },
+      "channel:fixture:gain": {
+       "allowed_tokens": [],
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "channel:fixture:mode": {
+       "allowed_tokens": [
+        "linear",
+        "logarithmic"
+       ],
+       "fallback": "linear",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "channel:fixture:source": {
+       "kind": "relationship"
+      }
+     },
+     "type": ""
+    }
+   ],
+   "family": "ChannelAPI",
+   "is_a": [],
+   "kind": "MultipleApplyAPI",
+   "name": "ChannelAPI",
+   "plugin": "lab",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [
+      "CalibrationAPI"
+     ],
+     "properties": {
+      "calibration:certificate": {
+       "allowed_tokens": [],
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "asset",
+       "variability": "varying"
+      },
+      "calibration:interval": {
+       "allowed_tokens": [],
+       "fallback": 7.0,
+       "kind": "attribute",
+       "type_name": "double",
+       "variability": "varying"
+      },
+      "calibration:method": {
+       "allowed_tokens": [
+        "reference",
+        "selfTest"
+       ],
+       "fallback": "reference",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "imaging:interleave": {
+       "allowed_tokens": [
+        "bil",
+        "bip",
+        "bsq"
+       ],
+       "fallback": "bil",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "imaging:resolution": {
+       "allowed_tokens": [],
+       "fallback": [
+        640,
+        480
+       ],
+       "kind": "attribute",
+       "type_name": "int2",
+       "variability": "varying"
+      },
+      "instrument:serialNumber": {
+       "allowed_tokens": [],
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "string",
+       "variability": "varying"
+      },
+      "instrument:status": {
+       "allowed_tokens": [
+        "idle",
+        "running",
+        "fault"
+       ],
+       "fallback": "running",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "instrument:temperature": {
+       "allowed_tokens": [],
+       "fallback": 21.5,
+       "kind": "attribute",
+       "type_name": "double",
+       "variability": "varying"
+      },
+      "spectrometer:channels": {
+       "allowed_tokens": [],
+       "fallback": 1024,
+       "kind": "attribute",
+       "type_name": "int",
+       "variability": "varying"
+      },
+      "spectrometer:lightSource": {
+       "kind": "relationship"
+      },
+      "spectrometer:maxWavelength": {
+       "allowed_tokens": [],
+       "fallback": 780.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "spectrometer:minWavelength": {
+       "allowed_tokens": [],
+       "fallback": 380.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      }
+     },
+     "type": "ImagingSpectrometer"
+    }
+   ],
+   "family": "ImagingSpectrometer",
+   "is_a": [
+    "ImagingSpectrometer",
+    "Instrument",
+    "Spectrometer",
+    "Typed"
+   ],
+   "kind": "ConcreteTyped",
+   "name": "ImagingSpectrometer",
+   "plugin": "lab",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [],
+     "properties": {
+      "instrument:serialNumber": {
+       "allowed_tokens": [],
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "string",
+       "variability": "varying"
+      },
+      "instrument:status": {
+       "allowed_tokens": [
+        "idle",
+        "running",
+        "fault"
+       ],
+       "fallback": "idle",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "instrument:temperature": {
+       "allowed_tokens": [],
+       "fallback": 21.5,
+       "kind": "attribute",
+       "type_name": "double",
+       "variability": "varying"
+      }
+     },
+     "type": "Instrument"
+    }
+   ],
+   "family": "Instrument",
+   "is_a": [
+    "Instrument",
+    "Typed"
+   ],
+   "kind": "AbstractTyped",
+   "name": "Instrument",
+   "plugin": "lab",
+   "version": 0
+  },
+  {
+   "auto_apply_to": [],
+   "can_only_apply_to": [
+    [
+     "",
+     [
+      "Xformable"
+     ]
+    ]
+   ],
+   "definitions": [
+    {
+     "applied": [
+      "MountedOnAPI"
+     ],
+     "applied_schemas": [
+      "MountedOnAPI"
+     ],
+     "properties": {
+      "mount:telescope": {
+       "kind": "relationship"
+      }
+     },
+     "type": ""
+    }
+   ],
+   "family": "MountedOnAPI",
+   "is_a": [],
+   "kind": "SingleApplyAPI",
+   "name": "MountedOnAPI",
+   "plugin": "observatory",
+   "version": 0
+  },
+  {
+   "definitions": [],
+   "family": "SampleQueryAPI",
+   "is_a": [],
+   "kind": "NonAppliedAPI",
+   "name": "SampleQueryAPI",
+   "plugin": "lab",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [
+      "CalibrationAPI"
+     ],
+     "properties": {
+      "calibration:certificate": {
+       "allowed_tokens": [],
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "asset",
+       "variability": "varying"
+      },
+      "calibration:interval": {
+       "allowed_tokens": [],
+       "fallback": 7.0,
+       "kind": "attribute",
+       "type_name": "double",
+       "variability": "varying"
+      },
+      "calibration:method": {
+       "allowed_tokens": [
+        "reference",
+        "selfTest"
+       ],
+       "fallback": "reference",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "instrument:serialNumber": {
+       "allowed_tokens": [],
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "string",
+       "variability": "varying"
+      },
+      "instrument:status": {
+       "allowed_tokens": [
+        "idle",
+        "running",
+        "fault"
+       ],
+       "fallback": "idle",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "instrument:temperature": {
+       "allowed_tokens": [],
+       "fallback": 21.5,
+       "kind": "attribute",
+       "type_name": "double",
+       "variability": "varying"
+      },
+      "spectrometer:channels": {
+       "allowed_tokens": [],
+       "fallback": 1024,
+       "kind": "attribute",
+       "type_name": "int",
+       "variability": "varying"
+      },
+      "spectrometer:lightSource": {
+       "kind": "relationship"
+      },
+      "spectrometer:maxWavelength": {
+       "allowed_tokens": [],
+       "fallback": 780.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "spectrometer:minWavelength": {
+       "allowed_tokens": [],
+       "fallback": 380.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      }
+     },
+     "type": "Spectrometer"
+    }
+   ],
+   "family": "Spectrometer",
+   "is_a": [
+    "Instrument",
+    "Spectrometer",
+    "Typed"
+   ],
+   "kind": "ConcreteTyped",
+   "name": "Spectrometer",
+   "plugin": "lab",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [
+      "VisibilityAPI"
+     ],
+     "properties": {
+      "guideVisibility": {
+       "allowed_tokens": [
+        "inherited",
+        "invisible",
+        "visible"
+       ],
+       "fallback": "invisible",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "proxyPrim": {
+       "kind": "relationship"
+      },
+      "proxyVisibility": {
+       "allowed_tokens": [
+        "inherited",
+        "invisible",
+        "visible"
+       ],
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "purpose": {
+       "allowed_tokens": [
+        "default",
+        "render",
+        "proxy",
+        "guide"
+       ],
+       "fallback": "default",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "renderVisibility": {
+       "allowed_tokens": [
+        "inherited",
+        "invisible",
+        "visible"
+       ],
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "telescope:aperture": {
+       "allowed_tokens": [],
+       "fallback": 0.20000000298023224,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "telescope:mount": {
+       "allowed_tokens": [
+        "altAz",
+        "equatorial",
+        "fork"
+       ],
+       "fallback": "equatorial",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "visibility": {
+       "allowed_tokens": [
+        "inherited",
+        "invisible"
+       ],
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "xformOpOrder": {
+       "allowed_tokens": [],
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token[]",
+       "variability": "uniform"
+      }
+     },
+     "type": "Telescope"
+    }
+   ],
+   "family": "Telescope",
+   "is_a": [
+    "Imageable",
+    "Telescope",
+    "Typed",
+    "Xformable"
+   ],
+   "kind": "ConcreteTyped",
+   "name": "Telescope",
+   "plugin": "observatory",
+   "version": 0
+  }
+ ]
+}

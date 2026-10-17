@@ -48,3 +48,4 @@ def Xform "Cleared"
     double3 xformOp:translate = (9, 9, 9)
     uniform token[] xformOpOrder = []
 }
+

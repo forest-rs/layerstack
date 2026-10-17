@@ -1,0 +1,46 @@
+#usda 1.0
+(
+    """Observatory schemas, which build on OpenUSD's `Xformable`: a codeless
+    library compiled against OpenUSD's own schema sources."""
+    subLayers = [
+        @usdGeom/schema.usda@
+    ]
+)
+
+over "GLOBAL" (
+    customData = {
+        string libraryName = "observatory"
+        string libraryPath = "."
+        bool skipCodeGeneration = true
+    }
+)
+{
+}
+
+class Telescope "Telescope" (
+    inherits = </Xformable>
+    doc = "A telescope, placed on its pier."
+    prepend apiSchemas = ["VisibilityAPI"]
+)
+{
+    float telescope:aperture = 0.2 (
+        doc = "Primary mirror diameter, in meters."
+    )
+    uniform token telescope:mount = "equatorial" (
+        allowedTokens = ["altAz", "equatorial", "fork"]
+    )
+}
+
+class "MountedOnAPI" (
+    inherits = </APISchemaBase>
+    doc = "What an instrument is mounted on."
+    customData = {
+        token apiSchemaType = "singleApply"
+        token[] apiSchemaCanOnlyApplyTo = ["Xformable"]
+    }
+)
+{
+    rel mount:telescope (
+        doc = "The telescope."
+    )
+}

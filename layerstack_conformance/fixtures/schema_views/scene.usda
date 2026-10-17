@@ -12,7 +12,7 @@ def Scope "Authored_CollectionAPI" (
 {
     rel collection:a:excludes = </Target>
     uniform token collection:a:expansionRule = "expandPrims"
-    uniform bool collection:a:includeRoot = true
+    uniform bool collection:a:includeRoot = 1
     rel collection:a:includes = </Target>
     uniform token collection:a:mode = "relationship"
 }
@@ -152,7 +152,7 @@ def BasisCurves "Authored_BasisCurves"
     float[] widths.timeSamples = {
         2: [2.5, 3.5],
     }
-    uniform bool doubleSided = true
+    uniform bool doubleSided = 1
     uniform token orientation = "leftHanded"
     color3f[] primvars:displayColor = [(1.5, 2.5, 3.5), (2.5, 3.5, 4.5)]
     color3f[] primvars:displayColor.timeSamples = {
@@ -379,7 +379,7 @@ def Scope "Authored_GeomModelAPI" (
     prepend apiSchemas = ["GeomModelAPI"]
 )
 {
-    uniform bool model:applyDrawMode = true
+    uniform bool model:applyDrawMode = 1
     uniform token model:cardGeometry = "box"
     asset model:cardTextureXNeg = @asset1.usda@
     asset model:cardTextureXNeg.timeSamples = {
@@ -837,9 +837,9 @@ def CylinderLight "Authored_CylinderLight"
     float inputs:radius.timeSamples = {
         2: 2.5,
     }
-    bool treatAsLine = true
+    bool treatAsLine = 1
     bool treatAsLine.timeSamples = {
-        2: false,
+        2: 0,
     }
 }
 
@@ -941,9 +941,9 @@ def Scope "Authored_LightAPI" (
     float inputs:diffuse.timeSamples = {
         2: 2.5,
     }
-    bool inputs:enableColorTemperature = true
+    bool inputs:enableColorTemperature = 1
     bool inputs:enableColorTemperature.timeSamples = {
-        2: false,
+        2: 0,
     }
     float inputs:exposure = 1.5
     float inputs:exposure.timeSamples = {
@@ -953,9 +953,9 @@ def Scope "Authored_LightAPI" (
     float inputs:intensity.timeSamples = {
         2: 2.5,
     }
-    bool inputs:normalize = true
+    bool inputs:normalize = 1
     bool inputs:normalize.timeSamples = {
-        2: false,
+        2: 0,
     }
     float inputs:specular = 1.5
     float inputs:specular.timeSamples = {
@@ -1091,9 +1091,9 @@ def Scope "Authored_ShadowAPI" (
     float inputs:shadow:distance.timeSamples = {
         2: 2.5,
     }
-    bool inputs:shadow:enable = true
+    bool inputs:shadow:enable = 1
     bool inputs:shadow:enable.timeSamples = {
-        2: false,
+        2: 0,
     }
     float inputs:shadow:falloff = 1.5
     float inputs:shadow:falloff.timeSamples = {
@@ -1139,9 +1139,9 @@ def Scope "Authored_ShapingAPI" (
     asset inputs:shaping:ies:file.timeSamples = {
         2: @asset2.usda@,
     }
-    bool inputs:shaping:ies:normalize = true
+    bool inputs:shaping:ies:normalize = 1
     bool inputs:shaping:ies:normalize.timeSamples = {
-        2: false,
+        2: 0,
     }
 }
 
@@ -1155,9 +1155,9 @@ def SphereLight "Authored_SphereLight"
     float inputs:radius.timeSamples = {
         2: 2.5,
     }
-    bool treatAsPoint = true
+    bool treatAsPoint = 1
     bool treatAsPoint.timeSamples = {
-        2: false,
+        2: 0,
     }
 }
 
@@ -1282,9 +1282,9 @@ def Scope "Authored_PhysicsCollisionAPI" (
     prepend apiSchemas = ["PhysicsCollisionAPI"]
 )
 {
-    bool physics:collisionEnabled = true
+    bool physics:collisionEnabled = 1
     bool physics:collisionEnabled.timeSamples = {
-        2: false,
+        2: 0,
     }
     rel physics:simulationOwner = </Target>
 }
@@ -1296,9 +1296,9 @@ def PhysicsCollisionGroup "Fallback_PhysicsCollisionGroup"
 def PhysicsCollisionGroup "Authored_PhysicsCollisionGroup"
 {
     rel physics:filteredGroups = </Target>
-    bool physics:invertFilteredGroups = true
+    bool physics:invertFilteredGroups = 1
     bool physics:invertFilteredGroups.timeSamples = {
-        2: false,
+        2: 0,
     }
     string physics:mergeGroup = "text1"
     string physics:mergeGroup.timeSamples = {
@@ -1392,14 +1392,14 @@ def PhysicsJoint "Authored_PhysicsJoint"
     float physics:breakTorque.timeSamples = {
         2: 2.5,
     }
-    bool physics:collisionEnabled = true
+    bool physics:collisionEnabled = 1
     bool physics:collisionEnabled.timeSamples = {
-        2: false,
+        2: 0,
     }
-    uniform bool physics:excludeFromArticulation = true
-    bool physics:jointEnabled = true
+    uniform bool physics:excludeFromArticulation = 1
+    bool physics:jointEnabled = 1
     bool physics:jointEnabled.timeSamples = {
-        2: false,
+        2: 0,
     }
     point3f physics:localPos0 = (1.5, 2.5, 3.5)
     point3f physics:localPos0.timeSamples = {
@@ -1560,16 +1560,16 @@ def Scope "Authored_PhysicsRigidBodyAPI" (
     vector3f physics:angularVelocity.timeSamples = {
         2: (2.5, 3.5, 4.5),
     }
-    bool physics:kinematicEnabled = true
+    bool physics:kinematicEnabled = 1
     bool physics:kinematicEnabled.timeSamples = {
-        2: false,
+        2: 0,
     }
-    bool physics:rigidBodyEnabled = true
+    bool physics:rigidBodyEnabled = 1
     bool physics:rigidBodyEnabled.timeSamples = {
-        2: false,
+        2: 0,
     }
     rel physics:simulationOwner = </Target>
-    uniform bool physics:startsAsleep = true
+    uniform bool physics:startsAsleep = 1
     vector3f physics:velocity = (1.5, 2.5, 3.5)
     vector3f physics:velocity.timeSamples = {
         2: (2.5, 3.5, 4.5),
@@ -1880,9 +1880,9 @@ def RenderProduct "Authored_RenderProduct"
     uniform token aspectRatioConformPolicy = "cropAperture"
     rel camera = </Target>
     uniform float4 dataWindowNDC = (1.5, 2.5, 3.5, 4.5)
-    uniform bool disableDepthOfField = true
-    uniform bool disableMotionBlur = true
-    uniform bool instantaneousShutter = true
+    uniform bool disableDepthOfField = 1
+    uniform bool disableMotionBlur = 1
+    uniform bool instantaneousShutter = 1
     uniform float pixelAspectRatio = 1.5
     uniform int2 resolution = (3, 4)
 }
@@ -2211,3 +2211,4 @@ def Material "Authored_MaterialXConfigAPI" (
         2: "text2",
     }
 }
+

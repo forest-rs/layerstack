@@ -21,6 +21,27 @@ schema metadata fallback, following `UsdSchemaRegistry::IsDisallowedField`.
 Structural type, variability, and default values use their dedicated table fields.
 Unsupported metadata constructors fail generation rather than dropping a field.
 
+Compile a downstream schema library, in usdGenSchema's `schema.usda` authoring
+form, into the `generatedSchema.usda` and `plugInfo.json` OpenUSD's
+`usdGenSchema` writes for it, so its schemas load in OpenUSD tools and in
+layerstack (`layerstack::schema::read_generated_schema`):
+
+```sh
+cargo run -p layerstack_schemagen -- compile schema/schema.usda --out schema --openusd-source <OpenUSD>
+```
+
+Sublayers such as `@usdGeom/schema.usda@` resolve next to the layer naming them,
+then through `--search <dir>`, `--openusd-source <checkout>` (its `pxr/usd`) and
+`--plugin-root <dir>` (each `<plugin>/resources`, such as the usd-core wheel's
+`pxr/pluginfo`, which ships the `schema.usda` files). An unresolved sublayer is an
+error naming it. Each class is checked against usdGenSchema's rules, and a broken
+rule is a structured error (`compile::Rule`). `plugInfo.json` is built on the one
+already in `--out`, so edits outside the generated types survive, as they do with
+usdGenSchema: a codeless plugin loaded from its own directory replaces the
+template's `@PLUG_INFO_...@` placeholders once. `--check` writes nothing and fails
+on a difference. `compile::compile` is the library counterpart, which also lists
+each class's kind, base and application rules. No C++ or Python is generated.
+
 Generate a downstream shader module without an OpenUSD installation:
 
 ```sh

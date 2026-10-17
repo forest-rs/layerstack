@@ -25,8 +25,9 @@ serde = { features = ["derive"], version = "1.0" }
 # `float_roundtrip` parses the bit-exact vectors exactly.
 serde_json = { features = ["float_roundtrip"], version = "1.0" }
 
-[dev-dependencies]
-# The schema compiler, compared with OpenUSD's usdGenSchema.
+# The schema compiler, compared with OpenUSD's usdGenSchema. Like the
+# compiler itself, its test does not build for wasm.
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 layerstack_schemagen = { path = "../layerstack_schemagen" }
 
 [build-dependencies]

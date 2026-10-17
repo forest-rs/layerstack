@@ -21,6 +21,7 @@
 //!
 //! Spec: AOUSD Core §13.3 (schemas and prim definitions).
 
+#![cfg(not(target_arch = "wasm32"))]
 #![allow(missing_docs, reason = "integration tests")]
 
 use std::collections::BTreeMap;

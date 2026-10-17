@@ -42,6 +42,18 @@ template's `@PLUG_INFO_...@` placeholders once. `--check` writes nothing and fai
 on a difference. `compile::compile` is the library counterpart, which also lists
 each class's kind, base and application rules. No C++ or Python is generated.
 
+`--rust <file.rs>` also writes the library as a Rust module (`--out` and
+`--install` become optional): typed views, edit handles and token enums of its
+schemas, of the shape `layerstack_schemas` gives OpenUSD's, which deref to
+OpenUSD's views (`Xformable`) and are named for each property's `apiName`, and a
+`register` function adding the schemas to a `SchemaRegistryBuilder` from static
+tables. `CompiledSchema::rust_module` is the build-script counterpart; see the
+`compile` module docs for the Cargo and `build.rs` setup.
+
+```sh
+cargo run -p layerstack_schemagen -- compile schema/schema.usda --openusd-source <OpenUSD> --rust src/schemas.rs
+```
+
 Generate a downstream shader module without an OpenUSD installation:
 
 ```sh

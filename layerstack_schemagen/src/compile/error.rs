@@ -68,6 +68,16 @@ pub enum CompileError {
         /// What could not be written.
         message: String,
     },
+    /// The library's Rust module could not be generated
+    /// ([`CompiledSchema::rust_module`](super::CompiledSchema::rust_module)):
+    /// an accessor's name, from a property's `apiName` or else its USD name,
+    /// is a Rust keyword or collides with another; two schemas make the
+    /// same Rust type; or a schema builds on a library that
+    /// `layerstack_schemas` has no views of.
+    Rust {
+        /// What is wrong, naming the schema.
+        message: String,
+    },
 }
 
 /// A field a schema cannot specify, where it is authored.
@@ -484,6 +494,7 @@ impl fmt::Display for CompileError {
             }
             Self::PlugInfo { message } => write!(f, "plugInfo.json: {message}"),
             Self::Write { message } => write!(f, "writing generatedSchema.usda: {message}"),
+            Self::Rust { message } => write!(f, "generating the Rust module: {message}"),
         }
     }
 }

@@ -143,6 +143,10 @@ fn method_name(schema: &str, property: &Property) -> String {
 pub(crate) enum Target {
     /// `layerstack_schemas` itself: OpenUSD's domains.
     BuiltIn,
+    /// A module of another crate, for a schema library of its own, which
+    /// declares `alloc` and imports `Arc` and `Vec` itself
+    /// (`compile --rust`).
+    Library,
 }
 
 impl Target {
@@ -150,6 +154,7 @@ impl Target {
     pub(crate) fn schemas(self) -> &'static str {
         match self {
             Self::BuiltIn => "crate",
+            Self::Library => "::layerstack_schemas",
         }
     }
 
@@ -157,6 +162,7 @@ impl Target {
     pub(crate) fn arc(self) -> &'static str {
         match self {
             Self::BuiltIn => "::alloc::sync::Arc",
+            Self::Library => "Arc",
         }
     }
 
@@ -164,6 +170,7 @@ impl Target {
     pub(crate) fn vec(self) -> &'static str {
         match self {
             Self::BuiltIn => "::alloc::vec::Vec",
+            Self::Library => "Vec",
         }
     }
 }
@@ -585,6 +592,19 @@ fn method_names<'m>(
         {
             continue;
         }
+        let placeholder = layerstack::schema::INSTANCE_NAME_PLACEHOLDER;
+        if property.api_name.is_none()
+            && property.name.rsplit(':').next() == Some(placeholder)
+            && !RENAMES
+                .iter()
+                .any(|(s, p, _)| *s == schema.name && *p == property.name)
+        {
+            return Err(format!(
+                "{}: `{}` is named for the instance alone, so only an `apiName` can name its \
+                 accessors",
+                schema.name, property.name
+            ));
+        }
         let name = method_name(&schema.name, property);
         out.push((name.clone(), Some(property)));
         out.push((format!("set_{name}"), Some(property)));
@@ -668,11 +688,15 @@ pub(crate) struct Context<'c, 'm> {
     pub(crate) owner: String,
 }
 
-/// The `#[allow]` each item carries; OpenUSD's domain files allow what
-/// their documentation needs once, for the file.
+/// The `#[allow]` a library's items carry for documentation as its schema
+/// writes it; OpenUSD's domain files allow it once, for the file.
 fn item_allow(target: Target) -> &'static str {
     match target {
         Target::BuiltIn => "",
+        Target::Library => {
+            "#[allow(\n    clippy::doc_markdown,\n    clippy::too_long_first_doc_paragraph,\n    \
+             reason = \"documentation as the schema writes it\"\n)]\n"
+        }
     }
 }
 
@@ -701,17 +725,35 @@ fn domain_file(
         origin_note(domain)
     );
     let schemas: Vec<&Schema> = domain.schemas.iter().collect();
-    out.push_str(&module_items(&cx, &schemas, table)?);
+    let items = module_items(&cx, &schemas, table)?;
+    let _ = write!(
+        out,
+        "use core::ops::Deref;\n\nuse layerstack::{{{}}};\n\nuse crate::{{{}}};\n{}",
+        items.layerstack.join(", "),
+        items.schemas.join(", "),
+        items.body
+    );
     Ok(out)
 }
 
-/// The imports, views, edit handles and enums of `schemas`, for a module
-/// that holds them all.
+/// The views, edit handles and enums of a module, with the items they
+/// import.
+pub(crate) struct Items {
+    /// What they import from `layerstack`.
+    pub(crate) layerstack: Vec<&'static str>,
+    /// What they import from `layerstack_schemas`.
+    pub(crate) schemas: Vec<&'static str>,
+    /// The views, edit handles and enums.
+    pub(crate) body: String,
+}
+
+/// The views, edit handles and enums of `schemas`, for a module that
+/// holds them all, which imports `Deref` and the [`Items`]' imports.
 pub(crate) fn module_items(
     cx: &Context<'_, '_>,
     schemas: &[&Schema],
     table: &mut TestTable,
-) -> Result<String, String> {
+) -> Result<Items, String> {
     let mut body = String::new();
     for schema in schemas {
         let text = match schema.kind {
@@ -724,7 +766,7 @@ pub(crate) fn module_items(
         };
         body.push_str(&text);
     }
-    let used = |names: &[&str]| -> String {
+    let used = |names: &[&'static str]| -> Vec<&'static str> {
         names
             .iter()
             .filter(|name| {
@@ -736,23 +778,20 @@ pub(crate) fn module_items(
                     || body.contains(&format!("{name}>"))
             })
             .copied()
-            .collect::<Vec<_>>()
-            .join(", ")
+            .collect()
     };
-    let mut out = String::from("use core::ops::Deref;\n\n");
-    let layerstack = used(&["CannotApply", "PathId"]);
-    let _ = writeln!(out, "use layerstack::{{{layerstack}}};\n");
-    let crate_items = used(&[
-        "InstanceEdit",
-        "InstanceView",
-        "PrimEdit",
-        "PrimView",
-        "Scene",
-        "SchemaEdit",
-    ]);
-    let _ = writeln!(out, "use {}::{{{crate_items}}};", cx.target.schemas());
-    out.push_str(&body);
-    Ok(out)
+    Ok(Items {
+        layerstack: used(&["CannotApply", "PathId"]),
+        schemas: used(&[
+            "InstanceEdit",
+            "InstanceView",
+            "PrimEdit",
+            "PrimView",
+            "Scene",
+            "SchemaEdit",
+        ]),
+        body,
+    })
 }
 
 /// A property's getters and setters, and its enum, if any.

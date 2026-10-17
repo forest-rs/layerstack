@@ -108,6 +108,23 @@
 //! (through a reference, `/Instance/Light` is authored as `/Asset/Light`);
 //! one it does not map rejects the transaction when it is applied.
 //!
+//! The views are built on public items alone, so a schema library of one's
+//! own gets views of the same shape from `layerstack_schemagen`
+//! (`compile --rust`), registered with its [`table::SchemaTables`]:
+//! [`PrimView`] and [`InstanceView`] read properties by USD name
+//! ([`PrimView::read_value`], [`PrimView::read_value_at`],
+//! [`PrimView::try_read_value`], [`PrimView::read_targets`]) with the
+//! conversions of [`value`], and [`PrimEdit`] and [`InstanceEdit`] author
+//! them ([`PrimEdit::write_value`], [`PrimEdit::write_targets`]). A view
+//! wraps the view of its base schema with `from_prim_unchecked` (a
+//! multiple-apply view an [`InstanceView`] with `from_instance_unchecked`),
+//! which skips the `IsA` or `HasAPI` check of its `new` or `get`; an edit
+//! handle wraps a [`PrimEdit`] with `from_prim` (or an [`InstanceEdit`]
+//! with `from_instance`). A [`PrimEdit`] is had for a prim that exists
+//! ([`PrimEdit::new`], [`SchemaEdit::define_prim`],
+//! [`SchemaEdit::apply_api`]), or with [`PrimEdit::from_path_unchecked`],
+//! which does not check.
+//!
 //! ```
 //! use std::sync::Arc;
 //!
@@ -379,8 +396,6 @@ pub use mesh_publication::{
     validate_mesh_primvar_indices,
 };
 
-#[macro_use]
-mod view;
 #[cfg(feature = "usd-geom")]
 pub mod affine;
 #[cfg(feature = "usd-shade")]
@@ -399,6 +414,7 @@ mod edit;
 mod metadata;
 #[cfg(feature = "usd")]
 pub mod validation;
+mod view;
 pub use metadata::{PropertyMetadata, StageMetadata};
 pub mod assets;
 #[cfg(feature = "usd-geom")]
@@ -455,7 +471,7 @@ pub mod scene_records;
 pub mod skel;
 #[cfg(feature = "usd-geom")]
 pub mod subset;
-mod table;
+pub mod table;
 #[cfg(feature = "usd-ui")]
 pub mod ui_hints;
 pub mod value;
@@ -520,16 +536,7 @@ pub fn register(
     tokens: &mut TokenInterner,
 ) -> Result<(), layerstack::MetadataConflict> {
     for domain in with_dependencies(domains) {
-        let tables = domain.tables();
-        for metadata in tables.metadata {
-            builder.register_metadata(metadata.definition(tokens))?;
-        }
-        for schema in tables.schemas {
-            builder.register(schema.definition(tokens));
-        }
-        for (schema, target) in tables.auto_applies {
-            builder.auto_apply(tokens.intern(schema), tokens.intern(target));
-        }
+        domain.tables().register(builder, tokens)?;
     }
     Ok(())
 }

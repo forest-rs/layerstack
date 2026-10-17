@@ -25,7 +25,7 @@ use layerstack::{CannotApply, PathId};
 use crate::{PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "\\\\deprecated Materials should use UsdShadeMaterial instead."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `RiMaterialAPI`. Get it with [`RiMaterialApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `RiMaterialAPI`. Get it with [`RiMaterialApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdRiMaterialAPI`."]
 #[doc(alias = "UsdRiMaterialAPI")]
 #[doc(alias = "RiMaterialAPI")]
@@ -54,17 +54,22 @@ impl<'a> RiMaterialApi<'a> {
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of the schema on `prim`, without checking that the prim
+    /// has it applied (`HasAPI`), as [`Self::get`] does: a getter reads
+    /// what the prim authors, and the schema's fallbacks only for a
+    /// prim with the schema applied. For a built-in's view.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self { base: prim }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> RiMaterialApiEdit {
-        RiMaterialApiEdit::from_path(self.path())
+        RiMaterialApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
@@ -81,39 +86,75 @@ impl<'a> RiMaterialApi<'a> {
         edit: &mut SchemaEdit<'_>,
         path: PathId,
     ) -> Result<RiMaterialApiEdit, CannotApply> {
-        edit.apply(path, Self::SCHEMA, None)?;
-        Ok(RiMaterialApiEdit::from_path(path))
+        edit.apply_api(path, Self::SCHEMA, None)
+            .map(RiMaterialApiEdit::from_prim)
     }
 
     /// The USD name of [`Self::displacement`].
     pub const DISPLACEMENT: &'static str = "outputs:ri:displacement";
 
-    attribute! {
-        #[doc = "USD attribute `outputs:ri:displacement` (`token`)."]
-        #[doc = "C++ read: `UsdRiMaterialAPI::GetDisplacementAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdRiMaterialAPI::GetDisplacementAttr")]
-        #[doc(alias = "GetDisplacementAttr")]
-        displacement, displacement_at, "outputs:ri:displacement", &'a str, crate::value::read_token
+    #[doc = "USD attribute `outputs:ri:displacement` (`token`)."]
+    #[doc = "C++ read: `UsdRiMaterialAPI::GetDisplacementAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdRiMaterialAPI::GetDisplacementAttr")]
+    #[doc(alias = "GetDisplacementAttr")]
+    #[must_use]
+    pub fn displacement(&self) -> Option<&'a str> {
+        self.read_value("outputs:ri:displacement", crate::value::read_token)
     }
+
+    #[doc = "[`Self::displacement`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn displacement_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<&'a str> {
+        self.read_value_at(
+            "outputs:ri:displacement",
+            time,
+            interp,
+            crate::value::read_token,
+        )
+    }
+
     /// The USD name of [`Self::surface`].
     pub const SURFACE: &'static str = "outputs:ri:surface";
 
-    attribute! {
-        #[doc = "USD attribute `outputs:ri:surface` (`token`)."]
-        #[doc = "C++ read: `UsdRiMaterialAPI::GetSurfaceAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdRiMaterialAPI::GetSurfaceAttr")]
-        #[doc(alias = "GetSurfaceAttr")]
-        surface, surface_at, "outputs:ri:surface", &'a str, crate::value::read_token
+    #[doc = "USD attribute `outputs:ri:surface` (`token`)."]
+    #[doc = "C++ read: `UsdRiMaterialAPI::GetSurfaceAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdRiMaterialAPI::GetSurfaceAttr")]
+    #[doc(alias = "GetSurfaceAttr")]
+    #[must_use]
+    pub fn surface(&self) -> Option<&'a str> {
+        self.read_value("outputs:ri:surface", crate::value::read_token)
     }
+
+    #[doc = "[`Self::surface`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn surface_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<&'a str> {
+        self.read_value_at("outputs:ri:surface", time, interp, crate::value::read_token)
+    }
+
     /// The USD name of [`Self::volume`].
     pub const VOLUME: &'static str = "outputs:ri:volume";
 
-    attribute! {
-        #[doc = "USD attribute `outputs:ri:volume` (`token`)."]
-        #[doc = "C++ read: `UsdRiMaterialAPI::GetVolumeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdRiMaterialAPI::GetVolumeAttr")]
-        #[doc(alias = "GetVolumeAttr")]
-        volume, volume_at, "outputs:ri:volume", &'a str, crate::value::read_token
+    #[doc = "USD attribute `outputs:ri:volume` (`token`)."]
+    #[doc = "C++ read: `UsdRiMaterialAPI::GetVolumeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdRiMaterialAPI::GetVolumeAttr")]
+    #[doc(alias = "GetVolumeAttr")]
+    #[must_use]
+    pub fn volume(&self) -> Option<&'a str> {
+        self.read_value("outputs:ri:volume", crate::value::read_token)
+    }
+
+    #[doc = "[`Self::volume`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn volume_at(&self, time: f64, interp: ::layerstack::InterpolationType) -> Option<&'a str> {
+        self.read_value_at("outputs:ri:volume", time, interp, crate::value::read_token)
     }
 }
 
@@ -137,41 +178,71 @@ impl RiMaterialApiEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
-        Self {
-            base: PrimEdit::new(path),
-        }
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whether or not it has the schema applied.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
+        Self { base: prim }
     }
 
-    set_attribute! {
-        #[doc = "USD attribute `outputs:ri:displacement` (`token`)."]
-        #[doc = "C++ authoring: `UsdRiMaterialAPI::CreateDisplacementAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdRiMaterialAPI::CreateDisplacementAttr")]
-        #[doc(alias = "CreateDisplacementAttr")]
-        set_displacement, set_displacement_at, "outputs:ri:displacement", &str, crate::value::write_token
+    #[doc = "USD attribute `outputs:ri:displacement` (`token`)."]
+    #[doc = "C++ authoring: `UsdRiMaterialAPI::CreateDisplacementAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdRiMaterialAPI::CreateDisplacementAttr")]
+    #[doc(alias = "CreateDisplacementAttr")]
+    pub fn set_displacement(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
+        let value = crate::value::write_token(value, edit.tokens());
+        self.write_value(edit, "outputs:ri:displacement", None, value);
+        self
     }
-    set_attribute! {
-        #[doc = "USD attribute `outputs:ri:surface` (`token`)."]
-        #[doc = "C++ authoring: `UsdRiMaterialAPI::CreateSurfaceAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdRiMaterialAPI::CreateSurfaceAttr")]
-        #[doc(alias = "CreateSurfaceAttr")]
-        set_surface, set_surface_at, "outputs:ri:surface", &str, crate::value::write_token
+
+    #[doc = "[`Self::set_displacement`] as a time sample at the time code `time`."]
+    pub fn set_displacement_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &str) -> &Self {
+        let value = crate::value::write_token(value, edit.tokens());
+        self.write_value(edit, "outputs:ri:displacement", Some(time), value);
+        self
     }
-    set_attribute! {
-        #[doc = "USD attribute `outputs:ri:volume` (`token`)."]
-        #[doc = "C++ authoring: `UsdRiMaterialAPI::CreateVolumeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdRiMaterialAPI::CreateVolumeAttr")]
-        #[doc(alias = "CreateVolumeAttr")]
-        set_volume, set_volume_at, "outputs:ri:volume", &str, crate::value::write_token
+
+    #[doc = "USD attribute `outputs:ri:surface` (`token`)."]
+    #[doc = "C++ authoring: `UsdRiMaterialAPI::CreateSurfaceAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdRiMaterialAPI::CreateSurfaceAttr")]
+    #[doc(alias = "CreateSurfaceAttr")]
+    pub fn set_surface(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
+        let value = crate::value::write_token(value, edit.tokens());
+        self.write_value(edit, "outputs:ri:surface", None, value);
+        self
+    }
+
+    #[doc = "[`Self::set_surface`] as a time sample at the time code `time`."]
+    pub fn set_surface_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &str) -> &Self {
+        let value = crate::value::write_token(value, edit.tokens());
+        self.write_value(edit, "outputs:ri:surface", Some(time), value);
+        self
+    }
+
+    #[doc = "USD attribute `outputs:ri:volume` (`token`)."]
+    #[doc = "C++ authoring: `UsdRiMaterialAPI::CreateVolumeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdRiMaterialAPI::CreateVolumeAttr")]
+    #[doc(alias = "CreateVolumeAttr")]
+    pub fn set_volume(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
+        let value = crate::value::write_token(value, edit.tokens());
+        self.write_value(edit, "outputs:ri:volume", None, value);
+        self
+    }
+
+    #[doc = "[`Self::set_volume`] as a time sample at the time code `time`."]
+    pub fn set_volume_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &str) -> &Self {
+        let value = crate::value::write_token(value, edit.tokens());
+        self.write_value(edit, "outputs:ri:volume", Some(time), value);
+        self
     }
 }
 
 #[doc = "\\\\deprecated This API schema will be removed in a future release."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `RiSplineAPI`. Get it with [`RiSplineApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `RiSplineAPI`. Get it with [`RiSplineApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdRiSplineAPI`."]
 #[doc(alias = "UsdRiSplineAPI")]
 #[doc(alias = "RiSplineAPI")]
@@ -200,17 +271,22 @@ impl<'a> RiSplineApi<'a> {
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of the schema on `prim`, without checking that the prim
+    /// has it applied (`HasAPI`), as [`Self::get`] does: a getter reads
+    /// what the prim authors, and the schema's fallbacks only for a
+    /// prim with the schema applied. For a built-in's view.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self { base: prim }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> RiSplineApiEdit {
-        RiSplineApiEdit::from_path(self.path())
+        RiSplineApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
@@ -224,8 +300,8 @@ impl<'a> RiSplineApi<'a> {
     #[doc(alias = "UsdRiSplineAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<RiSplineApiEdit, CannotApply> {
-        edit.apply(path, Self::SCHEMA, None)?;
-        Ok(RiSplineApiEdit::from_path(path))
+        edit.apply_api(path, Self::SCHEMA, None)
+            .map(RiSplineApiEdit::from_prim)
     }
 }
 
@@ -249,19 +325,20 @@ impl RiSplineApiEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
-        Self {
-            base: PrimEdit::new(path),
-        }
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whether or not it has the schema applied.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
+        Self { base: prim }
     }
 }
 
 #[doc = "Container namespace schema for all renderman statements."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `StatementsAPI`. Get it with [`StatementsApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `StatementsAPI`. Get it with [`StatementsApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdRiStatementsAPI`."]
 #[doc(alias = "UsdRiStatementsAPI")]
 #[doc(alias = "StatementsAPI")]
@@ -290,17 +367,22 @@ impl<'a> StatementsApi<'a> {
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of the schema on `prim`, without checking that the prim
+    /// has it applied (`HasAPI`), as [`Self::get`] does: a getter reads
+    /// what the prim authors, and the schema's fallbacks only for a
+    /// prim with the schema applied. For a built-in's view.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self { base: prim }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> StatementsApiEdit {
-        StatementsApiEdit::from_path(self.path())
+        StatementsApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
@@ -317,8 +399,8 @@ impl<'a> StatementsApi<'a> {
         edit: &mut SchemaEdit<'_>,
         path: PathId,
     ) -> Result<StatementsApiEdit, CannotApply> {
-        edit.apply(path, Self::SCHEMA, None)?;
-        Ok(StatementsApiEdit::from_path(path))
+        edit.apply_api(path, Self::SCHEMA, None)
+            .map(StatementsApiEdit::from_prim)
     }
 }
 
@@ -342,12 +424,13 @@ impl StatementsApiEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
-        Self {
-            base: PrimEdit::new(path),
-        }
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whether or not it has the schema applied.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
+        Self { base: prim }
     }
 }

@@ -198,7 +198,7 @@ use alloc::sync::Arc;
 
 use layerstack::Value;
 
-use crate::table::{DomainTables, ValueType};
+use crate::table::{SchemaTables, ValueType};
 
 mod metadata;
 #[cfg(feature = "usd-shade")]
@@ -437,7 +437,7 @@ impl Domain {
         }
     }
 
-    pub(crate) fn tables(self) -> &'static DomainTables {
+    pub(crate) fn tables(self) -> &'static SchemaTables {
         match self {
             #[cfg(feature = "usd")]
             Self::Usd => &usd::TABLES,

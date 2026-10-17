@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "layerstack",
     "layerstack_conformance",
+    "layerstack_custom_schemas",
     "layerstack_examples",
     "layerstack_io",
     "layerstack_mesh_export",

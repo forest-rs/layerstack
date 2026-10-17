@@ -123,7 +123,8 @@ impl<'s> SchemaEdit<'s> {
         self.transaction
     }
 
-    /// Applies a registered API schema by name, including codeless schemas.
+    /// Applies a registered API schema by name, including codeless schemas,
+    /// and returns the handle authoring the prim.
     ///
     /// Pass `None` for a single-apply schema, or the separate instance name for
     /// a multiple-apply schema (for example `"PipelineSlotAPI"`, `Some("main")`).
@@ -145,8 +146,30 @@ impl<'s> SchemaEdit<'s> {
         path: PathId,
         schema: &str,
         instance: Option<&str>,
-    ) -> Result<(), CannotApply> {
-        self.apply(path, schema, instance)
+    ) -> Result<crate::PrimEdit, CannotApply> {
+        self.apply(path, schema, instance)?;
+        Ok(crate::PrimEdit::from_path_unchecked(path))
+    }
+
+    /// Defines `path` as a new `def` prim spec of the typed schema named
+    /// `schema` in the edit's target, and returns the handle authoring it.
+    /// The schema need not have a generated Rust type; a concrete schema's
+    /// `define` (`Mesh::define`) is this with its name.
+    ///
+    /// OpenUSD: `UsdStage::DefinePrim`, for a prim the target does not
+    /// author yet; defining a spec that exists is rejected when the
+    /// transaction applies.
+    ///
+    /// Spec: AOUSD Core §7.6 (specifier field), §13.3.1 (typed schemas).
+    #[doc(alias = "DefinePrim")]
+    #[doc(alias = "UsdStage::DefinePrim")]
+    pub fn define_prim(&mut self, path: PathId, schema: &str) -> crate::PrimEdit {
+        let type_name = self.store.tokens_mut().intern(schema);
+        let at = self.target.prim(path);
+        self.transaction
+            .create_prim(at, Specifier::Def, Some(type_name));
+        self.defined.push((path, schema.into()));
+        crate::PrimEdit::from_path_unchecked(path)
     }
 
     /// Collects a fallible child group. Success appends its transaction; an error
@@ -915,18 +938,6 @@ impl<'s> SchemaEdit<'s> {
         let at = self.property(path, name);
         self.transaction
             .set_targets(at, ListOp::explicit(targets.to_vec()));
-    }
-
-    /// Defines `path` as a new `def` prim spec of the typed schema `schema`.
-    ///
-    /// OpenUSD: `UsdStage::DefinePrim`, for a prim the edit target does not
-    /// author yet.
-    pub(crate) fn define(&mut self, path: PathId, schema: &str) {
-        let type_name = self.store.tokens_mut().intern(schema);
-        let at = self.target.prim(path);
-        self.transaction
-            .create_prim(at, Specifier::Def, Some(type_name));
-        self.defined.push((path, schema.into()));
     }
 
     /// Applies the applied schema `schema` (with `instance` for a

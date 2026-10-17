@@ -21,9 +21,9 @@
 
 use layerstack::SchemaKind;
 
-use crate::table::{DomainTables, Schema};
+use crate::table::{Schema, SchemaTables};
 
-pub(crate) static TABLES: DomainTables = DomainTables {
+pub(crate) static TABLES: SchemaTables = SchemaTables {
     schemas: &[Schema {
         name: "ClaimsAPI",
         kind: SchemaKind::SingleApplyApi,

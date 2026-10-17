@@ -19,6 +19,8 @@
 //! for class in compiled.classes() {
 //!     println!("{} ({})", class.name, class.kind.as_str());
 //! }
+//! // Typed views and registration, for a crate using the schemas.
+//! std::fs::write("schemas.rs", compiled.rust_module()?)?;
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 //!
@@ -63,6 +65,119 @@
 //!   --install <dir>`): placeholders filled as OpenUSD's build fills them,
 //!   no comments. Edits to an existing file survive either way.
 //!
+//! # Rust views
+//!
+//! [`CompiledSchema::rust_module`] is the library as a Rust module, for a
+//! crate that reads and authors its schemas with layerstack. For each
+//! schema with a prim definition it has a typed view, an edit handle and
+//! token enums of the shape `layerstack_schemas` gives OpenUSD's own
+//! schemas (its crate docs, "Views"), built on that crate's public API
+//! alone, and it has the static tables that register the schemas:
+//!
+//! - a typed schema's view (`Spectrometer`) is had with `new`, which
+//!   checks `IsA`, and derefs to the view of the schema it inherits from,
+//!   OpenUSD's included: a `Telescope` inheriting `Xformable` derefs to
+//!   `layerstack_schemas::usd_geom::Xformable`, with its getters and
+//!   transform computations, and `TelescopeEdit` to `XformableEdit`, with its
+//!   op authoring. A concrete schema's view has `define`, and a typed
+//!   view an accessor for each single-apply built-in it adds
+//!   (`calibration_api`);
+//! - a single-apply schema's view is had with `get`, which checks
+//!   `HasAPI`, and applied with `apply`; a multiple-apply schema's with
+//!   `get(scene, path, instance)` or `instances`, and applied with
+//!   `apply(edit, path, instance)`;
+//! - getters return the resolved value, the registry's fallback included
+//!   (`max_rpm`; `max_rpm_at` for a time code), relationship getters their
+//!   targets, and a token attribute with `allowedTokens` reads as an enum
+//!   with `Other` for any other token (`ChannelApiMode`); the edit handle's
+//!   setters (`set_max_rpm`, `set_max_rpm_at`) author through a
+//!   `SchemaEdit`;
+//! - accessors are named for each property's `apiName`, snake-cased, which
+//!   `schema.usda` keeps and `generatedSchema.usda` does not, else for its
+//!   USD name without a multiple-apply schema's prefix: `centrifuge:maxSpeed`
+//!   with `apiName = "maxRpm"` makes `max_rpm`, `telescope:aperture` makes
+//!   `telescope_aperture`. A name that is a Rust keyword or collides with another
+//!   accessor of the view or of a view it derefs to, a multiple-apply
+//!   property named for the instance alone (`__INSTANCE_NAME__`) without an
+//!   `apiName`, and two schemas that make one Rust type are a
+//!   [`CompileError::Rust`]: nothing is renamed silently;
+//! - `register(builder, tokens)` adds the schemas, their auto-applies and
+//!   the plugin's `SdfMetadata` declarations (from an existing
+//!   `plugInfo.json`) to a `SchemaRegistryBuilder` from static
+//!   `layerstack_schemas::table` tables, as `layerstack_schemas::register`
+//!   adds OpenUSD's; nothing is parsed at run time. `DEPENDENCIES` lists
+//!   the OpenUSD domains the schemas build on, and `registry(tokens)`
+//!   builds a registry of both. `LIBRARY` is the library's name.
+//!
+//! A library's schemas can build on each other and on OpenUSD's domains,
+//! which `layerstack_schemas` has views of; building on another library
+//! is a [`CompileError::Rust`]. The OpenUSD schemas come from the schema
+//! stage, so compile against the OpenUSD release `layerstack_schemas` is
+//! generated from (`layerstack_schemas::OPENUSD_VERSION`).
+//!
+//! The module needs the crates `layerstack` and `layerstack_schemas`, with
+//! the features of the domains it builds on (its first comment names
+//! them); it works in `no_std` with `alloc`. It declares `extern crate
+//! alloc` and its imports itself, so it is a module of its own. From a
+//! build script (`layerstack_schemagen` is not published; depend on the
+//! repository):
+//!
+//! ```toml
+//! [dependencies]
+//! layerstack = "0.1"
+//! layerstack_schemas = { version = "0.1", default-features = false, features = ["usd-geom"] }
+//!
+//! [build-dependencies]
+//! layerstack_schemagen = { git = "https://github.com/forest-rs/layerstack" }
+//! ```
+//!
+//! ```no_run
+//! // build.rs
+//! use std::path::{Path, PathBuf};
+//!
+//! use layerstack_schemagen::compile::{CompileOptions, compile};
+//!
+//! fn main() {
+//!     // OpenUSD's schema sources, for `@usdGeom/schema.usda@`: a checkout
+//!     // (or `with_plugin_root` and the usd-core wheel's `pxr/pluginfo`).
+//!     let openusd = std::env::var_os("OPENUSD_SOURCE").expect("an OpenUSD checkout");
+//!     let options = CompileOptions::new().with_openusd_source(openusd);
+//!     let compiled = compile(Path::new("schema/schema.usda"), &options)
+//!         .unwrap_or_else(|e| panic!("{e}"));
+//!     let module = compiled.rust_module().unwrap_or_else(|e| panic!("{e}"));
+//!     let out = PathBuf::from(std::env::var_os("OUT_DIR").expect("set by Cargo"));
+//!     std::fs::write(out.join("schemas.rs"), module).expect("OUT_DIR is writable");
+//!     println!("cargo:rerun-if-changed=schema");
+//! }
+//! ```
+//!
+//! ```ignore
+//! // src/lib.rs
+//! pub mod schemas {
+//!     include!(concat!(env!("OUT_DIR"), "/schemas.rs"));
+//! }
+//! ```
+//!
+//! Or check the module in: `compile schema/schema.usda --openusd-source
+//! <OpenUSD> --rust src/schemas.rs` writes it formatted (`mod schemas;`
+//! reads it), and `--check` in CI fails when it is stale. Then, with a
+//! store and a stage composed with the registry:
+//!
+//! ```ignore
+//! let registry = schemas::registry(&mut store.tokens)?;
+//! let options = StageOptions { schemas: Some(Arc::new(registry)), ..StageOptions::default() };
+//! // ... compose `stage` from `store` with `options` ...
+//! let scene = Scene::new(stage, &store);
+//! let scope = schemas::Telescope::new(&scene, store.path("/Scope")).expect("a telescope");
+//! let aperture: Option<f32> = scope.telescope_aperture();
+//! let order = scope.xform_op_order(); // `Xformable`'s
+//! ```
+//!
+//! For several libraries in one registry, register OpenUSD's domains once
+//! (`layerstack_schemas::register` with every library's `DEPENDENCIES`),
+//! then each library's `register`. `layerstack_custom_schemas` in this
+//! repository is such a crate, for the `lab` and `observatory` fixtures.
+//!
 //! # Resolving upstream schemas
 //!
 //! A schema file sublayers the schemas it builds on by search path:
@@ -87,7 +202,8 @@
 //! # What is not ported
 //!
 //! C++, Python and token code generation (`GenerateCode`,
-//! `GenerateBuildHelpers`) and their templates; `apiGetImplementation`
+//! `GenerateBuildHelpers`) and their templates (the Rust module is
+//! layerstack's counterpart, not a port); `apiGetImplementation`
 //! (only reported by usdGenSchema); the type of an inherited applied API
 //! schema from a C++ library usdGenSchema finds through `TfType` (the
 //! rules it checks first already reject every case it would); and
@@ -100,9 +216,10 @@
 mod classes;
 mod codegen;
 mod error;
-mod names;
+pub(crate) mod names;
 mod plug_info;
 mod registry;
+mod rust;
 mod source;
 
 use std::path::{Path, PathBuf};
@@ -196,12 +313,13 @@ impl CompileOptions {
 }
 
 /// A compiled schema library: its generated files and its classes.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct CompiledSchema {
     library: SchemaLibrary,
     classes: Vec<SchemaClass>,
     generated_schema: String,
     plug_info: Option<String>,
+    rust: rust::Inputs,
 }
 
 impl CompiledSchema {
@@ -248,6 +366,31 @@ impl CompiledSchema {
     #[must_use]
     pub fn classes(&self) -> &[SchemaClass] {
         &self.classes
+    }
+
+    /// The library as a Rust module, for a crate that depends on
+    /// `layerstack` and `layerstack_schemas`: a typed view, edit handle
+    /// and token enums for each schema that has a prim definition, in the
+    /// shape `layerstack_schemas` gives OpenUSD's own, and `register` and
+    /// `registry` functions that register the schemas from static tables.
+    /// See [Rust views](self#rust-views).
+    ///
+    /// The text is not formatted, so a build script needs no `rustfmt`;
+    /// `compile --rust <file>` formats it for a checked-in file.
+    ///
+    /// # Errors
+    ///
+    /// [`CompileError::Rust`]: an accessor name is a Rust keyword or
+    /// collides, or a schema builds on a library other than OpenUSD's
+    /// domains.
+    pub fn rust_module(&self) -> Result<String, CompileError> {
+        rust::module_text(
+            &self.library.name,
+            &self.classes,
+            &self.generated_schema,
+            self.plug_info.as_deref(),
+            &self.rust,
+        )
     }
 }
 
@@ -400,6 +543,7 @@ pub fn compile(source: &Path, options: &CompileOptions) -> Result<CompiledSchema
         )?)
     };
     let generated_schema = registry::generate(&mut stage, &parsed, source, &search)?;
+    let rust = rust::Inputs::new(&parsed);
     let classes = parsed
         .classes
         .into_iter()
@@ -425,23 +569,27 @@ pub fn compile(source: &Path, options: &CompileOptions) -> Result<CompiledSchema
         classes,
         generated_schema,
         plug_info,
+        rust,
     })
 }
 
-/// The `compile` subcommand: `compile <schema.usda> (--out <dir> |
-/// --install <dir>) [--search <dir>]... [--openusd-source <dir>]...
-/// [--plugin-root <dir>]... [--check]`.
+/// The `compile` subcommand: `compile <schema.usda> [--out <dir> |
+/// --install <dir>] [--rust <file.rs>] [--search <dir>]...
+/// [--openusd-source <dir>]... [--plugin-root <dir>]... [--check]`.
 ///
 /// `--out` writes `generatedSchema.usda` and `plugInfo.json` into `<dir>`
 /// as usdGenSchema does, `plugInfo.json` as OpenUSD's template;
 /// `--install` writes them into `<dir>/resources` in their installed form
 /// ([`CompiledSchema::installed_plug_info_json`]), ready to register.
-/// Either builds `plugInfo.json` on the one already there. With `--check`
-/// it writes nothing and fails when either file differs.
+/// Either builds `plugInfo.json` on the one already there. `--rust`
+/// writes the library's Rust module ([`CompiledSchema::rust_module`]),
+/// formatted with `rustfmt`. At least one of them is required. With
+/// `--check` it writes nothing and fails when any file differs.
 pub(crate) fn run(mut args: impl Iterator<Item = String>) -> Result<String, String> {
     let mut source = None;
     let mut out = None;
     let mut install = None;
+    let mut rust = None;
     let mut check = false;
     let mut options = CompileOptions::new();
     while let Some(arg) = args.next() {
@@ -452,6 +600,11 @@ pub(crate) fn run(mut args: impl Iterator<Item = String>) -> Result<String, Stri
         match arg.as_str() {
             "--out" => out = Some(PathBuf::from(value("--out")?)),
             "--install" => install = Some(PathBuf::from(value("--install")?)),
+            "--rust" => {
+                rust = Some(PathBuf::from(
+                    args.next().ok_or("--rust requires a Rust file")?,
+                ));
+            }
             "--search" => options = options.with_search_path(value("--search")?),
             "--openusd-source" => options = options.with_openusd_source(value("--openusd-source")?),
             "--plugin-root" => options = options.with_plugin_root(value("--plugin-root")?),
@@ -465,15 +618,18 @@ pub(crate) fn run(mut args: impl Iterator<Item = String>) -> Result<String, Stri
     }
     let source = source.ok_or("compile requires a schema.usda")?;
     let out = match (out, &install) {
-        (Some(out), None) => out,
-        (None, Some(plugin)) => plugin.join("resources"),
+        (Some(out), None) => Some(out),
+        (None, Some(plugin)) => Some(plugin.join("resources")),
         (Some(_), Some(_)) => return Err("compile takes --out or --install, not both".into()),
+        (None, None) if rust.is_some() => None,
         (None, None) => {
-            return Err("compile requires --out <directory> or --install <directory>".into());
+            return Err(
+                "compile requires --out <directory>, --install <directory> or --rust <file>".into(),
+            );
         }
     };
-    let plug_info_path = out.join("plugInfo.json");
-    if let Ok(existing) = std::fs::read_to_string(&plug_info_path) {
+    let plug_info_path = out.as_ref().map(|out| out.join("plugInfo.json"));
+    if let Some(Ok(existing)) = plug_info_path.as_ref().map(std::fs::read_to_string) {
         options = options.with_existing_plug_info(existing);
     }
     let compiled = compile(&source, &options).map_err(|e| e.to_string())?;
@@ -484,12 +640,27 @@ pub(crate) fn run(mut args: impl Iterator<Item = String>) -> Result<String, Stri
     } else {
         None
     };
-    let mut files = vec![(
-        out.join("generatedSchema.usda"),
-        compiled.generated_schema_usda(),
-    )];
-    if let Some(plug_info) = installed.as_deref().or(compiled.plug_info_json()) {
-        files.push((plug_info_path, plug_info));
+    let module = rust
+        .as_ref()
+        .map(|_| {
+            compiled
+                .rust_module()
+                .map_err(|e| e.to_string())
+                .and_then(|text| crate::rustfmt(&text))
+        })
+        .transpose()?;
+    let mut files: Vec<(PathBuf, &str)> = Vec::new();
+    if let (Some(out), Some(plug_info_path)) = (&out, plug_info_path) {
+        files.push((
+            out.join("generatedSchema.usda"),
+            compiled.generated_schema_usda(),
+        ));
+        if let Some(plug_info) = installed.as_deref().or(compiled.plug_info_json()) {
+            files.push((plug_info_path, plug_info));
+        }
+    }
+    if let (Some(path), Some(module)) = (&rust, &module) {
+        files.push((path.clone(), module));
     }
     if check {
         let stale: Vec<String> = files
@@ -510,7 +681,9 @@ pub(crate) fn run(mut args: impl Iterator<Item = String>) -> Result<String, Stri
             compiled.library().name
         ));
     }
-    std::fs::create_dir_all(&out).map_err(|error| format!("{}: {error}", out.display()))?;
+    if let Some(out) = &out {
+        std::fs::create_dir_all(out).map_err(|error| format!("{}: {error}", out.display()))?;
+    }
     for (path, text) in &files {
         crate::output::write_if_changed(path, text)?;
     }
@@ -518,7 +691,11 @@ pub(crate) fn run(mut args: impl Iterator<Item = String>) -> Result<String, Stri
         "compiled {} {} schemas into {}",
         compiled.classes().len(),
         compiled.library().name,
-        out.display()
+        files
+            .iter()
+            .map(|(path, _)| path.display().to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
     ))
 }
 

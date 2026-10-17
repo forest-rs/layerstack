@@ -8,7 +8,7 @@ use std::fmt::Write as _;
 
 use layerstack::{PropertyKind, SchemaKind, TokenInterner, Value, Variability};
 
-use crate::model::{Domain, Model, Origin, Property};
+use crate::model::{Domain, Model, Origin, Property, Schema};
 
 /// The year the generated files' copyright line names. Fixed, so that
 /// regenerating from the same sources writes the same files.
@@ -171,7 +171,7 @@ fn mod_file(model: &Model, types: &ValueTypes) -> String {
         );
     }
     out.push_str(
-        "        }\n    }\n\n    pub(crate) fn tables(self) -> &'static DomainTables {\n        match self {\n",
+        "        }\n    }\n\n    pub(crate) fn tables(self) -> &'static SchemaTables {\n        match self {\n",
     );
     for domain in &model.domains {
         let _ = writeln!(
@@ -209,14 +209,14 @@ fn mod_file(model: &Model, types: &ValueTypes) -> String {
     out.replace(
         "@IMPORTS@\n",
         &format!(
-            "{arc}use layerstack::Value;\n\nuse crate::table::{{DomainTables, ValueType}};\n\n"
+            "{arc}use layerstack::Value;\n\nuse crate::table::{{SchemaTables, ValueType}};\n\n"
         ),
     )
 }
 
 /// The value types the domains declare, each emitted once in `mod.rs`.
 #[derive(Default)]
-struct ValueTypes {
+pub(crate) struct ValueTypes {
     /// Static name → (type name, is array, the zero value's expression, the
     /// plugins using it).
     statics: BTreeMap<String, (String, bool, String, BTreeSet<&'static str>)>,
@@ -231,6 +231,21 @@ fn cfg(domain: &Domain) -> String {
 }
 
 impl ValueTypes {
+    /// Each value type's static, declared with `declaration`
+    /// (`static`), for a library's module.
+    pub(crate) fn statics(&self, declaration: &str) -> String {
+        let mut out = String::new();
+        for (ident, (name, is_array, zero, _)) in &self.statics {
+            let _ = write!(
+                out,
+                "\n{declaration} {ident}: ValueType = ValueType {{\n    \
+                 name: {name:?},\n    is_array: {is_array},\n    zero: {},\n}};\n",
+                closure(zero)
+            );
+        }
+        out
+    }
+
     /// The static naming `(name, is_array)`, which `plugin` uses.
     fn get(&mut self, name: &str, is_array: bool, zero: String, plugin: &'static str) -> String {
         let base = name.strip_suffix("[]").unwrap_or(name);
@@ -259,12 +274,94 @@ fn domain_file(
         "\n//! OpenUSD's `{}` schemas.{}\n\n\
          #![allow(\n    clippy::unreadable_literal,\n    clippy::approx_constant,\n    \
          clippy::excessive_precision,\n    reason = \"values as OpenUSD writes them\"\n)]\n\n\
-         @IMPORTS@\n\
-         pub(crate) static TABLES: DomainTables = DomainTables {{\n    schemas: &[\n",
+         @IMPORTS@\n",
         domain.name,
         origin_note(domain)
     );
-    for schema in &domain.schemas {
+    let schemas: Vec<&Schema> = domain.schemas.iter().collect();
+    out.push_str(&tables(
+        "pub(crate) static",
+        &schemas,
+        &domain.auto_applies,
+        &domain.metadata,
+        &model.tokens,
+        Statics {
+            types,
+            plugin: domain.plugin,
+            prefix: "super::",
+        },
+        failures,
+    ));
+    let mut imports = String::new();
+    if out.contains("Arc::from(") {
+        imports.push_str("use alloc::sync::Arc;\n\n");
+    }
+    let _ = write!(
+        imports,
+        "use layerstack::{{{}}};\n\nuse crate::table::{{{}}};\n\n",
+        table_imports(&out).0.join(", "),
+        table_imports(&out).1.join(", ")
+    );
+    out.replace("@IMPORTS@\n", &imports)
+}
+
+/// The value types a table names, kept once per generated module set.
+pub(crate) struct Statics<'t> {
+    /// The value types named so far.
+    pub(crate) types: &'t mut ValueTypes,
+    /// The plugin naming them, for the features of OpenUSD's.
+    pub(crate) plugin: &'static str,
+    /// The path of the module holding them, from the table's.
+    pub(crate) prefix: &'static str,
+}
+
+/// The `layerstack` and `table` items `text`, a table, names.
+pub(crate) fn table_imports(text: &str) -> (Vec<&'static str>, Vec<&'static str>) {
+    let used = |names: &[(&str, &'static str)]| -> Vec<&'static str> {
+        names
+            .iter()
+            .filter(|(marker, _)| text.contains(marker))
+            .map(|(_, name)| *name)
+            .collect()
+    };
+    (
+        used(&[
+            ("PropertyKind::", "PropertyKind"),
+            ("SchemaKind::", "SchemaKind"),
+            ("Value::", "Value"),
+            ("Variability::", "Variability"),
+        ]),
+        used(&[
+            ("SchemaTables {", "SchemaTables"),
+            ("Property {", "Property"),
+            ("Metadata {", "Metadata"),
+            ("Schema {", "Schema"),
+            ("fallback(|", "fallback"),
+            ("ValueType {", "ValueType"),
+        ]),
+    )
+}
+
+/// The `TABLES` static of `schemas`, `auto_applies` and `metadata`,
+/// declared with `declaration` (`pub(crate) static`), with a value this
+/// generation cannot express listed in `failures`.
+pub(crate) fn tables(
+    declaration: &str,
+    schemas: &[&Schema],
+    auto_applies: &[(String, String)],
+    metadata: &[layerstack::MetadataDefinition],
+    tokens: &TokenInterner,
+    statics: Statics<'_>,
+    failures: &mut Vec<String>,
+) -> String {
+    let Statics {
+        types,
+        plugin,
+        prefix,
+    } = statics;
+    let mut out =
+        format!("{declaration} TABLES: SchemaTables = SchemaTables {{\n    schemas: &[\n");
+    for schema in schemas {
         let kind = match schema.kind {
             SchemaKind::ConcreteTyped => "ConcreteTyped",
             SchemaKind::AbstractTyped => "AbstractTyped",
@@ -280,8 +377,8 @@ fn domain_file(
         for property in &schema.properties {
             property_entry(
                 &mut out,
-                model,
-                domain.plugin,
+                tokens,
+                (plugin, prefix),
                 &schema.name,
                 property,
                 types,
@@ -292,8 +389,8 @@ fn domain_file(
         for property in &schema.overrides {
             property_entry(
                 &mut out,
-                model,
-                domain.plugin,
+                tokens,
+                (plugin, prefix),
                 &schema.name,
                 property,
                 types,
@@ -312,12 +409,12 @@ fn domain_file(
         out.push_str("],\n        },\n");
     }
     out.push_str("    ],\n    auto_applies: &[\n");
-    for (schema, target) in &domain.auto_applies {
+    for (schema, target) in auto_applies {
         let _ = writeln!(out, "        ({schema:?}, {target:?}),");
     }
     out.push_str("    ],\n    metadata: &[\n");
-    for metadata in &domain.metadata {
-        let name = model.tokens.resolve(metadata.name);
+    for metadata in metadata {
+        let name = tokens.resolve(metadata.name);
         let targets = metadata
             .targets
             .iter()
@@ -327,9 +424,7 @@ fn domain_file(
         let default = metadata
             .default
             .as_ref()
-            .map(|value| {
-                expr(value, &model.tokens).map(|value| format!("fallback({})", closure(&value)))
-            })
+            .map(|value| expr(value, tokens).map(|value| format!("fallback({})", closure(&value))))
             .transpose()
             .unwrap_or_else(|why| {
                 failures.push(format!("{name}: {why}"));
@@ -343,43 +438,13 @@ fn domain_file(
         );
     }
     out.push_str("    ],\n};\n");
-    let mut imports = String::new();
-    if out.contains("Arc::from(") {
-        imports.push_str("use alloc::sync::Arc;\n\n");
-    }
-    let used = |names: &[(&str, &'static str)]| -> Vec<&'static str> {
-        names
-            .iter()
-            .filter(|(marker, _)| out.contains(marker))
-            .map(|(_, name)| *name)
-            .collect()
-    };
-    let layerstack = used(&[
-        ("PropertyKind::", "PropertyKind"),
-        ("SchemaKind::", "SchemaKind"),
-        ("Value::", "Value"),
-        ("Variability::", "Variability"),
-    ]);
-    let _ = write!(
-        imports,
-        "use layerstack::{{{}}};\n\n",
-        layerstack.join(", ")
-    );
-    let table = used(&[
-        ("DomainTables {", "DomainTables"),
-        ("Property {", "Property"),
-        ("Metadata {", "Metadata"),
-        ("Schema {", "Schema"),
-        ("fallback(|", "fallback"),
-    ]);
-    let _ = write!(imports, "use crate::table::{{{}}};\n\n", table.join(", "));
-    out.replace("@IMPORTS@\n", &imports)
+    out
 }
 
 fn property_entry(
     out: &mut String,
-    model: &Model,
-    plugin: &'static str,
+    tokens: &TokenInterner,
+    (plugin, prefix): (&'static str, &str),
     schema: &str,
     property: &Property,
     types: &mut ValueTypes,
@@ -391,8 +456,11 @@ fn property_entry(
     };
     let value_type = match &property.value_type {
         None => "None".to_string(),
-        Some((name, is_array, zero)) => match expr(zero, &model.tokens) {
-            Ok(zero) => format!("Some(&super::{})", types.get(name, *is_array, zero, plugin)),
+        Some((name, is_array, zero)) => match expr(zero, tokens) {
+            Ok(zero) => format!(
+                "Some(&{prefix}{})",
+                types.get(name, *is_array, zero, plugin)
+            ),
             Err(why) => {
                 failures.push(format!("{schema}.{}: type {name}: {why}", property.name));
                 "None".into()
@@ -401,7 +469,7 @@ fn property_entry(
     };
     let fallback = match &property.fallback {
         None => "None".to_string(),
-        Some(value) => match expr(value, &model.tokens) {
+        Some(value) => match expr(value, tokens) {
             Ok(value) => format!("fallback({})", closure(&value)),
             Err(why) => {
                 failures.push(format!("{schema}.{}: fallback: {why}", property.name));
@@ -413,9 +481,9 @@ fn property_entry(
         .metadata
         .iter()
         .filter_map(|field| {
-            let name = model.tokens.resolve(field.name);
+            let name = tokens.resolve(field.name);
             match &field.value {
-                layerstack::FieldValue::Value(value) => match expr(value, &model.tokens) {
+                layerstack::FieldValue::Value(value) => match expr(value, tokens) {
                     Ok(value) => Some(format!("({name:?}, {})", closure(&value))),
                     Err(why) => {
                         failures.push(format!(

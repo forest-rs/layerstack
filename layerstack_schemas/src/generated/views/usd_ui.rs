@@ -22,23 +22,63 @@ use core::ops::Deref;
 
 use layerstack::{CannotApply, PathId};
 
-use crate::view::{InstanceEdit, InstanceView};
-use crate::{PrimEdit, PrimView, Scene, SchemaEdit};
-token_enum! {
-    #[doc = "The tokens `accessibility:<instance>:priority` allows."]
-    AccessibilityApiPriority {
-        #[doc = "`low`"]
-        Low = "low",
-        #[doc = "`standard`"]
-        Standard = "standard",
-        #[doc = "`high`"]
-        High = "high",
+use crate::{InstanceEdit, InstanceView, PrimEdit, PrimView, Scene, SchemaEdit};
+#[doc = "The tokens `accessibility:<instance>:priority` allows."]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum AccessibilityApiPriority {
+    #[doc = "`low`"]
+    Low,
+    #[doc = "`standard`"]
+    Standard,
+    #[doc = "`high`"]
+    High,
+    /// A token the schema does not list: OpenUSD does not enforce
+    /// `allowedTokens`, so an authored value may be anything.
+    Other(::alloc::sync::Arc<str>),
+}
+
+impl AccessibilityApiPriority {
+    /// The tokens the schema allows, in its order.
+    pub const TOKENS: &'static [&'static str] = &["low", "standard", "high"];
+
+    /// The value `token` names, `Other` when the schema does not
+    /// list it.
+    #[must_use]
+    pub fn from_token(token: &str) -> Self {
+        match token {
+            "low" => Self::Low,
+            "standard" => Self::Standard,
+            "high" => Self::High,
+            other => Self::Other(::alloc::sync::Arc::from(other)),
+        }
+    }
+
+    /// The token this value is.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Low => "low",
+            Self::Standard => "standard",
+            Self::High => "high",
+            Self::Other(token) => token,
+        }
+    }
+
+    pub(crate) fn read(
+        value: &::layerstack::Value,
+        tokens: &::layerstack::TokenInterner,
+    ) -> Option<Self> {
+        crate::value::read_token(value, tokens).map(Self::from_token)
+    }
+
+    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+        crate::value::write_token(self.as_str(), tokens)
     }
 }
 
 #[doc = "Specifies accessibility information for a prim, usable in tools that support accessibility features such as voice controls or screen readers."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's multiple-apply API schema `AccessibilityAPI`. Get it with [`AccessibilityApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's multiple-apply API schema `AccessibilityAPI`. Get it with [`AccessibilityApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdUIAccessibilityAPI`."]
 #[doc(alias = "UsdUIAccessibilityAPI")]
 #[doc(alias = "AccessibilityAPI")]
@@ -68,8 +108,14 @@ impl<'a> AccessibilityApi<'a> {
         if !scene.has_api(path, Self::SCHEMA, Some(instance)) {
             return None;
         }
-        let instance = scene.instance_name(instance)?;
-        Some(Self::from_view(PrimView::new(*scene, path), instance))
+        let instance = scene
+            .instances(path, Self::SCHEMA)
+            .into_iter()
+            .find(|applied| *applied == instance)?;
+        Some(Self::from_instance_unchecked(InstanceView::new(
+            PrimView::new(*scene, path),
+            instance,
+        )))
     }
 
     /// Every instance of the schema the prim at `path` has applied, in the
@@ -81,20 +127,31 @@ impl<'a> AccessibilityApi<'a> {
         scene
             .instances(path, Self::SCHEMA)
             .into_iter()
-            .map(|instance| Self::from_view(PrimView::new(*scene, path), instance))
+            .map(|instance| {
+                Self::from_instance_unchecked(InstanceView::new(
+                    PrimView::new(*scene, path),
+                    instance,
+                ))
+            })
             .collect()
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>, instance: &'a str) -> Self {
-        Self {
-            base: InstanceView::new(prim, instance),
-        }
+    /// A view of `instance` as an instance of the schema, without
+    /// checking that the prim has it applied (`HasAPI`), as [`Self::get`]
+    /// does: a getter reads what the prim authors, and the schema's
+    /// fallbacks only for an applied instance.
+    #[must_use]
+    pub fn from_instance_unchecked(instance: InstanceView<'a>) -> Self {
+        Self { base: instance }
     }
 
     /// An edit handle for this instance.
     #[must_use]
     pub fn edit(&self) -> AccessibilityApiEdit {
-        AccessibilityApiEdit::from_path(self.path(), self.instance())
+        AccessibilityApiEdit::from_instance(InstanceEdit::new(
+            PrimEdit::from_path_unchecked(self.path()),
+            self.instance(),
+        ))
     }
 
     /// Applies the instance `instance` of the schema to `path` (a `prepend
@@ -112,36 +169,97 @@ impl<'a> AccessibilityApi<'a> {
         path: PathId,
         instance: &str,
     ) -> Result<AccessibilityApiEdit, CannotApply> {
-        edit.apply(path, Self::SCHEMA, Some(instance))?;
-        Ok(AccessibilityApiEdit::from_path(path, instance))
+        let prim = edit.apply_api(path, Self::SCHEMA, Some(instance))?;
+        Ok(AccessibilityApiEdit::from_instance(InstanceEdit::new(
+            prim, instance,
+        )))
     }
 
-    attribute! {
-        #[doc = "An extended description of the prim to provide more details."]
-        #[doc = ""]
-        #[doc = "USD attribute `accessibility:&lt;instance&gt;:description` (`string`)."]
-        #[doc = "C++ read: `UsdUIAccessibilityAPI::GetDescriptionAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdUIAccessibilityAPI::GetDescriptionAttr")]
-        #[doc(alias = "GetDescriptionAttr")]
-        description, description_at, "accessibility:__INSTANCE_NAME__:description", ::alloc::sync::Arc<str>, crate::value::read_string
+    #[doc = "An extended description of the prim to provide more details."]
+    #[doc = ""]
+    #[doc = "USD attribute `accessibility:<instance>:description` (`string`)."]
+    #[doc = "C++ read: `UsdUIAccessibilityAPI::GetDescriptionAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdUIAccessibilityAPI::GetDescriptionAttr")]
+    #[doc(alias = "GetDescriptionAttr")]
+    #[must_use]
+    pub fn description(&self) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value(
+            "accessibility:__INSTANCE_NAME__:description",
+            crate::value::read_string,
+        )
     }
-    attribute! {
-        #[doc = "A short label to concisely describe the prim."]
-        #[doc = ""]
-        #[doc = "USD attribute `accessibility:&lt;instance&gt;:label` (`string`)."]
-        #[doc = "C++ read: `UsdUIAccessibilityAPI::GetLabelAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdUIAccessibilityAPI::GetLabelAttr")]
-        #[doc(alias = "GetLabelAttr")]
-        label, label_at, "accessibility:__INSTANCE_NAME__:label", ::alloc::sync::Arc<str>, crate::value::read_string
+
+    #[doc = "[`Self::description`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn description_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value_at(
+            "accessibility:__INSTANCE_NAME__:description",
+            time,
+            interp,
+            crate::value::read_string,
+        )
     }
-    attribute! {
-        #[doc = "A hint to the accessibility runtime of how to prioritize this instance's label and description, relative to others. Allowed tokens are \"low\", \"standard\", and \"high\"."]
-        #[doc = ""]
-        #[doc = "USD attribute `accessibility:&lt;instance&gt;:priority` (`token`; fallback `\"standard\"`)."]
-        #[doc = "C++ read: `UsdUIAccessibilityAPI::GetPriorityAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdUIAccessibilityAPI::GetPriorityAttr")]
-        #[doc(alias = "GetPriorityAttr")]
-        priority, priority_at, "accessibility:__INSTANCE_NAME__:priority", AccessibilityApiPriority, AccessibilityApiPriority::read
+
+    #[doc = "A short label to concisely describe the prim."]
+    #[doc = ""]
+    #[doc = "USD attribute `accessibility:<instance>:label` (`string`)."]
+    #[doc = "C++ read: `UsdUIAccessibilityAPI::GetLabelAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdUIAccessibilityAPI::GetLabelAttr")]
+    #[doc(alias = "GetLabelAttr")]
+    #[must_use]
+    pub fn label(&self) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value(
+            "accessibility:__INSTANCE_NAME__:label",
+            crate::value::read_string,
+        )
+    }
+
+    #[doc = "[`Self::label`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn label_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value_at(
+            "accessibility:__INSTANCE_NAME__:label",
+            time,
+            interp,
+            crate::value::read_string,
+        )
+    }
+
+    #[doc = "A hint to the accessibility runtime of how to prioritize this instance's label and description, relative to others. Allowed tokens are \"low\", \"standard\", and \"high\"."]
+    #[doc = ""]
+    #[doc = "USD attribute `accessibility:<instance>:priority` (`token`; fallback `\"standard\"`)."]
+    #[doc = "C++ read: `UsdUIAccessibilityAPI::GetPriorityAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdUIAccessibilityAPI::GetPriorityAttr")]
+    #[doc(alias = "GetPriorityAttr")]
+    #[must_use]
+    pub fn priority(&self) -> Option<AccessibilityApiPriority> {
+        self.read_value(
+            "accessibility:__INSTANCE_NAME__:priority",
+            AccessibilityApiPriority::read,
+        )
+    }
+
+    #[doc = "[`Self::priority`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn priority_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<AccessibilityApiPriority> {
+        self.read_value_at(
+            "accessibility:__INSTANCE_NAME__:priority",
+            time,
+            interp,
+            AccessibilityApiPriority::read,
+        )
     }
 }
 
@@ -165,47 +283,111 @@ impl AccessibilityApiEdit {
     /// earlier in `edit`. Setters never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId, instance: &str) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path, instance))
+        PrimEdit::new(edit, path).map(|prim| Self::from_instance(InstanceEdit::new(prim, instance)))
     }
 
-    pub(crate) fn from_path(path: PathId, instance: &str) -> Self {
-        Self {
-            base: InstanceEdit::new(path, instance),
-        }
+    /// A handle authoring the schema's properties for `instance`, whether
+    /// or not the prim has it applied.
+    #[must_use]
+    pub fn from_instance(instance: InstanceEdit) -> Self {
+        Self { base: instance }
     }
 
-    set_attribute! {
-        #[doc = "An extended description of the prim to provide more details."]
-        #[doc = ""]
-        #[doc = "USD attribute `accessibility:&lt;instance&gt;:description` (`string`)."]
-        #[doc = "C++ authoring: `UsdUIAccessibilityAPI::CreateDescriptionAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdUIAccessibilityAPI::CreateDescriptionAttr")]
-        #[doc(alias = "CreateDescriptionAttr")]
-        set_description, set_description_at, "accessibility:__INSTANCE_NAME__:description", &str, crate::value::write_string
+    #[doc = "An extended description of the prim to provide more details."]
+    #[doc = ""]
+    #[doc = "USD attribute `accessibility:<instance>:description` (`string`)."]
+    #[doc = "C++ authoring: `UsdUIAccessibilityAPI::CreateDescriptionAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdUIAccessibilityAPI::CreateDescriptionAttr")]
+    #[doc(alias = "CreateDescriptionAttr")]
+    pub fn set_description(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
+        let value = crate::value::write_string(value, edit.tokens());
+        self.write_value(
+            edit,
+            "accessibility:__INSTANCE_NAME__:description",
+            None,
+            value,
+        );
+        self
     }
-    set_attribute! {
-        #[doc = "A short label to concisely describe the prim."]
-        #[doc = ""]
-        #[doc = "USD attribute `accessibility:&lt;instance&gt;:label` (`string`)."]
-        #[doc = "C++ authoring: `UsdUIAccessibilityAPI::CreateLabelAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdUIAccessibilityAPI::CreateLabelAttr")]
-        #[doc(alias = "CreateLabelAttr")]
-        set_label, set_label_at, "accessibility:__INSTANCE_NAME__:label", &str, crate::value::write_string
+
+    #[doc = "[`Self::set_description`] as a time sample at the time code `time`."]
+    pub fn set_description_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &str) -> &Self {
+        let value = crate::value::write_string(value, edit.tokens());
+        self.write_value(
+            edit,
+            "accessibility:__INSTANCE_NAME__:description",
+            Some(time),
+            value,
+        );
+        self
     }
-    set_attribute! {
-        #[doc = "A hint to the accessibility runtime of how to prioritize this instance's label and description, relative to others. Allowed tokens are \"low\", \"standard\", and \"high\"."]
-        #[doc = ""]
-        #[doc = "USD attribute `accessibility:&lt;instance&gt;:priority` (`token`; fallback `\"standard\"`)."]
-        #[doc = "C++ authoring: `UsdUIAccessibilityAPI::CreatePriorityAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdUIAccessibilityAPI::CreatePriorityAttr")]
-        #[doc(alias = "CreatePriorityAttr")]
-        set_priority, set_priority_at, "accessibility:__INSTANCE_NAME__:priority", AccessibilityApiPriority, AccessibilityApiPriority::write
+
+    #[doc = "A short label to concisely describe the prim."]
+    #[doc = ""]
+    #[doc = "USD attribute `accessibility:<instance>:label` (`string`)."]
+    #[doc = "C++ authoring: `UsdUIAccessibilityAPI::CreateLabelAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdUIAccessibilityAPI::CreateLabelAttr")]
+    #[doc(alias = "CreateLabelAttr")]
+    pub fn set_label(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
+        let value = crate::value::write_string(value, edit.tokens());
+        self.write_value(edit, "accessibility:__INSTANCE_NAME__:label", None, value);
+        self
+    }
+
+    #[doc = "[`Self::set_label`] as a time sample at the time code `time`."]
+    pub fn set_label_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &str) -> &Self {
+        let value = crate::value::write_string(value, edit.tokens());
+        self.write_value(
+            edit,
+            "accessibility:__INSTANCE_NAME__:label",
+            Some(time),
+            value,
+        );
+        self
+    }
+
+    #[doc = "A hint to the accessibility runtime of how to prioritize this instance's label and description, relative to others. Allowed tokens are \"low\", \"standard\", and \"high\"."]
+    #[doc = ""]
+    #[doc = "USD attribute `accessibility:<instance>:priority` (`token`; fallback `\"standard\"`)."]
+    #[doc = "C++ authoring: `UsdUIAccessibilityAPI::CreatePriorityAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdUIAccessibilityAPI::CreatePriorityAttr")]
+    #[doc(alias = "CreatePriorityAttr")]
+    pub fn set_priority(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        value: AccessibilityApiPriority,
+    ) -> &Self {
+        let value = value.write(edit.tokens());
+        self.write_value(
+            edit,
+            "accessibility:__INSTANCE_NAME__:priority",
+            None,
+            value,
+        );
+        self
+    }
+
+    #[doc = "[`Self::set_priority`] as a time sample at the time code `time`."]
+    pub fn set_priority_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: AccessibilityApiPriority,
+    ) -> &Self {
+        let value = value.write(edit.tokens());
+        self.write_value(
+            edit,
+            "accessibility:__INSTANCE_NAME__:priority",
+            Some(time),
+            value,
+        );
+        self
     }
 }
 
 #[doc = "Backdrop is a visual indication of a grouping of nodes."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `Backdrop`, inheriting [`crate::usd::Typed`]. Construct it with [`Backdrop::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `Backdrop`, inheriting [`crate::usd::Typed`]. Construct it with [`Backdrop::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdUIBackdrop`."]
 #[doc(alias = "UsdUIBackdrop")]
 #[derive(Clone, Copy, Debug)]
@@ -232,19 +414,24 @@ impl<'a> Backdrop<'a> {
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .is_a(path, Self::SCHEMA)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of `prim` as of the schema, without checking that it is
+    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// authors, and the schema's fallbacks only for a prim of the schema.
+    /// For the view of a schema built on this one.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self {
-            base: crate::usd::Typed::from_view(prim),
+            base: crate::usd::Typed::from_prim_unchecked(prim),
         }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> BackdropEdit {
-        BackdropEdit::from_path(self.path())
+        BackdropEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Defines `path` as a new `def Backdrop` prim spec in the edit's target.
@@ -255,21 +442,21 @@ impl<'a> Backdrop<'a> {
     #[doc(alias = "UsdUIBackdrop::Define")]
     #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> BackdropEdit {
-        edit.define(path, Self::SCHEMA);
-        BackdropEdit::from_path(path)
+        BackdropEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
     }
 
     /// The USD name of [`Self::description`].
     pub const DESCRIPTION: &'static str = "ui:description";
 
-    uniform_attribute! {
-        #[doc = "A description for the backdrop."]
-        #[doc = ""]
-        #[doc = "USD attribute `ui:description` (`token`, uniform)."]
-        #[doc = "C++ read: `UsdUIBackdrop::GetDescriptionAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdUIBackdrop::GetDescriptionAttr")]
-        #[doc(alias = "GetDescriptionAttr")]
-        description, "ui:description", &'a str, crate::value::read_token
+    #[doc = "A description for the backdrop."]
+    #[doc = ""]
+    #[doc = "USD attribute `ui:description` (`token`, uniform)."]
+    #[doc = "C++ read: `UsdUIBackdrop::GetDescriptionAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdUIBackdrop::GetDescriptionAttr")]
+    #[doc(alias = "GetDescriptionAttr")]
+    #[must_use]
+    pub fn description(&self) -> Option<&'a str> {
+        self.read_value("ui:description", crate::value::read_token)
     }
 }
 
@@ -293,41 +480,87 @@ impl BackdropEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whatever its type.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
         Self {
-            base: crate::usd::TypedEdit::from_path(path),
+            base: crate::usd::TypedEdit::from_prim(prim),
         }
     }
 
-    set_uniform_attribute! {
-        #[doc = "A description for the backdrop."]
-        #[doc = ""]
-        #[doc = "USD attribute `ui:description` (`token`, uniform)."]
-        #[doc = "C++ authoring: `UsdUIBackdrop::CreateDescriptionAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdUIBackdrop::CreateDescriptionAttr")]
-        #[doc(alias = "CreateDescriptionAttr")]
-        set_description, "ui:description", &str, crate::value::write_token
+    #[doc = "A description for the backdrop."]
+    #[doc = ""]
+    #[doc = "USD attribute `ui:description` (`token`, uniform)."]
+    #[doc = "C++ authoring: `UsdUIBackdrop::CreateDescriptionAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdUIBackdrop::CreateDescriptionAttr")]
+    #[doc(alias = "CreateDescriptionAttr")]
+    pub fn set_description(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
+        let value = crate::value::write_token(value, edit.tokens());
+        self.write_value(edit, "ui:description", None, value);
+        self
     }
 }
 
-token_enum! {
-    #[doc = "The tokens `ui:nodegraph:node:expansionState` allows."]
-    NodeGraphNodeApiExpansionState {
-        #[doc = "`open`"]
-        Open = "open",
-        #[doc = "`closed`"]
-        Closed = "closed",
-        #[doc = "`minimized`"]
-        Minimized = "minimized",
+#[doc = "The tokens `ui:nodegraph:node:expansionState` allows."]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum NodeGraphNodeApiExpansionState {
+    #[doc = "`open`"]
+    Open,
+    #[doc = "`closed`"]
+    Closed,
+    #[doc = "`minimized`"]
+    Minimized,
+    /// A token the schema does not list: OpenUSD does not enforce
+    /// `allowedTokens`, so an authored value may be anything.
+    Other(::alloc::sync::Arc<str>),
+}
+
+impl NodeGraphNodeApiExpansionState {
+    /// The tokens the schema allows, in its order.
+    pub const TOKENS: &'static [&'static str] = &["open", "closed", "minimized"];
+
+    /// The value `token` names, `Other` when the schema does not
+    /// list it.
+    #[must_use]
+    pub fn from_token(token: &str) -> Self {
+        match token {
+            "open" => Self::Open,
+            "closed" => Self::Closed,
+            "minimized" => Self::Minimized,
+            other => Self::Other(::alloc::sync::Arc::from(other)),
+        }
+    }
+
+    /// The token this value is.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Open => "open",
+            Self::Closed => "closed",
+            Self::Minimized => "minimized",
+            Self::Other(token) => token,
+        }
+    }
+
+    pub(crate) fn read(
+        value: &::layerstack::Value,
+        tokens: &::layerstack::TokenInterner,
+    ) -> Option<Self> {
+        crate::value::read_token(value, tokens).map(Self::from_token)
+    }
+
+    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+        crate::value::write_token(self.as_str(), tokens)
     }
 }
 
 #[doc = "NodeGraphNodeAPI stores information about nodes within a node graph. This information includes node display UI hints (node color, icon, etc.) and layout hits (node position and size)."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `NodeGraphNodeAPI`. Get it with [`NodeGraphNodeApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `NodeGraphNodeAPI`. Get it with [`NodeGraphNodeApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdUINodeGraphNodeAPI`."]
 #[doc(alias = "UsdUINodeGraphNodeAPI")]
 #[doc(alias = "NodeGraphNodeAPI")]
@@ -356,17 +589,22 @@ impl<'a> NodeGraphNodeApi<'a> {
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of the schema on `prim`, without checking that the prim
+    /// has it applied (`HasAPI`), as [`Self::get`] does: a getter reads
+    /// what the prim authors, and the schema's fallbacks only for a
+    /// prim with the schema applied. For a built-in's view.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self { base: prim }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> NodeGraphNodeApiEdit {
-        NodeGraphNodeApiEdit::from_path(self.path())
+        NodeGraphNodeApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
@@ -383,90 +621,106 @@ impl<'a> NodeGraphNodeApi<'a> {
         edit: &mut SchemaEdit<'_>,
         path: PathId,
     ) -> Result<NodeGraphNodeApiEdit, CannotApply> {
-        edit.apply(path, Self::SCHEMA, None)?;
-        Ok(NodeGraphNodeApiEdit::from_path(path))
+        edit.apply_api(path, Self::SCHEMA, None)
+            .map(NodeGraphNodeApiEdit::from_prim)
     }
 
     /// The USD name of [`Self::display_color`].
     pub const DISPLAY_COLOR: &'static str = "ui:nodegraph:node:displayColor";
 
-    uniform_attribute! {
-        #[doc = "The color of the node."]
-        #[doc = ""]
-        #[doc = "USD attribute `ui:nodegraph:node:displayColor` (`color3f`, uniform)."]
-        #[doc = "C++ read: `UsdUINodeGraphNodeAPI::GetDisplayColorAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdUINodeGraphNodeAPI::GetDisplayColorAttr")]
-        #[doc(alias = "GetDisplayColorAttr")]
-        display_color, "ui:nodegraph:node:displayColor", [f32; 3], crate::value::read_float3
+    #[doc = "The color of the node."]
+    #[doc = ""]
+    #[doc = "USD attribute `ui:nodegraph:node:displayColor` (`color3f`, uniform)."]
+    #[doc = "C++ read: `UsdUINodeGraphNodeAPI::GetDisplayColorAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdUINodeGraphNodeAPI::GetDisplayColorAttr")]
+    #[doc(alias = "GetDisplayColorAttr")]
+    #[must_use]
+    pub fn display_color(&self) -> Option<[f32; 3]> {
+        self.read_value("ui:nodegraph:node:displayColor", crate::value::read_float3)
     }
+
     /// The USD name of [`Self::doc_uri`].
     pub const DOC_URI: &'static str = "ui:nodegraph:node:docURI";
 
-    uniform_attribute! {
-        #[doc = "A URI formatted link that points to documentation for the node."]
-        #[doc = ""]
-        #[doc = "USD attribute `ui:nodegraph:node:docURI` (`string`, uniform)."]
-        doc_uri, "ui:nodegraph:node:docURI", ::alloc::sync::Arc<str>, crate::value::read_string
+    #[doc = "A URI formatted link that points to documentation for the node."]
+    #[doc = ""]
+    #[doc = "USD attribute `ui:nodegraph:node:docURI` (`string`, uniform)."]
+    #[must_use]
+    pub fn doc_uri(&self) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value("ui:nodegraph:node:docURI", crate::value::read_string)
     }
+
     /// The USD name of [`Self::expansion_state`].
     pub const EXPANSION_STATE: &'static str = "ui:nodegraph:node:expansionState";
 
-    uniform_attribute! {
-        #[doc = "Shows the current size or status of the node. Either open, closed, or minimized."]
-        #[doc = ""]
-        #[doc = "USD attribute `ui:nodegraph:node:expansionState` (`token`, uniform)."]
-        #[doc = "C++ read: `UsdUINodeGraphNodeAPI::GetExpansionStateAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdUINodeGraphNodeAPI::GetExpansionStateAttr")]
-        #[doc(alias = "GetExpansionStateAttr")]
-        expansion_state, "ui:nodegraph:node:expansionState", NodeGraphNodeApiExpansionState, NodeGraphNodeApiExpansionState::read
+    #[doc = "Shows the current size or status of the node. Either open, closed, or minimized."]
+    #[doc = ""]
+    #[doc = "USD attribute `ui:nodegraph:node:expansionState` (`token`, uniform)."]
+    #[doc = "C++ read: `UsdUINodeGraphNodeAPI::GetExpansionStateAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdUINodeGraphNodeAPI::GetExpansionStateAttr")]
+    #[doc(alias = "GetExpansionStateAttr")]
+    #[must_use]
+    pub fn expansion_state(&self) -> Option<NodeGraphNodeApiExpansionState> {
+        self.read_value(
+            "ui:nodegraph:node:expansionState",
+            NodeGraphNodeApiExpansionState::read,
+        )
     }
+
     /// The USD name of [`Self::icon`].
     pub const ICON: &'static str = "ui:nodegraph:node:icon";
 
-    uniform_attribute! {
-        #[doc = "An image to classify the node."]
-        #[doc = ""]
-        #[doc = "USD attribute `ui:nodegraph:node:icon` (`asset`, uniform)."]
-        #[doc = "C++ read: `UsdUINodeGraphNodeAPI::GetIconAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdUINodeGraphNodeAPI::GetIconAttr")]
-        #[doc(alias = "GetIconAttr")]
-        icon, "ui:nodegraph:node:icon", ::alloc::sync::Arc<str>, crate::value::read_asset
+    #[doc = "An image to classify the node."]
+    #[doc = ""]
+    #[doc = "USD attribute `ui:nodegraph:node:icon` (`asset`, uniform)."]
+    #[doc = "C++ read: `UsdUINodeGraphNodeAPI::GetIconAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdUINodeGraphNodeAPI::GetIconAttr")]
+    #[doc(alias = "GetIconAttr")]
+    #[must_use]
+    pub fn icon(&self) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value("ui:nodegraph:node:icon", crate::value::read_asset)
     }
+
     /// The USD name of [`Self::pos`].
     pub const POS: &'static str = "ui:nodegraph:node:pos";
 
-    uniform_attribute! {
-        #[doc = "An x,y coordinate pair expressing the location of the node."]
-        #[doc = ""]
-        #[doc = "USD attribute `ui:nodegraph:node:pos` (`float2`, uniform)."]
-        #[doc = "C++ read: `UsdUINodeGraphNodeAPI::GetPosAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdUINodeGraphNodeAPI::GetPosAttr")]
-        #[doc(alias = "GetPosAttr")]
-        pos, "ui:nodegraph:node:pos", [f32; 2], crate::value::read_float2
+    #[doc = "An x,y coordinate pair expressing the location of the node."]
+    #[doc = ""]
+    #[doc = "USD attribute `ui:nodegraph:node:pos` (`float2`, uniform)."]
+    #[doc = "C++ read: `UsdUINodeGraphNodeAPI::GetPosAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdUINodeGraphNodeAPI::GetPosAttr")]
+    #[doc(alias = "GetPosAttr")]
+    #[must_use]
+    pub fn pos(&self) -> Option<[f32; 2]> {
+        self.read_value("ui:nodegraph:node:pos", crate::value::read_float2)
     }
+
     /// The USD name of [`Self::size`].
     pub const SIZE: &'static str = "ui:nodegraph:node:size";
 
-    uniform_attribute! {
-        #[doc = "Optional x,y dimensions for the node."]
-        #[doc = ""]
-        #[doc = "USD attribute `ui:nodegraph:node:size` (`float2`, uniform)."]
-        #[doc = "C++ read: `UsdUINodeGraphNodeAPI::GetSizeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdUINodeGraphNodeAPI::GetSizeAttr")]
-        #[doc(alias = "GetSizeAttr")]
-        size, "ui:nodegraph:node:size", [f32; 2], crate::value::read_float2
+    #[doc = "Optional x,y dimensions for the node."]
+    #[doc = ""]
+    #[doc = "USD attribute `ui:nodegraph:node:size` (`float2`, uniform)."]
+    #[doc = "C++ read: `UsdUINodeGraphNodeAPI::GetSizeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdUINodeGraphNodeAPI::GetSizeAttr")]
+    #[doc(alias = "GetSizeAttr")]
+    #[must_use]
+    pub fn size(&self) -> Option<[f32; 2]> {
+        self.read_value("ui:nodegraph:node:size", crate::value::read_float2)
     }
+
     /// The USD name of [`Self::stacking_order`].
     pub const STACKING_ORDER: &'static str = "ui:nodegraph:node:stackingOrder";
 
-    uniform_attribute! {
-        #[doc = "The order in which a node should be displayed in the case of overlapping nodes."]
-        #[doc = ""]
-        #[doc = "USD attribute `ui:nodegraph:node:stackingOrder` (`int`, uniform)."]
-        #[doc = "C++ read: `UsdUINodeGraphNodeAPI::GetStackingOrderAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdUINodeGraphNodeAPI::GetStackingOrderAttr")]
-        #[doc(alias = "GetStackingOrderAttr")]
-        stacking_order, "ui:nodegraph:node:stackingOrder", i32, crate::value::read_int
+    #[doc = "The order in which a node should be displayed in the case of overlapping nodes."]
+    #[doc = ""]
+    #[doc = "USD attribute `ui:nodegraph:node:stackingOrder` (`int`, uniform)."]
+    #[doc = "C++ read: `UsdUINodeGraphNodeAPI::GetStackingOrderAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdUINodeGraphNodeAPI::GetStackingOrderAttr")]
+    #[doc(alias = "GetStackingOrderAttr")]
+    #[must_use]
+    pub fn stacking_order(&self) -> Option<i32> {
+        self.read_value("ui:nodegraph:node:stackingOrder", crate::value::read_int)
     }
 }
 
@@ -490,80 +744,105 @@ impl NodeGraphNodeApiEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
-        Self {
-            base: PrimEdit::new(path),
-        }
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whether or not it has the schema applied.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
+        Self { base: prim }
     }
 
-    set_uniform_attribute! {
-        #[doc = "The color of the node."]
-        #[doc = ""]
-        #[doc = "USD attribute `ui:nodegraph:node:displayColor` (`color3f`, uniform)."]
-        #[doc = "C++ authoring: `UsdUINodeGraphNodeAPI::CreateDisplayColorAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdUINodeGraphNodeAPI::CreateDisplayColorAttr")]
-        #[doc(alias = "CreateDisplayColorAttr")]
-        set_display_color, "ui:nodegraph:node:displayColor", [f32; 3], crate::value::write_float3
+    #[doc = "The color of the node."]
+    #[doc = ""]
+    #[doc = "USD attribute `ui:nodegraph:node:displayColor` (`color3f`, uniform)."]
+    #[doc = "C++ authoring: `UsdUINodeGraphNodeAPI::CreateDisplayColorAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdUINodeGraphNodeAPI::CreateDisplayColorAttr")]
+    #[doc(alias = "CreateDisplayColorAttr")]
+    pub fn set_display_color(&self, edit: &mut SchemaEdit<'_>, value: [f32; 3]) -> &Self {
+        let value = crate::value::write_float3(value, edit.tokens());
+        self.write_value(edit, "ui:nodegraph:node:displayColor", None, value);
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "A URI formatted link that points to documentation for the node."]
-        #[doc = ""]
-        #[doc = "USD attribute `ui:nodegraph:node:docURI` (`string`, uniform)."]
-        set_doc_uri, "ui:nodegraph:node:docURI", &str, crate::value::write_string
+
+    #[doc = "A URI formatted link that points to documentation for the node."]
+    #[doc = ""]
+    #[doc = "USD attribute `ui:nodegraph:node:docURI` (`string`, uniform)."]
+    pub fn set_doc_uri(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
+        let value = crate::value::write_string(value, edit.tokens());
+        self.write_value(edit, "ui:nodegraph:node:docURI", None, value);
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "Shows the current size or status of the node. Either open, closed, or minimized."]
-        #[doc = ""]
-        #[doc = "USD attribute `ui:nodegraph:node:expansionState` (`token`, uniform)."]
-        #[doc = "C++ authoring: `UsdUINodeGraphNodeAPI::CreateExpansionStateAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdUINodeGraphNodeAPI::CreateExpansionStateAttr")]
-        #[doc(alias = "CreateExpansionStateAttr")]
-        set_expansion_state, "ui:nodegraph:node:expansionState", NodeGraphNodeApiExpansionState, NodeGraphNodeApiExpansionState::write
+
+    #[doc = "Shows the current size or status of the node. Either open, closed, or minimized."]
+    #[doc = ""]
+    #[doc = "USD attribute `ui:nodegraph:node:expansionState` (`token`, uniform)."]
+    #[doc = "C++ authoring: `UsdUINodeGraphNodeAPI::CreateExpansionStateAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdUINodeGraphNodeAPI::CreateExpansionStateAttr")]
+    #[doc(alias = "CreateExpansionStateAttr")]
+    pub fn set_expansion_state(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        value: NodeGraphNodeApiExpansionState,
+    ) -> &Self {
+        let value = value.write(edit.tokens());
+        self.write_value(edit, "ui:nodegraph:node:expansionState", None, value);
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "An image to classify the node."]
-        #[doc = ""]
-        #[doc = "USD attribute `ui:nodegraph:node:icon` (`asset`, uniform)."]
-        #[doc = "C++ authoring: `UsdUINodeGraphNodeAPI::CreateIconAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdUINodeGraphNodeAPI::CreateIconAttr")]
-        #[doc(alias = "CreateIconAttr")]
-        set_icon, "ui:nodegraph:node:icon", &str, crate::value::write_asset
+
+    #[doc = "An image to classify the node."]
+    #[doc = ""]
+    #[doc = "USD attribute `ui:nodegraph:node:icon` (`asset`, uniform)."]
+    #[doc = "C++ authoring: `UsdUINodeGraphNodeAPI::CreateIconAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdUINodeGraphNodeAPI::CreateIconAttr")]
+    #[doc(alias = "CreateIconAttr")]
+    pub fn set_icon(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
+        let value = crate::value::write_asset(value, edit.tokens());
+        self.write_value(edit, "ui:nodegraph:node:icon", None, value);
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "An x,y coordinate pair expressing the location of the node."]
-        #[doc = ""]
-        #[doc = "USD attribute `ui:nodegraph:node:pos` (`float2`, uniform)."]
-        #[doc = "C++ authoring: `UsdUINodeGraphNodeAPI::CreatePosAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdUINodeGraphNodeAPI::CreatePosAttr")]
-        #[doc(alias = "CreatePosAttr")]
-        set_pos, "ui:nodegraph:node:pos", [f32; 2], crate::value::write_float2
+
+    #[doc = "An x,y coordinate pair expressing the location of the node."]
+    #[doc = ""]
+    #[doc = "USD attribute `ui:nodegraph:node:pos` (`float2`, uniform)."]
+    #[doc = "C++ authoring: `UsdUINodeGraphNodeAPI::CreatePosAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdUINodeGraphNodeAPI::CreatePosAttr")]
+    #[doc(alias = "CreatePosAttr")]
+    pub fn set_pos(&self, edit: &mut SchemaEdit<'_>, value: [f32; 2]) -> &Self {
+        let value = crate::value::write_float2(value, edit.tokens());
+        self.write_value(edit, "ui:nodegraph:node:pos", None, value);
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "Optional x,y dimensions for the node."]
-        #[doc = ""]
-        #[doc = "USD attribute `ui:nodegraph:node:size` (`float2`, uniform)."]
-        #[doc = "C++ authoring: `UsdUINodeGraphNodeAPI::CreateSizeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdUINodeGraphNodeAPI::CreateSizeAttr")]
-        #[doc(alias = "CreateSizeAttr")]
-        set_size, "ui:nodegraph:node:size", [f32; 2], crate::value::write_float2
+
+    #[doc = "Optional x,y dimensions for the node."]
+    #[doc = ""]
+    #[doc = "USD attribute `ui:nodegraph:node:size` (`float2`, uniform)."]
+    #[doc = "C++ authoring: `UsdUINodeGraphNodeAPI::CreateSizeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdUINodeGraphNodeAPI::CreateSizeAttr")]
+    #[doc(alias = "CreateSizeAttr")]
+    pub fn set_size(&self, edit: &mut SchemaEdit<'_>, value: [f32; 2]) -> &Self {
+        let value = crate::value::write_float2(value, edit.tokens());
+        self.write_value(edit, "ui:nodegraph:node:size", None, value);
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "The order in which a node should be displayed in the case of overlapping nodes."]
-        #[doc = ""]
-        #[doc = "USD attribute `ui:nodegraph:node:stackingOrder` (`int`, uniform)."]
-        #[doc = "C++ authoring: `UsdUINodeGraphNodeAPI::CreateStackingOrderAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdUINodeGraphNodeAPI::CreateStackingOrderAttr")]
-        #[doc(alias = "CreateStackingOrderAttr")]
-        set_stacking_order, "ui:nodegraph:node:stackingOrder", i32, crate::value::write_int
+
+    #[doc = "The order in which a node should be displayed in the case of overlapping nodes."]
+    #[doc = ""]
+    #[doc = "USD attribute `ui:nodegraph:node:stackingOrder` (`int`, uniform)."]
+    #[doc = "C++ authoring: `UsdUINodeGraphNodeAPI::CreateStackingOrderAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdUINodeGraphNodeAPI::CreateStackingOrderAttr")]
+    #[doc(alias = "CreateStackingOrderAttr")]
+    pub fn set_stacking_order(&self, edit: &mut SchemaEdit<'_>, value: i32) -> &Self {
+        let value = crate::value::write_int(value, edit.tokens());
+        self.write_value(edit, "ui:nodegraph:node:stackingOrder", None, value);
+        self
     }
 }
 
 #[doc = "SceneGraphPrimAPI provides a way to add descriptive information to the node graph."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `SceneGraphPrimAPI`. Get it with [`SceneGraphPrimApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `SceneGraphPrimAPI`. Get it with [`SceneGraphPrimApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdUISceneGraphPrimAPI`."]
 #[doc(alias = "UsdUISceneGraphPrimAPI")]
 #[doc(alias = "SceneGraphPrimAPI")]
@@ -592,17 +871,22 @@ impl<'a> SceneGraphPrimApi<'a> {
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of the schema on `prim`, without checking that the prim
+    /// has it applied (`HasAPI`), as [`Self::get`] does: a getter reads
+    /// what the prim authors, and the schema's fallbacks only for a
+    /// prim with the schema applied. For a built-in's view.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self { base: prim }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> SceneGraphPrimApiEdit {
-        SceneGraphPrimApiEdit::from_path(self.path())
+        SceneGraphPrimApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
@@ -619,33 +903,36 @@ impl<'a> SceneGraphPrimApi<'a> {
         edit: &mut SchemaEdit<'_>,
         path: PathId,
     ) -> Result<SceneGraphPrimApiEdit, CannotApply> {
-        edit.apply(path, Self::SCHEMA, None)?;
-        Ok(SceneGraphPrimApiEdit::from_path(path))
+        edit.apply_api(path, Self::SCHEMA, None)
+            .map(SceneGraphPrimApiEdit::from_prim)
     }
 
     /// The USD name of [`Self::display_group`].
     pub const DISPLAY_GROUP: &'static str = "ui:displayGroup";
 
-    uniform_attribute! {
-        #[doc = "A descriptive name for the group to which the node belongs, potentially distinct from any other USD grouping feature name."]
-        #[doc = ""]
-        #[doc = "USD attribute `ui:displayGroup` (`token`, uniform)."]
-        #[doc = "C++ read: `UsdUISceneGraphPrimAPI::GetDisplayGroupAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdUISceneGraphPrimAPI::GetDisplayGroupAttr")]
-        #[doc(alias = "GetDisplayGroupAttr")]
-        display_group, "ui:displayGroup", &'a str, crate::value::read_token
+    #[doc = "A descriptive name for the group to which the node belongs, potentially distinct from any other USD grouping feature name."]
+    #[doc = ""]
+    #[doc = "USD attribute `ui:displayGroup` (`token`, uniform)."]
+    #[doc = "C++ read: `UsdUISceneGraphPrimAPI::GetDisplayGroupAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdUISceneGraphPrimAPI::GetDisplayGroupAttr")]
+    #[doc(alias = "GetDisplayGroupAttr")]
+    #[must_use]
+    pub fn display_group(&self) -> Option<&'a str> {
+        self.read_value("ui:displayGroup", crate::value::read_token)
     }
+
     /// The USD name of [`Self::display_name`].
     pub const DISPLAY_NAME: &'static str = "ui:displayName";
 
-    uniform_attribute! {
-        #[doc = "A descriptive name for the node, potentially distinct from its UsdPrim displayName."]
-        #[doc = ""]
-        #[doc = "USD attribute `ui:displayName` (`token`, uniform)."]
-        #[doc = "C++ read: `UsdUISceneGraphPrimAPI::GetDisplayNameAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdUISceneGraphPrimAPI::GetDisplayNameAttr")]
-        #[doc(alias = "GetDisplayNameAttr")]
-        display_name, "ui:displayName", &'a str, crate::value::read_token
+    #[doc = "A descriptive name for the node, potentially distinct from its UsdPrim displayName."]
+    #[doc = ""]
+    #[doc = "USD attribute `ui:displayName` (`token`, uniform)."]
+    #[doc = "C++ read: `UsdUISceneGraphPrimAPI::GetDisplayNameAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdUISceneGraphPrimAPI::GetDisplayNameAttr")]
+    #[doc(alias = "GetDisplayNameAttr")]
+    #[must_use]
+    pub fn display_name(&self) -> Option<&'a str> {
+        self.read_value("ui:displayName", crate::value::read_token)
     }
 }
 
@@ -669,31 +956,37 @@ impl SceneGraphPrimApiEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
-        Self {
-            base: PrimEdit::new(path),
-        }
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whether or not it has the schema applied.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
+        Self { base: prim }
     }
 
-    set_uniform_attribute! {
-        #[doc = "A descriptive name for the group to which the node belongs, potentially distinct from any other USD grouping feature name."]
-        #[doc = ""]
-        #[doc = "USD attribute `ui:displayGroup` (`token`, uniform)."]
-        #[doc = "C++ authoring: `UsdUISceneGraphPrimAPI::CreateDisplayGroupAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdUISceneGraphPrimAPI::CreateDisplayGroupAttr")]
-        #[doc(alias = "CreateDisplayGroupAttr")]
-        set_display_group, "ui:displayGroup", &str, crate::value::write_token
+    #[doc = "A descriptive name for the group to which the node belongs, potentially distinct from any other USD grouping feature name."]
+    #[doc = ""]
+    #[doc = "USD attribute `ui:displayGroup` (`token`, uniform)."]
+    #[doc = "C++ authoring: `UsdUISceneGraphPrimAPI::CreateDisplayGroupAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdUISceneGraphPrimAPI::CreateDisplayGroupAttr")]
+    #[doc(alias = "CreateDisplayGroupAttr")]
+    pub fn set_display_group(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
+        let value = crate::value::write_token(value, edit.tokens());
+        self.write_value(edit, "ui:displayGroup", None, value);
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "A descriptive name for the node, potentially distinct from its UsdPrim displayName."]
-        #[doc = ""]
-        #[doc = "USD attribute `ui:displayName` (`token`, uniform)."]
-        #[doc = "C++ authoring: `UsdUISceneGraphPrimAPI::CreateDisplayNameAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdUISceneGraphPrimAPI::CreateDisplayNameAttr")]
-        #[doc(alias = "CreateDisplayNameAttr")]
-        set_display_name, "ui:displayName", &str, crate::value::write_token
+
+    #[doc = "A descriptive name for the node, potentially distinct from its UsdPrim displayName."]
+    #[doc = ""]
+    #[doc = "USD attribute `ui:displayName` (`token`, uniform)."]
+    #[doc = "C++ authoring: `UsdUISceneGraphPrimAPI::CreateDisplayNameAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdUISceneGraphPrimAPI::CreateDisplayNameAttr")]
+    #[doc(alias = "CreateDisplayNameAttr")]
+    pub fn set_display_name(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
+        let value = crate::value::write_token(value, edit.tokens());
+        self.write_value(edit, "ui:displayName", None, value);
+        self
     }
 }

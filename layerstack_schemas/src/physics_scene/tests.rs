@@ -142,7 +142,7 @@ fn scope_exclusions_and_owner_filter_follow_body_for_attached_shapes() {
     let j = PhysicsFixedJoint::define(&mut edit, joint);
     j.set_body0(&mut edit, &[TargetPath::Prim(a)]);
     j.set_body1(&mut edit, &[TargetPath::Prim(b)]);
-    edit.define(material, "Material");
+    edit.define_prim(material, "Material");
     PhysicsMaterialApi::apply(&mut edit, material).unwrap();
     let transaction = edit.finish();
     stage.apply(&mut store, &transaction).unwrap();
@@ -385,7 +385,7 @@ fn mesh_points_group_and_material_capture_are_owned_and_checked() {
     p.set_points(&mut edit, &[[0., 0., 0.], [1., 1., 1.]]);
     p.set_widths(&mut edit, &[2., 4.]);
     PhysicsCollisionApi::apply(&mut edit, points).unwrap();
-    edit.define(material, "Material");
+    edit.define_prim(material, "Material");
     PhysicsMaterialApi::apply(&mut edit, material)
         .unwrap()
         .set_density(&mut edit, 5.);

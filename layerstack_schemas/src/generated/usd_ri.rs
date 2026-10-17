@@ -23,9 +23,9 @@ use alloc::sync::Arc;
 
 use layerstack::{PropertyKind, SchemaKind, Value, Variability};
 
-use crate::table::{DomainTables, Property, Schema};
+use crate::table::{Property, Schema, SchemaTables};
 
-pub(crate) static TABLES: DomainTables = DomainTables {
+pub(crate) static TABLES: SchemaTables = SchemaTables {
     schemas: &[
         Schema {
             name: "RiMaterialAPI",

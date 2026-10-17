@@ -22,35 +22,117 @@ use core::ops::Deref;
 
 use layerstack::{CannotApply, PathId};
 
-use crate::view::{InstanceEdit, InstanceView};
-use crate::{PrimEdit, PrimView, Scene, SchemaEdit};
-token_enum! {
-    #[doc = "The tokens `collection:<instance>:expansionRule` allows."]
-    CollectionApiExpansionRule {
-        #[doc = "`explicitOnly`"]
-        ExplicitOnly = "explicitOnly",
-        #[doc = "`expandPrims`"]
-        ExpandPrims = "expandPrims",
-        #[doc = "`expandPrimsAndProperties`"]
-        ExpandPrimsAndProperties = "expandPrimsAndProperties",
+use crate::{InstanceEdit, InstanceView, PrimEdit, PrimView, Scene, SchemaEdit};
+#[doc = "The tokens `collection:<instance>:expansionRule` allows."]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum CollectionApiExpansionRule {
+    #[doc = "`explicitOnly`"]
+    ExplicitOnly,
+    #[doc = "`expandPrims`"]
+    ExpandPrims,
+    #[doc = "`expandPrimsAndProperties`"]
+    ExpandPrimsAndProperties,
+    /// A token the schema does not list: OpenUSD does not enforce
+    /// `allowedTokens`, so an authored value may be anything.
+    Other(::alloc::sync::Arc<str>),
+}
+
+impl CollectionApiExpansionRule {
+    /// The tokens the schema allows, in its order.
+    pub const TOKENS: &'static [&'static str] =
+        &["explicitOnly", "expandPrims", "expandPrimsAndProperties"];
+
+    /// The value `token` names, `Other` when the schema does not
+    /// list it.
+    #[must_use]
+    pub fn from_token(token: &str) -> Self {
+        match token {
+            "explicitOnly" => Self::ExplicitOnly,
+            "expandPrims" => Self::ExpandPrims,
+            "expandPrimsAndProperties" => Self::ExpandPrimsAndProperties,
+            other => Self::Other(::alloc::sync::Arc::from(other)),
+        }
+    }
+
+    /// The token this value is.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::ExplicitOnly => "explicitOnly",
+            Self::ExpandPrims => "expandPrims",
+            Self::ExpandPrimsAndProperties => "expandPrimsAndProperties",
+            Self::Other(token) => token,
+        }
+    }
+
+    pub(crate) fn read(
+        value: &::layerstack::Value,
+        tokens: &::layerstack::TokenInterner,
+    ) -> Option<Self> {
+        crate::value::read_token(value, tokens).map(Self::from_token)
+    }
+
+    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+        crate::value::write_token(self.as_str(), tokens)
     }
 }
 
-token_enum! {
-    #[doc = "The tokens `collection:<instance>:mode` allows."]
-    CollectionApiMode {
-        #[doc = "`automatic`"]
-        Automatic = "automatic",
-        #[doc = "`relationship`"]
-        Relationship = "relationship",
-        #[doc = "`expression`"]
-        Expression = "expression",
+#[doc = "The tokens `collection:<instance>:mode` allows."]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum CollectionApiMode {
+    #[doc = "`automatic`"]
+    Automatic,
+    #[doc = "`relationship`"]
+    Relationship,
+    #[doc = "`expression`"]
+    Expression,
+    /// A token the schema does not list: OpenUSD does not enforce
+    /// `allowedTokens`, so an authored value may be anything.
+    Other(::alloc::sync::Arc<str>),
+}
+
+impl CollectionApiMode {
+    /// The tokens the schema allows, in its order.
+    pub const TOKENS: &'static [&'static str] = &["automatic", "relationship", "expression"];
+
+    /// The value `token` names, `Other` when the schema does not
+    /// list it.
+    #[must_use]
+    pub fn from_token(token: &str) -> Self {
+        match token {
+            "automatic" => Self::Automatic,
+            "relationship" => Self::Relationship,
+            "expression" => Self::Expression,
+            other => Self::Other(::alloc::sync::Arc::from(other)),
+        }
+    }
+
+    /// The token this value is.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Automatic => "automatic",
+            Self::Relationship => "relationship",
+            Self::Expression => "expression",
+            Self::Other(token) => token,
+        }
+    }
+
+    pub(crate) fn read(
+        value: &::layerstack::Value,
+        tokens: &::layerstack::TokenInterner,
+    ) -> Option<Self> {
+        crate::value::read_token(value, tokens).map(Self::from_token)
+    }
+
+    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+        crate::value::write_token(self.as_str(), tokens)
     }
 }
 
 #[doc = "A general purpose API schema used to describe a collection of prims and properties within a scene."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's multiple-apply API schema `CollectionAPI`. Get it with [`CollectionApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's multiple-apply API schema `CollectionAPI`. Get it with [`CollectionApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdCollectionAPI`."]
 #[doc(alias = "UsdCollectionAPI")]
 #[doc(alias = "CollectionAPI")]
@@ -80,8 +162,14 @@ impl<'a> CollectionApi<'a> {
         if !scene.has_api(path, Self::SCHEMA, Some(instance)) {
             return None;
         }
-        let instance = scene.instance_name(instance)?;
-        Some(Self::from_view(PrimView::new(*scene, path), instance))
+        let instance = scene
+            .instances(path, Self::SCHEMA)
+            .into_iter()
+            .find(|applied| *applied == instance)?;
+        Some(Self::from_instance_unchecked(InstanceView::new(
+            PrimView::new(*scene, path),
+            instance,
+        )))
     }
 
     /// Every instance of the schema the prim at `path` has applied, in the
@@ -93,20 +181,31 @@ impl<'a> CollectionApi<'a> {
         scene
             .instances(path, Self::SCHEMA)
             .into_iter()
-            .map(|instance| Self::from_view(PrimView::new(*scene, path), instance))
+            .map(|instance| {
+                Self::from_instance_unchecked(InstanceView::new(
+                    PrimView::new(*scene, path),
+                    instance,
+                ))
+            })
             .collect()
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>, instance: &'a str) -> Self {
-        Self {
-            base: InstanceView::new(prim, instance),
-        }
+    /// A view of `instance` as an instance of the schema, without
+    /// checking that the prim has it applied (`HasAPI`), as [`Self::get`]
+    /// does: a getter reads what the prim authors, and the schema's
+    /// fallbacks only for an applied instance.
+    #[must_use]
+    pub fn from_instance_unchecked(instance: InstanceView<'a>) -> Self {
+        Self { base: instance }
     }
 
     /// An edit handle for this instance.
     #[must_use]
     pub fn edit(&self) -> CollectionApiEdit {
-        CollectionApiEdit::from_path(self.path(), self.instance())
+        CollectionApiEdit::from_instance(InstanceEdit::new(
+            PrimEdit::from_path_unchecked(self.path()),
+            self.instance(),
+        ))
     }
 
     /// Applies the instance `instance` of the schema to `path` (a `prepend
@@ -124,63 +223,85 @@ impl<'a> CollectionApi<'a> {
         path: PathId,
         instance: &str,
     ) -> Result<CollectionApiEdit, CannotApply> {
-        edit.apply(path, Self::SCHEMA, Some(instance))?;
-        Ok(CollectionApiEdit::from_path(path, instance))
+        let prim = edit.apply_api(path, Self::SCHEMA, Some(instance))?;
+        Ok(CollectionApiEdit::from_instance(InstanceEdit::new(
+            prim, instance,
+        )))
     }
 
-    relationship! {
-        #[doc = "Specifies a list of targets that are excluded below the included paths in this collection."]
-        #[doc = ""]
-        #[doc = "USD relationship `collection:&lt;instance&gt;:excludes` (`rel`)."]
-        #[doc = "C++ read: `UsdCollectionAPI::GetExcludesRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdCollectionAPI::GetExcludesRel")]
-        #[doc(alias = "GetExcludesRel")]
-        excludes, "collection:__INSTANCE_NAME__:excludes"
+    #[doc = "Specifies a list of targets that are excluded below the included paths in this collection."]
+    #[doc = ""]
+    #[doc = "USD relationship `collection:<instance>:excludes` (`rel`)."]
+    #[doc = "C++ read: `UsdCollectionAPI::GetExcludesRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdCollectionAPI::GetExcludesRel")]
+    #[doc(alias = "GetExcludesRel")]
+    #[must_use]
+    pub fn excludes(&self) -> ::alloc::vec::Vec<::layerstack::TargetPath> {
+        self.read_targets("collection:__INSTANCE_NAME__:excludes")
     }
-    uniform_attribute! {
-        #[doc = "Specifies how the paths that are included in the collection must be expanded to determine its members."]
-        #[doc = ""]
-        #[doc = "USD attribute `collection:&lt;instance&gt;:expansionRule` (`token`, uniform; fallback `\"expandPrims\"`)."]
-        #[doc = "C++ read: `UsdCollectionAPI::GetExpansionRuleAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdCollectionAPI::GetExpansionRuleAttr")]
-        #[doc(alias = "GetExpansionRuleAttr")]
-        expansion_rule, "collection:__INSTANCE_NAME__:expansionRule", CollectionApiExpansionRule, CollectionApiExpansionRule::read
+
+    #[doc = "Specifies how the paths that are included in the collection must be expanded to determine its members."]
+    #[doc = ""]
+    #[doc = "USD attribute `collection:<instance>:expansionRule` (`token`, uniform; fallback `\"expandPrims\"`)."]
+    #[doc = "C++ read: `UsdCollectionAPI::GetExpansionRuleAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdCollectionAPI::GetExpansionRuleAttr")]
+    #[doc(alias = "GetExpansionRuleAttr")]
+    #[must_use]
+    pub fn expansion_rule(&self) -> Option<CollectionApiExpansionRule> {
+        self.read_value(
+            "collection:__INSTANCE_NAME__:expansionRule",
+            CollectionApiExpansionRule::read,
+        )
     }
-    uniform_attribute! {
-        #[doc = "Boolean attribute indicating whether the pseudo-root path `&lt;/&gt;` should be counted as one of the included target paths."]
-        #[doc = ""]
-        #[doc = "USD attribute `collection:&lt;instance&gt;:includeRoot` (`bool`, uniform)."]
-        #[doc = "C++ read: `UsdCollectionAPI::GetIncludeRootAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdCollectionAPI::GetIncludeRootAttr")]
-        #[doc(alias = "GetIncludeRootAttr")]
-        include_root, "collection:__INSTANCE_NAME__:includeRoot", bool, crate::value::read_bool
+
+    #[doc = "Boolean attribute indicating whether the pseudo-root path `</>` should be counted as one of the included target paths."]
+    #[doc = ""]
+    #[doc = "USD attribute `collection:<instance>:includeRoot` (`bool`, uniform)."]
+    #[doc = "C++ read: `UsdCollectionAPI::GetIncludeRootAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdCollectionAPI::GetIncludeRootAttr")]
+    #[doc(alias = "GetIncludeRootAttr")]
+    #[must_use]
+    pub fn include_root(&self) -> Option<bool> {
+        self.read_value(
+            "collection:__INSTANCE_NAME__:includeRoot",
+            crate::value::read_bool,
+        )
     }
-    relationship! {
-        #[doc = "Specifies a list of targets that are included in the collection."]
-        #[doc = ""]
-        #[doc = "USD relationship `collection:&lt;instance&gt;:includes` (`rel`)."]
-        #[doc = "C++ read: `UsdCollectionAPI::GetIncludesRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdCollectionAPI::GetIncludesRel")]
-        #[doc(alias = "GetIncludesRel")]
-        includes, "collection:__INSTANCE_NAME__:includes"
+
+    #[doc = "Specifies a list of targets that are included in the collection."]
+    #[doc = ""]
+    #[doc = "USD relationship `collection:<instance>:includes` (`rel`)."]
+    #[doc = "C++ read: `UsdCollectionAPI::GetIncludesRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdCollectionAPI::GetIncludesRel")]
+    #[doc(alias = "GetIncludesRel")]
+    #[must_use]
+    pub fn includes(&self) -> ::alloc::vec::Vec<::layerstack::TargetPath> {
+        self.read_targets("collection:__INSTANCE_NAME__:includes")
     }
-    uniform_attribute! {
-        #[doc = "Specifies a path expression that determines membership in this collection."]
-        #[doc = ""]
-        #[doc = "USD attribute `collection:&lt;instance&gt;:membershipExpression` (`pathExpression`, uniform)."]
-        #[doc = "C++ read: `UsdCollectionAPI::GetMembershipExpressionAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdCollectionAPI::GetMembershipExpressionAttr")]
-        #[doc(alias = "GetMembershipExpressionAttr")]
-        membership_expression, "collection:__INSTANCE_NAME__:membershipExpression", ::alloc::sync::Arc<str>, crate::value::read_path_expression
+
+    #[doc = "Specifies a path expression that determines membership in this collection."]
+    #[doc = ""]
+    #[doc = "USD attribute `collection:<instance>:membershipExpression` (`pathExpression`, uniform)."]
+    #[doc = "C++ read: `UsdCollectionAPI::GetMembershipExpressionAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdCollectionAPI::GetMembershipExpressionAttr")]
+    #[doc(alias = "GetMembershipExpressionAttr")]
+    #[must_use]
+    pub fn membership_expression(&self) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value(
+            "collection:__INSTANCE_NAME__:membershipExpression",
+            crate::value::read_path_expression,
+        )
     }
-    uniform_attribute! {
-        #[doc = "Specifies which mode the collection uses to determine membership: `automatic`, `relationship`, or `expression`."]
-        #[doc = ""]
-        #[doc = "USD attribute `collection:&lt;instance&gt;:mode` (`token`, uniform; fallback `\"automatic\"`)."]
-        #[doc = "C++ read: `UsdCollectionAPI::GetModeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdCollectionAPI::GetModeAttr")]
-        #[doc(alias = "GetModeAttr")]
-        mode, "collection:__INSTANCE_NAME__:mode", CollectionApiMode, CollectionApiMode::read
+
+    #[doc = "Specifies which mode the collection uses to determine membership: `automatic`, `relationship`, or `expression`."]
+    #[doc = ""]
+    #[doc = "USD attribute `collection:<instance>:mode` (`token`, uniform; fallback `\"automatic\"`)."]
+    #[doc = "C++ read: `UsdCollectionAPI::GetModeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdCollectionAPI::GetModeAttr")]
+    #[doc(alias = "GetModeAttr")]
+    #[must_use]
+    pub fn mode(&self) -> Option<CollectionApiMode> {
+        self.read_value("collection:__INSTANCE_NAME__:mode", CollectionApiMode::read)
     }
 }
 
@@ -204,74 +325,117 @@ impl CollectionApiEdit {
     /// earlier in `edit`. Setters never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId, instance: &str) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path, instance))
+        PrimEdit::new(edit, path).map(|prim| Self::from_instance(InstanceEdit::new(prim, instance)))
     }
 
-    pub(crate) fn from_path(path: PathId, instance: &str) -> Self {
-        Self {
-            base: InstanceEdit::new(path, instance),
-        }
+    /// A handle authoring the schema's properties for `instance`, whether
+    /// or not the prim has it applied.
+    #[must_use]
+    pub fn from_instance(instance: InstanceEdit) -> Self {
+        Self { base: instance }
     }
 
-    set_relationship! {
-        #[doc = "Specifies a list of targets that are excluded below the included paths in this collection."]
-        #[doc = ""]
-        #[doc = "USD relationship `collection:&lt;instance&gt;:excludes` (`rel`)."]
-        #[doc = "C++ authoring: `UsdCollectionAPI::CreateExcludesRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdCollectionAPI::CreateExcludesRel")]
-        #[doc(alias = "CreateExcludesRel")]
-        set_excludes, "collection:__INSTANCE_NAME__:excludes"
+    #[doc = "Specifies a list of targets that are excluded below the included paths in this collection."]
+    #[doc = ""]
+    #[doc = "USD relationship `collection:<instance>:excludes` (`rel`)."]
+    #[doc = "C++ authoring: `UsdCollectionAPI::CreateExcludesRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdCollectionAPI::CreateExcludesRel")]
+    #[doc(alias = "CreateExcludesRel")]
+    pub fn set_excludes(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        targets: &[::layerstack::TargetPath],
+    ) -> &Self {
+        self.write_targets(edit, "collection:__INSTANCE_NAME__:excludes", targets);
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "Specifies how the paths that are included in the collection must be expanded to determine its members."]
-        #[doc = ""]
-        #[doc = "USD attribute `collection:&lt;instance&gt;:expansionRule` (`token`, uniform; fallback `\"expandPrims\"`)."]
-        #[doc = "C++ authoring: `UsdCollectionAPI::CreateExpansionRuleAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdCollectionAPI::CreateExpansionRuleAttr")]
-        #[doc(alias = "CreateExpansionRuleAttr")]
-        set_expansion_rule, "collection:__INSTANCE_NAME__:expansionRule", CollectionApiExpansionRule, CollectionApiExpansionRule::write
+
+    #[doc = "Specifies how the paths that are included in the collection must be expanded to determine its members."]
+    #[doc = ""]
+    #[doc = "USD attribute `collection:<instance>:expansionRule` (`token`, uniform; fallback `\"expandPrims\"`)."]
+    #[doc = "C++ authoring: `UsdCollectionAPI::CreateExpansionRuleAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdCollectionAPI::CreateExpansionRuleAttr")]
+    #[doc(alias = "CreateExpansionRuleAttr")]
+    pub fn set_expansion_rule(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        value: CollectionApiExpansionRule,
+    ) -> &Self {
+        let value = value.write(edit.tokens());
+        self.write_value(
+            edit,
+            "collection:__INSTANCE_NAME__:expansionRule",
+            None,
+            value,
+        );
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "Boolean attribute indicating whether the pseudo-root path `&lt;/&gt;` should be counted as one of the included target paths."]
-        #[doc = ""]
-        #[doc = "USD attribute `collection:&lt;instance&gt;:includeRoot` (`bool`, uniform)."]
-        #[doc = "C++ authoring: `UsdCollectionAPI::CreateIncludeRootAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdCollectionAPI::CreateIncludeRootAttr")]
-        #[doc(alias = "CreateIncludeRootAttr")]
-        set_include_root, "collection:__INSTANCE_NAME__:includeRoot", bool, crate::value::write_bool
+
+    #[doc = "Boolean attribute indicating whether the pseudo-root path `</>` should be counted as one of the included target paths."]
+    #[doc = ""]
+    #[doc = "USD attribute `collection:<instance>:includeRoot` (`bool`, uniform)."]
+    #[doc = "C++ authoring: `UsdCollectionAPI::CreateIncludeRootAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdCollectionAPI::CreateIncludeRootAttr")]
+    #[doc(alias = "CreateIncludeRootAttr")]
+    pub fn set_include_root(&self, edit: &mut SchemaEdit<'_>, value: bool) -> &Self {
+        let value = crate::value::write_bool(value, edit.tokens());
+        self.write_value(
+            edit,
+            "collection:__INSTANCE_NAME__:includeRoot",
+            None,
+            value,
+        );
+        self
     }
-    set_relationship! {
-        #[doc = "Specifies a list of targets that are included in the collection."]
-        #[doc = ""]
-        #[doc = "USD relationship `collection:&lt;instance&gt;:includes` (`rel`)."]
-        #[doc = "C++ authoring: `UsdCollectionAPI::CreateIncludesRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdCollectionAPI::CreateIncludesRel")]
-        #[doc(alias = "CreateIncludesRel")]
-        set_includes, "collection:__INSTANCE_NAME__:includes"
+
+    #[doc = "Specifies a list of targets that are included in the collection."]
+    #[doc = ""]
+    #[doc = "USD relationship `collection:<instance>:includes` (`rel`)."]
+    #[doc = "C++ authoring: `UsdCollectionAPI::CreateIncludesRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdCollectionAPI::CreateIncludesRel")]
+    #[doc(alias = "CreateIncludesRel")]
+    pub fn set_includes(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        targets: &[::layerstack::TargetPath],
+    ) -> &Self {
+        self.write_targets(edit, "collection:__INSTANCE_NAME__:includes", targets);
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "Specifies a path expression that determines membership in this collection."]
-        #[doc = ""]
-        #[doc = "USD attribute `collection:&lt;instance&gt;:membershipExpression` (`pathExpression`, uniform)."]
-        #[doc = "C++ authoring: `UsdCollectionAPI::CreateMembershipExpressionAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdCollectionAPI::CreateMembershipExpressionAttr")]
-        #[doc(alias = "CreateMembershipExpressionAttr")]
-        set_membership_expression, "collection:__INSTANCE_NAME__:membershipExpression", &str, crate::value::write_path_expression
+
+    #[doc = "Specifies a path expression that determines membership in this collection."]
+    #[doc = ""]
+    #[doc = "USD attribute `collection:<instance>:membershipExpression` (`pathExpression`, uniform)."]
+    #[doc = "C++ authoring: `UsdCollectionAPI::CreateMembershipExpressionAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdCollectionAPI::CreateMembershipExpressionAttr")]
+    #[doc(alias = "CreateMembershipExpressionAttr")]
+    pub fn set_membership_expression(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
+        let value = crate::value::write_path_expression(value, edit.tokens());
+        self.write_value(
+            edit,
+            "collection:__INSTANCE_NAME__:membershipExpression",
+            None,
+            value,
+        );
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "Specifies which mode the collection uses to determine membership: `automatic`, `relationship`, or `expression`."]
-        #[doc = ""]
-        #[doc = "USD attribute `collection:&lt;instance&gt;:mode` (`token`, uniform; fallback `\"automatic\"`)."]
-        #[doc = "C++ authoring: `UsdCollectionAPI::CreateModeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdCollectionAPI::CreateModeAttr")]
-        #[doc(alias = "CreateModeAttr")]
-        set_mode, "collection:__INSTANCE_NAME__:mode", CollectionApiMode, CollectionApiMode::write
+
+    #[doc = "Specifies which mode the collection uses to determine membership: `automatic`, `relationship`, or `expression`."]
+    #[doc = ""]
+    #[doc = "USD attribute `collection:<instance>:mode` (`token`, uniform; fallback `\"automatic\"`)."]
+    #[doc = "C++ authoring: `UsdCollectionAPI::CreateModeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdCollectionAPI::CreateModeAttr")]
+    #[doc(alias = "CreateModeAttr")]
+    pub fn set_mode(&self, edit: &mut SchemaEdit<'_>, value: CollectionApiMode) -> &Self {
+        let value = value.write(edit.tokens());
+        self.write_value(edit, "collection:__INSTANCE_NAME__:mode", None, value);
+        self
     }
 }
 
 #[doc = "UsdColorSpaceAPI is an API schema that introduces a `colorSpace` property for authoring scene referred color space opinions."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `ColorSpaceAPI`. Get it with [`ColorSpaceApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `ColorSpaceAPI`. Get it with [`ColorSpaceApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdColorSpaceAPI`."]
 #[doc(alias = "UsdColorSpaceAPI")]
 #[doc(alias = "ColorSpaceAPI")]
@@ -300,17 +464,22 @@ impl<'a> ColorSpaceApi<'a> {
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of the schema on `prim`, without checking that the prim
+    /// has it applied (`HasAPI`), as [`Self::get`] does: a getter reads
+    /// what the prim authors, and the schema's fallbacks only for a
+    /// prim with the schema applied. For a built-in's view.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self { base: prim }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> ColorSpaceApiEdit {
-        ColorSpaceApiEdit::from_path(self.path())
+        ColorSpaceApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
@@ -327,21 +496,22 @@ impl<'a> ColorSpaceApi<'a> {
         edit: &mut SchemaEdit<'_>,
         path: PathId,
     ) -> Result<ColorSpaceApiEdit, CannotApply> {
-        edit.apply(path, Self::SCHEMA, None)?;
-        Ok(ColorSpaceApiEdit::from_path(path))
+        edit.apply_api(path, Self::SCHEMA, None)
+            .map(ColorSpaceApiEdit::from_prim)
     }
 
     /// The USD name of [`Self::color_space_name`].
     pub const COLOR_SPACE_NAME: &'static str = "colorSpace:name";
 
-    uniform_attribute! {
-        #[doc = "The color space that applies to attributes with unauthored color spaces on this prim and its descendents."]
-        #[doc = ""]
-        #[doc = "USD attribute `colorSpace:name` (`token`, uniform)."]
-        #[doc = "C++ read: `UsdColorSpaceAPI::GetColorSpaceNameAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdColorSpaceAPI::GetColorSpaceNameAttr")]
-        #[doc(alias = "GetColorSpaceNameAttr")]
-        color_space_name, "colorSpace:name", &'a str, crate::value::read_token
+    #[doc = "The color space that applies to attributes with unauthored color spaces on this prim and its descendents."]
+    #[doc = ""]
+    #[doc = "USD attribute `colorSpace:name` (`token`, uniform)."]
+    #[doc = "C++ read: `UsdColorSpaceAPI::GetColorSpaceNameAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdColorSpaceAPI::GetColorSpaceNameAttr")]
+    #[doc(alias = "GetColorSpaceNameAttr")]
+    #[must_use]
+    pub fn color_space_name(&self) -> Option<&'a str> {
+        self.read_value("colorSpace:name", crate::value::read_token)
     }
 }
 
@@ -365,29 +535,32 @@ impl ColorSpaceApiEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
-        Self {
-            base: PrimEdit::new(path),
-        }
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whether or not it has the schema applied.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
+        Self { base: prim }
     }
 
-    set_uniform_attribute! {
-        #[doc = "The color space that applies to attributes with unauthored color spaces on this prim and its descendents."]
-        #[doc = ""]
-        #[doc = "USD attribute `colorSpace:name` (`token`, uniform)."]
-        #[doc = "C++ authoring: `UsdColorSpaceAPI::CreateColorSpaceNameAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdColorSpaceAPI::CreateColorSpaceNameAttr")]
-        #[doc(alias = "CreateColorSpaceNameAttr")]
-        set_color_space_name, "colorSpace:name", &str, crate::value::write_token
+    #[doc = "The color space that applies to attributes with unauthored color spaces on this prim and its descendents."]
+    #[doc = ""]
+    #[doc = "USD attribute `colorSpace:name` (`token`, uniform)."]
+    #[doc = "C++ authoring: `UsdColorSpaceAPI::CreateColorSpaceNameAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdColorSpaceAPI::CreateColorSpaceNameAttr")]
+    #[doc(alias = "CreateColorSpaceNameAttr")]
+    pub fn set_color_space_name(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
+        let value = crate::value::write_token(value, edit.tokens());
+        self.write_value(edit, "colorSpace:name", None, value);
+        self
     }
 }
 
 #[doc = "UsdColorSpaceDefinitionAPI is an API schema for defining a custom color space."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's multiple-apply API schema `ColorSpaceDefinitionAPI`. Get it with [`ColorSpaceDefinitionApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's multiple-apply API schema `ColorSpaceDefinitionAPI`. Get it with [`ColorSpaceDefinitionApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdColorSpaceDefinitionAPI`."]
 #[doc(alias = "UsdColorSpaceDefinitionAPI")]
 #[doc(alias = "ColorSpaceDefinitionAPI")]
@@ -417,8 +590,14 @@ impl<'a> ColorSpaceDefinitionApi<'a> {
         if !scene.has_api(path, Self::SCHEMA, Some(instance)) {
             return None;
         }
-        let instance = scene.instance_name(instance)?;
-        Some(Self::from_view(PrimView::new(*scene, path), instance))
+        let instance = scene
+            .instances(path, Self::SCHEMA)
+            .into_iter()
+            .find(|applied| *applied == instance)?;
+        Some(Self::from_instance_unchecked(InstanceView::new(
+            PrimView::new(*scene, path),
+            instance,
+        )))
     }
 
     /// Every instance of the schema the prim at `path` has applied, in the
@@ -430,20 +609,31 @@ impl<'a> ColorSpaceDefinitionApi<'a> {
         scene
             .instances(path, Self::SCHEMA)
             .into_iter()
-            .map(|instance| Self::from_view(PrimView::new(*scene, path), instance))
+            .map(|instance| {
+                Self::from_instance_unchecked(InstanceView::new(
+                    PrimView::new(*scene, path),
+                    instance,
+                ))
+            })
             .collect()
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>, instance: &'a str) -> Self {
-        Self {
-            base: InstanceView::new(prim, instance),
-        }
+    /// A view of `instance` as an instance of the schema, without
+    /// checking that the prim has it applied (`HasAPI`), as [`Self::get`]
+    /// does: a getter reads what the prim authors, and the schema's
+    /// fallbacks only for an applied instance.
+    #[must_use]
+    pub fn from_instance_unchecked(instance: InstanceView<'a>) -> Self {
+        Self { base: instance }
     }
 
     /// An edit handle for this instance.
     #[must_use]
     pub fn edit(&self) -> ColorSpaceDefinitionApiEdit {
-        ColorSpaceDefinitionApiEdit::from_path(self.path(), self.instance())
+        ColorSpaceDefinitionApiEdit::from_instance(InstanceEdit::new(
+            PrimEdit::from_path_unchecked(self.path()),
+            self.instance(),
+        ))
     }
 
     /// Applies the instance `instance` of the schema to `path` (a `prepend
@@ -461,72 +651,194 @@ impl<'a> ColorSpaceDefinitionApi<'a> {
         path: PathId,
         instance: &str,
     ) -> Result<ColorSpaceDefinitionApiEdit, CannotApply> {
-        edit.apply(path, Self::SCHEMA, Some(instance))?;
-        Ok(ColorSpaceDefinitionApiEdit::from_path(path, instance))
+        let prim = edit.apply_api(path, Self::SCHEMA, Some(instance))?;
+        Ok(ColorSpaceDefinitionApiEdit::from_instance(
+            InstanceEdit::new(prim, instance),
+        ))
     }
 
-    attribute! {
-        #[doc = "Blue chromaticity coordinates."]
-        #[doc = ""]
-        #[doc = "USD attribute `colorSpaceDefinition:&lt;instance&gt;:blueChroma` (`float2`; fallback `(0.0, 0.0)`)."]
-        #[doc = "C++ read: `UsdColorSpaceDefinitionAPI::GetBlueChromaAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdColorSpaceDefinitionAPI::GetBlueChromaAttr")]
-        #[doc(alias = "GetBlueChromaAttr")]
-        blue_chroma, blue_chroma_at, "colorSpaceDefinition:__INSTANCE_NAME__:blueChroma", [f32; 2], crate::value::read_float2
+    #[doc = "Blue chromaticity coordinates."]
+    #[doc = ""]
+    #[doc = "USD attribute `colorSpaceDefinition:<instance>:blueChroma` (`float2`; fallback `(0.0, 0.0)`)."]
+    #[doc = "C++ read: `UsdColorSpaceDefinitionAPI::GetBlueChromaAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdColorSpaceDefinitionAPI::GetBlueChromaAttr")]
+    #[doc(alias = "GetBlueChromaAttr")]
+    #[must_use]
+    pub fn blue_chroma(&self) -> Option<[f32; 2]> {
+        self.read_value(
+            "colorSpaceDefinition:__INSTANCE_NAME__:blueChroma",
+            crate::value::read_float2,
+        )
     }
-    attribute! {
-        #[doc = "Gamma value of the log section."]
-        #[doc = ""]
-        #[doc = "USD attribute `colorSpaceDefinition:&lt;instance&gt;:gamma` (`float`; fallback `1.0`)."]
-        #[doc = "C++ read: `UsdColorSpaceDefinitionAPI::GetGammaAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdColorSpaceDefinitionAPI::GetGammaAttr")]
-        #[doc(alias = "GetGammaAttr")]
-        gamma, gamma_at, "colorSpaceDefinition:__INSTANCE_NAME__:gamma", f32, crate::value::read_float
+
+    #[doc = "[`Self::blue_chroma`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn blue_chroma_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<[f32; 2]> {
+        self.read_value_at(
+            "colorSpaceDefinition:__INSTANCE_NAME__:blueChroma",
+            time,
+            interp,
+            crate::value::read_float2,
+        )
     }
-    attribute! {
-        #[doc = "Green chromaticity coordinates."]
-        #[doc = ""]
-        #[doc = "USD attribute `colorSpaceDefinition:&lt;instance&gt;:greenChroma` (`float2`; fallback `(0.0, 1.0)`)."]
-        #[doc = "C++ read: `UsdColorSpaceDefinitionAPI::GetGreenChromaAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdColorSpaceDefinitionAPI::GetGreenChromaAttr")]
-        #[doc(alias = "GetGreenChromaAttr")]
-        green_chroma, green_chroma_at, "colorSpaceDefinition:__INSTANCE_NAME__:greenChroma", [f32; 2], crate::value::read_float2
+
+    #[doc = "Gamma value of the log section."]
+    #[doc = ""]
+    #[doc = "USD attribute `colorSpaceDefinition:<instance>:gamma` (`float`; fallback `1.0`)."]
+    #[doc = "C++ read: `UsdColorSpaceDefinitionAPI::GetGammaAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdColorSpaceDefinitionAPI::GetGammaAttr")]
+    #[doc(alias = "GetGammaAttr")]
+    #[must_use]
+    pub fn gamma(&self) -> Option<f32> {
+        self.read_value(
+            "colorSpaceDefinition:__INSTANCE_NAME__:gamma",
+            crate::value::read_float,
+        )
     }
-    attribute! {
-        #[doc = "Linear bias of the log section."]
-        #[doc = ""]
-        #[doc = "USD attribute `colorSpaceDefinition:&lt;instance&gt;:linearBias` (`float`; fallback `0.0`)."]
-        #[doc = "C++ read: `UsdColorSpaceDefinitionAPI::GetLinearBiasAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdColorSpaceDefinitionAPI::GetLinearBiasAttr")]
-        #[doc(alias = "GetLinearBiasAttr")]
-        linear_bias, linear_bias_at, "colorSpaceDefinition:__INSTANCE_NAME__:linearBias", f32, crate::value::read_float
+
+    #[doc = "[`Self::gamma`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn gamma_at(&self, time: f64, interp: ::layerstack::InterpolationType) -> Option<f32> {
+        self.read_value_at(
+            "colorSpaceDefinition:__INSTANCE_NAME__:gamma",
+            time,
+            interp,
+            crate::value::read_float,
+        )
     }
-    uniform_attribute! {
-        #[doc = "The name of the color space defined on this prim."]
-        #[doc = ""]
-        #[doc = "USD attribute `colorSpaceDefinition:&lt;instance&gt;:name` (`token`, uniform; fallback `\"custom\"`)."]
-        #[doc = "C++ read: `UsdColorSpaceDefinitionAPI::GetNameAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdColorSpaceDefinitionAPI::GetNameAttr")]
-        #[doc(alias = "GetNameAttr")]
-        name, "colorSpaceDefinition:__INSTANCE_NAME__:name", &'a str, crate::value::read_token
+
+    #[doc = "Green chromaticity coordinates."]
+    #[doc = ""]
+    #[doc = "USD attribute `colorSpaceDefinition:<instance>:greenChroma` (`float2`; fallback `(0.0, 1.0)`)."]
+    #[doc = "C++ read: `UsdColorSpaceDefinitionAPI::GetGreenChromaAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdColorSpaceDefinitionAPI::GetGreenChromaAttr")]
+    #[doc(alias = "GetGreenChromaAttr")]
+    #[must_use]
+    pub fn green_chroma(&self) -> Option<[f32; 2]> {
+        self.read_value(
+            "colorSpaceDefinition:__INSTANCE_NAME__:greenChroma",
+            crate::value::read_float2,
+        )
     }
-    attribute! {
-        #[doc = "Red chromaticity coordinates."]
-        #[doc = ""]
-        #[doc = "USD attribute `colorSpaceDefinition:&lt;instance&gt;:redChroma` (`float2`; fallback `(1.0, 0.0)`)."]
-        #[doc = "C++ read: `UsdColorSpaceDefinitionAPI::GetRedChromaAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdColorSpaceDefinitionAPI::GetRedChromaAttr")]
-        #[doc(alias = "GetRedChromaAttr")]
-        red_chroma, red_chroma_at, "colorSpaceDefinition:__INSTANCE_NAME__:redChroma", [f32; 2], crate::value::read_float2
+
+    #[doc = "[`Self::green_chroma`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn green_chroma_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<[f32; 2]> {
+        self.read_value_at(
+            "colorSpaceDefinition:__INSTANCE_NAME__:greenChroma",
+            time,
+            interp,
+            crate::value::read_float2,
+        )
     }
-    attribute! {
-        #[doc = "Whitepoint chromaticity coordinates."]
-        #[doc = ""]
-        #[doc = "USD attribute `colorSpaceDefinition:&lt;instance&gt;:whitePoint` (`float2`; fallback `(0.33333334, 0.33333334)`)."]
-        #[doc = "C++ read: `UsdColorSpaceDefinitionAPI::GetWhitePointAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdColorSpaceDefinitionAPI::GetWhitePointAttr")]
-        #[doc(alias = "GetWhitePointAttr")]
-        white_point, white_point_at, "colorSpaceDefinition:__INSTANCE_NAME__:whitePoint", [f32; 2], crate::value::read_float2
+
+    #[doc = "Linear bias of the log section."]
+    #[doc = ""]
+    #[doc = "USD attribute `colorSpaceDefinition:<instance>:linearBias` (`float`; fallback `0.0`)."]
+    #[doc = "C++ read: `UsdColorSpaceDefinitionAPI::GetLinearBiasAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdColorSpaceDefinitionAPI::GetLinearBiasAttr")]
+    #[doc(alias = "GetLinearBiasAttr")]
+    #[must_use]
+    pub fn linear_bias(&self) -> Option<f32> {
+        self.read_value(
+            "colorSpaceDefinition:__INSTANCE_NAME__:linearBias",
+            crate::value::read_float,
+        )
+    }
+
+    #[doc = "[`Self::linear_bias`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn linear_bias_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<f32> {
+        self.read_value_at(
+            "colorSpaceDefinition:__INSTANCE_NAME__:linearBias",
+            time,
+            interp,
+            crate::value::read_float,
+        )
+    }
+
+    #[doc = "The name of the color space defined on this prim."]
+    #[doc = ""]
+    #[doc = "USD attribute `colorSpaceDefinition:<instance>:name` (`token`, uniform; fallback `\"custom\"`)."]
+    #[doc = "C++ read: `UsdColorSpaceDefinitionAPI::GetNameAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdColorSpaceDefinitionAPI::GetNameAttr")]
+    #[doc(alias = "GetNameAttr")]
+    #[must_use]
+    pub fn name(&self) -> Option<&'a str> {
+        self.read_value(
+            "colorSpaceDefinition:__INSTANCE_NAME__:name",
+            crate::value::read_token,
+        )
+    }
+
+    #[doc = "Red chromaticity coordinates."]
+    #[doc = ""]
+    #[doc = "USD attribute `colorSpaceDefinition:<instance>:redChroma` (`float2`; fallback `(1.0, 0.0)`)."]
+    #[doc = "C++ read: `UsdColorSpaceDefinitionAPI::GetRedChromaAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdColorSpaceDefinitionAPI::GetRedChromaAttr")]
+    #[doc(alias = "GetRedChromaAttr")]
+    #[must_use]
+    pub fn red_chroma(&self) -> Option<[f32; 2]> {
+        self.read_value(
+            "colorSpaceDefinition:__INSTANCE_NAME__:redChroma",
+            crate::value::read_float2,
+        )
+    }
+
+    #[doc = "[`Self::red_chroma`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn red_chroma_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<[f32; 2]> {
+        self.read_value_at(
+            "colorSpaceDefinition:__INSTANCE_NAME__:redChroma",
+            time,
+            interp,
+            crate::value::read_float2,
+        )
+    }
+
+    #[doc = "Whitepoint chromaticity coordinates."]
+    #[doc = ""]
+    #[doc = "USD attribute `colorSpaceDefinition:<instance>:whitePoint` (`float2`; fallback `(0.33333334, 0.33333334)`)."]
+    #[doc = "C++ read: `UsdColorSpaceDefinitionAPI::GetWhitePointAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdColorSpaceDefinitionAPI::GetWhitePointAttr")]
+    #[doc(alias = "GetWhitePointAttr")]
+    #[must_use]
+    pub fn white_point(&self) -> Option<[f32; 2]> {
+        self.read_value(
+            "colorSpaceDefinition:__INSTANCE_NAME__:whitePoint",
+            crate::value::read_float2,
+        )
+    }
+
+    #[doc = "[`Self::white_point`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn white_point_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<[f32; 2]> {
+        self.read_value_at(
+            "colorSpaceDefinition:__INSTANCE_NAME__:whitePoint",
+            time,
+            interp,
+            crate::value::read_float2,
+        )
     }
 }
 
@@ -550,83 +862,231 @@ impl ColorSpaceDefinitionApiEdit {
     /// earlier in `edit`. Setters never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId, instance: &str) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path, instance))
+        PrimEdit::new(edit, path).map(|prim| Self::from_instance(InstanceEdit::new(prim, instance)))
     }
 
-    pub(crate) fn from_path(path: PathId, instance: &str) -> Self {
-        Self {
-            base: InstanceEdit::new(path, instance),
-        }
+    /// A handle authoring the schema's properties for `instance`, whether
+    /// or not the prim has it applied.
+    #[must_use]
+    pub fn from_instance(instance: InstanceEdit) -> Self {
+        Self { base: instance }
     }
 
-    set_attribute! {
-        #[doc = "Blue chromaticity coordinates."]
-        #[doc = ""]
-        #[doc = "USD attribute `colorSpaceDefinition:&lt;instance&gt;:blueChroma` (`float2`; fallback `(0.0, 0.0)`)."]
-        #[doc = "C++ authoring: `UsdColorSpaceDefinitionAPI::CreateBlueChromaAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdColorSpaceDefinitionAPI::CreateBlueChromaAttr")]
-        #[doc(alias = "CreateBlueChromaAttr")]
-        set_blue_chroma, set_blue_chroma_at, "colorSpaceDefinition:__INSTANCE_NAME__:blueChroma", [f32; 2], crate::value::write_float2
+    #[doc = "Blue chromaticity coordinates."]
+    #[doc = ""]
+    #[doc = "USD attribute `colorSpaceDefinition:<instance>:blueChroma` (`float2`; fallback `(0.0, 0.0)`)."]
+    #[doc = "C++ authoring: `UsdColorSpaceDefinitionAPI::CreateBlueChromaAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdColorSpaceDefinitionAPI::CreateBlueChromaAttr")]
+    #[doc(alias = "CreateBlueChromaAttr")]
+    pub fn set_blue_chroma(&self, edit: &mut SchemaEdit<'_>, value: [f32; 2]) -> &Self {
+        let value = crate::value::write_float2(value, edit.tokens());
+        self.write_value(
+            edit,
+            "colorSpaceDefinition:__INSTANCE_NAME__:blueChroma",
+            None,
+            value,
+        );
+        self
     }
-    set_attribute! {
-        #[doc = "Gamma value of the log section."]
-        #[doc = ""]
-        #[doc = "USD attribute `colorSpaceDefinition:&lt;instance&gt;:gamma` (`float`; fallback `1.0`)."]
-        #[doc = "C++ authoring: `UsdColorSpaceDefinitionAPI::CreateGammaAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdColorSpaceDefinitionAPI::CreateGammaAttr")]
-        #[doc(alias = "CreateGammaAttr")]
-        set_gamma, set_gamma_at, "colorSpaceDefinition:__INSTANCE_NAME__:gamma", f32, crate::value::write_float
+
+    #[doc = "[`Self::set_blue_chroma`] as a time sample at the time code `time`."]
+    pub fn set_blue_chroma_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: [f32; 2],
+    ) -> &Self {
+        let value = crate::value::write_float2(value, edit.tokens());
+        self.write_value(
+            edit,
+            "colorSpaceDefinition:__INSTANCE_NAME__:blueChroma",
+            Some(time),
+            value,
+        );
+        self
     }
-    set_attribute! {
-        #[doc = "Green chromaticity coordinates."]
-        #[doc = ""]
-        #[doc = "USD attribute `colorSpaceDefinition:&lt;instance&gt;:greenChroma` (`float2`; fallback `(0.0, 1.0)`)."]
-        #[doc = "C++ authoring: `UsdColorSpaceDefinitionAPI::CreateGreenChromaAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdColorSpaceDefinitionAPI::CreateGreenChromaAttr")]
-        #[doc(alias = "CreateGreenChromaAttr")]
-        set_green_chroma, set_green_chroma_at, "colorSpaceDefinition:__INSTANCE_NAME__:greenChroma", [f32; 2], crate::value::write_float2
+
+    #[doc = "Gamma value of the log section."]
+    #[doc = ""]
+    #[doc = "USD attribute `colorSpaceDefinition:<instance>:gamma` (`float`; fallback `1.0`)."]
+    #[doc = "C++ authoring: `UsdColorSpaceDefinitionAPI::CreateGammaAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdColorSpaceDefinitionAPI::CreateGammaAttr")]
+    #[doc(alias = "CreateGammaAttr")]
+    pub fn set_gamma(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(
+            edit,
+            "colorSpaceDefinition:__INSTANCE_NAME__:gamma",
+            None,
+            value,
+        );
+        self
     }
-    set_attribute! {
-        #[doc = "Linear bias of the log section."]
-        #[doc = ""]
-        #[doc = "USD attribute `colorSpaceDefinition:&lt;instance&gt;:linearBias` (`float`; fallback `0.0`)."]
-        #[doc = "C++ authoring: `UsdColorSpaceDefinitionAPI::CreateLinearBiasAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdColorSpaceDefinitionAPI::CreateLinearBiasAttr")]
-        #[doc(alias = "CreateLinearBiasAttr")]
-        set_linear_bias, set_linear_bias_at, "colorSpaceDefinition:__INSTANCE_NAME__:linearBias", f32, crate::value::write_float
+
+    #[doc = "[`Self::set_gamma`] as a time sample at the time code `time`."]
+    pub fn set_gamma_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(
+            edit,
+            "colorSpaceDefinition:__INSTANCE_NAME__:gamma",
+            Some(time),
+            value,
+        );
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "The name of the color space defined on this prim."]
-        #[doc = ""]
-        #[doc = "USD attribute `colorSpaceDefinition:&lt;instance&gt;:name` (`token`, uniform; fallback `\"custom\"`)."]
-        #[doc = "C++ authoring: `UsdColorSpaceDefinitionAPI::CreateNameAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdColorSpaceDefinitionAPI::CreateNameAttr")]
-        #[doc(alias = "CreateNameAttr")]
-        set_name, "colorSpaceDefinition:__INSTANCE_NAME__:name", &str, crate::value::write_token
+
+    #[doc = "Green chromaticity coordinates."]
+    #[doc = ""]
+    #[doc = "USD attribute `colorSpaceDefinition:<instance>:greenChroma` (`float2`; fallback `(0.0, 1.0)`)."]
+    #[doc = "C++ authoring: `UsdColorSpaceDefinitionAPI::CreateGreenChromaAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdColorSpaceDefinitionAPI::CreateGreenChromaAttr")]
+    #[doc(alias = "CreateGreenChromaAttr")]
+    pub fn set_green_chroma(&self, edit: &mut SchemaEdit<'_>, value: [f32; 2]) -> &Self {
+        let value = crate::value::write_float2(value, edit.tokens());
+        self.write_value(
+            edit,
+            "colorSpaceDefinition:__INSTANCE_NAME__:greenChroma",
+            None,
+            value,
+        );
+        self
     }
-    set_attribute! {
-        #[doc = "Red chromaticity coordinates."]
-        #[doc = ""]
-        #[doc = "USD attribute `colorSpaceDefinition:&lt;instance&gt;:redChroma` (`float2`; fallback `(1.0, 0.0)`)."]
-        #[doc = "C++ authoring: `UsdColorSpaceDefinitionAPI::CreateRedChromaAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdColorSpaceDefinitionAPI::CreateRedChromaAttr")]
-        #[doc(alias = "CreateRedChromaAttr")]
-        set_red_chroma, set_red_chroma_at, "colorSpaceDefinition:__INSTANCE_NAME__:redChroma", [f32; 2], crate::value::write_float2
+
+    #[doc = "[`Self::set_green_chroma`] as a time sample at the time code `time`."]
+    pub fn set_green_chroma_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: [f32; 2],
+    ) -> &Self {
+        let value = crate::value::write_float2(value, edit.tokens());
+        self.write_value(
+            edit,
+            "colorSpaceDefinition:__INSTANCE_NAME__:greenChroma",
+            Some(time),
+            value,
+        );
+        self
     }
-    set_attribute! {
-        #[doc = "Whitepoint chromaticity coordinates."]
-        #[doc = ""]
-        #[doc = "USD attribute `colorSpaceDefinition:&lt;instance&gt;:whitePoint` (`float2`; fallback `(0.33333334, 0.33333334)`)."]
-        #[doc = "C++ authoring: `UsdColorSpaceDefinitionAPI::CreateWhitePointAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdColorSpaceDefinitionAPI::CreateWhitePointAttr")]
-        #[doc(alias = "CreateWhitePointAttr")]
-        set_white_point, set_white_point_at, "colorSpaceDefinition:__INSTANCE_NAME__:whitePoint", [f32; 2], crate::value::write_float2
+
+    #[doc = "Linear bias of the log section."]
+    #[doc = ""]
+    #[doc = "USD attribute `colorSpaceDefinition:<instance>:linearBias` (`float`; fallback `0.0`)."]
+    #[doc = "C++ authoring: `UsdColorSpaceDefinitionAPI::CreateLinearBiasAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdColorSpaceDefinitionAPI::CreateLinearBiasAttr")]
+    #[doc(alias = "CreateLinearBiasAttr")]
+    pub fn set_linear_bias(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(
+            edit,
+            "colorSpaceDefinition:__INSTANCE_NAME__:linearBias",
+            None,
+            value,
+        );
+        self
+    }
+
+    #[doc = "[`Self::set_linear_bias`] as a time sample at the time code `time`."]
+    pub fn set_linear_bias_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(
+            edit,
+            "colorSpaceDefinition:__INSTANCE_NAME__:linearBias",
+            Some(time),
+            value,
+        );
+        self
+    }
+
+    #[doc = "The name of the color space defined on this prim."]
+    #[doc = ""]
+    #[doc = "USD attribute `colorSpaceDefinition:<instance>:name` (`token`, uniform; fallback `\"custom\"`)."]
+    #[doc = "C++ authoring: `UsdColorSpaceDefinitionAPI::CreateNameAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdColorSpaceDefinitionAPI::CreateNameAttr")]
+    #[doc(alias = "CreateNameAttr")]
+    pub fn set_name(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
+        let value = crate::value::write_token(value, edit.tokens());
+        self.write_value(
+            edit,
+            "colorSpaceDefinition:__INSTANCE_NAME__:name",
+            None,
+            value,
+        );
+        self
+    }
+
+    #[doc = "Red chromaticity coordinates."]
+    #[doc = ""]
+    #[doc = "USD attribute `colorSpaceDefinition:<instance>:redChroma` (`float2`; fallback `(1.0, 0.0)`)."]
+    #[doc = "C++ authoring: `UsdColorSpaceDefinitionAPI::CreateRedChromaAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdColorSpaceDefinitionAPI::CreateRedChromaAttr")]
+    #[doc(alias = "CreateRedChromaAttr")]
+    pub fn set_red_chroma(&self, edit: &mut SchemaEdit<'_>, value: [f32; 2]) -> &Self {
+        let value = crate::value::write_float2(value, edit.tokens());
+        self.write_value(
+            edit,
+            "colorSpaceDefinition:__INSTANCE_NAME__:redChroma",
+            None,
+            value,
+        );
+        self
+    }
+
+    #[doc = "[`Self::set_red_chroma`] as a time sample at the time code `time`."]
+    pub fn set_red_chroma_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: [f32; 2],
+    ) -> &Self {
+        let value = crate::value::write_float2(value, edit.tokens());
+        self.write_value(
+            edit,
+            "colorSpaceDefinition:__INSTANCE_NAME__:redChroma",
+            Some(time),
+            value,
+        );
+        self
+    }
+
+    #[doc = "Whitepoint chromaticity coordinates."]
+    #[doc = ""]
+    #[doc = "USD attribute `colorSpaceDefinition:<instance>:whitePoint` (`float2`; fallback `(0.33333334, 0.33333334)`)."]
+    #[doc = "C++ authoring: `UsdColorSpaceDefinitionAPI::CreateWhitePointAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdColorSpaceDefinitionAPI::CreateWhitePointAttr")]
+    #[doc(alias = "CreateWhitePointAttr")]
+    pub fn set_white_point(&self, edit: &mut SchemaEdit<'_>, value: [f32; 2]) -> &Self {
+        let value = crate::value::write_float2(value, edit.tokens());
+        self.write_value(
+            edit,
+            "colorSpaceDefinition:__INSTANCE_NAME__:whitePoint",
+            None,
+            value,
+        );
+        self
+    }
+
+    #[doc = "[`Self::set_white_point`] as a time sample at the time code `time`."]
+    pub fn set_white_point_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: [f32; 2],
+    ) -> &Self {
+        let value = crate::value::write_float2(value, edit.tokens());
+        self.write_value(
+            edit,
+            "colorSpaceDefinition:__INSTANCE_NAME__:whitePoint",
+            Some(time),
+            value,
+        );
+        self
     }
 }
 
 #[doc = "The base class for all typed schemas (those that can impart a typeName to a UsdPrim), and therefore the base class for all concrete, instantiable \"IsA\" schemas."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's abstract typed schema `Typed`. Construct it with [`Typed::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's abstract typed schema `Typed`. Construct it with [`Typed::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdTyped`."]
 #[doc(alias = "UsdTyped")]
 #[derive(Clone, Copy, Debug)]
@@ -653,17 +1113,22 @@ impl<'a> Typed<'a> {
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .is_a(path, Self::SCHEMA)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of `prim` as of the schema, without checking that it is
+    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// authors, and the schema's fallbacks only for a prim of the schema.
+    /// For the view of a schema built on this one.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self { base: prim }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> TypedEdit {
-        TypedEdit::from_path(self.path())
+        TypedEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 }
 
@@ -687,12 +1152,13 @@ impl TypedEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
-        Self {
-            base: PrimEdit::new(path),
-        }
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whatever its type.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
+        Self { base: prim }
     }
 }

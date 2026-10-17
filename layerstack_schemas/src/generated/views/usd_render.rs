@@ -22,10 +22,10 @@ use core::ops::Deref;
 
 use layerstack::PathId;
 
-use crate::{PrimView, Scene, SchemaEdit};
+use crate::{PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "Represents the renderer and scene configuration for a single render pass in a multi-pass rendering workflow."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `RenderPass`, inheriting [`crate::usd::Typed`]. Construct it with [`RenderPass::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `RenderPass`, inheriting [`crate::usd::Typed`]. Construct it with [`RenderPass::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdRenderPass`."]
 #[doc(alias = "UsdRenderPass")]
 #[derive(Clone, Copy, Debug)]
@@ -52,19 +52,24 @@ impl<'a> RenderPass<'a> {
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .is_a(path, Self::SCHEMA)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of `prim` as of the schema, without checking that it is
+    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// authors, and the schema's fallbacks only for a prim of the schema.
+    /// For the view of a schema built on this one.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self {
-            base: crate::usd::Typed::from_view(prim),
+            base: crate::usd::Typed::from_prim_unchecked(prim),
         }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> RenderPassEdit {
-        RenderPassEdit::from_path(self.path())
+        RenderPassEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Defines `path` as a new `def RenderPass` prim spec in the edit's target.
@@ -75,79 +80,90 @@ impl<'a> RenderPass<'a> {
     #[doc(alias = "UsdRenderPass::Define")]
     #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> RenderPassEdit {
-        edit.define(path, Self::SCHEMA);
-        RenderPassEdit::from_path(path)
+        RenderPassEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
     }
 
     /// The USD name of [`Self::command`].
     pub const COMMAND: &'static str = "command";
 
-    uniform_attribute! {
-        #[doc = "Command to run in order to generate renders for this pass. Used by render pipelines to send jobs to scheduling components that will generate renders."]
-        #[doc = ""]
-        #[doc = "USD attribute `command` (`string\\[\\]`, uniform)."]
-        #[doc = "C++ read: `UsdRenderPass::GetCommandAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdRenderPass::GetCommandAttr")]
-        #[doc(alias = "GetCommandAttr")]
-        command, "command", ::alloc::vec::Vec<::alloc::sync::Arc<str>>, |v, t| crate::value::read_array(v, t, crate::value::read_string)
+    #[doc = "Command to run in order to generate renders for this pass. Used by render pipelines to send jobs to scheduling components that will generate renders."]
+    #[doc = ""]
+    #[doc = "USD attribute `command` (`string[]`, uniform)."]
+    #[doc = "C++ read: `UsdRenderPass::GetCommandAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdRenderPass::GetCommandAttr")]
+    #[doc(alias = "GetCommandAttr")]
+    #[must_use]
+    pub fn command(&self) -> Option<::alloc::vec::Vec<::alloc::sync::Arc<str>>> {
+        self.read_value("command", |v, t| {
+            crate::value::read_array(v, t, crate::value::read_string)
+        })
     }
+
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
     pub fn try_command(
         &self,
         time: crate::Time,
-    ) -> Result<Option<::alloc::vec::Vec<::alloc::sync::Arc<str>>>, layerstack::ArrayReadError>
+    ) -> Result<Option<::alloc::vec::Vec<::alloc::sync::Arc<str>>>, ::layerstack::ArrayReadError>
     {
         self.try_read_value("command", time, |v, t| {
             crate::value::read_array(v, t, crate::value::read_string)
         })
     }
+
     /// The USD name of [`Self::file_name`].
     pub const FILE_NAME: &'static str = "fileName";
 
-    uniform_attribute! {
-        #[doc = "Asset that contains the render configuration prims or other information needed to render this pass."]
-        #[doc = ""]
-        #[doc = "USD attribute `fileName` (`asset`, uniform)."]
-        #[doc = "C++ read: `UsdRenderPass::GetFileNameAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdRenderPass::GetFileNameAttr")]
-        #[doc(alias = "GetFileNameAttr")]
-        file_name, "fileName", ::alloc::sync::Arc<str>, crate::value::read_asset
+    #[doc = "Asset that contains the render configuration prims or other information needed to render this pass."]
+    #[doc = ""]
+    #[doc = "USD attribute `fileName` (`asset`, uniform)."]
+    #[doc = "C++ read: `UsdRenderPass::GetFileNameAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdRenderPass::GetFileNameAttr")]
+    #[doc(alias = "GetFileNameAttr")]
+    #[must_use]
+    pub fn file_name(&self) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value("fileName", crate::value::read_asset)
     }
+
     /// The USD name of [`Self::input_passes`].
     pub const INPUT_PASSES: &'static str = "inputPasses";
 
-    relationship! {
-        #[doc = "The RenderPasses that this pass depends on. For example, this pass might depend on the output from a 'Render Texture' pass, which gets used as input for this pass."]
-        #[doc = ""]
-        #[doc = "USD relationship `inputPasses` (`rel`)."]
-        #[doc = "C++ read: `UsdRenderPass::GetInputPassesRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdRenderPass::GetInputPassesRel")]
-        #[doc(alias = "GetInputPassesRel")]
-        input_passes, "inputPasses"
+    #[doc = "The RenderPasses that this pass depends on. For example, this pass might depend on the output from a 'Render Texture' pass, which gets used as input for this pass."]
+    #[doc = ""]
+    #[doc = "USD relationship `inputPasses` (`rel`)."]
+    #[doc = "C++ read: `UsdRenderPass::GetInputPassesRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdRenderPass::GetInputPassesRel")]
+    #[doc(alias = "GetInputPassesRel")]
+    #[must_use]
+    pub fn input_passes(&self) -> ::alloc::vec::Vec<::layerstack::TargetPath> {
+        self.read_targets("inputPasses")
     }
+
     /// The USD name of [`Self::pass_type`].
     pub const PASS_TYPE: &'static str = "passType";
 
-    uniform_attribute! {
-        #[doc = "Used to categorize different types of passes within a render pipeline."]
-        #[doc = ""]
-        #[doc = "USD attribute `passType` (`token`, uniform)."]
-        #[doc = "C++ read: `UsdRenderPass::GetPassTypeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdRenderPass::GetPassTypeAttr")]
-        #[doc(alias = "GetPassTypeAttr")]
-        pass_type, "passType", &'a str, crate::value::read_token
+    #[doc = "Used to categorize different types of passes within a render pipeline."]
+    #[doc = ""]
+    #[doc = "USD attribute `passType` (`token`, uniform)."]
+    #[doc = "C++ read: `UsdRenderPass::GetPassTypeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdRenderPass::GetPassTypeAttr")]
+    #[doc(alias = "GetPassTypeAttr")]
+    #[must_use]
+    pub fn pass_type(&self) -> Option<&'a str> {
+        self.read_value("passType", crate::value::read_token)
     }
+
     /// The USD name of [`Self::render_source`].
     pub const RENDER_SOURCE: &'static str = "renderSource";
 
-    relationship! {
-        #[doc = "Points to render configuration for this pass. Targets a relationship to a RenderSettings, or if fileName is set, points to configuration within that file."]
-        #[doc = ""]
-        #[doc = "USD relationship `renderSource` (`rel`)."]
-        #[doc = "C++ read: `UsdRenderPass::GetRenderSourceRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdRenderPass::GetRenderSourceRel")]
-        #[doc(alias = "GetRenderSourceRel")]
-        render_source, "renderSource"
+    #[doc = "Points to render configuration for this pass. Targets a relationship to a RenderSettings, or if fileName is set, points to configuration within that file."]
+    #[doc = ""]
+    #[doc = "USD relationship `renderSource` (`rel`)."]
+    #[doc = "C++ read: `UsdRenderPass::GetRenderSourceRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdRenderPass::GetRenderSourceRel")]
+    #[doc(alias = "GetRenderSourceRel")]
+    #[must_use]
+    pub fn render_source(&self) -> ::alloc::vec::Vec<::layerstack::TargetPath> {
+        self.read_targets("renderSource")
     }
 }
 
@@ -171,75 +187,137 @@ impl RenderPassEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whatever its type.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
         Self {
-            base: crate::usd::TypedEdit::from_path(path),
+            base: crate::usd::TypedEdit::from_prim(prim),
         }
     }
 
-    set_uniform_attribute! {
-        #[doc = "Command to run in order to generate renders for this pass. Used by render pipelines to send jobs to scheduling components that will generate renders."]
-        #[doc = ""]
-        #[doc = "USD attribute `command` (`string\\[\\]`, uniform)."]
-        #[doc = "C++ authoring: `UsdRenderPass::CreateCommandAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdRenderPass::CreateCommandAttr")]
-        #[doc(alias = "CreateCommandAttr")]
-        set_command, "command", &[&str], |v, t| crate::value::write_array(v, t, crate::value::write_string)
+    #[doc = "Command to run in order to generate renders for this pass. Used by render pipelines to send jobs to scheduling components that will generate renders."]
+    #[doc = ""]
+    #[doc = "USD attribute `command` (`string[]`, uniform)."]
+    #[doc = "C++ authoring: `UsdRenderPass::CreateCommandAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdRenderPass::CreateCommandAttr")]
+    #[doc(alias = "CreateCommandAttr")]
+    pub fn set_command(&self, edit: &mut SchemaEdit<'_>, value: &[&str]) -> &Self {
+        let value = crate::value::write_array(value, edit.tokens(), crate::value::write_string);
+        self.write_value(edit, "command", None, value);
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "Asset that contains the render configuration prims or other information needed to render this pass."]
-        #[doc = ""]
-        #[doc = "USD attribute `fileName` (`asset`, uniform)."]
-        #[doc = "C++ authoring: `UsdRenderPass::CreateFileNameAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdRenderPass::CreateFileNameAttr")]
-        #[doc(alias = "CreateFileNameAttr")]
-        set_file_name, "fileName", &str, crate::value::write_asset
+
+    #[doc = "Asset that contains the render configuration prims or other information needed to render this pass."]
+    #[doc = ""]
+    #[doc = "USD attribute `fileName` (`asset`, uniform)."]
+    #[doc = "C++ authoring: `UsdRenderPass::CreateFileNameAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdRenderPass::CreateFileNameAttr")]
+    #[doc(alias = "CreateFileNameAttr")]
+    pub fn set_file_name(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
+        let value = crate::value::write_asset(value, edit.tokens());
+        self.write_value(edit, "fileName", None, value);
+        self
     }
-    set_relationship! {
-        #[doc = "The RenderPasses that this pass depends on. For example, this pass might depend on the output from a 'Render Texture' pass, which gets used as input for this pass."]
-        #[doc = ""]
-        #[doc = "USD relationship `inputPasses` (`rel`)."]
-        #[doc = "C++ authoring: `UsdRenderPass::CreateInputPassesRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdRenderPass::CreateInputPassesRel")]
-        #[doc(alias = "CreateInputPassesRel")]
-        set_input_passes, "inputPasses"
+
+    #[doc = "The RenderPasses that this pass depends on. For example, this pass might depend on the output from a 'Render Texture' pass, which gets used as input for this pass."]
+    #[doc = ""]
+    #[doc = "USD relationship `inputPasses` (`rel`)."]
+    #[doc = "C++ authoring: `UsdRenderPass::CreateInputPassesRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdRenderPass::CreateInputPassesRel")]
+    #[doc(alias = "CreateInputPassesRel")]
+    pub fn set_input_passes(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        targets: &[::layerstack::TargetPath],
+    ) -> &Self {
+        self.write_targets(edit, "inputPasses", targets);
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "Used to categorize different types of passes within a render pipeline."]
-        #[doc = ""]
-        #[doc = "USD attribute `passType` (`token`, uniform)."]
-        #[doc = "C++ authoring: `UsdRenderPass::CreatePassTypeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdRenderPass::CreatePassTypeAttr")]
-        #[doc(alias = "CreatePassTypeAttr")]
-        set_pass_type, "passType", &str, crate::value::write_token
+
+    #[doc = "Used to categorize different types of passes within a render pipeline."]
+    #[doc = ""]
+    #[doc = "USD attribute `passType` (`token`, uniform)."]
+    #[doc = "C++ authoring: `UsdRenderPass::CreatePassTypeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdRenderPass::CreatePassTypeAttr")]
+    #[doc(alias = "CreatePassTypeAttr")]
+    pub fn set_pass_type(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
+        let value = crate::value::write_token(value, edit.tokens());
+        self.write_value(edit, "passType", None, value);
+        self
     }
-    set_relationship! {
-        #[doc = "Points to render configuration for this pass. Targets a relationship to a RenderSettings, or if fileName is set, points to configuration within that file."]
-        #[doc = ""]
-        #[doc = "USD relationship `renderSource` (`rel`)."]
-        #[doc = "C++ authoring: `UsdRenderPass::CreateRenderSourceRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdRenderPass::CreateRenderSourceRel")]
-        #[doc(alias = "CreateRenderSourceRel")]
-        set_render_source, "renderSource"
+
+    #[doc = "Points to render configuration for this pass. Targets a relationship to a RenderSettings, or if fileName is set, points to configuration within that file."]
+    #[doc = ""]
+    #[doc = "USD relationship `renderSource` (`rel`)."]
+    #[doc = "C++ authoring: `UsdRenderPass::CreateRenderSourceRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdRenderPass::CreateRenderSourceRel")]
+    #[doc(alias = "CreateRenderSourceRel")]
+    pub fn set_render_source(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        targets: &[::layerstack::TargetPath],
+    ) -> &Self {
+        self.write_targets(edit, "renderSource", targets);
+        self
     }
 }
 
-token_enum! {
-    #[doc = "The tokens `productType` allows."]
-    RenderProductProductType {
-        #[doc = "`raster`"]
-        Raster = "raster",
-        #[doc = "`deepRaster`"]
-        DeepRaster = "deepRaster",
+#[doc = "The tokens `productType` allows."]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum RenderProductProductType {
+    #[doc = "`raster`"]
+    Raster,
+    #[doc = "`deepRaster`"]
+    DeepRaster,
+    /// A token the schema does not list: OpenUSD does not enforce
+    /// `allowedTokens`, so an authored value may be anything.
+    Other(::alloc::sync::Arc<str>),
+}
+
+impl RenderProductProductType {
+    /// The tokens the schema allows, in its order.
+    pub const TOKENS: &'static [&'static str] = &["raster", "deepRaster"];
+
+    /// The value `token` names, `Other` when the schema does not
+    /// list it.
+    #[must_use]
+    pub fn from_token(token: &str) -> Self {
+        match token {
+            "raster" => Self::Raster,
+            "deepRaster" => Self::DeepRaster,
+            other => Self::Other(::alloc::sync::Arc::from(other)),
+        }
+    }
+
+    /// The token this value is.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Raster => "raster",
+            Self::DeepRaster => "deepRaster",
+            Self::Other(token) => token,
+        }
+    }
+
+    pub(crate) fn read(
+        value: &::layerstack::Value,
+        tokens: &::layerstack::TokenInterner,
+    ) -> Option<Self> {
+        crate::value::read_token(value, tokens).map(Self::from_token)
+    }
+
+    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+        crate::value::write_token(self.as_str(), tokens)
     }
 }
 
 #[doc = "A single render output artifact, such as a rendered image or other file-like artifact. Specifies one or more RenderVars combined into the output artifact."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `RenderProduct`, inheriting [`RenderSettingsBase`]. Construct it with [`RenderProduct::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `RenderProduct`, inheriting [`RenderSettingsBase`]. Construct it with [`RenderProduct::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdRenderProduct`."]
 #[doc(alias = "UsdRenderProduct")]
 #[derive(Clone, Copy, Debug)]
@@ -266,19 +344,24 @@ impl<'a> RenderProduct<'a> {
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .is_a(path, Self::SCHEMA)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of `prim` as of the schema, without checking that it is
+    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// authors, and the schema's fallbacks only for a prim of the schema.
+    /// For the view of a schema built on this one.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self {
-            base: RenderSettingsBase::from_view(prim),
+            base: RenderSettingsBase::from_prim_unchecked(prim),
         }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> RenderProductEdit {
-        RenderProductEdit::from_path(self.path())
+        RenderProductEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Defines `path` as a new `def RenderProduct` prim spec in the edit's target.
@@ -289,45 +372,59 @@ impl<'a> RenderProduct<'a> {
     #[doc(alias = "UsdRenderProduct::Define")]
     #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> RenderProductEdit {
-        edit.define(path, Self::SCHEMA);
-        RenderProductEdit::from_path(path)
+        RenderProductEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
     }
 
     /// The USD name of [`Self::ordered_vars`].
     pub const ORDERED_VARS: &'static str = "orderedVars";
 
-    relationship! {
-        #[doc = "Specifies the RenderVars that should be used and combined into the final output product. The order is provided to the render executable and pipeline tools."]
-        #[doc = ""]
-        #[doc = "USD relationship `orderedVars` (`rel`)."]
-        #[doc = "C++ read: `UsdRenderProduct::GetOrderedVarsRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdRenderProduct::GetOrderedVarsRel")]
-        #[doc(alias = "GetOrderedVarsRel")]
-        ordered_vars, "orderedVars"
+    #[doc = "Specifies the RenderVars that should be used and combined into the final output product. The order is provided to the render executable and pipeline tools."]
+    #[doc = ""]
+    #[doc = "USD relationship `orderedVars` (`rel`)."]
+    #[doc = "C++ read: `UsdRenderProduct::GetOrderedVarsRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdRenderProduct::GetOrderedVarsRel")]
+    #[doc(alias = "GetOrderedVarsRel")]
+    #[must_use]
+    pub fn ordered_vars(&self) -> ::alloc::vec::Vec<::layerstack::TargetPath> {
+        self.read_targets("orderedVars")
     }
+
     /// The USD name of [`Self::product_name`].
     pub const PRODUCT_NAME: &'static str = "productName";
 
-    attribute! {
-        #[doc = "Specifies the name for the output product. Used by render executables and pipeline tools to name the product, for example, using the productName as the filename (and path) for an output image artifact."]
-        #[doc = ""]
-        #[doc = "USD attribute `productName` (`token`; fallback `\"\"`)."]
-        #[doc = "C++ read: `UsdRenderProduct::GetProductNameAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdRenderProduct::GetProductNameAttr")]
-        #[doc(alias = "GetProductNameAttr")]
-        product_name, product_name_at, "productName", &'a str, crate::value::read_token
+    #[doc = "Specifies the name for the output product. Used by render executables and pipeline tools to name the product, for example, using the productName as the filename (and path) for an output image artifact."]
+    #[doc = ""]
+    #[doc = "USD attribute `productName` (`token`; fallback `\"\"`)."]
+    #[doc = "C++ read: `UsdRenderProduct::GetProductNameAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdRenderProduct::GetProductNameAttr")]
+    #[doc(alias = "GetProductNameAttr")]
+    #[must_use]
+    pub fn product_name(&self) -> Option<&'a str> {
+        self.read_value("productName", crate::value::read_token)
     }
+
+    #[doc = "[`Self::product_name`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn product_name_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<&'a str> {
+        self.read_value_at("productName", time, interp, crate::value::read_token)
+    }
+
     /// The USD name of [`Self::product_type`].
     pub const PRODUCT_TYPE: &'static str = "productType";
 
-    uniform_attribute! {
-        #[doc = "Specifies the type of output to produce. Values are output types most renderers should be able to support, such as 'raster' or 'deepRaster'."]
-        #[doc = ""]
-        #[doc = "USD attribute `productType` (`token`, uniform; fallback `\"raster\"`)."]
-        #[doc = "C++ read: `UsdRenderProduct::GetProductTypeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdRenderProduct::GetProductTypeAttr")]
-        #[doc(alias = "GetProductTypeAttr")]
-        product_type, "productType", RenderProductProductType, RenderProductProductType::read
+    #[doc = "Specifies the type of output to produce. Values are output types most renderers should be able to support, such as 'raster' or 'deepRaster'."]
+    #[doc = ""]
+    #[doc = "USD attribute `productType` (`token`, uniform; fallback `\"raster\"`)."]
+    #[doc = "C++ read: `UsdRenderProduct::GetProductTypeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdRenderProduct::GetProductTypeAttr")]
+    #[doc(alias = "GetProductTypeAttr")]
+    #[must_use]
+    pub fn product_type(&self) -> Option<RenderProductProductType> {
+        self.read_value("productType", RenderProductProductType::read)
     }
 }
 
@@ -351,47 +448,72 @@ impl RenderProductEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whatever its type.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
         Self {
-            base: RenderSettingsBaseEdit::from_path(path),
+            base: RenderSettingsBaseEdit::from_prim(prim),
         }
     }
 
-    set_relationship! {
-        #[doc = "Specifies the RenderVars that should be used and combined into the final output product. The order is provided to the render executable and pipeline tools."]
-        #[doc = ""]
-        #[doc = "USD relationship `orderedVars` (`rel`)."]
-        #[doc = "C++ authoring: `UsdRenderProduct::CreateOrderedVarsRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdRenderProduct::CreateOrderedVarsRel")]
-        #[doc(alias = "CreateOrderedVarsRel")]
-        set_ordered_vars, "orderedVars"
+    #[doc = "Specifies the RenderVars that should be used and combined into the final output product. The order is provided to the render executable and pipeline tools."]
+    #[doc = ""]
+    #[doc = "USD relationship `orderedVars` (`rel`)."]
+    #[doc = "C++ authoring: `UsdRenderProduct::CreateOrderedVarsRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdRenderProduct::CreateOrderedVarsRel")]
+    #[doc(alias = "CreateOrderedVarsRel")]
+    pub fn set_ordered_vars(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        targets: &[::layerstack::TargetPath],
+    ) -> &Self {
+        self.write_targets(edit, "orderedVars", targets);
+        self
     }
-    set_attribute! {
-        #[doc = "Specifies the name for the output product. Used by render executables and pipeline tools to name the product, for example, using the productName as the filename (and path) for an output image artifact."]
-        #[doc = ""]
-        #[doc = "USD attribute `productName` (`token`; fallback `\"\"`)."]
-        #[doc = "C++ authoring: `UsdRenderProduct::CreateProductNameAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdRenderProduct::CreateProductNameAttr")]
-        #[doc(alias = "CreateProductNameAttr")]
-        set_product_name, set_product_name_at, "productName", &str, crate::value::write_token
+
+    #[doc = "Specifies the name for the output product. Used by render executables and pipeline tools to name the product, for example, using the productName as the filename (and path) for an output image artifact."]
+    #[doc = ""]
+    #[doc = "USD attribute `productName` (`token`; fallback `\"\"`)."]
+    #[doc = "C++ authoring: `UsdRenderProduct::CreateProductNameAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdRenderProduct::CreateProductNameAttr")]
+    #[doc(alias = "CreateProductNameAttr")]
+    pub fn set_product_name(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
+        let value = crate::value::write_token(value, edit.tokens());
+        self.write_value(edit, "productName", None, value);
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "Specifies the type of output to produce. Values are output types most renderers should be able to support, such as 'raster' or 'deepRaster'."]
-        #[doc = ""]
-        #[doc = "USD attribute `productType` (`token`, uniform; fallback `\"raster\"`)."]
-        #[doc = "C++ authoring: `UsdRenderProduct::CreateProductTypeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdRenderProduct::CreateProductTypeAttr")]
-        #[doc(alias = "CreateProductTypeAttr")]
-        set_product_type, "productType", RenderProductProductType, RenderProductProductType::write
+
+    #[doc = "[`Self::set_product_name`] as a time sample at the time code `time`."]
+    pub fn set_product_name_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &str) -> &Self {
+        let value = crate::value::write_token(value, edit.tokens());
+        self.write_value(edit, "productName", Some(time), value);
+        self
+    }
+
+    #[doc = "Specifies the type of output to produce. Values are output types most renderers should be able to support, such as 'raster' or 'deepRaster'."]
+    #[doc = ""]
+    #[doc = "USD attribute `productType` (`token`, uniform; fallback `\"raster\"`)."]
+    #[doc = "C++ authoring: `UsdRenderProduct::CreateProductTypeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdRenderProduct::CreateProductTypeAttr")]
+    #[doc(alias = "CreateProductTypeAttr")]
+    pub fn set_product_type(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        value: RenderProductProductType,
+    ) -> &Self {
+        let value = value.write(edit.tokens());
+        self.write_value(edit, "productType", None, value);
+        self
     }
 }
 
 #[doc = "All the global settings for a single invocation of a rendering of a scene. Includes configuration of what render products should be produced, and what imageable purposes should be rendered."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `RenderSettings`, inheriting [`RenderSettingsBase`]. Construct it with [`RenderSettings::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `RenderSettings`, inheriting [`RenderSettingsBase`]. Construct it with [`RenderSettings::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdRenderSettings`."]
 #[doc(alias = "UsdRenderSettings")]
 #[derive(Clone, Copy, Debug)]
@@ -418,19 +540,24 @@ impl<'a> RenderSettings<'a> {
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .is_a(path, Self::SCHEMA)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of `prim` as of the schema, without checking that it is
+    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// authors, and the schema's fallbacks only for a prim of the schema.
+    /// For the view of a schema built on this one.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self {
-            base: RenderSettingsBase::from_view(prim),
+            base: RenderSettingsBase::from_prim_unchecked(prim),
         }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> RenderSettingsEdit {
-        RenderSettingsEdit::from_path(self.path())
+        RenderSettingsEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Defines `path` as a new `def RenderSettings` prim spec in the edit's target.
@@ -441,75 +568,87 @@ impl<'a> RenderSettings<'a> {
     #[doc(alias = "UsdRenderSettings::Define")]
     #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> RenderSettingsEdit {
-        edit.define(path, Self::SCHEMA);
-        RenderSettingsEdit::from_path(path)
+        RenderSettingsEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
     }
 
     /// The USD name of [`Self::included_purposes`].
     pub const INCLUDED_PURPOSES: &'static str = "includedPurposes";
 
-    uniform_attribute! {
-        #[doc = "Imageable purpose values (e.g. default, render, proxy, guide) that should be included in the render. Only imageable prims with purpose set to one of the includedPurposes values will be rendered."]
-        #[doc = ""]
-        #[doc = "USD attribute `includedPurposes` (`token\\[\\]`, uniform; fallback `\\[\"default\", \"render\"\\]`)."]
-        #[doc = "C++ read: `UsdRenderSettings::GetIncludedPurposesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdRenderSettings::GetIncludedPurposesAttr")]
-        #[doc(alias = "GetIncludedPurposesAttr")]
-        included_purposes, "includedPurposes", ::alloc::vec::Vec<&'a str>, |v, t| crate::value::read_array(v, t, crate::value::read_token)
+    #[doc = "Imageable purpose values (e.g. default, render, proxy, guide) that should be included in the render. Only imageable prims with purpose set to one of the includedPurposes values will be rendered."]
+    #[doc = ""]
+    #[doc = "USD attribute `includedPurposes` (`token[]`, uniform; fallback `[\"default\", \"render\"]`)."]
+    #[doc = "C++ read: `UsdRenderSettings::GetIncludedPurposesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdRenderSettings::GetIncludedPurposesAttr")]
+    #[doc(alias = "GetIncludedPurposesAttr")]
+    #[must_use]
+    pub fn included_purposes(&self) -> Option<::alloc::vec::Vec<&'a str>> {
+        self.read_value("includedPurposes", |v, t| {
+            crate::value::read_array(v, t, crate::value::read_token)
+        })
     }
+
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
     pub fn try_included_purposes(
         &self,
         time: crate::Time,
-    ) -> Result<Option<::alloc::vec::Vec<&'a str>>, layerstack::ArrayReadError> {
+    ) -> Result<Option<::alloc::vec::Vec<&'a str>>, ::layerstack::ArrayReadError> {
         self.try_read_value("includedPurposes", time, |v, t| {
             crate::value::read_array(v, t, crate::value::read_token)
         })
     }
+
     /// The USD name of [`Self::material_binding_purposes`].
     pub const MATERIAL_BINDING_PURPOSES: &'static str = "materialBindingPurposes";
 
-    uniform_attribute! {
-        #[doc = "Ordered list of material binding purposes that will be used in the render."]
-        #[doc = ""]
-        #[doc = "USD attribute `materialBindingPurposes` (`token\\[\\]`, uniform; fallback `\\[\"full\", \"\"\\]`)."]
-        #[doc = "C++ read: `UsdRenderSettings::GetMaterialBindingPurposesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdRenderSettings::GetMaterialBindingPurposesAttr")]
-        #[doc(alias = "GetMaterialBindingPurposesAttr")]
-        material_binding_purposes, "materialBindingPurposes", ::alloc::vec::Vec<&'a str>, |v, t| crate::value::read_array(v, t, crate::value::read_token)
+    #[doc = "Ordered list of material binding purposes that will be used in the render."]
+    #[doc = ""]
+    #[doc = "USD attribute `materialBindingPurposes` (`token[]`, uniform; fallback `[\"full\", \"\"]`)."]
+    #[doc = "C++ read: `UsdRenderSettings::GetMaterialBindingPurposesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdRenderSettings::GetMaterialBindingPurposesAttr")]
+    #[doc(alias = "GetMaterialBindingPurposesAttr")]
+    #[must_use]
+    pub fn material_binding_purposes(&self) -> Option<::alloc::vec::Vec<&'a str>> {
+        self.read_value("materialBindingPurposes", |v, t| {
+            crate::value::read_array(v, t, crate::value::read_token)
+        })
     }
+
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
     pub fn try_material_binding_purposes(
         &self,
         time: crate::Time,
-    ) -> Result<Option<::alloc::vec::Vec<&'a str>>, layerstack::ArrayReadError> {
+    ) -> Result<Option<::alloc::vec::Vec<&'a str>>, ::layerstack::ArrayReadError> {
         self.try_read_value("materialBindingPurposes", time, |v, t| {
             crate::value::read_array(v, t, crate::value::read_token)
         })
     }
+
     /// The USD name of [`Self::products`].
     pub const PRODUCTS: &'static str = "products";
 
-    relationship! {
-        #[doc = "Specifies the RenderProducts that a render of this scene should produce. If no products are specified, renderers are expected to produce a default RGB image."]
-        #[doc = ""]
-        #[doc = "USD relationship `products` (`rel`)."]
-        #[doc = "C++ read: `UsdRenderSettings::GetProductsRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdRenderSettings::GetProductsRel")]
-        #[doc(alias = "GetProductsRel")]
-        products, "products"
+    #[doc = "Specifies the RenderProducts that a render of this scene should produce. If no products are specified, renderers are expected to produce a default RGB image."]
+    #[doc = ""]
+    #[doc = "USD relationship `products` (`rel`)."]
+    #[doc = "C++ read: `UsdRenderSettings::GetProductsRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdRenderSettings::GetProductsRel")]
+    #[doc(alias = "GetProductsRel")]
+    #[must_use]
+    pub fn products(&self) -> ::alloc::vec::Vec<::layerstack::TargetPath> {
+        self.read_targets("products")
     }
+
     /// The USD name of [`Self::rendering_color_space`].
     pub const RENDERING_COLOR_SPACE: &'static str = "renderingColorSpace";
 
-    uniform_attribute! {
-        #[doc = "The 'rendering color space' the renderer should use for internal color calculations. If this is not set, a renderer is expected to use its own default color space. Not to be confused with setting specific 'source' color spaces for scene assets."]
-        #[doc = ""]
-        #[doc = "USD attribute `renderingColorSpace` (`token`, uniform)."]
-        #[doc = "C++ read: `UsdRenderSettings::GetRenderingColorSpaceAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdRenderSettings::GetRenderingColorSpaceAttr")]
-        #[doc(alias = "GetRenderingColorSpaceAttr")]
-        rendering_color_space, "renderingColorSpace", &'a str, crate::value::read_token
+    #[doc = "The 'rendering color space' the renderer should use for internal color calculations. If this is not set, a renderer is expected to use its own default color space. Not to be confused with setting specific 'source' color spaces for scene assets."]
+    #[doc = ""]
+    #[doc = "USD attribute `renderingColorSpace` (`token`, uniform)."]
+    #[doc = "C++ read: `UsdRenderSettings::GetRenderingColorSpaceAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdRenderSettings::GetRenderingColorSpaceAttr")]
+    #[doc(alias = "GetRenderingColorSpaceAttr")]
+    #[must_use]
+    pub fn rendering_color_space(&self) -> Option<&'a str> {
+        self.read_value("renderingColorSpace", crate::value::read_token)
     }
 }
 
@@ -533,72 +672,144 @@ impl RenderSettingsEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whatever its type.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
         Self {
-            base: RenderSettingsBaseEdit::from_path(path),
+            base: RenderSettingsBaseEdit::from_prim(prim),
         }
     }
 
-    set_uniform_attribute! {
-        #[doc = "Imageable purpose values (e.g. default, render, proxy, guide) that should be included in the render. Only imageable prims with purpose set to one of the includedPurposes values will be rendered."]
-        #[doc = ""]
-        #[doc = "USD attribute `includedPurposes` (`token\\[\\]`, uniform; fallback `\\[\"default\", \"render\"\\]`)."]
-        #[doc = "C++ authoring: `UsdRenderSettings::CreateIncludedPurposesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdRenderSettings::CreateIncludedPurposesAttr")]
-        #[doc(alias = "CreateIncludedPurposesAttr")]
-        set_included_purposes, "includedPurposes", &[&str], |v, t| crate::value::write_array(v, t, crate::value::write_token)
+    #[doc = "Imageable purpose values (e.g. default, render, proxy, guide) that should be included in the render. Only imageable prims with purpose set to one of the includedPurposes values will be rendered."]
+    #[doc = ""]
+    #[doc = "USD attribute `includedPurposes` (`token[]`, uniform; fallback `[\"default\", \"render\"]`)."]
+    #[doc = "C++ authoring: `UsdRenderSettings::CreateIncludedPurposesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdRenderSettings::CreateIncludedPurposesAttr")]
+    #[doc(alias = "CreateIncludedPurposesAttr")]
+    pub fn set_included_purposes(&self, edit: &mut SchemaEdit<'_>, value: &[&str]) -> &Self {
+        let value = crate::value::write_array(value, edit.tokens(), crate::value::write_token);
+        self.write_value(edit, "includedPurposes", None, value);
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "Ordered list of material binding purposes that will be used in the render."]
-        #[doc = ""]
-        #[doc = "USD attribute `materialBindingPurposes` (`token\\[\\]`, uniform; fallback `\\[\"full\", \"\"\\]`)."]
-        #[doc = "C++ authoring: `UsdRenderSettings::CreateMaterialBindingPurposesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdRenderSettings::CreateMaterialBindingPurposesAttr")]
-        #[doc(alias = "CreateMaterialBindingPurposesAttr")]
-        set_material_binding_purposes, "materialBindingPurposes", &[&str], |v, t| crate::value::write_array(v, t, crate::value::write_token)
+
+    #[doc = "Ordered list of material binding purposes that will be used in the render."]
+    #[doc = ""]
+    #[doc = "USD attribute `materialBindingPurposes` (`token[]`, uniform; fallback `[\"full\", \"\"]`)."]
+    #[doc = "C++ authoring: `UsdRenderSettings::CreateMaterialBindingPurposesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdRenderSettings::CreateMaterialBindingPurposesAttr")]
+    #[doc(alias = "CreateMaterialBindingPurposesAttr")]
+    pub fn set_material_binding_purposes(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        value: &[&str],
+    ) -> &Self {
+        let value = crate::value::write_array(value, edit.tokens(), crate::value::write_token);
+        self.write_value(edit, "materialBindingPurposes", None, value);
+        self
     }
-    set_relationship! {
-        #[doc = "Specifies the RenderProducts that a render of this scene should produce. If no products are specified, renderers are expected to produce a default RGB image."]
-        #[doc = ""]
-        #[doc = "USD relationship `products` (`rel`)."]
-        #[doc = "C++ authoring: `UsdRenderSettings::CreateProductsRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdRenderSettings::CreateProductsRel")]
-        #[doc(alias = "CreateProductsRel")]
-        set_products, "products"
+
+    #[doc = "Specifies the RenderProducts that a render of this scene should produce. If no products are specified, renderers are expected to produce a default RGB image."]
+    #[doc = ""]
+    #[doc = "USD relationship `products` (`rel`)."]
+    #[doc = "C++ authoring: `UsdRenderSettings::CreateProductsRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdRenderSettings::CreateProductsRel")]
+    #[doc(alias = "CreateProductsRel")]
+    pub fn set_products(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        targets: &[::layerstack::TargetPath],
+    ) -> &Self {
+        self.write_targets(edit, "products", targets);
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "The 'rendering color space' the renderer should use for internal color calculations. If this is not set, a renderer is expected to use its own default color space. Not to be confused with setting specific 'source' color spaces for scene assets."]
-        #[doc = ""]
-        #[doc = "USD attribute `renderingColorSpace` (`token`, uniform)."]
-        #[doc = "C++ authoring: `UsdRenderSettings::CreateRenderingColorSpaceAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdRenderSettings::CreateRenderingColorSpaceAttr")]
-        #[doc(alias = "CreateRenderingColorSpaceAttr")]
-        set_rendering_color_space, "renderingColorSpace", &str, crate::value::write_token
+
+    #[doc = "The 'rendering color space' the renderer should use for internal color calculations. If this is not set, a renderer is expected to use its own default color space. Not to be confused with setting specific 'source' color spaces for scene assets."]
+    #[doc = ""]
+    #[doc = "USD attribute `renderingColorSpace` (`token`, uniform)."]
+    #[doc = "C++ authoring: `UsdRenderSettings::CreateRenderingColorSpaceAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdRenderSettings::CreateRenderingColorSpaceAttr")]
+    #[doc(alias = "CreateRenderingColorSpaceAttr")]
+    pub fn set_rendering_color_space(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
+        let value = crate::value::write_token(value, edit.tokens());
+        self.write_value(edit, "renderingColorSpace", None, value);
+        self
     }
 }
 
-token_enum! {
-    #[doc = "The tokens `aspectRatioConformPolicy` allows."]
-    RenderSettingsBaseAspectRatioConformPolicy {
-        #[doc = "`expandAperture`"]
-        ExpandAperture = "expandAperture",
-        #[doc = "`cropAperture`"]
-        CropAperture = "cropAperture",
-        #[doc = "`adjustApertureWidth`"]
-        AdjustApertureWidth = "adjustApertureWidth",
-        #[doc = "`adjustApertureHeight`"]
-        AdjustApertureHeight = "adjustApertureHeight",
-        #[doc = "`adjustPixelAspectRatio`"]
-        AdjustPixelAspectRatio = "adjustPixelAspectRatio",
+#[doc = "The tokens `aspectRatioConformPolicy` allows."]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum RenderSettingsBaseAspectRatioConformPolicy {
+    #[doc = "`expandAperture`"]
+    ExpandAperture,
+    #[doc = "`cropAperture`"]
+    CropAperture,
+    #[doc = "`adjustApertureWidth`"]
+    AdjustApertureWidth,
+    #[doc = "`adjustApertureHeight`"]
+    AdjustApertureHeight,
+    #[doc = "`adjustPixelAspectRatio`"]
+    AdjustPixelAspectRatio,
+    /// A token the schema does not list: OpenUSD does not enforce
+    /// `allowedTokens`, so an authored value may be anything.
+    Other(::alloc::sync::Arc<str>),
+}
+
+impl RenderSettingsBaseAspectRatioConformPolicy {
+    /// The tokens the schema allows, in its order.
+    pub const TOKENS: &'static [&'static str] = &[
+        "expandAperture",
+        "cropAperture",
+        "adjustApertureWidth",
+        "adjustApertureHeight",
+        "adjustPixelAspectRatio",
+    ];
+
+    /// The value `token` names, `Other` when the schema does not
+    /// list it.
+    #[must_use]
+    pub fn from_token(token: &str) -> Self {
+        match token {
+            "expandAperture" => Self::ExpandAperture,
+            "cropAperture" => Self::CropAperture,
+            "adjustApertureWidth" => Self::AdjustApertureWidth,
+            "adjustApertureHeight" => Self::AdjustApertureHeight,
+            "adjustPixelAspectRatio" => Self::AdjustPixelAspectRatio,
+            other => Self::Other(::alloc::sync::Arc::from(other)),
+        }
+    }
+
+    /// The token this value is.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::ExpandAperture => "expandAperture",
+            Self::CropAperture => "cropAperture",
+            Self::AdjustApertureWidth => "adjustApertureWidth",
+            Self::AdjustApertureHeight => "adjustApertureHeight",
+            Self::AdjustPixelAspectRatio => "adjustPixelAspectRatio",
+            Self::Other(token) => token,
+        }
+    }
+
+    pub(crate) fn read(
+        value: &::layerstack::Value,
+        tokens: &::layerstack::TokenInterner,
+    ) -> Option<Self> {
+        crate::value::read_token(value, tokens).map(Self::from_token)
+    }
+
+    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+        crate::value::write_token(self.as_str(), tokens)
     }
 }
 
 #[doc = "An abstract base class schema that defines settings common to both RenderSettings and RenderProduct."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's abstract typed schema `RenderSettingsBase`, inheriting [`crate::usd::Typed`]. Construct it with [`RenderSettingsBase::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's abstract typed schema `RenderSettingsBase`, inheriting [`crate::usd::Typed`]. Construct it with [`RenderSettingsBase::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdRenderSettingsBase`."]
 #[doc(alias = "UsdRenderSettingsBase")]
 #[derive(Clone, Copy, Debug)]
@@ -625,113 +836,138 @@ impl<'a> RenderSettingsBase<'a> {
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .is_a(path, Self::SCHEMA)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of `prim` as of the schema, without checking that it is
+    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// authors, and the schema's fallbacks only for a prim of the schema.
+    /// For the view of a schema built on this one.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self {
-            base: crate::usd::Typed::from_view(prim),
+            base: crate::usd::Typed::from_prim_unchecked(prim),
         }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> RenderSettingsBaseEdit {
-        RenderSettingsBaseEdit::from_path(self.path())
+        RenderSettingsBaseEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// The USD name of [`Self::aspect_ratio_conform_policy`].
     pub const ASPECT_RATIO_CONFORM_POLICY: &'static str = "aspectRatioConformPolicy";
 
-    uniform_attribute! {
-        #[doc = "Indicates the policy to use to resolve an aspect ratio mismatch between the camera aperture and image aspect ratio (derived from the resolution and pixelAspectRatio)."]
-        #[doc = ""]
-        #[doc = "USD attribute `aspectRatioConformPolicy` (`token`, uniform; fallback `\"expandAperture\"`)."]
-        #[doc = "C++ read: `UsdRenderSettingsBase::GetAspectRatioConformPolicyAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdRenderSettingsBase::GetAspectRatioConformPolicyAttr")]
-        #[doc(alias = "GetAspectRatioConformPolicyAttr")]
-        aspect_ratio_conform_policy, "aspectRatioConformPolicy", RenderSettingsBaseAspectRatioConformPolicy, RenderSettingsBaseAspectRatioConformPolicy::read
+    #[doc = "Indicates the policy to use to resolve an aspect ratio mismatch between the camera aperture and image aspect ratio (derived from the resolution and pixelAspectRatio)."]
+    #[doc = ""]
+    #[doc = "USD attribute `aspectRatioConformPolicy` (`token`, uniform; fallback `\"expandAperture\"`)."]
+    #[doc = "C++ read: `UsdRenderSettingsBase::GetAspectRatioConformPolicyAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdRenderSettingsBase::GetAspectRatioConformPolicyAttr")]
+    #[doc(alias = "GetAspectRatioConformPolicyAttr")]
+    #[must_use]
+    pub fn aspect_ratio_conform_policy(
+        &self,
+    ) -> Option<RenderSettingsBaseAspectRatioConformPolicy> {
+        self.read_value(
+            "aspectRatioConformPolicy",
+            RenderSettingsBaseAspectRatioConformPolicy::read,
+        )
     }
+
     /// The USD name of [`Self::camera`].
     pub const CAMERA: &'static str = "camera";
 
-    relationship! {
-        #[doc = "A relationship that specifies the primary camera to use for a render. Must target a Camera prim."]
-        #[doc = ""]
-        #[doc = "USD relationship `camera` (`rel`)."]
-        #[doc = "C++ read: `UsdRenderSettingsBase::GetCameraRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdRenderSettingsBase::GetCameraRel")]
-        #[doc(alias = "GetCameraRel")]
-        camera, "camera"
+    #[doc = "A relationship that specifies the primary camera to use for a render. Must target a Camera prim."]
+    #[doc = ""]
+    #[doc = "USD relationship `camera` (`rel`)."]
+    #[doc = "C++ read: `UsdRenderSettingsBase::GetCameraRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdRenderSettingsBase::GetCameraRel")]
+    #[doc(alias = "GetCameraRel")]
+    #[must_use]
+    pub fn camera(&self) -> ::alloc::vec::Vec<::layerstack::TargetPath> {
+        self.read_targets("camera")
     }
+
     /// The USD name of [`Self::data_window_ndc`].
     pub const DATA_WINDOW_NDC: &'static str = "dataWindowNDC";
 
-    uniform_attribute! {
-        #[doc = "Specifies the axis-aligned rectangular region in the adjusted aperture window within which the renderer should produce data. Specified as (xmin, ymin, xmax, ymax) in normalized device coordinates, where the range 0 to 1 corresponds to the aperture."]
-        #[doc = ""]
-        #[doc = "USD attribute `dataWindowNDC` (`float4`, uniform; fallback `(0.0, 0.0, 1.0, 1.0)`)."]
-        data_window_ndc, "dataWindowNDC", [f32; 4], crate::value::read_float4
+    #[doc = "Specifies the axis-aligned rectangular region in the adjusted aperture window within which the renderer should produce data. Specified as (xmin, ymin, xmax, ymax) in normalized device coordinates, where the range 0 to 1 corresponds to the aperture."]
+    #[doc = ""]
+    #[doc = "USD attribute `dataWindowNDC` (`float4`, uniform; fallback `(0.0, 0.0, 1.0, 1.0)`)."]
+    #[must_use]
+    pub fn data_window_ndc(&self) -> Option<[f32; 4]> {
+        self.read_value("dataWindowNDC", crate::value::read_float4)
     }
+
     /// The USD name of [`Self::disable_depth_of_field`].
     pub const DISABLE_DEPTH_OF_FIELD: &'static str = "disableDepthOfField";
 
-    uniform_attribute! {
-        #[doc = "Disable all depth of field by setting F-stop of the targeted camera to infinity."]
-        #[doc = ""]
-        #[doc = "USD attribute `disableDepthOfField` (`bool`, uniform; fallback `false`)."]
-        #[doc = "C++ read: `UsdRenderSettingsBase::GetDisableDepthOfFieldAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdRenderSettingsBase::GetDisableDepthOfFieldAttr")]
-        #[doc(alias = "GetDisableDepthOfFieldAttr")]
-        disable_depth_of_field, "disableDepthOfField", bool, crate::value::read_bool
+    #[doc = "Disable all depth of field by setting F-stop of the targeted camera to infinity."]
+    #[doc = ""]
+    #[doc = "USD attribute `disableDepthOfField` (`bool`, uniform; fallback `false`)."]
+    #[doc = "C++ read: `UsdRenderSettingsBase::GetDisableDepthOfFieldAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdRenderSettingsBase::GetDisableDepthOfFieldAttr")]
+    #[doc(alias = "GetDisableDepthOfFieldAttr")]
+    #[must_use]
+    pub fn disable_depth_of_field(&self) -> Option<bool> {
+        self.read_value("disableDepthOfField", crate::value::read_bool)
     }
+
     /// The USD name of [`Self::disable_motion_blur`].
     pub const DISABLE_MOTION_BLUR: &'static str = "disableMotionBlur";
 
-    uniform_attribute! {
-        #[doc = "Disable all motion blur by setting the shutter interval of the render camera to \\[0,0\\] (take only one sample at the current time code)."]
-        #[doc = ""]
-        #[doc = "USD attribute `disableMotionBlur` (`bool`, uniform; fallback `false`)."]
-        #[doc = "C++ read: `UsdRenderSettingsBase::GetDisableMotionBlurAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdRenderSettingsBase::GetDisableMotionBlurAttr")]
-        #[doc(alias = "GetDisableMotionBlurAttr")]
-        disable_motion_blur, "disableMotionBlur", bool, crate::value::read_bool
+    #[doc = "Disable all motion blur by setting the shutter interval of the render camera to \\[0,0\\] (take only one sample at the current time code)."]
+    #[doc = ""]
+    #[doc = "USD attribute `disableMotionBlur` (`bool`, uniform; fallback `false`)."]
+    #[doc = "C++ read: `UsdRenderSettingsBase::GetDisableMotionBlurAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdRenderSettingsBase::GetDisableMotionBlurAttr")]
+    #[doc(alias = "GetDisableMotionBlurAttr")]
+    #[must_use]
+    pub fn disable_motion_blur(&self) -> Option<bool> {
+        self.read_value("disableMotionBlur", crate::value::read_bool)
     }
+
     /// The USD name of [`Self::instantaneous_shutter`].
     pub const INSTANTANEOUS_SHUTTER: &'static str = "instantaneousShutter";
 
-    uniform_attribute! {
-        #[doc = "Deprecated, use disableMotionBlur instead."]
-        #[doc = ""]
-        #[doc = "USD attribute `instantaneousShutter` (`bool`, uniform; fallback `false`)."]
-        #[doc = "C++ read: `UsdRenderSettingsBase::GetInstantaneousShutterAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdRenderSettingsBase::GetInstantaneousShutterAttr")]
-        #[doc(alias = "GetInstantaneousShutterAttr")]
-        instantaneous_shutter, "instantaneousShutter", bool, crate::value::read_bool
+    #[doc = "Deprecated, use disableMotionBlur instead."]
+    #[doc = ""]
+    #[doc = "USD attribute `instantaneousShutter` (`bool`, uniform; fallback `false`)."]
+    #[doc = "C++ read: `UsdRenderSettingsBase::GetInstantaneousShutterAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdRenderSettingsBase::GetInstantaneousShutterAttr")]
+    #[doc(alias = "GetInstantaneousShutterAttr")]
+    #[must_use]
+    pub fn instantaneous_shutter(&self) -> Option<bool> {
+        self.read_value("instantaneousShutter", crate::value::read_bool)
     }
+
     /// The USD name of [`Self::pixel_aspect_ratio`].
     pub const PIXEL_ASPECT_RATIO: &'static str = "pixelAspectRatio";
 
-    uniform_attribute! {
-        #[doc = "The aspect ratio (width/height) of the image pixels."]
-        #[doc = ""]
-        #[doc = "USD attribute `pixelAspectRatio` (`float`, uniform; fallback `1.0`)."]
-        #[doc = "C++ read: `UsdRenderSettingsBase::GetPixelAspectRatioAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdRenderSettingsBase::GetPixelAspectRatioAttr")]
-        #[doc(alias = "GetPixelAspectRatioAttr")]
-        pixel_aspect_ratio, "pixelAspectRatio", f32, crate::value::read_float
+    #[doc = "The aspect ratio (width/height) of the image pixels."]
+    #[doc = ""]
+    #[doc = "USD attribute `pixelAspectRatio` (`float`, uniform; fallback `1.0`)."]
+    #[doc = "C++ read: `UsdRenderSettingsBase::GetPixelAspectRatioAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdRenderSettingsBase::GetPixelAspectRatioAttr")]
+    #[doc(alias = "GetPixelAspectRatioAttr")]
+    #[must_use]
+    pub fn pixel_aspect_ratio(&self) -> Option<f32> {
+        self.read_value("pixelAspectRatio", crate::value::read_float)
     }
+
     /// The USD name of [`Self::resolution`].
     pub const RESOLUTION: &'static str = "resolution";
 
-    uniform_attribute! {
-        #[doc = "The image pixel resolution, corresponding to the camera's screen window."]
-        #[doc = ""]
-        #[doc = "USD attribute `resolution` (`int2`, uniform; fallback `(2048, 1080)`)."]
-        #[doc = "C++ read: `UsdRenderSettingsBase::GetResolutionAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdRenderSettingsBase::GetResolutionAttr")]
-        #[doc(alias = "GetResolutionAttr")]
-        resolution, "resolution", [i32; 2], crate::value::read_int2
+    #[doc = "The image pixel resolution, corresponding to the camera's screen window."]
+    #[doc = ""]
+    #[doc = "USD attribute `resolution` (`int2`, uniform; fallback `(2048, 1080)`)."]
+    #[doc = "C++ read: `UsdRenderSettingsBase::GetResolutionAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdRenderSettingsBase::GetResolutionAttr")]
+    #[doc(alias = "GetResolutionAttr")]
+    #[must_use]
+    pub fn resolution(&self) -> Option<[i32; 2]> {
+        self.read_value("resolution", crate::value::read_int2)
     }
 }
 
@@ -755,103 +991,179 @@ impl RenderSettingsBaseEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whatever its type.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
         Self {
-            base: crate::usd::TypedEdit::from_path(path),
+            base: crate::usd::TypedEdit::from_prim(prim),
         }
     }
 
-    set_uniform_attribute! {
-        #[doc = "Indicates the policy to use to resolve an aspect ratio mismatch between the camera aperture and image aspect ratio (derived from the resolution and pixelAspectRatio)."]
-        #[doc = ""]
-        #[doc = "USD attribute `aspectRatioConformPolicy` (`token`, uniform; fallback `\"expandAperture\"`)."]
-        #[doc = "C++ authoring: `UsdRenderSettingsBase::CreateAspectRatioConformPolicyAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdRenderSettingsBase::CreateAspectRatioConformPolicyAttr")]
-        #[doc(alias = "CreateAspectRatioConformPolicyAttr")]
-        set_aspect_ratio_conform_policy, "aspectRatioConformPolicy", RenderSettingsBaseAspectRatioConformPolicy, RenderSettingsBaseAspectRatioConformPolicy::write
+    #[doc = "Indicates the policy to use to resolve an aspect ratio mismatch between the camera aperture and image aspect ratio (derived from the resolution and pixelAspectRatio)."]
+    #[doc = ""]
+    #[doc = "USD attribute `aspectRatioConformPolicy` (`token`, uniform; fallback `\"expandAperture\"`)."]
+    #[doc = "C++ authoring: `UsdRenderSettingsBase::CreateAspectRatioConformPolicyAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdRenderSettingsBase::CreateAspectRatioConformPolicyAttr")]
+    #[doc(alias = "CreateAspectRatioConformPolicyAttr")]
+    pub fn set_aspect_ratio_conform_policy(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        value: RenderSettingsBaseAspectRatioConformPolicy,
+    ) -> &Self {
+        let value = value.write(edit.tokens());
+        self.write_value(edit, "aspectRatioConformPolicy", None, value);
+        self
     }
-    set_relationship! {
-        #[doc = "A relationship that specifies the primary camera to use for a render. Must target a Camera prim."]
-        #[doc = ""]
-        #[doc = "USD relationship `camera` (`rel`)."]
-        #[doc = "C++ authoring: `UsdRenderSettingsBase::CreateCameraRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdRenderSettingsBase::CreateCameraRel")]
-        #[doc(alias = "CreateCameraRel")]
-        set_camera, "camera"
+
+    #[doc = "A relationship that specifies the primary camera to use for a render. Must target a Camera prim."]
+    #[doc = ""]
+    #[doc = "USD relationship `camera` (`rel`)."]
+    #[doc = "C++ authoring: `UsdRenderSettingsBase::CreateCameraRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdRenderSettingsBase::CreateCameraRel")]
+    #[doc(alias = "CreateCameraRel")]
+    pub fn set_camera(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        targets: &[::layerstack::TargetPath],
+    ) -> &Self {
+        self.write_targets(edit, "camera", targets);
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "Specifies the axis-aligned rectangular region in the adjusted aperture window within which the renderer should produce data. Specified as (xmin, ymin, xmax, ymax) in normalized device coordinates, where the range 0 to 1 corresponds to the aperture."]
-        #[doc = ""]
-        #[doc = "USD attribute `dataWindowNDC` (`float4`, uniform; fallback `(0.0, 0.0, 1.0, 1.0)`)."]
-        set_data_window_ndc, "dataWindowNDC", [f32; 4], crate::value::write_float4
+
+    #[doc = "Specifies the axis-aligned rectangular region in the adjusted aperture window within which the renderer should produce data. Specified as (xmin, ymin, xmax, ymax) in normalized device coordinates, where the range 0 to 1 corresponds to the aperture."]
+    #[doc = ""]
+    #[doc = "USD attribute `dataWindowNDC` (`float4`, uniform; fallback `(0.0, 0.0, 1.0, 1.0)`)."]
+    pub fn set_data_window_ndc(&self, edit: &mut SchemaEdit<'_>, value: [f32; 4]) -> &Self {
+        let value = crate::value::write_float4(value, edit.tokens());
+        self.write_value(edit, "dataWindowNDC", None, value);
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "Disable all depth of field by setting F-stop of the targeted camera to infinity."]
-        #[doc = ""]
-        #[doc = "USD attribute `disableDepthOfField` (`bool`, uniform; fallback `false`)."]
-        #[doc = "C++ authoring: `UsdRenderSettingsBase::CreateDisableDepthOfFieldAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdRenderSettingsBase::CreateDisableDepthOfFieldAttr")]
-        #[doc(alias = "CreateDisableDepthOfFieldAttr")]
-        set_disable_depth_of_field, "disableDepthOfField", bool, crate::value::write_bool
+
+    #[doc = "Disable all depth of field by setting F-stop of the targeted camera to infinity."]
+    #[doc = ""]
+    #[doc = "USD attribute `disableDepthOfField` (`bool`, uniform; fallback `false`)."]
+    #[doc = "C++ authoring: `UsdRenderSettingsBase::CreateDisableDepthOfFieldAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdRenderSettingsBase::CreateDisableDepthOfFieldAttr")]
+    #[doc(alias = "CreateDisableDepthOfFieldAttr")]
+    pub fn set_disable_depth_of_field(&self, edit: &mut SchemaEdit<'_>, value: bool) -> &Self {
+        let value = crate::value::write_bool(value, edit.tokens());
+        self.write_value(edit, "disableDepthOfField", None, value);
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "Disable all motion blur by setting the shutter interval of the render camera to \\[0,0\\] (take only one sample at the current time code)."]
-        #[doc = ""]
-        #[doc = "USD attribute `disableMotionBlur` (`bool`, uniform; fallback `false`)."]
-        #[doc = "C++ authoring: `UsdRenderSettingsBase::CreateDisableMotionBlurAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdRenderSettingsBase::CreateDisableMotionBlurAttr")]
-        #[doc(alias = "CreateDisableMotionBlurAttr")]
-        set_disable_motion_blur, "disableMotionBlur", bool, crate::value::write_bool
+
+    #[doc = "Disable all motion blur by setting the shutter interval of the render camera to \\[0,0\\] (take only one sample at the current time code)."]
+    #[doc = ""]
+    #[doc = "USD attribute `disableMotionBlur` (`bool`, uniform; fallback `false`)."]
+    #[doc = "C++ authoring: `UsdRenderSettingsBase::CreateDisableMotionBlurAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdRenderSettingsBase::CreateDisableMotionBlurAttr")]
+    #[doc(alias = "CreateDisableMotionBlurAttr")]
+    pub fn set_disable_motion_blur(&self, edit: &mut SchemaEdit<'_>, value: bool) -> &Self {
+        let value = crate::value::write_bool(value, edit.tokens());
+        self.write_value(edit, "disableMotionBlur", None, value);
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "Deprecated, use disableMotionBlur instead."]
-        #[doc = ""]
-        #[doc = "USD attribute `instantaneousShutter` (`bool`, uniform; fallback `false`)."]
-        #[doc = "C++ authoring: `UsdRenderSettingsBase::CreateInstantaneousShutterAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdRenderSettingsBase::CreateInstantaneousShutterAttr")]
-        #[doc(alias = "CreateInstantaneousShutterAttr")]
-        set_instantaneous_shutter, "instantaneousShutter", bool, crate::value::write_bool
+
+    #[doc = "Deprecated, use disableMotionBlur instead."]
+    #[doc = ""]
+    #[doc = "USD attribute `instantaneousShutter` (`bool`, uniform; fallback `false`)."]
+    #[doc = "C++ authoring: `UsdRenderSettingsBase::CreateInstantaneousShutterAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdRenderSettingsBase::CreateInstantaneousShutterAttr")]
+    #[doc(alias = "CreateInstantaneousShutterAttr")]
+    pub fn set_instantaneous_shutter(&self, edit: &mut SchemaEdit<'_>, value: bool) -> &Self {
+        let value = crate::value::write_bool(value, edit.tokens());
+        self.write_value(edit, "instantaneousShutter", None, value);
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "The aspect ratio (width/height) of the image pixels."]
-        #[doc = ""]
-        #[doc = "USD attribute `pixelAspectRatio` (`float`, uniform; fallback `1.0`)."]
-        #[doc = "C++ authoring: `UsdRenderSettingsBase::CreatePixelAspectRatioAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdRenderSettingsBase::CreatePixelAspectRatioAttr")]
-        #[doc(alias = "CreatePixelAspectRatioAttr")]
-        set_pixel_aspect_ratio, "pixelAspectRatio", f32, crate::value::write_float
+
+    #[doc = "The aspect ratio (width/height) of the image pixels."]
+    #[doc = ""]
+    #[doc = "USD attribute `pixelAspectRatio` (`float`, uniform; fallback `1.0`)."]
+    #[doc = "C++ authoring: `UsdRenderSettingsBase::CreatePixelAspectRatioAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdRenderSettingsBase::CreatePixelAspectRatioAttr")]
+    #[doc(alias = "CreatePixelAspectRatioAttr")]
+    pub fn set_pixel_aspect_ratio(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "pixelAspectRatio", None, value);
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "The image pixel resolution, corresponding to the camera's screen window."]
-        #[doc = ""]
-        #[doc = "USD attribute `resolution` (`int2`, uniform; fallback `(2048, 1080)`)."]
-        #[doc = "C++ authoring: `UsdRenderSettingsBase::CreateResolutionAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdRenderSettingsBase::CreateResolutionAttr")]
-        #[doc(alias = "CreateResolutionAttr")]
-        set_resolution, "resolution", [i32; 2], crate::value::write_int2
+
+    #[doc = "The image pixel resolution, corresponding to the camera's screen window."]
+    #[doc = ""]
+    #[doc = "USD attribute `resolution` (`int2`, uniform; fallback `(2048, 1080)`)."]
+    #[doc = "C++ authoring: `UsdRenderSettingsBase::CreateResolutionAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdRenderSettingsBase::CreateResolutionAttr")]
+    #[doc(alias = "CreateResolutionAttr")]
+    pub fn set_resolution(&self, edit: &mut SchemaEdit<'_>, value: [i32; 2]) -> &Self {
+        let value = crate::value::write_int2(value, edit.tokens());
+        self.write_value(edit, "resolution", None, value);
+        self
     }
 }
 
-token_enum! {
-    #[doc = "The tokens `sourceType` allows."]
-    RenderVarSourceType {
-        #[doc = "`raw`"]
-        Raw = "raw",
-        #[doc = "`primvar`"]
-        Primvar = "primvar",
-        #[doc = "`lpe`"]
-        Lpe = "lpe",
-        #[doc = "`intrinsic`"]
-        Intrinsic = "intrinsic",
+#[doc = "The tokens `sourceType` allows."]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum RenderVarSourceType {
+    #[doc = "`raw`"]
+    Raw,
+    #[doc = "`primvar`"]
+    Primvar,
+    #[doc = "`lpe`"]
+    Lpe,
+    #[doc = "`intrinsic`"]
+    Intrinsic,
+    /// A token the schema does not list: OpenUSD does not enforce
+    /// `allowedTokens`, so an authored value may be anything.
+    Other(::alloc::sync::Arc<str>),
+}
+
+impl RenderVarSourceType {
+    /// The tokens the schema allows, in its order.
+    pub const TOKENS: &'static [&'static str] = &["raw", "primvar", "lpe", "intrinsic"];
+
+    /// The value `token` names, `Other` when the schema does not
+    /// list it.
+    #[must_use]
+    pub fn from_token(token: &str) -> Self {
+        match token {
+            "raw" => Self::Raw,
+            "primvar" => Self::Primvar,
+            "lpe" => Self::Lpe,
+            "intrinsic" => Self::Intrinsic,
+            other => Self::Other(::alloc::sync::Arc::from(other)),
+        }
+    }
+
+    /// The token this value is.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Raw => "raw",
+            Self::Primvar => "primvar",
+            Self::Lpe => "lpe",
+            Self::Intrinsic => "intrinsic",
+            Self::Other(token) => token,
+        }
+    }
+
+    pub(crate) fn read(
+        value: &::layerstack::Value,
+        tokens: &::layerstack::TokenInterner,
+    ) -> Option<Self> {
+        crate::value::read_token(value, tokens).map(Self::from_token)
+    }
+
+    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+        crate::value::write_token(self.as_str(), tokens)
     }
 }
 
 #[doc = "Describes a quantity or 'channel' of computed data, produced by a renderer. Examples include camera-space depth channels, material shader quantities such as color or alpha channels, light path expressions (LPEs), and renderer intrinsic quantities such as computation time per pixel."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `RenderVar`, inheriting [`crate::usd::Typed`]. Construct it with [`RenderVar::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `RenderVar`, inheriting [`crate::usd::Typed`]. Construct it with [`RenderVar::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdRenderVar`."]
 #[doc(alias = "UsdRenderVar")]
 #[derive(Clone, Copy, Debug)]
@@ -878,19 +1190,24 @@ impl<'a> RenderVar<'a> {
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .is_a(path, Self::SCHEMA)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of `prim` as of the schema, without checking that it is
+    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// authors, and the schema's fallbacks only for a prim of the schema.
+    /// For the view of a schema built on this one.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self {
-            base: crate::usd::Typed::from_view(prim),
+            base: crate::usd::Typed::from_prim_unchecked(prim),
         }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> RenderVarEdit {
-        RenderVarEdit::from_path(self.path())
+        RenderVarEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Defines `path` as a new `def RenderVar` prim spec in the edit's target.
@@ -901,45 +1218,49 @@ impl<'a> RenderVar<'a> {
     #[doc(alias = "UsdRenderVar::Define")]
     #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> RenderVarEdit {
-        edit.define(path, Self::SCHEMA);
-        RenderVarEdit::from_path(path)
+        RenderVarEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
     }
 
     /// The USD name of [`Self::data_type`].
     pub const DATA_TYPE: &'static str = "dataType";
 
-    uniform_attribute! {
-        #[doc = "The type of this quantity, as a USD attribute type (color3f, float, etc.)."]
-        #[doc = ""]
-        #[doc = "USD attribute `dataType` (`token`, uniform; fallback `\"color3f\"`)."]
-        #[doc = "C++ read: `UsdRenderVar::GetDataTypeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdRenderVar::GetDataTypeAttr")]
-        #[doc(alias = "GetDataTypeAttr")]
-        data_type, "dataType", &'a str, crate::value::read_token
+    #[doc = "The type of this quantity, as a USD attribute type (color3f, float, etc.)."]
+    #[doc = ""]
+    #[doc = "USD attribute `dataType` (`token`, uniform; fallback `\"color3f\"`)."]
+    #[doc = "C++ read: `UsdRenderVar::GetDataTypeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdRenderVar::GetDataTypeAttr")]
+    #[doc(alias = "GetDataTypeAttr")]
+    #[must_use]
+    pub fn data_type(&self) -> Option<&'a str> {
+        self.read_value("dataType", crate::value::read_token)
     }
+
     /// The USD name of [`Self::source_name`].
     pub const SOURCE_NAME: &'static str = "sourceName";
 
-    uniform_attribute! {
-        #[doc = "The name of the data source that contains the computed value(s) for the RenderVar."]
-        #[doc = ""]
-        #[doc = "USD attribute `sourceName` (`string`, uniform; fallback `\"\"`)."]
-        #[doc = "C++ read: `UsdRenderVar::GetSourceNameAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdRenderVar::GetSourceNameAttr")]
-        #[doc(alias = "GetSourceNameAttr")]
-        source_name, "sourceName", ::alloc::sync::Arc<str>, crate::value::read_string
+    #[doc = "The name of the data source that contains the computed value(s) for the RenderVar."]
+    #[doc = ""]
+    #[doc = "USD attribute `sourceName` (`string`, uniform; fallback `\"\"`)."]
+    #[doc = "C++ read: `UsdRenderVar::GetSourceNameAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdRenderVar::GetSourceNameAttr")]
+    #[doc(alias = "GetSourceNameAttr")]
+    #[must_use]
+    pub fn source_name(&self) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value("sourceName", crate::value::read_string)
     }
+
     /// The USD name of [`Self::source_type`].
     pub const SOURCE_TYPE: &'static str = "sourceType";
 
-    uniform_attribute! {
-        #[doc = "Describes the type of the quantity data source."]
-        #[doc = ""]
-        #[doc = "USD attribute `sourceType` (`token`, uniform; fallback `\"raw\"`)."]
-        #[doc = "C++ read: `UsdRenderVar::GetSourceTypeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdRenderVar::GetSourceTypeAttr")]
-        #[doc(alias = "GetSourceTypeAttr")]
-        source_type, "sourceType", RenderVarSourceType, RenderVarSourceType::read
+    #[doc = "Describes the type of the quantity data source."]
+    #[doc = ""]
+    #[doc = "USD attribute `sourceType` (`token`, uniform; fallback `\"raw\"`)."]
+    #[doc = "C++ read: `UsdRenderVar::GetSourceTypeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdRenderVar::GetSourceTypeAttr")]
+    #[doc(alias = "GetSourceTypeAttr")]
+    #[must_use]
+    pub fn source_type(&self) -> Option<RenderVarSourceType> {
+        self.read_value("sourceType", RenderVarSourceType::read)
     }
 }
 
@@ -963,40 +1284,51 @@ impl RenderVarEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whatever its type.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
         Self {
-            base: crate::usd::TypedEdit::from_path(path),
+            base: crate::usd::TypedEdit::from_prim(prim),
         }
     }
 
-    set_uniform_attribute! {
-        #[doc = "The type of this quantity, as a USD attribute type (color3f, float, etc.)."]
-        #[doc = ""]
-        #[doc = "USD attribute `dataType` (`token`, uniform; fallback `\"color3f\"`)."]
-        #[doc = "C++ authoring: `UsdRenderVar::CreateDataTypeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdRenderVar::CreateDataTypeAttr")]
-        #[doc(alias = "CreateDataTypeAttr")]
-        set_data_type, "dataType", &str, crate::value::write_token
+    #[doc = "The type of this quantity, as a USD attribute type (color3f, float, etc.)."]
+    #[doc = ""]
+    #[doc = "USD attribute `dataType` (`token`, uniform; fallback `\"color3f\"`)."]
+    #[doc = "C++ authoring: `UsdRenderVar::CreateDataTypeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdRenderVar::CreateDataTypeAttr")]
+    #[doc(alias = "CreateDataTypeAttr")]
+    pub fn set_data_type(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
+        let value = crate::value::write_token(value, edit.tokens());
+        self.write_value(edit, "dataType", None, value);
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "The name of the data source that contains the computed value(s) for the RenderVar."]
-        #[doc = ""]
-        #[doc = "USD attribute `sourceName` (`string`, uniform; fallback `\"\"`)."]
-        #[doc = "C++ authoring: `UsdRenderVar::CreateSourceNameAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdRenderVar::CreateSourceNameAttr")]
-        #[doc(alias = "CreateSourceNameAttr")]
-        set_source_name, "sourceName", &str, crate::value::write_string
+
+    #[doc = "The name of the data source that contains the computed value(s) for the RenderVar."]
+    #[doc = ""]
+    #[doc = "USD attribute `sourceName` (`string`, uniform; fallback `\"\"`)."]
+    #[doc = "C++ authoring: `UsdRenderVar::CreateSourceNameAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdRenderVar::CreateSourceNameAttr")]
+    #[doc(alias = "CreateSourceNameAttr")]
+    pub fn set_source_name(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
+        let value = crate::value::write_string(value, edit.tokens());
+        self.write_value(edit, "sourceName", None, value);
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "Describes the type of the quantity data source."]
-        #[doc = ""]
-        #[doc = "USD attribute `sourceType` (`token`, uniform; fallback `\"raw\"`)."]
-        #[doc = "C++ authoring: `UsdRenderVar::CreateSourceTypeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdRenderVar::CreateSourceTypeAttr")]
-        #[doc(alias = "CreateSourceTypeAttr")]
-        set_source_type, "sourceType", RenderVarSourceType, RenderVarSourceType::write
+
+    #[doc = "Describes the type of the quantity data source."]
+    #[doc = ""]
+    #[doc = "USD attribute `sourceType` (`token`, uniform; fallback `\"raw\"`)."]
+    #[doc = "C++ authoring: `UsdRenderVar::CreateSourceTypeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdRenderVar::CreateSourceTypeAttr")]
+    #[doc(alias = "CreateSourceTypeAttr")]
+    pub fn set_source_type(&self, edit: &mut SchemaEdit<'_>, value: RenderVarSourceType) -> &Self {
+        let value = value.write(edit.tokens());
+        self.write_value(edit, "sourceType", None, value);
+        self
     }
 }

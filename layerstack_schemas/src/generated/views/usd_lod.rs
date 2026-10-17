@@ -25,7 +25,7 @@ use layerstack::{CannotApply, PathId};
 use crate::{PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "This LOD heuristic selects LOD children on the basis of distance from the view point to the LOD root."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `LODDistanceHeuristic`, inheriting [`LODHeuristic`]. Construct it with [`LODDistanceHeuristic::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `LODDistanceHeuristic`, inheriting [`LODHeuristic`]. Construct it with [`LODDistanceHeuristic::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLodDistanceHeuristic`."]
 #[doc(alias = "UsdLodDistanceHeuristic")]
 #[derive(Clone, Copy, Debug)]
@@ -52,19 +52,24 @@ impl<'a> LODDistanceHeuristic<'a> {
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .is_a(path, Self::SCHEMA)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of `prim` as of the schema, without checking that it is
+    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// authors, and the schema's fallbacks only for a prim of the schema.
+    /// For the view of a schema built on this one.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self {
-            base: LODHeuristic::from_view(prim),
+            base: LODHeuristic::from_prim_unchecked(prim),
         }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> LODDistanceHeuristicEdit {
-        LODDistanceHeuristicEdit::from_path(self.path())
+        LODDistanceHeuristicEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Defines `path` as a new `def LODDistanceHeuristic` prim spec in the edit's target.
@@ -75,29 +80,30 @@ impl<'a> LODDistanceHeuristic<'a> {
     #[doc(alias = "UsdLodDistanceHeuristic::Define")]
     #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> LODDistanceHeuristicEdit {
-        edit.define(path, Self::SCHEMA);
-        LODDistanceHeuristicEdit::from_path(path)
+        LODDistanceHeuristicEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
     }
 
     /// The USD name of [`Self::blend_thresholds`].
     pub const BLEND_THRESHOLDS: &'static str = "blendThresholds";
 
-    uniform_attribute! {
-        #[doc = "This defines distance thresholds for LOD transitions in ascending order."]
-        #[doc = ""]
-        #[doc = "USD attribute `blendThresholds` (`float\\[\\]`, uniform; fallback `\\[\\]`)."]
-        #[doc = ""]
-        #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
-        #[doc = "C++ read: `UsdLodDistanceHeuristic::GetBlendThresholdsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLodDistanceHeuristic::GetBlendThresholdsAttr")]
-        #[doc(alias = "GetBlendThresholdsAttr")]
-        blend_thresholds, "blendThresholds", ::alloc::sync::Arc<::alloc::vec::Vec<f32>>, crate::value::read_float_array_shared
+    #[doc = "This defines distance thresholds for LOD transitions in ascending order."]
+    #[doc = ""]
+    #[doc = "USD attribute `blendThresholds` (`float[]`, uniform; fallback `[]`)."]
+    #[doc = ""]
+    #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+    #[doc = "C++ read: `UsdLodDistanceHeuristic::GetBlendThresholdsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLodDistanceHeuristic::GetBlendThresholdsAttr")]
+    #[doc(alias = "GetBlendThresholdsAttr")]
+    #[must_use]
+    pub fn blend_thresholds(&self) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<f32>>> {
+        self.read_value("blendThresholds", crate::value::read_float_array_shared)
     }
+
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
     pub fn try_blend_thresholds(
         &self,
         time: crate::Time,
-    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<f32>>>, layerstack::ArrayReadError>
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<f32>>>, ::layerstack::ArrayReadError>
     {
         self.try_read_value(
             "blendThresholds",
@@ -105,49 +111,66 @@ impl<'a> LODDistanceHeuristic<'a> {
             crate::value::read_float_array_shared,
         )
     }
+
     /// The USD name of [`Self::bounding_volume`].
     pub const BOUNDING_VOLUME: &'static str = "boundingVolume";
 
-    relationship! {
-        #[doc = "Optional relationship to a Boundable prim that defines the bounding volume for this LOD Root, the prim's extent will be used for distance calculation if it is valid (not empty)."]
-        #[doc = ""]
-        #[doc = "USD relationship `boundingVolume` (`rel`)."]
-        #[doc = "C++ read: `UsdLodDistanceHeuristic::GetBoundingVolumeRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLodDistanceHeuristic::GetBoundingVolumeRel")]
-        #[doc(alias = "GetBoundingVolumeRel")]
-        bounding_volume, "boundingVolume"
+    #[doc = "Optional relationship to a Boundable prim that defines the bounding volume for this LOD Root, the prim's extent will be used for distance calculation if it is valid (not empty)."]
+    #[doc = ""]
+    #[doc = "USD relationship `boundingVolume` (`rel`)."]
+    #[doc = "C++ read: `UsdLodDistanceHeuristic::GetBoundingVolumeRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLodDistanceHeuristic::GetBoundingVolumeRel")]
+    #[doc(alias = "GetBoundingVolumeRel")]
+    #[must_use]
+    pub fn bounding_volume(&self) -> ::alloc::vec::Vec<::layerstack::TargetPath> {
+        self.read_targets("boundingVolume")
     }
+
     /// The USD name of [`Self::center`].
     pub const CENTER: &'static str = "center";
 
-    attribute! {
-        #[doc = "The center point of this LOD Root in local coordinates."]
-        #[doc = ""]
-        #[doc = "USD attribute `center` (`point3f`; fallback `(0.0, 0.0, 0.0)`)."]
-        #[doc = "C++ read: `UsdLodDistanceHeuristic::GetCenterAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLodDistanceHeuristic::GetCenterAttr")]
-        #[doc(alias = "GetCenterAttr")]
-        center, center_at, "center", [f32; 3], crate::value::read_float3
+    #[doc = "The center point of this LOD Root in local coordinates."]
+    #[doc = ""]
+    #[doc = "USD attribute `center` (`point3f`; fallback `(0.0, 0.0, 0.0)`)."]
+    #[doc = "C++ read: `UsdLodDistanceHeuristic::GetCenterAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLodDistanceHeuristic::GetCenterAttr")]
+    #[doc(alias = "GetCenterAttr")]
+    #[must_use]
+    pub fn center(&self) -> Option<[f32; 3]> {
+        self.read_value("center", crate::value::read_float3)
     }
+
+    #[doc = "[`Self::center`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn center_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<[f32; 3]> {
+        self.read_value_at("center", time, interp, crate::value::read_float3)
+    }
+
     /// The USD name of [`Self::thresholds`].
     pub const THRESHOLDS: &'static str = "thresholds";
 
-    uniform_attribute! {
-        #[doc = "This defines the distance thresholds for LOD transitions in ascending order."]
-        #[doc = ""]
-        #[doc = "USD attribute `thresholds` (`float\\[\\]`, uniform; fallback `\\[\\]`)."]
-        #[doc = ""]
-        #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
-        #[doc = "C++ read: `UsdLodDistanceHeuristic::GetThresholdsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLodDistanceHeuristic::GetThresholdsAttr")]
-        #[doc(alias = "GetThresholdsAttr")]
-        thresholds, "thresholds", ::alloc::sync::Arc<::alloc::vec::Vec<f32>>, crate::value::read_float_array_shared
+    #[doc = "This defines the distance thresholds for LOD transitions in ascending order."]
+    #[doc = ""]
+    #[doc = "USD attribute `thresholds` (`float[]`, uniform; fallback `[]`)."]
+    #[doc = ""]
+    #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+    #[doc = "C++ read: `UsdLodDistanceHeuristic::GetThresholdsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLodDistanceHeuristic::GetThresholdsAttr")]
+    #[doc(alias = "GetThresholdsAttr")]
+    #[must_use]
+    pub fn thresholds(&self) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<f32>>> {
+        self.read_value("thresholds", crate::value::read_float_array_shared)
     }
+
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
     pub fn try_thresholds(
         &self,
         time: crate::Time,
-    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<f32>>>, layerstack::ArrayReadError>
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<f32>>>, ::layerstack::ArrayReadError>
     {
         self.try_read_value("thresholds", time, crate::value::read_float_array_shared)
     }
@@ -173,76 +196,128 @@ impl LODDistanceHeuristicEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whatever its type.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
         Self {
-            base: LODHeuristicEdit::from_path(path),
+            base: LODHeuristicEdit::from_prim(prim),
         }
     }
 
-    set_uniform_attribute! {
-        #[doc = "This defines distance thresholds for LOD transitions in ascending order."]
-        #[doc = ""]
-        #[doc = "USD attribute `blendThresholds` (`float\\[\\]`, uniform; fallback `\\[\\]`)."]
-        #[doc = ""]
-        #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
-        #[doc = "C++ authoring: `UsdLodDistanceHeuristic::CreateBlendThresholdsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLodDistanceHeuristic::CreateBlendThresholdsAttr")]
-        #[doc(alias = "CreateBlendThresholdsAttr")]
-        set_blend_thresholds, "blendThresholds", &[f32], crate::value::write_float_array
+    #[doc = "This defines distance thresholds for LOD transitions in ascending order."]
+    #[doc = ""]
+    #[doc = "USD attribute `blendThresholds` (`float[]`, uniform; fallback `[]`)."]
+    #[doc = ""]
+    #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+    #[doc = "C++ authoring: `UsdLodDistanceHeuristic::CreateBlendThresholdsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLodDistanceHeuristic::CreateBlendThresholdsAttr")]
+    #[doc(alias = "CreateBlendThresholdsAttr")]
+    pub fn set_blend_thresholds(&self, edit: &mut SchemaEdit<'_>, value: &[f32]) -> &Self {
+        let value = crate::value::write_float_array(value, edit.tokens());
+        self.write_value(edit, "blendThresholds", None, value);
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "Transfers the vector allocation and capacity; allocates only its shared owner. Slice callers can use `set_blend_thresholds`."]
-        set_blend_thresholds_owned, "blendThresholds", ::alloc::vec::Vec<f32>, crate::value::write_float_array_owned
+
+    #[doc = "Transfers the vector allocation and capacity; allocates only its shared owner. Slice callers can use `set_blend_thresholds`."]
+    pub fn set_blend_thresholds_owned(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        value: ::alloc::vec::Vec<f32>,
+    ) -> &Self {
+        let value = crate::value::write_float_array_owned(value, edit.tokens());
+        self.write_value(edit, "blendThresholds", None, value);
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "Transfers a shared owner without allocating or copying elements. Slice callers can use `set_blend_thresholds`."]
-        set_blend_thresholds_shared, "blendThresholds", ::alloc::sync::Arc<::alloc::vec::Vec<f32>>, crate::value::write_float_array_shared
+
+    #[doc = "Transfers a shared owner without allocating or copying elements. Slice callers can use `set_blend_thresholds`."]
+    pub fn set_blend_thresholds_shared(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        value: ::alloc::sync::Arc<::alloc::vec::Vec<f32>>,
+    ) -> &Self {
+        let value = crate::value::write_float_array_shared(value, edit.tokens());
+        self.write_value(edit, "blendThresholds", None, value);
+        self
     }
-    set_relationship! {
-        #[doc = "Optional relationship to a Boundable prim that defines the bounding volume for this LOD Root, the prim's extent will be used for distance calculation if it is valid (not empty)."]
-        #[doc = ""]
-        #[doc = "USD relationship `boundingVolume` (`rel`)."]
-        #[doc = "C++ authoring: `UsdLodDistanceHeuristic::CreateBoundingVolumeRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLodDistanceHeuristic::CreateBoundingVolumeRel")]
-        #[doc(alias = "CreateBoundingVolumeRel")]
-        set_bounding_volume, "boundingVolume"
+
+    #[doc = "Optional relationship to a Boundable prim that defines the bounding volume for this LOD Root, the prim's extent will be used for distance calculation if it is valid (not empty)."]
+    #[doc = ""]
+    #[doc = "USD relationship `boundingVolume` (`rel`)."]
+    #[doc = "C++ authoring: `UsdLodDistanceHeuristic::CreateBoundingVolumeRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLodDistanceHeuristic::CreateBoundingVolumeRel")]
+    #[doc(alias = "CreateBoundingVolumeRel")]
+    pub fn set_bounding_volume(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        targets: &[::layerstack::TargetPath],
+    ) -> &Self {
+        self.write_targets(edit, "boundingVolume", targets);
+        self
     }
-    set_attribute! {
-        #[doc = "The center point of this LOD Root in local coordinates."]
-        #[doc = ""]
-        #[doc = "USD attribute `center` (`point3f`; fallback `(0.0, 0.0, 0.0)`)."]
-        #[doc = "C++ authoring: `UsdLodDistanceHeuristic::CreateCenterAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLodDistanceHeuristic::CreateCenterAttr")]
-        #[doc(alias = "CreateCenterAttr")]
-        set_center, set_center_at, "center", [f32; 3], crate::value::write_float3
+
+    #[doc = "The center point of this LOD Root in local coordinates."]
+    #[doc = ""]
+    #[doc = "USD attribute `center` (`point3f`; fallback `(0.0, 0.0, 0.0)`)."]
+    #[doc = "C++ authoring: `UsdLodDistanceHeuristic::CreateCenterAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLodDistanceHeuristic::CreateCenterAttr")]
+    #[doc(alias = "CreateCenterAttr")]
+    pub fn set_center(&self, edit: &mut SchemaEdit<'_>, value: [f32; 3]) -> &Self {
+        let value = crate::value::write_float3(value, edit.tokens());
+        self.write_value(edit, "center", None, value);
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "This defines the distance thresholds for LOD transitions in ascending order."]
-        #[doc = ""]
-        #[doc = "USD attribute `thresholds` (`float\\[\\]`, uniform; fallback `\\[\\]`)."]
-        #[doc = ""]
-        #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
-        #[doc = "C++ authoring: `UsdLodDistanceHeuristic::CreateThresholdsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLodDistanceHeuristic::CreateThresholdsAttr")]
-        #[doc(alias = "CreateThresholdsAttr")]
-        set_thresholds, "thresholds", &[f32], crate::value::write_float_array
+
+    #[doc = "[`Self::set_center`] as a time sample at the time code `time`."]
+    pub fn set_center_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: [f32; 3]) -> &Self {
+        let value = crate::value::write_float3(value, edit.tokens());
+        self.write_value(edit, "center", Some(time), value);
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "Transfers the vector allocation and capacity; allocates only its shared owner. Slice callers can use `set_thresholds`."]
-        set_thresholds_owned, "thresholds", ::alloc::vec::Vec<f32>, crate::value::write_float_array_owned
+
+    #[doc = "This defines the distance thresholds for LOD transitions in ascending order."]
+    #[doc = ""]
+    #[doc = "USD attribute `thresholds` (`float[]`, uniform; fallback `[]`)."]
+    #[doc = ""]
+    #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+    #[doc = "C++ authoring: `UsdLodDistanceHeuristic::CreateThresholdsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLodDistanceHeuristic::CreateThresholdsAttr")]
+    #[doc(alias = "CreateThresholdsAttr")]
+    pub fn set_thresholds(&self, edit: &mut SchemaEdit<'_>, value: &[f32]) -> &Self {
+        let value = crate::value::write_float_array(value, edit.tokens());
+        self.write_value(edit, "thresholds", None, value);
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "Transfers a shared owner without allocating or copying elements. Slice callers can use `set_thresholds`."]
-        set_thresholds_shared, "thresholds", ::alloc::sync::Arc<::alloc::vec::Vec<f32>>, crate::value::write_float_array_shared
+
+    #[doc = "Transfers the vector allocation and capacity; allocates only its shared owner. Slice callers can use `set_thresholds`."]
+    pub fn set_thresholds_owned(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        value: ::alloc::vec::Vec<f32>,
+    ) -> &Self {
+        let value = crate::value::write_float_array_owned(value, edit.tokens());
+        self.write_value(edit, "thresholds", None, value);
+        self
+    }
+
+    #[doc = "Transfers a shared owner without allocating or copying elements. Slice callers can use `set_thresholds`."]
+    pub fn set_thresholds_shared(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        value: ::alloc::sync::Arc<::alloc::vec::Vec<f32>>,
+    ) -> &Self {
+        let value = crate::value::write_float_array_shared(value, edit.tokens());
+        self.write_value(edit, "thresholds", None, value);
+        self
     }
 }
 
 #[doc = "Base class for LOD Heuristics."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's abstract typed schema `LODHeuristic`, inheriting [`crate::usd::Typed`]. Construct it with [`LODHeuristic::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's abstract typed schema `LODHeuristic`, inheriting [`crate::usd::Typed`]. Construct it with [`LODHeuristic::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLodHeuristic`."]
 #[doc(alias = "UsdLodHeuristic")]
 #[derive(Clone, Copy, Debug)]
@@ -269,32 +344,38 @@ impl<'a> LODHeuristic<'a> {
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .is_a(path, Self::SCHEMA)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of `prim` as of the schema, without checking that it is
+    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// authors, and the schema's fallbacks only for a prim of the schema.
+    /// For the view of a schema built on this one.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self {
-            base: crate::usd::Typed::from_view(prim),
+            base: crate::usd::Typed::from_prim_unchecked(prim),
         }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> LODHeuristicEdit {
-        LODHeuristicEdit::from_path(self.path())
+        LODHeuristicEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// The USD name of [`Self::lod_domain`].
     pub const LOD_DOMAIN: &'static str = "lod:domain";
 
-    uniform_attribute! {
-        #[doc = "The \"domain\" of this heuristic."]
-        #[doc = ""]
-        #[doc = "USD attribute `lod:domain` (`token`, uniform)."]
-        #[doc = "C++ read: `UsdLodHeuristic::GetLodDomainAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLodHeuristic::GetLodDomainAttr")]
-        #[doc(alias = "GetLodDomainAttr")]
-        lod_domain, "lod:domain", &'a str, crate::value::read_token
+    #[doc = "The \"domain\" of this heuristic."]
+    #[doc = ""]
+    #[doc = "USD attribute `lod:domain` (`token`, uniform)."]
+    #[doc = "C++ read: `UsdLodHeuristic::GetLodDomainAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLodHeuristic::GetLodDomainAttr")]
+    #[doc(alias = "GetLodDomainAttr")]
+    #[must_use]
+    pub fn lod_domain(&self) -> Option<&'a str> {
+        self.read_value("lod:domain", crate::value::read_token)
     }
 }
 
@@ -318,45 +399,96 @@ impl LODHeuristicEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whatever its type.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
         Self {
-            base: crate::usd::TypedEdit::from_path(path),
+            base: crate::usd::TypedEdit::from_prim(prim),
         }
     }
 
-    set_uniform_attribute! {
-        #[doc = "The \"domain\" of this heuristic."]
-        #[doc = ""]
-        #[doc = "USD attribute `lod:domain` (`token`, uniform)."]
-        #[doc = "C++ authoring: `UsdLodHeuristic::CreateLodDomainAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLodHeuristic::CreateLodDomainAttr")]
-        #[doc(alias = "CreateLodDomainAttr")]
-        set_lod_domain, "lod:domain", &str, crate::value::write_token
+    #[doc = "The \"domain\" of this heuristic."]
+    #[doc = ""]
+    #[doc = "USD attribute `lod:domain` (`token`, uniform)."]
+    #[doc = "C++ authoring: `UsdLodHeuristic::CreateLodDomainAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLodHeuristic::CreateLodDomainAttr")]
+    #[doc(alias = "CreateLodDomainAttr")]
+    pub fn set_lod_domain(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
+        let value = crate::value::write_token(value, edit.tokens());
+        self.write_value(edit, "lod:domain", None, value);
+        self
     }
 }
 
-token_enum! {
-    #[doc = "The tokens `lod:override:mode` allows."]
-    LODOverrideApiLodOverrideMode {
-        #[doc = "`inherited`"]
-        Inherited = "inherited",
-        #[doc = "`noOverride`"]
-        NoOverride = "noOverride",
-        #[doc = "`indexedLOD`"]
-        IndexedLod = "indexedLOD",
-        #[doc = "`noLOD`"]
-        NoLod = "noLOD",
-        #[doc = "`allLOD`"]
-        AllLod = "allLOD",
+#[doc = "The tokens `lod:override:mode` allows."]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum LODOverrideApiLodOverrideMode {
+    #[doc = "`inherited`"]
+    Inherited,
+    #[doc = "`noOverride`"]
+    NoOverride,
+    #[doc = "`indexedLOD`"]
+    IndexedLod,
+    #[doc = "`noLOD`"]
+    NoLod,
+    #[doc = "`allLOD`"]
+    AllLod,
+    /// A token the schema does not list: OpenUSD does not enforce
+    /// `allowedTokens`, so an authored value may be anything.
+    Other(::alloc::sync::Arc<str>),
+}
+
+impl LODOverrideApiLodOverrideMode {
+    /// The tokens the schema allows, in its order.
+    pub const TOKENS: &'static [&'static str] =
+        &["inherited", "noOverride", "indexedLOD", "noLOD", "allLOD"];
+
+    /// The value `token` names, `Other` when the schema does not
+    /// list it.
+    #[must_use]
+    pub fn from_token(token: &str) -> Self {
+        match token {
+            "inherited" => Self::Inherited,
+            "noOverride" => Self::NoOverride,
+            "indexedLOD" => Self::IndexedLod,
+            "noLOD" => Self::NoLod,
+            "allLOD" => Self::AllLod,
+            other => Self::Other(::alloc::sync::Arc::from(other)),
+        }
+    }
+
+    /// The token this value is.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Inherited => "inherited",
+            Self::NoOverride => "noOverride",
+            Self::IndexedLod => "indexedLOD",
+            Self::NoLod => "noLOD",
+            Self::AllLod => "allLOD",
+            Self::Other(token) => token,
+        }
+    }
+
+    pub(crate) fn read(
+        value: &::layerstack::Value,
+        tokens: &::layerstack::TokenInterner,
+    ) -> Option<Self> {
+        crate::value::read_token(value, tokens).map(Self::from_token)
+    }
+
+    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+        crate::value::write_token(self.as_str(), tokens)
     }
 }
 
 #[doc = "API for overriding Level of Detail (LOD) choices."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `LODOverrideAPI`. Get it with [`LODOverrideApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `LODOverrideAPI`. Get it with [`LODOverrideApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLodOverrideAPI`."]
 #[doc(alias = "UsdLodOverrideAPI")]
 #[doc(alias = "LODOverrideAPI")]
@@ -385,17 +517,22 @@ impl<'a> LODOverrideApi<'a> {
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of the schema on `prim`, without checking that the prim
+    /// has it applied (`HasAPI`), as [`Self::get`] does: a getter reads
+    /// what the prim authors, and the schema's fallbacks only for a
+    /// prim with the schema applied. For a built-in's view.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self { base: prim }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> LODOverrideApiEdit {
-        LODOverrideApiEdit::from_path(self.path())
+        LODOverrideApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
@@ -412,33 +549,61 @@ impl<'a> LODOverrideApi<'a> {
         edit: &mut SchemaEdit<'_>,
         path: PathId,
     ) -> Result<LODOverrideApiEdit, CannotApply> {
-        edit.apply(path, Self::SCHEMA, None)?;
-        Ok(LODOverrideApiEdit::from_path(path))
+        edit.apply_api(path, Self::SCHEMA, None)
+            .map(LODOverrideApiEdit::from_prim)
     }
 
     /// The USD name of [`Self::lod_override_index`].
     pub const LOD_OVERRIDE_INDEX: &'static str = "lod:override:index";
 
-    attribute! {
-        #[doc = "The index value to use when lod:override:mode is \"indexedLOD\"."]
-        #[doc = ""]
-        #[doc = "USD attribute `lod:override:index` (`float`; fallback `0.0`)."]
-        #[doc = "C++ read: `UsdLodOverrideAPI::GetLodOverrideIndexAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLodOverrideAPI::GetLodOverrideIndexAttr")]
-        #[doc(alias = "GetLodOverrideIndexAttr")]
-        lod_override_index, lod_override_index_at, "lod:override:index", f32, crate::value::read_float
+    #[doc = "The index value to use when lod:override:mode is \"indexedLOD\"."]
+    #[doc = ""]
+    #[doc = "USD attribute `lod:override:index` (`float`; fallback `0.0`)."]
+    #[doc = "C++ read: `UsdLodOverrideAPI::GetLodOverrideIndexAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLodOverrideAPI::GetLodOverrideIndexAttr")]
+    #[doc(alias = "GetLodOverrideIndexAttr")]
+    #[must_use]
+    pub fn lod_override_index(&self) -> Option<f32> {
+        self.read_value("lod:override:index", crate::value::read_float)
     }
+
+    #[doc = "[`Self::lod_override_index`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn lod_override_index_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<f32> {
+        self.read_value_at("lod:override:index", time, interp, crate::value::read_float)
+    }
+
     /// The USD name of [`Self::lod_override_mode`].
     pub const LOD_OVERRIDE_MODE: &'static str = "lod:override:mode";
 
-    attribute! {
-        #[doc = "How to apply override to LOD decisions."]
-        #[doc = ""]
-        #[doc = "USD attribute `lod:override:mode` (`token`; fallback `\"inherited\"`)."]
-        #[doc = "C++ read: `UsdLodOverrideAPI::GetLodOverrideModeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLodOverrideAPI::GetLodOverrideModeAttr")]
-        #[doc(alias = "GetLodOverrideModeAttr")]
-        lod_override_mode, lod_override_mode_at, "lod:override:mode", LODOverrideApiLodOverrideMode, LODOverrideApiLodOverrideMode::read
+    #[doc = "How to apply override to LOD decisions."]
+    #[doc = ""]
+    #[doc = "USD attribute `lod:override:mode` (`token`; fallback `\"inherited\"`)."]
+    #[doc = "C++ read: `UsdLodOverrideAPI::GetLodOverrideModeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLodOverrideAPI::GetLodOverrideModeAttr")]
+    #[doc(alias = "GetLodOverrideModeAttr")]
+    #[must_use]
+    pub fn lod_override_mode(&self) -> Option<LODOverrideApiLodOverrideMode> {
+        self.read_value("lod:override:mode", LODOverrideApiLodOverrideMode::read)
+    }
+
+    #[doc = "[`Self::lod_override_mode`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn lod_override_mode_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<LODOverrideApiLodOverrideMode> {
+        self.read_value_at(
+            "lod:override:mode",
+            time,
+            interp,
+            LODOverrideApiLodOverrideMode::read,
+        )
     }
 }
 
@@ -462,38 +627,72 @@ impl LODOverrideApiEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
-        Self {
-            base: PrimEdit::new(path),
-        }
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whether or not it has the schema applied.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
+        Self { base: prim }
     }
 
-    set_attribute! {
-        #[doc = "The index value to use when lod:override:mode is \"indexedLOD\"."]
-        #[doc = ""]
-        #[doc = "USD attribute `lod:override:index` (`float`; fallback `0.0`)."]
-        #[doc = "C++ authoring: `UsdLodOverrideAPI::CreateLodOverrideIndexAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLodOverrideAPI::CreateLodOverrideIndexAttr")]
-        #[doc(alias = "CreateLodOverrideIndexAttr")]
-        set_lod_override_index, set_lod_override_index_at, "lod:override:index", f32, crate::value::write_float
+    #[doc = "The index value to use when lod:override:mode is \"indexedLOD\"."]
+    #[doc = ""]
+    #[doc = "USD attribute `lod:override:index` (`float`; fallback `0.0`)."]
+    #[doc = "C++ authoring: `UsdLodOverrideAPI::CreateLodOverrideIndexAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLodOverrideAPI::CreateLodOverrideIndexAttr")]
+    #[doc(alias = "CreateLodOverrideIndexAttr")]
+    pub fn set_lod_override_index(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "lod:override:index", None, value);
+        self
     }
-    set_attribute! {
-        #[doc = "How to apply override to LOD decisions."]
-        #[doc = ""]
-        #[doc = "USD attribute `lod:override:mode` (`token`; fallback `\"inherited\"`)."]
-        #[doc = "C++ authoring: `UsdLodOverrideAPI::CreateLodOverrideModeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLodOverrideAPI::CreateLodOverrideModeAttr")]
-        #[doc(alias = "CreateLodOverrideModeAttr")]
-        set_lod_override_mode, set_lod_override_mode_at, "lod:override:mode", LODOverrideApiLodOverrideMode, LODOverrideApiLodOverrideMode::write
+
+    #[doc = "[`Self::set_lod_override_index`] as a time sample at the time code `time`."]
+    pub fn set_lod_override_index_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: f32,
+    ) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "lod:override:index", Some(time), value);
+        self
+    }
+
+    #[doc = "How to apply override to LOD decisions."]
+    #[doc = ""]
+    #[doc = "USD attribute `lod:override:mode` (`token`; fallback `\"inherited\"`)."]
+    #[doc = "C++ authoring: `UsdLodOverrideAPI::CreateLodOverrideModeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLodOverrideAPI::CreateLodOverrideModeAttr")]
+    #[doc(alias = "CreateLodOverrideModeAttr")]
+    pub fn set_lod_override_mode(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        value: LODOverrideApiLodOverrideMode,
+    ) -> &Self {
+        let value = value.write(edit.tokens());
+        self.write_value(edit, "lod:override:mode", None, value);
+        self
+    }
+
+    #[doc = "[`Self::set_lod_override_mode`] as a time sample at the time code `time`."]
+    pub fn set_lod_override_mode_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: LODOverrideApiLodOverrideMode,
+    ) -> &Self {
+        let value = value.write(edit.tokens());
+        self.write_value(edit, "lod:override:mode", Some(time), value);
+        self
     }
 }
 
 #[doc = "API for configuring Level of Detail (LOD) facilities on a prim."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `LODRootAPI`. Get it with [`LODRootApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `LODRootAPI`. Get it with [`LODRootApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLodRootAPI`."]
 #[doc(alias = "UsdLodRootAPI")]
 #[doc(alias = "LODRootAPI")]
@@ -522,17 +721,22 @@ impl<'a> LODRootApi<'a> {
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of the schema on `prim`, without checking that the prim
+    /// has it applied (`HasAPI`), as [`Self::get`] does: a getter reads
+    /// what the prim authors, and the schema's fallbacks only for a
+    /// prim with the schema applied. For a built-in's view.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self { base: prim }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> LODRootApiEdit {
-        LODRootApiEdit::from_path(self.path())
+        LODRootApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
@@ -546,33 +750,46 @@ impl<'a> LODRootApi<'a> {
     #[doc(alias = "UsdLodRootAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<LODRootApiEdit, CannotApply> {
-        edit.apply(path, Self::SCHEMA, None)?;
-        Ok(LODRootApiEdit::from_path(path))
+        edit.apply_api(path, Self::SCHEMA, None)
+            .map(LODRootApiEdit::from_prim)
     }
 
     /// The USD name of [`Self::lod_default_index`].
     pub const LOD_DEFAULT_INDEX: &'static str = "lod:default:index";
 
-    attribute! {
-        #[doc = "The LOD item child to use if none of the heuristics are understood by the renderer or if none return a usable LOD."]
-        #[doc = ""]
-        #[doc = "USD attribute `lod:default:index` (`int`; fallback `0`)."]
-        #[doc = "C++ read: `UsdLodRootAPI::GetLodDefaultIndexAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLodRootAPI::GetLodDefaultIndexAttr")]
-        #[doc(alias = "GetLodDefaultIndexAttr")]
-        lod_default_index, lod_default_index_at, "lod:default:index", i32, crate::value::read_int
+    #[doc = "The LOD item child to use if none of the heuristics are understood by the renderer or if none return a usable LOD."]
+    #[doc = ""]
+    #[doc = "USD attribute `lod:default:index` (`int`; fallback `0`)."]
+    #[doc = "C++ read: `UsdLodRootAPI::GetLodDefaultIndexAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLodRootAPI::GetLodDefaultIndexAttr")]
+    #[doc(alias = "GetLodDefaultIndexAttr")]
+    #[must_use]
+    pub fn lod_default_index(&self) -> Option<i32> {
+        self.read_value("lod:default:index", crate::value::read_int)
     }
+
+    #[doc = "[`Self::lod_default_index`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn lod_default_index_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<i32> {
+        self.read_value_at("lod:default:index", time, interp, crate::value::read_int)
+    }
+
     /// The USD name of [`Self::lod_heuristics`].
     pub const LOD_HEURISTICS: &'static str = "lod:heuristics";
 
-    relationship! {
-        #[doc = "Relationship targeting all the heuristic prims that could be used for this particular LOD root."]
-        #[doc = ""]
-        #[doc = "USD relationship `lod:heuristics` (`rel`)."]
-        #[doc = "C++ read: `UsdLodRootAPI::GetLodHeuristicsRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLodRootAPI::GetLodHeuristicsRel")]
-        #[doc(alias = "GetLodHeuristicsRel")]
-        lod_heuristics, "lod:heuristics"
+    #[doc = "Relationship targeting all the heuristic prims that could be used for this particular LOD root."]
+    #[doc = ""]
+    #[doc = "USD relationship `lod:heuristics` (`rel`)."]
+    #[doc = "C++ read: `UsdLodRootAPI::GetLodHeuristicsRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLodRootAPI::GetLodHeuristicsRel")]
+    #[doc(alias = "GetLodHeuristicsRel")]
+    #[must_use]
+    pub fn lod_heuristics(&self) -> ::alloc::vec::Vec<::layerstack::TargetPath> {
+        self.read_targets("lod:heuristics")
     }
 }
 
@@ -596,48 +813,108 @@ impl LODRootApiEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
-        Self {
-            base: PrimEdit::new(path),
-        }
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whether or not it has the schema applied.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
+        Self { base: prim }
     }
 
-    set_attribute! {
-        #[doc = "The LOD item child to use if none of the heuristics are understood by the renderer or if none return a usable LOD."]
-        #[doc = ""]
-        #[doc = "USD attribute `lod:default:index` (`int`; fallback `0`)."]
-        #[doc = "C++ authoring: `UsdLodRootAPI::CreateLodDefaultIndexAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLodRootAPI::CreateLodDefaultIndexAttr")]
-        #[doc(alias = "CreateLodDefaultIndexAttr")]
-        set_lod_default_index, set_lod_default_index_at, "lod:default:index", i32, crate::value::write_int
+    #[doc = "The LOD item child to use if none of the heuristics are understood by the renderer or if none return a usable LOD."]
+    #[doc = ""]
+    #[doc = "USD attribute `lod:default:index` (`int`; fallback `0`)."]
+    #[doc = "C++ authoring: `UsdLodRootAPI::CreateLodDefaultIndexAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLodRootAPI::CreateLodDefaultIndexAttr")]
+    #[doc(alias = "CreateLodDefaultIndexAttr")]
+    pub fn set_lod_default_index(&self, edit: &mut SchemaEdit<'_>, value: i32) -> &Self {
+        let value = crate::value::write_int(value, edit.tokens());
+        self.write_value(edit, "lod:default:index", None, value);
+        self
     }
-    set_relationship! {
-        #[doc = "Relationship targeting all the heuristic prims that could be used for this particular LOD root."]
-        #[doc = ""]
-        #[doc = "USD relationship `lod:heuristics` (`rel`)."]
-        #[doc = "C++ authoring: `UsdLodRootAPI::CreateLodHeuristicsRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLodRootAPI::CreateLodHeuristicsRel")]
-        #[doc(alias = "CreateLodHeuristicsRel")]
-        set_lod_heuristics, "lod:heuristics"
+
+    #[doc = "[`Self::set_lod_default_index`] as a time sample at the time code `time`."]
+    pub fn set_lod_default_index_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: i32,
+    ) -> &Self {
+        let value = crate::value::write_int(value, edit.tokens());
+        self.write_value(edit, "lod:default:index", Some(time), value);
+        self
+    }
+
+    #[doc = "Relationship targeting all the heuristic prims that could be used for this particular LOD root."]
+    #[doc = ""]
+    #[doc = "USD relationship `lod:heuristics` (`rel`)."]
+    #[doc = "C++ authoring: `UsdLodRootAPI::CreateLodHeuristicsRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLodRootAPI::CreateLodHeuristicsRel")]
+    #[doc(alias = "CreateLodHeuristicsRel")]
+    pub fn set_lod_heuristics(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        targets: &[::layerstack::TargetPath],
+    ) -> &Self {
+        self.write_targets(edit, "lod:heuristics", targets);
+        self
     }
 }
 
-token_enum! {
-    #[doc = "The tokens `projectionMethod` allows."]
-    LODScreenSizeHeuristicProjectionMethod {
-        #[doc = "`projectedExtent`"]
-        ProjectedExtent = "projectedExtent",
-        #[doc = "`projectedSphere`"]
-        ProjectedSphere = "projectedSphere",
+#[doc = "The tokens `projectionMethod` allows."]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum LODScreenSizeHeuristicProjectionMethod {
+    #[doc = "`projectedExtent`"]
+    ProjectedExtent,
+    #[doc = "`projectedSphere`"]
+    ProjectedSphere,
+    /// A token the schema does not list: OpenUSD does not enforce
+    /// `allowedTokens`, so an authored value may be anything.
+    Other(::alloc::sync::Arc<str>),
+}
+
+impl LODScreenSizeHeuristicProjectionMethod {
+    /// The tokens the schema allows, in its order.
+    pub const TOKENS: &'static [&'static str] = &["projectedExtent", "projectedSphere"];
+
+    /// The value `token` names, `Other` when the schema does not
+    /// list it.
+    #[must_use]
+    pub fn from_token(token: &str) -> Self {
+        match token {
+            "projectedExtent" => Self::ProjectedExtent,
+            "projectedSphere" => Self::ProjectedSphere,
+            other => Self::Other(::alloc::sync::Arc::from(other)),
+        }
+    }
+
+    /// The token this value is.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::ProjectedExtent => "projectedExtent",
+            Self::ProjectedSphere => "projectedSphere",
+            Self::Other(token) => token,
+        }
+    }
+
+    pub(crate) fn read(
+        value: &::layerstack::Value,
+        tokens: &::layerstack::TokenInterner,
+    ) -> Option<Self> {
+        crate::value::read_token(value, tokens).map(Self::from_token)
+    }
+
+    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+        crate::value::write_token(self.as_str(), tokens)
     }
 }
 
 #[doc = "This LOD heuristic selects LOD children on the basis of the fraction of the viewplane would be covered by the extent."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `LODScreenSizeHeuristic`, inheriting [`LODHeuristic`]. Construct it with [`LODScreenSizeHeuristic::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `LODScreenSizeHeuristic`, inheriting [`LODHeuristic`]. Construct it with [`LODScreenSizeHeuristic::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLodScreenSizeHeuristic`."]
 #[doc(alias = "UsdLodScreenSizeHeuristic")]
 #[derive(Clone, Copy, Debug)]
@@ -664,19 +941,24 @@ impl<'a> LODScreenSizeHeuristic<'a> {
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .is_a(path, Self::SCHEMA)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of `prim` as of the schema, without checking that it is
+    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// authors, and the schema's fallbacks only for a prim of the schema.
+    /// For the view of a schema built on this one.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self {
-            base: LODHeuristic::from_view(prim),
+            base: LODHeuristic::from_prim_unchecked(prim),
         }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> LODScreenSizeHeuristicEdit {
-        LODScreenSizeHeuristicEdit::from_path(self.path())
+        LODScreenSizeHeuristicEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Defines `path` as a new `def LODScreenSizeHeuristic` prim spec in the edit's target.
@@ -687,29 +969,30 @@ impl<'a> LODScreenSizeHeuristic<'a> {
     #[doc(alias = "UsdLodScreenSizeHeuristic::Define")]
     #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> LODScreenSizeHeuristicEdit {
-        edit.define(path, Self::SCHEMA);
-        LODScreenSizeHeuristicEdit::from_path(path)
+        LODScreenSizeHeuristicEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
     }
 
     /// The USD name of [`Self::blend_thresholds`].
     pub const BLEND_THRESHOLDS: &'static str = "blendThresholds";
 
-    uniform_attribute! {
-        #[doc = "This defines screen size thresholds for LOD transitions in descending order."]
-        #[doc = ""]
-        #[doc = "USD attribute `blendThresholds` (`float\\[\\]`, uniform; fallback `\\[\\]`)."]
-        #[doc = ""]
-        #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
-        #[doc = "C++ read: `UsdLodScreenSizeHeuristic::GetBlendThresholdsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLodScreenSizeHeuristic::GetBlendThresholdsAttr")]
-        #[doc(alias = "GetBlendThresholdsAttr")]
-        blend_thresholds, "blendThresholds", ::alloc::sync::Arc<::alloc::vec::Vec<f32>>, crate::value::read_float_array_shared
+    #[doc = "This defines screen size thresholds for LOD transitions in descending order."]
+    #[doc = ""]
+    #[doc = "USD attribute `blendThresholds` (`float[]`, uniform; fallback `[]`)."]
+    #[doc = ""]
+    #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+    #[doc = "C++ read: `UsdLodScreenSizeHeuristic::GetBlendThresholdsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLodScreenSizeHeuristic::GetBlendThresholdsAttr")]
+    #[doc(alias = "GetBlendThresholdsAttr")]
+    #[must_use]
+    pub fn blend_thresholds(&self) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<f32>>> {
+        self.read_value("blendThresholds", crate::value::read_float_array_shared)
     }
+
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
     pub fn try_blend_thresholds(
         &self,
         time: crate::Time,
-    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<f32>>>, layerstack::ArrayReadError>
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<f32>>>, ::layerstack::ArrayReadError>
     {
         self.try_read_value(
             "blendThresholds",
@@ -717,71 +1000,99 @@ impl<'a> LODScreenSizeHeuristic<'a> {
             crate::value::read_float_array_shared,
         )
     }
+
     /// The USD name of [`Self::bounding_volume`].
     pub const BOUNDING_VOLUME: &'static str = "boundingVolume";
 
-    relationship! {
-        #[doc = "Optional relationship to a Boundable prim that defines the bounding volume for this LOD Root, used for size calculation if the referenced prim has a valid extent."]
-        #[doc = ""]
-        #[doc = "USD relationship `boundingVolume` (`rel`)."]
-        #[doc = "C++ read: `UsdLodScreenSizeHeuristic::GetBoundingVolumeRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLodScreenSizeHeuristic::GetBoundingVolumeRel")]
-        #[doc(alias = "GetBoundingVolumeRel")]
-        bounding_volume, "boundingVolume"
+    #[doc = "Optional relationship to a Boundable prim that defines the bounding volume for this LOD Root, used for size calculation if the referenced prim has a valid extent."]
+    #[doc = ""]
+    #[doc = "USD relationship `boundingVolume` (`rel`)."]
+    #[doc = "C++ read: `UsdLodScreenSizeHeuristic::GetBoundingVolumeRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLodScreenSizeHeuristic::GetBoundingVolumeRel")]
+    #[doc(alias = "GetBoundingVolumeRel")]
+    #[must_use]
+    pub fn bounding_volume(&self) -> ::alloc::vec::Vec<::layerstack::TargetPath> {
+        self.read_targets("boundingVolume")
     }
+
     /// The USD name of [`Self::extent`].
     pub const EXTENT: &'static str = "extent";
 
-    attribute! {
-        #[doc = "The extent of this LOD Root in local coordinates."]
-        #[doc = ""]
-        #[doc = "USD attribute `extent` (`float3\\[\\]`; fallback `\\[(-1.0, -1.0, -1.0), (1.0, 1.0, 1.0)\\]`)."]
-        #[doc = ""]
-        #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
-        #[doc = "C++ read: `UsdLodScreenSizeHeuristic::GetExtentAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLodScreenSizeHeuristic::GetExtentAttr")]
-        #[doc(alias = "GetExtentAttr")]
-        extent, extent_at, "extent", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::read_float3_array_shared
+    #[doc = "The extent of this LOD Root in local coordinates."]
+    #[doc = ""]
+    #[doc = "USD attribute `extent` (`float3[]`; fallback `[(-1.0, -1.0, -1.0), (1.0, 1.0, 1.0)]`)."]
+    #[doc = ""]
+    #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+    #[doc = "C++ read: `UsdLodScreenSizeHeuristic::GetExtentAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLodScreenSizeHeuristic::GetExtentAttr")]
+    #[doc(alias = "GetExtentAttr")]
+    #[must_use]
+    pub fn extent(&self) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>> {
+        self.read_value("extent", crate::value::read_float3_array_shared)
     }
+
+    #[doc = "[`Self::extent`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn extent_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>> {
+        self.read_value_at(
+            "extent",
+            time,
+            interp,
+            crate::value::read_float3_array_shared,
+        )
+    }
+
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
     pub fn try_extent(
         &self,
         time: crate::Time,
-    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>>, layerstack::ArrayReadError>
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>>, ::layerstack::ArrayReadError>
     {
         self.try_read_value("extent", time, crate::value::read_float3_array_shared)
     }
+
     /// The USD name of [`Self::projection_method`].
     pub const PROJECTION_METHOD: &'static str = "projectionMethod";
 
-    uniform_attribute! {
-        #[doc = "Defines how screen size is calculated."]
-        #[doc = ""]
-        #[doc = "USD attribute `projectionMethod` (`token`, uniform; fallback `\"projectedSphere\"`)."]
-        #[doc = "C++ read: `UsdLodScreenSizeHeuristic::GetProjectionMethodAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLodScreenSizeHeuristic::GetProjectionMethodAttr")]
-        #[doc(alias = "GetProjectionMethodAttr")]
-        projection_method, "projectionMethod", LODScreenSizeHeuristicProjectionMethod, LODScreenSizeHeuristicProjectionMethod::read
+    #[doc = "Defines how screen size is calculated."]
+    #[doc = ""]
+    #[doc = "USD attribute `projectionMethod` (`token`, uniform; fallback `\"projectedSphere\"`)."]
+    #[doc = "C++ read: `UsdLodScreenSizeHeuristic::GetProjectionMethodAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLodScreenSizeHeuristic::GetProjectionMethodAttr")]
+    #[doc(alias = "GetProjectionMethodAttr")]
+    #[must_use]
+    pub fn projection_method(&self) -> Option<LODScreenSizeHeuristicProjectionMethod> {
+        self.read_value(
+            "projectionMethod",
+            LODScreenSizeHeuristicProjectionMethod::read,
+        )
     }
+
     /// The USD name of [`Self::thresholds`].
     pub const THRESHOLDS: &'static str = "thresholds";
 
-    uniform_attribute! {
-        #[doc = "The screen size thresholds for LOD transitions in descending order as a fraction of the viewport size."]
-        #[doc = ""]
-        #[doc = "USD attribute `thresholds` (`float\\[\\]`, uniform; fallback `\\[\\]`)."]
-        #[doc = ""]
-        #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
-        #[doc = "C++ read: `UsdLodScreenSizeHeuristic::GetThresholdsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLodScreenSizeHeuristic::GetThresholdsAttr")]
-        #[doc(alias = "GetThresholdsAttr")]
-        thresholds, "thresholds", ::alloc::sync::Arc<::alloc::vec::Vec<f32>>, crate::value::read_float_array_shared
+    #[doc = "The screen size thresholds for LOD transitions in descending order as a fraction of the viewport size."]
+    #[doc = ""]
+    #[doc = "USD attribute `thresholds` (`float[]`, uniform; fallback `[]`)."]
+    #[doc = ""]
+    #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+    #[doc = "C++ read: `UsdLodScreenSizeHeuristic::GetThresholdsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLodScreenSizeHeuristic::GetThresholdsAttr")]
+    #[doc(alias = "GetThresholdsAttr")]
+    #[must_use]
+    pub fn thresholds(&self) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<f32>>> {
+        self.read_value("thresholds", crate::value::read_float_array_shared)
     }
+
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
     pub fn try_thresholds(
         &self,
         time: crate::Time,
-    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<f32>>>, layerstack::ArrayReadError>
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<f32>>>, ::layerstack::ArrayReadError>
     {
         self.try_read_value("thresholds", time, crate::value::read_float_array_shared)
     }
@@ -807,88 +1118,185 @@ impl LODScreenSizeHeuristicEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whatever its type.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
         Self {
-            base: LODHeuristicEdit::from_path(path),
+            base: LODHeuristicEdit::from_prim(prim),
         }
     }
 
-    set_uniform_attribute! {
-        #[doc = "This defines screen size thresholds for LOD transitions in descending order."]
-        #[doc = ""]
-        #[doc = "USD attribute `blendThresholds` (`float\\[\\]`, uniform; fallback `\\[\\]`)."]
-        #[doc = ""]
-        #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
-        #[doc = "C++ authoring: `UsdLodScreenSizeHeuristic::CreateBlendThresholdsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLodScreenSizeHeuristic::CreateBlendThresholdsAttr")]
-        #[doc(alias = "CreateBlendThresholdsAttr")]
-        set_blend_thresholds, "blendThresholds", &[f32], crate::value::write_float_array
+    #[doc = "This defines screen size thresholds for LOD transitions in descending order."]
+    #[doc = ""]
+    #[doc = "USD attribute `blendThresholds` (`float[]`, uniform; fallback `[]`)."]
+    #[doc = ""]
+    #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+    #[doc = "C++ authoring: `UsdLodScreenSizeHeuristic::CreateBlendThresholdsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLodScreenSizeHeuristic::CreateBlendThresholdsAttr")]
+    #[doc(alias = "CreateBlendThresholdsAttr")]
+    pub fn set_blend_thresholds(&self, edit: &mut SchemaEdit<'_>, value: &[f32]) -> &Self {
+        let value = crate::value::write_float_array(value, edit.tokens());
+        self.write_value(edit, "blendThresholds", None, value);
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "Transfers the vector allocation and capacity; allocates only its shared owner. Slice callers can use `set_blend_thresholds`."]
-        set_blend_thresholds_owned, "blendThresholds", ::alloc::vec::Vec<f32>, crate::value::write_float_array_owned
+
+    #[doc = "Transfers the vector allocation and capacity; allocates only its shared owner. Slice callers can use `set_blend_thresholds`."]
+    pub fn set_blend_thresholds_owned(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        value: ::alloc::vec::Vec<f32>,
+    ) -> &Self {
+        let value = crate::value::write_float_array_owned(value, edit.tokens());
+        self.write_value(edit, "blendThresholds", None, value);
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "Transfers a shared owner without allocating or copying elements. Slice callers can use `set_blend_thresholds`."]
-        set_blend_thresholds_shared, "blendThresholds", ::alloc::sync::Arc<::alloc::vec::Vec<f32>>, crate::value::write_float_array_shared
+
+    #[doc = "Transfers a shared owner without allocating or copying elements. Slice callers can use `set_blend_thresholds`."]
+    pub fn set_blend_thresholds_shared(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        value: ::alloc::sync::Arc<::alloc::vec::Vec<f32>>,
+    ) -> &Self {
+        let value = crate::value::write_float_array_shared(value, edit.tokens());
+        self.write_value(edit, "blendThresholds", None, value);
+        self
     }
-    set_relationship! {
-        #[doc = "Optional relationship to a Boundable prim that defines the bounding volume for this LOD Root, used for size calculation if the referenced prim has a valid extent."]
-        #[doc = ""]
-        #[doc = "USD relationship `boundingVolume` (`rel`)."]
-        #[doc = "C++ authoring: `UsdLodScreenSizeHeuristic::CreateBoundingVolumeRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLodScreenSizeHeuristic::CreateBoundingVolumeRel")]
-        #[doc(alias = "CreateBoundingVolumeRel")]
-        set_bounding_volume, "boundingVolume"
+
+    #[doc = "Optional relationship to a Boundable prim that defines the bounding volume for this LOD Root, used for size calculation if the referenced prim has a valid extent."]
+    #[doc = ""]
+    #[doc = "USD relationship `boundingVolume` (`rel`)."]
+    #[doc = "C++ authoring: `UsdLodScreenSizeHeuristic::CreateBoundingVolumeRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLodScreenSizeHeuristic::CreateBoundingVolumeRel")]
+    #[doc(alias = "CreateBoundingVolumeRel")]
+    pub fn set_bounding_volume(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        targets: &[::layerstack::TargetPath],
+    ) -> &Self {
+        self.write_targets(edit, "boundingVolume", targets);
+        self
     }
-    set_attribute! {
-        #[doc = "The extent of this LOD Root in local coordinates."]
-        #[doc = ""]
-        #[doc = "USD attribute `extent` (`float3\\[\\]`; fallback `\\[(-1.0, -1.0, -1.0), (1.0, 1.0, 1.0)\\]`)."]
-        #[doc = ""]
-        #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
-        #[doc = "C++ authoring: `UsdLodScreenSizeHeuristic::CreateExtentAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLodScreenSizeHeuristic::CreateExtentAttr")]
-        #[doc(alias = "CreateExtentAttr")]
-        set_extent, set_extent_at, "extent", &[[f32; 3]], crate::value::write_float3_array
+
+    #[doc = "The extent of this LOD Root in local coordinates."]
+    #[doc = ""]
+    #[doc = "USD attribute `extent` (`float3[]`; fallback `[(-1.0, -1.0, -1.0), (1.0, 1.0, 1.0)]`)."]
+    #[doc = ""]
+    #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+    #[doc = "C++ authoring: `UsdLodScreenSizeHeuristic::CreateExtentAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLodScreenSizeHeuristic::CreateExtentAttr")]
+    #[doc(alias = "CreateExtentAttr")]
+    pub fn set_extent(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 3]]) -> &Self {
+        let value = crate::value::write_float3_array(value, edit.tokens());
+        self.write_value(edit, "extent", None, value);
+        self
     }
-    set_attribute! {
-        #[doc = "Transfers the vector allocation and capacity; allocates only its shared owner. Slice callers can use `set_extent`."]
-        set_extent_owned, set_extent_owned_at, "extent", ::alloc::vec::Vec<[f32; 3]>, crate::value::write_float3_array_owned
+
+    #[doc = "[`Self::set_extent`] as a time sample at the time code `time`."]
+    pub fn set_extent_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &[[f32; 3]]) -> &Self {
+        let value = crate::value::write_float3_array(value, edit.tokens());
+        self.write_value(edit, "extent", Some(time), value);
+        self
     }
-    set_attribute! {
-        #[doc = "Transfers a shared owner without allocating or copying elements. Slice callers can use `set_extent`."]
-        set_extent_shared, set_extent_shared_at, "extent", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::write_float3_array_shared
+
+    #[doc = "Transfers the vector allocation and capacity; allocates only its shared owner. Slice callers can use `set_extent`."]
+    pub fn set_extent_owned(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        value: ::alloc::vec::Vec<[f32; 3]>,
+    ) -> &Self {
+        let value = crate::value::write_float3_array_owned(value, edit.tokens());
+        self.write_value(edit, "extent", None, value);
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "Defines how screen size is calculated."]
-        #[doc = ""]
-        #[doc = "USD attribute `projectionMethod` (`token`, uniform; fallback `\"projectedSphere\"`)."]
-        #[doc = "C++ authoring: `UsdLodScreenSizeHeuristic::CreateProjectionMethodAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLodScreenSizeHeuristic::CreateProjectionMethodAttr")]
-        #[doc(alias = "CreateProjectionMethodAttr")]
-        set_projection_method, "projectionMethod", LODScreenSizeHeuristicProjectionMethod, LODScreenSizeHeuristicProjectionMethod::write
+
+    #[doc = "[`Self::set_extent_owned`] as a time sample at the time code `time`."]
+    pub fn set_extent_owned_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: ::alloc::vec::Vec<[f32; 3]>,
+    ) -> &Self {
+        let value = crate::value::write_float3_array_owned(value, edit.tokens());
+        self.write_value(edit, "extent", Some(time), value);
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "The screen size thresholds for LOD transitions in descending order as a fraction of the viewport size."]
-        #[doc = ""]
-        #[doc = "USD attribute `thresholds` (`float\\[\\]`, uniform; fallback `\\[\\]`)."]
-        #[doc = ""]
-        #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
-        #[doc = "C++ authoring: `UsdLodScreenSizeHeuristic::CreateThresholdsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLodScreenSizeHeuristic::CreateThresholdsAttr")]
-        #[doc(alias = "CreateThresholdsAttr")]
-        set_thresholds, "thresholds", &[f32], crate::value::write_float_array
+
+    #[doc = "Transfers a shared owner without allocating or copying elements. Slice callers can use `set_extent`."]
+    pub fn set_extent_shared(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
+    ) -> &Self {
+        let value = crate::value::write_float3_array_shared(value, edit.tokens());
+        self.write_value(edit, "extent", None, value);
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "Transfers the vector allocation and capacity; allocates only its shared owner. Slice callers can use `set_thresholds`."]
-        set_thresholds_owned, "thresholds", ::alloc::vec::Vec<f32>, crate::value::write_float_array_owned
+
+    #[doc = "[`Self::set_extent_shared`] as a time sample at the time code `time`."]
+    pub fn set_extent_shared_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
+    ) -> &Self {
+        let value = crate::value::write_float3_array_shared(value, edit.tokens());
+        self.write_value(edit, "extent", Some(time), value);
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "Transfers a shared owner without allocating or copying elements. Slice callers can use `set_thresholds`."]
-        set_thresholds_shared, "thresholds", ::alloc::sync::Arc<::alloc::vec::Vec<f32>>, crate::value::write_float_array_shared
+
+    #[doc = "Defines how screen size is calculated."]
+    #[doc = ""]
+    #[doc = "USD attribute `projectionMethod` (`token`, uniform; fallback `\"projectedSphere\"`)."]
+    #[doc = "C++ authoring: `UsdLodScreenSizeHeuristic::CreateProjectionMethodAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLodScreenSizeHeuristic::CreateProjectionMethodAttr")]
+    #[doc(alias = "CreateProjectionMethodAttr")]
+    pub fn set_projection_method(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        value: LODScreenSizeHeuristicProjectionMethod,
+    ) -> &Self {
+        let value = value.write(edit.tokens());
+        self.write_value(edit, "projectionMethod", None, value);
+        self
+    }
+
+    #[doc = "The screen size thresholds for LOD transitions in descending order as a fraction of the viewport size."]
+    #[doc = ""]
+    #[doc = "USD attribute `thresholds` (`float[]`, uniform; fallback `[]`)."]
+    #[doc = ""]
+    #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+    #[doc = "C++ authoring: `UsdLodScreenSizeHeuristic::CreateThresholdsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLodScreenSizeHeuristic::CreateThresholdsAttr")]
+    #[doc(alias = "CreateThresholdsAttr")]
+    pub fn set_thresholds(&self, edit: &mut SchemaEdit<'_>, value: &[f32]) -> &Self {
+        let value = crate::value::write_float_array(value, edit.tokens());
+        self.write_value(edit, "thresholds", None, value);
+        self
+    }
+
+    #[doc = "Transfers the vector allocation and capacity; allocates only its shared owner. Slice callers can use `set_thresholds`."]
+    pub fn set_thresholds_owned(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        value: ::alloc::vec::Vec<f32>,
+    ) -> &Self {
+        let value = crate::value::write_float_array_owned(value, edit.tokens());
+        self.write_value(edit, "thresholds", None, value);
+        self
+    }
+
+    #[doc = "Transfers a shared owner without allocating or copying elements. Slice callers can use `set_thresholds`."]
+    pub fn set_thresholds_shared(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        value: ::alloc::sync::Arc<::alloc::vec::Vec<f32>>,
+    ) -> &Self {
+        let value = crate::value::write_float_array_shared(value, edit.tokens());
+        self.write_value(edit, "thresholds", None, value);
+        self
     }
 }

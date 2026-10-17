@@ -15,9 +15,12 @@ generated_tests="layerstack_conformance/tests/generated"
 licensed_math="layerstack_schemas/src/gf/decomposition.rs"
 licensed_mass="layerstack_schemas/src/mass/diagonalize.rs"
 licensed_lux="layerstack_schemas/src/light/helpers.rs"
+# A schema library's Rust module, as `layerstack_schemagen compile --rust`
+# writes it for a downstream crate; it is checked against the generator.
+generated_library="layerstack_custom_schemas/src/generated"
 
 # Check all the standard Rust source files
-output=$(rg "^// Copyright (19|20)[\d]{2} (.+ and )?the LayerStack Authors( and .+)?$\n^// SPDX-License-Identifier: Apache-2\.0 OR MIT$\n\n" --files-without-match --multiline -g "*.rs" -g "!$generated/**" -g "!$generated_tests/**" -g "!$licensed_math" -g "!$licensed_mass" -g "!$licensed_lux" .)
+output=$(rg "^// Copyright (19|20)[\d]{2} (.+ and )?the LayerStack Authors( and .+)?$\n^// SPDX-License-Identifier: Apache-2\.0 OR MIT$\n\n" --files-without-match --multiline -g "*.rs" -g "!$generated/**" -g "!$generated_tests/**" -g "!$licensed_math" -g "!$licensed_mass" -g "!$licensed_lux" -g "!$generated_library/**" .)
 
 if [ -n "$output" ]; then
 	echo -e "The following files lack the correct copyright header:\n"

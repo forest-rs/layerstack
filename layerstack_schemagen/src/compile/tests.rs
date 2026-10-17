@@ -504,3 +504,130 @@ fn installing_fills_template_placeholders_and_keeps_edits() {
     let error = super::plug_info::install(template, false).unwrap_err();
     assert!(error.to_string().contains("LibraryPath"), "{error}");
 }
+
+/// The message of the [`CompileError::Rust`] the Rust module of `classes`,
+/// a codeless library, fails with.
+fn rust_error(classes: &str) -> String {
+    let compiled = compile_text(&format!("{CODELESS}{classes}")).expect("the schema compiles");
+    match compiled.rust_module() {
+        Err(CompileError::Rust { message }) => message,
+        other => panic!("{classes}: {other:?}"),
+    }
+}
+
+#[test]
+fn rust_modules_name_their_bases_and_dependencies() {
+    let compiled = compile_text(&format!(
+        "{CODELESS}class Thing \"Thing\" (inherits = </Typed>) {{\n    \
+         float thing:size = 2 (customData = {{ string apiName = \"extent\" }})\n}}\n"
+    ))
+    .unwrap();
+    let module = compiled.rust_module().unwrap();
+    assert!(module.contains("base: ::layerstack_schemas::usd::Typed<'a>"));
+    assert!(module.contains("pub fn extent(&self) -> Option<f32>"));
+    assert!(module.contains("pub fn set_extent_at("));
+    assert!(module.contains(
+        "pub const DEPENDENCIES: &[::layerstack_schemas::Domain] = \
+         &[::layerstack_schemas::Domain::Usd];"
+    ));
+    assert!(module.contains("pub const LIBRARY: &str = \"fixture\";"));
+}
+
+#[test]
+fn rust_names_that_cannot_be_methods_or_types_fail() {
+    let typed = |properties: &str| {
+        format!("class Thing \"Thing\" (inherits = </Typed>) {{\n{properties}\n}}\n")
+    };
+    let message = rust_error(&typed("float type"));
+    assert!(message.contains("Rust keyword"), "{message}");
+    let message = rust_error(&typed("float fooBar\nfloat foo_bar"));
+    assert!(
+        message.contains("two properties are named `foo_bar`"),
+        "{message}"
+    );
+    let message = rust_error(&typed("float new"));
+    assert!(message.contains("`new`"), "{message}");
+    let message = rust_error(
+        "class \"SlotAPI\" (inherits = </APISchemaBase>\n    customData = {\n        \
+         token apiSchemaType = \"multipleApply\"\n        token propertyNamespacePrefix = \"slot\"\n    })\n\
+         {\n    bool __INSTANCE_NAME__\n}\n",
+    );
+    assert!(message.contains("only an `apiName`"), "{message}");
+    let message = rust_error("class Scene \"Scene\" (inherits = </Typed>) {}\n");
+    assert!(
+        message.contains("`Scene` is a name the module imports"),
+        "{message}"
+    );
+    let message = rust_error(&format!(
+        "{}class ThingMode \"ThingMode\" (inherits = </Typed>) {{}}\n",
+        typed("token mode (allowedTokens = [\"on\", \"off\"])")
+    ));
+    assert!(message.contains("`ThingMode`"), "{message}");
+}
+
+#[test]
+fn rust_modules_build_only_on_openusd_domains() {
+    let directory = Directory::new();
+    std::fs::create_dir_all(directory.0.join("other")).unwrap();
+    std::fs::write(
+        directory.0.join("other/schema.usda"),
+        CODELESS.replace("\"fixture\"", "\"other\"") + "class \"Part\" (inherits = </Typed>) {}\n",
+    )
+    .unwrap();
+    let source = directory.0.join("schema.usda");
+    std::fs::write(
+        &source,
+        CODELESS.replace("@usd/schema.usda@", "@other/schema.usda@")
+            + "class Widget \"Widget\" (inherits = </Part>) {}\n",
+    )
+    .unwrap();
+    let compiled = compile(
+        &source,
+        &CompileOptions::new().with_search_path(&directory.0),
+    )
+    .expect("usdGenSchema compiles a library on another");
+    let Err(CompileError::Rust { message }) = compiled.rust_module() else {
+        panic!("a Rust module of a library built on another");
+    };
+    assert!(
+        message.contains("`Part` of the `other` library"),
+        "{message}"
+    );
+}
+
+#[test]
+fn the_command_writes_and_checks_a_rust_module() {
+    let directory = Directory::new();
+    let source = directory.0.join("schema.usda");
+    std::fs::write(
+        &source,
+        format!("{CODELESS}class Thing \"Thing\" (inherits = </Typed>) {{ float size }}\n"),
+    )
+    .unwrap();
+    let module = directory.0.join("src/schemas.rs");
+    std::fs::create_dir_all(directory.0.join("src")).unwrap();
+    let run = |check: bool| {
+        let mut args = vec![
+            source.display().to_string(),
+            "--rust".into(),
+            module.display().to_string(),
+            "--search".into(),
+            directory.0.display().to_string(),
+        ];
+        if check {
+            args.push("--check".into());
+        }
+        super::run(args.into_iter())
+    };
+    assert!(run(true).is_err(), "nothing written yet");
+    run(false).unwrap();
+    run(true).expect("up to date");
+    let text = std::fs::read_to_string(&module).unwrap();
+    assert!(
+        text.contains("pub fn size(&self) -> Option<f32> {\n"),
+        "formatted"
+    );
+    assert!(!directory.0.join("generatedSchema.usda").exists());
+    std::fs::write(&module, text.replace("size", "extent")).unwrap();
+    assert!(run(true).unwrap_err().contains("schemas.rs"));
+}

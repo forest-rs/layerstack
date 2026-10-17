@@ -78,6 +78,15 @@ pub(crate) struct PropertyInfo {
     pub(crate) generated_name: String,
     /// Its `apiName`, empty for an API schema override.
     pub(crate) api_name: String,
+    /// The `apiName` its `customData` authors, if it does: what the
+    /// generated Rust views name its accessors for.
+    pub(crate) authored_api_name: Option<String>,
+    /// Attribute or relationship.
+    pub(crate) kind: PropertyKind,
+    /// An attribute's value type, as its spec declares it.
+    pub(crate) type_name: Option<layerstack::PropertyType>,
+    /// Its variability.
+    pub(crate) variability: layerstack::Variability,
     /// A `token` attribute's fallback.
     pub(crate) token_fallback: Option<String>,
     /// Its `allowedTokens`.
@@ -95,6 +104,11 @@ pub(crate) struct Parsed {
     /// Classes of other layers that a class reflects
     /// (`reflectedAPISchemas`), by name.
     pub(crate) reflected: Vec<ClassInfo>,
+    /// The classes of the other layers of the stack, the libraries the
+    /// schema file builds on, each with its library's name. usdGenSchema
+    /// checks none of their rules; a layer or class that breaks one is
+    /// left out.
+    pub(crate) upstream: Vec<(String, ClassInfo)>,
 }
 
 /// Reads the classes of the schema file, checking usdGenSchema's rules
@@ -145,11 +159,27 @@ pub(crate) fn parse(stage: &SchemaStage) -> Result<Parsed, CompileError> {
     }
     let reflected = parser.reflected(&classes, library.use_literal_identifier)?;
     check_api_bases(&classes)?;
+    let mut upstream = Vec::new();
+    for layer in stage
+        .layer_stack()
+        .into_iter()
+        .filter(|&layer| layer != root)
+    {
+        let Ok(name) = parser.library_name(layer) else {
+            continue;
+        };
+        for path in parser.root_prims(layer) {
+            if let Ok(Some(class)) = parser.class(layer, path, true, true) {
+                upstream.push((name.clone(), class));
+            }
+        }
+    }
     Ok(Parsed {
         library,
         library_tokens,
         classes,
         reflected,
+        upstream,
     })
 }
 
@@ -702,15 +732,22 @@ impl<'s> Parser<'s> {
         };
         let is_override =
             dict_get(&custom_data, "apiSchemaOverride").is_some_and(|v| is_truthy(v, tokens));
+        let authored_api_name = dict_str(&custom_data, "apiName", tokens);
         let api_name = if is_override {
             String::new()
         } else {
-            dict_str(&custom_data, "apiName", tokens).unwrap_or_else(|| camel_case(base))
+            authored_api_name
+                .clone()
+                .unwrap_or_else(|| camel_case(base))
         };
         let mut info = PropertyInfo {
             name,
             generated_name,
             api_name,
+            authored_api_name,
+            kind: spec.kind,
+            type_name: spec.type_name.clone(),
+            variability: spec.variability,
             token_fallback: None,
             allowed_tokens: Vec::new(),
         };

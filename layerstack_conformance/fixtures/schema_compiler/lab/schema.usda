@@ -84,6 +84,9 @@ class Centrifuge "Centrifuge" (
 )
 {
     float centrifuge:maxSpeed = 15000 (
+        customData = {
+            string apiName = "maxRpm"
+        }
         doc = "Revolutions per minute."
     )
     uniform bool centrifuge:refrigerated = 0
@@ -126,6 +129,9 @@ class "ChannelAPI" (
 )
 {
     bool __INSTANCE_NAME__ = 1 (
+        customData = {
+            string apiName = "enabled"
+        }
         doc = "Whether the channel is enabled."
     )
     float gain = 1 (

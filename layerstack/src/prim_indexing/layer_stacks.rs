@@ -26,7 +26,7 @@ use crate::{
     layer_stack::{LayerStack, LayerStackIdentifier},
     path::PathId,
     relocates::RelocationTable,
-    sync::{Lock, Slots},
+    sync::{ReadLock, Slots},
 };
 
 /// Identifies a computed layer stack within one composition.
@@ -81,7 +81,7 @@ type StackKey = (LayerStackIdentifier, Arc<[LayerStackIdentifier]>);
 pub(crate) struct LayerStacks {
     stacks: Slots<ComputedStack>,
     len: AtomicU32,
-    by_key: Lock<HashMap<StackKey, StackId>>,
+    by_key: ReadLock<HashMap<StackKey, StackId>>,
 }
 
 impl LayerStacks {
@@ -103,13 +103,13 @@ impl LayerStacks {
         outer: Option<StackId>,
     ) -> StackId {
         let key = (identifier, self.variable_chain(store, identifier, outer));
-        if let Some(id) = self.by_key.with(|by_key| by_key.get(&key).copied()) {
+        if let Some(id) = self.by_key.read(|by_key| by_key.get(&key).copied()) {
             return id;
         }
         // Gathered without the lock, so threads gather different stacks at
         // once; of two gathering the same one, the first to record it wins.
         let computed = compute(store, identifier, key.1.clone());
-        self.by_key.with(|by_key| {
+        self.by_key.write(|by_key| {
             if let Some(&id) = by_key.get(&key) {
                 return id;
             }

@@ -15,7 +15,7 @@ categories = ["development-tools::testing"]
 workspace = true
 
 [dependencies]
-layerstack = { workspace = true }
+layerstack = { features = ["std"], workspace = true }
 layerstack_mesh_export = { workspace = true }
 layerstack_schemas = { features = ["all"], workspace = true }
 layerstack_usda = { workspace = true }

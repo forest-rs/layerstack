@@ -33,7 +33,7 @@ use crate::{
     path::PathId,
     prim_index::ArcKind,
     spec_path::SpecPath,
-    sync::Lock,
+    sync::ReadLock,
     variant_fallbacks::VariantFallbacks,
 };
 
@@ -52,11 +52,11 @@ pub(crate) struct Ctx<'s> {
     pub(crate) child_index: ChildIndex,
     pub(crate) fallbacks: &'s VariantFallbacks,
     /// Whether payloads at a stage path are loaded.
-    pub(crate) include_payload: &'s dyn Fn(&crate::path::PathInterner, PathId) -> bool,
+    pub(crate) include_payload: &'s (dyn Fn(&crate::path::PathInterner, PathId) -> bool + Sync),
     /// The stage's own layer stack.
     pub(crate) stage_stack: StackId,
     /// Finalized indexes of stage prims, for their children to start from.
-    pub(crate) cache: Lock<HashMap<PathId, Arc<Graph>>>,
+    pub(crate) cache: ReadLock<HashMap<PathId, Arc<Graph>>>,
     pub(crate) root_path: PathId,
 }
 
@@ -291,7 +291,7 @@ impl Default for ArcOptions {
 
 /// Builds one prim index. OpenUSD: `Pcp_PrimIndexer`.
 struct Indexer<'c, 's, 'f> {
-    ctx: &'c mut Ctx<'s>,
+    ctx: &'c Ctx<'s>,
     root_site: &'c Site,
     previous_frame: Option<&'f Frame<'f>>,
     evaluate_implied_specializes: bool,
@@ -307,7 +307,7 @@ struct Indexer<'c, 's, 'f> {
     reason = "mirrors `Pcp_BuildPrimIndex`, whose inputs are separate"
 )]
 pub(crate) fn build_prim_index(
-    ctx: &mut Ctx<'_>,
+    ctx: &Ctx<'_>,
     site: &Site,
     root_site: &Site,
     evaluate_implied_specializes: bool,
@@ -723,7 +723,7 @@ impl Indexer<'_, '_, '_> {
             && site.stack == self.ctx.stage_stack)
             .then(|| {
                 let parent = parent_path.prim_path();
-                self.ctx.cache.with(|cache| cache.get(&parent).cloned())
+                self.ctx.cache.read(|cache| cache.get(&parent).cloned())
             })
             .flatten();
         if let Some(parent) = cached.filter(|_| !parent_path.has_variant_selections()) {

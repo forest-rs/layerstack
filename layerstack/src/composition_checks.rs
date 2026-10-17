@@ -40,6 +40,16 @@ pub(crate) struct Findings {
 }
 
 impl Findings {
+    /// Records the findings of `other` after these, as if found in order:
+    /// the findings of one prim's index, merged in traversal order.
+    pub(crate) fn extend(&mut self, other: Self) {
+        for error in other.errors {
+            self.report(error);
+        }
+        self.class_internal_targets
+            .extend(other.class_internal_targets);
+    }
+
     /// Records `error` unless it was already recorded.
     pub(crate) fn report(&mut self, error: CompositionError) {
         if self.seen.insert(error.clone()) {

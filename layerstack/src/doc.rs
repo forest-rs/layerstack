@@ -2587,8 +2587,29 @@ pub enum AssetAvailability {
     Unresolved,
 }
 
+/// [`Sync`] with the `std` feature, so that a stage can compose from
+/// several threads reading one store ([`crate::StageOptions::threads`]);
+/// every type without it. A [`LayerStore`] must be one.
+#[cfg(feature = "std")]
+pub trait MaybeSync: Sync {}
+#[cfg(feature = "std")]
+impl<T: Sync + ?Sized> MaybeSync for T {}
+
+/// [`Sync`] with the `std` feature, so that a stage can compose from
+/// several threads reading one store ([`crate::StageOptions::threads`]);
+/// every type without it. A [`LayerStore`] must be one.
+#[cfg(not(feature = "std"))]
+pub trait MaybeSync {}
+#[cfg(not(feature = "std"))]
+impl<T: ?Sized> MaybeSync for T {}
+
 /// A store for accessing layers and shared interners.
-pub trait LayerStore {
+///
+/// With the `std` feature a store is [`Sync`] ([`MaybeSync`]): composing
+/// with [`crate::StageOptions::threads`] above one reads it from several
+/// threads at once, and interns into its [`TokenInterner`] and
+/// [`PathInterner`] through shared references.
+pub trait LayerStore: MaybeSync {
     /// Retains affinity of the shared token/path domains. Moving this store or
     /// adding names preserves it; replacing either interner invalidates it.
     /// Adapters exposing these same interners share affinity. No layer content

@@ -32,7 +32,7 @@ use core::{
 
 use hashbrown::{DefaultHashBuilder, HashTable};
 
-use crate::sync::{Lock, Slots};
+use crate::sync::{ReadLock, Slots};
 
 /// The number of separately locked tables; a power of two.
 const SHARDS: usize = 64;
@@ -63,7 +63,7 @@ fn position_of(id: u32) -> u32 {
 /// Values interned by id, from any number of threads.
 pub(crate) struct Interned<T> {
     hasher: DefaultHashBuilder,
-    shards: Box<[Lock<HashTable<u32>>]>,
+    shards: Box<[ReadLock<HashTable<u32>>]>,
     /// The values, in interning order.
     values: Slots<T>,
     len: AtomicU32,
@@ -73,7 +73,9 @@ impl<T> Default for Interned<T> {
     fn default() -> Self {
         Self {
             hasher: DefaultHashBuilder::default(),
-            shards: (0..SHARDS).map(|_| Lock::new(HashTable::new())).collect(),
+            shards: (0..SHARDS)
+                .map(|_| ReadLock::new(HashTable::new()))
+                .collect(),
             values: Slots::default(),
             len: AtomicU32::new(0),
         }
@@ -92,7 +94,7 @@ impl<T: Hash + Eq> Interned<T> {
         self.values.get(position_of(id))
     }
 
-    fn shard(&self, hash: u64) -> &Lock<HashTable<u32>> {
+    fn shard(&self, hash: u64) -> &ReadLock<HashTable<u32>> {
         &self.shards[(hash >> SHARD_SHIFT) as usize & (SHARDS - 1)]
     }
 
@@ -107,7 +109,15 @@ impl<T: Hash + Eq> Interned<T> {
         Q: Hash + Eq + ?Sized,
     {
         let hash = self.hasher.hash_one(key);
-        self.shard(hash).with(|table| {
+        self.find_hashed(hash, key)
+    }
+
+    fn find_hashed<Q>(&self, hash: u64, key: &Q) -> Option<u32>
+    where
+        T: Borrow<Q>,
+        Q: Hash + Eq + ?Sized,
+    {
+        self.shard(hash).read(|table| {
             table
                 .find(hash, |&id| self.get(id).is_some_and(|v| v.borrow() == key))
                 .copied()
@@ -122,7 +132,11 @@ impl<T: Hash + Eq> Interned<T> {
         Q: Hash + Eq + ?Sized,
     {
         let hash = self.hasher.hash_one(key);
-        self.shard(hash).with(|table| {
+        // Most values are interned already: find them under a shared lock.
+        if let Some(id) = self.find_hashed(hash, key) {
+            return (id, false);
+        }
+        self.shard(hash).write(|table| {
             if let Some(&id) =
                 table.find(hash, |&id| self.get(id).is_some_and(|v| v.borrow() == key))
             {
@@ -146,14 +160,14 @@ impl<T: Hash + Eq + Clone> Interned<T> {
         // Each id below `len` was handed out under its table's lock, and
         // has its value once that lock is released.
         for shard in &self.shards {
-            shard.with(|_| ());
+            shard.write(|_| ());
         }
         for n in 0..len {
             let id = id_of(n);
             let value = self.get(id).expect("interned id").clone();
             let hash = copy.hasher.hash_one(&value);
             copy.values.set(n, value);
-            copy.shard(hash).with(|table| {
+            copy.shard(hash).write(|table| {
                 table.insert_unique(hash, id, copy.rehash());
             });
         }

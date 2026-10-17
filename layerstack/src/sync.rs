@@ -3,7 +3,7 @@
 
 //! Shared-state building blocks for tables several threads fill at once.
 //!
-//! With the `std` feature a [`Lock`] is a `Mutex` and [`Slots`] are
+//! With the `std` feature a [`ReadLock`] is a `RwLock` and [`Slots`] are
 //! `OnceLock`s, so the tables built from them are [`Sync`]; without it they
 //! are a `RefCell` and `OnceCell`s, for one thread.
 
@@ -12,30 +12,42 @@ use alloc::boxed::Box;
 #[cfg(not(feature = "std"))]
 use core::cell::{OnceCell as Once, RefCell};
 #[cfg(feature = "std")]
-use std::sync::{Mutex, OnceLock as Once};
+use std::sync::{OnceLock as Once, RwLock};
 
-/// A value behind a lock: a `Mutex` with the `std` feature, a `RefCell`
-/// without.
-pub(crate) struct Lock<T>(
-    #[cfg(feature = "std")] Mutex<T>,
+/// A value many threads read at once and one writes at a time: a `RwLock`
+/// with the `std` feature, a `RefCell` without.
+pub(crate) struct ReadLock<T>(
+    #[cfg(feature = "std")] RwLock<T>,
     #[cfg(not(feature = "std"))] RefCell<T>,
 );
 
-impl<T> Lock<T> {
+impl<T> ReadLock<T> {
     pub(crate) fn new(value: T) -> Self {
         #[cfg(feature = "std")]
-        let lock = Mutex::new(value);
+        let lock = RwLock::new(value);
         #[cfg(not(feature = "std"))]
         let lock = RefCell::new(value);
         Self(lock)
     }
 
-    /// Runs `f` on the value while holding the lock.
-    pub(crate) fn with<R>(&self, f: impl FnOnce(&mut T) -> R) -> R {
+    /// Runs `f` on the value, sharing it with other readers.
+    pub(crate) fn read<R>(&self, f: impl FnOnce(&T) -> R) -> R {
+        #[cfg(feature = "std")]
+        let value = self
+            .0
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        #[cfg(not(feature = "std"))]
+        let value = self.0.borrow();
+        f(&value)
+    }
+
+    /// Runs `f` on the value while no one else reads or writes it.
+    pub(crate) fn write<R>(&self, f: impl FnOnce(&mut T) -> R) -> R {
         #[cfg(feature = "std")]
         let mut value = self
             .0
-            .lock()
+            .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         #[cfg(not(feature = "std"))]
         let mut value = self.0.borrow_mut();
@@ -43,7 +55,7 @@ impl<T> Lock<T> {
     }
 }
 
-impl<T: Default> Default for Lock<T> {
+impl<T: Default> Default for ReadLock<T> {
     fn default() -> Self {
         Self::new(T::default())
     }

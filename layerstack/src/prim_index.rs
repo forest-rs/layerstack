@@ -263,6 +263,9 @@ pub(crate) struct PrimIndex {
     /// Namespace-independent records. Equivalent prototype members share
     /// these; mutation detaches while older stages retain their snapshot.
     pub(crate) data: Arc<PrimIndexData>,
+    /// What the arguments of the dynamic payloads the index follows were
+    /// composed from; `None` when it follows none.
+    pub(crate) dynamic: Option<Arc<crate::dynamic_format::DynamicDependency>>,
 }
 
 #[derive(Clone, Debug, Default)]

@@ -366,6 +366,15 @@ pub struct StageOptions {
     /// OpenUSD composes on as many threads as `WorkGetConcurrencyLimit`,
     /// every core unless the host lowers it.
     pub threads: usize,
+    /// The dynamic file formats payloads compose arguments for: a payload
+    /// to an asset with one of their extensions targets the layer its
+    /// composed arguments name (see [`crate::dynamic_format`]). Empty by
+    /// default. `layerstack_io::StageDocument` adds the dynamic sides of
+    /// the file formats it reads.
+    ///
+    /// OpenUSD finds them among the registered `SdfFileFormat` plugins
+    /// (`_GetDynamicFileFormat` in `pxr/usd/pcp/primIndex.cpp`).
+    pub dynamic_formats: crate::dynamic_format::DynamicFormats,
 }
 
 /// A composed stage: read-only facade over composition results.
@@ -1395,6 +1404,19 @@ impl Stage {
     #[must_use]
     pub fn asset_requests(&self) -> &[crate::AssetRequest] {
         &self.asset_requests
+    }
+
+    /// What the arguments of the payloads to dynamic file formats that the
+    /// prim index of `prim` follows were composed from: the fields and
+    /// attributes read, and each format's dependency data. `None` when the
+    /// prim is not composed or its index composes no dynamic arguments; the
+    /// payloads of its ancestors belong to their own indexes.
+    ///
+    /// See [`crate::dynamic_format`]. OpenUSD:
+    /// `PcpCache::GetDynamicFileFormatArgumentDependencyData`.
+    #[must_use]
+    pub fn dynamic_dependency(&self, prim: PathId) -> Option<&crate::DynamicDependency> {
+        self.prims.get(&prim)?.dynamic.as_deref()
     }
 
     /// Replaces the prim indexes of `recomposed` with those from a partial

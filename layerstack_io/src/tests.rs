@@ -7,6 +7,7 @@ mod deferred_arcs;
 mod encoded_ownership;
 mod package_identity;
 mod registered_metadata;
+mod threaded_open;
 
 #[test]
 fn sparse_clip_preparation_covers_advanced_weaker_queries_and_set_reordering() {

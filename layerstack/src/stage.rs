@@ -348,9 +348,11 @@ pub struct StageOptions {
     pub schemas: Option<Arc<SchemaRegistry>>,
     /// The most threads composition indexes prims on, the calling thread
     /// included. `0` and `1`, the default, compose on the calling thread;
-    /// above that, composition spawns scoped worker threads for as long as
+    /// above that, composition starts scoped worker threads for as long as
     /// it runs, and reads the store from all of them. Without the `std`
-    /// feature composition always runs on the calling thread.
+    /// feature composition always runs on the calling thread. A host that
+    /// opens stages from storage may read their layers on as many threads
+    /// too, as `layerstack_io::StageDocument` does.
     ///
     /// The composed stage is the same for every count: its prims, values
     /// and the order of its composition errors. Only the order in which

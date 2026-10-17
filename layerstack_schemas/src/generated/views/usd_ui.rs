@@ -177,7 +177,7 @@ impl<'a> AccessibilityApi<'a> {
 
     #[doc = "An extended description of the prim to provide more details."]
     #[doc = ""]
-    #[doc = "USD attribute `accessibility:&lt;instance&gt;:description` (`string`)."]
+    #[doc = "USD attribute `accessibility:<instance>:description` (`string`)."]
     #[doc = "C++ read: `UsdUIAccessibilityAPI::GetDescriptionAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdUIAccessibilityAPI::GetDescriptionAttr")]
     #[doc(alias = "GetDescriptionAttr")]
@@ -206,7 +206,7 @@ impl<'a> AccessibilityApi<'a> {
 
     #[doc = "A short label to concisely describe the prim."]
     #[doc = ""]
-    #[doc = "USD attribute `accessibility:&lt;instance&gt;:label` (`string`)."]
+    #[doc = "USD attribute `accessibility:<instance>:label` (`string`)."]
     #[doc = "C++ read: `UsdUIAccessibilityAPI::GetLabelAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdUIAccessibilityAPI::GetLabelAttr")]
     #[doc(alias = "GetLabelAttr")]
@@ -235,7 +235,7 @@ impl<'a> AccessibilityApi<'a> {
 
     #[doc = "A hint to the accessibility runtime of how to prioritize this instance's label and description, relative to others. Allowed tokens are \"low\", \"standard\", and \"high\"."]
     #[doc = ""]
-    #[doc = "USD attribute `accessibility:&lt;instance&gt;:priority` (`token`; fallback `\"standard\"`)."]
+    #[doc = "USD attribute `accessibility:<instance>:priority` (`token`; fallback `\"standard\"`)."]
     #[doc = "C++ read: `UsdUIAccessibilityAPI::GetPriorityAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdUIAccessibilityAPI::GetPriorityAttr")]
     #[doc(alias = "GetPriorityAttr")]
@@ -295,7 +295,7 @@ impl AccessibilityApiEdit {
 
     #[doc = "An extended description of the prim to provide more details."]
     #[doc = ""]
-    #[doc = "USD attribute `accessibility:&lt;instance&gt;:description` (`string`)."]
+    #[doc = "USD attribute `accessibility:<instance>:description` (`string`)."]
     #[doc = "C++ authoring: `UsdUIAccessibilityAPI::CreateDescriptionAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdUIAccessibilityAPI::CreateDescriptionAttr")]
     #[doc(alias = "CreateDescriptionAttr")]
@@ -324,7 +324,7 @@ impl AccessibilityApiEdit {
 
     #[doc = "A short label to concisely describe the prim."]
     #[doc = ""]
-    #[doc = "USD attribute `accessibility:&lt;instance&gt;:label` (`string`)."]
+    #[doc = "USD attribute `accessibility:<instance>:label` (`string`)."]
     #[doc = "C++ authoring: `UsdUIAccessibilityAPI::CreateLabelAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdUIAccessibilityAPI::CreateLabelAttr")]
     #[doc(alias = "CreateLabelAttr")]
@@ -348,7 +348,7 @@ impl AccessibilityApiEdit {
 
     #[doc = "A hint to the accessibility runtime of how to prioritize this instance's label and description, relative to others. Allowed tokens are \"low\", \"standard\", and \"high\"."]
     #[doc = ""]
-    #[doc = "USD attribute `accessibility:&lt;instance&gt;:priority` (`token`; fallback `\"standard\"`)."]
+    #[doc = "USD attribute `accessibility:<instance>:priority` (`token`; fallback `\"standard\"`)."]
     #[doc = "C++ authoring: `UsdUIAccessibilityAPI::CreatePriorityAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdUIAccessibilityAPI::CreatePriorityAttr")]
     #[doc(alias = "CreatePriorityAttr")]

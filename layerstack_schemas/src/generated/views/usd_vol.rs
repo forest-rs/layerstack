@@ -1467,7 +1467,7 @@ impl<'a> ParticleFieldOpacityAttributeApi<'a> {
 
     #[doc = "Defines the opacity for each particle."]
     #[doc = ""]
-    #[doc = "USD attribute `opacities` (`float\\[\\]`)."]
+    #[doc = "USD attribute `opacities` (`float[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdVolParticleFieldOpacityAttributeAPI::GetOpacitiesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -1507,7 +1507,7 @@ impl<'a> ParticleFieldOpacityAttributeApi<'a> {
 
     #[doc = "Defines the opacity for each particle."]
     #[doc = ""]
-    #[doc = "USD attribute `opacitiesh` (`half\\[\\]`)."]
+    #[doc = "USD attribute `opacitiesh` (`half[]`)."]
     #[doc = "C++ read: `UsdVolParticleFieldOpacityAttributeAPI::GetOpacitieshAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdVolParticleFieldOpacityAttributeAPI::GetOpacitieshAttr")]
     #[doc(alias = "GetOpacitieshAttr")]
@@ -1567,7 +1567,7 @@ impl ParticleFieldOpacityAttributeApiEdit {
 
     #[doc = "Defines the opacity for each particle."]
     #[doc = ""]
-    #[doc = "USD attribute `opacities` (`float\\[\\]`)."]
+    #[doc = "USD attribute `opacities` (`float[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdVolParticleFieldOpacityAttributeAPI::CreateOpacitiesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -1634,7 +1634,7 @@ impl ParticleFieldOpacityAttributeApiEdit {
 
     #[doc = "Defines the opacity for each particle."]
     #[doc = ""]
-    #[doc = "USD attribute `opacitiesh` (`half\\[\\]`)."]
+    #[doc = "USD attribute `opacitiesh` (`half[]`)."]
     #[doc = "C++ authoring: `UsdVolParticleFieldOpacityAttributeAPI::CreateOpacitieshAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdVolParticleFieldOpacityAttributeAPI::CreateOpacitieshAttr")]
     #[doc(alias = "CreateOpacitieshAttr")]
@@ -1726,7 +1726,7 @@ impl<'a> ParticleFieldOrientationAttributeApi<'a> {
 
     #[doc = "Defines the quaternion orientation for each particle."]
     #[doc = ""]
-    #[doc = "USD attribute `orientations` (`quatf\\[\\]`)."]
+    #[doc = "USD attribute `orientations` (`quatf[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdVolParticleFieldOrientationAttributeAPI::GetOrientationsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -1766,7 +1766,7 @@ impl<'a> ParticleFieldOrientationAttributeApi<'a> {
 
     #[doc = "Defines the quaternion orientation for each particle."]
     #[doc = ""]
-    #[doc = "USD attribute `orientationsh` (`quath\\[\\]`)."]
+    #[doc = "USD attribute `orientationsh` (`quath[]`)."]
     #[doc = "C++ read: `UsdVolParticleFieldOrientationAttributeAPI::GetOrientationshAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdVolParticleFieldOrientationAttributeAPI::GetOrientationshAttr")]
     #[doc(alias = "GetOrientationshAttr")]
@@ -1831,7 +1831,7 @@ impl ParticleFieldOrientationAttributeApiEdit {
 
     #[doc = "Defines the quaternion orientation for each particle."]
     #[doc = ""]
-    #[doc = "USD attribute `orientations` (`quatf\\[\\]`)."]
+    #[doc = "USD attribute `orientations` (`quatf[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdVolParticleFieldOrientationAttributeAPI::CreateOrientationsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -1903,7 +1903,7 @@ impl ParticleFieldOrientationAttributeApiEdit {
 
     #[doc = "Defines the quaternion orientation for each particle."]
     #[doc = ""]
-    #[doc = "USD attribute `orientationsh` (`quath\\[\\]`)."]
+    #[doc = "USD attribute `orientationsh` (`quath[]`)."]
     #[doc = "C++ authoring: `UsdVolParticleFieldOrientationAttributeAPI::CreateOrientationshAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdVolParticleFieldOrientationAttributeAPI::CreateOrientationshAttr")]
     #[doc(alias = "CreateOrientationshAttr")]
@@ -1998,7 +1998,7 @@ impl<'a> ParticleFieldPositionAttributeApi<'a> {
 
     #[doc = "Defines the position for each particle in local space."]
     #[doc = ""]
-    #[doc = "USD attribute `positions` (`point3f\\[\\]`)."]
+    #[doc = "USD attribute `positions` (`point3f[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdVolParticleFieldPositionAttributeAPI::GetPositionsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -2038,7 +2038,7 @@ impl<'a> ParticleFieldPositionAttributeApi<'a> {
 
     #[doc = "Defines the position for each particle in local space."]
     #[doc = ""]
-    #[doc = "USD attribute `positionsh` (`point3h\\[\\]`)."]
+    #[doc = "USD attribute `positionsh` (`point3h[]`)."]
     #[doc = "C++ read: `UsdVolParticleFieldPositionAttributeAPI::GetPositionshAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdVolParticleFieldPositionAttributeAPI::GetPositionshAttr")]
     #[doc(alias = "GetPositionshAttr")]
@@ -2098,7 +2098,7 @@ impl ParticleFieldPositionAttributeApiEdit {
 
     #[doc = "Defines the position for each particle in local space."]
     #[doc = ""]
-    #[doc = "USD attribute `positions` (`point3f\\[\\]`)."]
+    #[doc = "USD attribute `positions` (`point3f[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdVolParticleFieldPositionAttributeAPI::CreatePositionsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -2170,7 +2170,7 @@ impl ParticleFieldPositionAttributeApiEdit {
 
     #[doc = "Defines the position for each particle in local space."]
     #[doc = ""]
-    #[doc = "USD attribute `positionsh` (`point3h\\[\\]`)."]
+    #[doc = "USD attribute `positionsh` (`point3h[]`)."]
     #[doc = "C++ authoring: `UsdVolParticleFieldPositionAttributeAPI::CreatePositionshAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdVolParticleFieldPositionAttributeAPI::CreatePositionshAttr")]
     #[doc(alias = "CreatePositionshAttr")]
@@ -2463,7 +2463,7 @@ impl<'a> ParticleFieldScaleAttributeApi<'a> {
 
     #[doc = "Affine linear scale factor applied to the kernel that is instantiated at each particle."]
     #[doc = ""]
-    #[doc = "USD attribute `scales` (`float3\\[\\]`)."]
+    #[doc = "USD attribute `scales` (`float3[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdVolParticleFieldScaleAttributeAPI::GetScalesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -2503,7 +2503,7 @@ impl<'a> ParticleFieldScaleAttributeApi<'a> {
 
     #[doc = "Affine linear scale factor applied to the kernel that is instantiated at each particle."]
     #[doc = ""]
-    #[doc = "USD attribute `scalesh` (`half3\\[\\]`)."]
+    #[doc = "USD attribute `scalesh` (`half3[]`)."]
     #[doc = "C++ read: `UsdVolParticleFieldScaleAttributeAPI::GetScaleshAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdVolParticleFieldScaleAttributeAPI::GetScaleshAttr")]
     #[doc(alias = "GetScaleshAttr")]
@@ -2563,7 +2563,7 @@ impl ParticleFieldScaleAttributeApiEdit {
 
     #[doc = "Affine linear scale factor applied to the kernel that is instantiated at each particle."]
     #[doc = ""]
-    #[doc = "USD attribute `scales` (`float3\\[\\]`)."]
+    #[doc = "USD attribute `scales` (`float3[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdVolParticleFieldScaleAttributeAPI::CreateScalesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -2630,7 +2630,7 @@ impl ParticleFieldScaleAttributeApiEdit {
 
     #[doc = "Affine linear scale factor applied to the kernel that is instantiated at each particle."]
     #[doc = ""]
-    #[doc = "USD attribute `scalesh` (`half3\\[\\]`)."]
+    #[doc = "USD attribute `scalesh` (`half3[]`)."]
     #[doc = "C++ authoring: `UsdVolParticleFieldScaleAttributeAPI::CreateScaleshAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdVolParticleFieldScaleAttributeAPI::CreateScaleshAttr")]
     #[doc(alias = "CreateScaleshAttr")]
@@ -2728,7 +2728,7 @@ impl<'a> ParticleFieldSphericalHarmonicsAttributeApi<'a> {
 
     #[doc = "An array of spherical harmonics coefficients."]
     #[doc = ""]
-    #[doc = "USD attribute `radiance:sphericalHarmonicsCoefficients` (`float3\\[\\]`)."]
+    #[doc = "USD attribute `radiance:sphericalHarmonicsCoefficients` (`float3[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdVolParticleFieldSphericalHarmonicsAttributeAPI::GetRadianceSphericalHarmonicsCoefficientsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -2780,7 +2780,7 @@ impl<'a> ParticleFieldSphericalHarmonicsAttributeApi<'a> {
 
     #[doc = "An array of spherical harmonics coefficients."]
     #[doc = ""]
-    #[doc = "USD attribute `radiance:sphericalHarmonicsCoefficientsh` (`half3\\[\\]`)."]
+    #[doc = "USD attribute `radiance:sphericalHarmonicsCoefficientsh` (`half3[]`)."]
     #[doc = "C++ read: `UsdVolParticleFieldSphericalHarmonicsAttributeAPI::GetRadianceSphericalHarmonicsCoefficientshAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(
         alias = "UsdVolParticleFieldSphericalHarmonicsAttributeAPI::GetRadianceSphericalHarmonicsCoefficientshAttr"
@@ -2873,7 +2873,7 @@ impl ParticleFieldSphericalHarmonicsAttributeApiEdit {
 
     #[doc = "An array of spherical harmonics coefficients."]
     #[doc = ""]
-    #[doc = "USD attribute `radiance:sphericalHarmonicsCoefficients` (`float3\\[\\]`)."]
+    #[doc = "USD attribute `radiance:sphericalHarmonicsCoefficients` (`float3[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdVolParticleFieldSphericalHarmonicsAttributeAPI::CreateRadianceSphericalHarmonicsCoefficientsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -2966,7 +2966,7 @@ impl ParticleFieldSphericalHarmonicsAttributeApiEdit {
 
     #[doc = "An array of spherical harmonics coefficients."]
     #[doc = ""]
-    #[doc = "USD attribute `radiance:sphericalHarmonicsCoefficientsh` (`half3\\[\\]`)."]
+    #[doc = "USD attribute `radiance:sphericalHarmonicsCoefficientsh` (`half3[]`)."]
     #[doc = "C++ authoring: `UsdVolParticleFieldSphericalHarmonicsAttributeAPI::CreateRadianceSphericalHarmonicsCoefficientshAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(
         alias = "UsdVolParticleFieldSphericalHarmonicsAttributeAPI::CreateRadianceSphericalHarmonicsCoefficientshAttr"

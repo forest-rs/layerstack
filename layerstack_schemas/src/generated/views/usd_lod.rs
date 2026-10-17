@@ -88,7 +88,7 @@ impl<'a> LODDistanceHeuristic<'a> {
 
     #[doc = "This defines distance thresholds for LOD transitions in ascending order."]
     #[doc = ""]
-    #[doc = "USD attribute `blendThresholds` (`float\\[\\]`, uniform; fallback `\\[\\]`)."]
+    #[doc = "USD attribute `blendThresholds` (`float[]`, uniform; fallback `[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdLodDistanceHeuristic::GetBlendThresholdsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -155,7 +155,7 @@ impl<'a> LODDistanceHeuristic<'a> {
 
     #[doc = "This defines the distance thresholds for LOD transitions in ascending order."]
     #[doc = ""]
-    #[doc = "USD attribute `thresholds` (`float\\[\\]`, uniform; fallback `\\[\\]`)."]
+    #[doc = "USD attribute `thresholds` (`float[]`, uniform; fallback `[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdLodDistanceHeuristic::GetThresholdsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -210,7 +210,7 @@ impl LODDistanceHeuristicEdit {
 
     #[doc = "This defines distance thresholds for LOD transitions in ascending order."]
     #[doc = ""]
-    #[doc = "USD attribute `blendThresholds` (`float\\[\\]`, uniform; fallback `\\[\\]`)."]
+    #[doc = "USD attribute `blendThresholds` (`float[]`, uniform; fallback `[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdLodDistanceHeuristic::CreateBlendThresholdsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -280,7 +280,7 @@ impl LODDistanceHeuristicEdit {
 
     #[doc = "This defines the distance thresholds for LOD transitions in ascending order."]
     #[doc = ""]
-    #[doc = "USD attribute `thresholds` (`float\\[\\]`, uniform; fallback `\\[\\]`)."]
+    #[doc = "USD attribute `thresholds` (`float[]`, uniform; fallback `[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdLodDistanceHeuristic::CreateThresholdsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -977,7 +977,7 @@ impl<'a> LODScreenSizeHeuristic<'a> {
 
     #[doc = "This defines screen size thresholds for LOD transitions in descending order."]
     #[doc = ""]
-    #[doc = "USD attribute `blendThresholds` (`float\\[\\]`, uniform; fallback `\\[\\]`)."]
+    #[doc = "USD attribute `blendThresholds` (`float[]`, uniform; fallback `[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdLodScreenSizeHeuristic::GetBlendThresholdsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -1020,7 +1020,7 @@ impl<'a> LODScreenSizeHeuristic<'a> {
 
     #[doc = "The extent of this LOD Root in local coordinates."]
     #[doc = ""]
-    #[doc = "USD attribute `extent` (`float3\\[\\]`; fallback `\\[(-1.0, -1.0, -1.0), (1.0, 1.0, 1.0)\\]`)."]
+    #[doc = "USD attribute `extent` (`float3[]`; fallback `[(-1.0, -1.0, -1.0), (1.0, 1.0, 1.0)]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdLodScreenSizeHeuristic::GetExtentAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -1077,7 +1077,7 @@ impl<'a> LODScreenSizeHeuristic<'a> {
 
     #[doc = "The screen size thresholds for LOD transitions in descending order as a fraction of the viewport size."]
     #[doc = ""]
-    #[doc = "USD attribute `thresholds` (`float\\[\\]`, uniform; fallback `\\[\\]`)."]
+    #[doc = "USD attribute `thresholds` (`float[]`, uniform; fallback `[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdLodScreenSizeHeuristic::GetThresholdsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -1132,7 +1132,7 @@ impl LODScreenSizeHeuristicEdit {
 
     #[doc = "This defines screen size thresholds for LOD transitions in descending order."]
     #[doc = ""]
-    #[doc = "USD attribute `blendThresholds` (`float\\[\\]`, uniform; fallback `\\[\\]`)."]
+    #[doc = "USD attribute `blendThresholds` (`float[]`, uniform; fallback `[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdLodScreenSizeHeuristic::CreateBlendThresholdsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -1183,7 +1183,7 @@ impl LODScreenSizeHeuristicEdit {
 
     #[doc = "The extent of this LOD Root in local coordinates."]
     #[doc = ""]
-    #[doc = "USD attribute `extent` (`float3\\[\\]`; fallback `\\[(-1.0, -1.0, -1.0), (1.0, 1.0, 1.0)\\]`)."]
+    #[doc = "USD attribute `extent` (`float3[]`; fallback `[(-1.0, -1.0, -1.0), (1.0, 1.0, 1.0)]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdLodScreenSizeHeuristic::CreateExtentAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -1266,7 +1266,7 @@ impl LODScreenSizeHeuristicEdit {
 
     #[doc = "The screen size thresholds for LOD transitions in descending order as a fraction of the viewport size."]
     #[doc = ""]
-    #[doc = "USD attribute `thresholds` (`float\\[\\]`, uniform; fallback `\\[\\]`)."]
+    #[doc = "USD attribute `thresholds` (`float[]`, uniform; fallback `[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdLodScreenSizeHeuristic::CreateThresholdsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]

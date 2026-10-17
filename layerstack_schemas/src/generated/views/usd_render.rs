@@ -88,7 +88,7 @@ impl<'a> RenderPass<'a> {
 
     #[doc = "Command to run in order to generate renders for this pass. Used by render pipelines to send jobs to scheduling components that will generate renders."]
     #[doc = ""]
-    #[doc = "USD attribute `command` (`string\\[\\]`, uniform)."]
+    #[doc = "USD attribute `command` (`string[]`, uniform)."]
     #[doc = "C++ read: `UsdRenderPass::GetCommandAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdRenderPass::GetCommandAttr")]
     #[doc(alias = "GetCommandAttr")]
@@ -201,7 +201,7 @@ impl RenderPassEdit {
 
     #[doc = "Command to run in order to generate renders for this pass. Used by render pipelines to send jobs to scheduling components that will generate renders."]
     #[doc = ""]
-    #[doc = "USD attribute `command` (`string\\[\\]`, uniform)."]
+    #[doc = "USD attribute `command` (`string[]`, uniform)."]
     #[doc = "C++ authoring: `UsdRenderPass::CreateCommandAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdRenderPass::CreateCommandAttr")]
     #[doc(alias = "CreateCommandAttr")]
@@ -576,7 +576,7 @@ impl<'a> RenderSettings<'a> {
 
     #[doc = "Imageable purpose values (e.g. default, render, proxy, guide) that should be included in the render. Only imageable prims with purpose set to one of the includedPurposes values will be rendered."]
     #[doc = ""]
-    #[doc = "USD attribute `includedPurposes` (`token\\[\\]`, uniform; fallback `\\[\"default\", \"render\"\\]`)."]
+    #[doc = "USD attribute `includedPurposes` (`token[]`, uniform; fallback `[\"default\", \"render\"]`)."]
     #[doc = "C++ read: `UsdRenderSettings::GetIncludedPurposesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdRenderSettings::GetIncludedPurposesAttr")]
     #[doc(alias = "GetIncludedPurposesAttr")]
@@ -602,7 +602,7 @@ impl<'a> RenderSettings<'a> {
 
     #[doc = "Ordered list of material binding purposes that will be used in the render."]
     #[doc = ""]
-    #[doc = "USD attribute `materialBindingPurposes` (`token\\[\\]`, uniform; fallback `\\[\"full\", \"\"\\]`)."]
+    #[doc = "USD attribute `materialBindingPurposes` (`token[]`, uniform; fallback `[\"full\", \"\"]`)."]
     #[doc = "C++ read: `UsdRenderSettings::GetMaterialBindingPurposesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdRenderSettings::GetMaterialBindingPurposesAttr")]
     #[doc(alias = "GetMaterialBindingPurposesAttr")]
@@ -686,7 +686,7 @@ impl RenderSettingsEdit {
 
     #[doc = "Imageable purpose values (e.g. default, render, proxy, guide) that should be included in the render. Only imageable prims with purpose set to one of the includedPurposes values will be rendered."]
     #[doc = ""]
-    #[doc = "USD attribute `includedPurposes` (`token\\[\\]`, uniform; fallback `\\[\"default\", \"render\"\\]`)."]
+    #[doc = "USD attribute `includedPurposes` (`token[]`, uniform; fallback `[\"default\", \"render\"]`)."]
     #[doc = "C++ authoring: `UsdRenderSettings::CreateIncludedPurposesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdRenderSettings::CreateIncludedPurposesAttr")]
     #[doc(alias = "CreateIncludedPurposesAttr")]
@@ -698,7 +698,7 @@ impl RenderSettingsEdit {
 
     #[doc = "Ordered list of material binding purposes that will be used in the render."]
     #[doc = ""]
-    #[doc = "USD attribute `materialBindingPurposes` (`token\\[\\]`, uniform; fallback `\\[\"full\", \"\"\\]`)."]
+    #[doc = "USD attribute `materialBindingPurposes` (`token[]`, uniform; fallback `[\"full\", \"\"]`)."]
     #[doc = "C++ authoring: `UsdRenderSettings::CreateMaterialBindingPurposesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdRenderSettings::CreateMaterialBindingPurposesAttr")]
     #[doc(alias = "CreateMaterialBindingPurposesAttr")]

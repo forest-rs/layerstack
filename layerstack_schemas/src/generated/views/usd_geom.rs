@@ -177,7 +177,7 @@ impl<'a> BackPlateApi<'a> {
 
     #[doc = "Asset path to the file containing a texture or sequence of textures."]
     #[doc = ""]
-    #[doc = "USD attribute `backPlate:&lt;instance&gt;:alpha:image` (`asset`; fallback `\"\"`)."]
+    #[doc = "USD attribute `backPlate:<instance>:alpha:image` (`asset`; fallback `\"\"`)."]
     #[doc = "C++ read: `UsdGeomBackPlateAPI::GetAlphaImageAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdGeomBackPlateAPI::GetAlphaImageAttr")]
     #[doc(alias = "GetAlphaImageAttr")]
@@ -204,7 +204,7 @@ impl<'a> BackPlateApi<'a> {
         )
     }
 
-    #[doc = "USD attribute `backPlate:&lt;instance&gt;:depth:cameraSpaceOffset` (`float`; fallback `0.0`)."]
+    #[doc = "USD attribute `backPlate:<instance>:depth:cameraSpaceOffset` (`float`; fallback `0.0`)."]
     #[doc = "C++ read: `UsdGeomBackPlateAPI::GetDepthCameraSpaceOffsetAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdGeomBackPlateAPI::GetDepthCameraSpaceOffsetAttr")]
     #[doc(alias = "GetDepthCameraSpaceOffsetAttr")]
@@ -233,7 +233,7 @@ impl<'a> BackPlateApi<'a> {
 
     #[doc = "Asset path to the file containing a texture or sequence of textures."]
     #[doc = ""]
-    #[doc = "USD attribute `backPlate:&lt;instance&gt;:depth:image` (`asset`; fallback `\"\"`)."]
+    #[doc = "USD attribute `backPlate:<instance>:depth:image` (`asset`; fallback `\"\"`)."]
     #[doc = "C++ read: `UsdGeomBackPlateAPI::GetDepthImageAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdGeomBackPlateAPI::GetDepthImageAttr")]
     #[doc(alias = "GetDepthImageAttr")]
@@ -260,7 +260,7 @@ impl<'a> BackPlateApi<'a> {
         )
     }
 
-    #[doc = "USD attribute `backPlate:&lt;instance&gt;:depth:minOffset` (`float`; fallback `0.0`)."]
+    #[doc = "USD attribute `backPlate:<instance>:depth:minOffset` (`float`; fallback `0.0`)."]
     #[doc = "C++ read: `UsdGeomBackPlateAPI::GetDepthMinOffsetAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdGeomBackPlateAPI::GetDepthMinOffsetAttr")]
     #[doc(alias = "GetDepthMinOffsetAttr")]
@@ -287,7 +287,7 @@ impl<'a> BackPlateApi<'a> {
         )
     }
 
-    #[doc = "USD attribute `backPlate:&lt;instance&gt;:depth:normalizingFactor` (`float`; fallback `1.0`)."]
+    #[doc = "USD attribute `backPlate:<instance>:depth:normalizingFactor` (`float`; fallback `1.0`)."]
     #[doc = "C++ read: `UsdGeomBackPlateAPI::GetDepthNormalizingFactorAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdGeomBackPlateAPI::GetDepthNormalizingFactorAttr")]
     #[doc(alias = "GetDepthNormalizingFactorAttr")]
@@ -316,7 +316,7 @@ impl<'a> BackPlateApi<'a> {
 
     #[doc = "Asset path to the file containing a texture or sequence of textures."]
     #[doc = ""]
-    #[doc = "USD attribute `backPlate:&lt;instance&gt;:image` (`asset`; fallback `\"\"`)."]
+    #[doc = "USD attribute `backPlate:<instance>:image` (`asset`; fallback `\"\"`)."]
     #[doc = "C++ read: `UsdGeomBackPlateAPI::GetImageAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdGeomBackPlateAPI::GetImageAttr")]
     #[doc(alias = "GetImageAttr")]
@@ -343,7 +343,7 @@ impl<'a> BackPlateApi<'a> {
         )
     }
 
-    #[doc = "USD attribute `backPlate:&lt;instance&gt;:luma:gain` (`float3`; fallback `(1.0, 1.0, 1.0)`)."]
+    #[doc = "USD attribute `backPlate:<instance>:luma:gain` (`float3`; fallback `(1.0, 1.0, 1.0)`)."]
     #[doc = "C++ read: `UsdGeomBackPlateAPI::GetLumaGainAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdGeomBackPlateAPI::GetLumaGainAttr")]
     #[doc(alias = "GetLumaGainAttr")]
@@ -370,7 +370,7 @@ impl<'a> BackPlateApi<'a> {
         )
     }
 
-    #[doc = "USD attribute `backPlate:&lt;instance&gt;:luma:gamma` (`float3`; fallback `(1.0, 1.0, 1.0)`)."]
+    #[doc = "USD attribute `backPlate:<instance>:luma:gamma` (`float3`; fallback `(1.0, 1.0, 1.0)`)."]
     #[doc = "C++ read: `UsdGeomBackPlateAPI::GetLumaGammaAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdGeomBackPlateAPI::GetLumaGammaAttr")]
     #[doc(alias = "GetLumaGammaAttr")]
@@ -397,7 +397,7 @@ impl<'a> BackPlateApi<'a> {
         )
     }
 
-    #[doc = "USD attribute `backPlate:&lt;instance&gt;:luma:lift` (`float3`; fallback `(0.0, 0.0, 0.0)`)."]
+    #[doc = "USD attribute `backPlate:<instance>:luma:lift` (`float3`; fallback `(0.0, 0.0, 0.0)`)."]
     #[doc = "C++ read: `UsdGeomBackPlateAPI::GetLumaLiftAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdGeomBackPlateAPI::GetLumaLiftAttr")]
     #[doc(alias = "GetLumaLiftAttr")]
@@ -426,7 +426,7 @@ impl<'a> BackPlateApi<'a> {
 
     #[doc = "Toggles the visibility of the back plate to all cameras, only the owning camera, or no cameras."]
     #[doc = ""]
-    #[doc = "USD attribute `backPlate:&lt;instance&gt;:plateVisibility` (`token`; fallback `\"solo\"`)."]
+    #[doc = "USD attribute `backPlate:<instance>:plateVisibility` (`token`; fallback `\"solo\"`)."]
     #[doc = "C++ read: `UsdGeomBackPlateAPI::GetPlateVisibilityAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdGeomBackPlateAPI::GetPlateVisibilityAttr")]
     #[doc(alias = "GetPlateVisibilityAttr")]
@@ -453,7 +453,7 @@ impl<'a> BackPlateApi<'a> {
         )
     }
 
-    #[doc = "USD attribute `backPlate:&lt;instance&gt;:rotateXYZ:tweak` (`float3`; fallback `(0.0, 0.0, 0.0)`)."]
+    #[doc = "USD attribute `backPlate:<instance>:rotateXYZ:tweak` (`float3`; fallback `(0.0, 0.0, 0.0)`)."]
     #[must_use]
     pub fn rotate_xyz_tweak(&self) -> Option<[f32; 3]> {
         self.read_value(
@@ -477,7 +477,7 @@ impl<'a> BackPlateApi<'a> {
         )
     }
 
-    #[doc = "USD attribute `backPlate:&lt;instance&gt;:scale:tweak` (`float2`; fallback `(1.0, 1.0)`)."]
+    #[doc = "USD attribute `backPlate:<instance>:scale:tweak` (`float2`; fallback `(1.0, 1.0)`)."]
     #[doc = "C++ read: `UsdGeomBackPlateAPI::GetScaleTweakAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdGeomBackPlateAPI::GetScaleTweakAttr")]
     #[doc(alias = "GetScaleTweakAttr")]
@@ -504,7 +504,7 @@ impl<'a> BackPlateApi<'a> {
         )
     }
 
-    #[doc = "USD attribute `backPlate:&lt;instance&gt;:translate:tweak` (`float3`; fallback `(0.0, 0.0, 0.0)`)."]
+    #[doc = "USD attribute `backPlate:<instance>:translate:tweak` (`float3`; fallback `(0.0, 0.0, 0.0)`)."]
     #[doc = "C++ read: `UsdGeomBackPlateAPI::GetTranslateTweakAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdGeomBackPlateAPI::GetTranslateTweakAttr")]
     #[doc(alias = "GetTranslateTweakAttr")]
@@ -564,7 +564,7 @@ impl BackPlateApiEdit {
 
     #[doc = "Asset path to the file containing a texture or sequence of textures."]
     #[doc = ""]
-    #[doc = "USD attribute `backPlate:&lt;instance&gt;:alpha:image` (`asset`; fallback `\"\"`)."]
+    #[doc = "USD attribute `backPlate:<instance>:alpha:image` (`asset`; fallback `\"\"`)."]
     #[doc = "C++ authoring: `UsdGeomBackPlateAPI::CreateAlphaImageAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdGeomBackPlateAPI::CreateAlphaImageAttr")]
     #[doc(alias = "CreateAlphaImageAttr")]
@@ -586,7 +586,7 @@ impl BackPlateApiEdit {
         self
     }
 
-    #[doc = "USD attribute `backPlate:&lt;instance&gt;:depth:cameraSpaceOffset` (`float`; fallback `0.0`)."]
+    #[doc = "USD attribute `backPlate:<instance>:depth:cameraSpaceOffset` (`float`; fallback `0.0`)."]
     #[doc = "C++ authoring: `UsdGeomBackPlateAPI::CreateDepthCameraSpaceOffsetAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdGeomBackPlateAPI::CreateDepthCameraSpaceOffsetAttr")]
     #[doc(alias = "CreateDepthCameraSpaceOffsetAttr")]
@@ -620,7 +620,7 @@ impl BackPlateApiEdit {
 
     #[doc = "Asset path to the file containing a texture or sequence of textures."]
     #[doc = ""]
-    #[doc = "USD attribute `backPlate:&lt;instance&gt;:depth:image` (`asset`; fallback `\"\"`)."]
+    #[doc = "USD attribute `backPlate:<instance>:depth:image` (`asset`; fallback `\"\"`)."]
     #[doc = "C++ authoring: `UsdGeomBackPlateAPI::CreateDepthImageAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdGeomBackPlateAPI::CreateDepthImageAttr")]
     #[doc(alias = "CreateDepthImageAttr")]
@@ -642,7 +642,7 @@ impl BackPlateApiEdit {
         self
     }
 
-    #[doc = "USD attribute `backPlate:&lt;instance&gt;:depth:minOffset` (`float`; fallback `0.0`)."]
+    #[doc = "USD attribute `backPlate:<instance>:depth:minOffset` (`float`; fallback `0.0`)."]
     #[doc = "C++ authoring: `UsdGeomBackPlateAPI::CreateDepthMinOffsetAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdGeomBackPlateAPI::CreateDepthMinOffsetAttr")]
     #[doc(alias = "CreateDepthMinOffsetAttr")]
@@ -674,7 +674,7 @@ impl BackPlateApiEdit {
         self
     }
 
-    #[doc = "USD attribute `backPlate:&lt;instance&gt;:depth:normalizingFactor` (`float`; fallback `1.0`)."]
+    #[doc = "USD attribute `backPlate:<instance>:depth:normalizingFactor` (`float`; fallback `1.0`)."]
     #[doc = "C++ authoring: `UsdGeomBackPlateAPI::CreateDepthNormalizingFactorAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdGeomBackPlateAPI::CreateDepthNormalizingFactorAttr")]
     #[doc(alias = "CreateDepthNormalizingFactorAttr")]
@@ -708,7 +708,7 @@ impl BackPlateApiEdit {
 
     #[doc = "Asset path to the file containing a texture or sequence of textures."]
     #[doc = ""]
-    #[doc = "USD attribute `backPlate:&lt;instance&gt;:image` (`asset`; fallback `\"\"`)."]
+    #[doc = "USD attribute `backPlate:<instance>:image` (`asset`; fallback `\"\"`)."]
     #[doc = "C++ authoring: `UsdGeomBackPlateAPI::CreateImageAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdGeomBackPlateAPI::CreateImageAttr")]
     #[doc(alias = "CreateImageAttr")]
@@ -725,7 +725,7 @@ impl BackPlateApiEdit {
         self
     }
 
-    #[doc = "USD attribute `backPlate:&lt;instance&gt;:luma:gain` (`float3`; fallback `(1.0, 1.0, 1.0)`)."]
+    #[doc = "USD attribute `backPlate:<instance>:luma:gain` (`float3`; fallback `(1.0, 1.0, 1.0)`)."]
     #[doc = "C++ authoring: `UsdGeomBackPlateAPI::CreateLumaGainAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdGeomBackPlateAPI::CreateLumaGainAttr")]
     #[doc(alias = "CreateLumaGainAttr")]
@@ -747,7 +747,7 @@ impl BackPlateApiEdit {
         self
     }
 
-    #[doc = "USD attribute `backPlate:&lt;instance&gt;:luma:gamma` (`float3`; fallback `(1.0, 1.0, 1.0)`)."]
+    #[doc = "USD attribute `backPlate:<instance>:luma:gamma` (`float3`; fallback `(1.0, 1.0, 1.0)`)."]
     #[doc = "C++ authoring: `UsdGeomBackPlateAPI::CreateLumaGammaAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdGeomBackPlateAPI::CreateLumaGammaAttr")]
     #[doc(alias = "CreateLumaGammaAttr")]
@@ -774,7 +774,7 @@ impl BackPlateApiEdit {
         self
     }
 
-    #[doc = "USD attribute `backPlate:&lt;instance&gt;:luma:lift` (`float3`; fallback `(0.0, 0.0, 0.0)`)."]
+    #[doc = "USD attribute `backPlate:<instance>:luma:lift` (`float3`; fallback `(0.0, 0.0, 0.0)`)."]
     #[doc = "C++ authoring: `UsdGeomBackPlateAPI::CreateLumaLiftAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdGeomBackPlateAPI::CreateLumaLiftAttr")]
     #[doc(alias = "CreateLumaLiftAttr")]
@@ -798,7 +798,7 @@ impl BackPlateApiEdit {
 
     #[doc = "Toggles the visibility of the back plate to all cameras, only the owning camera, or no cameras."]
     #[doc = ""]
-    #[doc = "USD attribute `backPlate:&lt;instance&gt;:plateVisibility` (`token`; fallback `\"solo\"`)."]
+    #[doc = "USD attribute `backPlate:<instance>:plateVisibility` (`token`; fallback `\"solo\"`)."]
     #[doc = "C++ authoring: `UsdGeomBackPlateAPI::CreatePlateVisibilityAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdGeomBackPlateAPI::CreatePlateVisibilityAttr")]
     #[doc(alias = "CreatePlateVisibilityAttr")]
@@ -834,7 +834,7 @@ impl BackPlateApiEdit {
         self
     }
 
-    #[doc = "USD attribute `backPlate:&lt;instance&gt;:rotateXYZ:tweak` (`float3`; fallback `(0.0, 0.0, 0.0)`)."]
+    #[doc = "USD attribute `backPlate:<instance>:rotateXYZ:tweak` (`float3`; fallback `(0.0, 0.0, 0.0)`)."]
     pub fn set_rotate_xyz_tweak(&self, edit: &mut SchemaEdit<'_>, value: [f32; 3]) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
         self.write_value(
@@ -863,7 +863,7 @@ impl BackPlateApiEdit {
         self
     }
 
-    #[doc = "USD attribute `backPlate:&lt;instance&gt;:scale:tweak` (`float2`; fallback `(1.0, 1.0)`)."]
+    #[doc = "USD attribute `backPlate:<instance>:scale:tweak` (`float2`; fallback `(1.0, 1.0)`)."]
     #[doc = "C++ authoring: `UsdGeomBackPlateAPI::CreateScaleTweakAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdGeomBackPlateAPI::CreateScaleTweakAttr")]
     #[doc(alias = "CreateScaleTweakAttr")]
@@ -890,7 +890,7 @@ impl BackPlateApiEdit {
         self
     }
 
-    #[doc = "USD attribute `backPlate:&lt;instance&gt;:translate:tweak` (`float3`; fallback `(0.0, 0.0, 0.0)`)."]
+    #[doc = "USD attribute `backPlate:<instance>:translate:tweak` (`float3`; fallback `(0.0, 0.0, 0.0)`)."]
     #[doc = "C++ authoring: `UsdGeomBackPlateAPI::CreateTranslateTweakAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdGeomBackPlateAPI::CreateTranslateTweakAttr")]
     #[doc(alias = "CreateTranslateTweakAttr")]
@@ -1304,7 +1304,7 @@ impl<'a> Boundable<'a> {
 
     #[doc = "Extent is a three dimensional range measuring the geometric extent of the authored gprim in its own local space (i.e."]
     #[doc = ""]
-    #[doc = "USD attribute `extent` (`float3\\[\\]`)."]
+    #[doc = "USD attribute `extent` (`float3[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdGeomBoundable::GetExtentAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -1374,7 +1374,7 @@ impl BoundableEdit {
 
     #[doc = "Extent is a three dimensional range measuring the geometric extent of the authored gprim in its own local space (i.e."]
     #[doc = ""]
-    #[doc = "USD attribute `extent` (`float3\\[\\]`)."]
+    #[doc = "USD attribute `extent` (`float3[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdGeomBoundable::CreateExtentAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -1607,7 +1607,7 @@ impl<'a> Camera<'a> {
 
     #[doc = "Additional, arbitrarily oriented clipping planes."]
     #[doc = ""]
-    #[doc = "USD attribute `clippingPlanes` (`float4\\[\\]`; fallback `\\[\\]`)."]
+    #[doc = "USD attribute `clippingPlanes` (`float4[]`; fallback `[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdGeomCamera::GetClippingPlanesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -2084,7 +2084,7 @@ impl CameraEdit {
 
     #[doc = "Additional, arbitrarily oriented clipping planes."]
     #[doc = ""]
-    #[doc = "USD attribute `clippingPlanes` (`float4\\[\\]`; fallback `\\[\\]`)."]
+    #[doc = "USD attribute `clippingPlanes` (`float4[]`; fallback `[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdGeomCamera::CreateClippingPlanesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -3493,7 +3493,7 @@ impl<'a> Curves<'a> {
 
     #[doc = "Curves-derived primitives can represent multiple distinct, potentially disconnected curves."]
     #[doc = ""]
-    #[doc = "USD attribute `curveVertexCounts` (`int\\[\\]`)."]
+    #[doc = "USD attribute `curveVertexCounts` (`int[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdGeomCurves::GetCurveVertexCountsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -3537,7 +3537,7 @@ impl<'a> Curves<'a> {
 
     #[doc = "Provides width specification for the curves, whose application will depend on whether the curve is oriented (normals are defined for it), in which case widths are \"ribbon width\", or unoriented, in which case widths are cylinder width."]
     #[doc = ""]
-    #[doc = "USD attribute `widths` (`float\\[\\]`)."]
+    #[doc = "USD attribute `widths` (`float[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdGeomCurves::GetWidthsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -3607,7 +3607,7 @@ impl CurvesEdit {
 
     #[doc = "Curves-derived primitives can represent multiple distinct, potentially disconnected curves."]
     #[doc = ""]
-    #[doc = "USD attribute `curveVertexCounts` (`int\\[\\]`)."]
+    #[doc = "USD attribute `curveVertexCounts` (`int[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdGeomCurves::CreateCurveVertexCountsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -3679,7 +3679,7 @@ impl CurvesEdit {
 
     #[doc = "Provides width specification for the curves, whose application will depend on whether the curve is oriented (normals are defined for it), in which case widths are \"ribbon width\", or unoriented, in which case widths are cylinder width."]
     #[doc = ""]
-    #[doc = "USD attribute `widths` (`float\\[\\]`)."]
+    #[doc = "USD attribute `widths` (`float[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdGeomCurves::CreateWidthsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -5173,7 +5173,7 @@ impl<'a> GeomSubset<'a> {
 
     #[doc = "The set of indices identifying elements included in this subset."]
     #[doc = ""]
-    #[doc = "USD attribute `indices` (`int\\[\\]`; fallback `\\[\\]`)."]
+    #[doc = "USD attribute `indices` (`int[]`; fallback `[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdGeomSubset::GetIndicesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -5266,7 +5266,7 @@ impl GeomSubsetEdit {
 
     #[doc = "The set of indices identifying elements included in this subset."]
     #[doc = ""]
-    #[doc = "USD attribute `indices` (`int\\[\\]`; fallback `\\[\\]`)."]
+    #[doc = "USD attribute `indices` (`int[]`; fallback `[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdGeomSubset::CreateIndicesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -5463,7 +5463,7 @@ impl<'a> Gprim<'a> {
 
     #[doc = "It is useful to have an \"official\" colorSet that can be used as a display or modeling color, even in the absence of any specified shader for a gprim."]
     #[doc = ""]
-    #[doc = "USD attribute `primvars:displayColor` (`color3f\\[\\]`)."]
+    #[doc = "USD attribute `primvars:displayColor` (`color3f[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdGeomGprim::GetDisplayColorAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -5510,7 +5510,7 @@ impl<'a> Gprim<'a> {
 
     #[doc = "Companion to displayColor that specifies opacity, broken out as an independent attribute rather than an rgba color, both so that each can be independently overridden, and because shaders rarely consume rgba parameters."]
     #[doc = ""]
-    #[doc = "USD attribute `primvars:displayOpacity` (`float\\[\\]`)."]
+    #[doc = "USD attribute `primvars:displayOpacity` (`float[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdGeomGprim::GetDisplayOpacityAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -5611,7 +5611,7 @@ impl GprimEdit {
 
     #[doc = "It is useful to have an \"official\" colorSet that can be used as a display or modeling color, even in the absence of any specified shader for a gprim."]
     #[doc = ""]
-    #[doc = "USD attribute `primvars:displayColor` (`color3f\\[\\]`)."]
+    #[doc = "USD attribute `primvars:displayColor` (`color3f[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdGeomGprim::CreateDisplayColorAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -5683,7 +5683,7 @@ impl GprimEdit {
 
     #[doc = "Companion to displayColor that specifies opacity, broken out as an independent attribute rather than an rgba color, both so that each can be independently overridden, and because shaders rarely consume rgba parameters."]
     #[doc = ""]
-    #[doc = "USD attribute `primvars:displayOpacity` (`float\\[\\]`)."]
+    #[doc = "USD attribute `primvars:displayOpacity` (`float[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdGeomGprim::CreateDisplayOpacityAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -5819,7 +5819,7 @@ impl<'a> HermiteCurves<'a> {
 
     #[doc = "Defines the outgoing trajectory tangent for each point."]
     #[doc = ""]
-    #[doc = "USD attribute `tangents` (`vector3f\\[\\]`; fallback `\\[\\]`)."]
+    #[doc = "USD attribute `tangents` (`vector3f[]`; fallback `[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdGeomHermiteCurves::GetTangentsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -5889,7 +5889,7 @@ impl HermiteCurvesEdit {
 
     #[doc = "Defines the outgoing trajectory tangent for each point."]
     #[doc = ""]
-    #[doc = "USD attribute `tangents` (`vector3f\\[\\]`; fallback `\\[\\]`)."]
+    #[doc = "USD attribute `tangents` (`vector3f[]`; fallback `[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdGeomHermiteCurves::CreateTangentsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -6548,7 +6548,7 @@ impl<'a> Mesh<'a> {
 
     #[doc = "The indices of points for which a corresponding sharpness value is specified in _cornerSharpnesses_ (so the size of this array must match that of _cornerSharpnesses_)."]
     #[doc = ""]
-    #[doc = "USD attribute `cornerIndices` (`int\\[\\]`; fallback `\\[\\]`)."]
+    #[doc = "USD attribute `cornerIndices` (`int[]`; fallback `[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdGeomMesh::GetCornerIndicesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -6588,7 +6588,7 @@ impl<'a> Mesh<'a> {
 
     #[doc = "The sharpness values associated with a corresponding set of points specified in _cornerIndices_ (so the size of this array must match that of _cornerIndices_)."]
     #[doc = ""]
-    #[doc = "USD attribute `cornerSharpnesses` (`float\\[\\]`; fallback `\\[\\]`)."]
+    #[doc = "USD attribute `cornerSharpnesses` (`float[]`; fallback `[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdGeomMesh::GetCornerSharpnessesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -6632,7 +6632,7 @@ impl<'a> Mesh<'a> {
 
     #[doc = "The indices of points grouped into sets of successive pairs that identify edges to be creased."]
     #[doc = ""]
-    #[doc = "USD attribute `creaseIndices` (`int\\[\\]`; fallback `\\[\\]`)."]
+    #[doc = "USD attribute `creaseIndices` (`int[]`; fallback `[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdGeomMesh::GetCreaseIndicesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -6672,7 +6672,7 @@ impl<'a> Mesh<'a> {
 
     #[doc = "The length of this array specifies the number of creases (sets of adjacent sharpened edges) on the mesh."]
     #[doc = ""]
-    #[doc = "USD attribute `creaseLengths` (`int\\[\\]`; fallback `\\[\\]`)."]
+    #[doc = "USD attribute `creaseLengths` (`int[]`; fallback `[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdGeomMesh::GetCreaseLengthsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -6712,7 +6712,7 @@ impl<'a> Mesh<'a> {
 
     #[doc = "The per-crease or per-edge sharpness values for all creases."]
     #[doc = ""]
-    #[doc = "USD attribute `creaseSharpnesses` (`float\\[\\]`; fallback `\\[\\]`)."]
+    #[doc = "USD attribute `creaseSharpnesses` (`float[]`; fallback `[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdGeomMesh::GetCreaseSharpnessesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -6788,7 +6788,7 @@ impl<'a> Mesh<'a> {
 
     #[doc = "Provides the number of vertices in each face of the mesh, which is also the number of consecutive indices in _faceVertexIndices_ that define the face."]
     #[doc = ""]
-    #[doc = "USD attribute `faceVertexCounts` (`int\\[\\]`)."]
+    #[doc = "USD attribute `faceVertexCounts` (`int[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdGeomMesh::GetFaceVertexCountsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -6832,7 +6832,7 @@ impl<'a> Mesh<'a> {
 
     #[doc = "Flat list of the index (into the _points_ attribute) of each vertex of each face in the mesh."]
     #[doc = ""]
-    #[doc = "USD attribute `faceVertexIndices` (`int\\[\\]`)."]
+    #[doc = "USD attribute `faceVertexIndices` (`int[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdGeomMesh::GetFaceVertexIndicesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -6876,7 +6876,7 @@ impl<'a> Mesh<'a> {
 
     #[doc = "The indices of all faces that should be treated as holes, i.e."]
     #[doc = ""]
-    #[doc = "USD attribute `holeIndices` (`int\\[\\]`; fallback `\\[\\]`)."]
+    #[doc = "USD attribute `holeIndices` (`int[]`; fallback `[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdGeomMesh::GetHoleIndicesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -7018,7 +7018,7 @@ impl MeshEdit {
 
     #[doc = "The indices of points for which a corresponding sharpness value is specified in _cornerSharpnesses_ (so the size of this array must match that of _cornerSharpnesses_)."]
     #[doc = ""]
-    #[doc = "USD attribute `cornerIndices` (`int\\[\\]`; fallback `\\[\\]`)."]
+    #[doc = "USD attribute `cornerIndices` (`int[]`; fallback `[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdGeomMesh::CreateCornerIndicesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -7090,7 +7090,7 @@ impl MeshEdit {
 
     #[doc = "The sharpness values associated with a corresponding set of points specified in _cornerIndices_ (so the size of this array must match that of _cornerIndices_)."]
     #[doc = ""]
-    #[doc = "USD attribute `cornerSharpnesses` (`float\\[\\]`; fallback `\\[\\]`)."]
+    #[doc = "USD attribute `cornerSharpnesses` (`float[]`; fallback `[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdGeomMesh::CreateCornerSharpnessesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -7162,7 +7162,7 @@ impl MeshEdit {
 
     #[doc = "The indices of points grouped into sets of successive pairs that identify edges to be creased."]
     #[doc = ""]
-    #[doc = "USD attribute `creaseIndices` (`int\\[\\]`; fallback `\\[\\]`)."]
+    #[doc = "USD attribute `creaseIndices` (`int[]`; fallback `[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdGeomMesh::CreateCreaseIndicesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -7234,7 +7234,7 @@ impl MeshEdit {
 
     #[doc = "The length of this array specifies the number of creases (sets of adjacent sharpened edges) on the mesh."]
     #[doc = ""]
-    #[doc = "USD attribute `creaseLengths` (`int\\[\\]`; fallback `\\[\\]`)."]
+    #[doc = "USD attribute `creaseLengths` (`int[]`; fallback `[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdGeomMesh::CreateCreaseLengthsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -7306,7 +7306,7 @@ impl MeshEdit {
 
     #[doc = "The per-crease or per-edge sharpness values for all creases."]
     #[doc = ""]
-    #[doc = "USD attribute `creaseSharpnesses` (`float\\[\\]`; fallback `\\[\\]`)."]
+    #[doc = "USD attribute `creaseSharpnesses` (`float[]`; fallback `[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdGeomMesh::CreateCreaseSharpnessesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -7406,7 +7406,7 @@ impl MeshEdit {
 
     #[doc = "Provides the number of vertices in each face of the mesh, which is also the number of consecutive indices in _faceVertexIndices_ that define the face."]
     #[doc = ""]
-    #[doc = "USD attribute `faceVertexCounts` (`int\\[\\]`)."]
+    #[doc = "USD attribute `faceVertexCounts` (`int[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdGeomMesh::CreateFaceVertexCountsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -7478,7 +7478,7 @@ impl MeshEdit {
 
     #[doc = "Flat list of the index (into the _points_ attribute) of each vertex of each face in the mesh."]
     #[doc = ""]
-    #[doc = "USD attribute `faceVertexIndices` (`int\\[\\]`)."]
+    #[doc = "USD attribute `faceVertexIndices` (`int[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdGeomMesh::CreateFaceVertexIndicesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -7550,7 +7550,7 @@ impl MeshEdit {
 
     #[doc = "The indices of all faces that should be treated as holes, i.e."]
     #[doc = ""]
-    #[doc = "USD attribute `holeIndices` (`int\\[\\]`; fallback `\\[\\]`)."]
+    #[doc = "USD attribute `holeIndices` (`int[]`; fallback `[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdGeomMesh::CreateHoleIndicesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -8003,7 +8003,7 @@ impl<'a> NurbsCurves<'a> {
 
     #[doc = "Knot vector providing curve parameterization."]
     #[doc = ""]
-    #[doc = "USD attribute `knots` (`double\\[\\]`)."]
+    #[doc = "USD attribute `knots` (`double[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdGeomNurbsCurves::GetKnotsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -8043,7 +8043,7 @@ impl<'a> NurbsCurves<'a> {
 
     #[doc = "Order of the curve."]
     #[doc = ""]
-    #[doc = "USD attribute `order` (`int\\[\\]`; fallback `\\[\\]`)."]
+    #[doc = "USD attribute `order` (`int[]`; fallback `[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdGeomNurbsCurves::GetOrderAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -8078,7 +8078,7 @@ impl<'a> NurbsCurves<'a> {
 
     #[doc = "Optionally provides \"w\" components for each control point, thus must be the same length as the points attribute."]
     #[doc = ""]
-    #[doc = "USD attribute `pointWeights` (`double\\[\\]`)."]
+    #[doc = "USD attribute `pointWeights` (`double[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdGeomNurbsCurves::GetPointWeightsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -8118,7 +8118,7 @@ impl<'a> NurbsCurves<'a> {
 
     #[doc = "Provides the minimum and maximum parametric values (as defined by knots) over which the curve is actually defined."]
     #[doc = ""]
-    #[doc = "USD attribute `ranges` (`double2\\[\\]`)."]
+    #[doc = "USD attribute `ranges` (`double2[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdGeomNurbsCurves::GetRangesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -8188,7 +8188,7 @@ impl NurbsCurvesEdit {
 
     #[doc = "Knot vector providing curve parameterization."]
     #[doc = ""]
-    #[doc = "USD attribute `knots` (`double\\[\\]`)."]
+    #[doc = "USD attribute `knots` (`double[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdGeomNurbsCurves::CreateKnotsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -8255,7 +8255,7 @@ impl NurbsCurvesEdit {
 
     #[doc = "Order of the curve."]
     #[doc = ""]
-    #[doc = "USD attribute `order` (`int\\[\\]`; fallback `\\[\\]`)."]
+    #[doc = "USD attribute `order` (`int[]`; fallback `[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdGeomNurbsCurves::CreateOrderAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -8322,7 +8322,7 @@ impl NurbsCurvesEdit {
 
     #[doc = "Optionally provides \"w\" components for each control point, thus must be the same length as the points attribute."]
     #[doc = ""]
-    #[doc = "USD attribute `pointWeights` (`double\\[\\]`)."]
+    #[doc = "USD attribute `pointWeights` (`double[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdGeomNurbsCurves::CreatePointWeightsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -8394,7 +8394,7 @@ impl NurbsCurvesEdit {
 
     #[doc = "Provides the minimum and maximum parametric values (as defined by knots) over which the curve is actually defined."]
     #[doc = ""]
-    #[doc = "USD attribute `ranges` (`double2\\[\\]`)."]
+    #[doc = "USD attribute `ranges` (`double2[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdGeomNurbsCurves::CreateRangesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -8631,7 +8631,7 @@ impl<'a> NurbsPatch<'a> {
 
     #[doc = "Optionally provides \"w\" components for each control point, thus must be the same length as the points attribute."]
     #[doc = ""]
-    #[doc = "USD attribute `pointWeights` (`double\\[\\]`)."]
+    #[doc = "USD attribute `pointWeights` (`double[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdGeomNurbsPatch::GetPointWeightsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -8671,7 +8671,7 @@ impl<'a> NurbsPatch<'a> {
 
     #[doc = "Each element specifies how many curves are present in each \"loop\" of the trimCurve, and the length of the array determines how many loops the trimCurve contains."]
     #[doc = ""]
-    #[doc = "USD attribute `trimCurve:counts` (`int\\[\\]`)."]
+    #[doc = "USD attribute `trimCurve:counts` (`int[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdGeomNurbsPatch::GetTrimCurveCountsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -8715,7 +8715,7 @@ impl<'a> NurbsPatch<'a> {
 
     #[doc = "Flat list of parametric values for each of the nCurves curves."]
     #[doc = ""]
-    #[doc = "USD attribute `trimCurve:knots` (`double\\[\\]`)."]
+    #[doc = "USD attribute `trimCurve:knots` (`double[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdGeomNurbsPatch::GetTrimCurveKnotsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -8759,7 +8759,7 @@ impl<'a> NurbsPatch<'a> {
 
     #[doc = "Flat list of orders for each of the nCurves curves."]
     #[doc = ""]
-    #[doc = "USD attribute `trimCurve:orders` (`int\\[\\]`)."]
+    #[doc = "USD attribute `trimCurve:orders` (`int[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdGeomNurbsPatch::GetTrimCurveOrdersAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -8803,7 +8803,7 @@ impl<'a> NurbsPatch<'a> {
 
     #[doc = "Flat list of homogeneous 2D points (u, v, w) that comprise the nCurves curves."]
     #[doc = ""]
-    #[doc = "USD attribute `trimCurve:points` (`double3\\[\\]`)."]
+    #[doc = "USD attribute `trimCurve:points` (`double3[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdGeomNurbsPatch::GetTrimCurvePointsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -8847,7 +8847,7 @@ impl<'a> NurbsPatch<'a> {
 
     #[doc = "Flat list of minimum and maximum parametric values (as defined by knots) for each of the nCurves curves."]
     #[doc = ""]
-    #[doc = "USD attribute `trimCurve:ranges` (`double2\\[\\]`)."]
+    #[doc = "USD attribute `trimCurve:ranges` (`double2[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdGeomNurbsPatch::GetTrimCurveRangesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -8891,7 +8891,7 @@ impl<'a> NurbsPatch<'a> {
 
     #[doc = "Flat list of number of vertices for each of the nCurves curves."]
     #[doc = ""]
-    #[doc = "USD attribute `trimCurve:vertexCounts` (`int\\[\\]`)."]
+    #[doc = "USD attribute `trimCurve:vertexCounts` (`int[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdGeomNurbsPatch::GetTrimCurveVertexCountsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -8952,7 +8952,7 @@ impl<'a> NurbsPatch<'a> {
 
     #[doc = "Knot vector for U direction providing U parameterization."]
     #[doc = ""]
-    #[doc = "USD attribute `uKnots` (`double\\[\\]`)."]
+    #[doc = "USD attribute `uKnots` (`double[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdGeomNurbsPatch::GetUKnotsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -9074,7 +9074,7 @@ impl<'a> NurbsPatch<'a> {
 
     #[doc = "Knot vector for V direction providing U parameterization."]
     #[doc = ""]
-    #[doc = "USD attribute `vKnots` (`double\\[\\]`)."]
+    #[doc = "USD attribute `vKnots` (`double[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdGeomNurbsPatch::GetVKnotsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -9212,7 +9212,7 @@ impl NurbsPatchEdit {
 
     #[doc = "Optionally provides \"w\" components for each control point, thus must be the same length as the points attribute."]
     #[doc = ""]
-    #[doc = "USD attribute `pointWeights` (`double\\[\\]`)."]
+    #[doc = "USD attribute `pointWeights` (`double[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdGeomNurbsPatch::CreatePointWeightsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -9284,7 +9284,7 @@ impl NurbsPatchEdit {
 
     #[doc = "Each element specifies how many curves are present in each \"loop\" of the trimCurve, and the length of the array determines how many loops the trimCurve contains."]
     #[doc = ""]
-    #[doc = "USD attribute `trimCurve:counts` (`int\\[\\]`)."]
+    #[doc = "USD attribute `trimCurve:counts` (`int[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdGeomNurbsPatch::CreateTrimCurveCountsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -9356,7 +9356,7 @@ impl NurbsPatchEdit {
 
     #[doc = "Flat list of parametric values for each of the nCurves curves."]
     #[doc = ""]
-    #[doc = "USD attribute `trimCurve:knots` (`double\\[\\]`)."]
+    #[doc = "USD attribute `trimCurve:knots` (`double[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdGeomNurbsPatch::CreateTrimCurveKnotsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -9428,7 +9428,7 @@ impl NurbsPatchEdit {
 
     #[doc = "Flat list of orders for each of the nCurves curves."]
     #[doc = ""]
-    #[doc = "USD attribute `trimCurve:orders` (`int\\[\\]`)."]
+    #[doc = "USD attribute `trimCurve:orders` (`int[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdGeomNurbsPatch::CreateTrimCurveOrdersAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -9500,7 +9500,7 @@ impl NurbsPatchEdit {
 
     #[doc = "Flat list of homogeneous 2D points (u, v, w) that comprise the nCurves curves."]
     #[doc = ""]
-    #[doc = "USD attribute `trimCurve:points` (`double3\\[\\]`)."]
+    #[doc = "USD attribute `trimCurve:points` (`double3[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdGeomNurbsPatch::CreateTrimCurvePointsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -9572,7 +9572,7 @@ impl NurbsPatchEdit {
 
     #[doc = "Flat list of minimum and maximum parametric values (as defined by knots) for each of the nCurves curves."]
     #[doc = ""]
-    #[doc = "USD attribute `trimCurve:ranges` (`double2\\[\\]`)."]
+    #[doc = "USD attribute `trimCurve:ranges` (`double2[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdGeomNurbsPatch::CreateTrimCurveRangesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -9644,7 +9644,7 @@ impl NurbsPatchEdit {
 
     #[doc = "Flat list of number of vertices for each of the nCurves curves."]
     #[doc = ""]
-    #[doc = "USD attribute `trimCurve:vertexCounts` (`int\\[\\]`)."]
+    #[doc = "USD attribute `trimCurve:vertexCounts` (`int[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdGeomNurbsPatch::CreateTrimCurveVertexCountsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -9728,7 +9728,7 @@ impl NurbsPatchEdit {
 
     #[doc = "Knot vector for U direction providing U parameterization."]
     #[doc = ""]
-    #[doc = "USD attribute `uKnots` (`double\\[\\]`)."]
+    #[doc = "USD attribute `uKnots` (`double[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdGeomNurbsPatch::CreateUKnotsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -9864,7 +9864,7 @@ impl NurbsPatchEdit {
 
     #[doc = "Knot vector for V direction providing U parameterization."]
     #[doc = ""]
-    #[doc = "USD attribute `vKnots` (`double\\[\\]`)."]
+    #[doc = "USD attribute `vKnots` (`double[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdGeomNurbsPatch::CreateVKnotsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -10292,7 +10292,7 @@ impl<'a> PointBased<'a> {
 
     #[doc = "If provided, 'accelerations' should be used with velocities to compute positions between samples for the 'points' attribute rather than interpolating between neighboring 'points' samples."]
     #[doc = ""]
-    #[doc = "USD attribute `accelerations` (`vector3f\\[\\]`)."]
+    #[doc = "USD attribute `accelerations` (`vector3f[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdGeomPointBased::GetAccelerationsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -10336,7 +10336,7 @@ impl<'a> PointBased<'a> {
 
     #[doc = "Provide an object-space orientation for individual points, which, depending on subclass, may define a surface, curve, or free points."]
     #[doc = ""]
-    #[doc = "USD attribute `normals` (`normal3f\\[\\]`)."]
+    #[doc = "USD attribute `normals` (`normal3f[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdGeomPointBased::GetNormalsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -10376,7 +10376,7 @@ impl<'a> PointBased<'a> {
 
     #[doc = "The primary geometry attribute for all PointBased primitives, describes points in (local) space."]
     #[doc = ""]
-    #[doc = "USD attribute `points` (`point3f\\[\\]`)."]
+    #[doc = "USD attribute `points` (`point3f[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdGeomPointBased::GetPointsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -10416,7 +10416,7 @@ impl<'a> PointBased<'a> {
 
     #[doc = "If provided, 'velocities' should be used by renderers to"]
     #[doc = ""]
-    #[doc = "USD attribute `velocities` (`vector3f\\[\\]`)."]
+    #[doc = "USD attribute `velocities` (`vector3f[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdGeomPointBased::GetVelocitiesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -10486,7 +10486,7 @@ impl PointBasedEdit {
 
     #[doc = "If provided, 'accelerations' should be used with velocities to compute positions between samples for the 'points' attribute rather than interpolating between neighboring 'points' samples."]
     #[doc = ""]
-    #[doc = "USD attribute `accelerations` (`vector3f\\[\\]`)."]
+    #[doc = "USD attribute `accelerations` (`vector3f[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdGeomPointBased::CreateAccelerationsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -10558,7 +10558,7 @@ impl PointBasedEdit {
 
     #[doc = "Provide an object-space orientation for individual points, which, depending on subclass, may define a surface, curve, or free points."]
     #[doc = ""]
-    #[doc = "USD attribute `normals` (`normal3f\\[\\]`)."]
+    #[doc = "USD attribute `normals` (`normal3f[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdGeomPointBased::CreateNormalsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -10630,7 +10630,7 @@ impl PointBasedEdit {
 
     #[doc = "The primary geometry attribute for all PointBased primitives, describes points in (local) space."]
     #[doc = ""]
-    #[doc = "USD attribute `points` (`point3f\\[\\]`)."]
+    #[doc = "USD attribute `points` (`point3f[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdGeomPointBased::CreatePointsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -10697,7 +10697,7 @@ impl PointBasedEdit {
 
     #[doc = "If provided, 'velocities' should be used by renderers to"]
     #[doc = ""]
-    #[doc = "USD attribute `velocities` (`vector3f\\[\\]`)."]
+    #[doc = "USD attribute `velocities` (`vector3f[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdGeomPointBased::CreateVelocitiesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -10833,7 +10833,7 @@ impl<'a> PointInstancer<'a> {
 
     #[doc = "If authored, per-instance 'accelerations' will be used with velocities to compute positions between samples for the 'positions' attribute rather than interpolating between neighboring 'positions' samples."]
     #[doc = ""]
-    #[doc = "USD attribute `accelerations` (`vector3f\\[\\]`)."]
+    #[doc = "USD attribute `accelerations` (`vector3f[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdGeomPointInstancer::GetAccelerationsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -10877,7 +10877,7 @@ impl<'a> PointInstancer<'a> {
 
     #[doc = "If authored, per-instance angular velocity vector to be used for interoplating orientations."]
     #[doc = ""]
-    #[doc = "USD attribute `angularVelocities` (`vector3f\\[\\]`)."]
+    #[doc = "USD attribute `angularVelocities` (`vector3f[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdGeomPointInstancer::GetAngularVelocitiesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -10921,7 +10921,7 @@ impl<'a> PointInstancer<'a> {
 
     #[doc = "Ids are optional; if authored, the ids array should be the same length as the protoIndices array, specifying (at each timeSample if instance identities are changing) the id of each instance."]
     #[doc = ""]
-    #[doc = "USD attribute `ids` (`int64\\[\\]`)."]
+    #[doc = "USD attribute `ids` (`int64[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdGeomPointInstancer::GetIdsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -10956,7 +10956,7 @@ impl<'a> PointInstancer<'a> {
 
     #[doc = "A list of id's to make invisible at the evaluation time."]
     #[doc = ""]
-    #[doc = "USD attribute `invisibleIds` (`int64\\[\\]`; fallback `\\[\\]`)."]
+    #[doc = "USD attribute `invisibleIds` (`int64[]`; fallback `[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdGeomPointInstancer::GetInvisibleIdsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -10996,7 +10996,7 @@ impl<'a> PointInstancer<'a> {
 
     #[doc = "If authored, per-instance orientation of each instance about its prototype's origin, represented as a unit length quaternion, which allows us to encode it with sufficient precision in a compact GfQuath."]
     #[doc = ""]
-    #[doc = "USD attribute `orientations` (`quath\\[\\]`)."]
+    #[doc = "USD attribute `orientations` (`quath[]`)."]
     #[doc = "C++ read: `UsdGeomPointInstancer::GetOrientationsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdGeomPointInstancer::GetOrientationsAttr")]
     #[doc(alias = "GetOrientationsAttr")]
@@ -11028,7 +11028,7 @@ impl<'a> PointInstancer<'a> {
 
     #[doc = "If authored, per-instance orientation of each instance about its prototype's origin, represented as a unit length quaternion, encoded as a GfQuatf to support higher precision computations."]
     #[doc = ""]
-    #[doc = "USD attribute `orientationsf` (`quatf\\[\\]`)."]
+    #[doc = "USD attribute `orientationsf` (`quatf[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdGeomPointInstancer::GetOrientationsfAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -11068,7 +11068,7 @@ impl<'a> PointInstancer<'a> {
 
     #[doc = "&lt;b&gt;Required property&lt;/b&gt;."]
     #[doc = ""]
-    #[doc = "USD attribute `positions` (`point3f\\[\\]`)."]
+    #[doc = "USD attribute `positions` (`point3f[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdGeomPointInstancer::GetPositionsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -11108,7 +11108,7 @@ impl<'a> PointInstancer<'a> {
 
     #[doc = "&lt;b&gt;Required property&lt;/b&gt;."]
     #[doc = ""]
-    #[doc = "USD attribute `protoIndices` (`int\\[\\]`)."]
+    #[doc = "USD attribute `protoIndices` (`int[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdGeomPointInstancer::GetProtoIndicesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -11162,7 +11162,7 @@ impl<'a> PointInstancer<'a> {
 
     #[doc = "If authored, per-instance scale to be applied to each instance, before any rotation is applied."]
     #[doc = ""]
-    #[doc = "USD attribute `scales` (`float3\\[\\]`)."]
+    #[doc = "USD attribute `scales` (`float3[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdGeomPointInstancer::GetScalesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -11202,7 +11202,7 @@ impl<'a> PointInstancer<'a> {
 
     #[doc = "If provided, per-instance 'velocities' will be used to compute positions between samples for the 'positions' attribute, rather than interpolating between neighboring 'positions' samples."]
     #[doc = ""]
-    #[doc = "USD attribute `velocities` (`vector3f\\[\\]`)."]
+    #[doc = "USD attribute `velocities` (`vector3f[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdGeomPointInstancer::GetVelocitiesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -11272,7 +11272,7 @@ impl PointInstancerEdit {
 
     #[doc = "If authored, per-instance 'accelerations' will be used with velocities to compute positions between samples for the 'positions' attribute rather than interpolating between neighboring 'positions' samples."]
     #[doc = ""]
-    #[doc = "USD attribute `accelerations` (`vector3f\\[\\]`)."]
+    #[doc = "USD attribute `accelerations` (`vector3f[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdGeomPointInstancer::CreateAccelerationsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -11344,7 +11344,7 @@ impl PointInstancerEdit {
 
     #[doc = "If authored, per-instance angular velocity vector to be used for interoplating orientations."]
     #[doc = ""]
-    #[doc = "USD attribute `angularVelocities` (`vector3f\\[\\]`)."]
+    #[doc = "USD attribute `angularVelocities` (`vector3f[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdGeomPointInstancer::CreateAngularVelocitiesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -11416,7 +11416,7 @@ impl PointInstancerEdit {
 
     #[doc = "Ids are optional; if authored, the ids array should be the same length as the protoIndices array, specifying (at each timeSample if instance identities are changing) the id of each instance."]
     #[doc = ""]
-    #[doc = "USD attribute `ids` (`int64\\[\\]`)."]
+    #[doc = "USD attribute `ids` (`int64[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdGeomPointInstancer::CreateIdsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -11479,7 +11479,7 @@ impl PointInstancerEdit {
 
     #[doc = "A list of id's to make invisible at the evaluation time."]
     #[doc = ""]
-    #[doc = "USD attribute `invisibleIds` (`int64\\[\\]`; fallback `\\[\\]`)."]
+    #[doc = "USD attribute `invisibleIds` (`int64[]`; fallback `[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdGeomPointInstancer::CreateInvisibleIdsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -11551,7 +11551,7 @@ impl PointInstancerEdit {
 
     #[doc = "If authored, per-instance orientation of each instance about its prototype's origin, represented as a unit length quaternion, which allows us to encode it with sufficient precision in a compact GfQuath."]
     #[doc = ""]
-    #[doc = "USD attribute `orientations` (`quath\\[\\]`)."]
+    #[doc = "USD attribute `orientations` (`quath[]`)."]
     #[doc = "C++ authoring: `UsdGeomPointInstancer::CreateOrientationsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdGeomPointInstancer::CreateOrientationsAttr")]
     #[doc(alias = "CreateOrientationsAttr")]
@@ -11575,7 +11575,7 @@ impl PointInstancerEdit {
 
     #[doc = "If authored, per-instance orientation of each instance about its prototype's origin, represented as a unit length quaternion, encoded as a GfQuatf to support higher precision computations."]
     #[doc = ""]
-    #[doc = "USD attribute `orientationsf` (`quatf\\[\\]`)."]
+    #[doc = "USD attribute `orientationsf` (`quatf[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdGeomPointInstancer::CreateOrientationsfAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -11647,7 +11647,7 @@ impl PointInstancerEdit {
 
     #[doc = "&lt;b&gt;Required property&lt;/b&gt;."]
     #[doc = ""]
-    #[doc = "USD attribute `positions` (`point3f\\[\\]`)."]
+    #[doc = "USD attribute `positions` (`point3f[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdGeomPointInstancer::CreatePositionsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -11719,7 +11719,7 @@ impl PointInstancerEdit {
 
     #[doc = "&lt;b&gt;Required property&lt;/b&gt;."]
     #[doc = ""]
-    #[doc = "USD attribute `protoIndices` (`int\\[\\]`)."]
+    #[doc = "USD attribute `protoIndices` (`int[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdGeomPointInstancer::CreateProtoIndicesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -11806,7 +11806,7 @@ impl PointInstancerEdit {
 
     #[doc = "If authored, per-instance scale to be applied to each instance, before any rotation is applied."]
     #[doc = ""]
-    #[doc = "USD attribute `scales` (`float3\\[\\]`)."]
+    #[doc = "USD attribute `scales` (`float3[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdGeomPointInstancer::CreateScalesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -11873,7 +11873,7 @@ impl PointInstancerEdit {
 
     #[doc = "If provided, per-instance 'velocities' will be used to compute positions between samples for the 'positions' attribute, rather than interpolating between neighboring 'positions' samples."]
     #[doc = ""]
-    #[doc = "USD attribute `velocities` (`vector3f\\[\\]`)."]
+    #[doc = "USD attribute `velocities` (`vector3f[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdGeomPointInstancer::CreateVelocitiesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -12009,7 +12009,7 @@ impl<'a> Points<'a> {
 
     #[doc = "Ids are optional; if authored, the ids array should be the same length as the points array, specifying (at each timesample if point identities are changing) the id of each point."]
     #[doc = ""]
-    #[doc = "USD attribute `ids` (`int64\\[\\]`)."]
+    #[doc = "USD attribute `ids` (`int64[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdGeomPoints::GetIdsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -12044,7 +12044,7 @@ impl<'a> Points<'a> {
 
     #[doc = "Widths are defined as the diameter of the points, in object space."]
     #[doc = ""]
-    #[doc = "USD attribute `widths` (`float\\[\\]`)."]
+    #[doc = "USD attribute `widths` (`float[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdGeomPoints::GetWidthsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -12114,7 +12114,7 @@ impl PointsEdit {
 
     #[doc = "Ids are optional; if authored, the ids array should be the same length as the points array, specifying (at each timesample if point identities are changing) the id of each point."]
     #[doc = ""]
-    #[doc = "USD attribute `ids` (`int64\\[\\]`)."]
+    #[doc = "USD attribute `ids` (`int64[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdGeomPoints::CreateIdsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -12177,7 +12177,7 @@ impl PointsEdit {
 
     #[doc = "Widths are defined as the diameter of the points, in object space."]
     #[doc = ""]
-    #[doc = "USD attribute `widths` (`float\\[\\]`)."]
+    #[doc = "USD attribute `widths` (`float[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdGeomPoints::CreateWidthsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -12535,7 +12535,7 @@ impl<'a> TetMesh<'a> {
 
     #[doc = "&lt;b&gt;surfaceFaceVertexIndices&lt;/b&gt; defines the triangle surface faces indices wrt."]
     #[doc = ""]
-    #[doc = "USD attribute `surfaceFaceVertexIndices` (`int3\\[\\]`)."]
+    #[doc = "USD attribute `surfaceFaceVertexIndices` (`int3[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdGeomTetMesh::GetSurfaceFaceVertexIndicesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -12584,7 +12584,7 @@ impl<'a> TetMesh<'a> {
 
     #[doc = "Flat list of the index (into the &lt;b&gt;points&lt;/b&gt; attribute) of each vertex of each tetrahedron in the mesh."]
     #[doc = ""]
-    #[doc = "USD attribute `tetVertexIndices` (`int4\\[\\]`)."]
+    #[doc = "USD attribute `tetVertexIndices` (`int4[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdGeomTetMesh::GetTetVertexIndicesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -12658,7 +12658,7 @@ impl TetMeshEdit {
 
     #[doc = "&lt;b&gt;surfaceFaceVertexIndices&lt;/b&gt; defines the triangle surface faces indices wrt."]
     #[doc = ""]
-    #[doc = "USD attribute `surfaceFaceVertexIndices` (`int3\\[\\]`)."]
+    #[doc = "USD attribute `surfaceFaceVertexIndices` (`int3[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdGeomTetMesh::CreateSurfaceFaceVertexIndicesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -12734,7 +12734,7 @@ impl TetMeshEdit {
 
     #[doc = "Flat list of the index (into the &lt;b&gt;points&lt;/b&gt; attribute) of each vertex of each tetrahedron in the mesh."]
     #[doc = ""]
-    #[doc = "USD attribute `tetVertexIndices` (`int4\\[\\]`)."]
+    #[doc = "USD attribute `tetVertexIndices` (`int4[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdGeomTetMesh::CreateTetVertexIndicesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -13301,7 +13301,7 @@ impl<'a> Xformable<'a> {
 
     #[doc = "Encodes the sequence of transformation operations in the order in which they should be pushed onto a transform stack while visiting a UsdStage's prims in a graph traversal that will effect the desired positioning for this prim and its descendant prims."]
     #[doc = ""]
-    #[doc = "USD attribute `xformOpOrder` (`token\\[\\]`, uniform)."]
+    #[doc = "USD attribute `xformOpOrder` (`token[]`, uniform)."]
     #[doc = "C++ read: `UsdGeomXformable::GetXformOpOrderAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdGeomXformable::GetXformOpOrderAttr")]
     #[doc(alias = "GetXformOpOrderAttr")]
@@ -13357,7 +13357,7 @@ impl XformableEdit {
 
     #[doc = "Encodes the sequence of transformation operations in the order in which they should be pushed onto a transform stack while visiting a UsdStage's prims in a graph traversal that will effect the desired positioning for this prim and its descendant prims."]
     #[doc = ""]
-    #[doc = "USD attribute `xformOpOrder` (`token\\[\\]`, uniform)."]
+    #[doc = "USD attribute `xformOpOrder` (`token[]`, uniform)."]
     #[doc = "C++ authoring: `UsdGeomXformable::CreateXformOpOrderAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdGeomXformable::CreateXformOpOrderAttr")]
     #[doc(alias = "CreateXformOpOrderAttr")]

@@ -48,7 +48,7 @@ env:
 # and checking with --all-targets would not find our feature requirements lacking.
 # This problem still applies to cargo resolver version 2.
 # Thus we split all the targets into two steps, one with --lib --bins
-# and another with --tests --benches --examples.
+# and another with --tests --scopes --examples.
 # Also, we can't give --lib --bins explicitly because then cargo will error on binary-only packages.
 # Luckily the default behavior of cargo with no explicit targets is the same but without the error.
 #
@@ -177,7 +177,7 @@ jobs:
         run: cargo hack clippy --workspace --locked --optional-deps --each-feature --ignore-unknown-features --features std -- -D warnings
 
       - name: cargo clippy (auxiliary)
-        run: cargo hack clippy --workspace --locked --optional-deps --each-feature --ignore-unknown-features --features std --tests --benches --examples -- -D warnings
+        run: cargo hack clippy --workspace --locked --optional-deps --each-feature --ignore-unknown-features --features std --tests --scopes --examples -- -D warnings
 
   clippy-stable-wasm:
     name: cargo clippy (wasm32)
@@ -206,7 +206,7 @@ jobs:
         run: cargo hack clippy ${{ env.RUST_NO_WASM_PKGS }} --workspace --locked --target wasm32-unknown-unknown --optional-deps --each-feature --ignore-unknown-features --features std -- -D warnings
 
       - name: cargo clippy (auxiliary)
-        run: cargo hack clippy ${{ env.RUST_NO_WASM_PKGS }} --workspace --locked --target wasm32-unknown-unknown --optional-deps --each-feature --ignore-unknown-features --features std --tests --benches --examples -- -D warnings
+        run: cargo hack clippy ${{ env.RUST_NO_WASM_PKGS }} --workspace --locked --target wasm32-unknown-unknown --optional-deps --each-feature --ignore-unknown-features --features std --tests --scopes --examples -- -D warnings
 
   test-stable:
     name: cargo test
@@ -429,6 +429,13 @@ jobs:
         env:
           LAYERSTACK_OPENUSD_SOURCE: ${{ github.workspace }}/openusd
         run: cargo test --locked -p layerstack_conformance --test schema_compiler
+
+      # The checked-in Rust module of the observatory fixture must be what the
+      # schema compiler generates from OpenUSD's `Xformable` today.
+      - name: check generated schema library module
+        env:
+          LAYERSTACK_OPENUSD_SOURCE: ${{ github.workspace }}/openusd
+        run: cargo test --locked -p layerstack_custom_schemas --test generated
 
       # The compiled fixture plugins must be what OpenUSD's registry reads.
       - name: check schema compiler oracle

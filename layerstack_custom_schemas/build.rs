@@ -1,0 +1,22 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+//! Generates the `lab` module from its `schema.usda`, as a downstream build
+//! script does. `lab` builds on the fixture's own `usd/schema.usda`, the two
+//! base classes of OpenUSD's, so it needs no OpenUSD checkout.
+
+use std::path::{Path, PathBuf};
+
+use layerstack_schemagen::compile::{CompileOptions, compile};
+
+fn main() {
+    let fixtures = Path::new("../layerstack_conformance/fixtures/schema_compiler");
+    let options = CompileOptions::new().with_search_path(fixtures);
+    let compiled =
+        compile(&fixtures.join("lab/schema.usda"), &options).unwrap_or_else(|e| panic!("{e}"));
+    let module = compiled.rust_module().unwrap_or_else(|e| panic!("{e}"));
+    let out = PathBuf::from(std::env::var_os("OUT_DIR").expect("cargo sets OUT_DIR"));
+    std::fs::write(out.join("lab.rs"), module).expect("OUT_DIR is writable");
+    println!("cargo:rerun-if-changed={}", fixtures.join("lab").display());
+    println!("cargo:rerun-if-changed={}", fixtures.join("usd").display());
+}

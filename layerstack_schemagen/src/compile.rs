@@ -175,7 +175,8 @@
 //!
 //! For several libraries in one registry, register OpenUSD's domains once
 //! (`layerstack_schemas::register` with every library's `DEPENDENCIES`),
-//! then each library's `register`.
+//! then each library's `register`. `layerstack_custom_schemas` in this
+//! repository is such a crate, for the `lab` and `observatory` fixtures.
 //!
 //! # Resolving upstream schemas
 //!

@@ -1,0 +1,879 @@
+{
+ "cases": [
+  {
+   "applied": "failed",
+   "name": "root_prim",
+   "path": "/A"
+  },
+  {
+   "applied": true,
+   "defaultPrim": "A",
+   "layers": {
+    "scene.usda": [
+     "/A",
+     "/A/Other",
+     "/A{v=x}",
+     "/A{v=x}InX",
+     "/A{v=y}",
+     "/A{v=y}InY",
+     "/A{v=}",
+     "/Cls",
+     "/R",
+     "/R/Local",
+     "/Watch"
+    ],
+    "sub.usda": [
+     "/A",
+     "/A/SubChild"
+    ]
+   },
+   "name": "child",
+   "path": "/A/Child",
+   "prims": [
+    "/A",
+    "/A/InX",
+    "/A/SubChild",
+    "/A/Other",
+    "/Cls",
+    "/R",
+    "/R/FromAsset",
+    "/R/Local",
+    "/Watch"
+   ],
+   "relocates": [],
+   "watch": {
+    "connections": {
+     "append": [],
+     "delete": [],
+     "explicit": [
+      "/A.y"
+     ],
+     "prepend": []
+    },
+    "expr": "/R/Local",
+    "inheritPaths": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      "/Cls"
+     ]
+    },
+    "look": {
+     "append": [],
+     "delete": [],
+     "explicit": [
+      "/A",
+      "/A.y",
+      "/R/FromAsset"
+     ],
+     "prepend": []
+    },
+    "references": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": []
+    },
+    "specializes": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      "/A/Other"
+     ]
+    }
+   }
+  },
+  {
+   "applied": true,
+   "defaultPrim": "A",
+   "layers": {
+    "scene.usda": [
+     "/A",
+     "/A/Child",
+     "/A/Other",
+     "/A{v=x}",
+     "/A{v=x}InX",
+     "/A{v=y}",
+     "/A{v=y}InY",
+     "/A{v=}",
+     "/Cls",
+     "/R",
+     "/R/Local",
+     "/Watch"
+    ],
+    "sub.usda": [
+     "/A",
+     "/A/SubChild"
+    ]
+   },
+   "name": "variant_child",
+   "path": "/A/InX",
+   "prims": [
+    "/A",
+    "/A/SubChild",
+    "/A/Child",
+    "/A/Other",
+    "/Cls",
+    "/R",
+    "/R/FromAsset",
+    "/R/Local",
+    "/Watch"
+   ],
+   "relocates": [
+    [
+     "/A/InX",
+     ""
+    ]
+   ],
+   "watch": {
+    "connections": {
+     "append": [],
+     "delete": [],
+     "explicit": [
+      "/A.y"
+     ],
+     "prepend": []
+    },
+    "expr": "/A/Child /R/Local",
+    "inheritPaths": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      "/Cls"
+     ]
+    },
+    "look": {
+     "append": [],
+     "delete": [],
+     "explicit": [
+      "/A",
+      "/A/Child",
+      "/A.y",
+      "/R/FromAsset"
+     ],
+     "prepend": []
+    },
+    "references": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      {
+       "asset": "",
+       "path": "/A/Child"
+      }
+     ]
+    },
+    "specializes": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      "/A/Other"
+     ]
+    }
+   }
+  },
+  {
+   "applied": true,
+   "defaultPrim": "A",
+   "layers": {
+    "scene.usda": [
+     "/A",
+     "/A/Child",
+     "/A/Other",
+     "/A{v=x}",
+     "/A{v=x}InX",
+     "/A{v=y}",
+     "/A{v=y}InY",
+     "/A{v=}",
+     "/R",
+     "/R/Local",
+     "/Watch"
+    ],
+    "sub.usda": [
+     "/A",
+     "/A/SubChild"
+    ]
+   },
+   "name": "class",
+   "path": "/Cls",
+   "prims": [
+    "/A",
+    "/A/InX",
+    "/A/SubChild",
+    "/A/Child",
+    "/A/Other",
+    "/R",
+    "/R/FromAsset",
+    "/R/Local",
+    "/Watch"
+   ],
+   "relocates": [],
+   "watch": {
+    "connections": {
+     "append": [],
+     "delete": [],
+     "explicit": [
+      "/A.y"
+     ],
+     "prepend": []
+    },
+    "expr": "/A/Child /R/Local",
+    "inheritPaths": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": []
+    },
+    "look": {
+     "append": [],
+     "delete": [],
+     "explicit": [
+      "/A",
+      "/A/Child",
+      "/A.y",
+      "/R/FromAsset"
+     ],
+     "prepend": []
+    },
+    "references": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      {
+       "asset": "",
+       "path": "/A/Child"
+      }
+     ]
+    },
+    "specializes": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      "/A/Other"
+     ]
+    }
+   }
+  },
+  {
+   "applied": true,
+   "defaultPrim": "A",
+   "layers": {
+    "scene.usda": [
+     "/A",
+     "/A/Child",
+     "/A/Other",
+     "/A{v=x}",
+     "/A{v=x}InX",
+     "/A{v=y}",
+     "/A{v=y}InY",
+     "/A{v=}",
+     "/Cls",
+     "/Watch"
+    ],
+    "sub.usda": [
+     "/A",
+     "/A/SubChild"
+    ]
+   },
+   "name": "prim_with_reference",
+   "path": "/R",
+   "prims": [
+    "/A",
+    "/A/InX",
+    "/A/SubChild",
+    "/A/Child",
+    "/A/Other",
+    "/Cls",
+    "/Watch"
+   ],
+   "relocates": [],
+   "watch": {
+    "connections": {
+     "append": [],
+     "delete": [],
+     "explicit": [
+      "/A.y"
+     ],
+     "prepend": []
+    },
+    "expr": "/A/Child",
+    "inheritPaths": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      "/Cls"
+     ]
+    },
+    "look": {
+     "append": [],
+     "delete": [],
+     "explicit": [
+      "/A",
+      "/A/Child",
+      "/A.y"
+     ],
+     "prepend": []
+    },
+    "references": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      {
+       "asset": "",
+       "path": "/A/Child"
+      }
+     ]
+    },
+    "specializes": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      "/A/Other"
+     ]
+    }
+   }
+  },
+  {
+   "applied": true,
+   "defaultPrim": "A",
+   "layers": {
+    "scene.usda": [
+     "/A",
+     "/A/Child",
+     "/A/Other",
+     "/A{v=x}",
+     "/A{v=x}InX",
+     "/A{v=y}",
+     "/A{v=y}InY",
+     "/A{v=}",
+     "/Cls",
+     "/R",
+     "/R/Local",
+     "/Watch"
+    ],
+    "sub.usda": [
+     "/A",
+     "/A/SubChild"
+    ]
+   },
+   "name": "referenced_child",
+   "path": "/R/FromAsset",
+   "prims": [
+    "/A",
+    "/A/InX",
+    "/A/SubChild",
+    "/A/Child",
+    "/A/Other",
+    "/Cls",
+    "/R",
+    "/R/Local",
+    "/Watch"
+   ],
+   "relocates": [
+    [
+     "/R/FromAsset",
+     ""
+    ]
+   ],
+   "watch": {
+    "connections": {
+     "append": [],
+     "delete": [],
+     "explicit": [
+      "/A.y"
+     ],
+     "prepend": []
+    },
+    "expr": "/A/Child /R/Local",
+    "inheritPaths": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      "/Cls"
+     ]
+    },
+    "look": {
+     "append": [],
+     "delete": [],
+     "explicit": [
+      "/A",
+      "/A/Child",
+      "/A.y"
+     ],
+     "prepend": []
+    },
+    "references": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      {
+       "asset": "",
+       "path": "/A/Child"
+      }
+     ]
+    },
+    "specializes": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      "/A/Other"
+     ]
+    }
+   }
+  },
+  {
+   "applied": true,
+   "defaultPrim": "A",
+   "layers": {
+    "scene.usda": [
+     "/A",
+     "/A/Child",
+     "/A/Other",
+     "/A{v=x}",
+     "/A{v=x}InX",
+     "/A{v=y}",
+     "/A{v=y}InY",
+     "/A{v=}",
+     "/Cls",
+     "/R",
+     "/Watch"
+    ],
+    "sub.usda": [
+     "/A",
+     "/A/SubChild"
+    ]
+   },
+   "name": "referenced_child_with_local_over",
+   "path": "/R/Local",
+   "prims": [
+    "/A",
+    "/A/InX",
+    "/A/SubChild",
+    "/A/Child",
+    "/A/Other",
+    "/Cls",
+    "/R",
+    "/R/FromAsset",
+    "/Watch"
+   ],
+   "relocates": [
+    [
+     "/R/Local",
+     ""
+    ]
+   ],
+   "watch": {
+    "connections": {
+     "append": [],
+     "delete": [],
+     "explicit": [
+      "/A.y"
+     ],
+     "prepend": []
+    },
+    "expr": "/A/Child",
+    "inheritPaths": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      "/Cls"
+     ]
+    },
+    "look": {
+     "append": [],
+     "delete": [],
+     "explicit": [
+      "/A",
+      "/A/Child",
+      "/A.y",
+      "/R/FromAsset"
+     ],
+     "prepend": []
+    },
+    "references": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      {
+       "asset": "",
+       "path": "/A/Child"
+      }
+     ]
+    },
+    "specializes": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      "/A/Other"
+     ]
+    }
+   }
+  },
+  {
+   "applied": true,
+   "defaultPrim": "A",
+   "layers": {
+    "scene.usda": [
+     "/A",
+     "/A/Child",
+     "/A/Other",
+     "/A{v=x}",
+     "/A{v=x}InX",
+     "/A{v=y}",
+     "/A{v=y}InY",
+     "/A{v=}",
+     "/Cls",
+     "/R",
+     "/R/Local",
+     "/Watch"
+    ],
+    "sub.usda": [
+     "/A",
+     "/A/SubChild"
+    ]
+   },
+   "name": "property",
+   "path": "/A.y",
+   "prims": [
+    "/A",
+    "/A/InX",
+    "/A/SubChild",
+    "/A/Child",
+    "/A/Other",
+    "/Cls",
+    "/R",
+    "/R/FromAsset",
+    "/R/Local",
+    "/Watch"
+   ],
+   "relocates": [],
+   "watch": {
+    "connections": {
+     "append": [],
+     "delete": [],
+     "explicit": [],
+     "prepend": []
+    },
+    "expr": "/A/Child /R/Local",
+    "inheritPaths": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      "/Cls"
+     ]
+    },
+    "look": {
+     "append": [],
+     "delete": [],
+     "explicit": [
+      "/A",
+      "/A/Child",
+      "/R/FromAsset"
+     ],
+     "prepend": []
+    },
+    "references": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      {
+       "asset": "",
+       "path": "/A/Child"
+      }
+     ]
+    },
+    "specializes": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      "/A/Other"
+     ]
+    }
+   }
+  },
+  {
+   "applied": false,
+   "defaultPrim": "A",
+   "layers": {
+    "scene.usda": [
+     "/A",
+     "/A/Child",
+     "/A/Other",
+     "/A{v=x}",
+     "/A{v=x}InX",
+     "/A{v=y}",
+     "/A{v=y}InY",
+     "/A{v=}",
+     "/Cls",
+     "/R",
+     "/R/Local",
+     "/Watch"
+    ],
+    "sub.usda": [
+     "/A",
+     "/A/SubChild"
+    ]
+   },
+   "name": "referenced_property",
+   "path": "/R/FromAsset.p",
+   "prims": [
+    "/A",
+    "/A/InX",
+    "/A/SubChild",
+    "/A/Child",
+    "/A/Other",
+    "/Cls",
+    "/R",
+    "/R/FromAsset",
+    "/R/Local",
+    "/Watch"
+   ],
+   "relocates": [],
+   "watch": {
+    "connections": {
+     "append": [],
+     "delete": [],
+     "explicit": [
+      "/A.y"
+     ],
+     "prepend": []
+    },
+    "expr": "/A/Child /R/Local",
+    "inheritPaths": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      "/Cls"
+     ]
+    },
+    "look": {
+     "append": [],
+     "delete": [],
+     "explicit": [
+      "/A",
+      "/A/Child",
+      "/A.y",
+      "/R/FromAsset"
+     ],
+     "prepend": []
+    },
+    "references": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      {
+       "asset": "",
+       "path": "/A/Child"
+      }
+     ]
+    },
+    "specializes": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      "/A/Other"
+     ]
+    }
+   }
+  },
+  {
+   "applied": false,
+   "defaultPrim": "A",
+   "layers": {
+    "scene.usda": [
+     "/A",
+     "/A/Child",
+     "/A/Other",
+     "/A{v=x}",
+     "/A{v=x}InX",
+     "/A{v=y}",
+     "/A{v=y}InY",
+     "/A{v=}",
+     "/Cls",
+     "/R",
+     "/R/Local",
+     "/Watch"
+    ],
+    "sub.usda": [
+     "/A",
+     "/A/SubChild"
+    ]
+   },
+   "name": "missing",
+   "path": "/Nope",
+   "prims": [
+    "/A",
+    "/A/InX",
+    "/A/SubChild",
+    "/A/Child",
+    "/A/Other",
+    "/Cls",
+    "/R",
+    "/R/FromAsset",
+    "/R/Local",
+    "/Watch"
+   ],
+   "relocates": [],
+   "watch": {
+    "connections": {
+     "append": [],
+     "delete": [],
+     "explicit": [
+      "/A.y"
+     ],
+     "prepend": []
+    },
+    "expr": "/A/Child /R/Local",
+    "inheritPaths": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      "/Cls"
+     ]
+    },
+    "look": {
+     "append": [],
+     "delete": [],
+     "explicit": [
+      "/A",
+      "/A/Child",
+      "/A.y",
+      "/R/FromAsset"
+     ],
+     "prepend": []
+    },
+    "references": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      {
+       "asset": "",
+       "path": "/A/Child"
+      }
+     ]
+    },
+    "specializes": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      "/A/Other"
+     ]
+    }
+   }
+  },
+  {
+   "applied": false,
+   "defaultPrim": "A",
+   "layers": {
+    "scene.usda": [
+     "/A",
+     "/A/Child",
+     "/A/Other",
+     "/A{v=x}",
+     "/A{v=x}InX",
+     "/A{v=y}",
+     "/A{v=y}InY",
+     "/A{v=}",
+     "/Cls",
+     "/R",
+     "/R/Local",
+     "/Watch"
+    ],
+    "sub.usda": [
+     "/A",
+     "/A/SubChild"
+    ]
+   },
+   "name": "pseudo_root_child_of_missing",
+   "path": "/Nope/Deeper",
+   "prims": [
+    "/A",
+    "/A/InX",
+    "/A/SubChild",
+    "/A/Child",
+    "/A/Other",
+    "/Cls",
+    "/R",
+    "/R/FromAsset",
+    "/R/Local",
+    "/Watch"
+   ],
+   "relocates": [],
+   "watch": {
+    "connections": {
+     "append": [],
+     "delete": [],
+     "explicit": [
+      "/A.y"
+     ],
+     "prepend": []
+    },
+    "expr": "/A/Child /R/Local",
+    "inheritPaths": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      "/Cls"
+     ]
+    },
+    "look": {
+     "append": [],
+     "delete": [],
+     "explicit": [
+      "/A",
+      "/A/Child",
+      "/A.y",
+      "/R/FromAsset"
+     ],
+     "prepend": []
+    },
+    "references": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      {
+       "asset": "",
+       "path": "/A/Child"
+      }
+     ]
+    },
+    "specializes": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      "/A/Other"
+     ]
+    }
+   }
+  }
+ ],
+ "openusd_version": "26.8"
+}

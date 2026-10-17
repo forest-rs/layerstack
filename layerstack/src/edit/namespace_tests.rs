@@ -1122,3 +1122,119 @@ fn dependent_session_on_same_root_moves_its_override_with_shared_source() {
     primary.apply(&mut store, &inverse).unwrap();
     assert_eq!(store.layers[&SESSION], before_session);
 }
+
+/// `/Shelf` references `/Asset`, whose `/Asset/Item` the root layer
+/// relocates to `/Shelf/Moved`.
+fn relocated() -> InMemoryStore {
+    let mut store = InMemoryStore::default();
+    let (asset, item, shelf) = (
+        store.path("/Asset"),
+        store.path("/Asset/Item"),
+        store.path("/Shelf"),
+    );
+    let (source, moved) = (store.path("/Shelf/Item"), store.path("/Shelf/Moved"));
+    let item_name = store.tokens.intern("Item");
+    let mut layer = Layer::new(ASSET);
+    layer.insert_prim(asset, PrimSpec::def().with_children(vec![item_name]));
+    layer.insert_prim(item, PrimSpec::def());
+    store.insert_layer(layer);
+    let mut root = Layer::new(ROOT);
+    root.insert_prim(
+        shelf,
+        PrimSpec::def().with_reference(Reference::new(ASSET, asset)),
+    );
+    root.relocates.push(crate::Relocate {
+        source,
+        target: Some(moved),
+    });
+    store.insert_layer(root);
+    store
+}
+
+#[test]
+fn deleting_a_relocated_prim_relocates_its_source_away_then_undoes() {
+    let mut store = relocated();
+    let (source, moved) = (store.path("/Shelf/Item"), store.path("/Shelf/Moved"));
+    let mut live = LiveStage::compose(&mut store, ROOT, StageOptions::default());
+    assert!(live.stage().has_prim(moved));
+    let edit = NamespaceEdit::prepare_delete(
+        live.stage(),
+        &mut store,
+        &EditTarget::for_layer(ROOT),
+        TargetPath::Prim(moved),
+    )
+    .unwrap();
+    assert_eq!(edit.destination(), None);
+    assert_eq!(
+        edit.relocates_to_author(),
+        &[(
+            ROOT,
+            vec![crate::Relocate {
+                source,
+                target: None
+            }]
+        )]
+    );
+    let applied = live.apply(&mut store, edit.transaction()).unwrap();
+    assert!(!live.stage().has_prim(moved));
+    assert!(!live.stage().has_prim(source));
+    live.apply(&mut store, &applied.inverse).unwrap();
+    assert!(live.stage().has_prim(moved));
+}
+
+#[test]
+fn deletes_reject_what_they_cannot_remove() {
+    let mut store = relocated();
+    let (shelf, root) = (store.path("/Shelf"), store.path("/"));
+    let stage = Stage::compose(&mut store, ROOT, StageOptions::default());
+    let delete = |store: &mut InMemoryStore, target: &EditTarget, object| {
+        NamespaceEdit::prepare_delete(&stage, store, target, object).unwrap_err()
+    };
+    let at_root = EditTarget::for_layer(ROOT);
+    assert_eq!(
+        delete(&mut store, &at_root, TargetPath::Prim(root)),
+        NamespaceError::InvalidPaths
+    );
+    let missing = store.path("/Missing");
+    assert_eq!(
+        delete(&mut store, &at_root, TargetPath::Prim(missing)),
+        NamespaceError::NoSuchObject
+    );
+    // The asset is not in the stage's root layer stack.
+    assert_eq!(
+        delete(
+            &mut store,
+            &EditTarget::for_layer(ASSET),
+            TargetPath::Prim(shelf)
+        ),
+        NamespaceError::Unmappable
+    );
+}
+
+#[test]
+fn deleting_beneath_an_instance_is_an_instance_proxy_edit() {
+    let mut store = relocated();
+    let shelf = store.path("/Shelf");
+    store.layers.get_mut(&ROOT).unwrap().relocates.clear();
+    store
+        .layers
+        .get_mut(&ROOT)
+        .unwrap()
+        .prims
+        .get_mut(&shelf)
+        .unwrap()
+        .instanceable = Some(true);
+    let item = store.path("/Shelf/Item");
+    let stage = Stage::compose(&mut store, ROOT, StageOptions::default());
+    assert!(stage.is_instance(shelf));
+    assert_eq!(
+        NamespaceEdit::prepare_delete(
+            &stage,
+            &mut store,
+            &EditTarget::for_layer(ROOT),
+            TargetPath::Prim(item)
+        )
+        .unwrap_err(),
+        NamespaceError::InstanceProxy
+    );
+}

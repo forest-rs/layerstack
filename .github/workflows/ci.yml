@@ -459,6 +459,13 @@ jobs:
             layerstack_conformance/fixtures/layer_field_edits "$RUNNER_TEMP/layer_field_edits.json"
           diff -u layerstack_conformance/fixtures/layer_field_edits/oracle.json "$RUNNER_TEMP/layer_field_edits.json"
 
+      # The delete oracle must be what OpenUSD's namespace editor does.
+      - name: check namespace deletes oracle
+        run: |
+          python layerstack_conformance/scripts/namespace_deletes_oracle.py \
+            layerstack_conformance/fixtures/namespace_deletes "$RUNNER_TEMP/namespace_deletes.json"
+          diff -u layerstack_conformance/fixtures/namespace_deletes/oracle.json "$RUNNER_TEMP/namespace_deletes.json"
+
       # The transform oracle must be what OpenUSD computes, to within the
       # rounding of the platform's trigonometry.
       - name: check transform oracle

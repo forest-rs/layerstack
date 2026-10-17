@@ -1,0 +1,71 @@
+#usda 1.0
+(
+    defaultPrim = "A"
+    subLayers = [
+        @sub.usda@
+    ]
+)
+
+def "A" (
+    variants = {
+        string v = "x"
+    }
+    prepend variantSets = "v"
+)
+{
+    reorder nameChildren = ["Child", "Other"]
+    double y = 2
+
+    def "Child"
+    {
+        double x = 1
+    }
+
+    def "Other"
+    {
+    }
+    variantSet "v" = {
+        "x" {
+            def "InX"
+            {
+            }
+
+        }
+        "y" {
+            def "InY"
+            {
+            }
+
+        }
+    }
+}
+
+class "Cls"
+{
+}
+
+def "R" (
+    prepend references = @asset.usda@</Asset>
+)
+{
+    over "Local"
+    {
+    }
+}
+
+def "Watch" (
+    prepend inherits = </Cls>
+    prepend references = </A/Child>
+    prepend specializes = </A/Other>
+)
+{
+    pathExpression expr = "/A/Child /R/Local"
+    rel look = [
+        </A>,
+        </A/Child>,
+        </A.y>,
+        </R/FromAsset>,
+    ]
+    double z
+    double z.connect = </A.y>
+}

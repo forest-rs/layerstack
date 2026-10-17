@@ -7,7 +7,19 @@
 //!
 //! ```text
 //! cargo run -p layerstack_schemagen -- --pxr <site-packages>/pxr --source <OpenUSD> [--check]
+//! cargo run -p layerstack_schemagen -- compile <schema.usda> --out <dir> \
+//!     [--search <dir>]... [--openusd-source <OpenUSD>] [--plugin-root <dir>] [--check]
 //! ```
+//!
+//! `compile` writes the `generatedSchema.usda` and `plugInfo.json` that
+//! `usdGenSchema` writes for a `schema.usda`, so its schemas load in OpenUSD
+//! and in layerstack alike; `plugInfo.json` is built on the one already in
+//! `<dir>`, keeping its edits. Sublayers such as `@usdGeom/schema.usda@`
+//! resolve next to the layer naming them, then in each `--search`
+//! directory, an OpenUSD checkout's `pxr/usd` (`--openusd-source`) and each
+//! `<plugin>/resources` of a plugin directory (`--plugin-root`, such as the
+//! usd-core wheel's `pxr/pluginfo`). With `--check` it writes nothing and
+//! fails when either file differs. See [`compile`] for the library API.
 //!
 //! `--pxr` names the `pxr` package of a usd-core wheel, whose
 //! `pluginfo/<plugin>/resources` directories hold each schema plugin's
@@ -81,7 +93,10 @@ pub fn run() -> Result<String, String> {
     let mut kind_plugins = Vec::new();
     let mut selected = Vec::new();
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
-    let mut args = std::env::args().skip(1);
+    let mut args = std::env::args().skip(1).peekable();
+    if args.peek().map(String::as_str) == Some("compile") {
+        return compile::run(args.skip(1));
+    }
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--pxr" => pxr = args.next().map(PathBuf::from),

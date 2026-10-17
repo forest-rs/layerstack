@@ -96,6 +96,11 @@ fn anchored_asset(reference: Reference) -> Reference {
 /// expression arc when both evaluate to the same asset. An expression that
 /// evaluates to nothing, or fails, drops the item.
 ///
+/// A payload to a dynamic file format the anchor names
+/// ([`ArcAnchor::dynamic`]) keeps its asset path, deferred: the layer it
+/// targets depends on the arguments composition gives it
+/// (`crate::dynamic_format`).
+///
 /// Spec: AOUSD Core §10.3.2.1 (for a reference with no layer asset path,
 /// "the layer stack containing the reference is assumed"), §10.3.2.2.
 /// OpenUSD: `_EvalRefOrPayloadArcs` in `pxr/usd/pcp/primIndex.cpp` (an
@@ -117,10 +122,24 @@ pub(crate) fn anchor_internal_arcs(
                         layer: anchor.layer,
                         ..reference.clone()
                     })
+                } else if anchor.is_dynamic(reference) {
+                    // Its layer depends on the arguments composition gives
+                    // it: keep the asset path, deferred to composition.
+                    Some(reference.clone())
                 } else if reference.deferred {
                     Some(resolve_deferred(store, reference))
                 } else if reference.is_expression() {
-                    anchor.evaluate(store, reference, layer).map(anchored_asset)
+                    anchor.evaluate(store, reference, layer).map(|evaluated| {
+                        if anchor.is_dynamic(&evaluated) {
+                            Reference {
+                                layer,
+                                deferred: true,
+                                ..evaluated
+                            }
+                        } else {
+                            anchored_asset(evaluated)
+                        }
+                    })
                 } else {
                     Some(anchored_asset(reference.clone()))
                 }

@@ -1,0 +1,148 @@
+#usda 1.0
+(
+    """Laboratory instrument schemas, in usdGenSchema's authoring form: a
+    codeless library whose classes cover each kind of schema the compiler
+    generates."""
+    subLayers = [
+        @usd/schema.usda@
+    ]
+)
+
+over "GLOBAL" (
+    customData = {
+        string libraryName = "labInstruments"
+        string libraryPath = "."
+        bool skipCodeGeneration = true
+    }
+)
+{
+}
+
+class "Instrument" (
+    inherits = </Typed>
+    doc = """An instrument of the lab. Every instrument has a serial number
+    and a status."""
+)
+{
+    string instrument:serialNumber (
+        doc = "The manufacturer's serial number, verbatim."
+    )
+    uniform token instrument:status = "idle" (
+        allowedTokens = ["idle", "running", "fault"]
+        doc = "What the instrument is doing. A fault stops a run."
+    )
+    double instrument:temperature = 21.5 (
+        displayGroup = "Environment"
+        doc = "Operating temperature, in degrees Celsius."
+    )
+}
+
+class Spectrometer "Spectrometer" (
+    inherits = </Instrument>
+    doc = "An instrument that measures light across a range of wavelengths."
+    prepend apiSchemas = ["CalibrationAPI"]
+    customData = {
+        token[] fallbackTypes = ["Spectrograph"]
+    }
+)
+{
+    float spectrometer:minWavelength = 380 (
+        doc = "The shortest wavelength measured, in nanometers."
+    )
+    float spectrometer:maxWavelength = 780
+    int spectrometer:channels = 1024
+    rel spectrometer:lightSource (
+        doc = "The lamp the instrument measures with."
+    )
+    double calibration:interval = 7 (
+        customData = {
+            bool apiSchemaOverride = true
+        }
+        doc = "Spectrometers are calibrated weekly."
+    )
+}
+
+class ImagingSpectrometer "ImagingSpectrometer" (
+    inherits = </Spectrometer>
+    doc = """A spectrometer that also records an image: one spectrum per
+    pixel, which \\em hyperspectral cameras record."""
+)
+{
+    int2 imaging:resolution = (640, 480)
+    uniform token imaging:interleave = "bil" (
+        allowedTokens = ["bil", "bip", "bsq"]
+    )
+    uniform token instrument:status = "running" (
+        allowedTokens = ["idle", "running", "fault"]
+        doc = "An imaging spectrometer starts running."
+    )
+}
+
+class Centrifuge "Centrifuge" (
+    inherits = </Instrument>
+    doc = "Spins samples. See \\ref Lab_Safety before use."
+)
+{
+    float centrifuge:maxSpeed = 15000 (
+        doc = "Revolutions per minute."
+    )
+    uniform bool centrifuge:refrigerated = 0
+}
+
+class "CalibrationAPI" (
+    inherits = </APISchemaBase>
+    doc = "The calibration record of an instrument."
+    customData = {
+        token apiSchemaType = "singleApply"
+        token[] apiSchemaAutoApplyTo = ["Centrifuge"]
+        token[] apiSchemaCanOnlyApplyTo = ["Instrument"]
+    }
+)
+{
+    double calibration:interval = 30 (
+        doc = "Days between calibrations."
+    )
+    token calibration:method = "reference" (
+        allowedTokens = ["reference", "selfTest"]
+    )
+    asset calibration:certificate
+}
+
+class "ChannelAPI" (
+    inherits = </APISchemaBase>
+    doc = """A detector channel. Multiple-apply: `ChannelAPI:red` gives
+    `channel:red:gain`."""
+    customData = {
+        token apiSchemaType = "multipleApply"
+        token propertyNamespacePrefix = "channel"
+        token[] apiSchemaAllowedInstanceNames = ["red", "green", "blue"]
+        token[] apiSchemaCanOnlyApplyTo = ["Spectrometer"]
+        dictionary apiSchemaInstances = {
+            dictionary red = {
+                token[] apiSchemaCanOnlyApplyTo = ["ImagingSpectrometer"]
+            }
+        }
+    }
+)
+{
+    bool __INSTANCE_NAME__ = 1 (
+        doc = "Whether the channel is enabled."
+    )
+    float gain = 1 (
+        doc = "Detector gain."
+    )
+    token mode = "linear" (
+        allowedTokens = ["linear", "logarithmic"]
+    )
+    rel source
+}
+
+class "SampleQueryAPI" (
+    inherits = </APISchemaBase>
+    doc = "Queries over the samples an instrument measured. Never applied."
+    customData = {
+        token apiSchemaType = "nonApplied"
+    }
+)
+{
+}

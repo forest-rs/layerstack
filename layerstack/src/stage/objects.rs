@@ -217,6 +217,14 @@ impl Attribute<'_> {
             .read_property(self.path, time, |v| T::from_value(v, tokens))
             .map(|resolved| resolved.value)
     }
+    /// The value at `time` beneath `layer`, as a `T`, with the source it
+    /// came from: what the attribute would read without `layer`'s opinions
+    /// and those stronger than them (see [`Stage::read_property_below`]).
+    pub fn value_below<T: FromValue>(self, layer: LayerId, time: Time) -> Option<Resolved<T>> {
+        let tokens = self.store.tokens();
+        self.stage
+            .read_property_below(self.path, layer, time, |v| T::from_value(v, tokens))
+    }
     /// Reads and materializes the selected numeric array, exposing decode failure.
     #[doc(alias = "UsdAttribute::Get")]
     #[doc(alias = "Get")]

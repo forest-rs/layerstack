@@ -486,6 +486,91 @@ mod tests {
         );
     }
 
+    /// `/Item.price` in a stack of `overlay` (2) over `basis` (3), with a
+    /// session-like `top` (1) above both: `top` authors nothing for the
+    /// price, `overlay` a default of 12 and a sample at 10 of 14, `basis` a
+    /// default of 10 and samples at 0 and 20.
+    fn overlays() -> InMemoryStore {
+        let mut store = InMemoryStore::default();
+        let item = store.path("/Item");
+        let (price, note) = (store.tokens.intern("price"), store.tokens.intern("note"));
+        let typed = |value: Option<f64>, samples: Vec<(f64, f64)>| {
+            let mut spec = PropertySpec::typed_attribute(PropertyType::new(
+                "double",
+                false,
+                Value::Double(0.0),
+            ));
+            spec.default = value.map(Value::Double);
+            if !samples.is_empty() {
+                spec = spec.with_time_samples(
+                    samples
+                        .into_iter()
+                        .map(|(t, v)| (t, Value::Double(v)))
+                        .collect(),
+                );
+            }
+            spec
+        };
+        let mut top = Layer::new(LayerId(1));
+        top.sublayers_mut().extend([
+            crate::SublayerEntry::new(LayerId(2)),
+            crate::SublayerEntry::new(LayerId(3)),
+        ]);
+        top.insert_prim(item, PrimSpec::over().with_property(note, double(1.0)));
+        let mut overlay = Layer::new(LayerId(2));
+        overlay.insert_prim(
+            item,
+            PrimSpec::over().with_property(price, typed(Some(12.0), vec![(10.0, 14.0)])),
+        );
+        let mut basis = Layer::new(LayerId(3));
+        basis.insert_prim(
+            item,
+            PrimSpec::def().with_property(price, typed(Some(10.0), vec![(0.0, 0.0), (20.0, 20.0)])),
+        );
+        for layer in [top, overlay, basis] {
+            store.insert_layer(layer);
+        }
+        store
+    }
+
+    #[test]
+    fn values_beneath_a_layer_are_those_without_it() {
+        let mut store = overlays();
+        let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+        let mut muted = StageOptions::default();
+        muted.muted_layers.insert(LayerId(2));
+        let without = Stage::compose(&mut store, LayerId(1), muted);
+        let view = stage.view(&store);
+        let price = view.attribute("/Item.price").unwrap();
+        let unmuted = without.view(&store).attribute("/Item.price").unwrap();
+        for time in [
+            Time::Default,
+            Time::at(5.0),
+            Time::at(10.0),
+            Time::held(15.0),
+        ] {
+            let below = price.value_below::<f64>(LayerId(2), time).unwrap();
+            assert_eq!(Some(below.value), unmuted.value::<f64>(time), "{time:?}");
+            assert_eq!(
+                below.provenance.map(|p| p.layer),
+                Some(LayerId(3)),
+                "the basis supplies it"
+            );
+        }
+        assert_eq!(price.value::<f64>(Time::Default), Some(12.0));
+        // `top` authors no price: beneath it is everything weaker, so the
+        // overlay's own value.
+        let below_top = price.value_below::<f64>(LayerId(1), Time::Default).unwrap();
+        assert_eq!(below_top.value, 12.0);
+        assert_eq!(below_top.provenance.map(|p| p.layer), Some(LayerId(2)));
+        // Beneath the basis there is only the fallback, which has none.
+        assert!(
+            price
+                .value_below::<f64>(LayerId(3), Time::Default)
+                .is_none()
+        );
+    }
+
     #[test]
     fn layer_specs_iterate_in_namespace_order() {
         let mut store = InMemoryStore::default();

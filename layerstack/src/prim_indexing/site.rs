@@ -17,9 +17,12 @@ use alloc::{sync::Arc, vec::Vec};
 use hashbrown::{HashMap, HashSet};
 
 use crate::{
-    doc::{FieldEntry, Layer, LayerId, LayerOffset, LayerStore, PrimSpec, Reference, VariantSpec},
+    doc::{
+        FieldEntry, FieldValue, Layer, LayerId, LayerOffset, LayerStore, PrimSpec, Reference,
+        Value, VariantSpec, get_field,
+    },
     expression_variables::{ArcAnchor, ExpressionScope},
-    interner::TokenId,
+    interner::{TokenId, TokenInterner},
     listop::ListOp,
     path::{PathId, PathInterner},
     spec_path::SpecPath,
@@ -27,6 +30,14 @@ use crate::{
 };
 
 use super::layer_stacks::ComputedStack;
+
+/// The authored boolean field `name` among `fields`.
+fn bool_field(fields: &[FieldEntry], tokens: &TokenInterner, name: &str) -> Option<bool> {
+    match get_field(fields, &tokens.lookup(name)?)? {
+        FieldValue::Value(Value::Bool(value)) => Some(*value),
+        _ => None,
+    }
+}
 
 /// The spec a layer authors at a site: a prim spec, or a variant spec of
 /// one.
@@ -48,6 +59,28 @@ impl<'a> SpecRef<'a> {
         match self {
             Self::Prim(spec) => &spec.properties,
             Self::Variant(spec) => &spec.properties,
+        }
+    }
+
+    /// This spec's `active` opinion. A prim spec keeps it in a dedicated
+    /// member; a variant spec, among its fields.
+    ///
+    /// Spec: AOUSD Core §7.6.7 (variant specs contribute prim spec fields),
+    /// §11.3 (active).
+    pub(crate) fn active(self, tokens: &TokenInterner) -> Option<bool> {
+        match self {
+            Self::Prim(spec) => spec.active,
+            Self::Variant(spec) => bool_field(&spec.fields, tokens, "active"),
+        }
+    }
+
+    /// This spec's `instanceable` opinion, kept as [`Self::active`] is.
+    ///
+    /// Spec: AOUSD Core §7.6.7, §11.3.3 (instanceable).
+    pub(crate) fn instanceable(self, tokens: &TokenInterner) -> Option<bool> {
+        match self {
+            Self::Prim(spec) => spec.instanceable,
+            Self::Variant(spec) => bool_field(&spec.fields, tokens, "instanceable"),
         }
     }
 

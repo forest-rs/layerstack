@@ -162,6 +162,18 @@ pub enum Rejection {
     ///
     /// Spec: AOUSD Core §10.3.2.6 (each source has one target).
     DuplicateRelocateSource(crate::PathId),
+    /// A copy names a prim and a property, which copy only to their own
+    /// kind.
+    CopyBetweenKinds,
+    /// A copy names a variant-qualified path; copies are of prim and
+    /// property specs outside variant branches.
+    VariantCopy,
+    /// A copy within one layer whose destination is the source, or an
+    /// ancestor or descendant of it.
+    CopyIntoSource,
+    /// The copied specs author paths the copy cannot remap (for example
+    /// an invalid path expression, or an arc whose asset is an expression).
+    UnsupportedCopy,
     /// A step of an inverse no longer matches the layer: the layer was
     /// changed in a way the inverse cannot undo.
     Diverged(SpecPath),
@@ -228,6 +240,16 @@ impl fmt::Display for Rejection {
                 write!(f, "composition would ignore the relocate: {reason:?}")
             }
             Self::DuplicateRelocateSource(_) => f.write_str("two relocates move the same source"),
+            Self::CopyBetweenKinds => {
+                f.write_str("a prim and a property copy only to their own kind")
+            }
+            Self::VariantCopy => f.write_str("variant specs are not copied"),
+            Self::CopyIntoSource => {
+                f.write_str("the copy's destination is its source, or inside or around it")
+            }
+            Self::UnsupportedCopy => {
+                f.write_str("the copied specs author paths that cannot be remapped")
+            }
             Self::Diverged(_) => f.write_str("the layer no longer matches the inverse"),
         }
     }

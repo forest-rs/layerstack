@@ -155,6 +155,10 @@ pub(crate) enum Op {
         layer: LayerId,
         relocates: Vec<Relocate>,
     },
+    CopySpec {
+        from: Address,
+        to: Address,
+    },
     /// A storage-level step of an inverse, guarded by the step it undoes.
     Raw(Box<Guarded>),
 }
@@ -410,6 +414,36 @@ impl Transaction {
             at,
             spec: Box::new(spec),
         })
+    }
+
+    /// Copies the prim spec at `from`, with every spec beneath it, or the
+    /// property spec at `from`, to `to`, in the same or another layer. The
+    /// copy replaces whatever `to` holds, and missing ancestors of `to` are
+    /// created as `over`s, as the other edits create them.
+    ///
+    /// Paths the copied specs author that point into the copied namespace
+    /// follow it to `to`: relationship targets, attribute connections,
+    /// inherits, specializes, internal references and payloads, and path
+    /// expressions (OpenUSD leaves those pointing at the source). For a
+    /// property, that namespace is its prim's. External arcs and paths
+    /// elsewhere stay as they are; internal arcs copied to another layer
+    /// are anchored there. Specs inside an ancestor's variant branches are
+    /// not part of the copy.
+    ///
+    /// A prim and a property copy only to their own kind
+    /// ([`Rejection::CopyBetweenKinds`]); variant-qualified paths are
+    /// rejected ([`Rejection::VariantCopy`]), and so is a copy within one
+    /// layer onto, into or around its source ([`Rejection::CopyIntoSource`]).
+    ///
+    /// OpenUSD: `SdfCopySpec`.
+    ///
+    /// Spec: AOUSD Core §7 (scene description), §8 (spec paths).
+    ///
+    /// [`Rejection::CopyBetweenKinds`]: super::Rejection::CopyBetweenKinds
+    /// [`Rejection::VariantCopy`]: super::Rejection::VariantCopy
+    /// [`Rejection::CopyIntoSource`]: super::Rejection::CopyIntoSource
+    pub fn copy_spec(&mut self, from: Address, to: Address) -> &mut Self {
+        self.push(Op::CopySpec { from, to })
     }
 
     /// Removes the prim, variant or property spec at `at`, with everything
@@ -1044,6 +1078,7 @@ impl Op {
             | Self::LayerMetadata { .. }
             | Self::EditSublayers { .. }
             | Self::SetRelocates { .. } => return None,
+            Self::CopySpec { to, .. } => (to, Slot::Spec),
         })
     }
 }

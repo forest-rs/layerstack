@@ -1,0 +1,48 @@
+#usda 1.0
+
+def "A" (
+    prepend inherits = [</A/Cls>, </Outside>]
+    prepend references = [</A/Child>, @asset.usda@</X>]
+    variants = {
+        string v = "x"
+    }
+    prepend variantSets = "v"
+)
+{
+    rel look = [</A/Child>, </Outside>, </A.y>]
+    double y = 1
+    double z
+    double z.connect = </A.y>
+    pathExpression e = "/A/Child /Outside"
+
+    def "Child"
+    {
+        custom double w = 2
+    }
+
+    class "Cls"
+    {
+    }
+    variantSet "v" = {
+        "x" {
+            def "InX"
+            {
+                rel r = </A/Child>
+            }
+
+        }
+    }
+}
+
+def "B"
+{
+    double keep = 3
+
+    def "Old"
+    {
+    }
+}
+
+def "Outside"
+{
+}

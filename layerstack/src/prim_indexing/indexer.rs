@@ -7,7 +7,9 @@
 //! site moved to the child's name. The arcs authored at each node's site are
 //! then evaluated as tasks, strongest kinds first: relocations, references,
 //! payloads, inherits and specializes, the classes they imply, then
-//! variants, whose selections can depend on every opinion gathered so far.
+//! variants, whose selections can depend on every opinion gathered so far,
+//! and last the payloads to dynamic file formats, whose arguments can too
+//! (see [`crate::dynamic_format`]).
 //! An arc to a site below a root prim brings the opinions of that site's
 //! ancestors along: the index of the target site is built (recursively, in
 //! the target's layer stack) and grafted beneath the arc's node.
@@ -21,12 +23,13 @@ use alloc::{string::String, sync::Arc, vec::Vec};
 use hashbrown::{HashMap, HashSet};
 
 use crate::{
-    asset::AssetRequest,
+    asset::{AssetRequest, FormatArgs},
     composition_error::{
         ArcCycle, ArcCycleSite, ArcToProhibitedChild, CompositionError, OpinionAtRelocationSource,
         UnresolvedAsset, UnresolvedDefaultPrim, UnresolvedPrimPath,
     },
-    doc::{LayerId, LayerOffset, LayerStore, ReferenceTarget},
+    doc::{AssetAvailability, LayerId, LayerOffset, LayerStore, ReferenceTarget},
+    dynamic_format::{DynamicDependency, DynamicFileFormat, DynamicFormatContext, DynamicFormats},
     expression_variables::{ExpressionScope, VariableReads},
     interner::TokenId,
     layer_stack::LayerStackIdentifier,
@@ -38,6 +41,7 @@ use crate::{
 };
 
 use super::{
+    dynamic_args::Walk,
     graph::{Graph, NONE, Node, NodeIndex, Site, SubgraphArc, is_class_based, non_variant_depth},
     layer_stacks::{LayerStacks, StackId},
     map_function::MapFunction,
@@ -58,6 +62,10 @@ pub(crate) struct Ctx<'s> {
     /// Finalized indexes of stage prims, for their children to start from.
     pub(crate) cache: ReadLock<HashMap<PathId, Arc<Graph>>>,
     pub(crate) root_path: PathId,
+    /// The dynamic file formats payloads compose arguments for.
+    pub(crate) dynamic_formats: &'s DynamicFormats,
+    /// The registry whose plugin metadata dynamic arguments may read.
+    pub(crate) schemas: Option<&'s crate::schema::SchemaRegistry>,
 }
 
 /// Whether a prim index's payload was included.
@@ -94,6 +102,9 @@ pub(crate) struct Outputs {
     pub(crate) reads: VariableReads,
     /// Layers that author a reference or payload this index follows.
     pub(crate) arc_layers: Vec<LayerId>,
+    /// What the arguments of the dynamic payloads this index follows were
+    /// composed from.
+    pub(crate) dynamic: DynamicDependency,
 }
 
 impl Outputs {
@@ -108,6 +119,7 @@ impl Outputs {
         self.default_prim_layers.extend(other.default_prim_layers);
         self.reads.extend(other.reads);
         self.arc_layers.extend(other.arc_layers);
+        self.dynamic.append(other.dynamic);
     }
 }
 
@@ -116,11 +128,11 @@ impl Outputs {
 pub(crate) struct Frame<'f> {
     /// The site the recursive index is built for.
     requested_site: Site,
-    parent_graph: &'f Graph,
-    parent_node: NodeIndex,
+    pub(super) parent_graph: &'f Graph,
+    pub(super) parent_node: NodeIndex,
     arc_kind: ArcKind,
-    arc_map_to_parent: &'f MapFunction,
-    previous: Option<&'f Self>,
+    pub(super) arc_map_to_parent: &'f MapFunction,
+    pub(super) previous: Option<&'f Self>,
     skip_duplicate_nodes: bool,
 }
 
@@ -189,10 +201,12 @@ enum TaskKind {
     AncestralVariantAuthored,
     AncestralVariantFallback,
     AncestralVariantNoneFound,
+    AncestralDynamicPayloads,
     VariantSets,
     VariantAuthored,
     VariantFallback,
     VariantNoneFound,
+    NodeDynamicPayloads,
     UnresolvedPrimPathError,
 }
 
@@ -256,6 +270,19 @@ impl TaskSet {
 
     fn with(self, kind: TaskKind) -> Self {
         Self(self.0 | Self::bit(kind))
+    }
+
+    /// Without the variant and dynamic payload tasks, which wait for the
+    /// opinions of stronger sites. OpenUSD: `VariantsAndDynamicPayloadTasks`.
+    fn without_variants_and_dynamic_payloads(self) -> Self {
+        self.without(TaskKind::VariantSets)
+            .without(TaskKind::NodeDynamicPayloads)
+    }
+
+    /// OpenUSD: `AncestralVariantsAndDynamicPayloadTasks`.
+    fn without_ancestral_variants_and_dynamic_payloads(self) -> Self {
+        self.without(TaskKind::AncestralVariantSets)
+            .without(TaskKind::AncestralDynamicPayloads)
     }
 
     fn without_expressed_arcs(self) -> Self {
@@ -409,6 +436,10 @@ impl Indexer<'_, '_, '_> {
         let graph = self.graph();
         let paths = self.paths();
         match a.kind {
+            // Dynamic payloads read opinions of other sites: strength order.
+            TaskKind::AncestralDynamicPayloads | TaskKind::NodeDynamicPayloads => {
+                graph.cmp_nodes(paths, a.node, b.node).is_lt()
+            }
             TaskKind::AncestralVariantAuthored
             | TaskKind::AncestralVariantFallback
             | TaskKind::VariantAuthored
@@ -464,8 +495,12 @@ impl Indexer<'_, '_, '_> {
         match task.kind {
             TaskKind::NodeRelocations => self.eval_node_relocations(node),
             TaskKind::ImpliedRelocations => self.eval_implied_relocations(node),
-            TaskKind::NodeReferences => self.eval_node_references(node, false),
-            TaskKind::NodePayloads => self.eval_node_references(node, true),
+            TaskKind::NodeReferences => self.eval_node_references(node),
+            TaskKind::NodePayloads | TaskKind::NodeDynamicPayloads => {
+                let path = self.graph().node(node).site.path.clone();
+                self.eval_node_payloads(node, task.kind == TaskKind::NodeDynamicPayloads, path);
+            }
+            TaskKind::AncestralDynamicPayloads => self.eval_ancestral_dynamic_payloads(node),
             TaskKind::NodeInherits => self.eval_node_class_arcs(node, ArcKind::Inherits),
             TaskKind::NodeSpecializes => self.eval_node_class_arcs(node, ArcKind::Specializes),
             TaskKind::ImpliedClasses => self.eval_implied_classes(node),
@@ -505,6 +540,7 @@ impl Indexer<'_, '_, '_> {
             .without(TaskKind::VariantSets)
             .without(TaskKind::NodeReferences)
             .without(TaskKind::NodePayloads)
+            .without(TaskKind::NodeDynamicPayloads)
             .without(TaskKind::NodeSpecializes);
         let entry = self.graph().node(node);
         if !entry.can_contribute_specs() {
@@ -529,6 +565,9 @@ impl Indexer<'_, '_, '_> {
             }
             if !spec.payloads().is_empty() {
                 tasks = tasks.with(TaskKind::NodePayloads);
+                if !self.ctx.dynamic_formats.is_empty() {
+                    tasks = tasks.with(TaskKind::NodeDynamicPayloads);
+                }
             }
             if !spec.specializes().is_empty() {
                 tasks = tasks.with(TaskKind::NodeSpecializes);
@@ -537,10 +576,10 @@ impl Indexer<'_, '_, '_> {
         tasks
     }
 
-    /// Whether a site above `node`'s authors variant sets.
-    /// OpenUSD: `_ScanAncestralArcs`.
+    /// Whether a site above `node`'s authors variant sets, or payloads
+    /// (which may be dynamic). OpenUSD: `_ScanAncestralArcs`.
     fn scan_ancestral_arcs(&mut self, node: NodeIndex) -> TaskSet {
-        let tasks = TaskSet::ALL.without(TaskKind::AncestralVariantSets);
+        let mut tasks = TaskSet::ALL.without_ancestral_variants_and_dynamic_payloads();
         let entry = self.graph().node(node).clone();
         let paths = self.ctx.store.paths();
         let Some(mut path) = site_paths::parent(paths, &entry.site.path) else {
@@ -564,11 +603,19 @@ impl Indexer<'_, '_, '_> {
             {
                 return tasks;
             }
-            let declares = site::specs(self.ctx.store, stack, &path).any(|(_, _, spec)| {
-                !spec.variant_set_order().is_empty() || !spec.variant_sets().is_empty()
-            });
-            if declares {
-                return tasks.with(TaskKind::AncestralVariantSets);
+            for (_, _, spec) in site::specs(self.ctx.store, stack, &path) {
+                if !spec.variant_set_order().is_empty() || !spec.variant_sets().is_empty() {
+                    tasks = tasks.with(TaskKind::AncestralVariantSets);
+                }
+                if !spec.payloads().is_empty() && !self.ctx.dynamic_formats.is_empty() {
+                    tasks = tasks.with(TaskKind::AncestralDynamicPayloads);
+                }
+            }
+            if tasks.has(TaskKind::AncestralVariantSets)
+                && (tasks.has(TaskKind::AncestralDynamicPayloads)
+                    || self.ctx.dynamic_formats.is_empty())
+            {
+                return tasks;
             }
             match site_paths::parent(self.ctx.store.paths(), &path) {
                 Some(parent) => path = parent,
@@ -594,12 +641,16 @@ impl Indexer<'_, '_, '_> {
             tasks = tasks.without(TaskKind::ImpliedRelocations);
         }
         tasks = TaskSet(tasks.0 & self.scan_arcs(node).0);
-        if tasks.has(TaskKind::AncestralVariantSets) {
+        if tasks.has(TaskKind::AncestralVariantSets)
+            || tasks.has(TaskKind::AncestralDynamicPayloads)
+        {
             tasks = TaskSet(tasks.0 & self.scan_ancestral_arcs(node).0);
         }
         for kind in [
             TaskKind::UnresolvedPrimPathError,
             TaskKind::VariantSets,
+            TaskKind::NodeDynamicPayloads,
+            TaskKind::AncestralDynamicPayloads,
             TaskKind::AncestralVariantSets,
             TaskKind::NodeSpecializes,
             TaskKind::NodeInherits,
@@ -616,10 +667,10 @@ impl Indexer<'_, '_, '_> {
 
     fn add_tasks_for_root(&mut self) {
         let mut tasks = TaskSet::ALL
-            .without(TaskKind::AncestralVariantSets)
+            .without_ancestral_variants_and_dynamic_payloads()
             .without(TaskKind::UnresolvedPrimPathError);
         if !self.evaluate_variants {
-            tasks = tasks.without(TaskKind::VariantSets);
+            tasks = tasks.without_variants_and_dynamic_payloads();
         }
         self.add_tasks_for_node_recursively(0, tasks);
     }
@@ -644,7 +695,7 @@ impl Indexer<'_, '_, '_> {
             self.add_task(Task::new(TaskKind::ImpliedSpecializes, node));
         }
         if !self.evaluate_variants {
-            tasks = tasks.without(TaskKind::VariantSets);
+            tasks = tasks.without_variants_and_dynamic_payloads();
         }
         if self.previous_frame.is_some() {
             tasks = tasks.without(TaskKind::UnresolvedPrimPathError);
@@ -1037,7 +1088,7 @@ impl Indexer<'_, '_, '_> {
             tasks = tasks.without_expressed_arcs();
         }
         if !(self.evaluate_variants && opts.include_ancestral_opinions) {
-            tasks = tasks.without(TaskKind::AncestralVariantSets);
+            tasks = tasks.without_ancestral_variants_and_dynamic_payloads();
         }
         if !opts.include_ancestral_opinions {
             tasks = tasks.without(TaskKind::ImpliedSpecializes);
@@ -1191,8 +1242,8 @@ impl Indexer<'_, '_, '_> {
 
     // ── References and payloads ───────────────────────────────────────
 
-    /// OpenUSD: `_EvalNodeReferences`, `_EvalNodePayloads`.
-    fn eval_node_references(&mut self, node: NodeIndex, payloads: bool) {
+    /// OpenUSD: `_EvalNodeReferences`.
+    fn eval_node_references(&mut self, node: NodeIndex) {
         let entry = self.graph().node(node).clone();
         if !entry.can_contribute_specs() {
             return;
@@ -1203,42 +1254,164 @@ impl Indexer<'_, '_, '_> {
             self.ctx.store,
             stack,
             &entry.site.path,
-            payloads,
+            false,
             scope.as_ref(),
+            None,
         );
         if let Some(scope) = scope {
-            self.absorb_scope(scope);
+            self.absorb_scope(scope, true);
+        }
+        for (arc_num, arc) in arcs.into_iter().enumerate() {
+            let arc_num = u16::try_from(arc_num).unwrap_or(u16::MAX);
+            let intro = entry.site.path.clone();
+            self.eval_ref_or_payload(node, &entry, ArcKind::References, arc, arc_num, &intro);
+        }
+    }
+
+    /// Evaluates the payloads authored at `path_at_intro` of `node`'s layer
+    /// stack (`node`'s own site, or an ancestor of it), those to dynamic
+    /// file formats when `dynamic`, the rest otherwise.
+    ///
+    /// Static payloads are evaluated with references; the dynamic ones
+    /// after variants, once the opinions their arguments read are in the
+    /// index. A payload whose inclusion no stage path governs (an ancestral
+    /// one of a subroot arc's target) is always included, and its node's
+    /// dynamic payloads are then evaluated within the recursive index too.
+    ///
+    /// Spec: AOUSD Core §10.3.2.2 (payloads). OpenUSD: `_EvalNodePayloads`.
+    fn eval_node_payloads(&mut self, node: NodeIndex, dynamic: bool, path_at_intro: SpecPath) {
+        let entry = self.graph().node(node).clone();
+        if !entry.can_contribute_specs() {
+            return;
+        }
+        let stack = self.ctx.stacks.get(entry.site.stack);
+        let scope = self.scope_for(entry.site.stack);
+        let arcs = site::references(
+            self.ctx.store,
+            stack,
+            &path_at_intro,
+            true,
+            scope.as_ref(),
+            Some(self.ctx.dynamic_formats),
+        );
+        // Both passes compose the site's payloads; one reports what their
+        // expressions found.
+        if let Some(scope) = scope {
+            self.absorb_scope(scope, !dynamic);
         }
         if arcs.is_empty() {
             return;
         }
-        let kind = if payloads {
-            ArcKind::Payloads
-        } else {
-            ArcKind::References
-        };
-        if payloads {
+        if path_at_intro == entry.site.path {
             self.outputs.graph.has_payloads = true;
-            let inclusion = self.payload_inclusion_path(node, &entry.site.path);
-            let include = match inclusion {
-                None => true,
-                Some(path) => (self.ctx.include_payload)(self.ctx.store.paths(), path),
-            };
-            self.outputs.payload_state = if include {
-                PayloadState::Included
-            } else {
-                PayloadState::Excluded
-            };
-            if !include {
+        }
+        // Arc numbers count every payload of the site, of either pass.
+        let arcs: Vec<(u16, site::SiteArc)> = arcs
+            .into_iter()
+            .enumerate()
+            .map(|(arc_num, arc)| (u16::try_from(arc_num).unwrap_or(u16::MAX), arc))
+            .filter(|(_, arc)| self.is_dynamic_payload(&arc.arc) == dynamic)
+            .collect();
+        match self.payload_inclusion_path(node, &path_at_intro) {
+            None => {
+                self.outputs.payload_state = PayloadState::Included;
+                for (arc_num, arc) in arcs {
+                    let intro = entry.site.path.clone();
+                    self.eval_ref_or_payload(node, &entry, ArcKind::Payloads, arc, arc_num, &intro);
+                }
+                if !dynamic && !self.ctx.dynamic_formats.is_empty() {
+                    self.add_task(Task::new(TaskKind::NodeDynamicPayloads, node));
+                }
                 return;
             }
+            Some(path) => {
+                let include = (self.ctx.include_payload)(self.ctx.store.paths(), path);
+                self.outputs.payload_state = if include {
+                    PayloadState::Included
+                } else {
+                    PayloadState::Excluded
+                };
+                if !include {
+                    return;
+                }
+            }
         }
-        for (arc_num, arc) in arcs.into_iter().enumerate() {
-            let arc_num = u16::try_from(arc_num).unwrap_or(u16::MAX);
-            self.eval_ref_or_payload(node, &entry, kind, arc, arc_num);
+        for (arc_num, arc) in arcs {
+            self.eval_ref_or_payload(
+                node,
+                &entry,
+                ArcKind::Payloads,
+                arc,
+                arc_num,
+                &path_at_intro,
+            );
         }
     }
 
+    /// Evaluates the dynamic payloads authored at the ancestral sites of
+    /// `node`, whose recursive index skipped them.
+    /// OpenUSD: `_EvalNodeAncestralDynamicPayloads`.
+    fn eval_ancestral_dynamic_payloads(&mut self, node: NodeIndex) {
+        let start = self.graph().node(node).site.path.clone();
+        let mut path = site_paths::parent(self.ctx.store.paths(), &start);
+        while let Some(current) = path {
+            let paths = self.ctx.store.paths();
+            if paths.resolve(current.prim_path()).depth() == 0 && !current.has_variant_selections()
+            {
+                break;
+            }
+            if self.node_can_contribute_ancestral_opinions(node, &current) {
+                self.eval_node_payloads(node, true, current.clone());
+            }
+            path = site_paths::parent(self.ctx.store.paths(), &current);
+        }
+    }
+
+    /// Whether `arc` is a payload to a registered dynamic file format.
+    /// OpenUSD: `_GetDynamicFileFormat`.
+    fn is_dynamic_payload(&self, arc: &crate::doc::Reference) -> bool {
+        arc.asset
+            .as_deref()
+            .is_some_and(|asset| self.ctx.dynamic_formats.for_asset(asset).is_some())
+    }
+
+    /// The identifier of the layer the payload to `asset`, the `arc_num`th
+    /// of `parent`'s introduced at `path_at_intro`, targets: `asset` with
+    /// `format`'s arguments composed at this point of indexing over those
+    /// it carries. Records what they were composed from.
+    ///
+    /// OpenUSD: `_ComposeFieldsForFileFormatArguments`, and the arguments
+    /// `SdfLayer::FindOrOpen` merges over the identifier's own.
+    fn compose_dynamic_args(
+        &mut self,
+        parent: NodeIndex,
+        path_at_intro: &SpecPath,
+        arc_num: u16,
+        format: &Arc<dyn DynamicFileFormat>,
+        asset: &str,
+    ) -> String {
+        let walk = Walk {
+            store: self.ctx.store,
+            stacks: &self.ctx.stacks,
+            schemas: self.ctx.schemas,
+            graph: &self.outputs.graph,
+            parent,
+            path_in_node: path_at_intro.clone(),
+            arc_num,
+            previous_frame: self.previous_frame,
+        };
+        let mut context = DynamicFormatContext::new(walk);
+        let composed = format.compose_args(asset, &mut context);
+        let dependency = context.into_dependency(Arc::clone(format), composed.dependency);
+        self.outputs.dynamic.append(dependency);
+        let (path, mut args) = FormatArgs::split(asset)
+            .unwrap_or_else(|_| (FormatArgs::strip(asset), FormatArgs::new()));
+        args.extend(composed.args);
+        args.identifier(path)
+    }
+
+    /// OpenUSD: `_EvalRefOrPayloadArcs`, for one arc authored at
+    /// `path_at_intro` of `node`'s layer stack.
     fn eval_ref_or_payload(
         &mut self,
         node: NodeIndex,
@@ -1246,6 +1419,7 @@ impl Indexer<'_, '_, '_> {
         kind: ArcKind,
         arc: site::SiteArc,
         arc_num: u16,
+        path_at_intro: &SpecPath,
     ) {
         let reference = &arc.arc;
         let prim = self.originating_prim();
@@ -1258,26 +1432,66 @@ impl Indexer<'_, '_, '_> {
             if reference.is_expression() {
                 return;
             }
-            if reference.deferred {
-                self.outputs.asset_requests.push(AssetRequest {
-                    anchor: reference.layer,
-                    asset_path: reference.asset.clone().unwrap_or_default(),
-                    prim,
-                    arc: kind,
-                });
-                return;
-            }
-            if reference.is_unresolved() {
-                self.record_error(CompositionError::UnresolvedAsset(UnresolvedAsset {
-                    prim,
-                    arc: kind,
-                    asset: reference.asset.clone().unwrap_or_default(),
-                }));
-                return;
-            }
+            let asset = reference.asset.as_deref().unwrap_or_default();
+            let dynamic = (kind == ArcKind::Payloads)
+                .then(|| self.ctx.dynamic_formats.shared_for_asset(asset).cloned())
+                .flatten();
+            let target_layer = if let Some(format) = dynamic {
+                // The layer the composed arguments name, anchored to the
+                // layer authoring the payload.
+                let anchor = if reference.deferred {
+                    reference.layer
+                } else {
+                    arc.source_layer
+                };
+                let identifier =
+                    self.compose_dynamic_args(node, path_at_intro, arc_num, &format, asset);
+                match self.ctx.store.asset_availability(anchor, &identifier) {
+                    AssetAvailability::Loaded(layer) => {
+                        self.outputs.dynamic.targets.insert(layer);
+                        layer
+                    }
+                    AssetAvailability::Missing => {
+                        self.record_error(CompositionError::UnresolvedAsset(UnresolvedAsset {
+                            prim,
+                            arc: kind,
+                            asset: identifier,
+                        }));
+                        return;
+                    }
+                    AssetAvailability::Unresolved => {
+                        self.outputs.asset_requests.push(AssetRequest {
+                            anchor,
+                            asset_path: identifier,
+                            prim,
+                            arc: kind,
+                        });
+                        return;
+                    }
+                }
+            } else {
+                if reference.deferred {
+                    self.outputs.asset_requests.push(AssetRequest {
+                        anchor: reference.layer,
+                        asset_path: reference.asset.clone().unwrap_or_default(),
+                        prim,
+                        arc: kind,
+                    });
+                    return;
+                }
+                if reference.is_unresolved() {
+                    self.record_error(CompositionError::UnresolvedAsset(UnresolvedAsset {
+                        prim,
+                        arc: kind,
+                        asset: reference.asset.clone().unwrap_or_default(),
+                    }));
+                    return;
+                }
+                reference.layer
+            };
             offset = arc.source_offset.compose(offset);
             let identifier = LayerStackIdentifier {
-                root: reference.layer,
+                root: target_layer,
                 session: None,
             };
             stack_id =
@@ -1337,16 +1551,30 @@ impl Indexer<'_, '_, '_> {
                 }
             }
         };
-        let intro_path = entry.site.path.clone();
+        let intro_path = path_at_intro.clone();
         let mut map = self.map_for_arc(target, &intro_path, entry.site.stack, offset);
         if is_internal {
             map = map.with_root_identity(self.ctx.store.paths());
         }
+        // An arc introduced at an ancestral site targets the matching
+        // descendant of its target.
+        let site_path = if intro_path == entry.site.path {
+            SpecPath::from_prim_path(target)
+        } else {
+            site_paths::replace_prefix(
+                self.ctx.store.paths(),
+                &entry.site.path,
+                &intro_path,
+                &SpecPath::from_prim_path(target),
+            )
+        };
         let root = self.ctx.root_path;
-        let is_root_prim = target != root && self.ctx.store.paths().resolve(target).depth() == 1;
+        let site_prim = site_path.prim_path();
+        let is_root_prim =
+            site_prim != root && self.ctx.store.paths().resolve(site_prim).depth() == 1;
         let opts = ArcOptions {
             direct_node_contributes: direct_contributes,
-            include_ancestral_opinions: target != root && !is_root_prim,
+            include_ancestral_opinions: site_prim != root && !is_root_prim,
             ..ArcOptions::default()
         };
         let namespace_depth = non_variant_depth(self.ctx.store.paths(), &intro_path);
@@ -1356,7 +1584,7 @@ impl Indexer<'_, '_, '_> {
             node,
             Site {
                 stack: stack_id,
-                path: SpecPath::from_prim_path(target),
+                path: site_path,
             },
             map,
             arc_num,
@@ -1433,6 +1661,7 @@ impl Indexer<'_, '_, '_> {
             &introducing_site,
             entry.arc_kind == ArcKind::Payloads,
             scope.as_ref(),
+            (entry.arc_kind == ArcKind::Payloads).then_some(self.ctx.dynamic_formats),
         );
         let source = arcs.get(entry.sibling_num as usize).cloned();
         let target_layer = self.ctx.stacks.get(entry.site.stack).identifier.root;
@@ -1467,10 +1696,15 @@ impl Indexer<'_, '_, '_> {
         Some(ExpressionScope::new(chain))
     }
 
-    fn absorb_scope(&mut self, scope: ExpressionScope) {
+    /// Keeps the variables `scope` read, and, when `report`, the errors
+    /// its expressions found.
+    fn absorb_scope(&mut self, scope: ExpressionScope, report: bool) {
         let prim = self.originating_prim();
         let findings = scope.into_findings();
         self.outputs.reads.extend(findings.reads);
+        if !report {
+            return;
+        }
         for (context, layer, expression, error) in findings.errors {
             self.record_error(crate::expression_variables::expression_error(
                 context,

@@ -267,7 +267,8 @@ pub(crate) struct SiteArc {
 
 /// The references (or payloads, when `payloads`) composed across `stack`'s
 /// layers at `site`, each internal arc anchored to the stack, each variable
-/// expression evaluated in `scope`.
+/// expression evaluated in `scope`. Payloads to the `dynamic` formats stay
+/// as authored, for composition to resolve with their arguments.
 /// OpenUSD: `_PcpComposeSiteReferencesOrPayloads`.
 pub(crate) fn references(
     store: &dyn LayerStore,
@@ -275,10 +276,14 @@ pub(crate) fn references(
     site: &SpecPath,
     payloads: bool,
     scope: Option<&ExpressionScope>,
+    dynamic: Option<&crate::dynamic_format::DynamicFormats>,
 ) -> Vec<SiteArc> {
     let mut anchor = ArcAnchor::new(stack.identifier, scope);
     if payloads {
         anchor = anchor.payloads();
+        if let Some(dynamic) = dynamic.filter(|formats| !formats.is_empty()) {
+            anchor = anchor.dynamic(dynamic);
+        }
     }
     let authored: Vec<(usize, LayerId, &ListOp<Reference>)> = specs(store, stack, site)
         .map(|(strength, id, spec)| {

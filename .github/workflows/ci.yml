@@ -395,6 +395,10 @@ jobs:
             pxr/usd/*/*.h
             pxr/usd/usdMtlx/generatedSchema.usda
             pxr/usd/usdMtlx/plugInfo.json
+            pxr/usd/pcp/testenv/testPcpDynamicFileFormatPlugin.testenv/**
+            pxr/usd/pcp/testenv/testPcpDynamicFileFormatPlugin.py
+            pxr/usd/pcp/testenv/TestPcpDynamicFileFormatPlugin.cpp
+            pxr/usd/pcp/testenv/TestPcpDynamicFileFormatPlugin_plugInfo.json
 
       - name: install stable toolchain
         uses: dtolnay/rust-toolchain@master
@@ -419,6 +423,13 @@ jobs:
         run: |
           pxr="$(python -c 'import os, pxr; print(os.path.dirname(pxr.__file__))')"
           cargo run --locked -p layerstack_schemagen -- --check --pxr "$pxr" --source openusd
+
+      # The dynamic file format port must pass OpenUSD's own test cases on
+      # its fixtures.
+      - name: test dynamic payloads against OpenUSD's fixtures
+        env:
+          LAYERSTACK_OPENUSD_SOURCE: ${{ github.workspace }}/openusd
+        run: cargo test --locked -p layerstack_io dynamic_payloads
 
       # The schema views oracle must be what OpenUSD reads from its scene.
       - name: check schema views oracle

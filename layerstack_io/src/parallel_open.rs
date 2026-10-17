@@ -127,7 +127,7 @@ impl<B: Storage> Shared<'_, B> {
         };
         let format = self.formats.for_identifier(&task.identifier);
         let bytes = if format.is_none_or(FileFormat::reads_source) {
-            let (outer, _) = match FormatArgs::split(&task.identifier) {
+            let (outer, _) = match super::format::split_args(&task.identifier) {
                 Ok(split) => split,
                 Err(error) => {
                     read.outcome = Outcome::Unread(error);
@@ -205,7 +205,7 @@ impl<B: Storage> AssetResolver for TaskResolver<'_, '_, B> {
             });
             Err(asset_error(error))
         };
-        let (path, args) = match FormatArgs::split(asset) {
+        let (path, args) = match super::format::split_args(asset) {
             Ok(split) => split,
             Err(error) => return failed(&mut self.calls, error),
         };
@@ -219,7 +219,7 @@ impl<B: Storage> AssetResolver for TaskResolver<'_, '_, B> {
             self.package = true;
             return Err(AssetResolveError::NotFound);
         }
-        let anchor = FormatArgs::split(self.anchor).map_or(self.anchor, |(outer, _)| outer);
+        let anchor = FormatArgs::strip(self.anchor);
         let outer = match self.shared.identify(path.outer(), anchor) {
             Ok(outer) => outer,
             Err(error) => return failed(&mut self.calls, error),
@@ -246,6 +246,10 @@ impl<B: Storage> AssetResolver for TaskResolver<'_, '_, B> {
         self.shared.defers_variant_arcs
     }
 
+    fn defers_payload(&self, asset_path: &str) -> bool {
+        self.shared.formats.is_dynamic(asset_path)
+    }
+
     fn allocate_layer_id(&mut self) -> Option<LayerId> {
         self.package = true;
         None
@@ -266,7 +270,7 @@ impl<B: Storage> Reader<'_, B> {
         if threads <= 1 || self.reachable_only {
             return None;
         }
-        let (path, args) = match FormatArgs::split(asset) {
+        let (path, args) = match super::format::split_args(asset) {
             Ok(split) => split,
             Err(error) => return Some(Err(error)),
         };

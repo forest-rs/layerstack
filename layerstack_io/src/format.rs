@@ -54,126 +54,47 @@
 //! `pxr/usd/sdf/layer.cpp`). AOUSD Core §9 (asset resolution).
 
 use alloc::{
-    collections::BTreeMap,
     string::{String, ToString},
     sync::Arc,
     vec::Vec,
 };
 use core::fmt;
 
-use layerstack::{Layer, LayerId, Path, PathId, PathInterner, TokenId, TokenInterner};
+use layerstack::{
+    DynamicArgs, DynamicFileFormat, DynamicFormatContext, Layer, LayerId, Path, PathId,
+    PathInterner, TokenId, TokenInterner, Value,
+};
 
 use crate::{IoError, IoErrorKind};
 
-/// The separator between an asset path and its format arguments.
-pub const FORMAT_ARGS_DELIMITER: &str = ":SDF_FORMAT_ARGS:";
+pub use layerstack::asset::{FORMAT_ARGS_DELIMITER, FormatArgs, FormatArgsError};
 
 /// The `target` argument, which selects a format among those claiming an
 /// extension. Every format here is the only one for its extensions, so the
 /// argument never takes part in a layer's identity.
 const TARGET: &str = "target";
 
-/// Format arguments: `key=value` pairs, ordered by key.
-#[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct FormatArgs(BTreeMap<String, String>);
-
-impl FormatArgs {
-    /// No arguments.
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Splits an asset path or identifier into the path and its arguments.
-    /// A later duplicate key replaces an earlier one, as in OpenUSD.
-    ///
-    /// # Errors
-    ///
-    /// [`IoErrorKind::Rejected`] when an argument has no `=`.
-    pub fn split(asset: &str) -> Result<(&str, Self), IoError> {
-        let Some((path, encoded)) = asset.split_once(FORMAT_ARGS_DELIMITER) else {
-            return Ok((asset, Self::new()));
-        };
-        let mut args = Self::new();
-        if !encoded.is_empty() {
-            for pair in encoded.split('&') {
-                let (key, value) = pair.split_once('=').ok_or_else(|| {
-                    IoError::new(
-                        IoErrorKind::Rejected,
-                        alloc::format!("{asset}: format argument `{pair}` has no `=`"),
-                    )
-                })?;
-                args.insert(key, value);
-            }
-        }
-        Ok((path, args))
-    }
-
-    /// Sets `key` to `value`, replacing any earlier value.
-    pub fn insert(&mut self, key: impl Into<String>, value: impl Into<String>) {
-        self.0.insert(key.into(), value.into());
-    }
-
-    /// Sets `key` to `value`.
-    #[must_use]
-    pub fn with(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
-        self.insert(key, value);
-        self
-    }
-
-    /// The value of `key`.
-    #[must_use]
-    pub fn get(&self, key: &str) -> Option<&str> {
-        self.0.get(key).map(String::as_str)
-    }
-
-    /// The arguments, ordered by key.
-    pub fn iter(&self) -> impl ExactSizeIterator<Item = (&str, &str)> + '_ {
-        self.0.iter().map(|(k, v)| (k.as_str(), v.as_str()))
-    }
-
-    /// Whether there are none.
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-
-    /// `path` with these arguments appended, ordered by key; `path` alone
-    /// when there are none.
-    #[must_use]
-    pub fn identifier(&self, path: &str) -> String {
-        let mut identifier = String::from(path);
-        for (at, (key, value)) in self.iter().enumerate() {
-            identifier.push_str(if at == 0 { FORMAT_ARGS_DELIMITER } else { "&" });
-            identifier.push_str(key);
-            identifier.push('=');
-            identifier.push_str(value);
-        }
-        identifier
-    }
-
-    /// These arguments without `target` and without those equal to
-    /// `format`'s defaults: the arguments that name a distinct layer.
-    #[must_use]
-    pub(crate) fn canonical(mut self, format: Option<&dyn FileFormat>) -> Self {
-        self.0.remove(TARGET);
-        if let Some(format) = format {
-            let defaults = format.default_args();
-            self.0
-                .retain(|key, value| defaults.get(key) != Some(value.as_str()));
-        }
-        self
-    }
+/// Splits `asset` into its path and format arguments ([`FormatArgs::split`]).
+///
+/// # Errors
+///
+/// [`IoErrorKind::Rejected`] when an argument has no `=`.
+pub(crate) fn split_args(asset: &str) -> Result<(&str, FormatArgs), IoError> {
+    FormatArgs::split(asset).map_err(|error| IoError::new(IoErrorKind::Rejected, error.to_string()))
 }
 
-impl<K: Into<String>, V: Into<String>> FromIterator<(K, V)> for FormatArgs {
-    fn from_iter<I: IntoIterator<Item = (K, V)>>(iter: I) -> Self {
-        Self(
-            iter.into_iter()
-                .map(|(k, v)| (k.into(), v.into()))
-                .collect(),
-        )
+/// `args` without `target` and without those equal to `format`'s defaults:
+/// the arguments that name a distinct layer.
+///
+/// OpenUSD: `_CanonicalizeFileFormatArguments` (`pxr/usd/sdf/layer.cpp`).
+#[must_use]
+pub(crate) fn canonical_args(mut args: FormatArgs, format: Option<&dyn FileFormat>) -> FormatArgs {
+    args.remove(TARGET);
+    if let Some(format) = format {
+        let defaults = format.default_args();
+        args.retain(|key, value| defaults.get(key) != Some(value));
     }
+    args
 }
 
 /// What a [`FileFormat`] reads a layer from.
@@ -282,6 +203,24 @@ pub trait FileFormat: fmt::Debug + Send + Sync {
     /// malformed USDA layer.
     fn read(&self, source: &FormatSource<'_>) -> Result<Layer, IoError>;
 
+    /// The format's dynamic side, when the payloads to it compose the
+    /// arguments its layers are read with (see [`layerstack::dynamic_format`]);
+    /// `None`, the default, for a format read with its asset paths'
+    /// arguments alone.
+    ///
+    /// Registering the format registers its dynamic side too: the document
+    /// composes its stage with it ([`layerstack::StageOptions::dynamic_formats`]),
+    /// under this format's name and extensions, and reads the layers it
+    /// authors leaving payloads to the format for composition
+    /// ([`layerstack::AssetResolver::defers_payload`]). A format implementing
+    /// both traits returns `Some(self)`.
+    ///
+    /// OpenUSD: an `SdfFileFormat` that is also a
+    /// `PcpDynamicFileFormatInterface`.
+    fn dynamic(&self) -> Option<&dyn DynamicFileFormat> {
+        None
+    }
+
     /// Serializes `layer` for saving or exporting to this format.
     ///
     /// # Errors
@@ -366,6 +305,56 @@ impl core::error::Error for FormatRegistrationError {}
 #[derive(Clone, Debug, Default)]
 pub struct FileFormats {
     formats: Vec<Arc<dyn FileFormat>>,
+    /// The dynamic sides of the formats that have one, in registration
+    /// order.
+    dynamic: Vec<Arc<dyn DynamicFileFormat>>,
+}
+
+/// The dynamic side of a registered [`FileFormat`], under its name and
+/// extensions.
+#[derive(Debug)]
+struct DynamicSide(Arc<dyn FileFormat>);
+
+impl DynamicSide {
+    fn side(&self) -> &dyn DynamicFileFormat {
+        self.0.dynamic().expect("registered for its dynamic side")
+    }
+}
+
+impl DynamicFileFormat for DynamicSide {
+    fn name(&self) -> &str {
+        self.0.name()
+    }
+    fn extensions(&self) -> &[&str] {
+        self.0.extensions()
+    }
+    fn compose_args(
+        &self,
+        asset_path: &str,
+        context: &mut DynamicFormatContext<'_>,
+    ) -> DynamicArgs {
+        self.side().compose_args(asset_path, context)
+    }
+    fn can_field_change_affect_args(
+        &self,
+        field: &str,
+        old: Option<&Value>,
+        new: Option<&Value>,
+        dependency: &Value,
+    ) -> bool {
+        self.side()
+            .can_field_change_affect_args(field, old, new, dependency)
+    }
+    fn can_attribute_default_change_affect_args(
+        &self,
+        attribute: &str,
+        old: Option<&Value>,
+        new: Option<&Value>,
+        dependency: &Value,
+    ) -> bool {
+        self.side()
+            .can_attribute_default_change_affect_args(attribute, old, new, dependency)
+    }
 }
 
 impl FileFormats {
@@ -404,8 +393,28 @@ impl FileFormats {
                 });
             }
         }
+        if format.dynamic().is_some() {
+            self.dynamic
+                .push(Arc::new(DynamicSide(Arc::clone(&format))));
+        }
         self.formats.push(format);
         Ok(())
+    }
+
+    /// The dynamic sides of the registered formats that have one
+    /// ([`FileFormat::dynamic`]), in registration order, as the document
+    /// adds them to [`layerstack::StageOptions::dynamic_formats`].
+    pub fn dynamic_formats(&self) -> impl ExactSizeIterator<Item = &Arc<dyn DynamicFileFormat>> {
+        self.dynamic.iter()
+    }
+
+    /// Whether the asset `asset_path` names is read by a format with a
+    /// dynamic side, whose payloads composition resolves.
+    pub(crate) fn is_dynamic(&self, asset_path: &str) -> bool {
+        !self.dynamic.is_empty()
+            && self
+                .for_identifier(asset_path)
+                .is_some_and(|format| format.dynamic().is_some())
     }
 
     /// These formats and `format` (see [`Self::add`]).
@@ -441,9 +450,7 @@ impl FileFormats {
         if self.formats.is_empty() {
             return None;
         }
-        let path = identifier
-            .split_once(FORMAT_ARGS_DELIMITER)
-            .map_or(identifier, |(path, _)| path);
+        let path = FormatArgs::strip(identifier);
         if path.ends_with(']') {
             return None;
         }
@@ -502,20 +509,9 @@ mod tests {
     }
 
     #[test]
-    fn arguments_split_and_join_as_openusd_writes_them() {
-        let (path, args) = FormatArgs::split("a/b.grid:SDF_FORMAT_ARGS:z=1&a=2&z=3").unwrap();
-        assert_eq!(path, "a/b.grid");
-        assert_eq!(args.iter().collect::<Vec<_>>(), [("a", "2"), ("z", "3")]);
-        assert_eq!(args.identifier(path), "a/b.grid:SDF_FORMAT_ARGS:a=2&z=3");
-        assert_eq!(FormatArgs::new().identifier(path), "a/b.grid");
-        let (path, args) = FormatArgs::split("a.usda:SDF_FORMAT_ARGS:").unwrap();
-        assert_eq!((path, args.is_empty()), ("a.usda", true));
-        let (_, args) = FormatArgs::split("a.grid:SDF_FORMAT_ARGS:k=").unwrap();
-        assert_eq!(args.get("k"), Some(""));
+    fn malformed_arguments_reject_the_asset() {
         assert_eq!(
-            FormatArgs::split("a.grid:SDF_FORMAT_ARGS:k")
-                .unwrap_err()
-                .kind,
+            split_args("a.grid:SDF_FORMAT_ARGS:k").unwrap_err().kind,
             IoErrorKind::Rejected
         );
     }
@@ -527,9 +523,9 @@ mod tests {
             .with("target", "usd")
             .with("rows", "4")
             .with("seed", "7");
-        let canonical = args.canonical(Some(&format));
+        let canonical = canonical_args(args, Some(&format));
         assert_eq!(canonical.iter().collect::<Vec<_>>(), [("seed", "7")]);
-        let builtin = FormatArgs::new().with("target", "usd").canonical(None);
+        let builtin = canonical_args(FormatArgs::new().with("target", "usd"), None);
         assert!(builtin.is_empty());
     }
 

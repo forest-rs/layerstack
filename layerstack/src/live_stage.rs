@@ -227,6 +227,11 @@ pub struct LiveStage {
     source_to_prims: HashMap<(LayerId, PathId), HashSet<PathId>>,
     /// Composed prim → source sites recorded in `source_to_prims`.
     prim_to_sources: HashMap<PathId, Vec<(LayerId, PathId)>>,
+    /// Site `(layer, prim path)` → composed prims whose dynamic payload
+    /// arguments were composed from its specs ([`Stage::dynamic_dependency`]).
+    dynamic_to_prims: HashMap<(LayerId, PathId), HashSet<PathId>>,
+    /// Composed prim → sites recorded in `dynamic_to_prims`.
+    prim_to_dynamic: HashMap<PathId, Vec<(LayerId, PathId)>>,
     /// Layer → composed prims with a reference or payload that targets that
     /// layer's `defaultPrim`, resolved or not.
     default_prim_dependents: HashMap<LayerId, HashSet<PathId>>,
@@ -276,6 +281,8 @@ impl LiveStage {
             prim_to_layers: deps.prim_to_layers,
             source_to_prims: HashMap::new(),
             prim_to_sources: HashMap::new(),
+            dynamic_to_prims: HashMap::new(),
+            prim_to_dynamic: HashMap::new(),
             default_prim_dependents: deps.default_prim_dependents,
             relocation_layers: deps.relocation_layers,
             expression_variables: deps.expression_variables,
@@ -525,6 +532,13 @@ impl LiveStage {
             .map(|index| index as &dyn crate::edit::SourceNamespace);
         let outcome = crate::edit::apply(store, txn, Some(&self.stage), namespace)?;
         self.work = RecompositionWork::default();
+        // Prims whose dynamic payload arguments the edits may change are
+        // recomposed, though no value refresh or source mapping finds them.
+        let argument_dependents = if sources_current {
+            self.argument_dependents(store, &outcome.argument_inputs)
+        } else {
+            Vec::new()
+        };
         let mut property_changes = alloc::collections::BTreeMap::new();
         if sources_current
             && !pending_recomposition
@@ -573,7 +587,7 @@ impl LiveStage {
         // Property values do not change prim indexes, dependency edges or
         // namespace. Do not rediscover population to refresh those slots.
         let refreshed = outcome.values.as_ref().and_then(|edits| {
-            if pending_recomposition {
+            if pending_recomposition || !argument_dependents.is_empty() {
                 return None;
             }
             let dependents: Vec<Vec<PathId>> = edits
@@ -629,6 +643,13 @@ impl LiveStage {
                 }
             } else if outcome.structural {
                 self.notify_structural_change();
+            } else if sources_current {
+                for &(layer, prim) in &outcome.touched {
+                    self.mark_source_prims(layer, &[prim]);
+                }
+                for &prim in &argument_dependents {
+                    self.tracker.mark(prim, OPINION_EDIT);
+                }
             } else {
                 for &(layer, prim) in &outcome.touched {
                     self.notify_layer_prim_edits(layer, &[prim]);
@@ -903,6 +924,16 @@ impl LiveStage {
             }
         }
         layers.extend(self.stage.clip_layers());
+        // A dynamic payload's layer is bound by the identifier its composed
+        // arguments form, which no authored arc spells: watch it, and what
+        // it reads, as composition found them.
+        for layer in self.stage.dynamic_layers() {
+            layers.extend(self.layer_discovery.participating(
+                store,
+                layer,
+                &self.options.muted_layers,
+            ));
+        }
         self.generations = layers
             .into_iter()
             .map(|layer| (layer, generations_of(store, layer)))
@@ -949,7 +980,28 @@ impl LiveStage {
     /// adding a spec there, or editing composition arcs, is a structural
     /// change and must be reported with
     /// [`notify_structural_change`](Self::notify_structural_change).
+    ///
+    /// A prim whose dynamic payload arguments were composed from one of the
+    /// specs is marked too ([`Stage::dynamic_dependency`]): the edit may have
+    /// changed them, and so the layer its payload targets.
     pub fn notify_layer_prim_edits(&mut self, layer: LayerId, prims: &[PathId]) {
+        self.mark_source_prims(layer, prims);
+        if self.options.muted_layers.contains(&layer) {
+            return;
+        }
+        for &source in prims {
+            if let Some(dests) = self.dynamic_to_prims.get(&(layer, source)) {
+                for &prim in dests {
+                    self.tracker.mark(prim, OPINION_EDIT);
+                }
+            }
+        }
+    }
+
+    /// Marks the composed prims drawing specs or opinions from `prims`
+    /// of `layer` ([`Self::notify_layer_prim_edits`] without the dynamic
+    /// argument dependents).
+    fn mark_source_prims(&mut self, layer: LayerId, prims: &[PathId]) {
         if self.options.muted_layers.contains(&layer) {
             return;
         }
@@ -960,6 +1012,56 @@ impl LiveStage {
                 }
             }
         }
+    }
+
+    /// The composed prims whose dynamic payload arguments `inputs` may
+    /// change: those that composed them from an edited spec, for which the
+    /// edited field or attribute default is relevant and the format says
+    /// the change may affect them ([`crate::DynamicDependency::can_field_change_affect_args`]).
+    ///
+    /// OpenUSD: `Pcp_DoesInfoChangeAffectFileFormatArguments` and
+    /// `Pcp_DoesAttributeChangeAffectFileFormatArguments`
+    /// (`pxr/usd/pcp/changes.cpp`).
+    fn argument_dependents(
+        &self,
+        store: &dyn LayerStore,
+        inputs: &[crate::edit::ArgumentInput],
+    ) -> Vec<PathId> {
+        use crate::edit::ArgumentName;
+        let mut out = Vec::new();
+        for input in inputs {
+            if self.options.muted_layers.contains(&input.layer) {
+                continue;
+            }
+            let Some(dests) = self.dynamic_to_prims.get(&(input.layer, input.prim)) else {
+                continue;
+            };
+            for &prim in dests {
+                let Some(dependency) = self.stage.dynamic_dependency(prim) else {
+                    continue;
+                };
+                let (old, new) = (input.old.as_ref(), input.new.as_ref());
+                let affects = match input.name {
+                    ArgumentName::Field(field) => dependency.can_field_change_affect_args(
+                        store.tokens().resolve(field),
+                        old,
+                        new,
+                    ),
+                    ArgumentName::Default(name) => dependency
+                        .can_attribute_default_change_affect_args(
+                            store.tokens().resolve(name),
+                            old,
+                            new,
+                        ),
+                };
+                if affects {
+                    out.push(prim);
+                }
+            }
+        }
+        out.sort_unstable();
+        out.dedup();
+        out
     }
 
     /// Returns the composed prims whose prim index draws specs or opinions
@@ -1278,11 +1380,11 @@ impl LiveStage {
             self.work.composed_prim_indexes += partial.composition_work().composed_prim_indexes;
 
             // An opinion edit that turns out to change hierarchy (activation,
-            // child ordering, ...) cannot be patched from a masked
-            // composition, whose child lists are partial by construction.
+            // child ordering, a dynamic payload's arguments, ...) cannot be
+            // patched from a masked composition, whose child lists are
+            // partial by construction.
             if self.stage.hierarchy_diverges(&partial, &affected) {
-                self.structural_roots.extend(affected);
-                return self.recompose_controls(store, changes);
+                return self.recompose_diverging(store, partial, affected, changes);
             }
 
             // A prim whose contributing specs change (another variant
@@ -1346,6 +1448,62 @@ impl LiveStage {
                 .collect();
         }
         affected
+    }
+
+    /// Recomposes `affected`, composed as `partial`, when some of them
+    /// change hierarchy or contributing specs: those are resynced with
+    /// their namespace ([`Self::recompose_controls`]); the rest, outside
+    /// their subtrees, keep the indexes `partial` composed for them, as an
+    /// opinion edit does, so a batch's other edits are not resynced with
+    /// them.
+    fn recompose_diverging(
+        &mut self,
+        store: &mut dyn LayerStore,
+        mut partial: Stage,
+        affected: Vec<PathId>,
+        mut changes: Option<&mut Changes>,
+    ) -> Vec<PathId> {
+        let (diverging, rest): (Vec<PathId>, Vec<PathId>) =
+            affected.iter().copied().partition(|prim| {
+                self.stage.hierarchy_diverges(&partial, &[*prim])
+                    || self.stage.sources_changed(&partial, *prim)
+            });
+        let rest: Vec<PathId> = rest
+            .into_iter()
+            .filter(|prim| {
+                !is_beneath(store, *prim, &diverging)
+                    && !diverging
+                        .iter()
+                        .any(|root| is_beneath(store, *root, &[*prim]))
+            })
+            .collect();
+        if rest.is_empty() {
+            self.structural_roots.extend(affected);
+            return self.recompose_controls(store, changes);
+        }
+        let mut partial_deps = partial.take_deps().unwrap_or_default();
+        self.expression_variables
+            .extend(core::mem::take(&mut partial_deps.expression_variables));
+        self.stage.merge_prims_from(store, partial, &rest, &rest);
+        self.update_prim_edges(&rest, &partial_deps);
+        for &prim in &rest {
+            self.reindex_sources(prim);
+        }
+        let replaced = rest.len();
+        self.structural_roots.extend(diverging);
+        let mut recomposed = self.recompose_controls(store, changes.as_deref_mut());
+        self.work.replaced_prim_indexes += replaced;
+        if let Some(changes) = changes {
+            changes.changed_info_only.extend(
+                rest.iter()
+                    .copied()
+                    .filter(|prim| !is_beneath(store, *prim, &changes.resynced)),
+            );
+        }
+        recomposed.extend(rest);
+        recomposed.sort_unstable();
+        recomposed.dedup();
+        recomposed
     }
 
     /// Physical sharing of this retained client's layer-contributor sets.
@@ -1478,6 +1636,7 @@ impl LiveStage {
             load_rules: self.options.load_rules.clone(),
             muted_layers: self.options.muted_layers.clone(),
             threads: self.options.threads,
+            dynamic_formats: self.options.dynamic_formats.clone(),
         };
         Stage::compose_retained(store, self.root, scoped_opts, true)
     }
@@ -1551,6 +1710,8 @@ impl LiveStage {
     fn reindex_all_sources(&mut self) {
         self.source_to_prims.clear();
         self.prim_to_sources.clear();
+        self.dynamic_to_prims.clear();
+        self.prim_to_dynamic.clear();
         let prims: Vec<PathId> = self.stage.prim_paths().collect();
         for prim in prims {
             self.reindex_sources(prim);
@@ -1560,6 +1721,13 @@ impl LiveStage {
     /// Replaces the source-site index entries for `prim` with those of its
     /// current prim index.
     fn reindex_sources(&mut self, prim: PathId) {
+        let dynamic = self.stage.dynamic_sites(prim);
+        reindex(
+            &mut self.dynamic_to_prims,
+            &mut self.prim_to_dynamic,
+            prim,
+            dynamic,
+        );
         let sites = self.stage.source_sites(prim);
         if self
             .prim_to_sources
@@ -1585,6 +1753,35 @@ impl LiveStage {
         if !sites.is_empty() {
             self.prim_to_sources.insert(prim, sites);
         }
+    }
+}
+
+/// Replaces `prim`'s entries in a site → prims index and its inverse with
+/// `sites`.
+fn reindex(
+    site_to_prims: &mut HashMap<(LayerId, PathId), HashSet<PathId>>,
+    prim_to_sites: &mut HashMap<PathId, Vec<(LayerId, PathId)>>,
+    prim: PathId,
+    sites: Vec<(LayerId, PathId)>,
+) {
+    if prim_to_sites.get(&prim).is_some_and(|old| *old == sites) {
+        return;
+    }
+    if let Some(old) = prim_to_sites.remove(&prim) {
+        for site in old {
+            if let Some(dests) = site_to_prims.get_mut(&site) {
+                dests.remove(&prim);
+                if dests.is_empty() {
+                    site_to_prims.remove(&site);
+                }
+            }
+        }
+    }
+    for &site in &sites {
+        site_to_prims.entry(site).or_default().insert(prim);
+    }
+    if !sites.is_empty() {
+        prim_to_sites.insert(prim, sites);
     }
 }
 

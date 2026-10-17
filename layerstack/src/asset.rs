@@ -45,7 +45,9 @@
 
 use alloc::{string::String, sync::Arc, vec::Vec};
 
+mod format_args;
 mod package_path;
+pub use format_args::{FORMAT_ARGS_DELIMITER, FormatArgs, FormatArgsError};
 pub use package_path::PackagePath;
 
 use hashbrown::{HashMap, HashSet};
@@ -145,7 +147,8 @@ pub fn expression_asset_paths_for_stack(
 /// becomes [`Reference::unresolved`], as an importer records any other.
 ///
 /// Importers call this once they have read the whole layer, when
-/// [`AssetResolver::defers_variant_arcs`] is `true`.
+/// [`AssetResolver::defers_variant_arcs`] is `true`. A payload the resolver
+/// defers ([`AssetResolver::defers_payload`]) stays deferred.
 ///
 /// Spec: AOUSD Core §10.3.2.5 (only the selected variant contributes).
 pub fn resolve_selected_deferred_arcs(
@@ -179,7 +182,7 @@ pub fn resolve_selected_deferred_arcs(
     }
     let anchor = layer.id;
     let mut resolved_layers = Vec::new();
-    let mut resolve = |op: &mut ListOp<Reference>| {
+    let mut resolve = |op: &mut ListOp<Reference>, payloads: bool| {
         let lists = op.explicit.iter_mut().chain([
             &mut op.prepend,
             &mut op.append,
@@ -189,6 +192,9 @@ pub fn resolve_selected_deferred_arcs(
         ]);
         for arc in lists.flatten().filter(|arc| arc.deferred) {
             let asset = arc.asset.clone().unwrap_or_default();
+            if payloads && resolver.defers_payload(&asset) {
+                continue;
+            }
             *arc = match resolver.resolve(&asset, Some(anchor), tokens, paths) {
                 Ok(resolved) => {
                     resolved_layers.extend(resolved.layer);
@@ -224,8 +230,8 @@ pub fn resolve_selected_deferred_arcs(
         {
             continue;
         }
-        resolve(&mut spec.references);
-        resolve(&mut spec.payloads);
+        resolve(&mut spec.references, false);
+        resolve(&mut spec.payloads, true);
         resolve_branch_arcs(&mut spec.variant_sets, path, &selected, &mut resolve);
     }
     resolved_layers
@@ -238,7 +244,7 @@ fn resolve_branch_arcs(
     sets: &mut HashMap<TokenId, VariantSetSpec>,
     host: PathId,
     selected: &HashSet<VariantSelectionSite>,
-    resolve: &mut impl FnMut(&mut ListOp<Reference>),
+    resolve: &mut impl FnMut(&mut ListOp<Reference>, bool),
 ) {
     for (&set, set_spec) in sets {
         for (&variant, branch) in &mut set_spec.variants {
@@ -249,8 +255,8 @@ fn resolve_branch_arcs(
             }) {
                 continue;
             }
-            resolve(&mut branch.references);
-            resolve(&mut branch.payloads);
+            resolve(&mut branch.references, false);
+            resolve(&mut branch.payloads, true);
             resolve_branch_arcs(&mut branch.variant_sets, host, selected, resolve);
         }
     }
@@ -397,6 +403,28 @@ pub trait AssetResolver {
     ///
     /// [`Stage::asset_requests`]: crate::Stage::asset_requests
     fn defers_variant_arcs(&self) -> bool {
+        false
+    }
+
+    /// Whether importers using this resolver leave the payload to
+    /// `asset_path` for composition to resolve ([`Reference::deferred`]),
+    /// instead of resolving it as they read the layer.
+    ///
+    /// A payload to a dynamic file format targets the layer that the
+    /// arguments composition gives it name, which no importer can know
+    /// (see [`crate::dynamic_format`]); reading its asset without them
+    /// reads a layer composition never uses. Composition asks for the
+    /// layer it names ([`Stage::asset_requests`]).
+    ///
+    /// The default, `false`, resolves every payload.
+    ///
+    /// Spec: AOUSD Core §10.3.2.2 (payloads). OpenUSD opens a dynamic
+    /// payload's layer with its arguments in `_EvalRefOrPayloadArcs`
+    /// (`pxr/usd/pcp/primIndex.cpp`).
+    ///
+    /// [`Stage::asset_requests`]: crate::Stage::asset_requests
+    fn defers_payload(&self, asset_path: &str) -> bool {
+        let _ = asset_path;
         false
     }
 

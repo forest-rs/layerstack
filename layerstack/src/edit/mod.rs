@@ -88,6 +88,7 @@
 //! §12.3.2.1 (layer offsets), §10.5 (variant selection).
 
 mod apply;
+pub(crate) use apply::{ArgumentInput, ArgumentName};
 mod copy;
 mod error;
 mod layer_fields;

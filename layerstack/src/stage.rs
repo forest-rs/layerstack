@@ -1787,6 +1787,14 @@ impl Stage {
         sites
     }
 
+    /// The `(layer, prim path)` sites the dynamic payload arguments of
+    /// `prim`'s index were composed from, sorted.
+    pub(crate) fn dynamic_sites(&self, prim: PathId) -> Vec<(LayerId, PathId)> {
+        self.dynamic_dependency(prim)
+            .map(|dynamic| dynamic.sites().collect())
+            .unwrap_or_default()
+    }
+
     /// Returns all prim paths present in the stage.
     pub(crate) fn prim_paths(&self) -> impl Iterator<Item = PathId> + '_ {
         self.prims.keys().copied()

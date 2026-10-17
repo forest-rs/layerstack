@@ -544,6 +544,107 @@ pub(crate) struct Outcome {
     pub(crate) local_structure: Option<Vec<PathId>>,
     /// Source prims whose property declarations or schema identity changed.
     pub(crate) resync_sites: Vec<(LayerId, PathId)>,
+    /// The edits of inputs dynamic file format arguments may compose from.
+    pub(crate) argument_inputs: Vec<ArgumentInput>,
+}
+
+/// An edit of a prim metadata field or an attribute default, the inputs
+/// a dynamic file format composes payload arguments from
+/// ([`crate::dynamic_format`]), with the values before and after.
+///
+/// OpenUSD: the info changes and default value changes
+/// `PcpChanges::DidChange` checks against dynamic file format dependencies
+/// (`pxr/usd/pcp/changes.cpp`).
+#[derive(Clone, Debug)]
+pub(crate) struct ArgumentInput {
+    pub(crate) layer: LayerId,
+    /// The prim path of the spec, its variant selections dropped.
+    pub(crate) prim: PathId,
+    pub(crate) name: ArgumentName,
+    pub(crate) old: Option<Value>,
+    pub(crate) new: Option<Value>,
+}
+
+/// What an [`ArgumentInput`] edits.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ArgumentName {
+    /// A prim metadata field.
+    Field(TokenId),
+    /// The default of an attribute, including one created or removed.
+    Default(TokenId),
+}
+
+/// The argument input `guarded` edits, if any.
+fn argument_input(guarded: &Guarded) -> Option<ArgumentInput> {
+    let plain = |value: &Option<FieldValue>| match value {
+        Some(FieldValue::Value(value)) => Some(value.clone()),
+        _ => None,
+    };
+    let (layer, loc, name, old, new) = match (&guarded.written, &guarded.step) {
+        (
+            Raw::Field {
+                layer,
+                loc,
+                property: None,
+                key,
+                value,
+                ..
+            },
+            inverse,
+        ) => {
+            let old = match inverse {
+                Raw::Field { value, .. } => plain(value),
+                _ => None,
+            };
+            (*layer, loc, ArgumentName::Field(*key), old, plain(value))
+        }
+        (
+            Raw::Default {
+                layer,
+                loc,
+                name,
+                value,
+            },
+            inverse,
+        ) => {
+            let old = match inverse {
+                Raw::Default { value, .. } => value.clone(),
+                _ => None,
+            };
+            (
+                *layer,
+                loc,
+                ArgumentName::Default(*name),
+                old,
+                value.clone(),
+            )
+        }
+        (
+            Raw::Property {
+                layer,
+                loc,
+                name,
+                spec,
+                ..
+            },
+            inverse,
+        ) => {
+            let old = match inverse {
+                Raw::Property { spec, .. } => spec.as_ref().and_then(|spec| spec.default.clone()),
+                _ => None,
+            };
+            let new = spec.as_ref().and_then(|spec| spec.default.clone());
+            (*layer, loc, ArgumentName::Default(*name), old, new)
+        }
+        _ => return None,
+    };
+    Some(ArgumentInput {
+        layer,
+        prim: loc.prim_path(),
+        name,
+        old,
+        new,
+    })
 }
 
 /// Existing property value slots changed by an atomic transaction. A property
@@ -838,6 +939,7 @@ pub(crate) fn apply(
     }
     resync_sites.sort_unstable();
     resync_sites.dedup();
+    let argument_inputs = steps.iter().filter_map(argument_input).collect();
     let values = value_edits(&steps, store);
     let properties = property_edits(&steps);
     steps.reverse();
@@ -846,6 +948,7 @@ pub(crate) fn apply(
         values,
         local_structure,
         resync_sites,
+        argument_inputs,
         inverse: Transaction {
             preconditions: Vec::new(),
             ops: steps.into_iter().map(|g| Op::Raw(Box::new(g))).collect(),

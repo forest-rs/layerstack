@@ -316,11 +316,9 @@ fn prim_rule(scene: &Scene<'_>, prim: PathId, rule: BuiltinRule, out: &mut Valid
                 if kind != PropertyKind::Attribute {
                     continue;
                 }
-                let expected = type_name(
-                    schema
-                        .and_then(|s| s.type_name.as_ref())
-                        .or(decl.type_name.as_ref()),
-                );
+                let declared = type_name(decl.type_name.as_ref());
+                let schema_type = type_name(schema.and_then(|s| s.type_name.as_ref()));
+                let expected = schema_type.clone().or_else(|| declared.clone());
                 if let Some(ops) = scene
                     .stage()
                     .explain_property_path(PropertyPath::new(prim, property))
@@ -344,6 +342,8 @@ fn prim_rule(scene: &Scene<'_>, prim: PathId, rule: BuiltinRule, out: &mut Valid
                                     None,
                                     ValidationProblemKind::AttributeTypeMismatch {
                                         expected: expected.clone(),
+                                        declared: declared.clone(),
+                                        schema: schema_type.clone(),
                                         authored,
                                     },
                                 );

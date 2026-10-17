@@ -69,7 +69,12 @@ pub enum BuiltinRule {
     CompositionErrors,
     /// The root layer's defaultPrim must identify an existing composed prim.
     DefaultPrim,
-    /// Every authored attribute spec must agree with its composed type name.
+    /// Every authored attribute spec must declare the type the attribute
+    /// resolves with: the schema's when a schema defines it, else the
+    /// strongest declaration. Without a schema, a stronger layer that
+    /// redeclares an attribute sets that type, so the weaker specs are the
+    /// ones reported; [`ValidationProblemKind::AttributeTypeMismatch`] names
+    /// both types so a consumer can tell which side disagrees.
     AttributeTypes,
     /// Root-layer metersPerUnit and upAxis must be authored (fallbacks do not count).
     #[cfg(feature = "usd-geom")]
@@ -177,10 +182,19 @@ pub enum ValidationProblemKind {
     Composition(CompositionError),
     /// Root defaultPrim is absent, malformed, or points outside the composed stage.
     InvalidDefaultPrim,
-    /// One authored spec disagrees with the composed attribute type.
+    /// One authored spec declares another type than the attribute resolves
+    /// with. Its values are then not what readers of the attribute's type
+    /// find: a typed read at the default time skips them for a weaker
+    /// opinion of the right type, as OpenUSD's `UsdAttribute::Get<T>` does.
     AttributeTypeMismatch {
-        /// Composed declaration.
+        /// The type the attribute resolves with: the schema's when a schema
+        /// defines the attribute, else the composed declaration.
         expected: Option<AttributeTypeName>,
+        /// The composed declaration: the strongest type name the
+        /// attribute's specs author.
+        declared: Option<AttributeTypeName>,
+        /// The type the prim's schema defines, if it defines the attribute.
+        schema: Option<AttributeTypeName>,
         /// This source's authored declaration.
         authored: Option<AttributeTypeName>,
     },
@@ -282,6 +296,18 @@ impl ValidationReport {
     #[must_use]
     pub fn is_valid(&self) -> bool {
         self.is_complete() && self.problems.is_empty()
+    }
+    /// The problems whose authored source is in `layer`, in report order: an
+    /// overlay validated against the stage it composes into, without
+    /// findings its basis already had. Problems with no authored source
+    /// (stage metadata, computed sites) are left out.
+    pub fn problems_authored_in(
+        &self,
+        layer: LayerId,
+    ) -> impl Iterator<Item = &ValidationProblem> + '_ {
+        self.problems
+            .iter()
+            .filter(move |p| p.site.source.as_ref().is_some_and(|s| s.layer == layer))
     }
 }
 /// Invalid request; no partial report is returned.

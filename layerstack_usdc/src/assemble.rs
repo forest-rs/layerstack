@@ -98,6 +98,7 @@ pub fn assemble(
         paths,
         defer_variant_arcs: resolver.defers_variant_arcs(),
         in_branch: false,
+        in_payloads: false,
         resolver,
         layer_id,
         resolved_layers: Vec::new(),
@@ -130,6 +131,8 @@ struct AssembleCtx<'a> {
     /// Whether the arcs being converted are authored inside a variant
     /// branch.
     in_branch: bool,
+    /// Whether the arcs being converted are payloads.
+    in_payloads: bool,
     layer_id: LayerId,
     resolved_layers: Vec<Layer>,
     diagnostics: Vec<AssembleDiagnostic>,
@@ -1639,6 +1642,18 @@ impl<'a> AssembleCtx<'a> {
         &mut self,
         field: &DecodedField<'_>,
     ) -> Result<Option<ListOp<Reference>>, UsdcError> {
+        let enclosing = core::mem::replace(&mut self.in_payloads, true);
+        let converted = self.convert_payload_field(field);
+        self.in_payloads = enclosing;
+        converted
+    }
+
+    /// [`Self::convert_payload_value`], once the arcs read are marked
+    /// payloads.
+    fn convert_payload_field(
+        &mut self,
+        field: &DecodedField<'_>,
+    ) -> Result<Option<ListOp<Reference>>, UsdcError> {
         let Some(value) = field.value() else {
             return Ok(None);
         };
@@ -1735,11 +1750,15 @@ impl<'a> AssembleCtx<'a> {
                         .with_custom_data(custom_data),
                 );
             }
-            // An arc inside a variant branch may never be composed;
-            // resolving the branches the layer selects is left until the
-            // whole layer is read (`resolve_selected_deferred_arcs`), the
-            // rest to composition.
-            if self.in_branch && self.defer_variant_arcs {
+            // A payload to a dynamic file format targets the layer its
+            // composed arguments name, which composition asks for
+            // (`AssetResolver::defers_payload`). An arc inside a variant
+            // branch may never be composed; resolving the branches the
+            // layer selects is left until the whole layer is read
+            // (`resolve_selected_deferred_arcs`), the rest to composition.
+            if (self.in_branch && self.defer_variant_arcs)
+                || (self.in_payloads && self.resolver.defers_payload(&asset_path))
+            {
                 return Some(
                     Reference::deferred(self.layer_id, asset_path, target, layer_offset)
                         .with_custom_data(custom_data),

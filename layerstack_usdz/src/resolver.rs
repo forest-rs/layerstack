@@ -330,6 +330,10 @@ impl<P: PackageAccess> AssetResolver for UsdzResolver<'_, P> {
     fn defers_variant_arcs(&self) -> bool {
         self.outer.defers_variant_arcs()
     }
+
+    fn defers_payload(&self, asset_path: &str) -> bool {
+        self.outer.defers_payload(asset_path)
+    }
 }
 
 /// Whether `path` (with `/` separators) is absolute: from the root, or from

@@ -2607,13 +2607,19 @@ impl Layer {
     /// payloads ([`Reference::deferred`]) name one of `assets`, in their own
     /// lists or in their variant branches, sorted.
     fn deferred_arc_paths(&self, assets: &[&str]) -> Vec<PathId> {
+        // A dynamic payload asks for its asset with the arguments
+        // composition gave it (`crate::dynamic_format`): an arc names the
+        // assets of its path whatever their arguments.
+        let assets: Vec<&str> = assets
+            .iter()
+            .map(|asset| crate::asset::FormatArgs::strip(asset))
+            .collect();
         let names = |op: &ListOp<Reference>| {
             op.items().any(|arc| {
                 arc.deferred
-                    && arc
-                        .asset
-                        .as_deref()
-                        .is_some_and(|asset| assets.contains(&asset))
+                    && arc.asset.as_deref().is_some_and(|asset| {
+                        assets.contains(&crate::asset::FormatArgs::strip(asset))
+                    })
             })
         };
         let mut paths: Vec<PathId> = self

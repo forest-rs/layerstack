@@ -1447,7 +1447,10 @@ impl Indexer<'_, '_, '_> {
                 let identifier =
                     self.compose_dynamic_args(node, path_at_intro, arc_num, &format, asset);
                 match self.ctx.store.asset_availability(anchor, &identifier) {
-                    AssetAvailability::Loaded(layer) => layer,
+                    AssetAvailability::Loaded(layer) => {
+                        self.outputs.dynamic.targets.insert(layer);
+                        layer
+                    }
                     AssetAvailability::Missing => {
                         self.record_error(CompositionError::UnresolvedAsset(UnresolvedAsset {
                             prim,

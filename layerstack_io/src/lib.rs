@@ -539,13 +539,23 @@ impl<B: Storage> StageDocument<B> {
     /// Opens with host-owned schemas/session layers and an explicit load policy.
     /// Registry tokens must belong to `store`, as for [`Self::open_in`]. Failed
     /// structural imports publish no layers; retained payloads are checked on demand.
+    ///
+    /// The dynamic sides of [`LoadOptions::formats`] ([`FileFormat::dynamic`])
+    /// join `options.dynamic_formats`; one claiming an extension a format
+    /// there claims is rejected ([`IoErrorKind::Rejected`]).
     pub fn open_in_with(
         mut storage: B,
         mut store: InMemoryStore,
         asset: &str,
-        options: StageOptions,
+        mut options: StageOptions,
         loading: LoadOptions,
     ) -> Result<Self, IoError> {
+        for format in loading.formats.dynamic_formats() {
+            options
+                .dynamic_formats
+                .add(Arc::clone(format))
+                .map_err(|error| IoError::new(IoErrorKind::Rejected, error.to_string()))?;
+        }
         let import_policy = loading.import_policy;
         let mut catalog = Catalog {
             reserved: store.layers.keys().copied().collect(),
@@ -1642,6 +1652,9 @@ impl<B: Storage> AssetResolver for Reader<'_, B> {
     }
     fn defers_variant_arcs(&self) -> bool {
         self.variant_arcs == VariantArcLoading::Selected
+    }
+    fn defers_payload(&self, asset_path: &str) -> bool {
+        self.formats.is_dynamic(asset_path)
     }
     fn allocate_layer_id(&mut self) -> Option<LayerId> {
         self.catalog.allocate().ok()

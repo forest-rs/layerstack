@@ -463,10 +463,12 @@ fn equal_values_from_a_new_authored_layer_change_provenance() {
     let weak = LayerId(999);
     f.session.edit_sources(|store| {
         let mut source = store.layers.remove(&root).unwrap();
-        source.id = weak;
+        source.map_layer_ids(|id| if id == root { weak } else { id });
         store.insert_layer(source);
         let mut strong = layerstack::Layer::new(root);
-        strong.sublayers.push(layerstack::SublayerEntry::new(weak));
+        strong
+            .sublayers_mut()
+            .push(layerstack::SublayerEntry::new(weak));
         store.insert_layer(strong);
     });
     let q = f.session.observe(Query::ShadingValue(f.input));

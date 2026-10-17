@@ -201,7 +201,7 @@ impl<'a> AssembleCtx<'a> {
         match (source_path, target_path) {
             (Some(source), Some(target)) => {
                 layer
-                    .relocates
+                    .relocates_mut()
                     .push(layerstack::Relocate { source, target });
                 Ok(())
             }
@@ -530,7 +530,7 @@ impl<'a> AssembleCtx<'a> {
                 }
                 "defaultPrim" => {
                     if let Some(CrateValue::Token(name)) = value.value() {
-                        layer.default_prim = Some(self.tokens.intern(name));
+                        layer.set_default_prim(Some(self.tokens.intern(name)));
                     }
                 }
                 "layerRelocates" => {
@@ -552,7 +552,7 @@ impl<'a> AssembleCtx<'a> {
                 _ => {
                     if let Some(field_value) = self.convert_metadata("/", name, value)? {
                         let key = self.tokens.intern(name);
-                        set_field_vec(&mut layer.metadata, key, field_value);
+                        set_field_vec(layer.metadata_fields_mut(), key, field_value);
                     }
                 }
             }
@@ -571,11 +571,11 @@ impl<'a> AssembleCtx<'a> {
                     });
             let Some(resolved) = self.resolve_asset(asset_path) else {
                 layer
-                    .sublayers
+                    .sublayers_mut()
                     .push(SublayerEntry::unresolved(asset_path.as_str(), offset));
                 continue;
             };
-            layer.sublayers.push(SublayerEntry::with_asset(
+            layer.sublayers_mut().push(SublayerEntry::with_asset(
                 resolved.layer_id,
                 asset_path.as_str(),
                 offset,
@@ -2291,7 +2291,7 @@ mod tests {
                 &mut DecodeBudget::with_limit(10_000),
             )
             .unwrap();
-            let property = &read.layer.prims.values().next().unwrap().properties[0].spec;
+            let property = &read.layer.prims().values().next().unwrap().properties[0].spec;
             assert_eq!(
                 property.type_name.as_ref().unwrap().type_name.as_ref(),
                 "double"
@@ -2478,7 +2478,7 @@ mod tests {
             )
             .unwrap();
             assert!(result.diagnostics.is_empty());
-            let prim = result.layer.prims.values().next().unwrap();
+            let prim = result.layer.prims().values().next().unwrap();
             let expected = if tag <= 6 {
                 Value::Array(alloc::vec![match ty {
                     ValueType::Bool => Value::Bool(true),

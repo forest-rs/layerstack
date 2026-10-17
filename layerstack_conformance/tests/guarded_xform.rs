@@ -20,7 +20,7 @@ fn fixture(
     let mut store = InMemoryStore::default();
     let path = store.path("/P");
     let mut root = Layer::new(LayerId(1));
-    root.sublayers.push(SublayerEntry::new(LayerId(2)));
+    root.sublayers_mut().push(SublayerEntry::new(LayerId(2)));
     let mut prim = PrimSpec::def().with_type_name(store.tokens.intern("Xform"));
     if let Some(order) = order {
         prim = prim.with_property(store.tokens.intern("xformOpOrder"), order);
@@ -107,7 +107,7 @@ fn sample_only_matrix_masks_numeric_replacement_but_not_default_replacement() {
     assert_eq!(cache.local_transform(&scene, path).unwrap().matrix, matrix);
     live.apply(&mut store, &undo.inverse).unwrap();
     assert!(
-        store.layers[&LayerId(2)].prims.is_empty(),
+        store.layers[&LayerId(2)].prims().is_empty(),
         "undo removes created weak specs"
     );
 }
@@ -190,7 +190,7 @@ fn referenced_matrix_replacement_maps_namespace_and_stage_time_together() {
     let transaction = edit.finish();
     let applied = live.apply(&mut store, &transaction).unwrap();
     let transform = store.tokens.lookup("xformOp:transform").unwrap();
-    let spec = store.layers[&LayerId(2)].prims[&asset]
+    let spec = store.layers[&LayerId(2)].prims()[&asset]
         .property(transform)
         .unwrap();
     assert_eq!(spec.time_samples.as_ref().unwrap()[0].0, 2.);
@@ -204,7 +204,7 @@ fn referenced_matrix_replacement_maps_namespace_and_stage_time_together() {
     );
     live.apply(&mut store, &applied.inverse).unwrap();
     assert!(
-        store.layers[&LayerId(2)].prims[&asset]
+        store.layers[&LayerId(2)].prims()[&asset]
             .properties
             .is_empty()
     );

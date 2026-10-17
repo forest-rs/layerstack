@@ -376,7 +376,7 @@ fn edit_selection(
         .store
         .layers
         .get_mut(&layer)
-        .and_then(|layer| layer.prims.get_mut(&prim))
+        .and_then(|layer| layer.prim_mut(prim))
         .expect("prim spec")
         .variant_selections;
     match variant {

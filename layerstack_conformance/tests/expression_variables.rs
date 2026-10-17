@@ -441,8 +441,7 @@ fn live_stage_reports_a_selection_once_its_branch_is_selected() {
         .store
         .layer_mut(root)
         .expect("root")
-        .prims
-        .get_mut(&orchard)
+        .prim_mut(orchard)
         .expect("/Orchard")
         .variant_selections
         .insert(season, winter);

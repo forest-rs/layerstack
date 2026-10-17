@@ -393,7 +393,7 @@ fn binding_caches_follow_edits() {
     store
         .layers
         .get_mut(&layer)
-        .and_then(|layer| layer.prims.get_mut(&ordered))
+        .and_then(|layer| layer.prim_mut(ordered))
         .expect("the `/Ordered` spec")
         .property_order = Some(vec![a, z]);
     live.notify_layer_prim_edits(layer, &[ordered]);

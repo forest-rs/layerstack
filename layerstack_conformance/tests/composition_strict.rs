@@ -267,8 +267,7 @@ fn authored_default(loaded: &LoadedStage, layer: LayerId, spec: &SpecPath) -> Au
         .position(|c| matches!(c, SpecComponent::VariantSelection { .. }))
     else {
         return layer
-            .prims
-            .get(&spec.prim_path())
+            .prim(spec.prim_path())
             .map_or(Authored::Unknown, |prim| {
                 property_default(&prim.properties, name)
             });
@@ -291,8 +290,7 @@ fn authored_default(loaded: &LoadedStage, layer: LayerId, spec: &SpecPath) -> Au
         return Authored::Unknown;
     };
     let Some(branch) = layer
-        .prims
-        .get(&host_path)
+        .prim(host_path)
         .and_then(|prim| prim.variant_spec(&[(set, variant)]))
     else {
         return Authored::Unknown;

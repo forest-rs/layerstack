@@ -203,7 +203,7 @@ fn main() {
     // -----------------------------------------------------------------------
 
     let mut root = Layer::new(LayerId(3));
-    root.sublayers = vec![
+    *root.sublayers_mut() = vec![
         // Base layer — shifted 10 frames later on the global timeline.
         // offset=10 means: local_time = global_time - 10.
         // So global frame 10 reads base-local frame 0.

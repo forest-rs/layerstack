@@ -1299,7 +1299,7 @@ fn live_anchor_metadata_retimes_and_new_asset_bindings_become_visible() {
     let property = store.property_path("/P.x");
     let clips_token = store.tokens.lookup("clips").unwrap();
     let layer = store.layers.get_mut(&LayerId(1)).unwrap();
-    let prim = layer.prims.get_mut(&property.prim_path()).unwrap();
+    let prim = layer.prim_mut(property.prim_path()).unwrap();
     let layerstack::FieldValue::Value(Value::Dictionary(mut sets)) =
         prim.field(clips_token).unwrap().clone()
     else {
@@ -1535,8 +1535,7 @@ fn live_newly_selected_resident_clip_is_watched_on_the_next_edit() {
         .layers
         .get_mut(&LayerId(1))
         .unwrap()
-        .prims
-        .get_mut(&property.prim_path())
+        .prim_mut(property.prim_path())
         .unwrap();
     let layerstack::FieldValue::Value(Value::Dictionary(mut sets)) =
         prim.field(clips_token).unwrap().clone()
@@ -1568,9 +1567,11 @@ fn live_newly_selected_resident_clip_is_watched_on_the_next_edit() {
         .property_mut(raw)
         .unwrap()
         .time_samples = Some(vec![(0., Value::Double(3.))].into());
+    // The root edit recorded through `prim_mut` is reported too: the
+    // explicit prim notification above does not consume its generation.
     assert_eq!(
         live.notify_changed_layers(&store),
-        [LayerId(3)],
+        [LayerId(1), LayerId(3)],
         "new dependency must be watched after partial recomposition"
     );
     live.recompose(&mut store);

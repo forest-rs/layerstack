@@ -569,7 +569,7 @@ def "A" {
         let points = &imported
             .emitted
             .layer
-            .prims
+            .prims()
             .values()
             .find(|prim| !prim.properties.is_empty())
             .unwrap()

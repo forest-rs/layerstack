@@ -33,9 +33,9 @@ fn authored_id_sequence() -> (layerstack::InMemoryStore, layerstack::LiveStage) 
     );
     store.insert_layer(weak);
     let root = store.layers.get_mut(&LayerId(1)).unwrap();
-    root.sublayers
+    root.sublayers_mut()
         .push(layerstack::SublayerEntry::new(LayerId(2)));
-    root.prims.get_mut(&path).unwrap().set_field(
+    root.prim_mut(path).unwrap().set_field(
         inactive,
         FieldValue::Int64ListOp(ListOp {
             add: vec![30, 10],
@@ -43,7 +43,6 @@ fn authored_id_sequence() -> (layerstack::InMemoryStore, layerstack::LiveStage) 
             ..ListOp::default()
         }),
     );
-    root.touch();
     live.synchronize(&mut store);
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
     let point = PointInstancerEdit::new(&edit, path).unwrap();
@@ -97,7 +96,8 @@ fn id_edits_preserve_future_weaker_opinions_and_group_rollback() {
         "default visibility helpers preserve numeric samples"
     );
     let inactive = store.tokens.lookup("inactiveIds").unwrap();
-    let Some(FieldValue::Int64ListOp(op)) = store.layers[&LayerId(1)].prims[&path].field(inactive)
+    let Some(FieldValue::Int64ListOp(op)) =
+        store.layers[&LayerId(1)].prims()[&path].field(inactive)
     else {
         panic!("authored int64 list operation")
     };
@@ -134,14 +134,12 @@ fn explicit_inactive_lists_keep_their_cutoff_after_id_edits() {
         .layers
         .get_mut(&LayerId(1))
         .unwrap()
-        .prims
-        .get_mut(&path)
+        .prim_mut(path)
         .unwrap()
         .set_field(
             inactive,
             FieldValue::Int64ListOp(ListOp::explicit(vec![30, 10])),
         );
-    store.layers.get_mut(&LayerId(1)).unwrap().touch();
     live.synchronize(&mut store);
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
     let point = PointInstancerEdit::new(&edit, path).unwrap();
@@ -149,7 +147,8 @@ fn explicit_inactive_lists_keep_their_cutoff_after_id_edits() {
     point.activate_ids(&mut edit, &[30]).unwrap();
     let transaction = edit.finish();
     live.apply(&mut store, &transaction).unwrap();
-    let Some(FieldValue::Int64ListOp(op)) = store.layers[&LayerId(1)].prims[&path].field(inactive)
+    let Some(FieldValue::Int64ListOp(op)) =
+        store.layers[&LayerId(1)].prims()[&path].field(inactive)
     else {
         panic!("inactive list")
     };
@@ -164,9 +163,8 @@ fn explicit_inactive_lists_keep_their_cutoff_after_id_edits() {
     );
     store.insert_layer(weak);
     let root = store.layers.get_mut(&LayerId(1)).unwrap();
-    root.sublayers
+    root.sublayers_mut()
         .push(layerstack::SublayerEntry::new(LayerId(2)));
-    root.touch();
     live.synchronize(&mut store);
     let scene = Scene::new(live.stage(), &store);
     assert_eq!(

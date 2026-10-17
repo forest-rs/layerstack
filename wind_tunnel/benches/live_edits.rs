@@ -127,8 +127,7 @@ fn bench_local_structure(c: &mut Criterion) {
                     .map(|path| store.paths.resolve(*path).leaf().unwrap())
                     .collect();
                 let layer = store.layers.get_mut(&LayerId(1)).unwrap();
-                layer.prims.get_mut(&world).unwrap().authored_children = names;
-                layer.touch();
+                layer.prim_mut(world).unwrap().authored_children = names;
                 live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
             }
             let parent = if case.ends_with("parent_toggle_1") {

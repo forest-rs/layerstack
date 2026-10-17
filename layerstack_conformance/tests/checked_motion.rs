@@ -46,8 +46,7 @@ fn point_motion_preserves_required_and_optional_decode_failures() {
                 .layers
                 .get_mut(&LayerId(1))
                 .unwrap()
-                .prims
-                .get_mut(&path)
+                .prim_mut(path)
                 .unwrap()
                 .property_mut(token)
                 .unwrap();
@@ -105,8 +104,7 @@ fn instancer_transform_and_mask_queries_preserve_decode_failures() {
                 .layers
                 .get_mut(&LayerId(1))
                 .unwrap()
-                .prims
-                .get_mut(&path)
+                .prim_mut(path)
                 .unwrap()
                 .property_mut(token)
                 .unwrap();

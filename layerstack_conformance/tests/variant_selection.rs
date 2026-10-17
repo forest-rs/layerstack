@@ -978,7 +978,7 @@ fn matrix_cell(outer: MatrixArc, inner: MatrixArc, selection: MatrixSelection) -
         let target_layer = store
             .layers
             .iter()
-            .find(|(_, layer)| layer.prims.contains_key(&selected_source_id))
+            .find(|(_, layer)| layer.prims().contains_key(&selected_source_id))
             .map(|(id, _)| *id);
         if !target_layer.is_some_and(|layer| {
             stage

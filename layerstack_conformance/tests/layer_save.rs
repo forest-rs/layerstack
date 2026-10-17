@@ -105,7 +105,7 @@ fn saved_explicit_empty_lists_block_weaker_opinions() {
         emit_into(&mut store, 1, &saved);
         emit_into(&mut store, 2, case.weaker.expect("weaker layer"));
         let mut root = Layer::new(LayerId(3));
-        root.sublayers = vec![
+        *root.sublayers_mut() = vec![
             SublayerEntry::new(LayerId(1)),
             SublayerEntry::new(LayerId(2)),
         ];
@@ -175,7 +175,7 @@ fn saved_adds_and_reorders_compose_as_openusd() {
         emit_into(&mut store, 1, &saved);
         emit_into(&mut store, 2, case.weaker.expect("weaker layer"));
         let mut root = Layer::new(LayerId(3));
-        root.sublayers = vec![
+        *root.sublayers_mut() = vec![
             SublayerEntry::new(LayerId(1)),
             SublayerEntry::new(LayerId(2)),
         ];
@@ -270,7 +270,7 @@ fn unresolved_arcs_are_kept_as_authored() {
     for (format, layer) in [("USDA", from_usda), ("USDC", from_usdc)] {
         let sublayers: Vec<_> = layer
             .layer
-            .sublayers
+            .sublayers()
             .iter()
             .filter(|s| s.is_unresolved())
             .map(|s| (s.asset.clone(), s.offset.offset))
@@ -282,7 +282,7 @@ fn unresolved_arcs_are_kept_as_authored() {
         );
         let references: Vec<_> = layer
             .layer
-            .prims
+            .prims()
             .values()
             .flat_map(|p| &p.references.prepend)
             .filter(|r| r.is_unresolved())
@@ -329,7 +329,7 @@ def "Clay" (
         layer.paths.intern(parsed)
     };
     let (loam, clay) = (path("/Loam"), path("/Clay"));
-    let spec = |layer: &Layer, path| layer.prims.get(&path).expect("prim").clone();
+    let spec = |layer: &Layer, path| layer.prim(path).expect("prim").clone();
     assert_eq!(spec(&layer.layer, loam).deleted_variant_sets, [grain]);
     assert!(spec(&layer.layer, loam).variant_set_order.is_empty());
     assert_eq!(spec(&layer.layer, clay).variant_set_order, [grain]);
@@ -440,18 +440,16 @@ fn variant_structure(variant: &VariantSpec) -> String {
 /// each field in its authored order, maps sorted, and arcs by what was
 /// authored.
 fn structure(layer: &Layer) -> String {
-    let Layer {
-        id: _,
-        sublayers,
-        default_prim,
-        metadata,
-        prims,
-        variant_prims,
-        relocates,
-        // The edit counters are not content.
-        ..
-    } = layer;
-    let sublayers: Vec<_> = sublayers
+    // The edit counters are not content.
+    let (default_prim, metadata, prims, variant_prims, relocates) = (
+        layer.default_prim(),
+        layer.metadata_fields(),
+        layer.prims(),
+        layer.variant_prims(),
+        layer.relocates(),
+    );
+    let sublayers: Vec<_> = layer
+        .sublayers()
         .iter()
         .map(|s| (s.asset.clone(), s.offset, s.is_unresolved()))
         .collect();
@@ -668,7 +666,7 @@ fn text_refuses_sparse_edit_kind_changes_while_binary_preserves_retiming() {
                 offset: 8.,
                 scale: 2.,
             };
-            root.sublayers.push(entry);
+            root.sublayers_mut().push(entry);
             store.insert_layer(root);
             let x = store.property_path("/P.x");
             let stage = Stage::compose(&mut store, LayerId(2), StageOptions::default());

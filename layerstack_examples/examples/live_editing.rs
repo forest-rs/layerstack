@@ -84,7 +84,7 @@ fn main() {
     println!("\n--- Edit: Hero takes 30 damage ---");
     {
         let layer = store.layers.get_mut(&LayerId(1)).unwrap();
-        let spec = layer.prims.get_mut(&hero).unwrap();
+        let spec = layer.prim_mut(hero).unwrap();
         spec.set_field(field_hp, 70_i64);
     }
 
@@ -108,7 +108,7 @@ fn main() {
     println!("\n--- Edit: Enchant the sword ---");
     {
         let layer = store.layers.get_mut(&LayerId(1)).unwrap();
-        let spec = layer.prims.get_mut(&sword).unwrap();
+        let spec = layer.prim_mut(sword).unwrap();
         spec.set_field(field_color, "glowing blue");
     }
 
@@ -133,7 +133,7 @@ fn main() {
     println!("\n--- Edit: Power gem upgrade (speed 10 → 20) ---");
     {
         let layer = store.layers.get_mut(&LayerId(2)).unwrap();
-        let spec = layer.prims.get_mut(&power_gem).unwrap();
+        let spec = layer.prim_mut(power_gem).unwrap();
         spec.set_field(field_speed, 20.0);
     }
 
@@ -163,9 +163,9 @@ fn main() {
     println!("\n--- Batch edit: enemy takes damage + shield upgrade ---");
     {
         let layer = store.layers.get_mut(&LayerId(1)).unwrap();
-        let e_spec = layer.prims.get_mut(&enemy).unwrap();
+        let e_spec = layer.prim_mut(enemy).unwrap();
         e_spec.set_field(field_hp, 25_i64);
-        let s_spec = layer.prims.get_mut(&shield).unwrap();
+        let s_spec = layer.prim_mut(shield).unwrap();
         s_spec.set_field(field_color, "mithril");
     }
 

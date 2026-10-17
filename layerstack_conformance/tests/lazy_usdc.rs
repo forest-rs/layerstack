@@ -111,12 +111,12 @@ fn retained_defaults_and_selected_endpoints_share_one_cache() {
     let tokens = TokenInterner::default();
     let paths = PathInterner::default();
     let eager = read_usdc(&input, LayerId(1), &tokens, &paths, &mut NoAssets).unwrap();
-    assert_eq!(snapshot.prims.len(), eager.layer.prims.len());
+    assert_eq!(snapshot.prims().len(), eager.layer.prims().len());
     drop(read.values);
     drop(input);
     // The last, still encoded frame outlives both the loader and its input.
     let frame = snapshot
-        .prims
+        .prims()
         .values()
         .flat_map(|prim| &prim.properties)
         .find_map(|property| property.spec.time_samples.as_ref())
@@ -165,7 +165,7 @@ fn source_budget_failure_is_cached_across_threads() {
         .lookup(&layerstack::Path::root().join(&[tokens.lookup("P").unwrap()]))
         .unwrap();
     let a = tokens.lookup("a").unwrap();
-    let Value::TypedArray(array) = read.assembled.layer.prims[&p]
+    let Value::TypedArray(array) = read.assembled.layer.prims()[&p]
         .property(a)
         .unwrap()
         .default
@@ -228,7 +228,7 @@ fn failures_never_select_weaker_defaults_or_hold_a_good_endpoint() {
             .with_default(Value::from(vec![99_f32])),
     );
     let mut strong = Layer::new(LayerId(1));
-    strong.sublayers.push(SublayerEntry::new(LayerId(2)));
+    strong.sublayers_mut().push(SublayerEntry::new(LayerId(2)));
     strong.insert_prim(p, PrimSpec::def());
     strong.set_property(
         a,
@@ -276,7 +276,7 @@ fn failures_never_select_weaker_defaults_or_hold_a_good_endpoint() {
         Value::from(vec![0_f32])
     );
     let mut to_save = store.layers[&LayerId(1)].clone();
-    to_save.sublayers.clear();
+    to_save.sublayers_mut().clear();
     to_save.insert_prim(
         store.path("/"),
         PrimSpec::default().with_children(vec![store.tokens.lookup("P").unwrap()]),
@@ -288,7 +288,7 @@ fn failures_never_select_weaker_defaults_or_hold_a_good_endpoint() {
         "{error:?}"
     );
     let mut edits = Layer::new(LayerId(3));
-    edits.sublayers.push(SublayerEntry::new(LayerId(1)));
+    edits.sublayers_mut().push(SublayerEntry::new(LayerId(1)));
     edits.insert_prim(p, PrimSpec::def());
     edits.set_property(
         a,
@@ -333,8 +333,7 @@ fn every_native_numeric_kind_and_empty_kind_survives_lazy_save() {
         let name = imported.tokens.lookup(&format!("a{n}")).unwrap();
         let spec = imported
             .layer
-            .prims
-            .get_mut(&p)
+            .prim_mut(p)
             .unwrap()
             .properties
             .iter_mut()
@@ -383,7 +382,7 @@ fn malformed_payload_is_deferred_and_failure_is_cached() {
         .lookup(&layerstack::Path::root().join(&[tokens.lookup("P").unwrap()]))
         .unwrap();
     let a = tokens.lookup("a").unwrap();
-    let Value::TypedArray(array) = read.assembled.layer.prims[&p]
+    let Value::TypedArray(array) = read.assembled.layer.prims()[&p]
         .property(a)
         .unwrap()
         .default
@@ -482,7 +481,7 @@ fn retimed_timecode_arrays_only_demand_the_bracketing_frames() {
     .unwrap();
     store.insert_layer(read.assembled.layer);
     let mut root = Layer::new(LayerId(1));
-    root.sublayers.push(SublayerEntry {
+    root.sublayers_mut().push(SublayerEntry {
         layer: LayerId(2),
         offset: LayerOffset {
             offset: 8.,

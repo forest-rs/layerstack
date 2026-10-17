@@ -35,8 +35,7 @@ fn checked_schema_arrays_preserve_decode_errors_at_default_and_numeric_times() {
             .layers
             .get_mut(&LayerId(1))
             .unwrap()
-            .prims
-            .get_mut(&path)
+            .prim_mut(path)
             .unwrap()
             .property_mut(name)
             .unwrap();
@@ -102,12 +101,12 @@ fn checked_schema_reads_share_native_arrays_and_keep_typed_default_selection() {
     );
     // A wrong dense type can still be skipped at default time, as Get<T> does.
     let mut weak = store.layers.remove(&LayerId(1)).unwrap();
-    weak.id = LayerId(2);
+    weak.map_layer_ids(|id| if id == LayerId(1) { LayerId(2) } else { id });
     store.insert_layer(weak);
     let mut root = layerstack::Layer::new(LayerId(1));
-    root.sublayers
+    root.sublayers_mut()
         .push(layerstack::SublayerEntry::new(LayerId(2)));
-    root.prims.insert(
+    root.prims_mut().insert(
         path,
         layerstack::PrimSpec::over().with_property(
             points,
@@ -146,8 +145,7 @@ fn validated_primvars_preserve_value_and_index_decode_errors() {
             .layers
             .get_mut(&LayerId(1))
             .unwrap()
-            .prims
-            .get_mut(&path)
+            .prim_mut(path)
             .unwrap()
             .property_mut(token)
             .unwrap()
@@ -250,7 +248,7 @@ fn checked_default_retry_preserves_weaker_decode_error_before_schema_fallback() 
         );
         store.insert_layer(weak);
         let mut root = Layer::new(LayerId(1));
-        root.sublayers.push(SublayerEntry::new(LayerId(2)));
+        root.sublayers_mut().push(SublayerEntry::new(LayerId(2)));
         root.insert_prim(
             path,
             PrimSpec::over()

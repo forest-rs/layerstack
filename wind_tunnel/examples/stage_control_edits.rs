@@ -44,14 +44,14 @@ fn main() {
     if let Some(session) = session {
         let mut layer = Layer::new(session);
         layer
-            .sublayers
+            .sublayers_mut()
             .push(layerstack::SublayerEntry::new(LayerId(4)));
         store.insert_layer(layer);
         store.insert_layer(Layer::new(LayerId(4)));
     }
     let child = store.path("/Asset/New");
     for forced in [true, false] {
-        if source_edits && store.layers[&LayerId(2)].prims.contains_key(&child) {
+        if source_edits && store.layers[&LayerId(2)].prims().contains_key(&child) {
             let mut remove = Transaction::new();
             remove.remove_spec(EditTarget::for_layer(LayerId(2)).prim(child));
             remove.apply(&mut store).unwrap();

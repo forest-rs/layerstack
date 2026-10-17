@@ -241,7 +241,7 @@ fn variant_selections_report_the_strongest_opinion() {
     store
         .layers
         .get_mut(&LayerId(1))
-        .and_then(|layer| layer.prims.get_mut(&grove))
+        .and_then(|layer| layer.prim_mut(grove))
         .expect("grove spec")
         .variant_selections
         .insert(season, winter);

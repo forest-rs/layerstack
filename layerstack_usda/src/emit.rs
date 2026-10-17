@@ -220,11 +220,11 @@ impl EmitCtx<'_> {
                         // OpenUSD `PcpErrorInvalidSublayerPath`).
                         let Some(resolved) = self.resolve_asset(item.asset) else {
                             layer
-                                .sublayers
+                                .sublayers_mut()
                                 .push(SublayerEntry::unresolved(item.asset, offset));
                             continue;
                         };
-                        layer.sublayers.push(SublayerEntry::with_asset(
+                        layer.sublayers_mut().push(SublayerEntry::with_asset(
                             resolved.layer_id,
                             item.asset,
                             offset,
@@ -253,7 +253,7 @@ impl EmitCtx<'_> {
                             continue;
                         }
                         if let Some(relocate) = self.emit_relocate(entry) {
-                            layer.relocates.push(relocate);
+                            layer.relocates_mut().push(relocate);
                         }
                     }
                 }
@@ -261,7 +261,7 @@ impl EmitCtx<'_> {
                     // Spec: AOUSD Core §7.6.1.5.1 (`documentation`).
                     let key = self.tokens.intern("documentation");
                     set_field_vec(
-                        &mut layer.metadata,
+                        layer.metadata_fields_mut(),
                         key,
                         FieldValue::Value(Value::String(Arc::from(&**doc))),
                     );
@@ -275,12 +275,16 @@ impl EmitCtx<'_> {
                         _ => None,
                     };
                     if let Some(name) = name {
-                        layer.default_prim = Some(self.tokens.intern(name));
+                        layer.set_default_prim(Some(self.tokens.intern(name)));
                     }
                 }
                 ast::LayerMeta::Custom(entry) => {
                     // Spec: AOUSD Core §7.6.1 (layer spec fields), §12.2.7.
-                    self.emit_metadata_entry(entry, &mut layer.metadata, MetadataTarget::Layer);
+                    self.emit_metadata_entry(
+                        entry,
+                        layer.metadata_fields_mut(),
+                        MetadataTarget::Layer,
+                    );
                 }
             }
         }
@@ -2180,7 +2184,7 @@ mod tests {
         let (result, tokens, paths) = emit_source("#usda 1.0\ndef Xform \"root\" {\n}\n");
         let root_path = Path::parse_absolute("/root", &tokens).unwrap();
         let root_id = paths.lookup(&root_path).expect("root path interned");
-        let spec = result.layer.prims.get(&root_id).expect("root prim");
+        let spec = result.layer.prim(root_id).expect("root prim");
         assert_eq!(spec.specifier, Some(Specifier::Def));
     }
 
@@ -2196,13 +2200,13 @@ def \"A\" {
         let (result, tokens, paths) = emit_source(src);
         let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = paths.lookup(&a_path).expect("/A interned");
-        let a_spec = result.layer.prims.get(&a_id).expect("prim /A");
+        let a_spec = result.layer.prim(a_id).expect("prim /A");
         let b_tok = tokens.intern("B");
         assert!(a_spec.authored_children.contains(&b_tok));
 
         let b_path = Path::parse_absolute("/A/B", &tokens).unwrap();
         let b_id = paths.lookup(&b_path).expect("/A/B interned");
-        assert!(result.layer.prims.contains_key(&b_id));
+        assert!(result.layer.prims().contains_key(&b_id));
     }
 
     #[test]
@@ -2211,7 +2215,7 @@ def \"A\" {
         let (result, tokens, paths) = emit_source(src);
         let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = paths.lookup(&a_path).expect("/A");
-        let spec = result.layer.prims.get(&a_id).unwrap();
+        let spec = result.layer.prim(a_id).unwrap();
         let x_tok = tokens.intern("x");
         assert_eq!(
             attr_default(&spec.properties, &x_tok),
@@ -2225,7 +2229,7 @@ def \"A\" {
         let (result, tokens, paths) = emit_source(src);
         let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = paths.lookup(&a_path).unwrap();
-        let spec = result.layer.prims.get(&a_id).unwrap();
+        let spec = result.layer.prim(a_id).unwrap();
         let y_tok = tokens.intern("y");
         assert_eq!(
             attr_default(&spec.properties, &y_tok),
@@ -2244,9 +2248,9 @@ def \"A\" {
 )
 ";
         let (result, _, _) = emit_source(src);
-        assert_eq!(result.layer.sublayers.len(), 1);
+        assert_eq!(result.layer.sublayers().len(), 1);
         assert_eq!(
-            result.layer.sublayers[0],
+            result.layer.sublayers()[0],
             SublayerEntry::with_asset(LayerId(100), "./sub.usd", LayerOffset::IDENTITY),
             "the authored asset path is kept"
         );
@@ -2259,7 +2263,7 @@ def \"A\" {
         let (result, tokens, paths) = emit_source(src);
         let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = paths.lookup(&a_path).unwrap();
-        let spec = result.layer.prims.get(&a_id).unwrap();
+        let spec = result.layer.prim(a_id).unwrap();
         assert!(spec.inherits.explicit.is_some());
         let b_path = Path::parse_absolute("/B", &tokens).unwrap();
         let b_id = paths.lookup(&b_path).expect("/B");
@@ -2272,7 +2276,7 @@ def \"A\" {
         let (result, tokens, paths) = emit_source(src);
         let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = paths.lookup(&a_path).unwrap();
-        let spec = result.layer.prims.get(&a_id).unwrap();
+        let spec = result.layer.prim(a_id).unwrap();
         assert_eq!(spec.references.prepend.len(), 1);
         assert_eq!(spec.references.prepend[0].layer, LayerId(100));
     }
@@ -2291,7 +2295,7 @@ def \"A\" (
         let (result, tokens, paths) = emit_source(src);
         let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = paths.lookup(&a_path).unwrap();
-        let spec = result.layer.prims.get(&a_id).unwrap();
+        let spec = result.layer.prim(a_id).unwrap();
         let shade_tok = tokens.intern("shade");
         let red_tok = tokens.intern("red");
         assert_eq!(spec.variant_selections.get(&shade_tok), Some(&red_tok));
@@ -2311,7 +2315,7 @@ def \"A\" (
         let (result, tokens, paths) = emit_source(src);
         let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = paths.lookup(&a_path).unwrap();
-        let spec = result.layer.prims.get(&a_id).unwrap();
+        let spec = result.layer.prim(a_id).unwrap();
         let shade_tok = tokens.intern("shade");
         let red_tok = tokens.intern("red");
         assert_eq!(spec.variant_selections.get(&shade_tok), Some(&red_tok));
@@ -2335,7 +2339,7 @@ def \"A\" {
         let (result, tokens, paths) = emit_source(src);
         let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = paths.lookup(&a_path).unwrap();
-        let spec = result.layer.prims.get(&a_id).unwrap();
+        let spec = result.layer.prim(a_id).unwrap();
         let color_tok = tokens.intern("color");
         assert!(spec.variant_sets.contains_key(&color_tok));
         let vs = spec.variant_sets.get(&color_tok).unwrap();
@@ -2365,7 +2369,7 @@ def \"A\" {
         let (result, tokens, paths) = emit_source(src);
         let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = paths.lookup(&a_path).unwrap();
-        let spec = result.layer.prims.get(&a_id).unwrap();
+        let spec = result.layer.prim(a_id).unwrap();
         let b = tokens.intern("B");
         let c = tokens.intern("C");
         assert_eq!(spec.prim_order, Some(vec![b, c]));
@@ -2385,7 +2389,7 @@ def \"A\" {
         let (result, tokens, paths) = emit_source(src);
         let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = paths.lookup(&a_path).unwrap();
-        let spec = result.layer.prims.get(&a_id).unwrap();
+        let spec = result.layer.prim(a_id).unwrap();
         let x_tok = tokens.intern("x");
         if let Some(ts) = prop(&spec.properties, &x_tok).time_samples.as_ref() {
             assert_eq!(ts.len(), 2);
@@ -2413,7 +2417,7 @@ def \"A\" {
         let (result, tokens, paths) = emit_source(src);
         let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = paths.lookup(&a_path).unwrap();
-        let spec = result.layer.prims.get(&a_id).unwrap();
+        let spec = result.layer.prim(a_id).unwrap();
         let x_tok = tokens.intern("x");
         let Some(ts) = prop(&spec.properties, &x_tok).time_samples.as_ref() else {
             panic!("expected TimeSamples");
@@ -2454,7 +2458,7 @@ def \"Rig\" {
                 .unwrap()
         };
         assert_eq!(
-            result.layer.relocates,
+            result.layer.relocates(),
             [
                 layerstack::Relocate {
                     source: path("/Rig/Anim"),
@@ -2493,8 +2497,8 @@ def \"Rig\" {
         let first = &result.diagnostics[0];
         assert_eq!(first.severity, crate::diagnostic::Severity::Error);
         assert_eq!(first.span.text(src), "</Rig{v=a}Anim>: </Anim>");
-        assert_eq!(result.layer.relocates.len(), 1);
-        assert_eq!(result.layer.prims.len(), 2, "pseudo-root and /Rig");
+        assert_eq!(result.layer.relocates().len(), 1);
+        assert_eq!(result.layer.prims().len(), 2, "pseudo-root and /Rig");
     }
 
     /// Spec: OpenUSD's text parser rejects the layer (`SdfSchema::IsValid*`);
@@ -2600,7 +2604,7 @@ def \"A\" (
         let (result, tokens, paths) = emit_source(src);
         let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = paths.lookup(&a_path).unwrap();
-        let spec = result.layer.prims.get(&a_id).unwrap();
+        let spec = result.layer.prim(a_id).unwrap();
         let target_tok = tokens.intern("target");
         let rel = prop(&spec.properties, &target_tok);
         assert!(rel.is_relationship());
@@ -2632,7 +2636,7 @@ def \"A\" (
         // The `over "Rig"` inside the variant should produce a PrimSpec at /A/Rig.
         let rig_path = Path::parse_absolute("/A/Rig", &tokens).unwrap();
         let rig_id = paths.lookup(&rig_path).expect("/A/Rig interned");
-        let spec = result.layer.prims.get(&rig_id).expect("prim /A/Rig");
+        let spec = result.layer.prim(rig_id).expect("prim /A/Rig");
         let connect_key = tokens.intern("focalLength");
         let attr = prop(&spec.properties, &connect_key);
         assert!(
@@ -2647,7 +2651,7 @@ def \"A\" (
         let (result, tokens, paths) = emit_source(src);
         let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = paths.lookup(&a_path).unwrap();
-        let spec = result.layer.prims.get(&a_id).unwrap();
+        let spec = result.layer.prim(a_id).unwrap();
         let x_tok = tokens.intern("x");
         assert_eq!(
             attr_default(&spec.properties, &x_tok),
@@ -2691,7 +2695,7 @@ def Scope "D" (
         let (result, mut tokens, paths) = emit_source(src);
         let d_path = Path::parse_absolute("/D", &tokens).unwrap();
         let d_id = paths.lookup(&d_path).unwrap();
-        let d_spec = result.layer.prims.get(&d_id).unwrap();
+        let d_spec = result.layer.prim(d_id).unwrap();
 
         let standin_tok = tokens.intern("standin");
         let shading_tok = tokens.intern("shadingVariant");
@@ -2819,7 +2823,7 @@ def Scope "D" (
         let (result, mut tokens, paths) = emit_source(src);
         let d_path = Path::parse_absolute("/D", &tokens).unwrap();
         let d_id = paths.lookup(&d_path).unwrap();
-        let d_spec = result.layer.prims.get(&d_id).unwrap();
+        let d_spec = result.layer.prim(d_id).unwrap();
 
         let [standin, shading, anim, render, default, spooky] = [
             "standin",
@@ -2909,7 +2913,7 @@ def Scope "D" (
         let (result, tokens, paths) = emit_source(src);
         let root_path = Path::parse_absolute("/root", &tokens).unwrap();
         let root_id = paths.lookup(&root_path).expect("root path interned");
-        let spec = result.layer.prims.get(&root_id).expect("root prim");
+        let spec = result.layer.prim(root_id).expect("root prim");
         let xform_tok = tokens.intern("Xform");
         assert_eq!(spec.type_name, Some(xform_tok));
     }
@@ -2920,7 +2924,7 @@ def Scope "D" (
         let (result, tokens, paths) = emit_source(src);
         let root_path = Path::parse_absolute("/root", &tokens).unwrap();
         let root_id = paths.lookup(&root_path).expect("root path interned");
-        let spec = result.layer.prims.get(&root_id).expect("root prim");
+        let spec = result.layer.prim(root_id).expect("root prim");
         assert_eq!(spec.type_name, None);
     }
 
@@ -2930,7 +2934,7 @@ def Scope "D" (
         let (result, tokens, paths) = emit_source(src);
         let root_path = Path::parse_absolute("/geo", &tokens).unwrap();
         let root_id = paths.lookup(&root_path).expect("geo path interned");
-        let spec = result.layer.prims.get(&root_id).expect("geo prim");
+        let spec = result.layer.prim(root_id).expect("geo prim");
         let mesh_tok = tokens.intern("Mesh");
         assert_eq!(spec.type_name, Some(mesh_tok));
     }
@@ -2942,7 +2946,7 @@ def Scope "D" (
         let (result, tokens, paths) = emit_source(src);
         let root_path = Path::parse_absolute("/root", &tokens).unwrap();
         let root_id = paths.lookup(&root_path).expect("root path interned");
-        let spec = result.layer.prims.get(&root_id).expect("root prim");
+        let spec = result.layer.prim(root_id).expect("root prim");
         assert_eq!(spec.instanceable, Some(true));
     }
 
@@ -2953,7 +2957,7 @@ def Scope "D" (
         let (result, tokens, paths) = emit_source(src);
         let root_path = Path::parse_absolute("/root", &tokens).unwrap();
         let root_id = paths.lookup(&root_path).expect("root path interned");
-        let spec = result.layer.prims.get(&root_id).expect("root prim");
+        let spec = result.layer.prim(root_id).expect("root prim");
         assert_eq!(spec.instanceable, Some(true));
     }
 
@@ -2963,7 +2967,7 @@ def Scope "D" (
         let (result, tokens, paths) = emit_source(src);
         let root_path = Path::parse_absolute("/root", &tokens).unwrap();
         let root_id = paths.lookup(&root_path).expect("root path interned");
-        let spec = result.layer.prims.get(&root_id).expect("root prim");
+        let spec = result.layer.prim(root_id).expect("root prim");
         assert_eq!(spec.active, Some(false));
     }
 
@@ -2973,7 +2977,7 @@ def Scope "D" (
         let (result, tokens, paths) = emit_source(src);
         let root_path = Path::parse_absolute("/root", &tokens).unwrap();
         let root_id = paths.lookup(&root_path).expect("root path interned");
-        let spec = result.layer.prims.get(&root_id).expect("root prim");
+        let spec = result.layer.prim(root_id).expect("root prim");
         assert_eq!(spec.active, Some(true));
     }
 
@@ -2983,7 +2987,7 @@ def Scope "D" (
         let (result, tokens, paths) = emit_source(src);
         let root_path = Path::parse_absolute("/root", &tokens).unwrap();
         let root_id = paths.lookup(&root_path).expect("root path interned");
-        let spec = result.layer.prims.get(&root_id).expect("root prim");
+        let spec = result.layer.prim(root_id).expect("root prim");
         assert_eq!(spec.active, Some(false));
     }
 
@@ -2996,7 +3000,7 @@ def Scope "D" (
         let (result, tokens, paths) = emit_source(src);
         let card_path = Path::parse_absolute("/card", &tokens).unwrap();
         let card_id = paths.lookup(&card_path).expect("card path interned");
-        let spec = result.layer.prims.get(&card_id).expect("card prim");
+        let spec = result.layer.prim(card_id).expect("card prim");
 
         let api_tok = tokens.intern("apiSchemas");
         let field = get_field(&spec.fields, &api_tok).expect("apiSchemas field");
@@ -3018,7 +3022,7 @@ def Scope "D" (
         let src = "#usda 1.0\n(\n    defaultPrim = \"Root\"\n)\n\ndef Xform \"Root\"\n{\n}\n";
         let (result, tokens, _paths) = emit_source(src);
         assert_eq!(
-            result.layer.default_prim,
+            result.layer.default_prim(),
             Some(tokens.intern("Root")),
             "defaultPrim is read from layer metadata"
         );
@@ -3039,7 +3043,7 @@ def \"A\" (
         let (result, tokens, _paths) = emit_source(src);
         let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = _paths.lookup(&a_path).expect("/A");
-        let spec = result.layer.prims.get(&a_id).unwrap();
+        let spec = result.layer.prim(a_id).unwrap();
         let cd_tok = tokens.intern("customData");
         let field = get_field(&spec.fields, &cd_tok).expect("customData field");
         match field {
@@ -3070,7 +3074,7 @@ def \"A\" (
         let (result, tokens, _paths) = emit_source(src);
         let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = _paths.lookup(&a_path).expect("/A");
-        let spec = result.layer.prims.get(&a_id).unwrap();
+        let spec = result.layer.prim(a_id).unwrap();
         let cd_tok = tokens.intern("customData");
         let field = get_field(&spec.fields, &cd_tok).expect("customData field");
         match field {
@@ -3103,7 +3107,7 @@ def \"A\" {
         let (result, tokens, _paths) = emit_source(src);
         let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = _paths.lookup(&a_path).expect("/A");
-        let spec = result.layer.prims.get(&a_id).unwrap();
+        let spec = result.layer.prim(a_id).unwrap();
         let d_tok = tokens.intern("d");
         let field = &FieldValue::Value(
             attr_default(&spec.properties, &d_tok)
@@ -3126,7 +3130,7 @@ def \"A\" {
         let (result, tokens, _paths) = emit_source(src);
         let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = _paths.lookup(&a_path).expect("/A");
-        let spec = result.layer.prims.get(&a_id).unwrap();
+        let spec = result.layer.prim(a_id).unwrap();
         let pos_tok = tokens.intern("pos");
         let field = &FieldValue::Value(
             attr_default(&spec.properties, &pos_tok)
@@ -3147,7 +3151,7 @@ def \"A\" {
         let (result, tokens, _paths) = emit_source(src);
         let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = _paths.lookup(&a_path).expect("/A");
-        let spec = result.layer.prims.get(&a_id).unwrap();
+        let spec = result.layer.prim(a_id).unwrap();
         let ids_tok = tokens.intern("ids");
         let field = &FieldValue::Value(
             attr_default(&spec.properties, &ids_tok)
@@ -3169,7 +3173,7 @@ def \"A\" {
         let (result, tokens, _paths) = emit_source(src);
         let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = _paths.lookup(&a_path).expect("/A");
-        let spec = result.layer.prims.get(&a_id).unwrap();
+        let spec = result.layer.prim(a_id).unwrap();
         let pts_tok = tokens.intern("points");
         let field = &FieldValue::Value(
             attr_default(&spec.properties, &pts_tok)
@@ -3190,7 +3194,7 @@ def \"A\" {
         let (result, tokens, _paths) = emit_source(src);
         let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = _paths.lookup(&a_path).expect("/A");
-        let spec = result.layer.prims.get(&a_id).unwrap();
+        let spec = result.layer.prim(a_id).unwrap();
         let empty_tok = tokens.intern("empty");
         let field = &FieldValue::Value(
             attr_default(&spec.properties, &empty_tok)
@@ -3211,7 +3215,7 @@ def \"A\" {
         let (result, tokens, _paths) = emit_source(src);
         let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = _paths.lookup(&a_path).expect("/A");
-        let spec = result.layer.prims.get(&a_id).unwrap();
+        let spec = result.layer.prim(a_id).unwrap();
         let pos_tok = tokens.intern("pos");
         let field = &FieldValue::Value(
             attr_default(&spec.properties, &pos_tok)
@@ -3227,7 +3231,7 @@ def \"A\" {
         let (result, tokens, _paths) = emit_source(src);
         let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = _paths.lookup(&a_path).expect("/A");
-        let spec = result.layer.prims.get(&a_id).unwrap();
+        let spec = result.layer.prim(a_id).unwrap();
         let v_tok = tokens.intern("v");
         let field = &FieldValue::Value(
             attr_default(&spec.properties, &v_tok)
@@ -3243,7 +3247,7 @@ def \"A\" {
         let (result, tokens, _paths) = emit_source(src);
         let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = _paths.lookup(&a_path).expect("/A");
-        let spec = result.layer.prims.get(&a_id).unwrap();
+        let spec = result.layer.prim(a_id).unwrap();
         let xf_tok = tokens.intern("xform");
         let field = &FieldValue::Value(
             attr_default(&spec.properties, &xf_tok)
@@ -3267,7 +3271,7 @@ def \"A\" {
         let (result, tokens, _paths) = emit_source(src);
         let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = _paths.lookup(&a_path).expect("/A");
-        let spec = result.layer.prims.get(&a_id).unwrap();
+        let spec = result.layer.prim(a_id).unwrap();
         let c_tok = tokens.intern("primvars:displayColor");
         let field = &FieldValue::Value(
             attr_default(&spec.properties, &c_tok)
@@ -3285,7 +3289,7 @@ def \"A\" {
         let (result, tokens, _paths) = emit_source(src);
         let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = _paths.lookup(&a_path).expect("/A");
-        let spec = result.layer.prims.get(&a_id).unwrap();
+        let spec = result.layer.prim(a_id).unwrap();
         let rot_tok = tokens.intern("rot");
         let field = &FieldValue::Value(
             attr_default(&spec.properties, &rot_tok)
@@ -3306,7 +3310,7 @@ def \"A\" {
         let (result, tokens, paths) = emit_source(src);
         let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = paths.lookup(&a_path).expect("/A");
-        let spec = result.layer.prims.get(&a_id).unwrap();
+        let spec = result.layer.prim(a_id).unwrap();
         let x_tok = tokens.intern("x");
         let entry = prop(&spec.properties, &x_tok);
 
@@ -3381,7 +3385,7 @@ def \"A\" {
     ) -> &'r PrimSpec {
         let path = Path::parse_absolute(path, tokens).unwrap();
         let id = paths.lookup(&path).expect("path interned");
-        result.layer.prims.get(&id).expect("prim spec")
+        result.layer.prim(id).expect("prim spec")
     }
 
     /// The default and time samples of each attribute of `/P`, by name, and
@@ -3731,7 +3735,7 @@ def \"A\" {
 ";
         let (result, tokens, _paths) = emit_source(src);
         let layer = &result.layer;
-        assert_eq!(layer.default_prim, Some(tokens.intern("A")));
+        assert_eq!(layer.default_prim(), Some(tokens.intern("A")));
         let z = tokens.intern("Z");
         assert_eq!(
             layer.metadata(tokens.intern("upAxis")),
@@ -3921,7 +3925,7 @@ def "P" (
             .lookup(&Path::parse_absolute("/P", &tokens).unwrap())
             .unwrap();
         let (a, y) = (tokens.intern("a"), tokens.intern("y"));
-        let spec = result.layer.prims.get(&p).unwrap();
+        let spec = result.layer.prim(p).unwrap();
         let deferred = spec.variant_spec(&[(a, y)]).unwrap().references.prepend[0].clone();
         assert!(deferred.deferred && deferred.is_unresolved());
         assert_eq!(deferred.layer, LayerId(1));

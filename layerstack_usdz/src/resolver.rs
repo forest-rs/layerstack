@@ -663,8 +663,8 @@ mod tests {
 
     /// The layer IDs of `result`, the root's first, which must all differ.
     fn layer_ids(result: &UsdzResult) -> Vec<LayerId> {
-        let mut ids = vec![result.layer.id];
-        ids.extend(result.resolved_layers.iter().map(|layer| layer.id));
+        let mut ids = vec![result.layer.id()];
+        ids.extend(result.resolved_layers.iter().map(|layer| layer.id()));
         let mut unique = ids.clone();
         unique.sort_unstable();
         unique.dedup();
@@ -735,13 +735,16 @@ mod tests {
     /// The package path of every layer returned, the root's first and the
     /// rest sorted, after checking that each is returned once.
     fn returned(result: &UsdzResult) -> Vec<&str> {
-        let mut ids: Vec<LayerId> = result.resolved_layers.iter().map(|l| l.id).collect();
+        let mut ids: Vec<LayerId> = result.resolved_layers.iter().map(|l| l.id()).collect();
         ids.sort_unstable();
         let count = ids.len();
         ids.dedup();
         assert_eq!(ids.len(), count, "a layer returned twice");
-        assert!(!ids.contains(&result.layer.id), "root layer returned again");
-        let mut paths = vec![&*result.member_paths[&result.layer.id]];
+        assert!(
+            !ids.contains(&result.layer.id()),
+            "root layer returned again"
+        );
+        let mut paths = vec![&*result.member_paths[&result.layer.id()]];
         let mut others: Vec<&str> = ids.iter().map(|id| &*result.member_paths[id]).collect();
         others.sort_unstable();
         paths.extend(others);

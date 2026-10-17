@@ -34,8 +34,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .tokens
                 .intern(path.rsplit('/').next().expect("prim name"));
             layer
-                .prims
-                .get_mut(&parent)
+                .prim_mut(parent)
                 .expect("parent spec")
                 .authored_children
                 .push(child);

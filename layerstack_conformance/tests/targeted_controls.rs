@@ -30,7 +30,7 @@ fn fixture(mask: bool) -> (InMemoryStore, LiveStage) {
     }
     store.insert_layer(root);
     let mut asset = Layer::new(LayerId(2));
-    asset.sublayers.push(SublayerEntry::new(LayerId(4)));
+    asset.sublayers_mut().push(SublayerEntry::new(LayerId(4)));
     asset.insert_prim(source, PrimSpec::def());
     let mut spec = PrimSpec::def();
     spec.payloads.explicit = Some(vec![Reference::with_asset(LayerId(3), deep, "deep.usda")]);
@@ -174,7 +174,7 @@ fn global_composition_errors_force_complete_diagnostic_replacement() {
         .layers
         .get_mut(&LayerId(2))
         .unwrap()
-        .sublayers
+        .sublayers_mut()
         .push(SublayerEntry::new(LayerId(2)));
     let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
     assert!(!live.stage().composition_errors().is_empty());

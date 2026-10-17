@@ -168,8 +168,7 @@ fn snapshot_subset_query_does_not_decode_unselected_topology_samples() {
         .layers
         .get_mut(&LayerId(1))
         .unwrap()
-        .prims
-        .get_mut(&path)
+        .prim_mut(path)
         .unwrap()
         .property_mut(counts)
         .unwrap();
@@ -249,8 +248,7 @@ fn material_subsets_preserve_decode_failure_paths() {
                 .layers
                 .get_mut(&LayerId(1))
                 .unwrap()
-                .prims
-                .get_mut(&path)
+                .prim_mut(path)
                 .unwrap()
                 .property_mut(token)
                 .unwrap();

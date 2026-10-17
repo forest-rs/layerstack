@@ -24,7 +24,7 @@ fn fixture(width: usize) -> (InMemoryStore, LiveStage, LiveStage) {
     store.insert_layer(Layer::new(LayerId(2)));
     for id in [LayerId(3), LayerId(4)] {
         let mut session = Layer::new(id);
-        session.sublayers.push(SublayerEntry::new(LayerId(2)));
+        session.sublayers_mut().push(SublayerEntry::new(LayerId(2)));
         store.insert_layer(session);
     }
     let mut open = |id| {
@@ -132,8 +132,7 @@ fn history_expiry_unknown_writes_and_reload_require_honest_full_rebuilds() {
     assert!(b.recomposition_work().full_rebuild);
     assert_fresh(&mut store, &b);
     let layer = store.layers.get_mut(&LayerId(2)).unwrap();
-    layer.prims.clear();
-    layer.touch();
+    layer.prims_mut().clear();
     a.synchronize(&mut store);
     assert!(a.recomposition_work().full_rebuild);
     assert_fresh(&mut store, &a);
@@ -403,7 +402,7 @@ fn newly_composed_stacks_receive_relocation_notifications() {
     );
     live.synchronize(&mut store);
     assert!(!live.recomposition_work().full_rebuild);
-    store.layers.get_mut(&LayerId(2)).unwrap().relocates = vec![layerstack::Relocate {
+    *store.layers.get_mut(&LayerId(2)).unwrap().relocates_mut() = vec![layerstack::Relocate {
         source: child,
         target: Some(renamed),
     }];

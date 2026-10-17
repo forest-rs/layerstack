@@ -658,15 +658,13 @@ fn package_preparation_includes_unsaved_layers_and_reports_missing_resources_wit
     let answer = doc.store.tokens.intern("answer");
     let layer = doc.store.layers.get_mut(&child).unwrap();
     let property = layer
-        .prims
-        .get_mut(&source)
+        .prim_mut(source)
         .unwrap()
         .properties
         .iter_mut()
         .find(|p| p.name == answer)
         .unwrap();
     Arc::make_mut(&mut property.spec).default = Some(Value::Int(99));
-    layer.touch();
     let generation = layer.generation();
     let package = doc
         .prepare_package(
@@ -1726,8 +1724,8 @@ fn package_reload_reads_unreferenced_resident_members_and_allows_root_rename() {
     );
     let new = doc.store.path("/New");
     let old = doc.store.path("/Old");
-    assert!(doc.store.layers[&member].prims.contains_key(&new));
-    assert!(!doc.store.layers[&member].prims.contains_key(&old));
+    assert!(doc.store.layers[&member].prims().contains_key(&new));
+    assert!(!doc.store.layers[&member].prims().contains_key(&old));
     doc.storage_mut().files.insert(
         "scene.usdz".into(),
         package(
@@ -1832,8 +1830,8 @@ fn promoted_members_retain_distinct_identity_from_the_outer_package() {
     let new = doc.store.path("/NewMember");
     let old = doc.store.path("/OldMember");
     for id in [member_id, root_id] {
-        assert!(doc.store.layers[&id].prims.contains_key(&new));
-        assert!(!doc.store.layers[&id].prims.contains_key(&old));
+        assert!(doc.store.layers[&id].prims().contains_key(&new));
+        assert!(!doc.store.layers[&id].prims().contains_key(&old));
     }
 }
 #[test]
@@ -1897,7 +1895,7 @@ fn nested_promoted_members_refresh_with_member_relative_anchors() {
         .unwrap();
     assert!(report.layers.contains(&member));
     let new = doc.store.path("/NewMember");
-    assert!(doc.store.layers[&member].prims.contains_key(&new));
+    assert!(doc.store.layers[&member].prims().contains_key(&new));
 }
 #[test]
 fn promoted_self_references_follow_the_explicit_member_identity() {

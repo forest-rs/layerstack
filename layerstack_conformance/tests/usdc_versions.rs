@@ -302,11 +302,11 @@ fn sublayers_match_openusd() {
     // sublayer entry.
     let loaded = load_entry_usdc(&fixtures_dir().join("sublayers_root.usdc"));
     let root = &loaded.store.layers[&loaded.root_layer];
-    assert_eq!(root.sublayers.len(), 1);
-    assert_eq!(root.sublayers[0].offset.offset, 10.0);
-    assert_eq!(root.sublayers[0].offset.scale, 2.0);
+    assert_eq!(root.sublayers().len(), 1);
+    assert_eq!(root.sublayers()[0].offset.offset, 10.0);
+    assert_eq!(root.sublayers()[0].offset.scale, 2.0);
     assert_eq!(
-        root.sublayers[0].asset.as_deref(),
+        root.sublayers()[0].asset.as_deref(),
         Some("./sublayers_weak.usdc"),
         "the authored asset path"
     );
@@ -390,7 +390,7 @@ fn authored(name: &str, prim: &str, attribute: &str) -> PropertySpec {
     )
     .unwrap_or_else(|e| panic!("failed to read {name}: {e}"));
     let path = Path::parse_absolute(prim, &tokens).expect("prim path");
-    let spec = &result.layer.prims[&paths.lookup(&path).expect("prim")];
+    let spec = &result.layer.prims()[&paths.lookup(&path).expect("prim")];
     spec.property(tokens.intern(attribute))
         .unwrap_or_else(|| panic!("no {prim}.{attribute}"))
         .clone()

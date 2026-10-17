@@ -457,9 +457,14 @@ fn prim_field_edits_agree_with_openusd_call_by_call() {
         );
         for (id, layer) in &original {
             let now = &loaded.store.layers[id];
-            assert_eq!(now.prims, layer.prims, "{name}: undo restores layer {id:?}");
             assert_eq!(
-                now.variant_prims, layer.variant_prims,
+                now.prims(),
+                layer.prims(),
+                "{name}: undo restores layer {id:?}"
+            );
+            assert_eq!(
+                now.variant_prims(),
+                layer.variant_prims(),
                 "{name}: undo restores layer {id:?}"
             );
         }

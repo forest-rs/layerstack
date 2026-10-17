@@ -69,7 +69,7 @@ fn build(layers: u64, points_len: usize, instructions: usize) -> Scene {
     let float_array_type = PropertyType::new("float", true, Value::Float(0.0));
 
     let mut root = Layer::new(LayerId(1));
-    root.sublayers = (2..=layers)
+    *root.sublayers_mut() = (2..=layers)
         .map(|id| SublayerEntry::new(LayerId(id)))
         .collect();
     root.insert_prim(prim, PrimSpec::def());

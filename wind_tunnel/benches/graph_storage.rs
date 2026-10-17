@@ -127,7 +127,7 @@ fn layer_dependencies(c: &mut Criterion) {
                         layer.insert_prim(*path, spec);
                     }
                     if id == 1 {
-                        layer.sublayers = (2..=layers)
+                        *layer.sublayers_mut() = (2..=layers)
                             .map(|id| layerstack::SublayerEntry::new(LayerId(id)))
                             .collect();
                     }

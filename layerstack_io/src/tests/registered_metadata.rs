@@ -40,7 +40,7 @@ fn scale(layer: &Layer, store: &InMemoryStore, path: &str) -> FieldValue {
     let path = layerstack::Path::root().join(&segments);
     let path = store.paths.lookup(&path).unwrap();
     layerstack::doc::get_field(
-        &layer.prims[&path].fields,
+        &layer.prims()[&path].fields,
         &store.tokens.lookup("hostScale").unwrap(),
     )
     .unwrap()
@@ -115,7 +115,7 @@ fn stage_registry_types_initial_recursive_explicit_reload_and_package_reads() {
         .layers
         .iter()
         .find(|layer| {
-            layer.layer.prims.values().any(|prim| {
+            layer.layer.prims().values().any(|prim| {
                 prim.fields
                     .iter()
                     .any(|field| field.value == FieldValue::Value(Value::Float(3.)))
@@ -125,7 +125,7 @@ fn stage_registry_types_initial_recursive_explicit_reload_and_package_reads() {
     assert!(
         metadata
             .layer
-            .prims
+            .prims()
             .values()
             .flat_map(|prim| &prim.fields)
             .any(|field| field.value == FieldValue::Value(Value::Float(3.)))

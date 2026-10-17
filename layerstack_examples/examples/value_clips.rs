@@ -17,7 +17,7 @@ fn main() {
     let height = store.tokens.intern("height");
     let mut clip = Layer::new(LayerId(10));
     for (name, value) in [("startTimeCode", 0.), ("endTimeCode", 10.)] {
-        clip.metadata.push(layerstack::FieldEntry {
+        clip.metadata_fields_mut().push(layerstack::FieldEntry {
             name: store.tokens.intern(name),
             value: Value::Double(value).into(),
         });
@@ -78,7 +78,7 @@ fn main() {
             "motion.manifest.usda" => bundle.manifest.clone(),
             unknown => panic!("unknown requested asset: {unknown}"),
         };
-        store.insert_asset_layer(request.anchor, &request.identifier, layer.id);
+        store.insert_asset_layer(request.anchor, &request.identifier, layer.id());
         store.insert_layer(layer);
     }
     let stage = Stage::compose(&mut store, options.root_id, StageOptions::default());
@@ -113,8 +113,8 @@ fn main() {
     let source = stage
         .property_clip_source(model, height, 5., InterpolationType::Linear)
         .expect("clip sample provenance");
-    assert_eq!(source.lower.layer, Some(clip.id), "lower raw clip source");
-    assert_eq!(source.upper.layer, Some(clip.id), "upper raw clip source");
+    assert_eq!(source.lower.layer, Some(clip.id()), "lower raw clip source");
+    assert_eq!(source.upper.layer, Some(clip.id()), "upper raw clip source");
     println!(
         "height at 5: {:?}; clip samples: {}..{}",
         at_five.value, source.lower.stage_time, source.upper.stage_time

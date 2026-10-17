@@ -827,8 +827,9 @@ impl LiveStage {
     ///
     /// Each stage keeps its own generation cursor; polling one client does
     /// not consume another client's authored evidence. A host that separately
-    /// notified an edit can still see its layer reported here. Writes into
-    /// public importer fields must call `Layer::touch` to become observable.
+    /// notified an edit can still see its layer reported here. Every
+    /// mutating [`Layer`](crate::Layer) method records its edit, so no
+    /// write goes unseen.
     ///
     /// OpenUSD: `UsdStage` handles `SdfNotice::LayersDidChange`, resyncing
     /// the prims of significant changes and updating the info of the rest.
@@ -1166,8 +1167,8 @@ impl LiveStage {
     /// Detects source edits and recomposes before exposing a current scene.
     ///
     /// Scans participating layer generations once per call. Layer methods and
-    /// transactions need no observer-specific authoring session. Direct writes
-    /// to importer fields must call [`crate::Layer::touch`]. Unknown source
+    /// transactions need no observer-specific authoring session. Every
+    /// mutating [`crate::Layer`] method records its edit. Unknown source
     /// changes produce conservative resyncs. Like OpenUSD's layer notices,
     /// evidence belongs to the stage, independently of its consumers; unlike
     /// OpenUSD's synchronous dispatch, synchronization here is explicit.
@@ -1843,8 +1844,8 @@ mod tests {
         assert!(live.stage().has_prim(b) && !live.stage().has_prim(c));
     }
 
-    /// Relocates cleared through the public fields and `touch` are found by
-    /// polling, which rebuilds the namespace they moved.
+    /// Relocates cleared through the crate-internal fields and `touch` are
+    /// found by polling, which rebuilds the namespace they moved.
     #[test]
     fn polled_relocates_edit_rebuilds_namespace() {
         let mut store = InMemoryStore::default();
@@ -1861,7 +1862,7 @@ mod tests {
 
     /// Edits through `Layer` methods move generations, which
     /// `notify_changed_layers` turns into layer notifications; writes into
-    /// the public fields are not seen.
+    /// the crate-internal fields are not seen.
     #[test]
     fn changed_layers_are_found_by_generation() {
         let mut store = InMemoryStore::default();
@@ -1965,8 +1966,8 @@ mod tests {
         assert!(live.stage().has_prim(world_pebble));
     }
 
-    /// A prim spec removed, through the public fields and `touch`, removes
-    /// its composed prim.
+    /// A prim spec removed, through the crate-internal fields and `touch`,
+    /// removes its composed prim.
     #[test]
     fn polled_spec_removal_rebuilds_namespace() {
         let (mut store, mut live, size) = rock_scene();

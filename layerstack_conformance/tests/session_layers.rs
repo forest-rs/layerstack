@@ -42,7 +42,7 @@ fn fixture() -> InMemoryStore {
     store.insert_layer(shared);
     for id in [LayerId(3), LayerId(4)] {
         let mut session = Layer::new(id);
-        session.sublayers.push(SublayerEntry::new(LayerId(2)));
+        session.sublayers_mut().push(SublayerEntry::new(LayerId(2)));
         store.insert_layer(session);
     }
     store
@@ -215,8 +215,16 @@ fn session_time_domains_include_authoring_offsets_and_root_default_prim() {
             .set_property(layerstack::PropertyPath::new(asset, x), prop);
         let root_default = store.tokens.intern("Asset");
         let session_default = store.tokens.intern("Internal");
-        store.layers.get_mut(&LayerId(1)).unwrap().default_prim = Some(root_default);
-        store.layers.get_mut(&LayerId(3)).unwrap().default_prim = Some(session_default);
+        store
+            .layers
+            .get_mut(&LayerId(1))
+            .unwrap()
+            .set_default_prim(Some(root_default));
+        store
+            .layers
+            .get_mut(&LayerId(3))
+            .unwrap()
+            .set_default_prim(Some(session_default));
         let stage = Stage::compose(
             &mut store,
             LayerId(1),
@@ -251,7 +259,7 @@ fn session_expression_variables_override_root_and_flow_into_external_stacks() {
         variables,
         Value::Dictionary(vec![("ASSET".into(), Value::String("red.usda".into()))]),
     );
-    root.sublayers.push(SublayerEntry::unresolved(
+    root.sublayers_mut().push(SublayerEntry::unresolved(
         "`${ASSET}`",
         layerstack::LayerOffset::IDENTITY,
     ));
@@ -339,7 +347,11 @@ fn flatten_preserves_session_metadata_and_effective_time_domain() {
             Value::Dictionary(vec![("private".into(), Value::Int(2))]),
         );
     let session_default = store.tokens.intern("Internal");
-    store.layers.get_mut(&LayerId(3)).unwrap().default_prim = Some(session_default);
+    store
+        .layers
+        .get_mut(&LayerId(3))
+        .unwrap()
+        .set_default_prim(Some(session_default));
     let stage = Stage::compose(
         &mut store,
         LayerId(1),
@@ -356,7 +368,7 @@ fn flatten_preserves_session_metadata_and_effective_time_domain() {
             &layerstack::stage::flatten::FlattenRequirements::default(),
         )
         .unwrap();
-    assert_eq!(flat.layer.default_prim, Some(session_default));
+    assert_eq!(flat.layer.default_prim(), Some(session_default));
     store.insert_layer(flat.layer);
     let reopened = Stage::compose(&mut store, LayerId(20), StageOptions::default());
     assert_eq!(reopened.time_codes_per_second(&store), 96.0);

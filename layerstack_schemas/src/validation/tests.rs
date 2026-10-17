@@ -30,9 +30,9 @@ fn core_type_conflicts_include_weaker_source_and_requests_are_deterministic() {
     let p = store.path("/Model");
     let a = store.tokens.intern("weight");
     let mut strong = Layer::new(LayerId(1));
-    strong.default_prim = Some(store.tokens.intern("Model"));
+    strong.set_default_prim(Some(store.tokens.intern("Model")));
     strong
-        .sublayers
+        .sublayers_mut()
         .push(layerstack::SublayerEntry::new(LayerId(2)));
     let mut spec = PrimSpec::def();
     spec.set_property(a, attr("float", Value::Float(1.)));
@@ -111,7 +111,7 @@ fn stage_errors_and_default_prim_are_scoped_and_preserve_original_details() {
     let absent = store.path("/Absent");
     let mut layer = Layer::new(LayerId(1));
     layer
-        .sublayers
+        .sublayers_mut()
         .push(layerstack::SublayerEntry::new(LayerId(1)));
     layer.insert_prim(p, PrimSpec::def());
     store.insert_layer(layer);
@@ -457,7 +457,7 @@ fn complete_valid_mesh_scene_passes_all_selected_builtins() {
     let mut store = setup();
     let p = store.path("/Mesh");
     let mut layer = Layer::new(LayerId(1));
-    layer.default_prim = Some(store.tokens.intern("Mesh"));
+    layer.set_default_prim(Some(store.tokens.intern("Mesh")));
     layer.set_metadata(store.tokens.intern("metersPerUnit"), Value::Double(1.));
     layer.set_metadata(
         store.tokens.intern("upAxis"),
@@ -643,7 +643,7 @@ mod third_party {
         let bad = store.path("/Root/BadChild");
         let outside = store.path("/BadOutside");
         let mut layer = Layer::new(LayerId(1));
-        layer.default_prim = Some(store.tokens.intern("Root"));
+        layer.set_default_prim(Some(store.tokens.intern("Root")));
         for path in [root, bad, outside] {
             layer.insert_prim(path, PrimSpec::def());
         }

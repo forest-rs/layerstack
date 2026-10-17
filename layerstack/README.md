@@ -109,7 +109,7 @@ base.insert_prim(prim, PrimSpec::def().with_field(title, Value::string("Untitled
 store.insert_layer(base);
 
 let mut local = Layer::new(LayerId(2));
-local.sublayers.push(SublayerEntry::new(LayerId(1)));
+local.sublayers_mut().push(SublayerEntry::new(LayerId(1)));
 local.insert_prim(prim, PrimSpec::over().with_field(title, Value::string("Hello")));
 store.insert_layer(local);
 

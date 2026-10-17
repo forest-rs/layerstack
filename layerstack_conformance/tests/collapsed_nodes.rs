@@ -320,7 +320,7 @@ fn edits_to_a_shared_site_recompose_every_occurrence() {
             .store
             .layers
             .get_mut(&source)
-            .and_then(|layer| layer.prims.get_mut(&prim))
+            .and_then(|layer| layer.prim_mut(prim))
             .expect("prim spec");
         get_property_mut(&mut spec.properties, name)
             .expect("property")
@@ -355,7 +355,7 @@ fn edits_to_a_shared_site_recompose_every_occurrence() {
         .store
         .layers
         .get_mut(&right)
-        .and_then(|layer| layer.prims.get_mut(&right_prim))
+        .and_then(|layer| layer.prim_mut(right_prim))
         .expect("prim spec")
         .references = ListOp::default();
     live.notify_layer_prim_edits(right, &[right_prim]);

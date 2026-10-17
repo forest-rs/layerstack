@@ -121,7 +121,7 @@ fn bench_open(c: &mut Criterion) {
                             let path = paths
                                 .lookup(&layerstack::Path::root().join(&[name]))
                                 .unwrap();
-                            let layerstack::Value::TypedArray(array) = read.assembled.layer.prims
+                            let layerstack::Value::TypedArray(array) = read.assembled.layer.prims()
                                 [&path]
                                 .property(weights)
                                 .unwrap()
@@ -248,7 +248,7 @@ fn bench_integer_import(c: &mut Criterion) {
             let field = tokens.intern("indices");
             let value = read
                 .layer
-                .prims
+                .prims()
                 .values()
                 .next()
                 .unwrap()

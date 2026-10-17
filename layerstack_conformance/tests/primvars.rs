@@ -377,10 +377,10 @@ fn primvar_groups_discard_failures_and_nonindexed_authoring_masks_weaker_indices
     let (mut store, _) = query_scene();
     let path = store.path("/Root/Group/Mesh");
     let mut weak = store.layers.remove(&LayerId(1)).unwrap();
-    weak.id = LayerId(2);
+    weak.map_layer_ids(|id| if id == LayerId(1) { LayerId(2) } else { id });
     store.insert_layer(weak);
     let mut root = Layer::new(LayerId(1));
-    root.sublayers.push(SublayerEntry::new(LayerId(2)));
+    root.sublayers_mut().push(SublayerEntry::new(LayerId(2)));
     store.insert_layer(root);
     let schemas = std::sync::Arc::new(layerstack_schemas::openusd(&mut store.tokens));
     let mut live = LiveStage::compose(
@@ -501,7 +501,7 @@ fn primvar_block_erases_local_animation_and_authors_future_indices_barrier() {
     assert!(!pv.has_authored_value() && !pv.is_indexed());
     let sidecar = store.tokens.lookup("primvars:noIndices:indices").unwrap();
     assert_eq!(
-        store.layers[&LayerId(1)].prims[&path]
+        store.layers[&LayerId(1)].prims()[&path]
             .property(sidecar)
             .unwrap()
             .default,
@@ -551,10 +551,10 @@ fn weaker_primvar_value_and_block_edits_can_precede_metadata() {
         let (mut store, _) = support::scene("#usda 1.0\ndef Mesh \"P\" {\nfloat primvars:x = 1\n}");
         let path = store.path("/P");
         let mut weak = store.layers.remove(&LayerId(1)).unwrap();
-        weak.id = LayerId(2);
+        weak.map_layer_ids(|id| if id == LayerId(1) { LayerId(2) } else { id });
         store.insert_layer(weak);
         let mut root = Layer::new(LayerId(1));
-        root.sublayers.push(SublayerEntry::new(LayerId(2)));
+        root.sublayers_mut().push(SublayerEntry::new(LayerId(2)));
         store.insert_layer(root);
         let schemas = std::sync::Arc::new(layerstack_schemas::openusd(&mut store.tokens));
         let mut live = LiveStage::compose(
@@ -688,11 +688,11 @@ fn removed_primvar_declarations_reveal_weaker_sources_and_group_rollback() {
     let path = store.path("/P");
     let name = store.tokens.lookup("primvars:x").unwrap();
     let mut weak = store.layers.remove(&LayerId(1)).unwrap();
-    weak.id = LayerId(2);
+    weak.map_layer_ids(|id| if id == LayerId(1) { LayerId(2) } else { id });
     store.insert_layer(weak);
     let mut root = Layer::new(LayerId(1));
-    root.sublayers.push(SublayerEntry::new(LayerId(2)));
-    root.prims.insert(
+    root.sublayers_mut().push(SublayerEntry::new(LayerId(2)));
+    root.prims_mut().insert(
         path,
         PrimSpec::over().with_property(
             name,
@@ -793,10 +793,10 @@ fn removed_primvar_ui_labels_do_not_leak_into_recreated_properties() {
             let transaction = edit.finish();
             live.apply(&mut store, &transaction).unwrap();
             let mut weak = store.layers.remove(&LayerId(1)).unwrap();
-            weak.id = LayerId(2);
+            weak.map_layer_ids(|id| if id == LayerId(1) { LayerId(2) } else { id });
             store.insert_layer(weak);
             let mut root = Layer::new(LayerId(1));
-            root.sublayers.push(SublayerEntry::new(LayerId(2)));
+            root.sublayers_mut().push(SublayerEntry::new(LayerId(2)));
             store.insert_layer(root);
             let schemas = std::sync::Arc::new(layerstack_schemas::openusd(&mut store.tokens));
             live = LiveStage::compose(

@@ -36,7 +36,7 @@ fn snapshot(
             .map(|n| store.tokens.resolve(n))
             .collect();
         names.sort_unstable();
-        let order: Vec<_> = store.layers[&root_layer].prims[&prim]
+        let order: Vec<_> = store.layers[&root_layer].prims()[&prim]
             .property_order
             .as_deref()
             .unwrap_or_default()
@@ -80,7 +80,7 @@ fn snapshot(
     let Value::PathExpression(expression) = expression else {
         panic!("expression");
     };
-    json!({"prims":prims,"defaultPrim":store.tokens.resolve(store.layers[&root_layer].default_prim.unwrap()),"watchTargets":target_list("look"),"connections":target_list("inputs:value"),"expression":expression.as_ref(),"properties":properties,"relativeExpressions":relative})
+    json!({"prims":prims,"defaultPrim":store.tokens.resolve(store.layers[&root_layer].default_prim().unwrap()),"watchTargets":target_list("look"),"connections":target_list("inputs:value"),"expression":expression.as_ref(),"properties":properties,"relativeExpressions":relative})
 }
 
 #[test]

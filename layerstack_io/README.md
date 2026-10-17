@@ -39,8 +39,8 @@ are added. Recoverable format errors require explicit `ImportPolicy::AllowRecove
 USDA and USDC source layers can be saved in place. USDZ members are read-only;
 use `prepare_package` to inventory and localize a dependency closure, inspect its
 report, then `export_package` to write the candidate. Layer export writes
-a copy and preserves the original source binding and dirty state. Direct writes to
-public importer fields must call `Layer::touch` before synchronization or saving.
+a copy and preserves the original source binding and dirty state. Every mutating
+`Layer` method records its edit, so synchronization and saving see each one.
 
 Start with `cargo run -p layerstack_examples --example tutorial_stage_io` for a
 complete create/edit/undo/export/reload workflow, or `tutorial_references` for

@@ -28,7 +28,7 @@ fn main() {
     // hierarchy bookkeeping; direct layer edits synchronize explicitly.
     let layer = store.layers.get_mut(&root).unwrap();
     for path in [first, second] {
-        let spec = layer.prims[&path]
+        let spec = layer.prims()[&path]
             .clone()
             .with_reference(Reference::with_asset_default_prim(
                 asset,

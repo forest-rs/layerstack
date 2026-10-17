@@ -39,7 +39,7 @@ fn main() {
     // sublayer.
     let mut store = InMemoryStore::default();
     let mut shot = Layer::new(LayerId(1));
-    shot.sublayers = vec![SublayerEntry::new(LayerId(2))];
+    *shot.sublayers_mut() = vec![SublayerEntry::new(LayerId(2))];
     store.insert_layer(shot);
     store.insert_layer(Layer::new(LayerId(2)));
     let options = StageOptions {

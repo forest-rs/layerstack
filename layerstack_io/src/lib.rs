@@ -915,7 +915,7 @@ impl<B: Storage> StageDocument<B> {
                 continue;
             }
             if let Some(layer) = self.store.layer(id) {
-                for sublayer in &layer.sublayers {
+                for sublayer in layer.sublayers() {
                     queue.push(sublayer.layer);
                 }
             }
@@ -998,7 +998,7 @@ impl<'a, B: Storage> Reader<'a, B> {
                     .pending
                     .iter()
                     .enumerate()
-                    .map(|(at, layer)| (layer.id, at))
+                    .map(|(at, layer)| (layer.id(), at))
                     .collect(),
                 bindings: &self.bindings,
             };
@@ -1058,7 +1058,7 @@ impl<'a, B: Storage> Reader<'a, B> {
             .collect();
         let mut layers = BTreeSet::new();
         for layer in self.pending.drain(..) {
-            let id = layer.id;
+            let id = layer.id();
             if layers.insert(id) {
                 store.insert_layer(layer);
             }
@@ -1658,13 +1658,13 @@ fn authors_expressions(layer: &Layer) -> bool {
             .any(|op| op.items().any(layerstack::Reference::is_expression))
     };
     layer
-        .sublayers
+        .sublayers()
         .iter()
         .any(layerstack::SublayerEntry::is_expression)
         || layer
-            .prims
+            .prims()
             .values()
-            .chain(layer.variant_prims.values().flatten())
+            .chain(layer.variant_prims().values().flatten())
             .any(|spec| {
                 arcs([&spec.references, &spec.payloads])
                     || spec

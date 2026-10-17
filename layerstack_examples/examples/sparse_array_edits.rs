@@ -117,7 +117,7 @@ over "Mesh" {
     insert_inline_usda(&mut store, LayerId(3), time_sampled_sparse_override);
 
     let mut root = Layer::new(LayerId(4));
-    root.sublayers = vec![
+    *root.sublayers_mut() = vec![
         SublayerEntry::new(LayerId(3)),
         SublayerEntry::new(LayerId(2)),
         SublayerEntry {

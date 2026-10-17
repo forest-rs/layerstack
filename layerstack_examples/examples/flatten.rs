@@ -214,9 +214,9 @@ fn main() {
         .collect();
     assert_eq!(retimed, ["/Grove/Elm.sway"], "only the Elm is retimed");
     let flat = &flattened.layer;
-    assert!(flat.sublayers.is_empty(), "no sublayers remain");
+    assert!(flat.sublayers().is_empty(), "no sublayers remain");
     assert!(
-        flat.prims
+        flat.prims()
             .values()
             .all(|spec| spec.references == ListOp::default()),
         "no references remain"

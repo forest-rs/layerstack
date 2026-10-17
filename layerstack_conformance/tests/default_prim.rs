@@ -228,7 +228,7 @@ fn default_prim_paths_match_openusd() {
     let mut tokens = TokenInterner::default();
     let mut layer = Layer::new(LayerId(1));
     for (token, expected) in vectors().default_prim_paths {
-        layer.default_prim = Some(tokens.intern(&token));
+        layer.set_default_prim(Some(tokens.intern(&token)));
         let actual = layer
             .default_prim_path(&mut tokens)
             .map(|path| path.display(&tokens));

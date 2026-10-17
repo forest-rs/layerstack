@@ -120,11 +120,17 @@ fn render(
     ids.sort();
     for id in ids {
         let layer = &doc.store.layers[&id];
-        writeln!(out, "layer {id:?} {:?} {:?}", layer.id, doc.identifier(id)).unwrap();
-        for sublayer in &layer.sublayers {
+        writeln!(
+            out,
+            "layer {id:?} {:?} {:?}",
+            layer.id(),
+            doc.identifier(id)
+        )
+        .unwrap();
+        for sublayer in layer.sublayers() {
             writeln!(out, "  sublayer {:?} {:?}", sublayer.layer, sublayer.asset).unwrap();
         }
-        let mut prims: Vec<_> = layer.prims.iter().collect();
+        let mut prims: Vec<_> = layer.prims().iter().collect();
         prims.sort_by_key(|(path, _)| paths.display(**path, tokens));
         for (path, spec) in prims {
             let arcs = spec.references.items().chain(spec.payloads.items());

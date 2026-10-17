@@ -350,14 +350,14 @@ fn render_prim(out: &mut Vec<String>, path: PathId, spec: &PrimSpec, names: Name
 /// Dumps everything `layer` authors, one line per item, with names resolved.
 pub fn dump_layer(layer: &Layer, names: Names<'_>) -> Vec<String> {
     let mut out = vec![String::from("layer")];
-    if let Some(default_prim) = layer.default_prim {
+    if let Some(default_prim) = layer.default_prim() {
         out.push(format!("    defaultPrim = {}", names.token(default_prim)));
     }
-    render_fields(&mut out, "    meta ", &layer.metadata, names);
+    render_fields(&mut out, "    meta ", layer.metadata_fields(), names);
     // Every spec, including those of other variant branches at the same
     // path; each prim header names its branch context.
     let mut prims: Vec<(PathId, Vec<String>)> = layer
-        .prims
+        .prims()
         .keys()
         .map(|path| {
             let mut lines = Vec::new();

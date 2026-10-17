@@ -115,7 +115,7 @@ fn registered_literals_use_declared_types_without_authoring_defaults() {
     assert_eq!(
         field(
             &store,
-            &legacy.emitted.layer.prims[&path].fields,
+            &legacy.emitted.layer.prims()[&path].fields,
             "hostFloat"
         ),
         &FieldValue::Value(Value::Int64(1)),
@@ -158,9 +158,9 @@ fn registered_literals_use_declared_types_without_authoring_defaults() {
     assert!(ast.diagnostics.is_empty(), "{:?}", ast.diagnostics);
     assert_eq!(ast.layer, compact.emitted.layer);
     let layer = &ast.layer;
-    let prim = &layer.prims[&path];
+    let prim = &layer.prims()[&path];
     assert_eq!(
-        field(&store, &layer.metadata, "hostLayer"),
+        field(&store, layer.metadata_fields(), "hostLayer"),
         &FieldValue::Value(Value::Double(1.))
     );
     assert_eq!(
@@ -282,7 +282,7 @@ fn invalid_registered_literals_and_targets_reject_without_foreign_kind_fields() 
         assert!(!result.emitted.diagnostics.is_empty(), "{assignment}");
         let path = store.path("/P");
         assert!(
-            result.emitted.layer.prims[&path].fields.is_empty(),
+            result.emitted.layer.prims()[&path].fields.is_empty(),
             "{assignment}"
         );
         assert!(
@@ -313,7 +313,7 @@ fn registered_list_none_is_an_explicit_empty_op() {
     assert_eq!(
         field(
             &store,
-            &result.emitted.layer.prims[&path].fields,
+            &result.emitted.layer.prims()[&path].fields,
             "hostInts"
         ),
         &FieldValue::IntListOp(layerstack::ListOp::explicit(vec![]))
@@ -337,7 +337,7 @@ fn integer_list_literals_use_checked_cpp_numeric_coercion() {
     );
     assert!(!result.emitted.rejected, "{:?}", result.emitted.diagnostics);
     let path = store.path("/P");
-    let fields = &result.emitted.layer.prims[&path].fields;
+    let fields = &result.emitted.layer.prims()[&path].fields;
     assert_eq!(
         field(&store, fields, "hostInts"),
         &FieldValue::IntListOp(layerstack::ListOp::explicit(vec![1, -1]))
@@ -386,6 +386,6 @@ fn empty_arrays_cannot_validate_unsupported_registered_type_names() {
         assert!(result.emitted.rejected, "{ty}");
         assert!(result.emitted.diagnostics[0].message.contains(ty), "{ty}");
         let path = store.path("/P");
-        assert!(result.emitted.layer.prims[&path].fields.is_empty());
+        assert!(result.emitted.layer.prims()[&path].fields.is_empty());
     }
 }

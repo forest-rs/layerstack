@@ -122,9 +122,9 @@ fn snapshot(loaded: &LoadedStage, stage: &Stage) -> Json {
     let path = |p: layerstack::PathId| store.paths.display(p, &store.tokens);
     let root = store.paths.lookup(&Path::root()).unwrap();
     json!({
-        "sublayers": layer.sublayers.iter().map(|s| s.asset.clone().unwrap_or_default()).collect::<Vec<_>>(),
-        "offsets": layer.sublayers.iter().map(|s| json!([s.offset.offset, s.offset.scale])).collect::<Vec<_>>(),
-        "relocates": layer.relocates.iter().map(|r| json!([path(r.source), r.target.map(path).unwrap_or_default()])).collect::<Vec<_>>(),
+        "sublayers": layer.sublayers().iter().map(|s| s.asset.clone().unwrap_or_default()).collect::<Vec<_>>(),
+        "offsets": layer.sublayers().iter().map(|s| json!([s.offset.offset, s.offset.scale])).collect::<Vec<_>>(),
+        "relocates": layer.relocates().iter().map(|r| json!([path(r.source), r.target.map(path).unwrap_or_default()])).collect::<Vec<_>>(),
         "prims": stage.traverse_all(root).filter(|p| *p != root).map(path).collect::<Vec<_>>(),
     })
 }
@@ -193,7 +193,7 @@ fn layer_field_edits_agree_with_openusd_call_by_call() {
         }
         assert_fresh(&live, &mut loaded, &format!("{name}: undo recomposes"));
         let layer = &loaded.store.layers[&loaded.root_layer];
-        assert_eq!(layer.sublayers, original.sublayers, "{name}: undo");
-        assert_eq!(layer.relocates, original.relocates, "{name}: undo");
+        assert_eq!(layer.sublayers(), original.sublayers(), "{name}: undo");
+        assert_eq!(layer.relocates(), original.relocates(), "{name}: undo");
     }
 }

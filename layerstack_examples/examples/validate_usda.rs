@@ -104,7 +104,7 @@ fn main() {
             diag_count += emit_result.diagnostics.len();
         }
 
-        let prim_count = emit_result.layer.prims.len();
+        let prim_count = emit_result.layer.prims().len();
         let status = if diag_count == 0 { "ok" } else { "WARN" };
         println!("{path}: {status} ({prim_count} prims, {diag_count} diagnostics)");
 

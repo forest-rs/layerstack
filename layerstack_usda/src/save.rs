@@ -315,9 +315,9 @@ impl Lowering<'_> {
     /// Spec: AOUSD Core §7.6.1 (layer spec fields).
     fn layer(&self, layer: &Layer) -> Result<Document, SaveError> {
         let mut doc = Document::new();
-        doc.default_prim = layer.default_prim.map(|t| self.name(t));
+        doc.default_prim = layer.default_prim().map(|t| self.name(t));
         doc.relocates = layer
-            .relocates
+            .relocates()
             .iter()
             .map(|r| {
                 (
@@ -326,10 +326,10 @@ impl Lowering<'_> {
                 )
             })
             .collect();
-        doc.metadata = self.metadata(&layer.metadata, "/")?;
+        doc.metadata = self.metadata(layer.metadata_fields(), "/")?;
         // Spec: AOUSD Core §10.3.1 (sublayers), written by their authored
         // asset paths; an unresolved sublayer keeps its own.
-        for sublayer in &layer.sublayers {
+        for sublayer in layer.sublayers() {
             let Some(asset) = &sublayer.asset else {
                 return invalid("/", Invalid::ArcWithoutAsset);
             };
@@ -341,7 +341,7 @@ impl Lowering<'_> {
 
         let root = self.paths.lookup(&Path::root());
         let mut visited = Visited::new();
-        if let Some((root, spec)) = root.and_then(|id| Some((id, layer.prims.get(&id)?))) {
+        if let Some((root, spec)) = root.and_then(|id| Some((id, layer.prim(id)?))) {
             visited.insert((root, Vec::new()));
             if !is_children_only(spec) {
                 return invalid("/", Invalid::PseudoRootOpinions);
@@ -361,11 +361,11 @@ impl Lowering<'_> {
         // Every prim spec, outside variants or inside one, must have been
         // reached from the pseudo-root through the children lists.
         let mut unlisted: Vec<String> = layer
-            .prims
+            .prims()
             .iter()
             .chain(
                 layer
-                    .variant_prims
+                    .variant_prims()
                     .iter()
                     .flat_map(|(path, specs)| specs.iter().map(move |spec| (path, spec))),
             )
@@ -771,7 +771,7 @@ impl Lowering<'_> {
     fn arc(&self, layer: &Layer, arc: &LayerReference, prim: &str) -> Result<Reference, SaveError> {
         let asset = match &arc.asset {
             Some(asset) => Some(asset.clone()),
-            None if arc.layer == layer.id => None,
+            None if arc.layer == layer.id() => None,
             None => return invalid(prim, Invalid::ArcWithoutAsset),
         };
         let prim_path = match arc.target {

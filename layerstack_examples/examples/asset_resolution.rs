@@ -40,7 +40,7 @@ struct CatalogResolver {
         clippy::type_complexity,
         reason = "example code, clarity over abstraction"
     )]
-    builders: StdHashMap<String, Box<dyn Fn(&TokenInterner, &PathInterner) -> Layer>>,
+    builders: StdHashMap<String, Box<dyn Fn(LayerId, &TokenInterner, &PathInterner) -> Layer>>,
     /// Maps asset URI to resolved info for deduplication.
     resolved: StdHashMap<String, (LayerId, Arc<str>)>,
     next_id: u64,
@@ -58,7 +58,7 @@ impl CatalogResolver {
     fn register(
         &mut self,
         uri: &str,
-        builder: impl Fn(&TokenInterner, &PathInterner) -> Layer + 'static,
+        builder: impl Fn(LayerId, &TokenInterner, &PathInterner) -> Layer + 'static,
     ) {
         self.builders.insert(uri.to_string(), Box::new(builder));
     }
@@ -89,8 +89,7 @@ impl AssetResolver for CatalogResolver {
             .get(asset_path)
             .ok_or(AssetResolveError::NotFound)?;
 
-        let mut layer = builder(tokens, paths);
-        layer.id = id;
+        let layer = builder(id, tokens, paths);
 
         let resolved_path: Arc<str> = Arc::from(asset_path);
         self.resolved
@@ -119,12 +118,12 @@ fn main() {
     // 1. Set up a catalog-backed resolver with two asset layers.
     let mut resolver = CatalogResolver::new();
 
-    resolver.register("props/robot.layer", |tokens, paths| {
+    resolver.register("props/robot.layer", |id, tokens, paths| {
         let field_material = tokens.intern("material");
         let field_joints = tokens.intern("joints");
         let arm_path = paths.intern(Path::parse_absolute("/Arm", tokens).expect("valid path"));
 
-        let mut layer = Layer::new(LayerId(0)); // Overwritten by the resolver.
+        let mut layer = Layer::new(id); // Assigned by the resolver.
         layer.insert_prim(
             arm_path,
             PrimSpec::def()
@@ -134,12 +133,12 @@ fn main() {
         layer
     });
 
-    resolver.register("sets/env.layer", |tokens, paths| {
+    resolver.register("sets/env.layer", |id, tokens, paths| {
         let field_color = tokens.intern("color");
         let ground_path =
             paths.intern(Path::parse_absolute("/Ground", tokens).expect("valid path"));
 
-        let mut layer = Layer::new(LayerId(0));
+        let mut layer = Layer::new(id);
         layer.insert_prim(
             ground_path,
             PrimSpec::def().with_field(field_color, "brown"),

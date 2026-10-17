@@ -202,8 +202,11 @@ fn count_values(layer: &Layer) -> u64 {
             })
             .sum()
     }
-    let prims = layer.prims.keys().flat_map(|path| layer.prim_specs(*path));
-    fields(&layer.metadata)
+    let prims = layer
+        .prims()
+        .keys()
+        .flat_map(|path| layer.prim_specs(*path));
+    fields(layer.metadata_fields())
         + prims
             .map(|prim| {
                 let variants = prim.variant_branches().map(|branch| branch.spec);
@@ -429,7 +432,7 @@ fn shared_field_names_are_charged_by_length() {
     let mut budget = DecodeBudget::for_input(data.len());
     let (read, bytes) = read_counting(&data, &mut budget);
     let read = read.expect("read");
-    assert_eq!(read.layer.prims.len(), SPECS + 1);
+    assert_eq!(read.layer.prims().len(), SPECS + 1);
     let used = budget.used();
     assert!(
         allocation_is_charged(bytes, used),
@@ -472,7 +475,7 @@ fn shared_array_edit_literals_stay_within_the_budget() {
     // Every literal instruction form, for both attributes, holds the one
     // literal.
     let mut literal_ops = 0;
-    for prim in read.layer.prims.values() {
+    for prim in read.layer.prims().values() {
         for entry in &prim.properties {
             let Some(edit) = entry.spec.default.as_ref().and_then(Value::array_edit_ref) else {
                 continue;

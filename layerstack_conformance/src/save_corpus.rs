@@ -196,7 +196,7 @@ impl Imported {
     pub fn prim(&mut self, path: &str) -> &mut layerstack::doc::PrimSpec {
         let path = Path::parse_absolute(path, &self.tokens).expect("prim path");
         let id = self.paths.intern(path);
-        self.layer.prims.get_mut(&id).expect("prim spec")
+        self.layer.prim_mut(id).expect("prim spec")
     }
 
     /// The variant spec at `chain` on the prim spec at `path` outside any
@@ -499,7 +499,9 @@ pub fn cases() -> Vec<SaveCase> {
                      and relative after the edit, written as authored",
             source: SUBROOT_DEFAULT_PRIM,
             edit: |layer| {
-                layer.layer.default_prim = Some(layer.tokens.intern("Model/Geo"));
+                layer
+                    .layer
+                    .set_default_prim(Some(layer.tokens.intern("Model/Geo")));
             },
             expected: SUBROOT_DEFAULT_PRIM_EDITED,
             weaker: None,

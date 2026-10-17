@@ -76,7 +76,7 @@ fn core_type_conflicts_include_weaker_source_and_requests_are_deterministic() {
         Some(a)
     );
     assert!(
-        matches!(&error.kind,ValidationProblemKind::AttributeTypeMismatch{expected:Some(e),authored:Some(a)} if &*e.name=="float" && &*a.name=="double")
+        matches!(&error.kind,ValidationProblemKind::AttributeTypeMismatch{expected:Some(e),authored:Some(a),..} if &*e.name=="float" && &*a.name=="double")
     );
     assert_eq!(report.work.property_specs, 2);
     assert_eq!(
@@ -501,7 +501,7 @@ fn schema_attribute_type_wins_over_an_incompatible_authored_declaration() {
         .unwrap();
     assert_eq!(report.problems.len(), 1);
     assert!(
-        matches!(&report.problems[0].kind,ValidationProblemKind::AttributeTypeMismatch{expected:Some(expected),authored:Some(authored)} if &*expected.name=="point3f" && expected.is_array && &*authored.name=="double")
+        matches!(&report.problems[0].kind,ValidationProblemKind::AttributeTypeMismatch{expected:Some(expected),authored:Some(authored),..} if &*expected.name=="point3f" && expected.is_array && &*authored.name=="double")
     );
 }
 
@@ -829,4 +829,69 @@ mod third_party {
             vec![ValidatorId::Custom(Arc::from("studio:stage-check"))]
         );
     }
+}
+
+/// An overlay declares a schema attribute with another type than the
+/// schema's: the finding names the composed declaration and the schema's
+/// type apart, and is the overlay's alone.
+#[cfg(feature = "usd-geom")]
+#[test]
+fn overlay_type_conflicts_name_declared_and_schema_types_per_layer() {
+    let mut store = setup();
+    let sphere = store.path("/Ball");
+    let (radius, sphere_type) = (store.tokens.intern("radius"), store.tokens.intern("Sphere"));
+    let mut overlay = Layer::new(LayerId(1));
+    overlay
+        .sublayers_mut()
+        .push(layerstack::SublayerEntry::new(LayerId(2)));
+    overlay.insert_prim(
+        sphere,
+        PrimSpec::over().with_property(radius, attr("float", Value::Float(3.))),
+    );
+    let mut basis = Layer::new(LayerId(2));
+    basis.insert_prim(
+        sphere,
+        PrimSpec::def()
+            .with_type_name(sphere_type)
+            .with_property(radius, attr("double", Value::Double(2.))),
+    );
+    store.insert_layer(overlay);
+    store.insert_layer(basis);
+    let stage = stage(&mut store);
+    let scene = Scene::new(&stage, &store);
+    let report = ValidationContext::new([BuiltinRule::AttributeTypes])
+        .validate(&scene, ValidationScope::Stage, &[Time::Default])
+        .unwrap();
+    let name =
+        |t: &Option<AttributeTypeName>| t.as_ref().map(|t| alloc::string::String::from(&*t.name));
+    let [problem] = report.problems.as_slice() else {
+        panic!("one problem: {report:?}")
+    };
+    let ValidationProblemKind::AttributeTypeMismatch {
+        expected,
+        declared,
+        schema,
+        authored,
+    } = &problem.kind
+    else {
+        panic!("a type mismatch: {problem:?}")
+    };
+    assert_eq!(name(expected).as_deref(), Some("double"));
+    assert_eq!(name(schema).as_deref(), Some("double"));
+    assert_eq!(
+        name(declared).as_deref(),
+        Some("float"),
+        "the overlay declares the strongest"
+    );
+    assert_eq!(name(authored).as_deref(), Some("float"));
+    assert_eq!(report.problems_authored_in(LayerId(1)).count(), 1);
+    assert_eq!(report.problems_authored_in(LayerId(2)).count(), 0);
+    // A typed read skips the overlay's value at the default time, as
+    // OpenUSD's `Get<double>` does, which is why the finding matters.
+    let value = stage
+        .view(&store)
+        .attribute("/Ball.radius")
+        .unwrap()
+        .value::<f64>(Time::Default);
+    assert_eq!(value, Some(2.));
 }

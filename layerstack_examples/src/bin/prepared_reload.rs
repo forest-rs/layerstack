@@ -18,7 +18,7 @@ impl Storage for Memory {
     fn identify(&self, asset: &str, _: Option<&str>) -> Result<String, IoError> {
         Ok(asset.into())
     }
-    fn read(&mut self, identifier: &str) -> Result<Vec<u8>, IoError> {
+    fn read(&self, identifier: &str) -> Result<Vec<u8>, IoError> {
         self.0
             .get(identifier)
             .cloned()

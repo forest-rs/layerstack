@@ -91,10 +91,10 @@ impl Storage for Filesystem {
             )
         })
     }
-    fn read(&mut self, identifier: &str) -> Result<Vec<u8>, IoError> {
+    fn read(&self, identifier: &str) -> Result<Vec<u8>, IoError> {
         fs::read(identifier).map_err(storage_error)
     }
-    fn read_bounded(&mut self, identifier: &str, max_bytes: u64) -> Result<Vec<u8>, IoError> {
+    fn read_bounded(&self, identifier: &str, max_bytes: u64) -> Result<Vec<u8>, IoError> {
         use std::io::Read;
         let file = fs::File::open(identifier).map_err(storage_error)?;
         if file.metadata().map_err(storage_error)?.len() > max_bytes {
@@ -119,7 +119,7 @@ impl Storage for Filesystem {
         Ok(bytes)
     }
     fn open_ranges(
-        &mut self,
+        &self,
         identifier: &str,
     ) -> Result<Arc<dyn layerstack_usdz::range::RangeSource<Error = IoError> + Send + Sync>, IoError>
     {
@@ -510,7 +510,7 @@ mod tests {
         fs::create_dir_all(&authored).unwrap();
         fs::create_dir_all(&search).unwrap();
         fs::write(search.join("asset.usda"), b"#usda 1.0\n").unwrap();
-        let mut storage = Filesystem::new(&root, [search.clone()]).unwrap();
+        let storage = Filesystem::new(&root, [search.clone()]).unwrap();
         let anchor = authored.join("root.usda");
         let anchor = anchor.to_str().unwrap();
         let search_path = storage.identify("asset.usda", Some(anchor)).unwrap();
@@ -618,7 +618,7 @@ mod bounded_tests {
         {
             let file = fs::File::create(&path).unwrap();
             file.set_len(2 * 1024 * 1024 * 1024).unwrap();
-            let mut storage = Filesystem::new(".", []).unwrap();
+            let storage = Filesystem::new(".", []).unwrap();
             assert_eq!(
                 storage
                     .read_bounded(path.to_str().unwrap(), 1024)

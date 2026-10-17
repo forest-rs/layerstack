@@ -6,21 +6,25 @@ use super::*;
 #[derive(Default)]
 struct Transferred {
     memory: Memory,
-    pointers: BTreeMap<String, usize>,
+    pointers: std::sync::Mutex<BTreeMap<String, usize>>,
 }
 impl Storage for Transferred {
     fn identify(&self, asset: &str, anchor: Option<&str>) -> Result<String, IoError> {
         self.memory.identify(asset, anchor)
     }
-    fn read(&mut self, identifier: &str) -> Result<Vec<u8>, IoError> {
+    fn read(&self, identifier: &str) -> Result<Vec<u8>, IoError> {
         let bytes = self.memory.read(identifier)?;
         self.pointers
+            .lock()
+            .unwrap()
             .insert(identifier.into(), bytes.as_ptr() as usize);
         Ok(bytes)
     }
-    fn read_bounded(&mut self, identifier: &str, limit: u64) -> Result<Vec<u8>, IoError> {
+    fn read_bounded(&self, identifier: &str, limit: u64) -> Result<Vec<u8>, IoError> {
         let bytes = self.memory.read_bounded(identifier, limit)?;
         self.pointers
+            .lock()
+            .unwrap()
             .insert(identifier.into(), bytes.as_ptr() as usize);
         Ok(bytes)
     }
@@ -52,7 +56,7 @@ fn transport_vectors_reach_package_and_resource_views_without_a_payload_copy() {
         StageOptions::default(),
     )
     .unwrap();
-    let package_pointer = document.storage().pointers["scene.usdz"];
+    let package_pointer = document.storage().pointers.lock().unwrap()["scene.usdz"];
     let image = document
         .read_asset_bytes("scene.usdz[image.png]", None)
         .unwrap();
@@ -64,7 +68,7 @@ fn transport_vectors_reach_package_and_resource_views_without_a_payload_copy() {
     let loose = document.read_asset_bytes("loose.png", None).unwrap();
     assert_eq!(
         loose.bytes.as_ptr() as usize,
-        document.storage().pointers["loose.png"],
+        document.storage().pointers.lock().unwrap()["loose.png"],
         "loose resource handoff preserves the transport allocation"
     );
     let bounded = document
@@ -79,7 +83,7 @@ fn transport_vectors_reach_package_and_resource_views_without_a_payload_copy() {
         .unwrap();
     assert_eq!(
         bounded.bytes.as_ptr() as usize,
-        document.storage().pointers["loose.png"],
+        document.storage().pointers.lock().unwrap()["loose.png"],
         "bounded handoff preserves the transport allocation"
     );
     assert_eq!(
@@ -108,10 +112,10 @@ impl Storage for Shared {
     fn identify(&self, asset: &str, _: Option<&str>) -> Result<String, IoError> {
         Ok(asset.into())
     }
-    fn read(&mut self, _: &str) -> Result<Vec<u8>, IoError> {
+    fn read(&self, _: &str) -> Result<Vec<u8>, IoError> {
         panic!("encoded cache hit must not require Vec materialization")
     }
-    fn read_encoded(&mut self, _: &str) -> Result<EncodedBytes, IoError> {
+    fn read_encoded(&self, _: &str) -> Result<EncodedBytes, IoError> {
         Ok(self.bytes.clone())
     }
     fn write(&mut self, _: &str, _: &[u8]) -> Result<(), IoError> {

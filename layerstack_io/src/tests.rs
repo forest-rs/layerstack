@@ -4,6 +4,8 @@
 use super::*;
 
 mod deferred_arcs;
+#[cfg(feature = "std")]
+mod dynamic_payloads;
 mod encoded_ownership;
 mod file_formats;
 mod package_identity;

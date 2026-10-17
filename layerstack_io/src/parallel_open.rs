@@ -246,6 +246,10 @@ impl<B: Storage> AssetResolver for TaskResolver<'_, '_, B> {
         self.shared.defers_variant_arcs
     }
 
+    fn defers_payload(&self, asset_path: &str) -> bool {
+        self.shared.formats.is_dynamic(asset_path)
+    }
+
     fn allocate_layer_id(&mut self) -> Option<LayerId> {
         self.package = true;
         None

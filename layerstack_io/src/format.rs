@@ -60,7 +60,10 @@ use alloc::{
 };
 use core::fmt;
 
-use layerstack::{Layer, LayerId, Path, PathId, PathInterner, TokenId, TokenInterner};
+use layerstack::{
+    DynamicArgs, DynamicFileFormat, DynamicFormatContext, Layer, LayerId, Path, PathId,
+    PathInterner, TokenId, TokenInterner, Value,
+};
 
 use crate::{IoError, IoErrorKind};
 
@@ -200,6 +203,24 @@ pub trait FileFormat: fmt::Debug + Send + Sync {
     /// malformed USDA layer.
     fn read(&self, source: &FormatSource<'_>) -> Result<Layer, IoError>;
 
+    /// The format's dynamic side, when the payloads to it compose the
+    /// arguments its layers are read with (see [`layerstack::dynamic_format`]);
+    /// `None`, the default, for a format read with its asset paths'
+    /// arguments alone.
+    ///
+    /// Registering the format registers its dynamic side too: the document
+    /// composes its stage with it ([`layerstack::StageOptions::dynamic_formats`]),
+    /// under this format's name and extensions, and reads the layers it
+    /// authors leaving payloads to the format for composition
+    /// ([`layerstack::AssetResolver::defers_payload`]). A format implementing
+    /// both traits returns `Some(self)`.
+    ///
+    /// OpenUSD: an `SdfFileFormat` that is also a
+    /// `PcpDynamicFileFormatInterface`.
+    fn dynamic(&self) -> Option<&dyn DynamicFileFormat> {
+        None
+    }
+
     /// Serializes `layer` for saving or exporting to this format.
     ///
     /// # Errors
@@ -284,6 +305,56 @@ impl core::error::Error for FormatRegistrationError {}
 #[derive(Clone, Debug, Default)]
 pub struct FileFormats {
     formats: Vec<Arc<dyn FileFormat>>,
+    /// The dynamic sides of the formats that have one, in registration
+    /// order.
+    dynamic: Vec<Arc<dyn DynamicFileFormat>>,
+}
+
+/// The dynamic side of a registered [`FileFormat`], under its name and
+/// extensions.
+#[derive(Debug)]
+struct DynamicSide(Arc<dyn FileFormat>);
+
+impl DynamicSide {
+    fn side(&self) -> &dyn DynamicFileFormat {
+        self.0.dynamic().expect("registered for its dynamic side")
+    }
+}
+
+impl DynamicFileFormat for DynamicSide {
+    fn name(&self) -> &str {
+        self.0.name()
+    }
+    fn extensions(&self) -> &[&str] {
+        self.0.extensions()
+    }
+    fn compose_args(
+        &self,
+        asset_path: &str,
+        context: &mut DynamicFormatContext<'_>,
+    ) -> DynamicArgs {
+        self.side().compose_args(asset_path, context)
+    }
+    fn can_field_change_affect_args(
+        &self,
+        field: &str,
+        old: Option<&Value>,
+        new: Option<&Value>,
+        dependency: &Value,
+    ) -> bool {
+        self.side()
+            .can_field_change_affect_args(field, old, new, dependency)
+    }
+    fn can_attribute_default_change_affect_args(
+        &self,
+        attribute: &str,
+        old: Option<&Value>,
+        new: Option<&Value>,
+        dependency: &Value,
+    ) -> bool {
+        self.side()
+            .can_attribute_default_change_affect_args(attribute, old, new, dependency)
+    }
 }
 
 impl FileFormats {
@@ -322,8 +393,28 @@ impl FileFormats {
                 });
             }
         }
+        if format.dynamic().is_some() {
+            self.dynamic
+                .push(Arc::new(DynamicSide(Arc::clone(&format))));
+        }
         self.formats.push(format);
         Ok(())
+    }
+
+    /// The dynamic sides of the registered formats that have one
+    /// ([`FileFormat::dynamic`]), in registration order, as the document
+    /// adds them to [`layerstack::StageOptions::dynamic_formats`].
+    pub fn dynamic_formats(&self) -> impl ExactSizeIterator<Item = &Arc<dyn DynamicFileFormat>> {
+        self.dynamic.iter()
+    }
+
+    /// Whether the asset `asset_path` names is read by a format with a
+    /// dynamic side, whose payloads composition resolves.
+    pub(crate) fn is_dynamic(&self, asset_path: &str) -> bool {
+        !self.dynamic.is_empty()
+            && self
+                .for_identifier(asset_path)
+                .is_some_and(|format| format.dynamic().is_some())
     }
 
     /// These formats and `format` (see [`Self::add`]).

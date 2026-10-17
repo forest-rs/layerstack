@@ -1233,10 +1233,15 @@ impl EmitCtx<'_> {
                     .with_custom_data(custom_data),
             );
         }
-        // An arc inside a variant branch may never be composed; resolving
-        // the branches the layer selects is left until the whole layer is
-        // read (`resolve_selected_deferred_arcs`), the rest to composition.
-        if in_branch && self.defer_variant_arcs {
+        // A payload to a dynamic file format targets the layer its composed
+        // arguments name, which composition asks for
+        // (`AssetResolver::defers_payload`). An arc inside a variant branch
+        // may never be composed; resolving the branches the layer selects
+        // is left until the whole layer is read
+        // (`resolve_selected_deferred_arcs`), the rest to composition.
+        if (in_branch && self.defer_variant_arcs)
+            || (arc == "Payload" && self.resolver.defers_payload(asset))
+        {
             return Some(
                 Reference::deferred(self.layer_id, asset, target, layer_offset)
                     .with_custom_data(custom_data),

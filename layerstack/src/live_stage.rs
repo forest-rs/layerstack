@@ -903,6 +903,16 @@ impl LiveStage {
             }
         }
         layers.extend(self.stage.clip_layers());
+        // A dynamic payload's layer is bound by the identifier its composed
+        // arguments form, which no authored arc spells: watch it, and what
+        // it reads, as composition found them.
+        for layer in self.stage.dynamic_layers() {
+            layers.extend(self.layer_discovery.participating(
+                store,
+                layer,
+                &self.options.muted_layers,
+            ));
+        }
         self.generations = layers
             .into_iter()
             .map(|layer| (layer, generations_of(store, layer)))

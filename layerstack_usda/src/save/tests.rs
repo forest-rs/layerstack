@@ -21,8 +21,8 @@ impl AssetResolver for AnyAsset {
         &mut self,
         asset_path: &str,
         _: Option<LayerId>,
-        _: &mut TokenInterner,
-        _: &mut PathInterner,
+        _: &TokenInterner,
+        _: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         self.0 += 1;
         Ok(ResolvedAsset {
@@ -47,13 +47,13 @@ impl Imported {
     fn new(source: &str) -> Self {
         let parsed = crate::parser::parse(source);
         assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
-        let mut tokens = TokenInterner::default();
-        let mut paths = PathInterner::default();
+        let tokens = TokenInterner::default();
+        let paths = PathInterner::default();
         let result = crate::emit::emit(
             &parsed.layer,
             LayerId(1),
-            &mut tokens,
-            &mut paths,
+            &tokens,
+            &paths,
             &mut AnyAsset(100),
         );
         assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
@@ -65,7 +65,7 @@ impl Imported {
     }
 
     fn property(&mut self, path: &str) -> &mut PropertySpec {
-        let path = PropertyPath::parse(path, &mut self.tokens, &mut self.paths).unwrap();
+        let path = PropertyPath::parse(path, &self.tokens, &self.paths).unwrap();
         self.layer.property_mut(path).unwrap()
     }
 
@@ -285,7 +285,7 @@ fn arcs_need_authored_asset_paths() {
             scale: 1.0,
         },
     )];
-    let prim = Path::parse_absolute("/A", &mut imported.tokens).unwrap();
+    let prim = Path::parse_absolute("/A", &imported.tokens).unwrap();
     let prim = imported.paths.intern(prim);
     let spec = imported.layer.prims.get_mut(&prim).unwrap();
     spec.add_reference(Reference::with_asset(LayerId(9), prim, "./x.usda"));
@@ -323,9 +323,9 @@ fn arcs_need_authored_asset_paths() {
 fn rejects_repeated_arcs_within_one_operation() {
     let source = "#usda 1.0\ndef \"A\"\n{\n}\n\nclass \"C\"\n{\n}\n";
     let mut imported = Imported::new(source);
-    let a = Path::parse_absolute("/A", &mut imported.tokens).unwrap();
+    let a = Path::parse_absolute("/A", &imported.tokens).unwrap();
     let a = imported.paths.intern(a);
-    let c = Path::parse_absolute("/C", &mut imported.tokens).unwrap();
+    let c = Path::parse_absolute("/C", &imported.tokens).unwrap();
     let c = imported.paths.intern(c);
     let arc = Reference::with_asset(LayerId(9), c, "./r.usda");
     /// Repeats an item in one of the prim's arc lists.
@@ -460,8 +460,8 @@ impl AssetResolver for NoAsset {
         &mut self,
         _: &str,
         _: Option<LayerId>,
-        _: &mut TokenInterner,
-        _: &mut PathInterner,
+        _: &TokenInterner,
+        _: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         Err(AssetResolveError::NotFound)
     }
@@ -484,15 +484,9 @@ fn saves_unresolved_arcs_as_authored() {
     ] {
         let parsed = crate::parser::parse(source);
         assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
-        let mut tokens = TokenInterner::default();
-        let mut paths = PathInterner::default();
-        let result = crate::emit::emit(
-            &parsed.layer,
-            LayerId(1),
-            &mut tokens,
-            &mut paths,
-            &mut NoAsset,
-        );
+        let tokens = TokenInterner::default();
+        let paths = PathInterner::default();
+        let result = crate::emit::emit(&parsed.layer, LayerId(1), &tokens, &paths, &mut NoAsset);
         let arcs = result
             .layer
             .prims
@@ -525,7 +519,7 @@ fn rejects_invalid_layers() {
     let source = "#usda 1.0\ndef \"A\"\n{\n    float a = 1\n}\n";
 
     let mut imported = Imported::new(source);
-    let b = Path::parse_absolute("/A/B", &mut imported.tokens).unwrap();
+    let b = Path::parse_absolute("/A/B", &imported.tokens).unwrap();
     let b = imported.paths.intern(b);
     imported.layer.insert_prim(b, PrimSpec::def());
     assert_eq!(
@@ -538,7 +532,7 @@ fn rejects_invalid_layers() {
     );
 
     let mut imported = Imported::new(source);
-    let a = Path::parse_absolute("/A", &mut imported.tokens).unwrap();
+    let a = Path::parse_absolute("/A", &imported.tokens).unwrap();
     let a = imported.paths.intern(a);
     let name = imported.tokens.intern("Missing");
     let spec = imported.layer.prims.get_mut(&a).unwrap();
@@ -728,10 +722,10 @@ def "A" (
     assert_eq!(Imported::new(&text).save().unwrap(), text, "stable");
 
     let mut imported = Imported::new(source);
-    let a = Path::parse_absolute("/A", &mut imported.tokens).unwrap();
+    let a = Path::parse_absolute("/A", &imported.tokens).unwrap();
     let a = imported.paths.intern(a);
     let key = imported.tokens.intern("exedraTargets");
-    let target = TargetPath::parse("/A", &mut imported.tokens, &mut imported.paths).unwrap();
+    let target = TargetPath::parse("/A", &imported.tokens, &imported.paths).unwrap();
     imported.layer.prims.get_mut(&a).unwrap().set_field(
         key,
         FieldValue::PathListOp(LayerListOp {
@@ -788,7 +782,7 @@ def "A"
         "reads back the same"
     );
 
-    let a = Path::parse_absolute("/A", &mut Imported::new(source).tokens).unwrap();
+    let a = Path::parse_absolute("/A", &Imported::new(source).tokens).unwrap();
     let imported = Imported::new(source);
     let a = imported.paths.intern(a);
     let height = imported.tokens.intern("height");
@@ -1005,10 +999,10 @@ def "A" (
 #[test]
 fn keeps_interleaved_property_order() {
     let mut imported = Imported::new("#usda 1.0\ndef \"A\"\n{\n    int x = 1\n    int z = 2\n}\n");
-    let a = Path::parse_absolute("/A", &mut imported.tokens).unwrap();
+    let a = Path::parse_absolute("/A", &imported.tokens).unwrap();
     let a = imported.paths.intern(a);
     let y = imported.tokens.intern("y");
-    let target = TargetPath::parse("/A.x", &mut imported.tokens, &mut imported.paths).unwrap();
+    let target = TargetPath::parse("/A.x", &imported.tokens, &imported.paths).unwrap();
     let spec = imported.layer.prims.get_mut(&a).unwrap();
     spec.properties.insert(
         1,
@@ -1165,7 +1159,7 @@ fn saves_variant_sets_and_selections() {
 fn rejects_misplaced_variant_specs() {
     let source = "#usda 1.0\ndef \"A\"\n{\n    variantSet \"v\" = {\n        \"x\" {\n            def \"B\"\n            {\n            }\n        }\n    }\n}\n";
     fn branch(imported: &mut Imported) -> &mut VariantSpec {
-        let a = Path::parse_absolute("/A", &mut imported.tokens).unwrap();
+        let a = Path::parse_absolute("/A", &imported.tokens).unwrap();
         let a = imported.paths.intern(a);
         let v = imported.tokens.intern("v");
         let x = imported.tokens.intern("x");

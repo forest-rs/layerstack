@@ -186,8 +186,8 @@ impl UsdzResult {
 ///
 /// struct NoAssets;
 /// impl AssetResolver for NoAssets {
-///     fn resolve(&mut self, _: &str, _: Option<LayerId>, _: &mut TokenInterner,
-///                _: &mut PathInterner) -> Result<ResolvedAsset, AssetResolveError> {
+///     fn resolve(&mut self, _: &str, _: Option<LayerId>, _: &TokenInterner,
+///                _: &PathInterner) -> Result<ResolvedAsset, AssetResolveError> {
 ///         Err(AssetResolveError::NotFound)
 ///     }
 ///     fn resolved_path(&self, _: LayerId) -> Option<&str> { None }
@@ -199,8 +199,8 @@ impl UsdzResult {
 /// let result = read_usdz(
 ///     &package,
 ///     LayerId(1),
-///     &mut TokenInterner::default(),
-///     &mut PathInterner::default(),
+///     &TokenInterner::default(),
+///     &PathInterner::default(),
 ///     &mut NoAssets,
 /// ).unwrap();
 /// assert!(result.has_errors());
@@ -215,8 +215,8 @@ impl UsdzResult {
 pub fn read_usdz(
     data: &[u8],
     layer_id: LayerId,
-    tokens: &mut TokenInterner,
-    paths: &mut PathInterner,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
     resolver: &mut dyn AssetResolver,
 ) -> Result<UsdzResult, UsdzError> {
     read_usdz_with_members(data, layer_id, tokens, paths, resolver, &[])
@@ -229,8 +229,8 @@ pub fn read_usdz(
 pub fn read_usdz_with_members(
     data: &[u8],
     layer_id: LayerId,
-    tokens: &mut TokenInterner,
-    paths: &mut PathInterner,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
     resolver: &mut dyn AssetResolver,
     members: &[&str],
 ) -> Result<UsdzResult, UsdzError> {
@@ -251,8 +251,8 @@ pub fn read_usdz_with_members(
 pub fn read_usdz_with_options(
     data: &[u8],
     layer_id: LayerId,
-    tokens: &mut TokenInterner,
-    paths: &mut PathInterner,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
     resolver: &mut dyn AssetResolver,
     members: &[&str],
     options: UsdcReadOptions,
@@ -279,8 +279,8 @@ pub fn read_usdz_snapshot(
     archive: &snapshot::PackageSnapshot,
     selected: Option<&str>,
     layer_id: LayerId,
-    tokens: &mut TokenInterner,
-    paths: &mut PathInterner,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
     resolver: &mut dyn AssetResolver,
     members: &[&str],
     options: UsdcReadOptions,
@@ -311,8 +311,8 @@ pub fn read_usdz_ranges<S: range::RangeSource>(
     archive: &mut range::RangePackage<S>,
     selected: Option<&str>,
     layer_id: LayerId,
-    tokens: &mut TokenInterner,
-    paths: &mut PathInterner,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
     resolver: &mut dyn AssetResolver,
     members: &[&str],
     options: UsdcReadOptions,
@@ -330,8 +330,8 @@ fn read_package<P: access::PackageAccess>(
     archive: &mut P,
     selected: Option<&str>,
     layer_id: LayerId,
-    tokens: &mut TokenInterner,
-    paths: &mut PathInterner,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
     resolver: &mut dyn AssetResolver,
     members: &[&str],
     options: UsdcReadOptions,

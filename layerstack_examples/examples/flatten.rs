@@ -113,8 +113,8 @@ impl AssetResolver for Files {
         &mut self,
         asset_path: &str,
         _anchor: Option<LayerId>,
-        tokens: &mut TokenInterner,
-        paths: &mut PathInterner,
+        tokens: &TokenInterner,
+        paths: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         let resolved_path: Arc<str> = Arc::from(asset_path);
         if let Some(&layer_id) = self.loaded.get(asset_path) {
@@ -149,8 +149,8 @@ impl AssetResolver for Files {
 fn parse(
     text: &str,
     id: LayerId,
-    tokens: &mut TokenInterner,
-    paths: &mut PathInterner,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
     resolver: &mut dyn AssetResolver,
 ) -> (Layer, Vec<Layer>) {
     let parsed = layerstack_usda::parser::parse(text);
@@ -162,7 +162,7 @@ fn parse(
 
 /// Reads USDA `text` into `store` as layer `id`, with the layers it names.
 fn load(text: &str, id: LayerId, store: &mut InMemoryStore, files: &mut Files) {
-    let (layer, resolved) = parse(text, id, &mut store.tokens, &mut store.paths, files);
+    let (layer, resolved) = parse(text, id, &store.tokens, &store.paths, files);
     store.insert_layer(layer);
     for layer in resolved {
         store.insert_layer(layer);

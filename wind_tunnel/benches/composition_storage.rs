@@ -24,8 +24,8 @@ impl AssetResolver for NoAssets {
         &mut self,
         _: &str,
         _: Option<LayerId>,
-        _: &mut TokenInterner,
-        _: &mut PathInterner,
+        _: &TokenInterner,
+        _: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         Err(AssetResolveError::NotFound)
     }
@@ -85,8 +85,8 @@ fn import(bytes: &[u8]) -> InMemoryStore {
     let result = layerstack_usdc::read_usdc(
         bytes,
         LayerId(1),
-        &mut store.tokens,
-        &mut store.paths,
+        &store.tokens,
+        &store.paths,
         &mut NoAssets,
     )
     .unwrap();

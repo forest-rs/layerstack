@@ -367,8 +367,8 @@ fn dependency_transport_failure_reaches_importer_without_outer_fallback() {
             &mut self,
             _: &str,
             _: Option<LayerId>,
-            _: &mut TokenInterner,
-            _: &mut PathInterner,
+            _: &TokenInterner,
+            _: &PathInterner,
         ) -> Result<ResolvedAsset, AssetResolveError> {
             panic!("found package member must not fall back")
         }
@@ -396,8 +396,8 @@ fn dependency_transport_failure_reaches_importer_without_outer_fallback() {
         &mut reader,
         None,
         LayerId(1),
-        &mut TokenInterner::default(),
-        &mut PathInterner::default(),
+        &TokenInterner::default(),
+        &PathInterner::default(),
         &mut Outside,
         &[],
         crate::UsdcReadOptions::default(),
@@ -416,8 +416,8 @@ fn repeated_import_selections_reuse_verified_layer_identity_without_payload_read
             &mut self,
             _: &str,
             _: Option<LayerId>,
-            _: &mut TokenInterner,
-            _: &mut PathInterner,
+            _: &TokenInterner,
+            _: &PathInterner,
         ) -> Result<ResolvedAsset, AssetResolveError> {
             panic!("package selection needs no outer read")
         }
@@ -463,8 +463,8 @@ fn repeated_import_selections_reuse_verified_layer_identity_without_payload_read
             &mut reader,
             None,
             LayerId(1),
-            &mut TokenInterner::default(),
-            &mut PathInterner::default(),
+            &TokenInterner::default(),
+            &PathInterner::default(),
             &mut Outside,
             &members,
             crate::UsdcReadOptions::default(),

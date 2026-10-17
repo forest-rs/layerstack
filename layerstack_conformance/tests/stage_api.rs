@@ -232,8 +232,8 @@ fn source_store(source: &str) -> InMemoryStore {
             &mut self,
             _: &str,
             _: Option<LayerId>,
-            _: &mut layerstack::TokenInterner,
-            _: &mut layerstack::PathInterner,
+            _: &layerstack::TokenInterner,
+            _: &layerstack::PathInterner,
         ) -> Result<layerstack::ResolvedAsset, layerstack::AssetResolveError> {
             Err(layerstack::AssetResolveError::NotFound)
         }
@@ -245,8 +245,8 @@ fn source_store(source: &str) -> InMemoryStore {
     let result = layerstack_usda::read_usda(
         source,
         LayerId(1),
-        &mut store.tokens,
-        &mut store.paths,
+        &store.tokens,
+        &store.paths,
         &mut NoAssets,
     );
     assert!(!result.emitted.rejected, "{:?}", result.emitted.diagnostics);

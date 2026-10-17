@@ -30,8 +30,8 @@ impl AssetResolver for NoAssets {
         &mut self,
         _: &str,
         _: Option<LayerId>,
-        _: &mut TokenInterner,
-        _: &mut PathInterner,
+        _: &TokenInterner,
+        _: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         Err(AssetResolveError::NotFound)
     }
@@ -344,8 +344,8 @@ fn usda_roundtrip_through_parser_and_stage() {
     let result = layerstack_usda::emit::emit(
         &parsed.layer,
         LayerId(1),
-        &mut store.tokens,
-        &mut store.paths,
+        &store.tokens,
+        &store.paths,
         &mut NoAssets,
     );
     assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
@@ -362,8 +362,8 @@ fn usdc_roundtrip_through_reader_and_stage() {
     let result = layerstack_usdc::read_usdc(
         &bytes,
         LayerId(1),
-        &mut store.tokens,
-        &mut store.paths,
+        &store.tokens,
+        &store.paths,
         &mut NoAssets,
     )
     .expect("the workspace reader reads the writer's output");
@@ -405,8 +405,8 @@ fn usdz_roundtrip_through_package_reader() {
         let result = layerstack_usdz::read_usdz(
             &bytes,
             LayerId(1),
-            &mut store.tokens,
-            &mut store.paths,
+            &store.tokens,
+            &store.paths,
             &mut NoAssets,
         )
         .expect("read_usdz verifies CRCs and layout");
@@ -425,8 +425,8 @@ fn load_usda(text: &str) -> InMemoryStore {
     let result = layerstack_usda::emit::emit(
         &parsed.layer,
         LayerId(1),
-        &mut store.tokens,
-        &mut store.paths,
+        &store.tokens,
+        &store.paths,
         &mut NoAssets,
     );
     assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
@@ -775,12 +775,12 @@ fn moved_usdz_resolves_every_internal_asset() {
     std::fs::remove_dir_all(&base).unwrap();
 
     let archive = layerstack_usdz::zip::ZipArchive::parse(&bytes).unwrap();
-    let mut store = InMemoryStore::default();
+    let store = InMemoryStore::default();
     let result = layerstack_usdz::read_usdz(
         &bytes,
         LayerId(1),
-        &mut store.tokens,
-        &mut store.paths,
+        &store.tokens,
+        &store.paths,
         &mut NoAssets,
     )
     .unwrap();
@@ -818,8 +818,8 @@ fn load_usdz(bytes: &[u8]) -> InMemoryStore {
     let result = layerstack_usdz::read_usdz(
         bytes,
         LayerId(1),
-        &mut store.tokens,
-        &mut store.paths,
+        &store.tokens,
+        &store.paths,
         &mut NoAssets,
     )
     .expect("valid package");
@@ -832,8 +832,8 @@ fn load_usdc(bytes: &[u8]) -> InMemoryStore {
     let result = layerstack_usdc::read_usdc(
         bytes,
         LayerId(1),
-        &mut store.tokens,
-        &mut store.paths,
+        &store.tokens,
+        &store.paths,
         &mut NoAssets,
     )
     .expect("valid crate file");

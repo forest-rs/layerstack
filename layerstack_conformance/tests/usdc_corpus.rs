@@ -41,8 +41,8 @@ impl AssetResolver for NoAssets {
         &mut self,
         _: &str,
         _: Option<LayerId>,
-        _: &mut TokenInterner,
-        _: &mut PathInterner,
+        _: &TokenInterner,
+        _: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         Err(AssetResolveError::NotFound)
     }
@@ -91,8 +91,8 @@ fn every_crate_file_in_the_repository_reads() {
             layerstack_usdc::read_usdc(
                 &data,
                 LayerId(1),
-                &mut TokenInterner::default(),
-                &mut PathInterner::default(),
+                &TokenInterner::default(),
+                &PathInterner::default(),
                 &mut NoAssets,
             )
             .map(|result| {

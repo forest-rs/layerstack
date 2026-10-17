@@ -29,9 +29,8 @@ pub fn check_scalar_values(
 ) -> Vec<String> {
     let mut failures = Vec::new();
     for (prop_path, value, layer_name, spec) in expected {
-        let path =
-            PropertyPath::parse(prop_path, &mut loaded.store.tokens, &mut loaded.store.paths)
-                .expect("property path");
+        let path = PropertyPath::parse(prop_path, &loaded.store.tokens, &loaded.store.paths)
+            .expect("property path");
         let Some(resolved) = stage.resolve_field_path(path) else {
             failures.push(format!("no resolved value for {prop_path}"));
             continue;
@@ -53,9 +52,8 @@ pub fn check_scalar_values(
             .get(&provenance.layer)
             .cloned()
             .unwrap_or_default();
-        let expected_spec =
-            SpecPath::parse(spec, &mut loaded.store.tokens, &mut loaded.store.paths)
-                .expect("expected spec path");
+        let expected_spec = SpecPath::parse(spec, &loaded.store.tokens, &loaded.store.paths)
+            .expect("expected spec path");
         if actual_layer != *layer_name || provenance.spec_path != expected_spec {
             failures.push(format!(
                 "wrong winning opinion for {prop_path}: got {actual_layer} {}, expected {layer_name} {spec}",

@@ -998,8 +998,8 @@ fn full_reader_assembles_the_layer() {
             &mut self,
             _: &str,
             _: Option<LayerId>,
-            _: &mut layerstack::TokenInterner,
-            _: &mut layerstack::PathInterner,
+            _: &layerstack::TokenInterner,
+            _: &layerstack::PathInterner,
         ) -> Result<ResolvedAsset, AssetResolveError> {
             Err(AssetResolveError::NotFound)
         }
@@ -1013,16 +1013,16 @@ fn full_reader_assembles_the_layer() {
         .fields
         .insert(0, Field::new("typeName", Value::Token("point3f[]".into())));
     let bytes = write_crate(&specs).unwrap();
-    let mut store = InMemoryStore::default();
+    let store = InMemoryStore::default();
     let result = crate::read_usdc(
         &bytes,
         LayerId(1),
-        &mut store.tokens,
-        &mut store.paths,
+        &store.tokens,
+        &store.paths,
         &mut NoAssets,
     )
     .unwrap();
-    let path = layerstack::path::Path::parse_absolute("/Root", &mut store.tokens).unwrap();
+    let path = layerstack::path::Path::parse_absolute("/Root", &store.tokens).unwrap();
     let id = store.paths.lookup(&path).unwrap();
     let prim = &result.layer.prims[&id];
     let name = store.tokens.intern("points");
@@ -1195,8 +1195,8 @@ fn variant_specs_round_trip() {
             &mut self,
             _: &str,
             _: Option<LayerId>,
-            _: &mut layerstack::TokenInterner,
-            _: &mut layerstack::PathInterner,
+            _: &layerstack::TokenInterner,
+            _: &layerstack::PathInterner,
         ) -> Result<ResolvedAsset, AssetResolveError> {
             Err(AssetResolveError::NotFound)
         }
@@ -1267,12 +1267,12 @@ fn variant_specs_round_trip() {
         "selections in set name order"
     );
 
-    let mut store = InMemoryStore::default();
+    let store = InMemoryStore::default();
     let result = crate::read_usdc(
         &bytes,
         LayerId(1),
-        &mut store.tokens,
-        &mut store.paths,
+        &store.tokens,
+        &store.paths,
         &mut NoAssets,
     )
     .unwrap();
@@ -1280,7 +1280,7 @@ fn variant_specs_round_trip() {
     let layer = result.layer;
     let [season, winter, age, old, snow_name] =
         ["season", "winter", "age", "old", "Snow"].map(|name| store.tokens.intern(name));
-    let root_path = layerstack::path::Path::parse_absolute("/Root", &mut store.tokens).unwrap();
+    let root_path = layerstack::path::Path::parse_absolute("/Root", &store.tokens).unwrap();
     let root_id = store.paths.lookup(&root_path).unwrap();
     let prim = &layer.prims[&root_id];
     assert_eq!(prim.variant_set_order, [season], "set order");
@@ -1307,7 +1307,7 @@ fn variant_specs_round_trip() {
         set: season,
         variant: winter,
     };
-    let snow = layerstack::path::Path::parse_absolute("/Root/Snow", &mut store.tokens).unwrap();
+    let snow = layerstack::path::Path::parse_absolute("/Root/Snow", &store.tokens).unwrap();
     let snow = store.paths.lookup(&snow).unwrap();
     assert!(
         layer.prim_spec_in(snow, &[site]).is_some(),

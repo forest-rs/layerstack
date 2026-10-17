@@ -73,8 +73,8 @@ impl AssetResolver for AnyAsset {
         &mut self,
         asset_path: &str,
         _: Option<LayerId>,
-        _: &mut TokenInterner,
-        _: &mut PathInterner,
+        _: &TokenInterner,
+        _: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         if asset_path.starts_with(MISSING) {
             return Err(AssetResolveError::NotFound);
@@ -101,13 +101,13 @@ impl Imported {
     pub fn usda(source: &str) -> Self {
         let parsed = layerstack_usda::parser::parse(source);
         assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
-        let mut tokens = TokenInterner::default();
-        let mut paths = PathInterner::default();
+        let tokens = TokenInterner::default();
+        let paths = PathInterner::default();
         let result = layerstack_usda::emit::emit(
             &parsed.layer,
             LayerId(1),
-            &mut tokens,
-            &mut paths,
+            &tokens,
+            &paths,
             &mut AnyAsset::default(),
         );
         assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
@@ -124,13 +124,13 @@ impl Imported {
     ///
     /// Panics if the reader fails or reports a diagnostic.
     pub fn usdc(bytes: &[u8]) -> Self {
-        let mut tokens = TokenInterner::default();
-        let mut paths = PathInterner::default();
+        let tokens = TokenInterner::default();
+        let paths = PathInterner::default();
         let result = layerstack_usdc::read_usdc(
             bytes,
             LayerId(1),
-            &mut tokens,
-            &mut paths,
+            &tokens,
+            &paths,
             &mut AnyAsset::default(),
         )
         .expect("USDC reads");
@@ -148,13 +148,13 @@ impl Imported {
     /// Panics on structural errors or assembly diagnostics; payload errors
     /// remain observable when saving or querying the imported layer.
     pub fn usdc_retained(bytes: Arc<[u8]>) -> Self {
-        let mut tokens = TokenInterner::default();
-        let mut paths = PathInterner::default();
+        let tokens = TokenInterner::default();
+        let paths = PathInterner::default();
         let read = layerstack_usdc::read_usdc_lazy(
             bytes,
             LayerId(1),
-            &mut tokens,
-            &mut paths,
+            &tokens,
+            &paths,
             &mut AnyAsset::default(),
         )
         .expect("retained USDC reads");
@@ -194,7 +194,7 @@ impl Imported {
     ///
     /// Panics if the layer authors no prim spec there.
     pub fn prim(&mut self, path: &str) -> &mut layerstack::doc::PrimSpec {
-        let path = Path::parse_absolute(path, &mut self.tokens).expect("prim path");
+        let path = Path::parse_absolute(path, &self.tokens).expect("prim path");
         let id = self.paths.intern(path);
         self.layer.prims.get_mut(&id).expect("prim spec")
     }
@@ -226,8 +226,7 @@ impl Imported {
     ///
     /// Panics if the layer authors no property spec there.
     pub fn property(&mut self, path: &str) -> &mut layerstack::property::PropertySpec {
-        let path =
-            PropertyPath::parse(path, &mut self.tokens, &mut self.paths).expect("property path");
+        let path = PropertyPath::parse(path, &self.tokens, &self.paths).expect("property path");
         self.layer.property_mut(path).expect("property spec")
     }
 }
@@ -543,7 +542,7 @@ pub fn cases() -> Vec<SaveCase> {
                      ahead of the first, which changes what the prim composes",
             source: INHERIT_SPECIALIZE,
             edit: |layer| {
-                let accent = Path::parse_absolute("/_Accent", &mut layer.tokens).unwrap();
+                let accent = Path::parse_absolute("/_Accent", &layer.tokens).unwrap();
                 let accent = layer.paths.intern(accent);
                 layer
                     .prim("/Item")
@@ -725,8 +724,8 @@ impl AssetResolver for Assets<'_> {
         &mut self,
         asset_path: &str,
         _: Option<LayerId>,
-        tokens: &mut TokenInterner,
-        paths: &mut PathInterner,
+        tokens: &TokenInterner,
+        paths: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         let resolved_path = Arc::from(asset_path);
         if let Some(&layer_id) = self.ids.get(asset_path) {
@@ -788,8 +787,8 @@ pub fn composed(root: Root<'_>, assets: &[(&str, &str)]) -> String {
             let result = layerstack_usda::emit::emit(
                 &parsed.layer,
                 LayerId(1),
-                &mut store.tokens,
-                &mut store.paths,
+                &store.tokens,
+                &store.paths,
                 &mut resolver,
             );
             assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
@@ -799,8 +798,8 @@ pub fn composed(root: Root<'_>, assets: &[(&str, &str)]) -> String {
             let result = layerstack_usdc::read_usdc(
                 bytes,
                 LayerId(1),
-                &mut store.tokens,
-                &mut store.paths,
+                &store.tokens,
+                &store.paths,
                 &mut resolver,
             )
             .expect("USDC reads");

@@ -31,8 +31,8 @@ impl Files {
         &mut self,
         asset: &str,
         anchor: Option<LayerId>,
-        tokens: &mut TokenInterner,
-        paths: &mut PathInterner,
+        tokens: &TokenInterner,
+        paths: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         let base =
             anchor
@@ -112,8 +112,8 @@ impl AssetResolver for Files {
         &mut self,
         asset: &str,
         anchor: Option<LayerId>,
-        tokens: &mut TokenInterner,
-        paths: &mut PathInterner,
+        tokens: &TokenInterner,
+        paths: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         let result = self.load_asset(asset, anchor, tokens, paths);
         if let Err(error) = &result {
@@ -145,7 +145,7 @@ fn main() {
         let mut files = Files::default();
         let start = Instant::now();
         let result = files
-            .resolve(root, None, &mut store.tokens, &mut store.paths)
+            .resolve(root, None, &store.tokens, &store.paths)
             .expect("load all scene layers without diagnostics");
         assert!(files.errors.is_empty(), "{:?}", files.errors);
         let root = result.layer_id;

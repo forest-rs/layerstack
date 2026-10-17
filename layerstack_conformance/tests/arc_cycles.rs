@@ -33,8 +33,8 @@ impl AssetResolver for MemoryResolver {
         &mut self,
         asset_path: &str,
         _anchor: Option<LayerId>,
-        tokens: &mut TokenInterner,
-        paths: &mut PathInterner,
+        tokens: &TokenInterner,
+        paths: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         let name = asset_path.trim_start_matches("./");
         if let Some(id) = self.by_name.get(name) {
@@ -64,8 +64,8 @@ impl AssetResolver for MemoryResolver {
 fn emit_layer(
     source: &str,
     layer_id: LayerId,
-    tokens: &mut TokenInterner,
-    paths: &mut PathInterner,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
     resolver: &mut MemoryResolver,
 ) -> Layer {
     let cst = parse_cst(source);
@@ -95,13 +95,7 @@ fn compose(root: &'static str, others: &[(&'static str, &'static str)]) -> Scene
         next_layer_id: 2,
         pending: Vec::new(),
     };
-    let layer = emit_layer(
-        root,
-        LayerId(1),
-        &mut store.tokens,
-        &mut store.paths,
-        &mut resolver,
-    );
+    let layer = emit_layer(root, LayerId(1), &store.tokens, &store.paths, &mut resolver);
     store.insert_layer(layer);
     for layer in resolver.pending.drain(..) {
         store.insert_layer(layer);

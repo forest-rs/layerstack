@@ -53,8 +53,8 @@ impl AssetResolver for NoAssets {
         &mut self,
         _: &str,
         _: Option<LayerId>,
-        _: &mut TokenInterner,
-        _: &mut PathInterner,
+        _: &TokenInterner,
+        _: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         Err(AssetResolveError::NotFound)
     }
@@ -69,8 +69,8 @@ fn read(data: &[u8]) -> Result<layerstack_usdc::AssembleResult, UsdcError> {
     layerstack_usdc::read_usdc(
         data,
         LayerId(1),
-        &mut TokenInterner::default(),
-        &mut PathInterner::default(),
+        &TokenInterner::default(),
+        &PathInterner::default(),
         &mut NoAssets,
     )
 }
@@ -162,7 +162,7 @@ fn compare_file_with_openusd(root: &std::path::Path, expected: &Json) -> Vec<Mis
 
     let mut mismatches = Vec::new();
     for (prim_path, attributes) in expected["prims"].as_object().expect("prims") {
-        let path = Path::parse_absolute(prim_path, &mut store.tokens).expect("prim path");
+        let path = Path::parse_absolute(prim_path, &store.tokens).expect("prim path");
         let prim = store.paths.intern(path);
         for (name, record) in attributes.as_object().expect("attributes") {
             let field = store.tokens.intern(name);
@@ -379,17 +379,17 @@ fn newest_authored_spline_features_are_readable() {
 
 /// Decodes `name` alone and returns the authored value of `prim.attribute`.
 fn authored(name: &str, prim: &str, attribute: &str) -> PropertySpec {
-    let mut tokens = TokenInterner::default();
-    let mut paths = PathInterner::default();
+    let tokens = TokenInterner::default();
+    let paths = PathInterner::default();
     let result = layerstack_usdc::read_usdc(
         &fixture_bytes(name),
         LayerId(1),
-        &mut tokens,
-        &mut paths,
+        &tokens,
+        &paths,
         &mut NoAssets,
     )
     .unwrap_or_else(|e| panic!("failed to read {name}: {e}"));
-    let path = Path::parse_absolute(prim, &mut tokens).expect("prim path");
+    let path = Path::parse_absolute(prim, &tokens).expect("prim path");
     let spec = &result.layer.prims[&paths.lookup(&path).expect("prim")];
     spec.property(tokens.intern(attribute))
         .unwrap_or_else(|| panic!("no {prim}.{attribute}"))
@@ -710,7 +710,7 @@ fn failing_vectors(vectors: &[Vector]) -> Vec<String> {
     let field = store.tokens.intern("attr");
     let mut failing = Vec::new();
     for &(prim, time, expected) in vectors {
-        let path = Path::parse_absolute(prim, &mut store.tokens).expect("prim path");
+        let path = Path::parse_absolute(prim, &store.tokens).expect("prim path");
         let prim_id = store.paths.intern(path);
         let value = match time {
             None => stage

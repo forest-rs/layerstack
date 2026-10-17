@@ -347,8 +347,8 @@ impl AssetResolver for MemoryResolver<'_> {
         &mut self,
         asset_path: &str,
         _anchor: Option<LayerId>,
-        tokens: &mut TokenInterner,
-        paths: &mut PathInterner,
+        tokens: &TokenInterner,
+        paths: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         let name = asset_path.trim_start_matches("./");
         if let Some(id) = self.by_name.get(name) {
@@ -378,8 +378,8 @@ impl AssetResolver for MemoryResolver<'_> {
 fn emit_layer(
     source: &str,
     layer_id: LayerId,
-    tokens: &mut TokenInterner,
-    paths: &mut PathInterner,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
     resolver: &mut MemoryResolver<'_>,
 ) -> Layer {
     let cst = parse_cst(source);
@@ -438,8 +438,8 @@ fn explanations_resolve_what_resolution_resolves() {
         let layer = emit_layer(
             &case.layers["root.usda"],
             LayerId(1),
-            &mut store.tokens,
-            &mut store.paths,
+            &store.tokens,
+            &store.paths,
             &mut resolver,
         );
         store.insert_layer(layer);

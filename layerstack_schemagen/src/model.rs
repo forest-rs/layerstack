@@ -270,8 +270,8 @@ pub(crate) fn read(pxr: &Path, source: &Path) -> Result<Model, String> {
         let emitted = layerstack_usda::emit::emit(
             &parsed.layer,
             LayerId(u64::try_from(index).expect("few domains") + 1),
-            &mut store.tokens,
-            &mut store.paths,
+            &store.tokens,
+            &store.paths,
             &mut NoAssets,
         );
         let diagnostics: Vec<String> = parsed
@@ -532,7 +532,7 @@ pub(crate) fn read(pxr: &Path, source: &Path) -> Result<Model, String> {
     })
 }
 
-fn intern_all(tokens: &mut TokenInterner, names: &[String]) -> Vec<layerstack::TokenId> {
+fn intern_all(tokens: &TokenInterner, names: &[String]) -> Vec<layerstack::TokenId> {
     names.iter().map(|name| tokens.intern(name)).collect()
 }
 
@@ -579,14 +579,14 @@ fn source_api_names(
     let path = source.join(&relative);
     files.push(relative);
     let text = fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-    let mut store = InMemoryStore::default();
+    let store = InMemoryStore::default();
     let parsed = layerstack_usda::parser::parse(&text);
     // Its sublayers name other schema files, which need not resolve.
     let emitted = layerstack_usda::emit::emit(
         &parsed.layer,
         LayerId(1),
-        &mut store.tokens,
-        &mut store.paths,
+        &store.tokens,
+        &store.paths,
         &mut NoAssets,
     );
     let custom_data = store.tokens.intern("customData");
@@ -721,8 +721,8 @@ impl AssetResolver for NoAssets {
         &mut self,
         _: &str,
         _: Option<LayerId>,
-        _: &mut TokenInterner,
-        _: &mut PathInterner,
+        _: &TokenInterner,
+        _: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         Err(AssetResolveError::NotFound)
     }

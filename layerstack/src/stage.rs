@@ -4195,9 +4195,9 @@ mod tests {
     }
 
     fn test_key(layer: LayerId, lookup_path: PathId) -> OpinionKey {
-        let mut tokens = TokenInterner::default();
-        let mut paths = PathInterner::default();
-        let spec_path = SpecPath::parse("/A", &mut tokens, &mut paths).expect("spec path");
+        let tokens = TokenInterner::default();
+        let paths = PathInterner::default();
+        let spec_path = SpecPath::parse("/A", &tokens, &paths).expect("spec path");
         OpinionKey {
             node: NodeId::ROOT,
             layer_strength: 0,
@@ -4209,9 +4209,9 @@ mod tests {
 
     #[test]
     fn resolves_sparse_array_edit_over_dense_default() {
-        let mut tokens = TokenInterner::default();
+        let tokens = TokenInterner::default();
         let paths = PathInterner::default();
-        let prim = paths.intern(Path::parse_absolute("/A", &mut tokens).expect("valid path"));
+        let prim = paths.intern(Path::parse_absolute("/A", &tokens).expect("valid path"));
         let field = tokens.intern("x");
 
         let mut index = PrimIndex::default();
@@ -4251,9 +4251,9 @@ mod tests {
 
     #[test]
     fn resolves_time_sampled_sparse_array_edits() {
-        let mut tokens = TokenInterner::default();
+        let tokens = TokenInterner::default();
         let paths = PathInterner::default();
-        let prim = paths.intern(Path::parse_absolute("/A", &mut tokens).expect("valid path"));
+        let prim = paths.intern(Path::parse_absolute("/A", &tokens).expect("valid path"));
         let field = tokens.intern("x");
 
         let identity = Value::ArrayEdit(ArrayEdit::default());
@@ -4321,9 +4321,9 @@ mod tests {
 
     #[test]
     fn sampled_block_hides_weaker_array_at_time() {
-        let mut tokens = TokenInterner::default();
+        let tokens = TokenInterner::default();
         let paths = PathInterner::default();
-        let prim = paths.intern(Path::parse_absolute("/A", &mut tokens).expect("valid path"));
+        let prim = paths.intern(Path::parse_absolute("/A", &tokens).expect("valid path"));
         let field = tokens.intern("x");
 
         let mut index = PrimIndex::default();

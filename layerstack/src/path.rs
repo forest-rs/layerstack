@@ -81,8 +81,8 @@ impl PropertyPath {
     /// variant-qualified provenance paths.
     pub fn parse(
         s: &str,
-        tokens: &mut TokenInterner,
-        paths: &mut PathInterner,
+        tokens: &TokenInterner,
+        paths: &PathInterner,
     ) -> Result<Self, PropertyPathError> {
         let (prim, property) = Self::split(s)?;
         let prim_path = Path::parse_absolute(prim, tokens)?;
@@ -177,8 +177,8 @@ impl TargetPath {
     /// Parses a concrete target path such as `/Prim` or `/Prim.attrName`.
     pub fn parse(
         s: &str,
-        tokens: &mut TokenInterner,
-        paths: &mut PathInterner,
+        tokens: &TokenInterner,
+        paths: &PathInterner,
     ) -> Result<Self, TargetPathError> {
         if s.contains('.') {
             return PropertyPath::parse(s, tokens, paths)
@@ -258,7 +258,7 @@ impl Path {
     ///
     /// assert_eq!(Path::parse_absolute("relative", &mut tokens), Err(PathError::NotAbsolute));
     /// ```
-    pub fn parse_absolute(s: &str, tokens: &mut TokenInterner) -> Result<Self, PathError> {
+    pub fn parse_absolute(s: &str, tokens: &TokenInterner) -> Result<Self, PathError> {
         if !s.starts_with('/') {
             return Err(PathError::NotAbsolute);
         }
@@ -627,11 +627,11 @@ mod tests {
 
     #[test]
     fn interning_a_path_interns_its_ancestors() {
-        let mut tokens = TokenInterner::default();
+        let tokens = TokenInterner::default();
         let paths = PathInterner::default();
-        let child = paths.intern(Path::parse_absolute("/World/Leaf", &mut tokens).unwrap());
+        let child = paths.intern(Path::parse_absolute("/World/Leaf", &tokens).unwrap());
         let parent = paths
-            .lookup(&Path::parse_absolute("/World", &mut tokens).unwrap())
+            .lookup(&Path::parse_absolute("/World", &tokens).unwrap())
             .expect("the parent is interned with its child");
         let root = paths.lookup(&Path::root()).expect("and the root");
         assert_eq!(paths.parent(child), Some(parent));
@@ -641,87 +641,86 @@ mod tests {
 
     #[test]
     fn property_path_parse_round_trips() {
-        let mut tokens = TokenInterner::default();
-        let mut paths = PathInterner::default();
-        let property =
-            PropertyPath::parse("/World/Cube.visibility", &mut tokens, &mut paths).unwrap();
+        let tokens = TokenInterner::default();
+        let paths = PathInterner::default();
+        let property = PropertyPath::parse("/World/Cube.visibility", &tokens, &paths).unwrap();
         assert_eq!(property.display(&paths, &tokens), "/World/Cube.visibility");
     }
 
     #[test]
     fn property_path_parse_rejects_missing_property() {
-        let mut tokens = TokenInterner::default();
-        let mut paths = PathInterner::default();
+        let tokens = TokenInterner::default();
+        let paths = PathInterner::default();
         assert_eq!(
-            PropertyPath::parse("/World/Cube", &mut tokens, &mut paths),
+            PropertyPath::parse("/World/Cube", &tokens, &paths),
             Err(PropertyPathError::MissingProperty)
         );
     }
 
     #[test]
     fn property_path_parse_rejects_empty_property() {
-        let mut tokens = TokenInterner::default();
-        let mut paths = PathInterner::default();
+        let tokens = TokenInterner::default();
+        let paths = PathInterner::default();
         assert_eq!(
-            PropertyPath::parse("/World/Cube.", &mut tokens, &mut paths),
+            PropertyPath::parse("/World/Cube.", &tokens, &paths),
             Err(PropertyPathError::EmptyPropertyName)
         );
     }
 
     #[test]
     fn property_path_parse_rejects_variant_qualified_path() {
-        let mut tokens = TokenInterner::default();
-        let mut paths = PathInterner::default();
+        let tokens = TokenInterner::default();
+        let paths = PathInterner::default();
         assert_eq!(
-            PropertyPath::parse("/World/Cube{lod=high}.visibility", &mut tokens, &mut paths),
+            PropertyPath::parse("/World/Cube{lod=high}.visibility", &tokens, &paths),
             Err(PropertyPathError::VariantSelectionNotAllowed)
         );
     }
 
     #[test]
     fn property_path_parse_rejects_invalid_property_name() {
-        let mut tokens = TokenInterner::default();
-        let mut paths = PathInterner::default();
+        let tokens = TokenInterner::default();
+        let paths = PathInterner::default();
         assert_eq!(
-            PropertyPath::parse("/World/Cube.visibility/child", &mut tokens, &mut paths),
+            PropertyPath::parse("/World/Cube.visibility/child", &tokens, &paths),
             Err(PropertyPathError::InvalidPropertyName)
         );
     }
 
     #[test]
     fn property_path_parse_rejects_root_property() {
-        let mut tokens = TokenInterner::default();
-        let mut paths = PathInterner::default();
+        let tokens = TokenInterner::default();
+        let paths = PathInterner::default();
         assert_eq!(
-            PropertyPath::parse("/.visibility", &mut tokens, &mut paths),
+            PropertyPath::parse("/.visibility", &tokens, &paths),
             Err(PropertyPathError::RootPrimNotAllowed)
         );
     }
 
     #[test]
     fn property_path_parse_rejects_ambiguous_dotted_prim_path() {
-        let mut tokens = TokenInterner::default();
-        let mut paths = PathInterner::default();
+        let tokens = TokenInterner::default();
+        let paths = PathInterner::default();
         assert_eq!(
-            PropertyPath::parse("/World/Cube.visibility.extra", &mut tokens, &mut paths),
+            PropertyPath::parse("/World/Cube.visibility.extra", &tokens, &paths),
             Err(PropertyPathError::InvalidPrimPath)
         );
     }
 
     #[test]
     fn target_path_parse_round_trips_prim_target() {
-        let mut tokens = TokenInterner::default();
-        let mut paths = PathInterner::default();
-        let target = TargetPath::parse("/World/Cube", &mut tokens, &mut paths).unwrap();
+        let tokens = TokenInterner::default();
+        let paths = PathInterner::default();
+        let target = TargetPath::parse("/World/Cube", &tokens, &paths).unwrap();
         assert_eq!(target.display(&paths, &tokens), "/World/Cube");
         assert_eq!(target.property_path(), None);
     }
 
     #[test]
     fn target_path_parse_round_trips_property_target() {
-        let mut tokens = TokenInterner::default();
-        let mut paths = PathInterner::default();
-        let target = TargetPath::parse("/World/Cube.visibility", &mut tokens, &mut paths).unwrap();
+        let tokens = TokenInterner::default();
+        let paths = PathInterner::default();
+        let target = TargetPath::parse("/World/Cube.visibility", &tokens, &paths).unwrap();
         assert_eq!(target.display(&paths, &tokens), "/World/Cube.visibility");
         assert!(target.property_path().is_some());
     }

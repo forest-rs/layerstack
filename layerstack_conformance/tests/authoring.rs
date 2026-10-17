@@ -91,8 +91,8 @@ impl AssetResolver for MemoryResolver {
         &mut self,
         asset_path: &str,
         _anchor: Option<LayerId>,
-        tokens: &mut TokenInterner,
-        paths: &mut PathInterner,
+        tokens: &TokenInterner,
+        paths: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         let name = asset_path.trim_start_matches("./");
         if let Some(id) = self.by_name.get(name) {
@@ -123,8 +123,8 @@ impl AssetResolver for MemoryResolver {
 fn emit_layer(
     source: &str,
     layer_id: LayerId,
-    tokens: &mut TokenInterner,
-    paths: &mut PathInterner,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
     resolver: &mut MemoryResolver,
 ) -> Layer {
     let cst = parse_cst(source);
@@ -143,13 +143,7 @@ fn load(scene: &str, rock: &str) -> InMemoryStore {
         by_name: BTreeMap::new(),
         pending: Vec::new(),
     };
-    let scene = emit_layer(
-        scene,
-        SCENE,
-        &mut store.tokens,
-        &mut store.paths,
-        &mut resolver,
-    );
+    let scene = emit_layer(scene, SCENE, &store.tokens, &store.paths, &mut resolver);
     store.insert_layer(scene);
     for layer in resolver.pending.drain(..) {
         store.insert_layer(layer);
@@ -182,7 +176,7 @@ fn scalar(stage: &Stage, path: PropertyPath) -> Option<Value> {
 }
 
 fn spec(store: &mut InMemoryStore, text: &str) -> SpecPath {
-    SpecPath::parse(text, &mut store.tokens, &mut store.paths).expect("spec path")
+    SpecPath::parse(text, &store.tokens, &store.paths).expect("spec path")
 }
 
 /// The probe of the C++ reference: effective values of both rocks and the

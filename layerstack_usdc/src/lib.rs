@@ -102,8 +102,8 @@ pub use version::CrateVersion;
 ///
 /// struct NoAssets;
 /// impl AssetResolver for NoAssets {
-///     fn resolve(&mut self, _: &str, _: Option<LayerId>, _: &mut TokenInterner,
-///                _: &mut PathInterner) -> Result<ResolvedAsset, AssetResolveError> {
+///     fn resolve(&mut self, _: &str, _: Option<LayerId>, _: &TokenInterner,
+///                _: &PathInterner) -> Result<ResolvedAsset, AssetResolveError> {
 ///         Err(AssetResolveError::NotFound)
 ///     }
 ///     fn resolved_path(&self, _: LayerId) -> Option<&str> { None }
@@ -113,8 +113,8 @@ pub use version::CrateVersion;
 /// let result = read_usdc(
 ///     b"too short",
 ///     LayerId(1),
-///     &mut TokenInterner::default(),
-///     &mut PathInterner::default(),
+///     &TokenInterner::default(),
+///     &PathInterner::default(),
 ///     &mut NoAssets,
 /// );
 /// assert!(matches!(result, Err(UsdcError::UnexpectedEof { .. })));
@@ -124,8 +124,8 @@ pub use version::CrateVersion;
 pub fn read_usdc(
     data: &[u8],
     layer_id: LayerId,
-    tokens: &mut TokenInterner,
-    paths: &mut PathInterner,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
     resolver: &mut dyn AssetResolver,
 ) -> Result<AssembleResult, UsdcError> {
     let mut budget = DecodeBudget::for_input(data.len());
@@ -142,8 +142,8 @@ pub fn read_usdc(
 pub fn read_usdc_within(
     data: &[u8],
     layer_id: LayerId,
-    tokens: &mut TokenInterner,
-    paths: &mut PathInterner,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
     resolver: &mut dyn AssetResolver,
     budget: &mut DecodeBudget,
 ) -> Result<AssembleResult, UsdcError> {

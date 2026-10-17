@@ -2781,7 +2781,7 @@ impl InMemoryStore {
     ///
     /// Panics if `s` is not a valid absolute path (must start with `/`).
     pub fn path(&mut self, s: &str) -> PathId {
-        let p = Path::parse_absolute(s, &mut self.tokens).expect("valid absolute path");
+        let p = Path::parse_absolute(s, &self.tokens).expect("valid absolute path");
         self.paths.intern(p)
     }
 
@@ -2791,7 +2791,7 @@ impl InMemoryStore {
     ///
     /// Panics if `s` is not a valid property path such as `/Prim.attrName`.
     pub fn property_path(&mut self, s: &str) -> PropertyPath {
-        PropertyPath::parse(s, &mut self.tokens, &mut self.paths).expect("valid property path")
+        PropertyPath::parse(s, &self.tokens, &self.paths).expect("valid property path")
     }
 
     /// Parses a concrete relationship or connection target path.
@@ -2801,7 +2801,7 @@ impl InMemoryStore {
     /// Panics if `s` is not a valid target path such as `/Prim` or
     /// `/Prim.attrName`.
     pub fn target_path(&mut self, s: &str) -> TargetPath {
-        TargetPath::parse(s, &mut self.tokens, &mut self.paths).expect("valid target path")
+        TargetPath::parse(s, &self.tokens, &self.paths).expect("valid target path")
     }
 }
 
@@ -3241,7 +3241,7 @@ mod tests {
         let mut tokens = TokenInterner::default();
         let mut paths = PathInterner::default();
         let [a, b, x, y, count] = ["a", "b", "x", "y", "count"].map(|t| tokens.intern(t));
-        let p = paths.intern(Path::parse_absolute("/P", &mut tokens).unwrap());
+        let p = paths.intern(Path::parse_absolute("/P", &tokens).unwrap());
         let variant = |value: i64, sets: Vec<(TokenId, TokenId, VariantSpec)>| {
             let mut spec = VariantSpec::default();
             spec.fields.push(FieldEntry {

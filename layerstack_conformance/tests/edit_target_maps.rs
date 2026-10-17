@@ -101,8 +101,8 @@ fn compose(store: &mut InMemoryStore) -> Stage {
 /// The edit target of a case, as the oracle builds OpenUSD's.
 fn edit_target(store: &mut InMemoryStore, stage: &Stage, prim: PathId, arc: &str) -> EditTarget {
     if arc == "local_direct_variant" {
-        let variant = SpecPath::parse("/Rock{look=a}", &mut store.tokens, &mut store.paths)
-            .expect("a variant path");
+        let variant =
+            SpecPath::parse("/Rock{look=a}", &store.tokens, &store.paths).expect("a variant path");
         return EditTarget::for_local_variant(ROOT, &variant);
     }
     let kind = match arc {
@@ -217,8 +217,8 @@ fn edit_targets_map_as_openusd_does() {
             .map_property_to_spec_path(at, &mut store.paths)
             .expect("the prim maps");
         for (path, expected) in case["targets"].as_object().expect("targets") {
-            let wanted = TargetPath::parse(path, &mut store.tokens, &mut store.paths)
-                .expect("a target path");
+            let wanted =
+                TargetPath::parse(path, &store.tokens, &store.paths).expect("a target path");
             let before = layers(&store);
             let mut edit = Transaction::new();
             edit.set_targets(target.property(at), ListOp::explicit(vec![wanted]));
@@ -301,9 +301,7 @@ fn authored_targets_compose_as_openusd_composes_them() {
             .expect("targets")
             .iter()
             .filter(|(_, outcome)| !outcome.is_null())
-            .map(|(path, _)| {
-                TargetPath::parse(path, &mut store.tokens, &mut store.paths).expect("a path")
-            })
+            .map(|(path, _)| TargetPath::parse(path, &store.tokens, &store.paths).expect("a path"))
             .collect();
         edit.set_targets(
             target.property(PropertyPath::new(prim, look)),

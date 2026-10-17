@@ -538,7 +538,7 @@ impl<B: Storage> StageDocument<B> {
             options.schemas.clone(),
         );
         reader.variant_arcs = loading.variant_arcs;
-        let resolved = reader.load(asset, None, &mut store.tokens, &mut store.paths)?;
+        let resolved = reader.load(asset, None, &store.tokens, &store.paths)?;
         if let Some(layer) = resolved.layer {
             reader.pending.push(layer);
         }
@@ -611,12 +611,8 @@ impl<B: Storage> StageDocument<B> {
             );
             reader.variant_arcs = self.variant_arcs;
             for (anchor, asset) in requests {
-                let result = reader.load(
-                    &asset,
-                    Some(anchor),
-                    &mut self.store.tokens,
-                    &mut self.store.paths,
-                );
+                let result =
+                    reader.load(&asset, Some(anchor), &self.store.tokens, &self.store.paths);
                 match result {
                     Ok(resolved) => {
                         reader.bindings.insert((anchor, asset), resolved.layer_id);
@@ -668,7 +664,7 @@ impl<B: Storage> StageDocument<B> {
             self.stage.options().schemas.clone(),
         );
         reader.variant_arcs = self.variant_arcs;
-        let resolved = reader.load(asset, anchor, &mut self.store.tokens, &mut self.store.paths)?;
+        let resolved = reader.load(asset, anchor, &self.store.tokens, &self.store.paths)?;
         let id = resolved.layer_id;
         if let Some(anchor) = anchor {
             reader.bindings.insert((anchor, asset.into()), id);
@@ -1002,8 +998,8 @@ impl<'a, B: Storage> Reader<'a, B> {
                 match self.load(
                     &request.asset_path,
                     Some(request.anchor),
-                    &mut store.tokens,
-                    &mut store.paths,
+                    &store.tokens,
+                    &store.paths,
                 ) {
                     Ok(resolved) => {
                         self.bindings.insert(key, resolved.layer_id);
@@ -1080,8 +1076,8 @@ impl<'a, B: Storage> Reader<'a, B> {
         data: EncodedBytes,
         identifier: &str,
         id: LayerId,
-        tokens: &mut TokenInterner,
-        paths: &mut PathInterner,
+        tokens: &TokenInterner,
+        paths: &PathInterner,
     ) -> Result<Layer, IoError> {
         let format = if data.starts_with(b"PXR-USDC") {
             Format::Usdc
@@ -1314,8 +1310,8 @@ impl<B: Storage> Reader<'_, B> {
         &mut self,
         asset: &str,
         anchor: Option<LayerId>,
-        tokens: &mut TokenInterner,
-        paths: &mut PathInterner,
+        tokens: &TokenInterner,
+        paths: &PathInterner,
     ) -> Result<ResolvedAsset, IoError> {
         if let Some(anchor) = anchor
             && let Some(package) = self.catalog.sources.get(&anchor).and_then(|s| s.package)
@@ -1330,8 +1326,8 @@ impl<B: Storage> Reader<'_, B> {
         asset: &str,
         anchor: LayerId,
         package: LayerId,
-        tokens: &mut TokenInterner,
-        paths: &mut PathInterner,
+        tokens: &TokenInterner,
+        paths: &PathInterner,
     ) -> Result<ResolvedAsset, IoError> {
         if asset.starts_with('/') || asset.contains(':') {
             return self.load_external(asset, Some(package), tokens, paths);
@@ -1356,8 +1352,8 @@ impl<B: Storage> Reader<'_, B> {
         &mut self,
         member: &str,
         package: LayerId,
-        tokens: &mut TokenInterner,
-        paths: &mut PathInterner,
+        tokens: &TokenInterner,
+        paths: &PathInterner,
     ) -> Result<ResolvedAsset, IoError> {
         self.catalog.cache_work.index_hits += 1;
         let archive = self.catalog.package_bytes[&package].clone();
@@ -1410,8 +1406,8 @@ impl<B: Storage> Reader<'_, B> {
         &mut self,
         asset: &str,
         anchor: Option<LayerId>,
-        tokens: &mut TokenInterner,
-        paths: &mut PathInterner,
+        tokens: &TokenInterner,
+        paths: &PathInterner,
     ) -> Result<ResolvedAsset, IoError> {
         let anchor_identifier = anchor
             .and_then(|id| self.catalog.sources.get(&id))
@@ -1483,8 +1479,8 @@ impl<B: Storage> AssetResolver for Reader<'_, B> {
         &mut self,
         asset: &str,
         anchor: Option<LayerId>,
-        tokens: &mut TokenInterner,
-        paths: &mut PathInterner,
+        tokens: &TokenInterner,
+        paths: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         let result = self.load(asset, anchor, tokens, paths);
         if let Err(error) = &result {

@@ -253,8 +253,8 @@ impl DeferredArraySource for RetimedArray {
 pub fn read_usdc_lazy(
     bytes: Arc<[u8]>,
     id: LayerId,
-    tokens: &mut TokenInterner,
-    paths: &mut PathInterner,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
     resolver: &mut dyn AssetResolver,
 ) -> Result<LazyReadResult, UsdcError> {
     let budget = DecodeBudget::for_input(bytes.len());
@@ -265,8 +265,8 @@ pub fn read_usdc_lazy(
 pub fn read_usdc_lazy_within(
     bytes: Arc<[u8]>,
     id: LayerId,
-    tokens: &mut TokenInterner,
-    paths: &mut PathInterner,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
     resolver: &mut dyn AssetResolver,
     budget: DecodeBudget,
 ) -> Result<LazyReadResult, UsdcError> {
@@ -279,8 +279,8 @@ pub fn read_usdc_lazy_within(
 pub fn read_usdc_lazy_range_within(
     bytes: EncodedBytes,
     id: LayerId,
-    tokens: &mut TokenInterner,
-    paths: &mut PathInterner,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
     resolver: &mut dyn AssetResolver,
     mut budget: DecodeBudget,
 ) -> Result<LazyReadResult, UsdcError> {

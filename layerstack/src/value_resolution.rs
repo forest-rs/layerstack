@@ -1822,10 +1822,10 @@ mod tests {
     }
 
     fn test_key(layer: LayerId, lookup_path: PathId) -> OpinionKey {
-        let mut tokens = TokenInterner::default();
-        let mut paths = PathInterner::default();
+        let tokens = TokenInterner::default();
+        let paths = PathInterner::default();
         let spec_path =
-            crate::spec_path::SpecPath::parse("/A", &mut tokens, &mut paths).expect("spec path");
+            crate::spec_path::SpecPath::parse("/A", &tokens, &paths).expect("spec path");
         OpinionKey {
             node: crate::prim_index_graph::NodeId::ROOT,
             layer_strength: 0,
@@ -1836,9 +1836,9 @@ mod tests {
     }
 
     fn test_ids() -> (PathId, TokenId) {
-        let mut tokens = TokenInterner::default();
+        let tokens = TokenInterner::default();
         let paths = PathInterner::default();
-        let spec_path = paths.intern(Path::parse_absolute("/A", &mut tokens).expect("valid path"));
+        let spec_path = paths.intern(Path::parse_absolute("/A", &tokens).expect("valid path"));
         let field = tokens.intern("x");
         (spec_path, field)
     }

@@ -580,8 +580,7 @@ fn local_variant_targets_keep_paths_outside_the_branch() {
     let (rock_name, light_name) = (store.tokens.intern("Rock"), store.tokens.intern("Light"));
     let (look, a) = (store.tokens.intern("look"), store.tokens.intern("a"));
     let intensity = store.tokens.intern("intensity");
-    let variant =
-        SpecPath::parse("/Rock{look=a}", &mut store.tokens, &mut store.paths).expect("a path");
+    let variant = SpecPath::parse("/Rock{look=a}", &store.tokens, &store.paths).expect("a path");
     let mut layer = Layer::new(LayerId(1));
     layer.insert_prim(
         root,

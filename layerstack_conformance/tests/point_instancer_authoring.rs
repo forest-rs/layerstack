@@ -193,8 +193,7 @@ fn variant_id_edits_read_only_the_mapped_target_site() {
     );
     let (mut store, mut live) = support::scene(&source);
     let path = store.path("/P");
-    let variant =
-        layerstack::SpecPath::parse("/P{mode=a}", &mut store.tokens, &mut store.paths).unwrap();
+    let variant = layerstack::SpecPath::parse("/P{mode=a}", &store.tokens, &store.paths).unwrap();
     let target = EditTarget::for_local_variant(LayerId(1), &variant);
     let mut edit = SchemaEdit::new(live.stage(), &mut store, target);
     let point = PointInstancerEdit::new(&edit, path).unwrap();

@@ -30,8 +30,8 @@ impl AssetResolver for StubResolver {
         &mut self,
         _asset_path: &str,
         _anchor: Option<LayerId>,
-        _tokens: &mut TokenInterner,
-        _paths: &mut PathInterner,
+        _tokens: &TokenInterner,
+        _paths: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         let id = LayerId(self.next_id);
         self.next_id += 1;
@@ -87,14 +87,14 @@ fn main() {
         }
 
         // Emit.
-        let mut tokens = TokenInterner::default();
-        let mut paths = PathInterner::default();
+        let tokens = TokenInterner::default();
+        let paths = PathInterner::default();
         let mut resolver = StubResolver { next_id: 100 };
         let emit_result = emit::emit(
             &ast_result.layer,
             LayerId(1),
-            &mut tokens,
-            &mut paths,
+            &tokens,
+            &paths,
             &mut resolver,
         );
         if !emit_result.diagnostics.is_empty() {

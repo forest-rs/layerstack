@@ -54,8 +54,8 @@ pub fn load_entry_usda(entry: &Path) -> LoadedStage {
         let resolved = resolver.resolve(
             &path.asset_path,
             Some(path.anchor),
-            &mut store.tokens,
-            &mut store.paths,
+            &store.tokens,
+            &store.paths,
         );
         while let Some(layer) = resolver.pending_layers.pop() {
             store.insert_layer(layer);
@@ -79,8 +79,8 @@ pub fn load_entry_usda(entry: &Path) -> LoadedStage {
             let result = resolver.resolve(
                 &request.identifier,
                 Some(request.anchor),
-                &mut store.tokens,
-                &mut store.paths,
+                &store.tokens,
+                &store.paths,
             );
             while let Some(layer) = resolver.pending_layers.pop() {
                 store.insert_layer(layer);
@@ -221,8 +221,8 @@ fn load_file(
     let emit_result = emit::emit(
         &ast_result.layer,
         layer_id,
-        &mut store.tokens,
-        &mut store.paths,
+        &store.tokens,
+        &store.paths,
         resolver,
     );
     if !emit_result.diagnostics.is_empty() {
@@ -297,8 +297,8 @@ impl AssetResolver for FileResolver {
         &mut self,
         asset_path: &str,
         anchor: Option<LayerId>,
-        tokens: &mut TokenInterner,
-        paths: &mut PathInterner,
+        tokens: &TokenInterner,
+        paths: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         // Resolve relative paths from the anchor layer's directory (or root).
         let base_dir = anchor

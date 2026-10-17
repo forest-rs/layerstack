@@ -30,8 +30,8 @@ impl AssetResolver for StubResolver {
         &mut self,
         _asset_path: &str,
         _anchor: Option<LayerId>,
-        _tokens: &mut TokenInterner,
-        _paths: &mut PathInterner,
+        _tokens: &TokenInterner,
+        _paths: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         let id = LayerId(self.next_id);
         self.next_id += 1;
@@ -66,8 +66,8 @@ fn insert_inline_usda(store: &mut InMemoryStore, layer_id: LayerId, source: &str
     let emitted = emit::emit(
         &ast.layer,
         layer_id,
-        &mut store.tokens,
-        &mut store.paths,
+        &store.tokens,
+        &store.paths,
         &mut resolver,
     );
     assert!(

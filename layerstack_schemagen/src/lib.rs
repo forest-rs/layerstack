@@ -308,8 +308,8 @@ fn generate_shader_text(text: &str) -> Result<String, String> {
     let emitted = layerstack_usda::emit::emit(
         &parsed.layer,
         layerstack::LayerId(0),
-        &mut store.tokens,
-        &mut store.paths,
+        &store.tokens,
+        &store.paths,
         &mut model::NoAssets,
     );
     if !parsed.diagnostics.is_empty() || !emitted.diagnostics.is_empty() {

@@ -19,8 +19,8 @@ impl AssetResolver for Outside {
         &mut self,
         _: &str,
         _: Option<LayerId>,
-        _: &mut TokenInterner,
-        _: &mut PathInterner,
+        _: &TokenInterner,
+        _: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         Err(AssetResolveError::NotFound)
     }
@@ -36,8 +36,8 @@ fn read(files: &[PackageFile<'_>]) -> Result<UsdzResult, UsdzError> {
     read_usdz(
         &write_usdz(files).unwrap(),
         LayerId(1),
-        &mut TokenInterner::default(),
-        &mut PathInterner::default(),
+        &TokenInterner::default(),
+        &PathInterner::default(),
         &mut Outside(1),
     )
 }
@@ -92,8 +92,8 @@ fn malformed_text_keeps_each_pipeline_phases_evidence() {
         let emitted = layerstack_usda::emit::emit(
             &ast.layer,
             LayerId(1),
-            &mut TokenInterner::default(),
-            &mut PathInterner::default(),
+            &TokenInterner::default(),
+            &PathInterner::default(),
             &mut Outside(1),
         );
         let expected = [&cst.diagnostics, &ast.diagnostics, &emitted.diagnostics][phase];
@@ -155,8 +155,8 @@ fn usdc_assembly_losses_survive_root_and_member_import() {
     let direct = layerstack_usdc::read_usdc(
         &bytes,
         LayerId(1),
-        &mut TokenInterner::default(),
-        &mut PathInterner::default(),
+        &TokenInterner::default(),
+        &PathInterner::default(),
         &mut Outside(1),
     )
     .unwrap();

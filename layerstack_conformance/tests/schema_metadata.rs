@@ -20,8 +20,8 @@ impl AssetResolver for NoAssets {
         &mut self,
         _: &str,
         _: Option<LayerId>,
-        _: &mut TokenInterner,
-        _: &mut PathInterner,
+        _: &TokenInterner,
+        _: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         Err(AssetResolveError::NotFound)
     }
@@ -35,8 +35,8 @@ fn parse(text: &str, id: LayerId, store: &mut InMemoryStore) -> layerstack::Laye
     let emitted = layerstack_usda::emit::emit(
         &parsed.layer,
         id,
-        &mut store.tokens,
-        &mut store.paths,
+        &store.tokens,
+        &store.paths,
         &mut NoAssets,
     );
     assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);

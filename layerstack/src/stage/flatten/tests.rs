@@ -516,8 +516,8 @@ fn asset_paths_are_external_and_anchoring_is_required_when_declared() {
             &mut self,
             _: &str,
             _: Option<LayerId>,
-            _: &mut crate::interner::TokenInterner,
-            _: &mut crate::path::PathInterner,
+            _: &crate::interner::TokenInterner,
+            _: &crate::path::PathInterner,
         ) -> Result<crate::asset::ResolvedAsset, crate::asset::AssetResolveError> {
             Err(crate::asset::AssetResolveError::NotFound)
         }

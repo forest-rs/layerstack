@@ -772,9 +772,9 @@ mod tests {
             property::PropertySpec,
             spline::{CurveType, Extrapolation, SplineData, SplineDataType},
         };
-        let mut tokens = TokenInterner::default();
-        let mut paths = PathInterner::default();
-        let spec_path = SpecPath::parse("/A", &mut tokens, &mut paths).expect("spec path");
+        let tokens = TokenInterner::default();
+        let paths = PathInterner::default();
+        let spec_path = SpecPath::parse("/A", &tokens, &paths).expect("spec path");
         let lookup_path = paths.intern(crate::path::Path::root());
         let field = tokens.intern("x");
         let opinion = |strength: u16, spec: PropertySpec| Opinion {

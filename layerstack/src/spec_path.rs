@@ -181,8 +181,8 @@ impl SpecPath {
     /// Parses a spec path like `/A{v=red}B/C.attr`.
     pub fn parse(
         s: &str,
-        tokens: &mut TokenInterner,
-        paths: &mut PathInterner,
+        tokens: &TokenInterner,
+        paths: &PathInterner,
     ) -> Result<Self, SpecPathError> {
         if !s.starts_with('/') {
             return Err(SpecPathError::NotAbsolute);
@@ -489,11 +489,11 @@ mod tests {
 
     #[test]
     fn from_variant_qualified_prim_path_formats_expected_string() {
-        let mut tokens = TokenInterner::default();
+        let tokens = TokenInterner::default();
         let paths = PathInterner::default();
-        let host = paths.intern(Path::parse_absolute("/Sarah", &mut tokens).expect("path"));
-        let concrete = paths
-            .intern(Path::parse_absolute("/Sarah/FaceRig/EyesRig", &mut tokens).expect("path"));
+        let host = paths.intern(Path::parse_absolute("/Sarah", &tokens).expect("path"));
+        let concrete =
+            paths.intern(Path::parse_absolute("/Sarah/FaceRig/EyesRig", &tokens).expect("path"));
         let selection = (tokens.intern("modelComplexity"), tokens.intern("full"));
 
         let spec = SpecPath::from_variant_qualified_prim_path(concrete, host, &[selection], &paths);
@@ -507,11 +507,11 @@ mod tests {
 
     #[test]
     fn from_variant_selection_sites_supports_multiple_hosts() {
-        let mut tokens = TokenInterner::default();
+        let tokens = TokenInterner::default();
         let paths = PathInterner::default();
-        let foo = paths.intern(Path::parse_absolute("/Foo", &mut tokens).expect("path"));
+        let foo = paths.intern(Path::parse_absolute("/Foo", &tokens).expect("path"));
         let foo_a_number =
-            paths.intern(Path::parse_absolute("/Foo/A/Number", &mut tokens).expect("path"));
+            paths.intern(Path::parse_absolute("/Foo/A/Number", &tokens).expect("path"));
         let which = tokens.intern("which");
         let a = tokens.intern("A");
         let count = tokens.intern("count");
@@ -542,16 +542,13 @@ mod tests {
 
     #[test]
     fn from_variant_selection_sites_supports_repeated_set_names_on_same_host() {
-        let mut tokens = TokenInterner::default();
+        let tokens = TokenInterner::default();
         let paths = PathInterner::default();
-        let host = paths
-            .intern(Path::parse_absolute("/DirectlyNestedVariants", &mut tokens).expect("path"));
+        let host =
+            paths.intern(Path::parse_absolute("/DirectlyNestedVariants", &tokens).expect("path"));
         let concrete = paths.intern(
-            Path::parse_absolute(
-                "/DirectlyNestedVariants/anim_spooky_anim_sphere",
-                &mut tokens,
-            )
-            .expect("path"),
+            Path::parse_absolute("/DirectlyNestedVariants/anim_spooky_anim_sphere", &tokens)
+                .expect("path"),
         );
         let standin = tokens.intern("standin");
         let shading = tokens.intern("shadingVariant");
@@ -588,15 +585,11 @@ mod tests {
 
     #[test]
     fn parse_round_trips_variant_property_path() {
-        let mut tokens = TokenInterner::default();
-        let mut paths = PathInterner::default();
+        let tokens = TokenInterner::default();
+        let paths = PathInterner::default();
 
-        let spec = SpecPath::parse(
-            "/A{nestedVariantSet=nestedVariant}.test",
-            &mut tokens,
-            &mut paths,
-        )
-        .expect("spec path");
+        let spec = SpecPath::parse("/A{nestedVariantSet=nestedVariant}.test", &tokens, &paths)
+            .expect("spec path");
 
         assert_eq!(
             spec.display(&paths, &tokens),
@@ -608,10 +601,10 @@ mod tests {
 
     #[test]
     fn from_property_path_preserves_plain_property_identity() {
-        let mut tokens = TokenInterner::default();
-        let mut paths = PathInterner::default();
-        let property = PropertyPath::parse("/Robot.visibility", &mut tokens, &mut paths)
-            .expect("property path");
+        let tokens = TokenInterner::default();
+        let paths = PathInterner::default();
+        let property =
+            PropertyPath::parse("/Robot.visibility", &tokens, &paths).expect("property path");
 
         let spec = SpecPath::from_property_path(property);
 
@@ -620,8 +613,8 @@ mod tests {
     }
     #[test]
     fn spec_paths_order_as_their_components() {
-        let mut tokens = TokenInterner::default();
-        let mut paths = PathInterner::default();
+        let tokens = TokenInterner::default();
+        let paths = PathInterner::default();
         let specs = [
             "/A/B/C",
             "/A/B/C.attr",
@@ -636,7 +629,7 @@ mod tests {
             "/A{v=x}B/C{w=y}",
             "/A{v=x}B/C{w=y}.attr",
         ]
-        .map(|s| SpecPath::parse(s, &mut tokens, &mut paths).expect("spec path"));
+        .map(|s| SpecPath::parse(s, &tokens, &paths).expect("spec path"));
         for a in &specs {
             for b in &specs {
                 let by_components = (a.prim_path(), a.components(&paths), a.property()).cmp(&(
@@ -658,15 +651,15 @@ mod tests {
 
     #[test]
     fn appending_prims_keeps_the_selections() {
-        let mut tokens = TokenInterner::default();
-        let mut paths = PathInterner::default();
-        let spec = SpecPath::parse("/Rock{shape=jagged}", &mut tokens, &mut paths).expect("spec");
+        let tokens = TokenInterner::default();
+        let paths = PathInterner::default();
+        let spec = SpecPath::parse("/Rock{shape=jagged}", &tokens, &paths).expect("spec");
         let child = tokens.intern("Child");
         let joined = spec.join_prims(&[child], &paths);
         assert_eq!(joined.display(&paths, &tokens), "/Rock{shape=jagged}Child");
         assert_eq!(
             joined,
-            SpecPath::parse("/Rock{shape=jagged}Child", &mut tokens, &mut paths).expect("spec")
+            SpecPath::parse("/Rock{shape=jagged}Child", &tokens, &paths).expect("spec")
         );
         assert!(joined.variant_chain().is_empty());
         assert_eq!(

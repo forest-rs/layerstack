@@ -342,11 +342,9 @@ fn derive_scalars(
                 let Some(&layer) = by_name.get(&site.layer) else {
                     continue 'props;
                 };
-                let Ok(spec) = SpecPath::parse(
-                    &site.path,
-                    &mut loaded.store.tokens,
-                    &mut loaded.store.paths,
-                ) else {
+                let Ok(spec) =
+                    SpecPath::parse(&site.path, &loaded.store.tokens, &loaded.store.paths)
+                else {
                     continue 'props;
                 };
                 match authored_default(loaded, layer, &spec) {
@@ -406,7 +404,7 @@ fn observe(name: &str) -> Observed {
 
     for prim in &oracle.prims {
         let expected = render_oracle(&prim.prim_stack);
-        let path = layerstack::Path::parse_absolute(&prim.path, &mut loaded.store.tokens)
+        let path = layerstack::Path::parse_absolute(&prim.path, &loaded.store.tokens)
             .expect("oracle prim path");
         let prim_id = loaded.store.paths.intern(path.clone());
         let Some(sources) = stage.explain_prim(prim_id) else {

@@ -18,8 +18,8 @@ impl AssetResolver for NoAssets {
         &mut self,
         _: &str,
         _: Option<LayerId>,
-        _: &mut TokenInterner,
-        _: &mut PathInterner,
+        _: &TokenInterner,
+        _: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         Err(AssetResolveError::NotFound)
     }
@@ -58,8 +58,8 @@ fn retained_defaults_and_selected_endpoints_share_one_cache() {
     let read = read_usdc_lazy(
         Arc::clone(&input),
         LayerId(1),
-        &mut store.tokens,
-        &mut store.paths,
+        &store.tokens,
+        &store.paths,
         &mut NoAssets,
     )
     .unwrap();
@@ -108,9 +108,9 @@ fn retained_defaults_and_selected_endpoints_share_one_cache() {
     drop(stage);
     drop(store);
     assert_eq!(read.values.stats().materialized_arrays, 3);
-    let mut tokens = TokenInterner::default();
-    let mut paths = PathInterner::default();
-    let eager = read_usdc(&input, LayerId(1), &mut tokens, &mut paths, &mut NoAssets).unwrap();
+    let tokens = TokenInterner::default();
+    let paths = PathInterner::default();
+    let eager = read_usdc(&input, LayerId(1), &tokens, &paths, &mut NoAssets).unwrap();
     assert_eq!(snapshot.prims.len(), eager.layer.prims.len());
     drop(read.values);
     drop(input);
@@ -139,14 +139,14 @@ fn retained_defaults_and_selected_endpoints_share_one_cache() {
 #[test]
 fn source_budget_failure_is_cached_across_threads() {
     let input = bytes();
-    let mut tokens = TokenInterner::default();
-    let mut paths = PathInterner::default();
+    let tokens = TokenInterner::default();
+    let paths = PathInterner::default();
     // First obtain the exact structural cost without materializing arrays.
     let initial = read_usdc_lazy(
         Arc::clone(&input),
         LayerId(1),
-        &mut tokens,
-        &mut paths,
+        &tokens,
+        &paths,
         &mut NoAssets,
     )
     .unwrap();
@@ -155,8 +155,8 @@ fn source_budget_failure_is_cached_across_threads() {
     let read = read_usdc_lazy_within(
         input,
         LayerId(1),
-        &mut tokens,
-        &mut paths,
+        &tokens,
+        &paths,
         &mut NoAssets,
         DecodeBudget::with_limit(structural),
     )
@@ -346,9 +346,9 @@ fn every_native_numeric_kind_and_empty_kind_survives_lazy_save() {
     }
     let expected = imported.save_usda().unwrap();
     let input: Arc<[u8]> = imported.save_usdc().unwrap().into();
-    let mut tokens = TokenInterner::default();
-    let mut paths = PathInterner::default();
-    let read = read_usdc_lazy(input, LayerId(1), &mut tokens, &mut paths, &mut NoAssets).unwrap();
+    let tokens = TokenInterner::default();
+    let paths = PathInterner::default();
+    let read = read_usdc_lazy(input, LayerId(1), &tokens, &paths, &mut NoAssets).unwrap();
     assert_eq!(read.values.stats().decode_attempts, 0);
     assert_eq!(read.values.stats().live_arrays, kinds.len() * 2);
     assert_eq!(
@@ -374,17 +374,10 @@ fn malformed_payload_is_deferred_and_failure_is_cached() {
     .unwrap();
     let mut damaged = input.to_vec();
     damaged[offset..offset + 8].copy_from_slice(&u64::MAX.to_le_bytes());
-    let mut tokens = TokenInterner::default();
-    let mut paths = PathInterner::default();
-    assert!(read_usdc(&damaged, LayerId(1), &mut tokens, &mut paths, &mut NoAssets).is_err());
-    let read = read_usdc_lazy(
-        damaged.into(),
-        LayerId(1),
-        &mut tokens,
-        &mut paths,
-        &mut NoAssets,
-    )
-    .unwrap();
+    let tokens = TokenInterner::default();
+    let paths = PathInterner::default();
+    assert!(read_usdc(&damaged, LayerId(1), &tokens, &paths, &mut NoAssets).is_err());
+    let read = read_usdc_lazy(damaged.into(), LayerId(1), &tokens, &paths, &mut NoAssets).unwrap();
     assert_eq!(read.values.stats().decode_attempts, 0);
     let p = paths
         .lookup(&layerstack::Path::root().join(&[tokens.lookup("P").unwrap()]))
@@ -423,8 +416,8 @@ fn deferred_equality_keeps_nan_semantics_and_bitwise_authored_identity() {
     let read = read_usdc_lazy(
         input,
         LayerId(1),
-        &mut store.tokens,
-        &mut store.paths,
+        &store.tokens,
+        &store.paths,
         &mut NoAssets,
     )
     .unwrap();
@@ -482,8 +475,8 @@ fn retimed_timecode_arrays_only_demand_the_bracketing_frames() {
     let read = read_usdc_lazy(
         input,
         LayerId(2),
-        &mut store.tokens,
-        &mut store.paths,
+        &store.tokens,
+        &store.paths,
         &mut NoAssets,
     )
     .unwrap();

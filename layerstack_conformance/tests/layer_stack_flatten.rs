@@ -17,8 +17,8 @@ impl AssetResolver for NoAssets {
         &mut self,
         _: &str,
         _: Option<LayerId>,
-        _: &mut TokenInterner,
-        _: &mut PathInterner,
+        _: &TokenInterner,
+        _: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         Err(AssetResolveError::NotFound)
     }
@@ -129,8 +129,8 @@ fn raw_consolidation_matches_native_and_keeps_composed_stage_values() {
     let mut expected = layerstack_usda::emit::emit(
         &parsed.layer,
         output,
-        &mut store.tokens,
-        &mut store.paths,
+        &store.tokens,
+        &store.paths,
         &mut NoAssets,
     )
     .layer;

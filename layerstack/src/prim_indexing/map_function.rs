@@ -540,7 +540,7 @@ mod tests {
         }
 
         fn path(&mut self, text: &str) -> PathId {
-            let path = Path::parse_absolute(text, &mut self.tokens).unwrap();
+            let path = Path::parse_absolute(text, &self.tokens).unwrap();
             self.paths.intern(path)
         }
 

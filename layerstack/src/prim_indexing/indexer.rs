@@ -46,7 +46,7 @@ use super::{
 
 /// What every prim index of one composition shares.
 pub(crate) struct Ctx<'s> {
-    pub(crate) store: &'s mut dyn LayerStore,
+    pub(crate) store: &'s dyn LayerStore,
     pub(crate) stacks: LayerStacks,
     pub(crate) child_index: ChildIndex,
     pub(crate) fallbacks: &'s VariantFallbacks,
@@ -306,7 +306,7 @@ pub(crate) fn build_prim_index(
     let depth = paths.resolve(site.path.prim_path()).depth();
     if depth == 0 && !site.path.has_variant_selections() {
         let mut graph = Graph::new(site.clone(), 0);
-        let has_specs = site::has_specs(&*ctx.store, ctx.stacks.get(site.stack), &site.path);
+        let has_specs = site::has_specs(ctx.store, ctx.stacks.get(site.stack), &site.path);
         graph.node_mut(0).has_specs = has_specs;
         outputs.graph = graph;
         return;
@@ -325,7 +325,7 @@ pub(crate) fn build_prim_index(
         let namespace_depth = non_variant_depth(indexer.ctx.store.paths(), &site.path);
         let mut graph = Graph::new(site.clone(), namespace_depth);
         let has_specs = site::has_specs(
-            &*indexer.ctx.store,
+            indexer.ctx.store,
             indexer.ctx.stacks.get(site.stack),
             &site.path,
         );
@@ -503,7 +503,7 @@ impl Indexer<'_, '_, '_> {
         if !entry.has_specs {
             return tasks;
         }
-        for (_, _, spec) in site::specs(&*self.ctx.store, stack, &entry.site.path) {
+        for (_, _, spec) in site::specs(self.ctx.store, stack, &entry.site.path) {
             if !spec.inherits().is_empty() {
                 tasks = tasks.with(TaskKind::NodeInherits);
             }
@@ -528,7 +528,7 @@ impl Indexer<'_, '_, '_> {
     fn scan_ancestral_arcs(&mut self, node: NodeIndex) -> TaskSet {
         let tasks = TaskSet::ALL.without(TaskKind::AncestralVariantSets);
         let entry = self.graph().node(node).clone();
-        let paths = self.ctx.store.paths_mut();
+        let paths = self.ctx.store.paths();
         let Some(mut path) = site_paths::parent(paths, &entry.site.path) else {
             return tasks;
         };
@@ -537,7 +537,7 @@ impl Indexer<'_, '_, '_> {
                 && site_paths::element_count(self.ctx.store.paths(), &path)
                     >= entry.restricted_depth as usize
             {
-                match site_paths::parent(self.ctx.store.paths_mut(), &path) {
+                match site_paths::parent(self.ctx.store.paths(), &path) {
                     Some(parent) => path = parent,
                     None => break,
                 }
@@ -550,13 +550,13 @@ impl Indexer<'_, '_, '_> {
             {
                 return tasks;
             }
-            let declares = site::specs(&*self.ctx.store, stack, &path).any(|(_, _, spec)| {
+            let declares = site::specs(self.ctx.store, stack, &path).any(|(_, _, spec)| {
                 !spec.variant_set_order().is_empty() || !spec.variant_sets().is_empty()
             });
             if declares {
                 return tasks.with(TaskKind::AncestralVariantSets);
             }
-            match site_paths::parent(self.ctx.store.paths_mut(), &path) {
+            match site_paths::parent(self.ctx.store.paths(), &path) {
                 Some(parent) => path = parent,
                 None => return tasks,
             }
@@ -682,7 +682,7 @@ impl Indexer<'_, '_, '_> {
                 .starting_node_of_class_hierarchy(self.paths(), start);
             start = instance;
             if is_class_based(self.graph().node(instance).arc_kind) {
-                let paths = self.ctx.store.paths_mut();
+                let paths = self.ctx.store.paths();
                 let ancestral = self.outputs.graph.path_at_introduction(paths, instance);
                 let class_path = self.outputs.graph.node(class).site.path.prim_path();
                 if has_prefix(self.paths(), class_path, ancestral.prim_path()) {
@@ -697,7 +697,7 @@ impl Indexer<'_, '_, '_> {
 
     /// OpenUSD: `_BuildInitialPrimIndexFromAncestor`.
     fn build_initial_from_ancestor(&mut self, site: &Site, root_contributes: bool) {
-        let paths = self.ctx.store.paths_mut();
+        let paths = self.ctx.store.paths();
         let parent_path = site_paths::parent(paths, &site.path).expect("not the root");
         let name = paths
             .resolve(site.path.prim_path())
@@ -736,7 +736,7 @@ impl Indexer<'_, '_, '_> {
         if ancestor_instanceable {
             self.disable_non_instanceable_nodes();
         }
-        let paths = self.ctx.store.paths_mut();
+        let paths = self.ctx.store.paths();
         self.outputs.graph.append_child_name(paths, name);
         self.outputs.graph.has_payloads = false;
         self.outputs.payload_state = PayloadState::NoPayload;
@@ -757,13 +757,13 @@ impl Indexer<'_, '_, '_> {
             // for its ancestors.
             if entry.has_specs || at == 0 {
                 let stack = self.ctx.stacks.get(entry.site.stack);
-                let has = site::has_specs(&*self.ctx.store, stack, &entry.site.path);
+                let has = site::has_specs(self.ctx.store, stack, &entry.site.path);
                 self.outputs.graph.node_mut(index).has_specs = has;
             }
             let entry = self.outputs.graph.node(index);
             if !entry.inert && entry.has_specs && !entry.has_value_clips {
                 let stack = self.ctx.stacks.get(entry.site.stack);
-                let clips = site::has_value_clips(&*self.ctx.store, stack, &entry.site.path);
+                let clips = site::has_value_clips(self.ctx.store, stack, &entry.site.path);
                 self.outputs.graph.node_mut(index).has_value_clips = clips;
             }
             if at != 0 {
@@ -806,7 +806,7 @@ impl Indexer<'_, '_, '_> {
 
     /// OpenUSD: `Pcp_PrimIndexIsInstanceable`.
     fn prim_index_is_instanceable(&self) -> bool {
-        is_instanceable(&*self.ctx.store, &self.ctx.stacks, self.graph())
+        is_instanceable(self.ctx.store, &self.ctx.stacks, self.graph())
     }
 
     /// OpenUSD: `_ElidePrimIndexIfProhibited`.
@@ -896,7 +896,7 @@ impl Indexer<'_, '_, '_> {
         let new_node;
         if !opts.include_ancestral_opinions {
             let map_to_root = {
-                let paths = self.ctx.store.paths_mut();
+                let paths = self.ctx.store.paths();
                 self.outputs
                     .graph
                     .node(parent)
@@ -905,7 +905,7 @@ impl Indexer<'_, '_, '_> {
                     .compose(paths, &map_to_parent)
             };
             let stack = self.ctx.stacks.get(site.stack);
-            let has_specs = site::has_specs(&*self.ctx.store, stack, &site.path);
+            let has_specs = site::has_specs(self.ctx.store, stack, &site.path);
             let node = Node {
                 arc_kind,
                 parent,
@@ -942,7 +942,7 @@ impl Indexer<'_, '_, '_> {
             let entry = self.outputs.graph.node(index);
             if !entry.inert && entry.has_specs {
                 let stack = self.ctx.stacks.get(site.stack);
-                let clips = site::has_value_clips(&*self.ctx.store, stack, &site.path);
+                let clips = site::has_value_clips(self.ctx.store, stack, &site.path);
                 self.outputs.graph.node_mut(index).has_value_clips = clips;
             }
             new_node = index;
@@ -972,7 +972,7 @@ impl Indexer<'_, '_, '_> {
             }
             let subgraph = core::mem::take(&mut child_outputs.graph);
             let has_payloads = subgraph.has_payloads;
-            let paths = self.ctx.store.paths_mut();
+            let paths = self.ctx.store.paths();
             new_node = self.outputs.graph.insert_subgraph(
                 paths,
                 parent,
@@ -1052,7 +1052,7 @@ impl Indexer<'_, '_, '_> {
             if let Some(frame) = cursor.frame {
                 let requested = &frame.requested_site.path;
                 let current = &cursor.graph.node(0).site.path;
-                let paths = self.ctx.store.paths_mut();
+                let paths = self.ctx.store.paths();
                 site_in_graph.path =
                     replace_spec_prefix(paths, requested, current, &site_in_graph.path);
             }
@@ -1109,7 +1109,7 @@ impl Indexer<'_, '_, '_> {
             if let Some(frame) = cursor.frame {
                 let requested = &frame.requested_site.path;
                 let current = &cursor.graph.node(0).site.path;
-                let paths = self.ctx.store.paths_mut();
+                let paths = self.ctx.store.paths();
                 child_site.path = if *current == child_site.path {
                     requested.clone()
                 } else {
@@ -1162,14 +1162,14 @@ impl Indexer<'_, '_, '_> {
         offset: LayerOffset,
     ) -> MapFunction {
         let target = target_path.prim_path();
-        let paths = self.ctx.store.paths_mut();
+        let paths = self.ctx.store.paths();
         let arc = MapFunction::new(paths, [(source, Some(target))], offset);
         let stack = self.ctx.stacks.get(target_stack);
         if !stack.has_relocates() {
             return arc;
         }
-        let relocates = relocates_map_at(&mut *self.ctx.store, stack, target);
-        relocates.compose(self.ctx.store.paths_mut(), &arc)
+        let relocates = relocates_map_at(self.ctx.store, stack, target);
+        relocates.compose(self.ctx.store.paths(), &arc)
     }
 
     // ── References and payloads ───────────────────────────────────────
@@ -1183,7 +1183,7 @@ impl Indexer<'_, '_, '_> {
         let stack = self.ctx.stacks.get(entry.site.stack);
         let scope = self.scope_for(entry.site.stack);
         let arcs = site::references(
-            &*self.ctx.store,
+            self.ctx.store,
             stack,
             &entry.site.path,
             payloads,
@@ -1264,11 +1264,10 @@ impl Indexer<'_, '_, '_> {
                 session: None,
             };
             let reported = self.ctx.stacks.errors.len();
-            stack_id = self.ctx.stacks.find_or_compute(
-                &mut *self.ctx.store,
-                identifier,
-                Some(entry.site.stack),
-            );
+            stack_id =
+                self.ctx
+                    .stacks
+                    .find_or_compute(self.ctx.store, identifier, Some(entry.site.stack));
             // A referenced layer stack's errors belong to the prim whose arc
             // first gathers it (OpenUSD appends them to that prim index's
             // errors in `_EvalRefOrPayloadArcs`).
@@ -1285,7 +1284,7 @@ impl Indexer<'_, '_, '_> {
                 .store
                 .layer(arc.source_layer)
                 .map_or(24.0, |layer| layer.time_codes_per_second(tokens));
-            let dest_rate = identifier.time_codes_per_second(&*self.ctx.store);
+            let dest_rate = identifier.time_codes_per_second(self.ctx.store);
             if source_rate != dest_rate {
                 offset.scale = offset.scale * source_rate / dest_rate;
             }
@@ -1307,12 +1306,12 @@ impl Indexer<'_, '_, '_> {
                 let path = names.filter(|names| !names.is_empty()).map(|names| {
                     let segments: Vec<TokenId> = names
                         .iter()
-                        .map(|name| self.ctx.store.tokens_mut().intern(name))
+                        .map(|name| self.ctx.store.tokens().intern(name))
                         .collect();
                     segments
                 });
                 match path {
-                    Some(segments) => self.ctx.store.paths_mut().intern_segments(&segments),
+                    Some(segments) => self.ctx.store.paths().intern_segments(&segments),
                     None => {
                         self.record_error(CompositionError::UnresolvedDefaultPrim(
                             UnresolvedDefaultPrim {
@@ -1331,7 +1330,7 @@ impl Indexer<'_, '_, '_> {
         let intro_path = entry.site.path.clone();
         let mut map = self.map_for_arc(target, &intro_path, entry.site.stack, offset);
         if is_internal {
-            map = map.with_root_identity(self.ctx.store.paths_mut());
+            map = map.with_root_identity(self.ctx.store.paths());
         }
         let root = self.ctx.root_path;
         let is_root_prim = target != root && self.ctx.store.paths().resolve(target).depth() == 1;
@@ -1363,21 +1362,17 @@ impl Indexer<'_, '_, '_> {
     /// `None` when no stage path maps to it (the payload is then always
     /// included). OpenUSD: `MapNodePathToPayloadInclusionPath`.
     fn payload_inclusion_path(&mut self, node: NodeIndex, path: &SpecPath) -> Option<PathId> {
-        let mut p = map_to_root_for_payload(
-            &mut *self.ctx.store,
-            &self.outputs.graph,
-            node,
-            path.prim_path(),
-        )?;
+        let mut p =
+            map_to_root_for_payload(self.ctx.store, &self.outputs.graph, node, path.prim_path())?;
         let mut frame = self.previous_frame;
         while let Some(f) = frame {
             p = map_for_payload_inclusion(
-                self.ctx.store.paths_mut(),
+                self.ctx.store.paths(),
                 f.arc_map_to_parent,
                 f.arc_kind,
                 p,
             )?;
-            p = map_to_root_for_payload(&mut *self.ctx.store, f.parent_graph, f.parent_node, p)?;
+            p = map_to_root_for_payload(self.ctx.store, f.parent_graph, f.parent_node, p)?;
             frame = f.previous;
         }
         Some(p)
@@ -1385,7 +1380,7 @@ impl Indexer<'_, '_, '_> {
 
     /// OpenUSD: `_EvalUnresolvedPrimPathError`.
     fn eval_unresolved_prim_path_error(&mut self, node: NodeIndex) {
-        let paths = self.ctx.store.paths_mut();
+        let paths = self.ctx.store.paths();
         let at_intro = self.outputs.graph.path_at_introduction(paths, node);
         // The placeholder of an unresolved default target, at the
         // pseudo-root, was reported when it was added; every layer has a
@@ -1402,9 +1397,9 @@ impl Indexer<'_, '_, '_> {
                 let path = self
                     .outputs
                     .graph
-                    .path_at_introduction(self.ctx.store.paths_mut(), n);
+                    .path_at_introduction(self.ctx.store.paths(), n);
                 let stack = self.ctx.stacks.get(self.graph().node(n).site.stack);
-                site::has_specs(&*self.ctx.store, stack, &path)
+                site::has_specs(self.ctx.store, stack, &path)
             };
             if found {
                 exists = true;
@@ -1419,14 +1414,11 @@ impl Indexer<'_, '_, '_> {
         let prim = self.originating_prim();
         // The arc is authored at the parent's site at the depth it was
         // introduced: an ancestral arc at an ancestor of the parent's site.
-        let introducing_site = self
-            .outputs
-            .graph
-            .intro_path(self.ctx.store.paths_mut(), node);
+        let introducing_site = self.outputs.graph.intro_path(self.ctx.store.paths(), node);
         let parent_stack = self.ctx.stacks.get(parent.site.stack);
         let scope = self.scope_for(parent.site.stack);
         let arcs = site::references(
-            &*self.ctx.store,
+            self.ctx.store,
             parent_stack,
             &introducing_site,
             entry.arc_kind == ArcKind::Payloads,
@@ -1561,7 +1553,7 @@ impl Indexer<'_, '_, '_> {
         let prim = self.originating_prim();
         let stack = self.ctx.stacks.get(entry.site.stack);
         let new_site = self.graph().node(new_node).site.path.clone();
-        let errors: Vec<CompositionError> = site::specs(&*self.ctx.store, stack, &new_site)
+        let errors: Vec<CompositionError> = site::specs(self.ctx.store, stack, &new_site)
             .map(|(_, layer, _)| {
                 CompositionError::OpinionAtRelocationSource(OpinionAtRelocationSource {
                     prim,
@@ -1591,8 +1583,8 @@ impl Indexer<'_, '_, '_> {
             return;
         }
         let parent_map = self.graph().node(parent).map_to_parent.clone();
-        let Some(source) = parent_map
-            .map_source_to_target(self.ctx.store.paths_mut(), entry.site.path.prim_path())
+        let Some(source) =
+            parent_map.map_source_to_target(self.ctx.store.paths(), entry.site.path.prim_path())
         else {
             return;
         };
@@ -1633,7 +1625,7 @@ impl Indexer<'_, '_, '_> {
         }
         let stack = self.ctx.stacks.get(entry.site.stack);
         let arcs = site::class_arcs(
-            &*self.ctx.store,
+            self.ctx.store,
             stack,
             &entry.site.path,
             kind == ArcKind::Specializes,
@@ -1647,7 +1639,7 @@ impl Indexer<'_, '_, '_> {
                     entry.site.stack,
                     LayerOffset::IDENTITY,
                 )
-                .with_root_identity(self.ctx.store.paths_mut());
+                .with_root_identity(self.ctx.store.paths());
             self.add_class_based_arc(
                 Some(SpecPath::from_prim_path(class)),
                 kind,
@@ -1848,7 +1840,7 @@ impl Indexer<'_, '_, '_> {
             return;
         }
         let transfer = self.graph().node(node).map_to_parent.clone();
-        let transfer = transfer.with_root_identity(self.ctx.store.paths_mut());
+        let transfer = transfer.with_root_identity(self.ctx.store.paths());
         self.eval_implied_class_tree(parent, node, &transfer, true);
     }
 
@@ -1862,8 +1854,8 @@ impl Indexer<'_, '_, '_> {
     ) {
         if self.graph().node(dest).arc_kind == ArcKind::Relocates {
             let dest_map = self.graph().node(dest).map_to_parent.clone();
-            let dest_map = dest_map.with_root_identity(self.ctx.store.paths_mut());
-            let new_transfer = dest_map.compose(self.ctx.store.paths_mut(), transfer);
+            let dest_map = dest_map.with_root_identity(self.ctx.store.paths());
+            let new_transfer = dest_map.compose(self.ctx.store.paths(), transfer);
             let dest_parent = self.graph().node(dest).parent;
             self.eval_implied_class_tree(dest_parent, source, &new_transfer, source_is_start);
             self.add_task(Task::new(TaskKind::ImpliedClasses, dest));
@@ -1890,7 +1882,7 @@ impl Indexer<'_, '_, '_> {
                 continue;
             }
             let dest_class_map = MapFunction::implied_class(
-                self.ctx.store.paths_mut(),
+                self.ctx.store.paths(),
                 transfer,
                 &child_entry.map_to_parent,
             );
@@ -1937,7 +1929,7 @@ impl Indexer<'_, '_, '_> {
         transfer: &MapFunction,
     ) -> Option<SpecPath> {
         let mapped =
-            transfer.map_source_to_target(self.ctx.store.paths_mut(), source_child.prim_path())?;
+            transfer.map_source_to_target(self.ctx.store.paths(), source_child.prim_path())?;
         if !dest_parent.has_variant_selections() {
             return Some(SpecPath::from_prim_path(mapped));
         }
@@ -1962,7 +1954,7 @@ impl Indexer<'_, '_, '_> {
     /// OpenUSD: `_EvalVariantSetsAtSite`.
     fn eval_variant_sets_at_site(&mut self, node: NodeIndex, site_path: SpecPath, ancestral: bool) {
         let stack = self.ctx.stacks.get(self.graph().node(node).site.stack);
-        let names = site::variant_sets(&*self.ctx.store, stack, &site_path);
+        let names = site::variant_sets(self.ctx.store, stack, &site_path);
         let kind = if ancestral {
             TaskKind::AncestralVariantAuthored
         } else {
@@ -1977,7 +1969,7 @@ impl Indexer<'_, '_, '_> {
     /// OpenUSD: `_EvalNodeAncestralVariantSets`.
     fn eval_ancestral_variant_sets(&mut self, node: NodeIndex) {
         let start = self.graph().node(node).site.path.clone();
-        let mut path = site_paths::parent(self.ctx.store.paths_mut(), &start);
+        let mut path = site_paths::parent(self.ctx.store.paths(), &start);
         while let Some(current) = path {
             let paths = self.ctx.store.paths();
             if paths.resolve(current.prim_path()).depth() == 0 && !current.has_variant_selections()
@@ -1990,7 +1982,7 @@ impl Indexer<'_, '_, '_> {
             if site_paths::is_variant_selection_path(&current) {
                 break;
             }
-            path = site_paths::parent(self.ctx.store.paths_mut(), &current);
+            path = site_paths::parent(self.ctx.store.paths(), &current);
         }
     }
 
@@ -2044,7 +2036,7 @@ impl Indexer<'_, '_, '_> {
             return;
         }
         let stack = self.ctx.stacks.get(self.graph().node(node).site.stack);
-        let options = site::variant_set_options(&*self.ctx.store, stack, &vset_path, vset);
+        let options = site::variant_set_options(self.ctx.store, stack, &vset_path, vset);
         let chosen = self
             .ctx
             .fallbacks
@@ -2070,8 +2062,7 @@ impl Indexer<'_, '_, '_> {
     /// selections. OpenUSD: `_SiteMightIntroducePendingVariantSelections`.
     fn site_might_introduce_selections(&self, stack: StackId, path: &SpecPath) -> bool {
         let stack = self.ctx.stacks.get(stack);
-        site::specs(&*self.ctx.store, stack, path)
-            .any(|(_, _, spec)| spec.may_introduce_selections())
+        site::specs(self.ctx.store, stack, path).any(|(_, _, spec)| spec.may_introduce_selections())
     }
 
     /// OpenUSD: `_AddVariantArc`.
@@ -2110,7 +2101,7 @@ impl Indexer<'_, '_, '_> {
         let ancestral_var_path =
             site_paths::append_selection(self.paths(), vset_path, vset, variant);
         let var_path = site_paths::replace_prefix(
-            self.ctx.store.paths_mut(),
+            self.ctx.store.paths(),
             &entry.site.path,
             vset_path,
             &ancestral_var_path,
@@ -2181,14 +2172,14 @@ impl Indexer<'_, '_, '_> {
         let mut current = node;
         let mut current_path = path;
         let map_to_root = self.graph().node(node).map_to_root.clone();
-        if let Some(in_root) = map_to_root.map_source_to_target(self.ctx.store.paths_mut(), path) {
+        if let Some(in_root) = map_to_root.map_source_to_target(self.ctx.store.paths(), path) {
             current = 0;
             current_path = in_root;
         } else {
             while current != 0 {
                 let map = self.graph().node(current).map_to_parent.clone();
                 let Some(in_parent) =
-                    map.map_source_to_target(self.ctx.store.paths_mut(), current_path)
+                    map.map_source_to_target(self.ctx.store.paths(), current_path)
                 else {
                     break;
                 };
@@ -2199,7 +2190,7 @@ impl Indexer<'_, '_, '_> {
         let at_intro = self
             .outputs
             .graph
-            .path_at_introduction(self.ctx.store.paths_mut(), current);
+            .path_at_introduction(self.ctx.store.paths(), current);
         let site = site_paths::apply_selections_of(self.paths(), current_path, &at_intro);
         (site, current)
     }
@@ -2224,7 +2215,7 @@ impl Indexer<'_, '_, '_> {
                 let entry = self.graph().node(node);
                 let in_parent = translated[entry.parent as usize];
                 let map = entry.map_to_parent.clone();
-                in_parent.and_then(|p| map.map_target_to_source(self.ctx.store.paths_mut(), p))
+                in_parent.and_then(|p| map.map_target_to_source(self.ctx.store.paths(), p))
             };
             translated[node as usize] = path;
             out.push((node, path));
@@ -2246,7 +2237,7 @@ impl Indexer<'_, '_, '_> {
             let at_intro = self
                 .outputs
                 .graph
-                .path_at_introduction(self.ctx.store.paths_mut(), node);
+                .path_at_introduction(self.ctx.store.paths(), node);
             let Some(selection) = at_intro.trailing_selection() else {
                 continue;
             };
@@ -2283,17 +2274,17 @@ impl Indexer<'_, '_, '_> {
                 let at_intro = self
                     .outputs
                     .graph
-                    .path_at_introduction(self.ctx.store.paths_mut(), node);
+                    .path_at_introduction(self.ctx.store.paths(), node);
                 site_paths::apply_selections_of(self.paths(), path, &at_intro)
             } else {
                 plain
             };
             let stack_id = self.graph().node(node).site.stack;
             let stack = self.ctx.stacks.get(stack_id);
-            if !site::has_variant_selections(&*self.ctx.store, stack, &site_path) {
+            if !site::has_variant_selections(self.ctx.store, stack, &site_path) {
                 continue;
             }
-            let authored = site::authored_selections(&*self.ctx.store, stack, &site_path, vset);
+            let authored = site::authored_selections(self.ctx.store, stack, &site_path, vset);
             for variant in authored {
                 match self.evaluate_selection(stack_id, variant) {
                     Some(evaluated) => return Some(evaluated),
@@ -2319,11 +2310,11 @@ impl Indexer<'_, '_, '_> {
         }
         // Variant selection expression errors and reads are reported
         // where the stage reads selections (`read_selections`).
-        let result = crate::expression_variables::evaluate(&*self.ctx.store, &chain, &text, None);
+        let result = crate::expression_variables::evaluate(self.ctx.store, &chain, &text, None);
         match result {
             Ok(name) => {
                 let name = name.unwrap_or_default();
-                Some(self.ctx.store.tokens_mut().intern(name))
+                Some(self.ctx.store.tokens().intern(name))
             }
             Err(_) => None,
         }
@@ -2393,7 +2384,7 @@ fn has_spec_prefix(paths: &crate::path::PathInterner, path: &SpecPath, prefix: &
 /// `/A` is built for `/A/B` becomes `/C/B`). `requested` is returned when
 /// `current` is not a prefix of it.
 fn replace_spec_prefix(
-    paths: &mut crate::path::PathInterner,
+    paths: &crate::path::PathInterner,
     requested: &SpecPath,
     current: &SpecPath,
     path: &SpecPath,
@@ -2408,7 +2399,7 @@ fn replace_spec_prefix(
 /// as a map function with the root identity. OpenUSD:
 /// `GetExpressionForRelocatesAtPath`, `_FilterRelocationsForPath`.
 fn relocates_map_at(
-    store: &mut dyn LayerStore,
+    store: &dyn LayerStore,
     stack: &super::layer_stacks::ComputedStack,
     path: PathId,
 ) -> MapFunction {
@@ -2431,19 +2422,19 @@ fn relocates_map_at(
             targets.push(target);
         }
     }
-    let root = store.paths_mut().intern_segments(&[]);
+    let root = store.paths().intern_segments(&[]);
     pairs.push((root, Some(root)));
     // Composed by deferring, as OpenUSD's `PcpLayerStack::GetExpressionForRelocatesAtPath` does:
     // a path mapped through the arc and then the relocations must map
     // back through each.
-    MapFunction::new(store.paths_mut(), pairs, LayerOffset::IDENTITY).deferred()
+    MapFunction::new(store.paths(), pairs, LayerOffset::IDENTITY).deferred()
 }
 
 /// Maps `path` across an arc for payload inclusion, ignoring the identity
 /// an internal reference or payload adds. OpenUSD:
 /// `_MapPathToNodeParentPayloadInclusionPath`.
 fn map_for_payload_inclusion(
-    paths: &mut crate::path::PathInterner,
+    paths: &crate::path::PathInterner,
     map_to_parent: &MapFunction,
     kind: ArcKind,
     path: PathId,
@@ -2459,15 +2450,13 @@ fn map_for_payload_inclusion(
 
 /// OpenUSD: `_MapPathToNodeRootPayloadInclusionPath`.
 fn map_to_root_for_payload(
-    store: &mut dyn LayerStore,
+    store: &dyn LayerStore,
     graph: &Graph,
     node: NodeIndex,
     path: PathId,
 ) -> Option<PathId> {
     let entry = graph.node(node);
-    let mapped = entry
-        .map_to_root
-        .map_source_to_target(store.paths_mut(), path);
+    let mapped = entry.map_to_root.map_source_to_target(store.paths(), path);
     if mapped == Some(path) && entry.map_to_root.has_root_identity() {
         let mut current = node;
         let mut mapped = Some(path);
@@ -2476,7 +2465,7 @@ fn map_to_root_for_payload(
                 break;
             }
             let e = graph.node(current);
-            mapped = map_for_payload_inclusion(store.paths_mut(), &e.map_to_parent, e.arc_kind, p);
+            mapped = map_for_payload_inclusion(store.paths(), &e.map_to_parent, e.arc_kind, p);
             current = e.parent;
         }
         return mapped;

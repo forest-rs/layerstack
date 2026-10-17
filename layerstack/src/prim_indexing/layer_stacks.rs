@@ -88,11 +88,11 @@ impl LayerStacks {
     /// stacks of `outer`'s chain (`None` for the stage's own).
     pub(crate) fn find_or_compute(
         &mut self,
-        store: &mut dyn LayerStore,
+        store: &dyn LayerStore,
         identifier: LayerStackIdentifier,
         outer: Option<StackId>,
     ) -> StackId {
-        let chain = self.variable_chain(&*store, identifier, outer);
+        let chain = self.variable_chain(store, identifier, outer);
         if let Some(&id) = self.by_key.get(&(identifier, chain.clone())) {
             return id;
         }
@@ -101,12 +101,12 @@ impl LayerStacks {
             full_chain.push(identifier);
         }
         let stack = LayerStack::gather_recording(
-            &*store,
+            store,
             &full_chain,
             &mut self.errors,
             Some(&mut self.reads),
         );
-        let relocations = RelocationTable::compute(&*store, &stack, &mut self.errors);
+        let relocations = RelocationTable::compute(store, &stack, &mut self.errors);
         let combined_source_to_target = combined_relocations(store, &relocations);
         let (layers, offsets): (Vec<_>, Vec<_>) = stack
             .layers
@@ -171,7 +171,7 @@ impl LayerStacks {
 /// OpenUSD: `_ComputeSourceOriginForTargetIfNeeded`
 /// (`pxr/usd/pcp/layerStack.cpp`).
 fn combined_relocations(
-    store: &mut dyn LayerStore,
+    store: &dyn LayerStore,
     table: &RelocationTable,
 ) -> Vec<(PathId, Option<PathId>)> {
     use crate::interner::TokenId;
@@ -225,8 +225,8 @@ fn combined_relocations(
         let target = relocates[at]
             .1
             .as_ref()
-            .map(|t| store.paths_mut().intern_segments(t));
-        out.push((store.paths_mut().intern_segments(&origin), target));
+            .map(|t| store.paths().intern_segments(t));
+        out.push((store.paths().intern_segments(&origin), target));
     }
     out.sort_unstable();
     out

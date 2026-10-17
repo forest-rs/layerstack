@@ -98,10 +98,7 @@ pub(crate) enum Scope<'m> {
 
 impl<'m> Scope<'m> {
     /// The scope of exactly the prims `listed`.
-    pub(crate) fn listed(
-        paths: &mut crate::path::PathInterner,
-        listed: &'m HashSet<PathId>,
-    ) -> Self {
+    pub(crate) fn listed(paths: &crate::path::PathInterner, listed: &'m HashSet<PathId>) -> Self {
         let mut ancestors = HashSet::new();
         for path in listed {
             let segments: Vec<TokenId> = paths.resolve(*path).segments().to_vec();
@@ -151,13 +148,13 @@ impl<'m> Scope<'m> {
 
 /// Composes the stage rooted at `root`.
 pub(crate) fn compose(
-    store: &mut dyn LayerStore,
+    store: &dyn LayerStore,
     root: LayerId,
     options: &StageOptions,
     scope: Scope<'_>,
     checks: &mut crate::composition_checks::Findings,
 ) -> Composition {
-    let root_path = store.paths_mut().intern_segments(&[]);
+    let root_path = store.paths().intern_segments(&[]);
     let load_rules = options.load_rules.clone();
     let include_payload = move |paths: &crate::path::PathInterner, path: PathId| {
         load_rules.is_loaded(paths.resolve(path))
@@ -176,9 +173,7 @@ pub(crate) fn compose(
         root,
         session: options.session_layer,
     };
-    ctx.stage_stack = ctx
-        .stacks
-        .find_or_compute(&mut *ctx.store, identifier, None);
+    ctx.stage_stack = ctx.stacks.find_or_compute(ctx.store, identifier, None);
     let mut out = Composition {
         local_layers: ctx.stacks.get(ctx.stage_stack).layers.clone(),
         deps: options.with_dependencies.then(DependencyBuilder::new),
@@ -302,8 +297,8 @@ fn walk(
         build_prim_index(ctx, &site, &site, true, true, true, None, &mut outputs);
         out.composed_prim_indexes += 1;
         let mut graph = core::mem::take(&mut outputs.graph);
-        cull(&mut graph, ctx.store.paths_mut(), ctx.stage_stack);
-        graph.instanceable = path != root_path && is_instanceable(&*ctx.store, &ctx.stacks, &graph);
+        cull(&mut graph, ctx.store.paths(), ctx.stage_stack);
+        graph.instanceable = path != root_path && is_instanceable(ctx.store, &ctx.stacks, &graph);
         graph.finalize();
 
         let names = child_names(ctx, &graph);
@@ -337,7 +332,7 @@ fn walk(
         let mut children = Vec::with_capacity(names.len());
         let mut composed_children = Vec::with_capacity(names.len());
         for name in names {
-            let child = ctx.store.paths_mut().intern_joined(path, &[name]);
+            let child = ctx.store.paths().intern_joined(path, &[name]);
             if scope.includes(ctx.store.paths(), child) {
                 composed_children.push(child);
             }
@@ -440,12 +435,7 @@ fn prototype_is_shareable(ctx: &Ctx<'_>, out: &Composition, representative: Path
 /// Re-roots the paths beneath `from` that the opinions of `index` name
 /// (relationship targets, connections, path list fields and path
 /// expressions) beneath `to`, detaching only opinions that name one.
-fn reroot_opinion_paths(
-    store: &mut dyn LayerStore,
-    index: &mut PrimIndex,
-    from: PathId,
-    to: PathId,
-) {
+fn reroot_opinion_paths(store: &dyn LayerStore, index: &mut PrimIndex, from: PathId, to: PathId) {
     use crate::doc::FieldValue;
     use crate::path::TargetPath;
     use crate::path_expression::value::{anchor_value_with, has_path_expression};
@@ -470,13 +460,13 @@ fn reroot_opinion_paths(
     {
         return;
     }
-    let reroot = |store: &mut dyn LayerStore, path: PathId| {
+    let reroot = |store: &dyn LayerStore, path: PathId| {
         store
-            .paths_mut()
+            .paths()
             .intern_reparented(path, from, to)
             .unwrap_or(path)
     };
-    let reroot_target = |store: &mut dyn LayerStore, target: TargetPath| match target {
+    let reroot_target = |store: &dyn LayerStore, target: TargetPath| match target {
         TargetPath::Prim(path) => TargetPath::Prim(reroot(store, path)),
         TargetPath::Property(path) => TargetPath::Property(crate::path::PropertyPath::new(
             reroot(store, path.prim_path()),
@@ -562,7 +552,7 @@ fn copy_prototype(
     let mut pending: Vec<PathId> = out.children.get(&from).cloned().unwrap_or_default();
     let mut moved: Vec<(PathId, PathId)> = Vec::new();
     while let Some(source) = pending.pop() {
-        let Some(target) = ctx.store.paths_mut().intern_reparented(source, from, to) else {
+        let Some(target) = ctx.store.paths().intern_reparented(source, from, to) else {
             continue;
         };
         moved.push((source, target));
@@ -577,9 +567,9 @@ fn copy_prototype(
         let mut index = index.clone();
         index
             .graph
-            .reroot_stage_sites(ctx.store.paths_mut(), stage_stack, from, to);
-        reroot_opinion_paths(&mut *ctx.store, &mut index, from, to);
-        let paths = ctx.store.paths_mut();
+            .reroot_stage_sites(ctx.store.paths(), stage_stack, from, to);
+        reroot_opinion_paths(ctx.store, &mut index, from, to);
+        let paths = ctx.store.paths();
         out.prims.insert(target, index);
         out.reused_prim_indexes += 1;
         // A nested instance still waiting for its own representative's
@@ -587,7 +577,7 @@ fn copy_prototype(
         if let Some(&(_, nested)) = instances.deferred.iter().find(|(path, _)| *path == source) {
             instances.deferred.push((target, nested));
         }
-        let map = |path: PathId, paths: &mut crate::path::PathInterner| {
+        let map = |path: PathId, paths: &crate::path::PathInterner| {
             paths.intern_reparented(path, from, to).unwrap_or(path)
         };
         if let Some(children) = out.children.get(&source).cloned() {
@@ -632,7 +622,7 @@ fn copy_prototype(
 
 /// Marks the subtrees of `graph` that contribute no specs culled.
 /// OpenUSD: `_CullSubtreesWithNoOpinions`.
-fn cull(graph: &mut Graph, paths: &mut crate::path::PathInterner, stage_stack: StackId) {
+fn cull(graph: &mut Graph, paths: &crate::path::PathInterner, stage_stack: StackId) {
     for child in graph.child_list(0) {
         cull_subtree(graph, paths, child, stage_stack);
     }
@@ -640,7 +630,7 @@ fn cull(graph: &mut Graph, paths: &mut crate::path::PathInterner, stage_stack: S
 
 fn cull_subtree(
     graph: &mut Graph,
-    paths: &mut crate::path::PathInterner,
+    paths: &crate::path::PathInterner,
     node: NodeIndex,
     stage_stack: StackId,
 ) {
@@ -655,7 +645,7 @@ fn cull_subtree(
 /// OpenUSD: `_NodeCanBeCulled`.
 fn can_be_culled(
     graph: &Graph,
-    paths: &mut crate::path::PathInterner,
+    paths: &crate::path::PathInterner,
     node: NodeIndex,
     stage_stack: StackId,
 ) -> bool {
@@ -740,7 +730,7 @@ fn child_names(ctx: &mut Ctx<'_>, graph: &Graph) -> Vec<TokenId> {
         }
         let stack = ctx.stacks.get(entry.site.stack);
         site::compose_child_names(
-            &*ctx.store,
+            ctx.store,
             stack,
             &entry.site.path,
             &mut ctx.child_index,
@@ -867,7 +857,7 @@ fn is_active(ctx: &Ctx<'_>, graph: &Graph) -> bool {
             continue;
         }
         let stack = ctx.stacks.get(entry.site.stack);
-        for (_, _, spec) in site::specs(&*ctx.store, stack, &entry.site.path) {
+        for (_, _, spec) in site::specs(ctx.store, stack, &entry.site.path) {
             if let site::SpecRef::Prim(prim) = spec
                 && let Some(active) = prim.active
             {
@@ -924,7 +914,7 @@ fn prim_index(
         let mut found: Vec<LayerSpecEntries> = Vec::new();
         {
             let stack = ctx.stacks.get(node.site.stack);
-            for (strength, layer_id, spec) in site::specs(&*ctx.store, stack, &node.site.path) {
+            for (strength, layer_id, spec) in site::specs(ctx.store, stack, &node.site.path) {
                 let layer_strength = u16::try_from(strength).unwrap_or(u16::MAX);
                 let layer_offset = node_offset.compose(stack.offset_at(strength));
                 let entries = crate::doc::composed_entries(spec.fields(), spec.properties())
@@ -939,7 +929,7 @@ fn prim_index(
         // The class or arc target the node's specs are authored beneath, at
         // the namespace depth it was introduced at: a target a class
         // authors inside itself names no instance of it.
-        let at_intro = graph.path_at_introduction(ctx.store.paths_mut(), graph::node_index(at));
+        let at_intro = graph.path_at_introduction(ctx.store.paths(), graph::node_index(at));
         let arc_root = ctx.store.paths().resolve(at_intro.prim_path()).clone();
         let source_path = ctx.store.paths().resolve(lookup_path).clone();
         for (layer_strength, layer_id, layer_offset, entries) in found {
@@ -961,14 +951,14 @@ fn prim_index(
                 };
                 // Relative expressions anchor at every node, the root's
                 // included.
-                map_path_expressions(&mut *ctx.store, &node.map_to_root, &source_path, &mut value);
+                map_path_expressions(ctx.store, &node.map_to_root, &source_path, &mut value);
                 if maps {
                     let map_to_root = &node.map_to_root;
-                    let map = |store: &mut dyn LayerStore, path: PathId| {
-                        map_to_root.map_source_to_target(store.paths_mut(), path)
+                    let map = |store: &dyn LayerStore, path: PathId| {
+                        map_to_root.map_source_to_target(store.paths(), path)
                     };
                     crate::composition_checks::map_arc_targets(
-                        &mut *ctx.store,
+                        ctx.store,
                         &mut value,
                         crate::composition_checks::ArcPathMap {
                             arc: node.arc_kind,
@@ -1067,7 +1057,7 @@ pub(crate) fn order_children(store: &dyn LayerStore, index: &PrimIndex, children
 /// prim) and maps them into the stage namespace through `map_to_root`.
 /// OpenUSD: `PcpMapFunction::MapSourceToTarget(SdfPathExpression)`.
 fn map_path_expressions(
-    store: &mut dyn LayerStore,
+    store: &dyn LayerStore,
     map_to_root: &map_function::MapFunction,
     site: &crate::path::Path,
     value: &mut crate::prim_index::OpinionValue,
@@ -1094,10 +1084,10 @@ fn map_path_expressions(
     let mut map = |names: &[alloc::string::String]| -> Option<Vec<alloc::string::String>> {
         let segments: Vec<TokenId> = names
             .iter()
-            .map(|name| store.tokens_mut().intern(name))
+            .map(|name| store.tokens().intern(name))
             .collect();
-        let path = store.paths_mut().intern_segments(&segments);
-        let mapped = map_to_root.map_source_to_target(store.paths_mut(), path)?;
+        let path = store.paths().intern_segments(&segments);
+        let mapped = map_to_root.map_source_to_target(store.paths(), path)?;
         Some(
             store
                 .paths()

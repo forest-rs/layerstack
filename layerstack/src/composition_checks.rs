@@ -149,12 +149,12 @@ pub(crate) struct ArcPathMap<'a> {
     pub(crate) source: &'a Path,
     /// Maps a path authored in the arc's target namespace to the stage
     /// namespace; `None` when the arcs cannot map it.
-    pub(crate) map: &'a dyn Fn(&mut dyn LayerStore, PathId) -> Option<PathId>,
+    pub(crate) map: &'a dyn Fn(&dyn LayerStore, PathId) -> Option<PathId>,
 }
 
 impl ArcPathMap<'_> {
     /// Maps `path`, or returns `None` when the arcs cannot map it.
-    fn map(&self, store: &mut dyn LayerStore, path: PathId) -> Option<PathId> {
+    fn map(&self, store: &dyn LayerStore, path: PathId) -> Option<PathId> {
         (self.map)(store, path)
     }
 
@@ -164,7 +164,7 @@ impl ArcPathMap<'_> {
             .is_prefix_of(store.paths().resolve(target.prim_path()))
     }
 
-    fn map_target(&self, store: &mut dyn LayerStore, target: TargetPath) -> Option<TargetPath> {
+    fn map_target(&self, store: &dyn LayerStore, target: TargetPath) -> Option<TargetPath> {
         match target {
             TargetPath::Prim(path) => self.map(store, path).map(TargetPath::Prim),
             TargetPath::Property(path) => self
@@ -197,7 +197,7 @@ pub(crate) struct TargetOwner {
 /// `pxr/usd/pcp/targetIndex.cpp` and `PcpMapFunction`'s bijection check in
 /// `pxr/usd/pcp/mapFunction.cpp`.
 pub(crate) fn map_arc_targets(
-    store: &mut dyn LayerStore,
+    store: &dyn LayerStore,
     value: &mut OpinionValue,
     map: ArcPathMap<'_>,
     owner: TargetOwner,

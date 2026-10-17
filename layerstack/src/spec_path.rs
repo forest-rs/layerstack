@@ -412,7 +412,7 @@ impl SpecPath {
     /// `/Rock{shape=jagged}` joined with `[Child]` is
     /// `/Rock{shape=jagged}Child`. The property suffix is kept.
     #[must_use]
-    pub(crate) fn join_prims(&self, names: &[TokenId], paths: &mut PathInterner) -> Self {
+    pub(crate) fn join_prims(&self, names: &[TokenId], paths: &PathInterner) -> Self {
         Self {
             prim_path: paths.intern_joined(self.prim_path, names),
             selections: self.selections.clone(),
@@ -662,7 +662,7 @@ mod tests {
         let mut paths = PathInterner::default();
         let spec = SpecPath::parse("/Rock{shape=jagged}", &mut tokens, &mut paths).expect("spec");
         let child = tokens.intern("Child");
-        let joined = spec.join_prims(&[child], &mut paths);
+        let joined = spec.join_prims(&[child], &paths);
         assert_eq!(joined.display(&paths, &tokens), "/Rock{shape=jagged}Child");
         assert_eq!(
             joined,

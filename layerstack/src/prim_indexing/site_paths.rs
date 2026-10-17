@@ -43,8 +43,9 @@ pub(crate) fn parent(paths: &PathInterner, site: &SpecPath) -> Option<SpecPath> 
     if depth == 0 {
         return None;
     }
-    let segments: crate::path::Segments = paths.resolve(prim).segments()[..depth - 1].into();
-    let parent = paths.intern_segments(&segments);
+    let parent = paths
+        .parent(prim)
+        .expect("a prim below the root has a parent");
     Some(site.truncated_to(parent, depth - 1))
 }
 

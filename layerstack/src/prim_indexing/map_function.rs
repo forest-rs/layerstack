@@ -103,14 +103,7 @@ fn best_source(
 
 /// The parent of `path`, interned; `path` itself for the root.
 fn parent_of(paths: &PathInterner, path: PathId) -> PathId {
-    let segments = paths.resolve(path).segments();
-    match segments.split_last() {
-        Some((_, parent)) => {
-            let parent: crate::path::Segments = parent.into();
-            paths.intern_segments(&parent)
-        }
-        None => path,
-    }
+    paths.parent(path).unwrap_or(path)
 }
 
 /// The pair whose target is the longest prefix of `path`, or `None`.

@@ -396,7 +396,36 @@ impl Path {
 #[derive(Debug, Default)]
 pub struct PathInterner {
     pub(crate) affinity: Arc<()>,
-    paths: Interned<Path>,
+    paths: Interned<PathEntry>,
+}
+
+/// An interned path and its parent's id, `None` for the root: interning a
+/// path interns its ancestors first, so a parent is read, not looked up.
+/// Found by its segments.
+#[derive(Clone, Debug)]
+struct PathEntry {
+    path: Path,
+    parent: Option<PathId>,
+}
+
+impl PartialEq for PathEntry {
+    fn eq(&self, other: &Self) -> bool {
+        self.path == other.path
+    }
+}
+
+impl Eq for PathEntry {}
+
+impl core::hash::Hash for PathEntry {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        self.path.segments().hash(state);
+    }
+}
+
+impl Borrow<[TokenId]> for PathEntry {
+    fn borrow(&self) -> &[TokenId] {
+        self.path.segments()
+    }
 }
 
 impl PathInterner {
@@ -407,17 +436,32 @@ impl PathInterner {
         }
     }
 
-    /// Interns a path, returning a stable [`PathId`].
+    /// Interns a path, and its ancestors, returning a stable [`PathId`].
     #[must_use]
     pub fn intern(&self, path: Path) -> PathId {
+        if let Some(id) = self.lookup_segments(path.segments()) {
+            return id;
+        }
+        let parent = self.intern_parent(path.segments());
         let key = Segments::from_slice(path.segments());
-        PathId(self.paths.intern(&key[..], || path).0)
+        PathId(self.paths.intern(&key[..], || PathEntry { path, parent }).0)
+    }
+
+    /// Interns the parent of the path made of `segments`: `None` for the
+    /// root.
+    fn intern_parent(&self, segments: &[TokenId]) -> Option<PathId> {
+        let (_, parent) = segments.split_last()?;
+        Some(self.intern_segments(parent))
+    }
+
+    fn entry(&self, id: PathId) -> &PathEntry {
+        self.paths.get(id.0).expect("path id out of range")
     }
 
     /// Resolves a [`PathId`] back to a [`Path`].
     #[must_use]
     pub fn resolve(&self, id: PathId) -> &Path {
-        self.paths.get(id.0).expect("path id out of range")
+        &self.entry(id).path
     }
 
     /// Looks up a path without interning. Returns `None` if the path hasn't been interned.
@@ -435,8 +479,15 @@ impl PathInterner {
     /// Interns the path made of `segments`, allocating only for a path not
     /// interned yet.
     pub(crate) fn intern_segments(&self, segments: &[TokenId]) -> PathId {
-        let make = || Path {
-            segments: segments.into(),
+        if let Some(id) = self.lookup_segments(segments) {
+            return id;
+        }
+        let parent = self.intern_parent(segments);
+        let make = || PathEntry {
+            path: Path {
+                segments: segments.into(),
+            },
+            parent,
         };
         PathId(self.paths.intern(segments, make).0)
     }
@@ -482,14 +533,14 @@ impl PathInterner {
         Some(self.intern_segments(&segments))
     }
 
-    /// Looks up the namespace parent of `id` without allocating a path.
+    /// Returns the namespace parent of `id`, `None` for the root.
     ///
-    /// Returns `None` for the root or when the parent has not been interned.
-    /// Interning a child does not implicitly intern its ancestors.
+    /// Interning a path interns its ancestors too, so the parent is always
+    /// interned, and reading it takes no lookup. OpenUSD: `SdfPath`'s
+    /// parent node.
     #[must_use]
     pub fn parent(&self, id: PathId) -> Option<PathId> {
-        let (_, parent) = self.resolve(id).segments().split_last()?;
-        self.lookup_segments(parent)
+        self.entry(id).parent
     }
 
     /// Compares the paths `a` and `b` in namespace order
@@ -575,15 +626,15 @@ mod tests {
     use crate::interner::TokenInterner;
 
     #[test]
-    fn interned_parent_lookup_handles_missing_and_later_ancestors() {
+    fn interning_a_path_interns_its_ancestors() {
         let mut tokens = TokenInterner::default();
         let paths = PathInterner::default();
         let child = paths.intern(Path::parse_absolute("/World/Leaf", &mut tokens).unwrap());
-        assert_eq!(paths.parent(child), None);
-        let parent = paths.intern(Path::parse_absolute("/World", &mut tokens).unwrap());
+        let parent = paths
+            .lookup(&Path::parse_absolute("/World", &mut tokens).unwrap())
+            .expect("the parent is interned with its child");
+        let root = paths.lookup(&Path::root()).expect("and the root");
         assert_eq!(paths.parent(child), Some(parent));
-        assert_eq!(paths.parent(parent), None);
-        let root = paths.intern(Path::root());
         assert_eq!(paths.parent(parent), Some(root));
         assert_eq!(paths.parent(root), None);
     }

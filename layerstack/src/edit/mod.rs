@@ -16,7 +16,9 @@
 //!   and targets, it authors the prim fields kept in dedicated members
 //!   ([`PrimField`]): the specifier, type name, `active`, `instanceable`,
 //!   child and property order, and the composition arcs, whose list ops
-//!   it also edits item by item ([`ListPosition`]).
+//!   it also edits item by item ([`ListPosition`]); and the layer fields
+//!   kept in dedicated members, the sublayers with their offsets and the
+//!   relocates, checked against what composition can use.
 //! - Applying a transaction checks its preconditions, validates and
 //!   applies every edit or none, and returns the inverse transaction,
 //!   which restores each slot only while it holds what was written there.
@@ -84,6 +86,7 @@
 
 mod apply;
 mod error;
+mod layer_fields;
 mod namespace;
 mod prim_fields;
 pub(crate) mod same;

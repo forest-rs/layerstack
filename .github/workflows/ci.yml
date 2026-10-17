@@ -452,6 +452,13 @@ jobs:
             layerstack_conformance/fixtures/prim_field_edits "$RUNNER_TEMP/prim_field_edits.json"
           diff -u layerstack_conformance/fixtures/prim_field_edits/oracle.json "$RUNNER_TEMP/prim_field_edits.json"
 
+      # The layer field oracle must be what OpenUSD authors and composes.
+      - name: check layer field edits oracle
+        run: |
+          python layerstack_conformance/scripts/layer_field_edits_oracle.py \
+            layerstack_conformance/fixtures/layer_field_edits "$RUNNER_TEMP/layer_field_edits.json"
+          diff -u layerstack_conformance/fixtures/layer_field_edits/oracle.json "$RUNNER_TEMP/layer_field_edits.json"
+
       # The transform oracle must be what OpenUSD computes, to within the
       # rounding of the platform's trigonometry.
       - name: check transform oracle

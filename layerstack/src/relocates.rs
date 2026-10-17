@@ -260,7 +260,10 @@ impl RelocationTable {
 /// Why `relocate` is invalid on its own, if it is.
 ///
 /// Paths are prim paths by construction (the readers reject others).
-fn invalid_reason(paths: &PathInterner, relocate: Relocate) -> Option<InvalidRelocationReason> {
+pub(crate) fn invalid_reason(
+    paths: &PathInterner,
+    relocate: Relocate,
+) -> Option<InvalidRelocationReason> {
     let source = paths.resolve(relocate.source);
     if let Some(target) = relocate.target {
         let target_path = paths.resolve(target);

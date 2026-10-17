@@ -368,6 +368,7 @@ name = "layerstack_schemagen"
 version = "0.1.0"
 dependencies = [
  "layerstack",
+ "layerstack_io",
  "layerstack_usda",
  "serde_json",
 ]

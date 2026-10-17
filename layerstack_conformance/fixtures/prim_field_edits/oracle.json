@@ -1,0 +1,1312 @@
+{
+ "cases": [
+  {
+   "accepted": [
+    true,
+    true,
+    true,
+    true,
+    true
+   ],
+   "name": "references_positions",
+   "prim": "/A",
+   "spec": {
+    "references": {
+     "append": [
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/E",
+       "scale": 1.0
+      },
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/D",
+       "scale": 1.0
+      },
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/B",
+       "scale": 1.0
+      }
+     ],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/B",
+       "scale": 1.0
+      },
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/C",
+       "scale": 1.0
+      }
+     ]
+    },
+    "specifier": "def"
+   },
+   "spec_path": "/A",
+   "steps": [
+    {
+     "call": "add_reference",
+     "path": "/B"
+    },
+    {
+     "call": "add_reference",
+     "path": "/C",
+     "position": "back_of_prepend"
+    },
+    {
+     "call": "add_reference",
+     "path": "/D",
+     "position": "front_of_append"
+    },
+    {
+     "call": "add_reference",
+     "path": "/E",
+     "position": "front_of_append"
+    },
+    {
+     "call": "add_reference",
+     "path": "/B",
+     "position": "back_of_append"
+    }
+   ],
+   "target": {
+    "kind": "root"
+   }
+  },
+  {
+   "accepted": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true
+   ],
+   "name": "references_move_within_list",
+   "prim": "/A",
+   "spec": {
+    "references": {
+     "append": [
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/E",
+       "scale": 1.0
+      },
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/D",
+       "scale": 1.0
+      }
+     ],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/B",
+       "scale": 1.0
+      },
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/C",
+       "scale": 1.0
+      }
+     ]
+    },
+    "specifier": "def"
+   },
+   "spec_path": "/A",
+   "steps": [
+    {
+     "call": "add_reference",
+     "path": "/B"
+    },
+    {
+     "call": "add_reference",
+     "path": "/C"
+    },
+    {
+     "call": "add_reference",
+     "path": "/B"
+    },
+    {
+     "call": "add_reference",
+     "path": "/D",
+     "position": "back_of_append"
+    },
+    {
+     "call": "add_reference",
+     "path": "/E",
+     "position": "back_of_append"
+    },
+    {
+     "call": "add_reference",
+     "path": "/E",
+     "position": "front_of_append"
+    }
+   ],
+   "target": {
+    "kind": "root"
+   }
+  },
+  {
+   "accepted": [
+    true,
+    true,
+    true,
+    true,
+    true
+   ],
+   "name": "references_explicit",
+   "prim": "/A",
+   "spec": {
+    "references": {
+     "append": [],
+     "delete": [],
+     "explicit": [
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/E",
+       "scale": 1.0
+      },
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/D",
+       "scale": 1.0
+      },
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/C",
+       "scale": 1.0
+      }
+     ],
+     "prepend": []
+    },
+    "specifier": "def"
+   },
+   "spec_path": "/A",
+   "steps": [
+    {
+     "call": "set_references",
+     "value": [
+      {
+       "path": "/B"
+      },
+      {
+       "path": "/C"
+      }
+     ]
+    },
+    {
+     "call": "add_reference",
+     "path": "/D",
+     "position": "front_of_prepend"
+    },
+    {
+     "call": "add_reference",
+     "path": "/E",
+     "position": "back_of_append"
+    },
+    {
+     "call": "add_reference",
+     "path": "/E",
+     "position": "front_of_prepend"
+    },
+    {
+     "call": "remove_reference",
+     "path": "/B"
+    }
+   ],
+   "target": {
+    "kind": "root"
+   }
+  },
+  {
+   "accepted": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true
+   ],
+   "name": "references_remove",
+   "prim": "/A",
+   "spec": {
+    "references": {
+     "append": [],
+     "delete": [
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/B",
+       "scale": 1.0
+      },
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/C",
+       "scale": 1.0
+      },
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/D",
+       "scale": 1.0
+      }
+     ],
+     "explicit": null,
+     "prepend": [
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/B",
+       "scale": 1.0
+      }
+     ]
+    },
+    "specifier": "def"
+   },
+   "spec_path": "/A",
+   "steps": [
+    {
+     "call": "add_reference",
+     "path": "/B"
+    },
+    {
+     "call": "add_reference",
+     "path": "/C",
+     "position": "back_of_append"
+    },
+    {
+     "call": "remove_reference",
+     "path": "/B"
+    },
+    {
+     "call": "remove_reference",
+     "path": "/C"
+    },
+    {
+     "call": "remove_reference",
+     "path": "/D"
+    },
+    {
+     "call": "remove_reference",
+     "path": "/D"
+    },
+    {
+     "call": "add_reference",
+     "path": "/B"
+    }
+   ],
+   "target": {
+    "kind": "root"
+   }
+  },
+  {
+   "accepted": [
+    true,
+    true
+   ],
+   "name": "references_clear",
+   "prim": "/A",
+   "spec": {
+    "specifier": "def"
+   },
+   "spec_path": "/A",
+   "steps": [
+    {
+     "call": "add_reference",
+     "path": "/B"
+    },
+    {
+     "call": "set_references",
+     "value": null
+    }
+   ],
+   "target": {
+    "kind": "root"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "references_explicit_empty",
+   "prim": "/A",
+   "spec": {
+    "references": {
+     "append": [],
+     "delete": [],
+     "explicit": [],
+     "prepend": []
+    },
+    "specifier": "def"
+   },
+   "spec_path": "/A",
+   "steps": [
+    {
+     "call": "set_references",
+     "value": []
+    }
+   ],
+   "target": {
+    "kind": "root"
+   }
+  },
+  {
+   "accepted": [
+    true,
+    true,
+    true,
+    true
+   ],
+   "name": "references_offsets_and_assets",
+   "prim": "/A",
+   "spec": {
+    "references": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      {
+       "asset": "asset.usda",
+       "offset": 2.0,
+       "path": "",
+       "scale": 0.5
+      },
+      {
+       "asset": "",
+       "offset": 5.0,
+       "path": "/B",
+       "scale": 1.0
+      },
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/B",
+       "scale": 1.0
+      },
+      {
+       "asset": "asset.usda",
+       "offset": 0.0,
+       "path": "/Other",
+       "scale": 1.0
+      }
+     ]
+    },
+    "specifier": "def"
+   },
+   "spec_path": "/A",
+   "steps": [
+    {
+     "call": "add_reference",
+     "path": "/B"
+    },
+    {
+     "call": "add_reference",
+     "offset": 5.0,
+     "path": "/B"
+    },
+    {
+     "asset": "asset.usda",
+     "call": "add_reference",
+     "path": "/Other",
+     "position": "back_of_prepend"
+    },
+    {
+     "asset": "asset.usda",
+     "call": "add_reference",
+     "offset": 2.0,
+     "path": "",
+     "scale": 0.5
+    }
+   ],
+   "target": {
+    "kind": "root"
+   }
+  },
+  {
+   "accepted": [
+    false,
+    false
+   ],
+   "name": "references_rejected_paths",
+   "prim": "/A",
+   "spec": {
+    "specifier": "def"
+   },
+   "spec_path": "/A",
+   "steps": [
+    {
+     "call": "add_reference",
+     "path": "/"
+    },
+    {
+     "call": "add_payload",
+     "path": "/"
+    }
+   ],
+   "target": {
+    "kind": "root"
+   }
+  },
+  {
+   "accepted": [
+    true,
+    true,
+    true,
+    true
+   ],
+   "name": "payloads",
+   "prim": "/A",
+   "spec": {
+    "payload": {
+     "append": [
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/C",
+       "scale": 1.0
+      }
+     ],
+     "delete": [
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/B",
+       "scale": 1.0
+      }
+     ],
+     "explicit": null,
+     "prepend": [
+      {
+       "asset": "asset.usda",
+       "offset": 0.0,
+       "path": "/Other",
+       "scale": 1.0
+      }
+     ]
+    },
+    "specifier": "def"
+   },
+   "spec_path": "/A",
+   "steps": [
+    {
+     "call": "add_payload",
+     "path": "/B"
+    },
+    {
+     "call": "add_payload",
+     "path": "/C",
+     "position": "back_of_append"
+    },
+    {
+     "call": "remove_payload",
+     "path": "/B"
+    },
+    {
+     "asset": "asset.usda",
+     "call": "add_payload",
+     "path": "/Other"
+    }
+   ],
+   "target": {
+    "kind": "root"
+   }
+  },
+  {
+   "accepted": [
+    true,
+    true,
+    true
+   ],
+   "name": "payloads_explicit",
+   "prim": "/A",
+   "spec": {
+    "specifier": "def"
+   },
+   "spec_path": "/A",
+   "steps": [
+    {
+     "call": "set_payloads",
+     "value": [
+      {
+       "path": "/B"
+      }
+     ]
+    },
+    {
+     "call": "add_payload",
+     "path": "/C",
+     "position": "front_of_append"
+    },
+    {
+     "call": "set_payloads",
+     "value": null
+    }
+   ],
+   "target": {
+    "kind": "root"
+   }
+  },
+  {
+   "accepted": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    false
+   ],
+   "name": "inherits",
+   "prim": "/A",
+   "spec": {
+    "inheritPaths": {
+     "append": [
+      "/C",
+      "/B"
+     ],
+     "delete": [
+      "/Cls"
+     ],
+     "explicit": null,
+     "prepend": [
+      "/Cls"
+     ]
+    },
+    "specifier": "def"
+   },
+   "spec_path": "/A",
+   "steps": [
+    {
+     "call": "add_inherit",
+     "path": "/Cls"
+    },
+    {
+     "call": "add_inherit",
+     "path": "/B",
+     "position": "back_of_append"
+    },
+    {
+     "call": "add_inherit",
+     "path": "/C",
+     "position": "front_of_append"
+    },
+    {
+     "call": "remove_inherit",
+     "path": "/Cls"
+    },
+    {
+     "call": "add_inherit",
+     "path": "/Cls",
+     "position": "back_of_prepend"
+    },
+    {
+     "call": "add_inherit",
+     "path": "/"
+    }
+   ],
+   "target": {
+    "kind": "root"
+   }
+  },
+  {
+   "accepted": [
+    true,
+    true,
+    true,
+    true,
+    true
+   ],
+   "name": "inherits_explicit",
+   "prim": "/A",
+   "spec": {
+    "inheritPaths": {
+     "append": [],
+     "delete": [
+      "/B"
+     ],
+     "explicit": null,
+     "prepend": []
+    },
+    "specifier": "def"
+   },
+   "spec_path": "/A",
+   "steps": [
+    {
+     "call": "set_inherits",
+     "value": [
+      "/Cls",
+      "/B"
+     ]
+    },
+    {
+     "call": "add_inherit",
+     "path": "/C",
+     "position": "back_of_append"
+    },
+    {
+     "call": "remove_inherit",
+     "path": "/Cls"
+    },
+    {
+     "call": "set_inherits",
+     "value": null
+    },
+    {
+     "call": "remove_inherit",
+     "path": "/B"
+    }
+   ],
+   "target": {
+    "kind": "root"
+   }
+  },
+  {
+   "accepted": [
+    true,
+    true,
+    true,
+    true,
+    false
+   ],
+   "name": "specializes",
+   "prim": "/A",
+   "spec": {
+    "specializes": {
+     "append": [],
+     "delete": [],
+     "explicit": [
+      "/D"
+     ],
+     "prepend": []
+    },
+    "specifier": "def"
+   },
+   "spec_path": "/A",
+   "steps": [
+    {
+     "call": "add_specialize",
+     "path": "/B"
+    },
+    {
+     "call": "add_specialize",
+     "path": "/C",
+     "position": "back_of_append"
+    },
+    {
+     "call": "remove_specialize",
+     "path": "/B"
+    },
+    {
+     "call": "set_specializes",
+     "value": [
+      "/D"
+     ]
+    },
+    {
+     "call": "add_specialize",
+     "path": "/"
+    }
+   ],
+   "target": {
+    "kind": "root"
+   }
+  },
+  {
+   "accepted": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true
+   ],
+   "name": "scalar_fields",
+   "prim": "/A",
+   "spec": {
+    "active": false,
+    "instanceable": true,
+    "primOrder": [
+     "y",
+     "x"
+    ],
+    "propertyOrder": [
+     "b",
+     "a"
+    ],
+    "specifier": "class",
+    "typeName": "Xform"
+   },
+   "spec_path": "/A",
+   "steps": [
+    {
+     "call": "set_active",
+     "value": false
+    },
+    {
+     "call": "set_instanceable",
+     "value": true
+    },
+    {
+     "call": "set_type_name",
+     "value": "Xform"
+    },
+    {
+     "call": "set_specifier",
+     "value": "class"
+    },
+    {
+     "call": "set_prim_order",
+     "value": [
+      "y",
+      "x"
+     ]
+    },
+    {
+     "call": "set_property_order",
+     "value": [
+      "b",
+      "a"
+     ]
+    }
+   ],
+   "target": {
+    "kind": "root"
+   }
+  },
+  {
+   "accepted": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true
+   ],
+   "name": "scalar_fields_cleared",
+   "prim": "/A",
+   "spec": {
+    "specifier": "def"
+   },
+   "spec_path": "/A",
+   "steps": [
+    {
+     "call": "set_active",
+     "value": false
+    },
+    {
+     "call": "set_instanceable",
+     "value": true
+    },
+    {
+     "call": "set_type_name",
+     "value": "Xform"
+    },
+    {
+     "call": "set_prim_order",
+     "value": [
+      "y",
+      "x"
+     ]
+    },
+    {
+     "call": "set_property_order",
+     "value": [
+      "b",
+      "a"
+     ]
+    },
+    {
+     "call": "set_active",
+     "value": null
+    },
+    {
+     "call": "set_instanceable",
+     "value": null
+    },
+    {
+     "call": "set_type_name",
+     "value": null
+    },
+    {
+     "call": "set_prim_order",
+     "value": null
+    },
+    {
+     "call": "set_property_order",
+     "value": null
+    },
+    {
+     "call": "set_specifier",
+     "value": "over"
+    },
+    {
+     "call": "set_specifier",
+     "value": "def"
+    }
+   ],
+   "target": {
+    "kind": "root"
+   }
+  },
+  {
+   "accepted": [
+    true,
+    true
+   ],
+   "name": "empty_orders",
+   "prim": "/A",
+   "spec": {
+    "primOrder": [],
+    "propertyOrder": [],
+    "specifier": "def"
+   },
+   "spec_path": "/A",
+   "steps": [
+    {
+     "call": "set_prim_order",
+     "value": []
+    },
+    {
+     "call": "set_property_order",
+     "value": []
+    }
+   ],
+   "target": {
+    "kind": "root"
+   }
+  },
+  {
+   "accepted": [
+    false,
+    false,
+    false
+   ],
+   "name": "pseudo_root",
+   "prim": "/",
+   "spec": {},
+   "spec_path": "/",
+   "steps": [
+    {
+     "call": "set_active",
+     "value": false
+    },
+    {
+     "call": "set_instanceable",
+     "value": true
+    },
+    {
+     "call": "set_type_name",
+     "value": "Xform"
+    }
+   ],
+   "target": {
+    "kind": "root"
+   }
+  },
+  {
+   "accepted": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true
+   ],
+   "name": "applied_schemas",
+   "prim": "/A",
+   "spec": {
+    "apiSchemas": {
+     "append": [],
+     "delete": [
+      "FooAPI",
+      "BazAPI"
+     ],
+     "explicit": null,
+     "prepend": [
+      "BarAPI",
+      "FooAPI"
+     ]
+    },
+    "specifier": "def"
+   },
+   "spec_path": "/A",
+   "steps": [
+    {
+     "call": "add_applied_schema",
+     "name": "FooAPI"
+    },
+    {
+     "call": "add_applied_schema",
+     "name": "BarAPI"
+    },
+    {
+     "call": "add_applied_schema",
+     "name": "FooAPI"
+    },
+    {
+     "call": "remove_applied_schema",
+     "name": "FooAPI"
+    },
+    {
+     "call": "remove_applied_schema",
+     "name": "BazAPI"
+    },
+    {
+     "call": "add_applied_schema",
+     "name": "FooAPI"
+    }
+   ],
+   "target": {
+    "kind": "root"
+   }
+  },
+  {
+   "accepted": [
+    true,
+    true
+   ],
+   "name": "sublayer_creates_over",
+   "prim": "/A",
+   "spec": {
+    "active": false,
+    "inheritPaths": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      "/Cls"
+     ]
+    },
+    "specifier": "over"
+   },
+   "spec_path": "/A",
+   "steps": [
+    {
+     "call": "set_active",
+     "value": false
+    },
+    {
+     "call": "add_inherit",
+     "path": "/Cls"
+    }
+   ],
+   "target": {
+    "kind": "sublayer"
+   }
+  },
+  {
+   "accepted": [
+    true,
+    true
+   ],
+   "name": "sublayer_clear_keeps_spec",
+   "prim": "/B",
+   "spec": {
+    "specifier": "def"
+   },
+   "spec_path": "/B",
+   "steps": [
+    {
+     "call": "set_active",
+     "value": null
+    },
+    {
+     "call": "set_references",
+     "value": null
+    }
+   ],
+   "target": {
+    "kind": "sublayer"
+   }
+  },
+  {
+   "accepted": [
+    true,
+    true,
+    true,
+    true
+   ],
+   "name": "sublayer_clear_creates_nothing",
+   "prim": "/C",
+   "spec": {
+    "references": {
+     "append": [],
+     "delete": [
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/B",
+       "scale": 1.0
+      }
+     ],
+     "explicit": null,
+     "prepend": []
+    },
+    "specifier": "over"
+   },
+   "spec_path": "/C",
+   "steps": [
+    {
+     "call": "set_active",
+     "value": null
+    },
+    {
+     "call": "set_type_name",
+     "value": null
+    },
+    {
+     "call": "set_references",
+     "value": null
+    },
+    {
+     "call": "remove_reference",
+     "path": "/B"
+    }
+   ],
+   "target": {
+    "kind": "sublayer"
+   }
+  },
+  {
+   "accepted": [
+    true,
+    true,
+    true,
+    true,
+    true
+   ],
+   "name": "variant_branch",
+   "prim": "/V",
+   "spec": {
+    "active": false,
+    "inheritPaths": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      "/Cls"
+     ]
+    },
+    "instanceable": true,
+    "propertyOrder": [
+     "b",
+     "a"
+    ],
+    "references": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/B",
+       "scale": 1.0
+      }
+     ]
+    },
+    "specifier": "over"
+   },
+   "spec_path": "/V{v=x}",
+   "steps": [
+    {
+     "call": "add_reference",
+     "path": "/B"
+    },
+    {
+     "call": "add_inherit",
+     "path": "/Cls"
+    },
+    {
+     "call": "set_active",
+     "value": false
+    },
+    {
+     "call": "set_instanceable",
+     "value": true
+    },
+    {
+     "call": "set_property_order",
+     "value": [
+      "b",
+      "a"
+     ]
+    }
+   ],
+   "target": {
+    "kind": "variant",
+    "prim": "/V"
+   }
+  },
+  {
+   "accepted": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true
+   ],
+   "name": "reference_target_maps_paths",
+   "prim": "/R",
+   "spec": {
+    "active": false,
+    "inheritPaths": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      "/Asset/Child"
+     ]
+    },
+    "references": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/Asset/Child",
+       "scale": 1.0
+      },
+      {
+       "asset": "asset.usda",
+       "offset": 0.0,
+       "path": "/Other",
+       "scale": 1.0
+      }
+     ]
+    },
+    "specializes": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      "/Asset/Child"
+     ]
+    },
+    "specifier": "def",
+    "typeName": "Scope"
+   },
+   "spec_path": "/Asset",
+   "steps": [
+    {
+     "call": "add_inherit",
+     "path": "/R/Child"
+    },
+    {
+     "call": "add_specialize",
+     "path": "/R/Child"
+    },
+    {
+     "call": "add_reference",
+     "path": "/R/Child",
+     "position": "back_of_prepend"
+    },
+    {
+     "asset": "asset.usda",
+     "call": "add_reference",
+     "path": "/Other",
+     "position": "back_of_prepend"
+    },
+    {
+     "call": "set_active",
+     "value": false
+    },
+    {
+     "call": "set_type_name",
+     "value": "Scope"
+    }
+   ],
+   "target": {
+    "kind": "reference",
+    "prim": "/R"
+   }
+  },
+  {
+   "accepted": [
+    true,
+    true,
+    true,
+    true
+   ],
+   "name": "reference_target_rejects_unmapped",
+   "prim": "/R",
+   "spec": {
+    "inheritPaths": {
+     "append": [],
+     "delete": [],
+     "explicit": [],
+     "prepend": []
+    },
+    "references": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/B",
+       "scale": 1.0
+      }
+     ]
+    },
+    "specifier": "def"
+   },
+   "spec_path": "/Asset",
+   "steps": [
+    {
+     "call": "add_inherit",
+     "path": "/Cls"
+    },
+    {
+     "call": "add_reference",
+     "path": "/B"
+    },
+    {
+     "call": "set_inherits",
+     "value": [
+      "/Cls"
+     ]
+    },
+    {
+     "call": "remove_inherit",
+     "path": "/Cls"
+    }
+   ],
+   "target": {
+    "kind": "reference",
+    "prim": "/R"
+   }
+  }
+ ],
+ "openusd_version": "26.8"
+}

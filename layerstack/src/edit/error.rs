@@ -67,6 +67,8 @@ pub enum Slot {
     Metadata(TokenId),
     /// The selection for a variant set.
     VariantSelection(TokenId),
+    /// A prim spec field kept in a dedicated member.
+    Prim(super::PrimField),
 }
 
 /// Why one edit of a transaction cannot be applied.
@@ -102,8 +104,26 @@ pub enum Rejection {
         declared: Arc<str>,
     },
     /// The metadata field is kept in a dedicated member of the layer model
-    /// and has its own edit, or none.
+    /// and has its own edit, or none: the prim fields of
+    /// [`PrimField`](super::PrimField) have the `set_`, `clear_`, `add_` and
+    /// `remove_` edits of [`Transaction`](super::Transaction).
     ReservedField(TokenId),
+    /// The edit addresses the pseudo-root, which holds no prim fields.
+    ///
+    /// OpenUSD: `UsdStage::_SetMetadata` rejects metadata on the
+    /// pseudo-root.
+    PseudoRoot,
+    /// An arc targets the pseudo-root; arcs target prims.
+    ///
+    /// Spec: AOUSD Core §10 (composition arcs).
+    PseudoRootArc,
+    /// A variant spec does not hold this prim field: its specifier, type
+    /// name and child order belong to the prim spec hosting the variant set.
+    /// OpenUSD accepts such an edit inside a variant edit context and
+    /// authors nothing.
+    ///
+    /// Spec: AOUSD Core §7.6.7 (variant specs).
+    NotOnVariant(super::PrimField),
     /// A step of an inverse no longer matches the layer: the layer was
     /// changed in a way the inverse cannot undo.
     Diverged(SpecPath),
@@ -153,6 +173,9 @@ impl fmt::Display for Rejection {
                 write!(f, "the value is not a `{declared}`")
             }
             Self::ReservedField(_) => f.write_str("the field has a dedicated member"),
+            Self::PseudoRoot => f.write_str("the pseudo-root holds no prim fields"),
+            Self::PseudoRootArc => f.write_str("an arc cannot target the pseudo-root"),
+            Self::NotOnVariant(field) => write!(f, "a variant spec holds no {field:?} field"),
             Self::Diverged(_) => f.write_str("the layer no longer matches the inverse"),
         }
     }

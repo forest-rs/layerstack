@@ -15,6 +15,7 @@ use alloc::{boxed::Box, sync::Arc, vec::Vec};
 
 use super::{
     error::{EditError, Rejection, Slot},
+    prim_fields::{self, PrimValue},
     same::Same,
     spec::{Loc, SpecRef, conforms, spec_at, spec_at_mut},
     target::Address,
@@ -156,6 +157,13 @@ pub(crate) enum Raw {
         set: TokenId,
         variant: Option<TokenId>,
     },
+    /// Replaces a prim field kept in a dedicated member of the spec at
+    /// `loc` (see [`prim_fields`]).
+    PrimField {
+        layer: LayerId,
+        loc: Loc,
+        value: PrimValue,
+    },
 }
 
 impl Raw {
@@ -173,7 +181,8 @@ impl Raw {
             | Self::Sample { layer, .. }
             | Self::Field { layer, .. }
             | Self::Targets { layer, .. }
-            | Self::Selection { layer, .. } => *layer,
+            | Self::Selection { layer, .. }
+            | Self::PrimField { layer, .. } => *layer,
         }
     }
 
@@ -190,6 +199,7 @@ impl Raw {
             }
             Self::Variant { host, .. } => Some(host.prim_path()),
             Self::Selection { loc, .. }
+            | Self::PrimField { loc, .. }
             | Self::Property { loc, .. }
             | Self::Default { loc, .. }
             | Self::Animation { loc, .. }
@@ -209,7 +219,8 @@ impl Raw {
             | Self::PrimSlots { .. }
             | Self::Child { .. }
             | Self::Variant { .. }
-            | Self::Selection { .. } => None,
+            | Self::Selection { .. }
+            | Self::PrimField { .. } => None,
             Self::Property { loc, .. }
             | Self::Default { loc, .. }
             | Self::Animation { loc, .. }
@@ -410,6 +421,14 @@ impl Raw {
                     variant: v,
                 },
             ) => (layer, loc, set, variant) == (l, lc, s, v),
+            (
+                Self::PrimField { layer, loc, value },
+                Self::PrimField {
+                    layer: l,
+                    loc: lc,
+                    value: v,
+                },
+            ) => (layer, loc, value) == (l, lc, v),
             _ => false,
         }
     }
@@ -464,6 +483,7 @@ impl Raw {
             Self::Selection { loc, set, .. } => {
                 (loc.spec_path(paths), Slot::VariantSelection(*set))
             }
+            Self::PrimField { loc, value, .. } => (loc.spec_path(paths), Slot::Prim(value.field())),
         }
     }
 }
@@ -590,7 +610,7 @@ pub(crate) trait SourceNamespace {
 
 /// The inverse steps recorded so far and their effects.
 #[derive(Default)]
-struct Journal<'a> {
+pub(super) struct Journal<'a> {
     // Deletions leave this snapshot a candidate superset. Source-slot writes
     // can add paths, so they discard it before any later subtree lookup.
     namespace: Option<&'a dyn SourceNamespace>,
@@ -602,7 +622,7 @@ struct Journal<'a> {
 }
 
 impl Journal<'_> {
-    fn run(&mut self, store: &mut dyn LayerStore, step: Raw) -> Result<(), Rejection> {
+    pub(super) fn run(&mut self, store: &mut dyn LayerStore, step: Raw) -> Result<(), Rejection> {
         self.run_step(store, step).map(|_| ())
     }
 
@@ -776,7 +796,8 @@ pub(crate) fn apply(
             | Raw::LayerMetadata { .. }
             | Raw::Variant { .. }
             | Raw::Selection { .. }
-            | Raw::Field { .. } => {
+            | Raw::Field { .. }
+            | Raw::PrimField { .. } => {
                 local_structure = None;
             }
             _ => {}
@@ -942,7 +963,10 @@ fn check_preconditions(store: &mut dyn LayerStore, txn: &Transaction) -> Result<
 }
 
 /// The spec path and storage location `at` names.
-fn resolve(store: &mut dyn LayerStore, at: &Address) -> Result<(SpecPath, Loc), Rejection> {
+pub(super) fn resolve(
+    store: &mut dyn LayerStore,
+    at: &Address,
+) -> Result<(SpecPath, Loc), Rejection> {
     if store.layer(at.layer()).is_none() {
         return Err(Rejection::NoSuchLayer(at.layer()));
     }
@@ -951,7 +975,7 @@ fn resolve(store: &mut dyn LayerStore, at: &Address) -> Result<(SpecPath, Loc), 
     Ok((path, loc))
 }
 
-fn layer(store: &dyn LayerStore, id: LayerId) -> Result<&Layer, Rejection> {
+pub(super) fn layer(store: &dyn LayerStore, id: LayerId) -> Result<&Layer, Rejection> {
     store.layer(id).ok_or(Rejection::NoSuchLayer(id))
 }
 
@@ -1103,6 +1127,11 @@ fn apply_op(
         Op::SetDefault { at, value } => set_value(store, at, None, value, stage, journal),
         Op::SetTargets { at, targets } => set_targets(store, at, targets.as_ref(), stage, journal),
         Op::AddAppliedSchema { at, name } => add_applied_schema(store, at, *name, journal),
+        Op::RemoveAppliedSchema { at, name } => {
+            prim_fields::remove_applied_schema(store, at, *name, journal)
+        }
+        Op::SetPrimField { at, value } => prim_fields::set_field(store, at, value.clone(), journal),
+        Op::EditArc { at, edit } => prim_fields::edit_arc(store, at, edit, journal),
         Op::SetTimeSample { at, time, value } => {
             set_value(store, at, Some(at.layer_time(*time)), value, stage, journal)
         }
@@ -1234,7 +1263,7 @@ fn apply_op(
 }
 
 /// The position a field `key` has, or would be appended at.
-fn field_index(fields: &[FieldEntry], key: TokenId) -> usize {
+pub(super) fn field_index(fields: &[FieldEntry], key: TokenId) -> usize {
     fields
         .iter()
         .position(|e| e.name == key)
@@ -1551,7 +1580,7 @@ fn set_targets(
 /// after its missing ancestors, or a variant spec, after its host.
 ///
 /// OpenUSD: `SdfCreatePrimInLayer`.
-fn ensure(
+pub(super) fn ensure(
     store: &mut dyn LayerStore,
     id: LayerId,
     loc: &Loc,
@@ -2168,6 +2197,17 @@ fn apply_raw(store: &mut dyn LayerStore, step: &Raw) -> Result<Raw, Rejection> {
                 loc: loc.clone(),
                 set: *set,
                 variant: old,
+            })
+        }
+        Raw::PrimField { loc, value, .. } => {
+            let Some(target) = store.layer_mut(id).and_then(|l| spec_at_mut(l, loc)) else {
+                return Err(diverged_at(store, loc));
+            };
+            let old = prim_fields::swap(target, value.clone()).map_err(Rejection::NotOnVariant)?;
+            Ok(Raw::PrimField {
+                layer: id,
+                loc: loc.clone(),
+                value: old,
             })
         }
     }

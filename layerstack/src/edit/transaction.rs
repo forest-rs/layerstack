@@ -8,15 +8,16 @@ use alloc::{boxed::Box, vec::Vec};
 use super::{
     apply::{self, AnimationState, Guarded},
     error::{EditError, Slot},
+    prim_fields::{ArcEdit, ArcItem, ListPosition, PrimValue},
     same::Same,
     spec::{Loc, spec_at},
     target::Address,
 };
 use crate::{
-    doc::{FieldValue, LayerId, LayerStore, Specifier, Value},
+    doc::{FieldValue, LayerId, LayerStore, Reference, Specifier, Value},
     interner::TokenId,
     listop::ListOp,
-    path::TargetPath,
+    path::{PathId, TargetPath},
     property::{PropertySpec, get_property},
 };
 
@@ -130,6 +131,18 @@ pub(crate) enum Op {
         at: Address,
         name: TokenId,
     },
+    RemoveAppliedSchema {
+        at: Address,
+        name: TokenId,
+    },
+    SetPrimField {
+        at: Address,
+        value: PrimValue,
+    },
+    EditArc {
+        at: Address,
+        edit: Box<ArcEdit>,
+    },
     /// A storage-level step of an inverse, guarded by the step it undoes.
     Raw(Box<Guarded>),
 }
@@ -164,6 +177,7 @@ pub(crate) enum Authored {
     Field(FieldValue),
     Token(TokenId),
     Property(Box<PropertySpec>),
+    Prim(Box<PrimValue>),
     Spec,
 }
 
@@ -175,6 +189,7 @@ impl Same for Authored {
             (Self::Field(a), Self::Field(b)) => a.same(b),
             (Self::Property(a), Self::Property(b)) => a.same(b),
             (Self::Token(a), Self::Token(b)) => a == b,
+            (Self::Prim(a), Self::Prim(b)) => a == b,
             (Self::Spec, Self::Spec) => true,
             _ => false,
         }
@@ -359,6 +374,307 @@ impl Transaction {
         self.push(Op::AddAppliedSchema { at, name })
     }
 
+    /// Removes the API schema `name` from the prim spec at `at`, creating
+    /// the spec as an `over` if needed: `name` is removed from the explicit
+    /// list when the spec's `apiSchemas` list op is explicit, and otherwise
+    /// from its prepended and appended items and added to its deleted
+    /// items, which removes weaker opinions' applications too.
+    ///
+    /// OpenUSD: `UsdPrim::RemoveAppliedSchema`, which `UsdPrim::RemoveAPI`
+    /// calls.
+    ///
+    /// Spec: AOUSD Core §13.2.1.2 (`apiSchemas`), §12.4 (list ops).
+    pub fn remove_applied_schema(&mut self, at: Address, name: TokenId) -> &mut Self {
+        self.push(Op::RemoveAppliedSchema { at, name })
+    }
+
+    /// Sets the specifier of the prim spec at `at`, creating the spec if
+    /// needed. A variant spec has none ([`Rejection::NotOnVariant`]).
+    ///
+    /// OpenUSD: `UsdPrim::SetSpecifier`.
+    ///
+    /// Spec: AOUSD Core §7.6 (specifier), §12.2.1 (specifier resolution).
+    ///
+    /// [`Rejection::NotOnVariant`]: super::Rejection::NotOnVariant
+    pub fn set_specifier(&mut self, at: Address, specifier: Specifier) -> &mut Self {
+        self.set_field(at, PrimValue::Specifier(Some(specifier)))
+    }
+
+    /// Sets the type name of the prim spec at `at`, creating the spec as an
+    /// `over` if needed. A variant spec has none.
+    ///
+    /// OpenUSD: `UsdPrim::SetTypeName`.
+    ///
+    /// Spec: AOUSD Core §7.6 (`typeName`), §12.2.3 (type name resolution).
+    pub fn set_type_name(&mut self, at: Address, type_name: TokenId) -> &mut Self {
+        self.set_field(at, PrimValue::TypeName(Some(type_name)))
+    }
+
+    /// Clears the type name of the prim spec at `at`. Clearing a field of a
+    /// spec that does not exist does nothing, here and for every `clear_`
+    /// edit of a prim field.
+    ///
+    /// OpenUSD: `UsdPrim::ClearTypeName`.
+    pub fn clear_type_name(&mut self, at: Address) -> &mut Self {
+        self.set_field(at, PrimValue::TypeName(None))
+    }
+
+    /// Sets the `active` opinion of the prim or variant spec at `at`,
+    /// creating the spec as an `over` if needed. An inactive prim's
+    /// descendants are not composed.
+    ///
+    /// OpenUSD: `UsdPrim::SetActive`.
+    ///
+    /// Spec: AOUSD Core §7.6 (`active`), §11 (stage population).
+    pub fn set_active(&mut self, at: Address, active: bool) -> &mut Self {
+        self.set_field(at, PrimValue::Active(Some(active)))
+    }
+
+    /// Clears the `active` opinion of the spec at `at`.
+    ///
+    /// OpenUSD: `UsdPrim::ClearActive`.
+    pub fn clear_active(&mut self, at: Address) -> &mut Self {
+        self.set_field(at, PrimValue::Active(None))
+    }
+
+    /// Sets the `instanceable` opinion of the prim or variant spec at `at`,
+    /// creating the spec as an `over` if needed.
+    ///
+    /// OpenUSD: `UsdPrim::SetInstanceable`.
+    ///
+    /// Spec: AOUSD Core §11.3.3 (instanceable).
+    pub fn set_instanceable(&mut self, at: Address, instanceable: bool) -> &mut Self {
+        self.set_field(at, PrimValue::Instanceable(Some(instanceable)))
+    }
+
+    /// Clears the `instanceable` opinion of the spec at `at`.
+    ///
+    /// OpenUSD: `UsdPrim::ClearInstanceable`.
+    pub fn clear_instanceable(&mut self, at: Address) -> &mut Self {
+        self.set_field(at, PrimValue::Instanceable(None))
+    }
+
+    /// Sets the child order (`reorder nameChildren`) of the prim spec at
+    /// `at`, creating the spec as an `over` if needed. Names are authored
+    /// as given; an empty order is authored too. A variant spec has none.
+    ///
+    /// OpenUSD: `UsdPrim::SetChildrenReorder`.
+    ///
+    /// Spec: AOUSD Core §7.6.2 (prim spec fields), §11 (child order).
+    pub fn set_prim_order(&mut self, at: Address, order: Vec<TokenId>) -> &mut Self {
+        self.set_field(at, PrimValue::PrimOrder(Some(order)))
+    }
+
+    /// Clears the child order of the prim spec at `at`.
+    ///
+    /// OpenUSD: `UsdPrim::ClearChildrenReorder`.
+    pub fn clear_prim_order(&mut self, at: Address) -> &mut Self {
+        self.set_field(at, PrimValue::PrimOrder(None))
+    }
+
+    /// Sets the property order (`reorder properties`) of the prim or variant
+    /// spec at `at`, creating the spec as an `over` if needed. Names are
+    /// authored as given.
+    ///
+    /// OpenUSD: `UsdPrim::SetPropertyOrder`.
+    ///
+    /// Spec: AOUSD Core §7.6.2 (prim spec fields).
+    pub fn set_property_order(&mut self, at: Address, order: Vec<TokenId>) -> &mut Self {
+        self.set_field(at, PrimValue::PropertyOrder(Some(order)))
+    }
+
+    /// Clears the property order of the spec at `at`.
+    ///
+    /// OpenUSD: `UsdPrim::ClearPropertyOrder`.
+    pub fn clear_property_order(&mut self, at: Address) -> &mut Self {
+        self.set_field(at, PrimValue::PropertyOrder(None))
+    }
+
+    /// Sets the references list op of the prim or variant spec at `at`,
+    /// replacing the one authored there, and creating the spec as an `over`
+    /// if needed.
+    ///
+    /// Arc paths are named as the address is: through an edit target the
+    /// paths of internal arcs (no asset, anchored at the target's layer;
+    /// see [`Reference::layer`]) are stage paths, mapped to the layer's
+    /// namespace as relationship targets are
+    /// ([`Transaction::set_targets`]), and one the target does not map
+    /// rejects the edit. An external arc names a path in its asset and is
+    /// authored as given, with its layer offset. An arc to the pseudo-root
+    /// is rejected.
+    ///
+    /// OpenUSD: `UsdReferences::SetReferences`.
+    ///
+    /// Spec: AOUSD Core §10.3.2 (references), §12.4 (list ops).
+    pub fn set_references(&mut self, at: Address, references: ListOp<Reference>) -> &mut Self {
+        self.set_field(at, PrimValue::References(references))
+    }
+
+    /// Clears the references authored on the spec at `at`.
+    ///
+    /// OpenUSD: `UsdReferences::ClearReferences`.
+    pub fn clear_references(&mut self, at: Address) -> &mut Self {
+        self.set_field(at, PrimValue::References(ListOp::default()))
+    }
+
+    /// Adds `reference` to the references of the prim or variant spec at
+    /// `at` at `position` (see [`ListPosition`]), creating the spec as an
+    /// `over` if needed. Its path is mapped as
+    /// [`Transaction::set_references`] maps arc paths.
+    ///
+    /// OpenUSD: `UsdReferences::AddReference`.
+    ///
+    /// Spec: AOUSD Core §10.3.2, §12.4.
+    pub fn add_reference(
+        &mut self,
+        at: Address,
+        reference: Reference,
+        position: ListPosition,
+    ) -> &mut Self {
+        self.edit_arc(at, ArcItem::Reference(reference), Some(position))
+    }
+
+    /// Removes `reference` from the references of the spec at `at`: from its
+    /// explicit list when the list op is explicit, and otherwise from its
+    /// prepended and appended items, adding it to its deleted items, which
+    /// removes weaker opinions' arcs too. The spec is created as an `over`
+    /// if needed.
+    ///
+    /// OpenUSD: `UsdReferences::RemoveReference`.
+    ///
+    /// Spec: AOUSD Core §10.3.2, §12.4.
+    pub fn remove_reference(&mut self, at: Address, reference: Reference) -> &mut Self {
+        self.edit_arc(at, ArcItem::Reference(reference), None)
+    }
+
+    /// Sets the payloads list op of the spec at `at`, as
+    /// [`Transaction::set_references`] sets references.
+    ///
+    /// OpenUSD: `UsdPayloads::SetPayloads`.
+    ///
+    /// Spec: AOUSD Core §10 (payloads), §12.4.
+    pub fn set_payloads(&mut self, at: Address, payloads: ListOp<Reference>) -> &mut Self {
+        self.set_field(at, PrimValue::Payloads(payloads))
+    }
+
+    /// Clears the payloads authored on the spec at `at`.
+    ///
+    /// OpenUSD: `UsdPayloads::ClearPayloads`.
+    pub fn clear_payloads(&mut self, at: Address) -> &mut Self {
+        self.set_field(at, PrimValue::Payloads(ListOp::default()))
+    }
+
+    /// Adds `payload` to the payloads of the spec at `at`, as
+    /// [`Transaction::add_reference`] adds a reference.
+    ///
+    /// OpenUSD: `UsdPayloads::AddPayload`.
+    pub fn add_payload(
+        &mut self,
+        at: Address,
+        payload: Reference,
+        position: ListPosition,
+    ) -> &mut Self {
+        self.edit_arc(at, ArcItem::Payload(payload), Some(position))
+    }
+
+    /// Removes `payload` from the payloads of the spec at `at`, as
+    /// [`Transaction::remove_reference`] removes a reference.
+    ///
+    /// OpenUSD: `UsdPayloads::RemovePayload`.
+    pub fn remove_payload(&mut self, at: Address, payload: Reference) -> &mut Self {
+        self.edit_arc(at, ArcItem::Payload(payload), None)
+    }
+
+    /// Sets the inherits list op of the prim or variant spec at `at`,
+    /// replacing the one authored there, and creating the spec as an `over`
+    /// if needed. Through an edit target the paths are stage paths, each
+    /// mapped to the layer's namespace; one the target does not map
+    /// rejects the edit, where OpenUSD drops it and reports success.
+    ///
+    /// OpenUSD: `UsdInherits::SetInherits`.
+    ///
+    /// Spec: AOUSD Core §10 (inherits), §12.4.
+    pub fn set_inherits(&mut self, at: Address, inherits: ListOp<PathId>) -> &mut Self {
+        self.set_field(at, PrimValue::Inherits(inherits))
+    }
+
+    /// Clears the inherits authored on the spec at `at`.
+    ///
+    /// OpenUSD: `UsdInherits::ClearInherits`.
+    pub fn clear_inherits(&mut self, at: Address) -> &mut Self {
+        self.set_field(at, PrimValue::Inherits(ListOp::default()))
+    }
+
+    /// Adds the inherit `path` to the spec at `at` at `position`, mapping
+    /// the path as [`Transaction::set_inherits`] does.
+    ///
+    /// OpenUSD: `UsdInherits::AddInherit`.
+    pub fn add_inherit(&mut self, at: Address, path: PathId, position: ListPosition) -> &mut Self {
+        self.edit_arc(at, ArcItem::Inherit(path), Some(position))
+    }
+
+    /// Removes the inherit `path` from the spec at `at`, as
+    /// [`Transaction::remove_reference`] removes a reference.
+    ///
+    /// OpenUSD: `UsdInherits::RemoveInherit`.
+    pub fn remove_inherit(&mut self, at: Address, path: PathId) -> &mut Self {
+        self.edit_arc(at, ArcItem::Inherit(path), None)
+    }
+
+    /// Sets the specializes list op of the spec at `at`, as
+    /// [`Transaction::set_inherits`] sets inherits.
+    ///
+    /// OpenUSD: `UsdSpecializes::SetSpecializes`.
+    ///
+    /// Spec: AOUSD Core §10 (specializes), §12.4.
+    pub fn set_specializes(&mut self, at: Address, specializes: ListOp<PathId>) -> &mut Self {
+        self.set_field(at, PrimValue::Specializes(specializes))
+    }
+
+    /// Clears the specializes authored on the spec at `at`.
+    ///
+    /// OpenUSD: `UsdSpecializes::ClearSpecializes`.
+    pub fn clear_specializes(&mut self, at: Address) -> &mut Self {
+        self.set_field(at, PrimValue::Specializes(ListOp::default()))
+    }
+
+    /// Adds the specialize `path` to the spec at `at`, as
+    /// [`Transaction::add_inherit`] adds an inherit.
+    ///
+    /// OpenUSD: `UsdSpecializes::AddSpecialize`.
+    pub fn add_specialize(
+        &mut self,
+        at: Address,
+        path: PathId,
+        position: ListPosition,
+    ) -> &mut Self {
+        self.edit_arc(at, ArcItem::Specialize(path), Some(position))
+    }
+
+    /// Removes the specialize `path` from the spec at `at`, as
+    /// [`Transaction::remove_reference`] removes a reference.
+    ///
+    /// OpenUSD: `UsdSpecializes::RemoveSpecialize`.
+    pub fn remove_specialize(&mut self, at: Address, path: PathId) -> &mut Self {
+        self.edit_arc(at, ArcItem::Specialize(path), None)
+    }
+
+    fn set_field(&mut self, at: Address, value: PrimValue) -> &mut Self {
+        self.push(Op::SetPrimField { at, value })
+    }
+
+    fn edit_arc(
+        &mut self,
+        at: Address,
+        item: ArcItem,
+        position: Option<ListPosition>,
+    ) -> &mut Self {
+        self.push(Op::EditArc {
+            at,
+            edit: Box::new(ArcEdit { item, position }),
+        })
+    }
+
     /// Sets the default value of the attribute at `at`.
     ///
     /// The value must conform to the attribute's declared type: the type
@@ -420,10 +736,12 @@ impl Transaction {
     /// at `at`, creating a missing prim or variant spec. A property spec
     /// must exist.
     ///
-    /// Fields that the layer model keeps in dedicated members
-    /// (`specifier`, `typeName`, `active`, the composition arcs, variant
-    /// selections and the like) are rejected: they have their own edits or
-    /// none.
+    /// Fields that the layer model keeps in dedicated members are rejected:
+    /// they have their own edits ([`Transaction::set_active`],
+    /// [`Transaction::add_reference`] and the others for the
+    /// [`PrimField`](super::PrimField)s, [`Transaction::set_default`],
+    /// [`Transaction::set_targets`], [`Transaction::set_variant_selection`])
+    /// or none.
     ///
     /// OpenUSD: `SdfSpec::SetInfo`.
     ///
@@ -612,7 +930,11 @@ impl Op {
             }
             Self::SetVariantSelection { at, set, .. } => (at, Slot::VariantSelection(*set)),
             Self::SetTargets { at, .. } => (at, Slot::Targets),
-            Self::AddAppliedSchema { at, .. } => (at, Slot::AppliedSchemas),
+            Self::AddAppliedSchema { at, .. } | Self::RemoveAppliedSchema { at, .. } => {
+                (at, Slot::AppliedSchemas)
+            }
+            Self::SetPrimField { at, value } => (at, Slot::Prim(value.field())),
+            Self::EditArc { at, edit } => (at, Slot::Prim(edit.item.field())),
             Self::Raw(_) | Self::LayerMetadata { .. } => return None,
         })
     }
@@ -669,5 +991,8 @@ pub(crate) fn authored(
         Slot::Targets => property
             .and_then(|p| p.targets.clone())
             .map(|targets| Authored::Field(FieldValue::PathListOp(targets))),
+        Slot::Prim(field) => super::prim_fields::read(&*store, spec, *field)
+            .filter(|value| !value.is_clear())
+            .map(|value| Authored::Prim(Box::new(value))),
     })
 }

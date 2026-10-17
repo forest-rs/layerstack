@@ -28,7 +28,8 @@
 //!   dependency graph
 //! - **Authoring** — via [`edit`]: edit targets through any node of a
 //!   prim's composition, and atomic transactions of spec edits that
-//!   return their inverses and check preconditions
+//!   return their inverses and check preconditions, including composition
+//!   arcs added and removed as OpenUSD's list editors do
 //! - **Schemas** — prim definitions (type, applied schemas, defined
 //!   properties and their fallbacks) from the [`SchemaRegistry`] a stage is
 //!   composed with ([`StageOptions::schemas`], [`Stage::prim_definition`])
@@ -227,8 +228,8 @@ pub use doc::{
     insert_field_if_absent, remove_field, set_field_vec,
 };
 pub use edit::{
-    Address, Applied, Changes, EditError, EditTarget, NamespaceEdit, NamespaceError,
-    PrimPropertyChanges, PropertyChange, PropertyField, Transaction,
+    Address, Applied, Changes, EditError, EditTarget, ListPosition, NamespaceEdit, NamespaceError,
+    PrimField, PrimPropertyChanges, PropertyChange, PropertyField, Transaction,
 };
 pub use interner::{TokenId, TokenInterner};
 pub use layer_stack::{LayerStack, LayerStackIdentifier};

@@ -271,7 +271,10 @@ fn registration_is_explicit_and_exclusive() {
         }
     }
     let mut formats = DynamicFormats::default();
-    formats.add(Arc::new(Terrain)).unwrap();
+    let terrain: Arc<dyn DynamicFileFormat> = Arc::new(Terrain);
+    formats.add(Arc::clone(&terrain)).unwrap();
+    formats.add(terrain).unwrap();
+    assert_eq!(formats.iter().len(), 1);
     assert!(matches!(
         formats.add(Arc::new(Claims(&["terrain"]))),
         Err(DynamicFormatRegistrationError::DuplicateExtension { registered, .. }) if registered == "terrain"

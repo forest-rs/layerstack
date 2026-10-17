@@ -309,6 +309,7 @@ impl<'a> DynamicFormatContext<'a> {
             fields: self.fields,
             attributes: self.attributes,
             sites: self.sites,
+            targets: BTreeSet::new(),
         }
     }
 }
@@ -385,7 +386,8 @@ pub struct DynamicFormats {
 }
 
 impl DynamicFormats {
-    /// Registers `format` for its extensions.
+    /// Registers `format` for its extensions. Registering a format already
+    /// registered (the same `Arc`) does nothing.
     ///
     /// # Errors
     ///
@@ -395,6 +397,13 @@ impl DynamicFormats {
         &mut self,
         format: Arc<dyn DynamicFileFormat>,
     ) -> Result<(), DynamicFormatRegistrationError> {
+        if self
+            .formats
+            .iter()
+            .any(|registered| Arc::ptr_eq(registered, &format))
+        {
+            return Ok(());
+        }
         let name = || format.name().to_string();
         if format.extensions().is_empty() {
             return Err(DynamicFormatRegistrationError::NoExtensions { format: name() });
@@ -513,6 +522,8 @@ pub struct DynamicDependency {
     attributes: BTreeSet<Arc<str>>,
     /// The `(layer, prim path)` of every spec the contexts read from.
     sites: BTreeSet<(LayerId, PathId)>,
+    /// The layers the payloads target, as the store bound them.
+    pub(crate) targets: BTreeSet<LayerId>,
 }
 
 impl fmt::Debug for DynamicDependency {
@@ -568,6 +579,13 @@ impl DynamicDependency {
         self.sites.iter().copied()
     }
 
+    /// The root layers of the layer stacks the payloads target, as the
+    /// store binds their argument-carrying identifiers, sorted; a payload
+    /// whose layer the store does not hold yet targets none.
+    pub fn target_layers(&self) -> impl ExactSizeIterator<Item = LayerId> + '_ {
+        self.targets.iter().copied()
+    }
+
     /// Whether changing the field `field` from `old` to `new` may change
     /// any of the arguments: the field is relevant and a composition's
     /// format says it may ([`DynamicFileFormat::can_field_change_affect_args`]).
@@ -613,6 +631,7 @@ impl DynamicDependency {
         self.fields.extend(other.fields);
         self.attributes.extend(other.attributes);
         self.sites.extend(other.sites);
+        self.targets.extend(other.targets);
     }
 }
 

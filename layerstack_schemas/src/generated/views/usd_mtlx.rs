@@ -25,7 +25,7 @@ use layerstack::{CannotApply, PathId};
 use crate::{PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "MaterialXConfigAPI is an API schema that provides an interface for storing information about the MaterialX environment."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `MaterialXConfigAPI`. Get it with [`MaterialXConfigApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `MaterialXConfigAPI`. Get it with [`MaterialXConfigApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdMtlxMaterialXConfigAPI`."]
 #[doc(alias = "UsdMtlxMaterialXConfigAPI")]
 #[doc(alias = "MaterialXConfigAPI")]
@@ -54,17 +54,22 @@ impl<'a> MaterialXConfigApi<'a> {
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of the schema on `prim`, without checking that the prim
+    /// has it applied (`HasAPI`), as [`Self::get`] does: a getter reads
+    /// what the prim authors, and the schema's fallbacks only for a
+    /// prim with the schema applied. For a built-in's view.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self { base: prim }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> MaterialXConfigApiEdit {
-        MaterialXConfigApiEdit::from_path(self.path())
+        MaterialXConfigApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
@@ -81,21 +86,37 @@ impl<'a> MaterialXConfigApi<'a> {
         edit: &mut SchemaEdit<'_>,
         path: PathId,
     ) -> Result<MaterialXConfigApiEdit, CannotApply> {
-        edit.apply(path, Self::SCHEMA, None)?;
-        Ok(MaterialXConfigApiEdit::from_path(path))
+        edit.apply_api(path, Self::SCHEMA, None)
+            .map(MaterialXConfigApiEdit::from_prim)
     }
 
     /// The USD name of [`Self::config_mtlx_version`].
     pub const CONFIG_MTLX_VERSION: &'static str = "config:mtlx:version";
 
-    attribute! {
-        #[doc = "MaterialX library version that the data has been authored against."]
-        #[doc = ""]
-        #[doc = "USD attribute `config:mtlx:version` (`string`; fallback `\"1.38\"`)."]
-        #[doc = "C++ read: `UsdMtlxMaterialXConfigAPI::GetConfigMtlxVersionAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdMtlxMaterialXConfigAPI::GetConfigMtlxVersionAttr")]
-        #[doc(alias = "GetConfigMtlxVersionAttr")]
-        config_mtlx_version, config_mtlx_version_at, "config:mtlx:version", ::alloc::sync::Arc<str>, crate::value::read_string
+    #[doc = "MaterialX library version that the data has been authored against."]
+    #[doc = ""]
+    #[doc = "USD attribute `config:mtlx:version` (`string`; fallback `\"1.38\"`)."]
+    #[doc = "C++ read: `UsdMtlxMaterialXConfigAPI::GetConfigMtlxVersionAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdMtlxMaterialXConfigAPI::GetConfigMtlxVersionAttr")]
+    #[doc(alias = "GetConfigMtlxVersionAttr")]
+    #[must_use]
+    pub fn config_mtlx_version(&self) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value("config:mtlx:version", crate::value::read_string)
+    }
+
+    #[doc = "[`Self::config_mtlx_version`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn config_mtlx_version_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value_at(
+            "config:mtlx:version",
+            time,
+            interp,
+            crate::value::read_string,
+        )
     }
 }
 
@@ -119,22 +140,37 @@ impl MaterialXConfigApiEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
-        Self {
-            base: PrimEdit::new(path),
-        }
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whether or not it has the schema applied.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
+        Self { base: prim }
     }
 
-    set_attribute! {
-        #[doc = "MaterialX library version that the data has been authored against."]
-        #[doc = ""]
-        #[doc = "USD attribute `config:mtlx:version` (`string`; fallback `\"1.38\"`)."]
-        #[doc = "C++ authoring: `UsdMtlxMaterialXConfigAPI::CreateConfigMtlxVersionAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdMtlxMaterialXConfigAPI::CreateConfigMtlxVersionAttr")]
-        #[doc(alias = "CreateConfigMtlxVersionAttr")]
-        set_config_mtlx_version, set_config_mtlx_version_at, "config:mtlx:version", &str, crate::value::write_string
+    #[doc = "MaterialX library version that the data has been authored against."]
+    #[doc = ""]
+    #[doc = "USD attribute `config:mtlx:version` (`string`; fallback `\"1.38\"`)."]
+    #[doc = "C++ authoring: `UsdMtlxMaterialXConfigAPI::CreateConfigMtlxVersionAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdMtlxMaterialXConfigAPI::CreateConfigMtlxVersionAttr")]
+    #[doc(alias = "CreateConfigMtlxVersionAttr")]
+    pub fn set_config_mtlx_version(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
+        let value = crate::value::write_string(value, edit.tokens());
+        self.write_value(edit, "config:mtlx:version", None, value);
+        self
+    }
+
+    #[doc = "[`Self::set_config_mtlx_version`] as a time sample at the time code `time`."]
+    pub fn set_config_mtlx_version_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: &str,
+    ) -> &Self {
+        let value = crate::value::write_string(value, edit.tokens());
+        self.write_value(edit, "config:mtlx:version", Some(time), value);
+        self
     }
 }

@@ -73,7 +73,11 @@ impl<'a> PreviewSurface<'a> {
     pub fn clearcoat_input(&self) -> Option<Port<'a>> {
         self.shader.input("clearcoat")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:clearcoat`, without following connections or applying the node default. "] clearcoat, "inputs:clearcoat", f32, crate::value::read_float }
+    #[doc = "The composed value of `inputs:clearcoat`, without following connections or applying the node default. "]
+    #[must_use]
+    pub fn clearcoat(&self) -> Option<f32> {
+        self.read_value("inputs:clearcoat", crate::value::read_float)
+    }
     /// The composed `inputs:clearcoat` at a numeric time.
     #[must_use]
     pub fn clearcoat_at(
@@ -98,7 +102,11 @@ impl<'a> PreviewSurface<'a> {
     pub fn clearcoat_roughness_input(&self) -> Option<Port<'a>> {
         self.shader.input("clearcoatRoughness")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:clearcoatRoughness`, without following connections or applying the node default. "] clearcoat_roughness, "inputs:clearcoatRoughness", f32, crate::value::read_float }
+    #[doc = "The composed value of `inputs:clearcoatRoughness`, without following connections or applying the node default. "]
+    #[must_use]
+    pub fn clearcoat_roughness(&self) -> Option<f32> {
+        self.read_value("inputs:clearcoatRoughness", crate::value::read_float)
+    }
     /// The composed `inputs:clearcoatRoughness` at a numeric time.
     #[must_use]
     pub fn clearcoat_roughness_at(
@@ -123,7 +131,11 @@ impl<'a> PreviewSurface<'a> {
     pub fn diffuse_color_input(&self) -> Option<Port<'a>> {
         self.shader.input("diffuseColor")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:diffuseColor`, without following connections or applying the node default. "] diffuse_color, "inputs:diffuseColor", [f32; 3], crate::value::read_float3 }
+    #[doc = "The composed value of `inputs:diffuseColor`, without following connections or applying the node default. "]
+    #[must_use]
+    pub fn diffuse_color(&self) -> Option<[f32; 3]> {
+        self.read_value("inputs:diffuseColor", crate::value::read_float3)
+    }
     /// The composed `inputs:diffuseColor` at a numeric time.
     #[must_use]
     pub fn diffuse_color_at(
@@ -148,7 +160,11 @@ impl<'a> PreviewSurface<'a> {
     pub fn displacement_input(&self) -> Option<Port<'a>> {
         self.shader.input("displacement")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:displacement`, without following connections or applying the node default. "] displacement, "inputs:displacement", f32, crate::value::read_float }
+    #[doc = "The composed value of `inputs:displacement`, without following connections or applying the node default. "]
+    #[must_use]
+    pub fn displacement(&self) -> Option<f32> {
+        self.read_value("inputs:displacement", crate::value::read_float)
+    }
     /// The composed `inputs:displacement` at a numeric time.
     #[must_use]
     pub fn displacement_at(
@@ -173,7 +189,11 @@ impl<'a> PreviewSurface<'a> {
     pub fn emissive_color_input(&self) -> Option<Port<'a>> {
         self.shader.input("emissiveColor")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:emissiveColor`, without following connections or applying the node default. "] emissive_color, "inputs:emissiveColor", [f32; 3], crate::value::read_float3 }
+    #[doc = "The composed value of `inputs:emissiveColor`, without following connections or applying the node default. "]
+    #[must_use]
+    pub fn emissive_color(&self) -> Option<[f32; 3]> {
+        self.read_value("inputs:emissiveColor", crate::value::read_float3)
+    }
     /// The composed `inputs:emissiveColor` at a numeric time.
     #[must_use]
     pub fn emissive_color_at(
@@ -198,7 +218,11 @@ impl<'a> PreviewSurface<'a> {
     pub fn ior_input(&self) -> Option<Port<'a>> {
         self.shader.input("ior")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:ior`, without following connections or applying the node default. "] ior, "inputs:ior", f32, crate::value::read_float }
+    #[doc = "The composed value of `inputs:ior`, without following connections or applying the node default. "]
+    #[must_use]
+    pub fn ior(&self) -> Option<f32> {
+        self.read_value("inputs:ior", crate::value::read_float)
+    }
     /// The composed `inputs:ior` at a numeric time.
     #[must_use]
     pub fn ior_at(&self, time: f64, interpolation: layerstack::InterpolationType) -> Option<f32> {
@@ -214,7 +238,11 @@ impl<'a> PreviewSurface<'a> {
     pub fn metallic_input(&self) -> Option<Port<'a>> {
         self.shader.input("metallic")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:metallic`, without following connections or applying the node default. "] metallic, "inputs:metallic", f32, crate::value::read_float }
+    #[doc = "The composed value of `inputs:metallic`, without following connections or applying the node default. "]
+    #[must_use]
+    pub fn metallic(&self) -> Option<f32> {
+        self.read_value("inputs:metallic", crate::value::read_float)
+    }
     /// The composed `inputs:metallic` at a numeric time.
     #[must_use]
     pub fn metallic_at(
@@ -239,7 +267,11 @@ impl<'a> PreviewSurface<'a> {
     pub fn normal_input(&self) -> Option<Port<'a>> {
         self.shader.input("normal")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:normal`, without following connections or applying the node default. "] normal, "inputs:normal", [f32; 3], crate::value::read_float3 }
+    #[doc = "The composed value of `inputs:normal`, without following connections or applying the node default. "]
+    #[must_use]
+    pub fn normal(&self) -> Option<[f32; 3]> {
+        self.read_value("inputs:normal", crate::value::read_float3)
+    }
     /// The composed `inputs:normal` at a numeric time.
     #[must_use]
     pub fn normal_at(
@@ -264,7 +296,11 @@ impl<'a> PreviewSurface<'a> {
     pub fn occlusion_input(&self) -> Option<Port<'a>> {
         self.shader.input("occlusion")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:occlusion`, without following connections or applying the node default. "] occlusion, "inputs:occlusion", f32, crate::value::read_float }
+    #[doc = "The composed value of `inputs:occlusion`, without following connections or applying the node default. "]
+    #[must_use]
+    pub fn occlusion(&self) -> Option<f32> {
+        self.read_value("inputs:occlusion", crate::value::read_float)
+    }
     /// The composed `inputs:occlusion` at a numeric time.
     #[must_use]
     pub fn occlusion_at(
@@ -289,7 +325,11 @@ impl<'a> PreviewSurface<'a> {
     pub fn opacity_input(&self) -> Option<Port<'a>> {
         self.shader.input("opacity")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:opacity`, without following connections or applying the node default. "] opacity, "inputs:opacity", f32, crate::value::read_float }
+    #[doc = "The composed value of `inputs:opacity`, without following connections or applying the node default. "]
+    #[must_use]
+    pub fn opacity(&self) -> Option<f32> {
+        self.read_value("inputs:opacity", crate::value::read_float)
+    }
     /// The composed `inputs:opacity` at a numeric time.
     #[must_use]
     pub fn opacity_at(
@@ -314,7 +354,11 @@ impl<'a> PreviewSurface<'a> {
     pub fn opacity_mode_input(&self) -> Option<Port<'a>> {
         self.shader.input("opacityMode")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:opacityMode`, without following connections or applying the node default. "] opacity_mode, "inputs:opacityMode", &'a str, crate::value::read_token }
+    #[doc = "The composed value of `inputs:opacityMode`, without following connections or applying the node default. "]
+    #[must_use]
+    pub fn opacity_mode(&self) -> Option<&'a str> {
+        self.read_value("inputs:opacityMode", crate::value::read_token)
+    }
     /// The composed `inputs:opacityMode` at a numeric time.
     #[must_use]
     pub fn opacity_mode_at(
@@ -339,7 +383,11 @@ impl<'a> PreviewSurface<'a> {
     pub fn opacity_threshold_input(&self) -> Option<Port<'a>> {
         self.shader.input("opacityThreshold")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:opacityThreshold`, without following connections or applying the node default. "] opacity_threshold, "inputs:opacityThreshold", f32, crate::value::read_float }
+    #[doc = "The composed value of `inputs:opacityThreshold`, without following connections or applying the node default. "]
+    #[must_use]
+    pub fn opacity_threshold(&self) -> Option<f32> {
+        self.read_value("inputs:opacityThreshold", crate::value::read_float)
+    }
     /// The composed `inputs:opacityThreshold` at a numeric time.
     #[must_use]
     pub fn opacity_threshold_at(
@@ -364,7 +412,11 @@ impl<'a> PreviewSurface<'a> {
     pub fn roughness_input(&self) -> Option<Port<'a>> {
         self.shader.input("roughness")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:roughness`, without following connections or applying the node default. "] roughness, "inputs:roughness", f32, crate::value::read_float }
+    #[doc = "The composed value of `inputs:roughness`, without following connections or applying the node default. "]
+    #[must_use]
+    pub fn roughness(&self) -> Option<f32> {
+        self.read_value("inputs:roughness", crate::value::read_float)
+    }
     /// The composed `inputs:roughness` at a numeric time.
     #[must_use]
     pub fn roughness_at(
@@ -389,7 +441,11 @@ impl<'a> PreviewSurface<'a> {
     pub fn specular_color_input(&self) -> Option<Port<'a>> {
         self.shader.input("specularColor")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:specularColor`, without following connections or applying the node default. "] specular_color, "inputs:specularColor", [f32; 3], crate::value::read_float3 }
+    #[doc = "The composed value of `inputs:specularColor`, without following connections or applying the node default. "]
+    #[must_use]
+    pub fn specular_color(&self) -> Option<[f32; 3]> {
+        self.read_value("inputs:specularColor", crate::value::read_float3)
+    }
     /// The composed `inputs:specularColor` at a numeric time.
     #[must_use]
     pub fn specular_color_at(
@@ -414,7 +470,11 @@ impl<'a> PreviewSurface<'a> {
     pub fn use_specular_workflow_input(&self) -> Option<Port<'a>> {
         self.shader.input("useSpecularWorkflow")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:useSpecularWorkflow`, without following connections or applying the node default. "] use_specular_workflow, "inputs:useSpecularWorkflow", i32, crate::value::read_int }
+    #[doc = "The composed value of `inputs:useSpecularWorkflow`, without following connections or applying the node default. "]
+    #[must_use]
+    pub fn use_specular_workflow(&self) -> Option<i32> {
+        self.read_value("inputs:useSpecularWorkflow", crate::value::read_int)
+    }
     /// The composed `inputs:useSpecularWorkflow` at a numeric time.
     #[must_use]
     pub fn use_specular_workflow_at(
@@ -998,7 +1058,11 @@ impl<'a> PrimvarReaderFloat<'a> {
     pub fn fallback_input(&self) -> Option<Port<'a>> {
         self.shader.input("fallback")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:fallback`, without following connections or applying the node default. "] fallback, "inputs:fallback", f32, crate::value::read_float }
+    #[doc = "The composed value of `inputs:fallback`, without following connections or applying the node default. "]
+    #[must_use]
+    pub fn fallback(&self) -> Option<f32> {
+        self.read_value("inputs:fallback", crate::value::read_float)
+    }
     /// The composed `inputs:fallback` at a numeric time.
     #[must_use]
     pub fn fallback_at(
@@ -1023,7 +1087,11 @@ impl<'a> PrimvarReaderFloat<'a> {
     pub fn varname_input(&self) -> Option<Port<'a>> {
         self.shader.input("varname")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:varname`, without following connections or applying the node default.  Accepts modern string and legacy token names without changing the authored USD type."] varname, "inputs:varname", ::alloc::sync::Arc<str>, crate::value::read_primvar_name }
+    #[doc = "The composed value of `inputs:varname`, without following connections or applying the node default.  Accepts modern string and legacy token names without changing the authored USD type."]
+    #[must_use]
+    pub fn varname(&self) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value("inputs:varname", crate::value::read_primvar_name)
+    }
     /// The composed `inputs:varname` at a numeric time.
     #[must_use]
     pub fn varname_at(
@@ -1167,7 +1235,11 @@ impl<'a> PrimvarReaderFloat2<'a> {
     pub fn fallback_input(&self) -> Option<Port<'a>> {
         self.shader.input("fallback")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:fallback`, without following connections or applying the node default. "] fallback, "inputs:fallback", [f32; 2], crate::value::read_float2 }
+    #[doc = "The composed value of `inputs:fallback`, without following connections or applying the node default. "]
+    #[must_use]
+    pub fn fallback(&self) -> Option<[f32; 2]> {
+        self.read_value("inputs:fallback", crate::value::read_float2)
+    }
     /// The composed `inputs:fallback` at a numeric time.
     #[must_use]
     pub fn fallback_at(
@@ -1192,7 +1264,11 @@ impl<'a> PrimvarReaderFloat2<'a> {
     pub fn varname_input(&self) -> Option<Port<'a>> {
         self.shader.input("varname")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:varname`, without following connections or applying the node default.  Accepts modern string and legacy token names without changing the authored USD type."] varname, "inputs:varname", ::alloc::sync::Arc<str>, crate::value::read_primvar_name }
+    #[doc = "The composed value of `inputs:varname`, without following connections or applying the node default.  Accepts modern string and legacy token names without changing the authored USD type."]
+    #[must_use]
+    pub fn varname(&self) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value("inputs:varname", crate::value::read_primvar_name)
+    }
     /// The composed `inputs:varname` at a numeric time.
     #[must_use]
     pub fn varname_at(
@@ -1340,7 +1416,11 @@ impl<'a> PrimvarReaderFloat3<'a> {
     pub fn fallback_input(&self) -> Option<Port<'a>> {
         self.shader.input("fallback")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:fallback`, without following connections or applying the node default. "] fallback, "inputs:fallback", [f32; 3], crate::value::read_float3 }
+    #[doc = "The composed value of `inputs:fallback`, without following connections or applying the node default. "]
+    #[must_use]
+    pub fn fallback(&self) -> Option<[f32; 3]> {
+        self.read_value("inputs:fallback", crate::value::read_float3)
+    }
     /// The composed `inputs:fallback` at a numeric time.
     #[must_use]
     pub fn fallback_at(
@@ -1365,7 +1445,11 @@ impl<'a> PrimvarReaderFloat3<'a> {
     pub fn varname_input(&self) -> Option<Port<'a>> {
         self.shader.input("varname")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:varname`, without following connections or applying the node default.  Accepts modern string and legacy token names without changing the authored USD type."] varname, "inputs:varname", ::alloc::sync::Arc<str>, crate::value::read_primvar_name }
+    #[doc = "The composed value of `inputs:varname`, without following connections or applying the node default.  Accepts modern string and legacy token names without changing the authored USD type."]
+    #[must_use]
+    pub fn varname(&self) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value("inputs:varname", crate::value::read_primvar_name)
+    }
     /// The composed `inputs:varname` at a numeric time.
     #[must_use]
     pub fn varname_at(
@@ -1513,7 +1597,11 @@ impl<'a> PrimvarReaderFloat4<'a> {
     pub fn fallback_input(&self) -> Option<Port<'a>> {
         self.shader.input("fallback")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:fallback`, without following connections or applying the node default. "] fallback, "inputs:fallback", [f32; 4], crate::value::read_float4 }
+    #[doc = "The composed value of `inputs:fallback`, without following connections or applying the node default. "]
+    #[must_use]
+    pub fn fallback(&self) -> Option<[f32; 4]> {
+        self.read_value("inputs:fallback", crate::value::read_float4)
+    }
     /// The composed `inputs:fallback` at a numeric time.
     #[must_use]
     pub fn fallback_at(
@@ -1538,7 +1626,11 @@ impl<'a> PrimvarReaderFloat4<'a> {
     pub fn varname_input(&self) -> Option<Port<'a>> {
         self.shader.input("varname")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:varname`, without following connections or applying the node default.  Accepts modern string and legacy token names without changing the authored USD type."] varname, "inputs:varname", ::alloc::sync::Arc<str>, crate::value::read_primvar_name }
+    #[doc = "The composed value of `inputs:varname`, without following connections or applying the node default.  Accepts modern string and legacy token names without changing the authored USD type."]
+    #[must_use]
+    pub fn varname(&self) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value("inputs:varname", crate::value::read_primvar_name)
+    }
     /// The composed `inputs:varname` at a numeric time.
     #[must_use]
     pub fn varname_at(
@@ -1686,7 +1778,11 @@ impl<'a> PrimvarReaderInt<'a> {
     pub fn fallback_input(&self) -> Option<Port<'a>> {
         self.shader.input("fallback")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:fallback`, without following connections or applying the node default. "] fallback, "inputs:fallback", i32, crate::value::read_int }
+    #[doc = "The composed value of `inputs:fallback`, without following connections or applying the node default. "]
+    #[must_use]
+    pub fn fallback(&self) -> Option<i32> {
+        self.read_value("inputs:fallback", crate::value::read_int)
+    }
     /// The composed `inputs:fallback` at a numeric time.
     #[must_use]
     pub fn fallback_at(
@@ -1711,7 +1807,11 @@ impl<'a> PrimvarReaderInt<'a> {
     pub fn varname_input(&self) -> Option<Port<'a>> {
         self.shader.input("varname")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:varname`, without following connections or applying the node default.  Accepts modern string and legacy token names without changing the authored USD type."] varname, "inputs:varname", ::alloc::sync::Arc<str>, crate::value::read_primvar_name }
+    #[doc = "The composed value of `inputs:varname`, without following connections or applying the node default.  Accepts modern string and legacy token names without changing the authored USD type."]
+    #[must_use]
+    pub fn varname(&self) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value("inputs:varname", crate::value::read_primvar_name)
+    }
     /// The composed `inputs:varname` at a numeric time.
     #[must_use]
     pub fn varname_at(
@@ -1855,7 +1955,11 @@ impl<'a> PrimvarReaderMatrix<'a> {
     pub fn fallback_input(&self) -> Option<Port<'a>> {
         self.shader.input("fallback")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:fallback`, without following connections or applying the node default. "] fallback, "inputs:fallback", [[f64; 4]; 4], crate::value::read_matrix4d }
+    #[doc = "The composed value of `inputs:fallback`, without following connections or applying the node default. "]
+    #[must_use]
+    pub fn fallback(&self) -> Option<[[f64; 4]; 4]> {
+        self.read_value("inputs:fallback", crate::value::read_matrix4d)
+    }
     /// The composed `inputs:fallback` at a numeric time.
     #[must_use]
     pub fn fallback_at(
@@ -1885,7 +1989,11 @@ impl<'a> PrimvarReaderMatrix<'a> {
     pub fn varname_input(&self) -> Option<Port<'a>> {
         self.shader.input("varname")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:varname`, without following connections or applying the node default.  Accepts modern string and legacy token names without changing the authored USD type."] varname, "inputs:varname", ::alloc::sync::Arc<str>, crate::value::read_primvar_name }
+    #[doc = "The composed value of `inputs:varname`, without following connections or applying the node default.  Accepts modern string and legacy token names without changing the authored USD type."]
+    #[must_use]
+    pub fn varname(&self) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value("inputs:varname", crate::value::read_primvar_name)
+    }
     /// The composed `inputs:varname` at a numeric time.
     #[must_use]
     pub fn varname_at(
@@ -2037,7 +2145,11 @@ impl<'a> PrimvarReaderNormal<'a> {
     pub fn fallback_input(&self) -> Option<Port<'a>> {
         self.shader.input("fallback")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:fallback`, without following connections or applying the node default. "] fallback, "inputs:fallback", [f32; 3], crate::value::read_float3 }
+    #[doc = "The composed value of `inputs:fallback`, without following connections or applying the node default. "]
+    #[must_use]
+    pub fn fallback(&self) -> Option<[f32; 3]> {
+        self.read_value("inputs:fallback", crate::value::read_float3)
+    }
     /// The composed `inputs:fallback` at a numeric time.
     #[must_use]
     pub fn fallback_at(
@@ -2062,7 +2174,11 @@ impl<'a> PrimvarReaderNormal<'a> {
     pub fn varname_input(&self) -> Option<Port<'a>> {
         self.shader.input("varname")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:varname`, without following connections or applying the node default.  Accepts modern string and legacy token names without changing the authored USD type."] varname, "inputs:varname", ::alloc::sync::Arc<str>, crate::value::read_primvar_name }
+    #[doc = "The composed value of `inputs:varname`, without following connections or applying the node default.  Accepts modern string and legacy token names without changing the authored USD type."]
+    #[must_use]
+    pub fn varname(&self) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value("inputs:varname", crate::value::read_primvar_name)
+    }
     /// The composed `inputs:varname` at a numeric time.
     #[must_use]
     pub fn varname_at(
@@ -2210,7 +2326,11 @@ impl<'a> PrimvarReaderPoint<'a> {
     pub fn fallback_input(&self) -> Option<Port<'a>> {
         self.shader.input("fallback")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:fallback`, without following connections or applying the node default. "] fallback, "inputs:fallback", [f32; 3], crate::value::read_float3 }
+    #[doc = "The composed value of `inputs:fallback`, without following connections or applying the node default. "]
+    #[must_use]
+    pub fn fallback(&self) -> Option<[f32; 3]> {
+        self.read_value("inputs:fallback", crate::value::read_float3)
+    }
     /// The composed `inputs:fallback` at a numeric time.
     #[must_use]
     pub fn fallback_at(
@@ -2235,7 +2355,11 @@ impl<'a> PrimvarReaderPoint<'a> {
     pub fn varname_input(&self) -> Option<Port<'a>> {
         self.shader.input("varname")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:varname`, without following connections or applying the node default.  Accepts modern string and legacy token names without changing the authored USD type."] varname, "inputs:varname", ::alloc::sync::Arc<str>, crate::value::read_primvar_name }
+    #[doc = "The composed value of `inputs:varname`, without following connections or applying the node default.  Accepts modern string and legacy token names without changing the authored USD type."]
+    #[must_use]
+    pub fn varname(&self) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value("inputs:varname", crate::value::read_primvar_name)
+    }
     /// The composed `inputs:varname` at a numeric time.
     #[must_use]
     pub fn varname_at(
@@ -2383,7 +2507,11 @@ impl<'a> PrimvarReaderString<'a> {
     pub fn fallback_input(&self) -> Option<Port<'a>> {
         self.shader.input("fallback")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:fallback`, without following connections or applying the node default. "] fallback, "inputs:fallback", ::alloc::sync::Arc<str>, crate::value::read_string }
+    #[doc = "The composed value of `inputs:fallback`, without following connections or applying the node default. "]
+    #[must_use]
+    pub fn fallback(&self) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value("inputs:fallback", crate::value::read_string)
+    }
     /// The composed `inputs:fallback` at a numeric time.
     #[must_use]
     pub fn fallback_at(
@@ -2408,7 +2536,11 @@ impl<'a> PrimvarReaderString<'a> {
     pub fn varname_input(&self) -> Option<Port<'a>> {
         self.shader.input("varname")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:varname`, without following connections or applying the node default.  Accepts modern string and legacy token names without changing the authored USD type."] varname, "inputs:varname", ::alloc::sync::Arc<str>, crate::value::read_primvar_name }
+    #[doc = "The composed value of `inputs:varname`, without following connections or applying the node default.  Accepts modern string and legacy token names without changing the authored USD type."]
+    #[must_use]
+    pub fn varname(&self) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value("inputs:varname", crate::value::read_primvar_name)
+    }
     /// The composed `inputs:varname` at a numeric time.
     #[must_use]
     pub fn varname_at(
@@ -2552,7 +2684,11 @@ impl<'a> PrimvarReaderVector<'a> {
     pub fn fallback_input(&self) -> Option<Port<'a>> {
         self.shader.input("fallback")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:fallback`, without following connections or applying the node default. "] fallback, "inputs:fallback", [f32; 3], crate::value::read_float3 }
+    #[doc = "The composed value of `inputs:fallback`, without following connections or applying the node default. "]
+    #[must_use]
+    pub fn fallback(&self) -> Option<[f32; 3]> {
+        self.read_value("inputs:fallback", crate::value::read_float3)
+    }
     /// The composed `inputs:fallback` at a numeric time.
     #[must_use]
     pub fn fallback_at(
@@ -2577,7 +2713,11 @@ impl<'a> PrimvarReaderVector<'a> {
     pub fn varname_input(&self) -> Option<Port<'a>> {
         self.shader.input("varname")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:varname`, without following connections or applying the node default.  Accepts modern string and legacy token names without changing the authored USD type."] varname, "inputs:varname", ::alloc::sync::Arc<str>, crate::value::read_primvar_name }
+    #[doc = "The composed value of `inputs:varname`, without following connections or applying the node default.  Accepts modern string and legacy token names without changing the authored USD type."]
+    #[must_use]
+    pub fn varname(&self) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value("inputs:varname", crate::value::read_primvar_name)
+    }
     /// The composed `inputs:varname` at a numeric time.
     #[must_use]
     pub fn varname_at(
@@ -2725,7 +2865,11 @@ impl<'a> Transform2d<'a> {
     pub fn in_value_input(&self) -> Option<Port<'a>> {
         self.shader.input("in")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:in`, without following connections or applying the node default. "] in_value, "inputs:in", [f32; 2], crate::value::read_float2 }
+    #[doc = "The composed value of `inputs:in`, without following connections or applying the node default. "]
+    #[must_use]
+    pub fn in_value(&self) -> Option<[f32; 2]> {
+        self.read_value("inputs:in", crate::value::read_float2)
+    }
     /// The composed `inputs:in` at a numeric time.
     #[must_use]
     pub fn in_value_at(
@@ -2745,7 +2889,11 @@ impl<'a> Transform2d<'a> {
     pub fn rotation_input(&self) -> Option<Port<'a>> {
         self.shader.input("rotation")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:rotation`, without following connections or applying the node default. "] rotation, "inputs:rotation", f32, crate::value::read_float }
+    #[doc = "The composed value of `inputs:rotation`, without following connections or applying the node default. "]
+    #[must_use]
+    pub fn rotation(&self) -> Option<f32> {
+        self.read_value("inputs:rotation", crate::value::read_float)
+    }
     /// The composed `inputs:rotation` at a numeric time.
     #[must_use]
     pub fn rotation_at(
@@ -2770,7 +2918,11 @@ impl<'a> Transform2d<'a> {
     pub fn scale_input(&self) -> Option<Port<'a>> {
         self.shader.input("scale")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:scale`, without following connections or applying the node default. "] scale, "inputs:scale", [f32; 2], crate::value::read_float2 }
+    #[doc = "The composed value of `inputs:scale`, without following connections or applying the node default. "]
+    #[must_use]
+    pub fn scale(&self) -> Option<[f32; 2]> {
+        self.read_value("inputs:scale", crate::value::read_float2)
+    }
     /// The composed `inputs:scale` at a numeric time.
     #[must_use]
     pub fn scale_at(
@@ -2795,7 +2947,11 @@ impl<'a> Transform2d<'a> {
     pub fn translation_input(&self) -> Option<Port<'a>> {
         self.shader.input("translation")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:translation`, without following connections or applying the node default. "] translation, "inputs:translation", [f32; 2], crate::value::read_float2 }
+    #[doc = "The composed value of `inputs:translation`, without following connections or applying the node default. "]
+    #[must_use]
+    pub fn translation(&self) -> Option<[f32; 2]> {
+        self.read_value("inputs:translation", crate::value::read_float2)
+    }
     /// The composed `inputs:translation` at a numeric time.
     #[must_use]
     pub fn translation_at(
@@ -3009,7 +3165,11 @@ impl<'a> UvTexture<'a> {
     pub fn bias_input(&self) -> Option<Port<'a>> {
         self.shader.input("bias")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:bias`, without following connections or applying the node default. "] bias, "inputs:bias", [f32; 4], crate::value::read_float4 }
+    #[doc = "The composed value of `inputs:bias`, without following connections or applying the node default. "]
+    #[must_use]
+    pub fn bias(&self) -> Option<[f32; 4]> {
+        self.read_value("inputs:bias", crate::value::read_float4)
+    }
     /// The composed `inputs:bias` at a numeric time.
     #[must_use]
     pub fn bias_at(
@@ -3034,7 +3194,11 @@ impl<'a> UvTexture<'a> {
     pub fn fallback_input(&self) -> Option<Port<'a>> {
         self.shader.input("fallback")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:fallback`, without following connections or applying the node default. "] fallback, "inputs:fallback", [f32; 4], crate::value::read_float4 }
+    #[doc = "The composed value of `inputs:fallback`, without following connections or applying the node default. "]
+    #[must_use]
+    pub fn fallback(&self) -> Option<[f32; 4]> {
+        self.read_value("inputs:fallback", crate::value::read_float4)
+    }
     /// The composed `inputs:fallback` at a numeric time.
     #[must_use]
     pub fn fallback_at(
@@ -3059,7 +3223,11 @@ impl<'a> UvTexture<'a> {
     pub fn file_input(&self) -> Option<Port<'a>> {
         self.shader.input("file")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:file`, without following connections or applying the node default. "] file, "inputs:file", ::alloc::sync::Arc<str>, crate::value::read_asset }
+    #[doc = "The composed value of `inputs:file`, without following connections or applying the node default. "]
+    #[must_use]
+    pub fn file(&self) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value("inputs:file", crate::value::read_asset)
+    }
     /// The composed `inputs:file` at a numeric time.
     #[must_use]
     pub fn file_at(
@@ -3079,7 +3247,11 @@ impl<'a> UvTexture<'a> {
     pub fn scale_input(&self) -> Option<Port<'a>> {
         self.shader.input("scale")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:scale`, without following connections or applying the node default. "] scale, "inputs:scale", [f32; 4], crate::value::read_float4 }
+    #[doc = "The composed value of `inputs:scale`, without following connections or applying the node default. "]
+    #[must_use]
+    pub fn scale(&self) -> Option<[f32; 4]> {
+        self.read_value("inputs:scale", crate::value::read_float4)
+    }
     /// The composed `inputs:scale` at a numeric time.
     #[must_use]
     pub fn scale_at(
@@ -3104,7 +3276,11 @@ impl<'a> UvTexture<'a> {
     pub fn source_color_space_input(&self) -> Option<Port<'a>> {
         self.shader.input("sourceColorSpace")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:sourceColorSpace`, without following connections or applying the node default. "] source_color_space, "inputs:sourceColorSpace", &'a str, crate::value::read_token }
+    #[doc = "The composed value of `inputs:sourceColorSpace`, without following connections or applying the node default. "]
+    #[must_use]
+    pub fn source_color_space(&self) -> Option<&'a str> {
+        self.read_value("inputs:sourceColorSpace", crate::value::read_token)
+    }
     /// The composed `inputs:sourceColorSpace` at a numeric time.
     #[must_use]
     pub fn source_color_space_at(
@@ -3129,7 +3305,11 @@ impl<'a> UvTexture<'a> {
     pub fn st_input(&self) -> Option<Port<'a>> {
         self.shader.input("st")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:st`, without following connections or applying the node default. "] st, "inputs:st", [f32; 2], crate::value::read_float2 }
+    #[doc = "The composed value of `inputs:st`, without following connections or applying the node default. "]
+    #[must_use]
+    pub fn st(&self) -> Option<[f32; 2]> {
+        self.read_value("inputs:st", crate::value::read_float2)
+    }
     /// The composed `inputs:st` at a numeric time.
     #[must_use]
     pub fn st_at(
@@ -3149,7 +3329,11 @@ impl<'a> UvTexture<'a> {
     pub fn wrap_s_input(&self) -> Option<Port<'a>> {
         self.shader.input("wrapS")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:wrapS`, without following connections or applying the node default. "] wrap_s, "inputs:wrapS", &'a str, crate::value::read_token }
+    #[doc = "The composed value of `inputs:wrapS`, without following connections or applying the node default. "]
+    #[must_use]
+    pub fn wrap_s(&self) -> Option<&'a str> {
+        self.read_value("inputs:wrapS", crate::value::read_token)
+    }
     /// The composed `inputs:wrapS` at a numeric time.
     #[must_use]
     pub fn wrap_s_at(
@@ -3174,7 +3358,11 @@ impl<'a> UvTexture<'a> {
     pub fn wrap_t_input(&self) -> Option<Port<'a>> {
         self.shader.input("wrapT")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:wrapT`, without following connections or applying the node default. "] wrap_t, "inputs:wrapT", &'a str, crate::value::read_token }
+    #[doc = "The composed value of `inputs:wrapT`, without following connections or applying the node default. "]
+    #[must_use]
+    pub fn wrap_t(&self) -> Option<&'a str> {
+        self.read_value("inputs:wrapT", crate::value::read_token)
+    }
     /// The composed `inputs:wrapT` at a numeric time.
     #[must_use]
     pub fn wrap_t_at(

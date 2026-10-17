@@ -268,7 +268,7 @@ impl<'a> LocalTransformInputs<'a> {
                 values: Vec::new(),
             };
         }
-        let prim = Xformable::from_view(PrimView::new(*scene, path));
+        let prim = Xformable::from_prim_unchecked(PrimView::new(*scene, path));
         let xform_op_order = prim.xform_op_order().unwrap_or_default();
         let ops = ordered_ops(&prim, &xform_op_order);
         let values = ops

@@ -21,9 +21,9 @@
 
 use layerstack::{PropertyKind, SchemaKind, Value, Variability};
 
-use crate::table::{DomainTables, Property, Schema, fallback};
+use crate::table::{Property, Schema, SchemaTables, fallback};
 
-pub(crate) static TABLES: DomainTables = DomainTables {
+pub(crate) static TABLES: SchemaTables = SchemaTables {
     schemas: &[Schema {
         name: "SemanticsLabelsAPI",
         kind: SchemaKind::MultipleApplyApi,

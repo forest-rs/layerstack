@@ -22,11 +22,10 @@ use core::ops::Deref;
 
 use layerstack::{CannotApply, PathId};
 
-use crate::view::{InstanceEdit, InstanceView};
-use crate::{PrimView, Scene, SchemaEdit};
+use crate::{InstanceEdit, InstanceView, PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "Application of labels for a prim for a taxonomy specified by the schema's instance name."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's multiple-apply API schema `SemanticsLabelsAPI`. Get it with [`SemanticsLabelsApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's multiple-apply API schema `SemanticsLabelsAPI`. Get it with [`SemanticsLabelsApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdSemanticsLabelsAPI`."]
 #[doc(alias = "UsdSemanticsLabelsAPI")]
 #[doc(alias = "SemanticsLabelsAPI")]
@@ -56,8 +55,14 @@ impl<'a> SemanticsLabelsApi<'a> {
         if !scene.has_api(path, Self::SCHEMA, Some(instance)) {
             return None;
         }
-        let instance = scene.instance_name(instance)?;
-        Some(Self::from_view(PrimView::new(*scene, path), instance))
+        let instance = scene
+            .instances(path, Self::SCHEMA)
+            .into_iter()
+            .find(|applied| *applied == instance)?;
+        Some(Self::from_instance_unchecked(InstanceView::new(
+            PrimView::new(*scene, path),
+            instance,
+        )))
     }
 
     /// Every instance of the schema the prim at `path` has applied, in the
@@ -69,20 +74,31 @@ impl<'a> SemanticsLabelsApi<'a> {
         scene
             .instances(path, Self::SCHEMA)
             .into_iter()
-            .map(|instance| Self::from_view(PrimView::new(*scene, path), instance))
+            .map(|instance| {
+                Self::from_instance_unchecked(InstanceView::new(
+                    PrimView::new(*scene, path),
+                    instance,
+                ))
+            })
             .collect()
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>, instance: &'a str) -> Self {
-        Self {
-            base: InstanceView::new(prim, instance),
-        }
+    /// A view of `instance` as an instance of the schema, without
+    /// checking that the prim has it applied (`HasAPI`), as [`Self::get`]
+    /// does: a getter reads what the prim authors, and the schema's
+    /// fallbacks only for an applied instance.
+    #[must_use]
+    pub fn from_instance_unchecked(instance: InstanceView<'a>) -> Self {
+        Self { base: instance }
     }
 
     /// An edit handle for this instance.
     #[must_use]
     pub fn edit(&self) -> SemanticsLabelsApiEdit {
-        SemanticsLabelsApiEdit::from_path(self.path(), self.instance())
+        SemanticsLabelsApiEdit::from_instance(InstanceEdit::new(
+            PrimEdit::from_path_unchecked(self.path()),
+            self.instance(),
+        ))
     }
 
     /// Applies the instance `instance` of the schema to `path` (a `prepend
@@ -100,24 +116,45 @@ impl<'a> SemanticsLabelsApi<'a> {
         path: PathId,
         instance: &str,
     ) -> Result<SemanticsLabelsApiEdit, CannotApply> {
-        edit.apply(path, Self::SCHEMA, Some(instance))?;
-        Ok(SemanticsLabelsApiEdit::from_path(path, instance))
+        let prim = edit.apply_api(path, Self::SCHEMA, Some(instance))?;
+        Ok(SemanticsLabelsApiEdit::from_instance(InstanceEdit::new(
+            prim, instance,
+        )))
     }
 
-    attribute! {
-        #[doc = "Array of labels specified directly at this prim."]
-        #[doc = ""]
-        #[doc = "USD attribute `semantics:labels:&lt;instance&gt;` (`token\\[\\]`; fallback `\\[\\]`)."]
-        #[doc = "C++ read: `UsdSemanticsLabelsAPI::GetLabelsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdSemanticsLabelsAPI::GetLabelsAttr")]
-        #[doc(alias = "GetLabelsAttr")]
-        labels, labels_at, "semantics:labels:__INSTANCE_NAME__", ::alloc::vec::Vec<&'a str>, |v, t| crate::value::read_array(v, t, crate::value::read_token)
+    #[doc = "Array of labels specified directly at this prim."]
+    #[doc = ""]
+    #[doc = "USD attribute `semantics:labels:&lt;instance&gt;` (`token\\[\\]`; fallback `\\[\\]`)."]
+    #[doc = "C++ read: `UsdSemanticsLabelsAPI::GetLabelsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdSemanticsLabelsAPI::GetLabelsAttr")]
+    #[doc(alias = "GetLabelsAttr")]
+    #[must_use]
+    pub fn labels(&self) -> Option<::alloc::vec::Vec<&'a str>> {
+        self.read_value("semantics:labels:__INSTANCE_NAME__", |v, t| {
+            crate::value::read_array(v, t, crate::value::read_token)
+        })
     }
+
+    #[doc = "[`Self::labels`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn labels_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<::alloc::vec::Vec<&'a str>> {
+        self.read_value_at(
+            "semantics:labels:__INSTANCE_NAME__",
+            time,
+            interp,
+            |v, t| crate::value::read_array(v, t, crate::value::read_token),
+        )
+    }
+
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
     pub fn try_labels(
         &self,
         time: crate::Time,
-    ) -> Result<Option<::alloc::vec::Vec<&'a str>>, layerstack::ArrayReadError> {
+    ) -> Result<Option<::alloc::vec::Vec<&'a str>>, ::layerstack::ArrayReadError> {
         self.try_read_value("semantics:labels:__INSTANCE_NAME__", time, |v, t| {
             crate::value::read_array(v, t, crate::value::read_token)
         })
@@ -144,22 +181,37 @@ impl SemanticsLabelsApiEdit {
     /// earlier in `edit`. Setters never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId, instance: &str) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path, instance))
+        PrimEdit::new(edit, path).map(|prim| Self::from_instance(InstanceEdit::new(prim, instance)))
     }
 
-    pub(crate) fn from_path(path: PathId, instance: &str) -> Self {
-        Self {
-            base: InstanceEdit::new(path, instance),
-        }
+    /// A handle authoring the schema's properties for `instance`, whether
+    /// or not the prim has it applied.
+    #[must_use]
+    pub fn from_instance(instance: InstanceEdit) -> Self {
+        Self { base: instance }
     }
 
-    set_attribute! {
-        #[doc = "Array of labels specified directly at this prim."]
-        #[doc = ""]
-        #[doc = "USD attribute `semantics:labels:&lt;instance&gt;` (`token\\[\\]`; fallback `\\[\\]`)."]
-        #[doc = "C++ authoring: `UsdSemanticsLabelsAPI::CreateLabelsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdSemanticsLabelsAPI::CreateLabelsAttr")]
-        #[doc(alias = "CreateLabelsAttr")]
-        set_labels, set_labels_at, "semantics:labels:__INSTANCE_NAME__", &[&str], |v, t| crate::value::write_array(v, t, crate::value::write_token)
+    #[doc = "Array of labels specified directly at this prim."]
+    #[doc = ""]
+    #[doc = "USD attribute `semantics:labels:&lt;instance&gt;` (`token\\[\\]`; fallback `\\[\\]`)."]
+    #[doc = "C++ authoring: `UsdSemanticsLabelsAPI::CreateLabelsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdSemanticsLabelsAPI::CreateLabelsAttr")]
+    #[doc(alias = "CreateLabelsAttr")]
+    pub fn set_labels(&self, edit: &mut SchemaEdit<'_>, value: &[&str]) -> &Self {
+        let value = crate::value::write_array(value, edit.tokens(), crate::value::write_token);
+        self.write_value(edit, "semantics:labels:__INSTANCE_NAME__", None, value);
+        self
+    }
+
+    #[doc = "[`Self::set_labels`] as a time sample at the time code `time`."]
+    pub fn set_labels_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &[&str]) -> &Self {
+        let value = crate::value::write_array(value, edit.tokens(), crate::value::write_token);
+        self.write_value(
+            edit,
+            "semantics:labels:__INSTANCE_NAME__",
+            Some(time),
+            value,
+        );
+        self
     }
 }

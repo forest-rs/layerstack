@@ -1,74 +1,148 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! The shape of the generated tables, and how they become
-//! [`SchemaDefinition`]s.
+//! Schema definitions as static tables: the form `layerstack_schemagen`
+//! writes OpenUSD's domains in, and a schema library's own
+//! (`compile --rust`), so that registering them parses nothing at run time.
+//!
+//! A library's [`SchemaTables`] become [`SchemaDefinition`]s, auto-applies
+//! and metadata declarations of a [`SchemaRegistryBuilder`] with
+//! [`SchemaTables::register`], the same definitions
+//! [`layerstack::schema::read_generated_schema`] reads from the library's
+//! `generatedSchema.usda`. Names are interned when they are registered, in
+//! the interner the stages using the registry share. The tables are
+//! generated code's to write; their fields are public so that code in
+//! another crate can.
+//!
+//! Spec: AOUSD Core §13 (schemas); §13.1 leaves how schemas are defined to
+//! the implementation.
 
 use layerstack::{
-    PropertyDefinition, PropertyKind, PropertyType, SchemaDefinition, SchemaKind, TokenInterner,
-    Value, Variability,
+    MetadataConflict, PropertyDefinition, PropertyKind, PropertyType, SchemaDefinition, SchemaKind,
+    SchemaRegistryBuilder, TokenInterner, Value, Variability,
 };
 
-/// Constructs a value, interning its tokens in the caller's interner.
-pub(crate) type Construct = fn(&mut TokenInterner) -> Value;
+/// Constructs a value, interning its tokens in the interner passed in.
+pub type Construct = fn(&mut TokenInterner) -> Value;
 
-/// A property's fallback constructor; a function so the generated tables
-/// can write fallbacks as closures.
-pub(crate) const fn fallback(construct: Construct) -> Option<Construct> {
+/// `Some(construct)`: a fallback or default constructor, which the tables
+/// write as a closure.
+#[must_use]
+pub const fn fallback(construct: Construct) -> Option<Construct> {
     Some(construct)
 }
 
 /// A declared value type.
-pub(crate) struct ValueType {
+#[derive(Debug)]
+pub struct ValueType {
     /// The type name as OpenUSD writes it (`float3[]`).
-    pub(crate) name: &'static str,
+    pub name: &'static str,
     /// Whether it is an array type.
-    pub(crate) is_array: bool,
+    pub is_array: bool,
     /// One element of the type's zero value.
-    pub(crate) zero: Construct,
+    pub zero: Construct,
 }
 
 /// A property a schema defines or overrides.
-pub(crate) struct Property {
-    pub(crate) name: &'static str,
-    pub(crate) kind: PropertyKind,
-    pub(crate) value_type: Option<&'static ValueType>,
-    pub(crate) variability: Variability,
-    pub(crate) fallback: Option<Construct>,
-    pub(crate) metadata: &'static [(&'static str, Construct)],
+#[derive(Debug)]
+pub struct Property {
+    /// Its name, with `__INSTANCE_NAME__` in a multiple-apply schema.
+    pub name: &'static str,
+    /// Attribute or relationship.
+    pub kind: PropertyKind,
+    /// An attribute's value type.
+    pub value_type: Option<&'static ValueType>,
+    /// Its variability.
+    pub variability: Variability,
+    /// Its fallback value.
+    pub fallback: Option<Construct>,
+    /// Its other metadata the registry keeps (`allowedTokens`, …), by
+    /// field name.
+    pub metadata: &'static [(&'static str, Construct)],
 }
 
 /// A schema, as `layerstack::schema::read_generated_schema` reads it.
-pub(crate) struct Schema {
-    pub(crate) name: &'static str,
-    pub(crate) kind: SchemaKind,
-    pub(crate) parent: Option<&'static str>,
-    pub(crate) built_ins: &'static [&'static str],
-    pub(crate) properties: &'static [Property],
-    pub(crate) overrides: &'static [Property],
-    pub(crate) can_only_apply_to: &'static [&'static str],
-    pub(crate) allowed_instance_names: &'static [&'static str],
-    pub(crate) instance_can_only_apply_to: &'static [(&'static str, &'static [&'static str])],
+#[derive(Debug)]
+pub struct Schema {
+    /// Its identifier (`Mesh`, `CollectionAPI`).
+    pub name: &'static str,
+    /// Its kind.
+    pub kind: SchemaKind,
+    /// The typed schema it inherits from.
+    pub parent: Option<&'static str>,
+    /// Its built-in applied schemas (`apiSchemas`).
+    pub built_ins: &'static [&'static str],
+    /// The properties it defines.
+    pub properties: &'static [Property],
+    /// The properties of its built-ins it overrides.
+    pub overrides: &'static [Property],
+    /// `apiSchemaCanOnlyApplyTo`.
+    pub can_only_apply_to: &'static [&'static str],
+    /// `apiSchemaAllowedInstanceNames`.
+    pub allowed_instance_names: &'static [&'static str],
+    /// The `apiSchemaCanOnlyApplyTo` of each `apiSchemaInstances` entry.
+    pub instance_can_only_apply_to: &'static [(&'static str, &'static [&'static str])],
 }
 
-/// One domain's schemas and auto-applies.
-pub(crate) struct DomainTables {
-    pub(crate) metadata: &'static [Metadata],
-    pub(crate) schemas: &'static [Schema],
-    /// `(applied schema, target)` pairs.
-    pub(crate) auto_applies: &'static [(&'static str, &'static str)],
+/// A schema library's tables: one OpenUSD domain, or a library of one's
+/// own.
+#[derive(Debug)]
+pub struct SchemaTables {
+    /// The plugin's `SdfMetadata` declarations.
+    pub metadata: &'static [Metadata],
+    /// Its schemas.
+    pub schemas: &'static [Schema],
+    /// Its auto-applies: `(applied schema, target)` pairs.
+    pub auto_applies: &'static [(&'static str, &'static str)],
 }
 
-/// A plugin-defined metadata field.
-pub(crate) struct Metadata {
-    pub(crate) name: &'static str,
-    pub(crate) type_name: &'static str,
-    pub(crate) targets: &'static [layerstack::MetadataTarget],
-    pub(crate) default: Option<Construct>,
-    pub(crate) documentation: &'static str,
+impl SchemaTables {
+    /// Registers the library's metadata declarations, schemas and
+    /// auto-applies with `builder`, interning their names and values in
+    /// `tokens`. The schemas they build on, such as OpenUSD's, are
+    /// registered separately ([`crate::register`]); a schema whose parent
+    /// or built-in no registration provides is an issue of the built
+    /// registry (`SchemaRegistry::issues`).
+    ///
+    /// # Errors
+    ///
+    /// A metadata declaration that conflicts with one already registered.
+    /// Registrations preceding the conflict remain in the builder.
+    pub fn register(
+        &self,
+        builder: &mut SchemaRegistryBuilder,
+        tokens: &mut TokenInterner,
+    ) -> Result<(), MetadataConflict> {
+        for metadata in self.metadata {
+            builder.register_metadata(metadata.definition(tokens))?;
+        }
+        for schema in self.schemas {
+            builder.register(schema.definition(tokens));
+        }
+        for (schema, target) in self.auto_applies {
+            builder.auto_apply(tokens.intern(schema), tokens.intern(target));
+        }
+        Ok(())
+    }
 }
+
+/// A plugin-defined metadata field (`SdfMetadata`).
+#[derive(Debug)]
+pub struct Metadata {
+    /// The field's name.
+    pub name: &'static str,
+    /// Its value type's name.
+    pub type_name: &'static str,
+    /// The kinds of spec it applies to.
+    pub targets: &'static [layerstack::MetadataTarget],
+    /// Its registered default.
+    pub default: Option<Construct>,
+    /// Its documentation.
+    pub documentation: &'static str,
+}
+
 impl Metadata {
-    pub(crate) fn definition(&self, tokens: &mut TokenInterner) -> layerstack::MetadataDefinition {
+    fn definition(&self, tokens: &mut TokenInterner) -> layerstack::MetadataDefinition {
         layerstack::MetadataDefinition {
             name: tokens.intern(self.name),
             type_name: self.type_name.into(),
@@ -103,7 +177,8 @@ impl Property {
 
 impl Schema {
     /// The schema's definition, with its names interned in `tokens`.
-    pub(crate) fn definition(&self, tokens: &mut TokenInterner) -> SchemaDefinition {
+    #[must_use]
+    pub fn definition(&self, tokens: &mut TokenInterner) -> SchemaDefinition {
         let mut schema = SchemaDefinition::new(tokens.intern(self.name), self.kind);
         schema.parent = self.parent.map(|parent| tokens.intern(parent));
         schema.built_ins = self.built_ins.iter().map(|b| tokens.intern(b)).collect();

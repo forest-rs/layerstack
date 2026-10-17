@@ -25,7 +25,7 @@ use layerstack::{CannotApply, PathId};
 use crate::{PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "AssetPreviewsAPI supports providing thumbnail previews for assets."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `AssetPreviewsAPI`. Get it with [`AssetPreviewsApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `AssetPreviewsAPI`. Get it with [`AssetPreviewsApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdMediaAssetPreviewsAPI`."]
 #[doc(alias = "UsdMediaAssetPreviewsAPI")]
 #[doc(alias = "AssetPreviewsAPI")]
@@ -54,17 +54,22 @@ impl<'a> AssetPreviewsApi<'a> {
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of the schema on `prim`, without checking that the prim
+    /// has it applied (`HasAPI`), as [`Self::get`] does: a getter reads
+    /// what the prim authors, and the schema's fallbacks only for a
+    /// prim with the schema applied. For a built-in's view.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self { base: prim }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> AssetPreviewsApiEdit {
-        AssetPreviewsApiEdit::from_path(self.path())
+        AssetPreviewsApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
@@ -81,8 +86,8 @@ impl<'a> AssetPreviewsApi<'a> {
         edit: &mut SchemaEdit<'_>,
         path: PathId,
     ) -> Result<AssetPreviewsApiEdit, CannotApply> {
-        edit.apply(path, Self::SCHEMA, None)?;
-        Ok(AssetPreviewsApiEdit::from_path(path))
+        edit.apply_api(path, Self::SCHEMA, None)
+            .map(AssetPreviewsApiEdit::from_prim)
     }
 }
 
@@ -106,45 +111,136 @@ impl AssetPreviewsApiEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
-        Self {
-            base: PrimEdit::new(path),
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whether or not it has the schema applied.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
+        Self { base: prim }
+    }
+}
+
+#[doc = "The tokens `auralMode` allows."]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum SpatialAudioAuralMode {
+    #[doc = "`spatial`"]
+    Spatial,
+    #[doc = "`nonSpatial`"]
+    NonSpatial,
+    /// A token the schema does not list: OpenUSD does not enforce
+    /// `allowedTokens`, so an authored value may be anything.
+    Other(::alloc::sync::Arc<str>),
+}
+
+impl SpatialAudioAuralMode {
+    /// The tokens the schema allows, in its order.
+    pub const TOKENS: &'static [&'static str] = &["spatial", "nonSpatial"];
+
+    /// The value `token` names, `Other` when the schema does not
+    /// list it.
+    #[must_use]
+    pub fn from_token(token: &str) -> Self {
+        match token {
+            "spatial" => Self::Spatial,
+            "nonSpatial" => Self::NonSpatial,
+            other => Self::Other(::alloc::sync::Arc::from(other)),
         }
     }
-}
 
-token_enum! {
-    #[doc = "The tokens `auralMode` allows."]
-    SpatialAudioAuralMode {
-        #[doc = "`spatial`"]
-        Spatial = "spatial",
-        #[doc = "`nonSpatial`"]
-        NonSpatial = "nonSpatial",
+    /// The token this value is.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Spatial => "spatial",
+            Self::NonSpatial => "nonSpatial",
+            Self::Other(token) => token,
+        }
+    }
+
+    pub(crate) fn read(
+        value: &::layerstack::Value,
+        tokens: &::layerstack::TokenInterner,
+    ) -> Option<Self> {
+        crate::value::read_token(value, tokens).map(Self::from_token)
+    }
+
+    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+        crate::value::write_token(self.as_str(), tokens)
     }
 }
 
-token_enum! {
-    #[doc = "The tokens `playbackMode` allows."]
-    SpatialAudioPlaybackMode {
-        #[doc = "`onceFromStart`"]
-        OnceFromStart = "onceFromStart",
-        #[doc = "`onceFromStartToEnd`"]
-        OnceFromStartToEnd = "onceFromStartToEnd",
-        #[doc = "`loopFromStart`"]
-        LoopFromStart = "loopFromStart",
-        #[doc = "`loopFromStartToEnd`"]
-        LoopFromStartToEnd = "loopFromStartToEnd",
-        #[doc = "`loopFromStage`"]
-        LoopFromStage = "loopFromStage",
+#[doc = "The tokens `playbackMode` allows."]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum SpatialAudioPlaybackMode {
+    #[doc = "`onceFromStart`"]
+    OnceFromStart,
+    #[doc = "`onceFromStartToEnd`"]
+    OnceFromStartToEnd,
+    #[doc = "`loopFromStart`"]
+    LoopFromStart,
+    #[doc = "`loopFromStartToEnd`"]
+    LoopFromStartToEnd,
+    #[doc = "`loopFromStage`"]
+    LoopFromStage,
+    /// A token the schema does not list: OpenUSD does not enforce
+    /// `allowedTokens`, so an authored value may be anything.
+    Other(::alloc::sync::Arc<str>),
+}
+
+impl SpatialAudioPlaybackMode {
+    /// The tokens the schema allows, in its order.
+    pub const TOKENS: &'static [&'static str] = &[
+        "onceFromStart",
+        "onceFromStartToEnd",
+        "loopFromStart",
+        "loopFromStartToEnd",
+        "loopFromStage",
+    ];
+
+    /// The value `token` names, `Other` when the schema does not
+    /// list it.
+    #[must_use]
+    pub fn from_token(token: &str) -> Self {
+        match token {
+            "onceFromStart" => Self::OnceFromStart,
+            "onceFromStartToEnd" => Self::OnceFromStartToEnd,
+            "loopFromStart" => Self::LoopFromStart,
+            "loopFromStartToEnd" => Self::LoopFromStartToEnd,
+            "loopFromStage" => Self::LoopFromStage,
+            other => Self::Other(::alloc::sync::Arc::from(other)),
+        }
+    }
+
+    /// The token this value is.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::OnceFromStart => "onceFromStart",
+            Self::OnceFromStartToEnd => "onceFromStartToEnd",
+            Self::LoopFromStart => "loopFromStart",
+            Self::LoopFromStartToEnd => "loopFromStartToEnd",
+            Self::LoopFromStage => "loopFromStage",
+            Self::Other(token) => token,
+        }
+    }
+
+    pub(crate) fn read(
+        value: &::layerstack::Value,
+        tokens: &::layerstack::TokenInterner,
+    ) -> Option<Self> {
+        crate::value::read_token(value, tokens).map(Self::from_token)
+    }
+
+    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+        crate::value::write_token(self.as_str(), tokens)
     }
 }
 
 #[doc = "Defines the properties that enable audio playback in the scene."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `SpatialAudio`, inheriting [`crate::usd_geom::Xformable`]. Construct it with [`SpatialAudio::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `SpatialAudio`, inheriting [`crate::usd_geom::Xformable`]. Construct it with [`SpatialAudio::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdMediaSpatialAudio`."]
 #[doc(alias = "UsdMediaSpatialAudio")]
 #[derive(Clone, Copy, Debug)]
@@ -171,19 +267,24 @@ impl<'a> SpatialAudio<'a> {
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .is_a(path, Self::SCHEMA)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of `prim` as of the schema, without checking that it is
+    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// authors, and the schema's fallbacks only for a prim of the schema.
+    /// For the view of a schema built on this one.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self {
-            base: crate::usd_geom::Xformable::from_view(prim),
+            base: crate::usd_geom::Xformable::from_prim_unchecked(prim),
         }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> SpatialAudioEdit {
-        SpatialAudioEdit::from_path(self.path())
+        SpatialAudioEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Defines `path` as a new `def SpatialAudio` prim spec in the edit's target.
@@ -194,93 +295,111 @@ impl<'a> SpatialAudio<'a> {
     #[doc(alias = "UsdMediaSpatialAudio::Define")]
     #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> SpatialAudioEdit {
-        edit.define(path, Self::SCHEMA);
-        SpatialAudioEdit::from_path(path)
+        SpatialAudioEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
     }
 
     /// The USD name of [`Self::aural_mode`].
     pub const AURAL_MODE: &'static str = "auralMode";
 
-    uniform_attribute! {
-        #[doc = "How the audio is played, spatially or not."]
-        #[doc = ""]
-        #[doc = "USD attribute `auralMode` (`token`, uniform; fallback `\"spatial\"`)."]
-        #[doc = "C++ read: `UsdMediaSpatialAudio::GetAuralModeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdMediaSpatialAudio::GetAuralModeAttr")]
-        #[doc(alias = "GetAuralModeAttr")]
-        aural_mode, "auralMode", SpatialAudioAuralMode, SpatialAudioAuralMode::read
+    #[doc = "How the audio is played, spatially or not."]
+    #[doc = ""]
+    #[doc = "USD attribute `auralMode` (`token`, uniform; fallback `\"spatial\"`)."]
+    #[doc = "C++ read: `UsdMediaSpatialAudio::GetAuralModeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdMediaSpatialAudio::GetAuralModeAttr")]
+    #[doc(alias = "GetAuralModeAttr")]
+    #[must_use]
+    pub fn aural_mode(&self) -> Option<SpatialAudioAuralMode> {
+        self.read_value("auralMode", SpatialAudioAuralMode::read)
     }
+
     /// The USD name of [`Self::end_time`].
     pub const END_TIME: &'static str = "endTime";
 
-    uniform_attribute! {
-        #[doc = "Offset from the start of the audio file for when to end playing, in timeCodes."]
-        #[doc = ""]
-        #[doc = "USD attribute `endTime` (`timecode`, uniform; fallback `0.0`)."]
-        #[doc = "C++ read: `UsdMediaSpatialAudio::GetEndTimeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdMediaSpatialAudio::GetEndTimeAttr")]
-        #[doc(alias = "GetEndTimeAttr")]
-        end_time, "endTime", f64, crate::value::read_timecode
+    #[doc = "Offset from the start of the audio file for when to end playing, in timeCodes."]
+    #[doc = ""]
+    #[doc = "USD attribute `endTime` (`timecode`, uniform; fallback `0.0`)."]
+    #[doc = "C++ read: `UsdMediaSpatialAudio::GetEndTimeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdMediaSpatialAudio::GetEndTimeAttr")]
+    #[doc(alias = "GetEndTimeAttr")]
+    #[must_use]
+    pub fn end_time(&self) -> Option<f64> {
+        self.read_value("endTime", crate::value::read_timecode)
     }
+
     /// The USD name of [`Self::file_path`].
     pub const FILE_PATH: &'static str = "filePath";
 
-    uniform_attribute! {
-        #[doc = "Path to the audio file."]
-        #[doc = ""]
-        #[doc = "USD attribute `filePath` (`asset`, uniform; fallback `\"\"`)."]
-        #[doc = "C++ read: `UsdMediaSpatialAudio::GetFilePathAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdMediaSpatialAudio::GetFilePathAttr")]
-        #[doc(alias = "GetFilePathAttr")]
-        file_path, "filePath", ::alloc::sync::Arc<str>, crate::value::read_asset
+    #[doc = "Path to the audio file."]
+    #[doc = ""]
+    #[doc = "USD attribute `filePath` (`asset`, uniform; fallback `\"\"`)."]
+    #[doc = "C++ read: `UsdMediaSpatialAudio::GetFilePathAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdMediaSpatialAudio::GetFilePathAttr")]
+    #[doc(alias = "GetFilePathAttr")]
+    #[must_use]
+    pub fn file_path(&self) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value("filePath", crate::value::read_asset)
     }
+
     /// The USD name of [`Self::gain`].
     pub const GAIN: &'static str = "gain";
 
-    attribute! {
-        #[doc = "Multiplier to the given audio signal."]
-        #[doc = ""]
-        #[doc = "USD attribute `gain` (`double`; fallback `1.0`)."]
-        #[doc = "C++ read: `UsdMediaSpatialAudio::GetGainAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdMediaSpatialAudio::GetGainAttr")]
-        #[doc(alias = "GetGainAttr")]
-        gain, gain_at, "gain", f64, crate::value::read_double
+    #[doc = "Multiplier to the given audio signal."]
+    #[doc = ""]
+    #[doc = "USD attribute `gain` (`double`; fallback `1.0`)."]
+    #[doc = "C++ read: `UsdMediaSpatialAudio::GetGainAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdMediaSpatialAudio::GetGainAttr")]
+    #[doc(alias = "GetGainAttr")]
+    #[must_use]
+    pub fn gain(&self) -> Option<f64> {
+        self.read_value("gain", crate::value::read_double)
     }
+
+    #[doc = "[`Self::gain`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn gain_at(&self, time: f64, interp: ::layerstack::InterpolationType) -> Option<f64> {
+        self.read_value_at("gain", time, interp, crate::value::read_double)
+    }
+
     /// The USD name of [`Self::media_offset`].
     pub const MEDIA_OFFSET: &'static str = "mediaOffset";
 
-    uniform_attribute! {
-        #[doc = "Amount, in seconds, the audio is offset when playing."]
-        #[doc = ""]
-        #[doc = "USD attribute `mediaOffset` (`double`, uniform; fallback `0.0`)."]
-        #[doc = "C++ read: `UsdMediaSpatialAudio::GetMediaOffsetAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdMediaSpatialAudio::GetMediaOffsetAttr")]
-        #[doc(alias = "GetMediaOffsetAttr")]
-        media_offset, "mediaOffset", f64, crate::value::read_double
+    #[doc = "Amount, in seconds, the audio is offset when playing."]
+    #[doc = ""]
+    #[doc = "USD attribute `mediaOffset` (`double`, uniform; fallback `0.0`)."]
+    #[doc = "C++ read: `UsdMediaSpatialAudio::GetMediaOffsetAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdMediaSpatialAudio::GetMediaOffsetAttr")]
+    #[doc(alias = "GetMediaOffsetAttr")]
+    #[must_use]
+    pub fn media_offset(&self) -> Option<f64> {
+        self.read_value("mediaOffset", crate::value::read_double)
     }
+
     /// The USD name of [`Self::playback_mode`].
     pub const PLAYBACK_MODE: &'static str = "playbackMode";
 
-    uniform_attribute! {
-        #[doc = "Determines general rules on the playback of the audio asset. Use this to specify when the audio should start, stop, and if the playback should loop."]
-        #[doc = ""]
-        #[doc = "USD attribute `playbackMode` (`token`, uniform; fallback `\"onceFromStart\"`)."]
-        #[doc = "C++ read: `UsdMediaSpatialAudio::GetPlaybackModeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdMediaSpatialAudio::GetPlaybackModeAttr")]
-        #[doc(alias = "GetPlaybackModeAttr")]
-        playback_mode, "playbackMode", SpatialAudioPlaybackMode, SpatialAudioPlaybackMode::read
+    #[doc = "Determines general rules on the playback of the audio asset. Use this to specify when the audio should start, stop, and if the playback should loop."]
+    #[doc = ""]
+    #[doc = "USD attribute `playbackMode` (`token`, uniform; fallback `\"onceFromStart\"`)."]
+    #[doc = "C++ read: `UsdMediaSpatialAudio::GetPlaybackModeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdMediaSpatialAudio::GetPlaybackModeAttr")]
+    #[doc(alias = "GetPlaybackModeAttr")]
+    #[must_use]
+    pub fn playback_mode(&self) -> Option<SpatialAudioPlaybackMode> {
+        self.read_value("playbackMode", SpatialAudioPlaybackMode::read)
     }
+
     /// The USD name of [`Self::start_time`].
     pub const START_TIME: &'static str = "startTime";
 
-    uniform_attribute! {
-        #[doc = "Offset from the start of the audio file for when to start playing, in timeCodes."]
-        #[doc = ""]
-        #[doc = "USD attribute `startTime` (`timecode`, uniform; fallback `0.0`)."]
-        #[doc = "C++ read: `UsdMediaSpatialAudio::GetStartTimeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdMediaSpatialAudio::GetStartTimeAttr")]
-        #[doc(alias = "GetStartTimeAttr")]
-        start_time, "startTime", f64, crate::value::read_timecode
+    #[doc = "Offset from the start of the audio file for when to start playing, in timeCodes."]
+    #[doc = ""]
+    #[doc = "USD attribute `startTime` (`timecode`, uniform; fallback `0.0`)."]
+    #[doc = "C++ read: `UsdMediaSpatialAudio::GetStartTimeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdMediaSpatialAudio::GetStartTimeAttr")]
+    #[doc(alias = "GetStartTimeAttr")]
+    #[must_use]
+    pub fn start_time(&self) -> Option<f64> {
+        self.read_value("startTime", crate::value::read_timecode)
     }
 }
 
@@ -304,76 +423,110 @@ impl SpatialAudioEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whatever its type.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
         Self {
-            base: crate::usd_geom::XformableEdit::from_path(path),
+            base: crate::usd_geom::XformableEdit::from_prim(prim),
         }
     }
 
-    set_uniform_attribute! {
-        #[doc = "How the audio is played, spatially or not."]
-        #[doc = ""]
-        #[doc = "USD attribute `auralMode` (`token`, uniform; fallback `\"spatial\"`)."]
-        #[doc = "C++ authoring: `UsdMediaSpatialAudio::CreateAuralModeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdMediaSpatialAudio::CreateAuralModeAttr")]
-        #[doc(alias = "CreateAuralModeAttr")]
-        set_aural_mode, "auralMode", SpatialAudioAuralMode, SpatialAudioAuralMode::write
+    #[doc = "How the audio is played, spatially or not."]
+    #[doc = ""]
+    #[doc = "USD attribute `auralMode` (`token`, uniform; fallback `\"spatial\"`)."]
+    #[doc = "C++ authoring: `UsdMediaSpatialAudio::CreateAuralModeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdMediaSpatialAudio::CreateAuralModeAttr")]
+    #[doc(alias = "CreateAuralModeAttr")]
+    pub fn set_aural_mode(&self, edit: &mut SchemaEdit<'_>, value: SpatialAudioAuralMode) -> &Self {
+        let value = value.write(edit.tokens());
+        self.write_value(edit, "auralMode", None, value);
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "Offset from the start of the audio file for when to end playing, in timeCodes."]
-        #[doc = ""]
-        #[doc = "USD attribute `endTime` (`timecode`, uniform; fallback `0.0`)."]
-        #[doc = "C++ authoring: `UsdMediaSpatialAudio::CreateEndTimeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdMediaSpatialAudio::CreateEndTimeAttr")]
-        #[doc(alias = "CreateEndTimeAttr")]
-        set_end_time, "endTime", f64, crate::value::write_timecode
+
+    #[doc = "Offset from the start of the audio file for when to end playing, in timeCodes."]
+    #[doc = ""]
+    #[doc = "USD attribute `endTime` (`timecode`, uniform; fallback `0.0`)."]
+    #[doc = "C++ authoring: `UsdMediaSpatialAudio::CreateEndTimeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdMediaSpatialAudio::CreateEndTimeAttr")]
+    #[doc(alias = "CreateEndTimeAttr")]
+    pub fn set_end_time(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
+        let value = crate::value::write_timecode(value, edit.tokens());
+        self.write_value(edit, "endTime", None, value);
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "Path to the audio file."]
-        #[doc = ""]
-        #[doc = "USD attribute `filePath` (`asset`, uniform; fallback `\"\"`)."]
-        #[doc = "C++ authoring: `UsdMediaSpatialAudio::CreateFilePathAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdMediaSpatialAudio::CreateFilePathAttr")]
-        #[doc(alias = "CreateFilePathAttr")]
-        set_file_path, "filePath", &str, crate::value::write_asset
+
+    #[doc = "Path to the audio file."]
+    #[doc = ""]
+    #[doc = "USD attribute `filePath` (`asset`, uniform; fallback `\"\"`)."]
+    #[doc = "C++ authoring: `UsdMediaSpatialAudio::CreateFilePathAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdMediaSpatialAudio::CreateFilePathAttr")]
+    #[doc(alias = "CreateFilePathAttr")]
+    pub fn set_file_path(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
+        let value = crate::value::write_asset(value, edit.tokens());
+        self.write_value(edit, "filePath", None, value);
+        self
     }
-    set_attribute! {
-        #[doc = "Multiplier to the given audio signal."]
-        #[doc = ""]
-        #[doc = "USD attribute `gain` (`double`; fallback `1.0`)."]
-        #[doc = "C++ authoring: `UsdMediaSpatialAudio::CreateGainAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdMediaSpatialAudio::CreateGainAttr")]
-        #[doc(alias = "CreateGainAttr")]
-        set_gain, set_gain_at, "gain", f64, crate::value::write_double
+
+    #[doc = "Multiplier to the given audio signal."]
+    #[doc = ""]
+    #[doc = "USD attribute `gain` (`double`; fallback `1.0`)."]
+    #[doc = "C++ authoring: `UsdMediaSpatialAudio::CreateGainAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdMediaSpatialAudio::CreateGainAttr")]
+    #[doc(alias = "CreateGainAttr")]
+    pub fn set_gain(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
+        let value = crate::value::write_double(value, edit.tokens());
+        self.write_value(edit, "gain", None, value);
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "Amount, in seconds, the audio is offset when playing."]
-        #[doc = ""]
-        #[doc = "USD attribute `mediaOffset` (`double`, uniform; fallback `0.0`)."]
-        #[doc = "C++ authoring: `UsdMediaSpatialAudio::CreateMediaOffsetAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdMediaSpatialAudio::CreateMediaOffsetAttr")]
-        #[doc(alias = "CreateMediaOffsetAttr")]
-        set_media_offset, "mediaOffset", f64, crate::value::write_double
+
+    #[doc = "[`Self::set_gain`] as a time sample at the time code `time`."]
+    pub fn set_gain_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f64) -> &Self {
+        let value = crate::value::write_double(value, edit.tokens());
+        self.write_value(edit, "gain", Some(time), value);
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "Determines general rules on the playback of the audio asset. Use this to specify when the audio should start, stop, and if the playback should loop."]
-        #[doc = ""]
-        #[doc = "USD attribute `playbackMode` (`token`, uniform; fallback `\"onceFromStart\"`)."]
-        #[doc = "C++ authoring: `UsdMediaSpatialAudio::CreatePlaybackModeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdMediaSpatialAudio::CreatePlaybackModeAttr")]
-        #[doc(alias = "CreatePlaybackModeAttr")]
-        set_playback_mode, "playbackMode", SpatialAudioPlaybackMode, SpatialAudioPlaybackMode::write
+
+    #[doc = "Amount, in seconds, the audio is offset when playing."]
+    #[doc = ""]
+    #[doc = "USD attribute `mediaOffset` (`double`, uniform; fallback `0.0`)."]
+    #[doc = "C++ authoring: `UsdMediaSpatialAudio::CreateMediaOffsetAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdMediaSpatialAudio::CreateMediaOffsetAttr")]
+    #[doc(alias = "CreateMediaOffsetAttr")]
+    pub fn set_media_offset(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
+        let value = crate::value::write_double(value, edit.tokens());
+        self.write_value(edit, "mediaOffset", None, value);
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "Offset from the start of the audio file for when to start playing, in timeCodes."]
-        #[doc = ""]
-        #[doc = "USD attribute `startTime` (`timecode`, uniform; fallback `0.0`)."]
-        #[doc = "C++ authoring: `UsdMediaSpatialAudio::CreateStartTimeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdMediaSpatialAudio::CreateStartTimeAttr")]
-        #[doc(alias = "CreateStartTimeAttr")]
-        set_start_time, "startTime", f64, crate::value::write_timecode
+
+    #[doc = "Determines general rules on the playback of the audio asset. Use this to specify when the audio should start, stop, and if the playback should loop."]
+    #[doc = ""]
+    #[doc = "USD attribute `playbackMode` (`token`, uniform; fallback `\"onceFromStart\"`)."]
+    #[doc = "C++ authoring: `UsdMediaSpatialAudio::CreatePlaybackModeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdMediaSpatialAudio::CreatePlaybackModeAttr")]
+    #[doc(alias = "CreatePlaybackModeAttr")]
+    pub fn set_playback_mode(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        value: SpatialAudioPlaybackMode,
+    ) -> &Self {
+        let value = value.write(edit.tokens());
+        self.write_value(edit, "playbackMode", None, value);
+        self
+    }
+
+    #[doc = "Offset from the start of the audio file for when to start playing, in timeCodes."]
+    #[doc = ""]
+    #[doc = "USD attribute `startTime` (`timecode`, uniform; fallback `0.0`)."]
+    #[doc = "C++ authoring: `UsdMediaSpatialAudio::CreateStartTimeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdMediaSpatialAudio::CreateStartTimeAttr")]
+    #[doc(alias = "CreateStartTimeAttr")]
+    pub fn set_start_time(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
+        let value = crate::value::write_timecode(value, edit.tokens());
+        self.write_value(edit, "startTime", None, value);
+        self
     }
 }

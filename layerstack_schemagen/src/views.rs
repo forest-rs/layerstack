@@ -30,8 +30,10 @@ const KEYWORDS: &[&str] = &[
 /// Methods every view or edit handle has, which no generated name may be.
 const RESERVED: &[&str] = &[
     "new",
-    "from_view",
-    "from_path",
+    "from_prim_unchecked",
+    "from_instance_unchecked",
+    "from_prim",
+    "from_instance",
     "get",
     "edit",
     "define",
@@ -136,6 +138,36 @@ fn method_name(schema: &str, property: &Property) -> String {
     snake(name)
 }
 
+/// Where generated views live, which decides the paths their code names.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Target {
+    /// `layerstack_schemas` itself: OpenUSD's domains.
+    BuiltIn,
+}
+
+impl Target {
+    /// The path of `layerstack_schemas`.
+    pub(crate) fn schemas(self) -> &'static str {
+        match self {
+            Self::BuiltIn => "crate",
+        }
+    }
+
+    /// The path of `Arc`.
+    pub(crate) fn arc(self) -> &'static str {
+        match self {
+            Self::BuiltIn => "::alloc::sync::Arc",
+        }
+    }
+
+    /// The path of `Vec`.
+    pub(crate) fn vec(self) -> &'static str {
+        match self {
+            Self::BuiltIn => "::alloc::vec::Vec",
+        }
+    }
+}
+
 /// How a USD value type reads and writes in Rust.
 pub(crate) struct RustType {
     /// The getter's type.
@@ -146,6 +178,17 @@ pub(crate) struct RustType {
     pub(crate) read_fn: String,
     /// The expression writing one.
     pub(crate) write_fn: String,
+    /// The call writing one: `write_fn` applied to `VALUE` and `TOKENS`.
+    write_call: String,
+}
+
+impl RustType {
+    /// The expression writing `value` with the interner `tokens`.
+    fn write(&self, value: &str, tokens: &str) -> String {
+        self.write_call
+            .replace("VALUE", value)
+            .replace("TOKENS", tokens)
+    }
 }
 
 /// Element representations that match native typed-array storage exactly.
@@ -178,6 +221,17 @@ pub(crate) fn shared_array(zero: &Value) -> bool {
 /// The Rust type of a property whose element type's zero value is `zero`;
 /// `None` for a value-less type (`opaque`).
 pub(crate) fn rust_type(zero: &Value, is_array: bool) -> Result<Option<RustType>, String> {
+    rust_type_in(zero, is_array, Target::BuiltIn)
+}
+
+/// [`rust_type`] for views in `target`.
+pub(crate) fn rust_type_in(
+    zero: &Value,
+    is_array: bool,
+    target: Target,
+) -> Result<Option<RustType>, String> {
+    let (schemas, arc, vec) = (target.schemas(), target.arc(), target.vec());
+    let arc_str = format!("{arc}<str>");
     let (read, write, name) = match zero {
         Value::Null => return Ok(None),
         Value::Bool(_) => ("bool", "bool", "bool"),
@@ -190,9 +244,9 @@ pub(crate) fn rust_type(zero: &Value, is_array: bool) -> Result<Option<RustType>
         Value::Float(_) => ("f32", "f32", "float"),
         Value::Double(_) => ("f64", "f64", "double"),
         Value::TimeCode(_) => ("f64", "f64", "timecode"),
-        Value::String(_) => ("::alloc::sync::Arc<str>", "&str", "string"),
-        Value::Asset(_) => ("::alloc::sync::Arc<str>", "&str", "asset"),
-        Value::PathExpression(_) => ("::alloc::sync::Arc<str>", "&str", "path_expression"),
+        Value::String(_) => (arc_str.as_str(), "&str", "string"),
+        Value::Asset(_) => (arc_str.as_str(), "&str", "asset"),
+        Value::PathExpression(_) => (arc_str.as_str(), "&str", "path_expression"),
         Value::Token(_) => ("&'a str", "&str", "token"),
         Value::Vec2f(_) => ("[f32; 2]", "[f32; 2]", "float2"),
         Value::Vec3f(_) => ("[f32; 3]", "[f32; 3]", "float3"),
@@ -214,39 +268,42 @@ pub(crate) fn rust_type(zero: &Value, is_array: bool) -> Result<Option<RustType>
         Value::Quath(_) => ("[f32; 4]", "[f32; 4]", "quath"),
         other => return Err(format!("no Rust type for values like {other:?}")),
     };
-    Ok(Some(if is_array {
+    let element_wise = matches!(
+        zero,
+        Value::String(_) | Value::Asset(_) | Value::PathExpression(_) | Value::Token(_)
+    );
+    let value = format!("{schemas}::value");
+    Ok(Some(if is_array && element_wise {
+        RustType {
+            read: format!("{vec}<{read}>"),
+            write: format!("&[{write}]"),
+            read_fn: format!("|v, t| {value}::read_array(v, t, {value}::read_{name})"),
+            write_fn: format!("|v, t| {value}::write_array(v, t, {value}::write_{name})"),
+            write_call: format!("{value}::write_array(VALUE, TOKENS, {value}::write_{name})"),
+        }
+    } else if is_array {
         RustType {
             read: if shared_array(zero) {
-                format!("::alloc::sync::Arc<::alloc::vec::Vec<{read}>>")
+                format!("{arc}<{vec}<{read}>>")
             } else {
-                format!("::alloc::vec::Vec<{read}>")
+                format!("{vec}<{read}>")
             },
             write: format!("&[{write}]"),
-            read_fn: if matches!(
-                zero,
-                Value::String(_) | Value::Asset(_) | Value::PathExpression(_) | Value::Token(_)
-            ) {
-                format!("|v, t| crate::value::read_array(v, t, crate::value::read_{name})")
-            } else if shared_array(zero) {
-                format!("crate::value::read_{name}_array_shared")
+            read_fn: if shared_array(zero) {
+                format!("{value}::read_{name}_array_shared")
             } else {
-                format!("crate::value::read_{name}_array")
+                format!("{value}::read_{name}_array")
             },
-            write_fn: if matches!(
-                zero,
-                Value::String(_) | Value::Asset(_) | Value::PathExpression(_) | Value::Token(_)
-            ) {
-                format!("|v, t| crate::value::write_array(v, t, crate::value::write_{name})")
-            } else {
-                format!("crate::value::write_{name}_array")
-            },
+            write_fn: format!("{value}::write_{name}_array"),
+            write_call: format!("{value}::write_{name}_array(VALUE, TOKENS)"),
         }
     } else {
         RustType {
             read: read.into(),
             write: write.into(),
-            read_fn: format!("crate::value::read_{name}"),
-            write_fn: format!("crate::value::write_{name}"),
+            read_fn: format!("{value}::read_{name}"),
+            write_fn: format!("{value}::write_{name}"),
+            write_call: format!("{value}::write_{name}(VALUE, TOKENS)"),
         }
     }))
 }
@@ -404,7 +461,7 @@ fn usd_type(property: &Property) -> String {
 }
 
 /// Every schema of every domain, by name, with its domain's module.
-type Index<'m> = BTreeMap<&'m str, (&'m Schema, String)>;
+pub(crate) type Index<'m> = BTreeMap<&'m str, (&'m Schema, String)>;
 
 /// The generated views: one file per domain, `mod.rs`, and the test
 /// table.
@@ -582,13 +639,40 @@ fn method_names<'m>(
     Ok(out)
 }
 
-/// The path of a schema's view type from the module `current`.
-fn type_path(schema: &str, index: &Index<'_>, current: &str) -> String {
-    let module = index.get(schema).map(|(_, m)| m.as_str()).unwrap_or("usd");
-    if module == current {
+/// The path of a schema's view type from the module being generated.
+fn type_path(cx: &Context<'_, '_>, schema: &str) -> String {
+    let module = cx
+        .index
+        .get(schema)
+        .map(|(_, m)| m.as_str())
+        .unwrap_or("usd");
+    if module == cx.module {
         type_name(schema)
     } else {
-        format!("crate::{module}::{}", type_name(schema))
+        format!("{}::{module}::{}", cx.target.schemas(), type_name(schema))
+    }
+}
+
+/// What the views of one module are generated with.
+pub(crate) struct Context<'c, 'm> {
+    /// The interner fallback tokens are in.
+    pub(crate) tokens: &'c TokenInterner,
+    /// Every schema the views may name, with its module.
+    pub(crate) index: &'c Index<'m>,
+    /// The module being generated.
+    pub(crate) module: String,
+    /// Where the module lives.
+    pub(crate) target: Target,
+    /// Whose schemas they are, as the views' documentation says
+    /// (`OpenUSD's`).
+    pub(crate) owner: String,
+}
+
+/// The `#[allow]` each item carries; OpenUSD's domain files allow what
+/// their documentation needs once, for the file.
+fn item_allow(target: Target) -> &'static str {
+    match target {
+        Target::BuiltIn => "",
     }
 }
 
@@ -600,38 +684,46 @@ fn domain_file(
     table: &mut TestTable,
 ) -> Result<String, String> {
     table.module = module(domain.plugin);
+    let cx = Context {
+        tokens: &model.tokens,
+        index,
+        module: module(domain.plugin),
+        target: Target::BuiltIn,
+        owner: "OpenUSD's".into(),
+    };
     let mut out = header(model);
     let _ = write!(
         out,
         "\n//! OpenUSD's `{}` schemas as typed views, edit handles and token enums.{}\n\n\
          #![allow(\n    clippy::doc_markdown,\n    clippy::too_long_first_doc_paragraph,\n    \
-         reason = \"documentation as OpenUSD writes it\"\n)]\n\n\
-         use core::ops::Deref;\n\n\
-         use layerstack::{{@LAYERSTACK@}};\n\n\
-         use crate::{{@CRATE@}};\n",
+         reason = \"documentation as OpenUSD writes it\"\n)]\n\n",
         domain.name,
         origin_note(domain)
     );
-    let mut uses_instances = false;
+    let schemas: Vec<&Schema> = domain.schemas.iter().collect();
+    out.push_str(&module_items(&cx, &schemas, table)?);
+    Ok(out)
+}
+
+/// The imports, views, edit handles and enums of `schemas`, for a module
+/// that holds them all.
+pub(crate) fn module_items(
+    cx: &Context<'_, '_>,
+    schemas: &[&Schema],
+    table: &mut TestTable,
+) -> Result<String, String> {
     let mut body = String::new();
-    for schema in &domain.schemas {
+    for schema in schemas {
         let text = match schema.kind {
             SchemaKind::ConcreteTyped | SchemaKind::AbstractTyped => {
-                chain_names(schema, index)?;
-                typed_view(model, schema, index, table)?
+                chain_names(schema, cx.index)?;
+                typed_view(cx, schema, table)?
             }
-            SchemaKind::SingleApplyApi => applied_view(model, schema, false, table)?,
-            SchemaKind::MultipleApplyApi => {
-                uses_instances = true;
-                applied_view(model, schema, true, table)?
-            }
+            SchemaKind::SingleApplyApi => applied_view(cx, schema, false, table)?,
+            SchemaKind::MultipleApplyApi => applied_view(cx, schema, true, table)?,
         };
         body.push_str(&text);
     }
-    if uses_instances {
-        out.push_str("use crate::view::{InstanceEdit, InstanceView};\n");
-    }
-    out.push_str(&body);
     let used = |names: &[&str]| -> String {
         names
             .iter()
@@ -647,22 +739,76 @@ fn domain_file(
             .collect::<Vec<_>>()
             .join(", ")
     };
+    let mut out = String::from("use core::ops::Deref;\n\n");
     let layerstack = used(&["CannotApply", "PathId"]);
-    let crate_items = used(&["PrimEdit", "PrimView", "Scene", "SchemaEdit"]);
-    Ok(out
-        .replace("@LAYERSTACK@", &layerstack)
-        .replace("@CRATE@", &crate_items))
+    let _ = writeln!(out, "use layerstack::{{{layerstack}}};\n");
+    let crate_items = used(&[
+        "InstanceEdit",
+        "InstanceView",
+        "PrimEdit",
+        "PrimView",
+        "Scene",
+        "SchemaEdit",
+    ]);
+    let _ = writeln!(out, "use {}::{{{crate_items}}};", cx.target.schemas());
+    out.push_str(&body);
+    Ok(out)
 }
 
-/// A property's getter and setter macro invocations, and its enum, if any.
+/// A property's getters and setters, and its enum, if any.
 struct Accessors {
     getters: String,
     setters: String,
     enums: String,
 }
 
+/// A getter reading the property `usd` with `read`, as `name`, and for a
+/// varying attribute its `_at` getter.
+fn getter(docs: &str, name: &str, usd: &str, ty: &RustType, varying: bool) -> String {
+    let mut out = format!(
+        "{docs}    #[must_use]\n    pub fn {name}(&self) -> Option<{read}> {{\n        \
+         self.read_value({usd:?}, {read_fn})\n    }}\n\n",
+        read = ty.read,
+        read_fn = ty.read_fn
+    );
+    if varying {
+        let _ = write!(
+            out,
+            "    #[doc = \"[`Self::{name}`] at the time code `time`, interpolated with `interp`.\"]\n    \
+             #[must_use]\n    \
+             pub fn {name}_at(&self, time: f64, interp: ::layerstack::InterpolationType) -> Option<{read}> {{\n        \
+             self.read_value_at({usd:?}, time, interp, {read_fn})\n    }}\n\n",
+            read = ty.read,
+            read_fn = ty.read_fn
+        );
+    }
+    out
+}
+
+/// A setter `set` authoring the property `usd` from a `ty` written with
+/// `write` (`VALUE`, `TOKENS`), and for a varying attribute its `_at`
+/// setter.
+fn setter(docs: &str, set: &str, usd: &str, ty: &str, write: &str, varying: bool) -> String {
+    let value = write
+        .replace("VALUE", "value")
+        .replace("TOKENS", "edit.tokens()");
+    let mut out = format!(
+        "{docs}    pub fn {set}(&self, edit: &mut SchemaEdit<'_>, value: {ty}) -> &Self {{\n        \
+         let value = {value};\n        self.write_value(edit, {usd:?}, None, value);\n        self\n    }}\n\n"
+    );
+    if varying {
+        let _ = write!(
+            out,
+            "    #[doc = \"[`Self::{set}`] as a time sample at the time code `time`.\"]\n    \
+             pub fn {set}_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: {ty}) -> &Self {{\n        \
+             let value = {value};\n        self.write_value(edit, {usd:?}, Some(time), value);\n        self\n    }}\n\n"
+        );
+    }
+    out
+}
+
 fn accessors(
-    model: &Model,
+    cx: &Context<'_, '_>,
     schema: &Schema,
     property: &Property,
     view: &str,
@@ -686,7 +832,7 @@ fn accessors(
         facts.push_str(", uniform");
     }
     if let Some(fallback) = &property.fallback {
-        let _ = write!(facts, "; fallback `{}`", usd_text(fallback, &model.tokens));
+        let _ = write!(facts, "; fallback `{}`", usd_text(fallback, cx.tokens));
     }
     facts.push_str(").");
     brief.push(doc_text(&facts));
@@ -711,18 +857,18 @@ fn accessors(
     };
     let get = format!("Get{}{suffix}", pascal(&snake(stem)));
     let create = format!("Create{}{suffix}", pascal(&snake(stem)));
-    let mut docs = doc_attrs("        ", &brief);
+    let mut docs = doc_attrs("    ", &brief);
     let mut setter_docs = docs.clone();
-    let alias = cpp_method_alias(schema, &get, "        ");
+    let alias = cpp_method_alias(schema, &get, "    ");
     if !alias.is_empty() {
         let class = &schema.cpp.as_ref().expect("verified native method").0;
-        docs.push_str(&doc_attrs("        ", &[format!("C++ read: `{class}::{get}().{}`; this getter returns the resolved value rather than an attribute/relationship handle.", if property.kind == PropertyKind::Relationship { "GetTargets()" } else { "Get()" })]));
+        docs.push_str(&doc_attrs("    ", &[format!("C++ read: `{class}::{get}().{}`; this getter returns the resolved value rather than an attribute/relationship handle.", if property.kind == PropertyKind::Relationship { "GetTargets()" } else { "Get()" })]));
         docs.push_str(&alias);
     }
-    let alias = cpp_method_alias(schema, &create, "        ");
+    let alias = cpp_method_alias(schema, &create, "    ");
     if !alias.is_empty() {
         let class = &schema.cpp.as_ref().expect("verified native method").0;
-        setter_docs.push_str(&doc_attrs("        ", &[format!("C++ authoring: `{class}::{create}().{}`; changes are queued in `SchemaEdit` until its transaction is applied.", if property.kind == PropertyKind::Relationship { "SetTargets()" } else { "Set()" })]));
+        setter_docs.push_str(&doc_attrs("    ", &[format!("C++ authoring: `{class}::{create}().{}`; changes are queued in `SchemaEdit` until its transaction is applied.", if property.kind == PropertyKind::Relationship { "SetTargets()" } else { "Set()" })]));
         setter_docs.push_str(&alias);
     }
     // The USD name, for authoring and reading by name (OpenUSD's schema
@@ -739,17 +885,21 @@ fn accessors(
             property.name
         )
     };
+    let usd = &property.name;
     let mut enums = String::new();
     if property.kind == PropertyKind::Relationship {
         table.getter(&name, property, Getter::Targets);
         return Ok(Accessors {
             getters: format!(
-                "{constant}    relationship! {{\n{docs}        {name}, {:?}\n    }}\n",
-                property.name
+                "{constant}{docs}    #[must_use]\n    \
+                 pub fn {name}(&self) -> {}<::layerstack::TargetPath> {{\n        \
+                 self.read_targets({usd:?})\n    }}\n\n",
+                cx.target.vec()
             ),
             setters: format!(
-                "    set_relationship! {{\n{setter_docs}        set_{name}, {:?}\n    }}\n",
-                property.name
+                "{setter_docs}    pub fn set_{name}(\n        &self,\n        \
+                 edit: &mut SchemaEdit<'_>,\n        targets: &[::layerstack::TargetPath],\n    \
+                 ) -> &Self {{\n        self.write_targets(edit, {usd:?}, targets);\n        self\n    }}\n\n"
             ),
             enums,
         });
@@ -757,7 +907,7 @@ fn accessors(
     let Some((_, is_array, zero)) = &property.value_type else {
         return Err(format!("{}.{}: no value type", schema.name, property.name));
     };
-    let Some(mut ty) = rust_type(zero, *is_array)
+    let Some(mut ty) = rust_type_in(zero, *is_array, cx.target)
         .map_err(|e| format!("{}.{}: {e}", schema.name, property.name))?
     else {
         return Ok(Accessors {
@@ -769,12 +919,13 @@ fn accessors(
     let mut enum_path = None;
     if matches!(zero, Value::Token(_)) && !*is_array && !property.allowed_tokens.is_empty() {
         let enum_name = format!("{view}{}", pascal(&name));
-        enums = token_enum(&enum_name, property)?;
+        enums = token_enum(cx, &enum_name, property)?;
         ty = RustType {
             read: enum_name.clone(),
             write: enum_name.clone(),
             read_fn: format!("{enum_name}::read"),
             write_fn: format!("{enum_name}::write"),
+            write_call: "VALUE.write(TOKENS)".into(),
         };
         enum_path = Some(enum_name);
     }
@@ -795,67 +946,51 @@ fn accessors(
             },
         },
     );
-    let mut getters = if varying {
-        format!(
-            "{constant}    attribute! {{\n{docs}        {name}, {name}_at, {:?}, {}, {}\n    }}\n",
-            property.name, ty.read, ty.read_fn
-        )
-    } else {
-        format!(
-            "{constant}    uniform_attribute! {{\n{docs}        {name}, {:?}, {}, {}\n    }}\n",
-            property.name, ty.read, ty.read_fn
-        )
-    };
+    let mut getters = constant;
+    getters.push_str(&getter(&docs, &name, usd, &ty, varying));
     if *is_array {
         let _ = writeln!(
             getters,
-            "    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.\n    pub fn try_{name}(&self, time: crate::Time) -> Result<Option<{}>, layerstack::ArrayReadError> {{ self.try_read_value({:?}, time, {}) }}",
-            ty.read, property.name, ty.read_fn
+            "    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.\n    pub fn try_{name}(&self, time: {}::Time) -> Result<Option<{}>, ::layerstack::ArrayReadError> {{ self.try_read_value({usd:?}, time, {}) }}\n",
+            cx.target.schemas(),
+            ty.read,
+            ty.read_fn
         );
     }
-    let mut setters = if varying {
-        format!(
-            "    set_attribute! {{\n{setter_docs}        set_{name}, set_{name}_at, {:?}, {}, {}\n    }}\n",
-            property.name, ty.write, ty.write_fn
-        )
-    } else {
-        format!(
-            "    set_uniform_attribute! {{\n{setter_docs}        set_{name}, {:?}, {}, {}\n    }}\n",
-            property.name, ty.write, ty.write_fn
-        )
-    };
+    let mut setters = setter(
+        &setter_docs,
+        &format!("set_{name}"),
+        usd,
+        &ty.write,
+        &ty.write("VALUE", "TOKENS"),
+        varying,
+    );
     if *is_array && shared_array(zero) {
-        let element = rust_type(zero, false)?.expect("an array element").read;
+        let element = rust_type_in(zero, false, cx.target)?
+            .expect("an array element")
+            .read;
+        let (arc, vec) = (cx.target.arc(), cx.target.vec());
         for (suffix, input) in [
-            ("owned", format!("::alloc::vec::Vec<{element}>")),
-            (
-                "shared",
-                format!("::alloc::sync::Arc<::alloc::vec::Vec<{element}>>"),
-            ),
+            ("owned", format!("{vec}<{element}>")),
+            ("shared", format!("{arc}<{vec}<{element}>>")),
         ] {
-            let write = format!("{}_{suffix}", ty.write_fn);
             let note = if suffix == "owned" {
                 "Transfers the vector allocation and capacity; allocates only its shared owner."
             } else {
                 "Transfers a shared owner without allocating or copying elements."
             };
             let docs = doc_attrs(
-                "        ",
+                "    ",
                 &[format!("{note} Slice callers can use `set_{name}`.")],
             );
-            if varying {
-                let _ = write!(
-                    setters,
-                    "    set_attribute! {{\n{docs}        set_{name}_{suffix}, set_{name}_{suffix}_at, {:?}, {input}, {write}\n    }}\n",
-                    property.name
-                );
-            } else {
-                let _ = write!(
-                    setters,
-                    "    set_uniform_attribute! {{\n{docs}        set_{name}_{suffix}, {:?}, {input}, {write}\n    }}\n",
-                    property.name
-                );
-            }
+            setters.push_str(&setter(
+                &docs,
+                &format!("set_{name}_{suffix}"),
+                usd,
+                &input,
+                &format!("{}_{suffix}(VALUE, TOKENS)", ty.write_fn),
+                varying,
+            ));
         }
     }
     Ok(Accessors {
@@ -865,18 +1000,13 @@ fn accessors(
     })
 }
 
-/// A `token_enum!` of a property's `allowedTokens`.
-fn token_enum(name: &str, property: &Property) -> Result<String, String> {
-    let mut out = format!(
-        "token_enum! {{\n    #[doc = {:?}]\n    {name} {{\n",
-        format!(
-            "The tokens `{}` allows.",
-            property
-                .name
-                .replace(layerstack::schema::INSTANCE_NAME_PLACEHOLDER, "<instance>")
-        )
-    );
+/// The enum of a property's `allowedTokens`, with `Other` for any token
+/// the schema does not list.
+fn token_enum(cx: &Context<'_, '_>, name: &str, property: &Property) -> Result<String, String> {
     let mut variants = BTreeSet::new();
+    let mut declared = String::new();
+    let mut from = String::new();
+    let mut to = String::new();
     for token in &property.allowed_tokens {
         let variant = pascal(&snake(token));
         if variant.is_empty()
@@ -896,60 +1026,90 @@ fn token_enum(name: &str, property: &Property) -> Result<String, String> {
             ));
         }
         let _ = writeln!(
-            out,
-            "        #[doc = {:?}]\n        {variant} = {token:?},",
+            declared,
+            "    #[doc = {:?}]\n    {variant},",
             format!("`{token}`")
         );
+        let _ = writeln!(from, "            {token:?} => Self::{variant},");
+        let _ = writeln!(to, "            Self::{variant} => {token:?},");
     }
-    out.push_str("    }\n}\n\n");
-    Ok(out)
+    let tokens: Vec<String> = property
+        .allowed_tokens
+        .iter()
+        .map(|token| format!("{token:?}"))
+        .collect();
+    let (schemas, arc) = (cx.target.schemas(), cx.target.arc());
+    Ok(format!(
+        "#[doc = {doc:?}]\n#[derive(Clone, Debug, PartialEq, Eq, Hash)]\npub enum {name} {{\n{declared}    \
+         /// A token the schema does not list: OpenUSD does not enforce\n    \
+         /// `allowedTokens`, so an authored value may be anything.\n    Other({arc}<str>),\n}}\n\n\
+         impl {name} {{\n    /// The tokens the schema allows, in its order.\n    \
+         pub const TOKENS: &'static [&'static str] = &[{tokens}];\n\n    \
+         /// The value `token` names, `Other` when the schema does not\n    /// list it.\n    \
+         #[must_use]\n    pub fn from_token(token: &str) -> Self {{\n        match token {{\n{from}            \
+         other => Self::Other({arc}::from(other)),\n        }}\n    }}\n\n    \
+         /// The token this value is.\n    #[must_use]\n    pub fn as_str(&self) -> &str {{\n        \
+         match self {{\n{to}            Self::Other(token) => token,\n        }}\n    }}\n\n    \
+         pub(crate) fn read(\n        value: &::layerstack::Value,\n        \
+         tokens: &::layerstack::TokenInterner,\n    ) -> Option<Self> {{\n        \
+         {schemas}::value::read_token(value, tokens).map(Self::from_token)\n    }}\n\n    \
+         pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {{\n        \
+         {schemas}::value::write_token(self.as_str(), tokens)\n    }}\n}}\n\n",
+        doc = format!(
+            "The tokens `{}` allows.",
+            property
+                .name
+                .replace(layerstack::schema::INSTANCE_NAME_PLACEHOLDER, "<instance>")
+        ),
+        tokens = tokens.join(", "),
+    ))
 }
 
 /// The view, edit handle and enums of a typed schema.
 fn typed_view(
-    model: &Model,
+    cx: &Context<'_, '_>,
     schema: &Schema,
-    index: &Index<'_>,
     table: &mut TestTable,
 ) -> Result<String, String> {
+    let index = cx.index;
     let view = type_name(&schema.name);
     let edit = format!("{view}Edit");
     let concrete = schema.kind == SchemaKind::ConcreteTyped;
     table.begin(schema, &view);
-    let (base, base_edit, wrap_base, new_base) = match &schema.parent {
+    let (base, base_edit, wrap_base, edit_base) = match &schema.parent {
         Some(parent) => {
-            let path = type_path(parent, index, &table.module);
+            let path = type_path(cx, parent);
             (
                 format!("{path}<'a>"),
                 format!("{path}Edit"),
-                format!("{path}::from_view(prim)"),
-                format!("{path}Edit::from_path(path)"),
+                format!("{path}::from_prim_unchecked(prim)"),
+                format!("{path}Edit::from_prim(prim)"),
             )
         }
         None => (
             "PrimView<'a>".to_string(),
             "PrimEdit".to_string(),
             "prim".to_string(),
-            "PrimEdit::new(path)".to_string(),
+            "prim".to_string(),
         ),
     };
     let mut getters = String::new();
     let mut setters = String::new();
     let mut enums = String::new();
     for property in local_properties(schema, index) {
-        let accessors = accessors(model, schema, property, &view, table)?;
+        let accessors = accessors(cx, schema, property, &view, table)?;
         getters.push_str(&accessors.getters);
         setters.push_str(&accessors.setters);
         enums.push_str(&accessors.enums);
     }
     for built_in in local_built_ins(schema, index) {
-        let api = type_path(built_in, index, &table.module);
+        let api = type_path(cx, built_in);
         let method = snake(&type_name(built_in));
         table.built_in(&method);
         let _ = write!(
             getters,
             "    #[doc = {:?}]\n    #[must_use]\n    pub fn {method}(&self) -> {api}<'a> {{\n        \
-             {api}::from_view(PrimView::new(self.scene(), self.path()))\n    }}\n\n",
+             {api}::from_prim_unchecked(PrimView::new(self.scene(), self.path()))\n    }}\n\n",
             format!(
                 "The prim's built-in `{built_in}`, which every `{}` has.",
                 schema.name
@@ -958,7 +1118,7 @@ fn typed_view(
         let _ = write!(
             setters,
             "    #[doc = {:?}]\n    #[must_use]\n    pub fn {method}(&self) -> {api}Edit {{\n        \
-             {api}Edit::from_path(self.path())\n    }}\n\n",
+             {api}Edit::from_prim(PrimEdit::from_path_unchecked(self.path()))\n    }}\n\n",
             format!("An edit handle for the prim's built-in `{built_in}`.")
         );
     }
@@ -966,24 +1126,20 @@ fn typed_view(
     let inherits = schema
         .parent
         .as_deref()
-        .map(|parent| {
-            format!(
-                ", inheriting [`{}`]",
-                type_path(parent, index, &table.module)
-            )
-        })
+        .map(|parent| format!(", inheriting [`{}`]", type_path(cx, parent)))
         .unwrap_or_default();
     let docs = doc_attrs(
         "",
         &[
             doc_text(&schema.doc),
             format!(
-                "The view of OpenUSD's {kind_text} typed schema `{}`{inherits}. Construct it \
+                "The view of {owner} {kind_text} typed schema `{}`{inherits}. Construct it \
                  with [`{view}::new`], which checks the prim is of the schema (`IsA`); it \
                  derefs to the view of the schema it inherits from. For anything it does not \
-                 offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) \
+                 offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) \
                  (`Stage::resolve_value_with_schema` returns the raw resolved value).",
-                schema.name
+                schema.name,
+                owner = cx.owner,
             ),
         ],
     );
@@ -994,7 +1150,7 @@ fn typed_view(
              /// author yet; defining a spec that exists is rejected when the\n    \
              /// transaction applies.\n    \
              pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> {edit} {{\n        \
-             edit.define(path, Self::SCHEMA);\n        {edit}::from_path(path)\n    }}\n\n",
+             {edit}::from_prim(edit.define_prim(path, Self::SCHEMA))\n    }}\n\n",
             name = schema.name
         )
     } else {
@@ -1007,25 +1163,32 @@ fn typed_view(
             cpp_method_alias(schema, "Define", "    ")
         ),
     );
+    let allow = item_allow(cx.target);
     Ok(format!(
-        "{enums}{docs}{aliases}#[derive(Clone, Copy, Debug)]\npub struct {view}<'a> {{\n    base: {base},\n}}\n\n\
+        "{enums}{docs}{aliases}{allow}#[derive(Clone, Copy, Debug)]\npub struct {view}<'a> {{\n    base: {base},\n}}\n\n\
          impl<'a> Deref for {view}<'a> {{\n    type Target = {base};\n\n    \
          fn deref(&self) -> &Self::Target {{\n        &self.base\n    }}\n}}\n\n\
-         impl<'a> {view}<'a> {{\n    /// The schema's name.\n    pub const SCHEMA: &'static str = {name:?};\n\n    \
+         {allow}impl<'a> {view}<'a> {{\n    /// The schema's name.\n    pub const SCHEMA: &'static str = {name:?};\n\n    \
          #[doc = {new_doc:?}]\n{get_alias}    #[must_use]\n    \
          pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {{\n        \
-         scene\n            .is_a(path, Self::SCHEMA)\n            .then(|| Self::from_view(PrimView::new(*scene, path)))\n    }}\n\n    \
-         pub(crate) fn from_view(prim: PrimView<'a>) -> Self {{\n        Self {{\n            base: {wrap_base},\n        }}\n    }}\n\n    \
+         scene\n            .is_a(path, Self::SCHEMA)\n            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))\n    }}\n\n    \
+         /// A view of `prim` as of the schema, without checking that it is\n    \
+         /// (`IsA`), as [`Self::new`] does: a getter reads what the prim\n    \
+         /// authors, and the schema's fallbacks only for a prim of the schema.\n    \
+         /// For the view of a schema built on this one.\n    #[must_use]\n    \
+         pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {{\n        Self {{\n            base: {wrap_base},\n        }}\n    }}\n\n    \
          /// An edit handle for this prim.\n    #[must_use]\n    \
-         pub fn edit(&self) -> {edit} {{\n        {edit}::from_path(self.path())\n    }}\n\n\
+         pub fn edit(&self) -> {edit} {{\n        {edit}::from_prim(PrimEdit::from_path_unchecked(self.path()))\n    }}\n\n\
          {define}{getters}}}\n\n\
          #[doc = {edit_doc:?}]\n#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]\npub struct {edit} {{\n    base: {base_edit},\n}}\n\n\
          impl Deref for {edit} {{\n    type Target = {base_edit};\n\n    \
          fn deref(&self) -> &Self::Target {{\n        &self.base\n    }}\n}}\n\n\
-         impl {edit} {{\n    /// A handle authoring the prim at `path` through `edit`, if the prim\n    /// exists: on the edit's stage, or defined earlier in `edit`. Setters\n    /// never create a prim that does not.\n    #[must_use]\n    \
+         {allow}impl {edit} {{\n    /// A handle authoring the prim at `path` through `edit`, if the prim\n    /// exists: on the edit's stage, or defined earlier in `edit`. Setters\n    /// never create a prim that does not.\n    #[must_use]\n    \
          pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {{\n        \
-         edit.exists(path).then(|| Self::from_path(path))\n    }}\n\n    \
-         pub(crate) fn from_path(path: PathId) -> Self {{\n        Self {{\n            base: {new_base},\n        }}\n    }}\n\n\
+         PrimEdit::new(edit, path).map(Self::from_prim)\n    }}\n\n    \
+         /// A handle authoring the schema's properties on the prim `prim`\n    \
+         /// authors, whatever its type.\n    #[must_use]\n    \
+         pub fn from_prim(prim: PrimEdit) -> Self {{\n        Self {{\n            base: {edit_base},\n        }}\n    }}\n\n\
          {setters}}}\n\n",
         aliases = schema_aliases(schema, &view),
         get_alias = cpp_method_alias(schema, "Get", "    "),
@@ -1035,16 +1198,16 @@ fn typed_view(
             schema.name
         ),
         edit_doc = format!(
-            "Authors the properties of OpenUSD's `{}` through a [`SchemaEdit`]; it derefs to \
+            "Authors the properties of {} `{}` through a [`SchemaEdit`]; it derefs to \
              the handle of the schema it inherits from.",
-            schema.name
+            cx.owner, schema.name
         ),
     ))
 }
 
 /// The view, edit handle and enums of an applied schema.
 fn applied_view(
-    model: &Model,
+    cx: &Context<'_, '_>,
     schema: &Schema,
     multiple: bool,
     table: &mut TestTable,
@@ -1057,7 +1220,7 @@ fn applied_view(
     table.begin(schema, &view);
     method_names(schema, &BTreeMap::new())?;
     for property in &schema.properties {
-        let accessors = accessors(model, schema, property, &view, table)?;
+        let accessors = accessors(cx, schema, property, &view, table)?;
         getters.push_str(&accessors.getters);
         setters.push_str(&accessors.setters);
         enums.push_str(&accessors.enums);
@@ -1077,54 +1240,67 @@ fn applied_view(
         &[
             doc_text(&schema.doc),
             format!(
-                "The view of OpenUSD's {kind_text} API schema `{}`. Get it with [`{view}::get`], \
+                "The view of {owner} {kind_text} API schema `{}`. Get it with [`{view}::get`], \
                  which checks the prim has the schema applied (`HasAPI`). For anything it does \
                  not offer, resolve the property by its USD name on \
-                 [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` \
+                 [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` \
                  returns the raw resolved value).",
-                schema.name
+                schema.name,
+                owner = cx.owner,
             ),
         ],
     );
+    let vec = cx.target.vec();
     let mut constructors = if multiple {
         format!(
             "    /// A view of the instance `instance` of the schema on the prim at `path`,\n    \
              /// if the prim has it applied.\n    #[must_use]\n    \
              pub fn get(scene: &Scene<'a>, path: PathId, instance: &str) -> Option<Self> {{\n        \
              if !scene.has_api(path, Self::SCHEMA, Some(instance)) {{\n            return None;\n        }}\n        \
-             let instance = scene.instance_name(instance)?;\n        \
-             Some(Self::from_view(PrimView::new(*scene, path), instance))\n    }}\n\n    \
+             let instance = scene\n            .instances(path, Self::SCHEMA)\n            .into_iter()\n            \
+             .find(|applied| *applied == instance)?;\n        \
+             Some(Self::from_instance_unchecked(InstanceView::new(\n            PrimView::new(*scene, path),\n            instance,\n        )))\n    }}\n\n    \
              /// Every instance of the schema the prim at `path` has applied, in the\n    \
              /// order its definition applies them.\n    #[must_use]\n    \
-             pub fn instances(scene: &Scene<'a>, path: PathId) -> ::alloc::vec::Vec<Self> {{\n        \
+             pub fn instances(scene: &Scene<'a>, path: PathId) -> {vec}<Self> {{\n        \
              scene\n            .instances(path, Self::SCHEMA)\n            .into_iter()\n            \
-             .map(|instance| Self::from_view(PrimView::new(*scene, path), instance))\n            .collect()\n    }}\n\n    \
-             pub(crate) fn from_view(prim: PrimView<'a>, instance: &'a str) -> Self {{\n        \
-             Self {{\n            base: InstanceView::new(prim, instance),\n        }}\n    }}\n\n    \
+             .map(|instance| {{\n                Self::from_instance_unchecked(InstanceView::new(PrimView::new(*scene, path), instance))\n            }})\n            .collect()\n    }}\n\n    \
+             /// A view of `instance` as an instance of the schema, without\n    \
+             /// checking that the prim has it applied (`HasAPI`), as [`Self::get`]\n    \
+             /// does: a getter reads what the prim authors, and the schema's\n    \
+             /// fallbacks only for an applied instance.\n    #[must_use]\n    \
+             pub fn from_instance_unchecked(instance: InstanceView<'a>) -> Self {{\n        \
+             Self {{ base: instance }}\n    }}\n\n    \
              /// An edit handle for this instance.\n    #[must_use]\n    \
-             pub fn edit(&self) -> {edit} {{\n        {edit}::from_path(self.path(), self.instance())\n    }}\n\n    \
+             pub fn edit(&self) -> {edit} {{\n        {edit}::from_instance(InstanceEdit::new(\n            \
+             PrimEdit::from_path_unchecked(self.path()),\n            self.instance(),\n        ))\n    }}\n\n    \
              /// Applies the instance `instance` of the schema to `path` (a `prepend\n    \
              /// apiSchemas` entry in the edit's target) if the prim may have it.\n    \
              ///\n    /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.\n    \
              ///\n    /// # Errors\n    ///\n    /// Why the schema cannot be applied there.\n    \
              pub fn apply(\n        edit: &mut SchemaEdit<'_>,\n        path: PathId,\n        instance: &str,\n    ) -> Result<{edit}, CannotApply> {{\n        \
-             edit.apply(path, Self::SCHEMA, Some(instance))?;\n        Ok({edit}::from_path(path, instance))\n    }}\n\n"
+             let prim = edit.apply_api(path, Self::SCHEMA, Some(instance))?;\n        \
+             Ok({edit}::from_instance(InstanceEdit::new(prim, instance)))\n    }}\n\n"
         )
     } else {
         format!(
             "    /// A view of the schema on the prim at `path`, if the prim has it\n    \
              /// applied.\n    #[must_use]\n    \
              pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {{\n        \
-             scene\n            .has_api(path, Self::SCHEMA, None)\n            .then(|| Self::from_view(PrimView::new(*scene, path)))\n    }}\n\n    \
-             pub(crate) fn from_view(prim: PrimView<'a>) -> Self {{\n        Self {{ base: prim }}\n    }}\n\n    \
+             scene\n            .has_api(path, Self::SCHEMA, None)\n            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))\n    }}\n\n    \
+             /// A view of the schema on `prim`, without checking that the prim\n    \
+             /// has it applied (`HasAPI`), as [`Self::get`] does: a getter reads\n    \
+             /// what the prim authors, and the schema's fallbacks only for a\n    \
+             /// prim with the schema applied. For a built-in's view.\n    #[must_use]\n    \
+             pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {{\n        Self {{ base: prim }}\n    }}\n\n    \
              /// An edit handle for this prim.\n    #[must_use]\n    \
-             pub fn edit(&self) -> {edit} {{\n        {edit}::from_path(self.path())\n    }}\n\n    \
+             pub fn edit(&self) -> {edit} {{\n        {edit}::from_prim(PrimEdit::from_path_unchecked(self.path()))\n    }}\n\n    \
              /// Applies the schema to `path` (a `prepend apiSchemas` entry in the\n    \
              /// edit's target) if the prim may have it.\n    \
              ///\n    /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.\n    \
              ///\n    /// # Errors\n    ///\n    /// Why the schema cannot be applied there.\n    \
              pub fn apply(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<{edit}, CannotApply> {{\n        \
-             edit.apply(path, Self::SCHEMA, None)?;\n        Ok({edit}::from_path(path))\n    }}\n\n"
+             edit.apply_api(path, Self::SCHEMA, None).map({edit}::from_prim)\n    }}\n\n"
         )
     };
     for (rust, native) in [("get", "Get"), ("instances", "GetAll"), ("apply", "Apply")] {
@@ -1142,15 +1318,19 @@ fn applied_view(
          /// earlier in `edit`. Setters never create a prim that does not.\n    \
          #[must_use]\n    \
          pub fn new(edit: &SchemaEdit<'_>, path: PathId, instance: &str) -> Option<Self> {\n        \
-         edit.exists(path).then(|| Self::from_path(path, instance))\n    }\n\n    \
-         pub(crate) fn from_path(path: PathId, instance: &str) -> Self {\n        \
-         Self {\n            base: InstanceEdit::new(path, instance),\n        }\n    }\n\n"
+         PrimEdit::new(edit, path).map(|prim| Self::from_instance(InstanceEdit::new(prim, instance)))\n    }\n\n    \
+         /// A handle authoring the schema's properties for `instance`, whether\n    \
+         /// or not the prim has it applied.\n    #[must_use]\n    \
+         pub fn from_instance(instance: InstanceEdit) -> Self {\n        \
+         Self { base: instance }\n    }\n\n"
             .to_string()
     } else {
         "    /// A handle authoring the prim at `path` through `edit`, if the prim\n    /// exists: on the edit's stage, or defined earlier in `edit`. Setters\n    /// never create a prim that does not.\n    #[must_use]\n    \
          pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {\n        \
-         edit.exists(path).then(|| Self::from_path(path))\n    }\n\n    \
-         pub(crate) fn from_path(path: PathId) -> Self {\n        Self {\n            base: PrimEdit::new(path),\n        }\n    }\n\n"
+         PrimEdit::new(edit, path).map(Self::from_prim)\n    }\n\n    \
+         /// A handle authoring the schema's properties on the prim `prim`\n    \
+         /// authors, whether or not it has the schema applied.\n    #[must_use]\n    \
+         pub fn from_prim(prim: PrimEdit) -> Self {\n        Self { base: prim }\n    }\n\n"
             .to_string()
     };
     let edit_derive = if multiple {
@@ -1158,21 +1338,22 @@ fn applied_view(
     } else {
         "#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]"
     };
+    let allow = item_allow(cx.target);
     Ok(format!(
-        "{enums}{docs}{aliases}#[derive(Clone, Copy, Debug)]\npub struct {view}<'a> {{\n    base: {base},\n}}\n\n\
+        "{enums}{docs}{aliases}{allow}#[derive(Clone, Copy, Debug)]\npub struct {view}<'a> {{\n    base: {base},\n}}\n\n\
          impl<'a> Deref for {view}<'a> {{\n    type Target = {base};\n\n    \
          fn deref(&self) -> &Self::Target {{\n        &self.base\n    }}\n}}\n\n\
-         impl<'a> {view}<'a> {{\n    /// The schema's name.\n    pub const SCHEMA: &'static str = {name:?};\n\n\
+         {allow}impl<'a> {view}<'a> {{\n    /// The schema's name.\n    pub const SCHEMA: &'static str = {name:?};\n\n\
          {constructors}{getters}}}\n\n\
          #[doc = {edit_doc:?}]\n{edit_derive}\npub struct {edit} {{\n    base: {base_edit},\n}}\n\n\
          impl Deref for {edit} {{\n    type Target = {base_edit};\n\n    \
          fn deref(&self) -> &Self::Target {{\n        &self.base\n    }}\n}}\n\n\
-         impl {edit} {{\n{new_edit}{setters}}}\n\n",
+         {allow}impl {edit} {{\n{new_edit}{setters}}}\n\n",
         aliases = schema_aliases(schema, &view),
         name = schema.name,
         edit_doc = format!(
-            "Authors the properties of OpenUSD's `{}` through a [`SchemaEdit`].",
-            schema.name
+            "Authors the properties of {} `{}` through a [`SchemaEdit`].",
+            cx.owner, schema.name
         ),
     ))
 }
@@ -1229,7 +1410,7 @@ struct TableView {
 /// (`Scope` when unrestricted), a multiple-apply one with its first allowed
 /// instance name, else `a`.
 #[derive(Default)]
-struct TestTable {
+pub(crate) struct TestTable {
     /// The views, in generation order.
     views: Vec<TableView>,
     /// The module of the schema being generated.

@@ -6,7 +6,9 @@
 //! OpenUSD: `UsdPhysicsCollisionGroup::ComputeCollisionGroupTable`.
 //! Relationship and metadata composition follow AOUSD Core §12; default
 //! traversal follows §11.3.3 and defined, non-abstract prim ancestry.
-use crate::{PrimView, Scene, usd::CollectionApi, usd_physics::PhysicsCollisionGroup};
+use crate::{
+    InstanceView, PrimView, Scene, usd::CollectionApi, usd_physics::PhysicsCollisionGroup,
+};
 use alloc::{sync::Arc, vec, vec::Vec};
 use layerstack::{HashMap, HashSet, PathId, TargetPath};
 
@@ -85,7 +87,10 @@ impl<'a> PhysicsCollisionGroup<'a> {
     /// collection membership expressions and included/excluded relationships.
     #[must_use]
     pub fn colliders_collection(&self) -> CollectionApi<'a> {
-        CollectionApi::from_view(PrimView::new(self.scene(), self.path()), "colliders")
+        CollectionApi::from_instance_unchecked(InstanceView::new(
+            PrimView::new(self.scene(), self.path()),
+            "colliders",
+        ))
     }
 }
 /// Resolves authored group filters, inversion and merge names at default time.

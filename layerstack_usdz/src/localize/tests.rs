@@ -57,8 +57,8 @@ impl AssetResolver for NoExternal {
         &mut self,
         _: &str,
         _: Option<LayerId>,
-        _: &mut TokenInterner,
-        _: &mut PathInterner,
+        _: &TokenInterner,
+        _: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         Err(AssetResolveError::NotFound)
     }
@@ -91,16 +91,10 @@ fn localized_package_round_trips_layers_and_rewrites_paths_from_each_authoring_l
     assert_eq!(*store.layer(LayerId(2)).unwrap(), original);
     let bytes = plan.write_usdz(&store.tokens, &store.paths).unwrap();
     assert_eq!(bytes, plan.write_usdz(&store.tokens, &store.paths).unwrap());
-    let mut tokens = TokenInterner::default();
-    let mut paths = PathInterner::default();
-    let read = crate::read_usdz(
-        &bytes,
-        LayerId(100),
-        &mut tokens,
-        &mut paths,
-        &mut NoExternal(100),
-    )
-    .unwrap();
+    let tokens = TokenInterner::default();
+    let paths = PathInterner::default();
+    let read =
+        crate::read_usdz(&bytes, LayerId(100), &tokens, &paths, &mut NoExternal(100)).unwrap();
     assert!(!read.has_errors(), "{:?}", read.diagnostics);
     assert_eq!(read.resolved_layers.len(), 1);
     let archive = crate::zip::ZipArchive::parse(&bytes).unwrap();

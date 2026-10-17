@@ -17,8 +17,8 @@ impl AssetResolver for NoAssets {
         &mut self,
         _: &str,
         _: Option<LayerId>,
-        _: &mut TokenInterner,
-        _: &mut PathInterner,
+        _: &TokenInterner,
+        _: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         Err(AssetResolveError::NotFound)
     }
@@ -38,25 +38,25 @@ fn import(c: &mut Criterion) {
         group.throughput(Throughput::Bytes(source.len() as u64));
         group.bench_with_input(BenchmarkId::new("ast_emit", count), &source, |b, source| {
             b.iter(|| {
-                let mut store = InMemoryStore::default();
+                let store = InMemoryStore::default();
                 let parsed = layerstack_usda::parser::parse(black_box(source));
                 black_box(layerstack_usda::emit::emit(
                     &parsed.layer,
                     LayerId(1),
-                    &mut store.tokens,
-                    &mut store.paths,
+                    &store.tokens,
+                    &store.paths,
                     &mut NoAssets,
                 ));
             });
         });
         group.bench_with_input(BenchmarkId::new("direct", count), &source, |b, source| {
             b.iter(|| {
-                let mut store = InMemoryStore::default();
+                let store = InMemoryStore::default();
                 black_box(layerstack_usda::read_usda(
                     black_box(source),
                     LayerId(1),
-                    &mut store.tokens,
-                    &mut store.paths,
+                    &store.tokens,
+                    &store.paths,
                     &mut NoAssets,
                 ));
             });

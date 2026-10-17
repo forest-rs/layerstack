@@ -23,8 +23,8 @@ impl AssetResolver for StubResolver {
         &mut self,
         _asset_path: &str,
         _anchor: Option<LayerId>,
-        _tokens: &mut TokenInterner,
-        _paths: &mut PathInterner,
+        _tokens: &TokenInterner,
+        _paths: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         Err(AssetResolveError::NotFound)
     }
@@ -192,14 +192,9 @@ fn parse_usdz(data: &[u8]) -> InMemoryStore {
     let layer_id = LayerId(1);
     let mut resolver = StubResolver;
 
-    let result = layerstack_usdz::read_usdz(
-        data,
-        layer_id,
-        &mut store.tokens,
-        &mut store.paths,
-        &mut resolver,
-    )
-    .expect("failed to parse USDZ");
+    let result =
+        layerstack_usdz::read_usdz(data, layer_id, &store.tokens, &store.paths, &mut resolver)
+            .expect("failed to parse USDZ");
 
     for layer in result.resolved_layers {
         store.insert_layer(layer);
@@ -216,7 +211,7 @@ fn expect_value(
     field_name: &str,
 ) -> Value {
     let path =
-        layerstack::path::Path::parse_absolute(prim_path, &mut store.tokens).expect("invalid path");
+        layerstack::path::Path::parse_absolute(prim_path, &store.tokens).expect("invalid path");
     let path_id = store
         .paths
         .lookup(&path)
@@ -237,7 +232,7 @@ fn expect_value(
 
 fn has_prim(store: &mut InMemoryStore, layer_id: LayerId, prim_path: &str) -> bool {
     let path =
-        layerstack::path::Path::parse_absolute(prim_path, &mut store.tokens).expect("invalid path");
+        layerstack::path::Path::parse_absolute(prim_path, &store.tokens).expect("invalid path");
     let Some(path_id) = store.paths.lookup(&path) else {
         return false;
     };
@@ -293,11 +288,10 @@ fn multiple_entries_root_is_first() {
 #[test]
 fn empty_archive_rejected() {
     let data = build_usdz(&[]);
-    let mut tokens = TokenInterner::default();
-    let mut paths = PathInterner::default();
+    let tokens = TokenInterner::default();
+    let paths = PathInterner::default();
     let mut resolver = StubResolver;
-    let result =
-        layerstack_usdz::read_usdz(&data, LayerId(1), &mut tokens, &mut paths, &mut resolver);
+    let result = layerstack_usdz::read_usdz(&data, LayerId(1), &tokens, &paths, &mut resolver);
     assert!(result.is_err(), "expected error for empty archive");
     let err = result.unwrap_err();
     assert!(
@@ -309,11 +303,10 @@ fn empty_archive_rejected() {
 #[test]
 fn non_usd_first_file_rejected() {
     let data = build_usdz(&[("texture.png", &[0x89, 0x50, 0x4E, 0x47])]);
-    let mut tokens = TokenInterner::default();
-    let mut paths = PathInterner::default();
+    let tokens = TokenInterner::default();
+    let paths = PathInterner::default();
     let mut resolver = StubResolver;
-    let result =
-        layerstack_usdz::read_usdz(&data, LayerId(1), &mut tokens, &mut paths, &mut resolver);
+    let result = layerstack_usdz::read_usdz(&data, LayerId(1), &tokens, &paths, &mut resolver);
     assert!(result.is_err(), "expected error for non-USD first file");
     assert!(matches!(
         result.unwrap_err(),
@@ -328,11 +321,10 @@ fn invalid_compression_rejected() {
         ..Default::default()
     };
     let data = build_usdz_opts(&[("root.usda", SIMPLE_USDA.as_bytes())], &opts);
-    let mut tokens = TokenInterner::default();
-    let mut paths = PathInterner::default();
+    let tokens = TokenInterner::default();
+    let paths = PathInterner::default();
     let mut resolver = StubResolver;
-    let result =
-        layerstack_usdz::read_usdz(&data, LayerId(1), &mut tokens, &mut paths, &mut resolver);
+    let result = layerstack_usdz::read_usdz(&data, LayerId(1), &tokens, &paths, &mut resolver);
     assert!(result.is_err(), "expected error for compressed entry");
     assert!(matches!(
         result.unwrap_err(),
@@ -347,11 +339,10 @@ fn invalid_encryption_rejected() {
         ..Default::default()
     };
     let data = build_usdz_opts(&[("root.usda", SIMPLE_USDA.as_bytes())], &opts);
-    let mut tokens = TokenInterner::default();
-    let mut paths = PathInterner::default();
+    let tokens = TokenInterner::default();
+    let paths = PathInterner::default();
     let mut resolver = StubResolver;
-    let result =
-        layerstack_usdz::read_usdz(&data, LayerId(1), &mut tokens, &mut paths, &mut resolver);
+    let result = layerstack_usdz::read_usdz(&data, LayerId(1), &tokens, &paths, &mut resolver);
     assert!(result.is_err(), "expected error for encrypted entry");
     assert!(matches!(
         result.unwrap_err(),
@@ -366,11 +357,10 @@ fn crc32_mismatch_rejected() {
         ..Default::default()
     };
     let data = build_usdz_opts(&[("root.usda", SIMPLE_USDA.as_bytes())], &opts);
-    let mut tokens = TokenInterner::default();
-    let mut paths = PathInterner::default();
+    let tokens = TokenInterner::default();
+    let paths = PathInterner::default();
     let mut resolver = StubResolver;
-    let result =
-        layerstack_usdz::read_usdz(&data, LayerId(1), &mut tokens, &mut paths, &mut resolver);
+    let result = layerstack_usdz::read_usdz(&data, LayerId(1), &tokens, &paths, &mut resolver);
     assert!(result.is_err(), "expected error for CRC mismatch");
     assert!(matches!(
         result.unwrap_err(),
@@ -385,11 +375,10 @@ fn eocd_comment_rejected() {
         ..Default::default()
     };
     let data = build_usdz_opts(&[("root.usda", SIMPLE_USDA.as_bytes())], &opts);
-    let mut tokens = TokenInterner::default();
-    let mut paths = PathInterner::default();
+    let tokens = TokenInterner::default();
+    let paths = PathInterner::default();
     let mut resolver = StubResolver;
-    let result =
-        layerstack_usdz::read_usdz(&data, LayerId(1), &mut tokens, &mut paths, &mut resolver);
+    let result = layerstack_usdz::read_usdz(&data, LayerId(1), &tokens, &paths, &mut resolver);
     assert!(result.is_err(), "expected error for EOCD comment");
     assert!(matches!(
         result.unwrap_err(),
@@ -400,22 +389,20 @@ fn eocd_comment_rejected() {
 #[test]
 fn invalid_magic_rejected() {
     let data = vec![0_u8; 64];
-    let mut tokens = TokenInterner::default();
-    let mut paths = PathInterner::default();
+    let tokens = TokenInterner::default();
+    let paths = PathInterner::default();
     let mut resolver = StubResolver;
-    let result =
-        layerstack_usdz::read_usdz(&data, LayerId(1), &mut tokens, &mut paths, &mut resolver);
+    let result = layerstack_usdz::read_usdz(&data, LayerId(1), &tokens, &paths, &mut resolver);
     assert!(result.is_err());
 }
 
 #[test]
 fn truncated_file_rejected() {
     let data = b"PK\x03\x04"; // Just LFH signature, truncated
-    let mut tokens = TokenInterner::default();
-    let mut paths = PathInterner::default();
+    let tokens = TokenInterner::default();
+    let paths = PathInterner::default();
     let mut resolver = StubResolver;
-    let result =
-        layerstack_usdz::read_usdz(data, LayerId(1), &mut tokens, &mut paths, &mut resolver);
+    let result = layerstack_usdz::read_usdz(data, LayerId(1), &tokens, &paths, &mut resolver);
     assert!(result.is_err());
 }
 
@@ -434,11 +421,10 @@ fn alignment_validation() {
         ],
         &opts,
     );
-    let mut tokens = TokenInterner::default();
-    let mut paths = PathInterner::default();
+    let tokens = TokenInterner::default();
+    let paths = PathInterner::default();
     let mut resolver = StubResolver;
-    let result =
-        layerstack_usdz::read_usdz(&data, LayerId(1), &mut tokens, &mut paths, &mut resolver);
+    let result = layerstack_usdz::read_usdz(&data, LayerId(1), &tokens, &paths, &mut resolver);
     assert_eq!(
         result.unwrap_err(),
         layerstack_usdz::UsdzError::ConstraintViolation {

@@ -55,8 +55,8 @@
 //! // Minimal resolver that rejects all asset paths (no external files).
 //! struct NoAssets;
 //! impl AssetResolver for NoAssets {
-//!     fn resolve(&mut self, _: &str, _: Option<LayerId>, _: &mut TokenInterner,
-//!                _: &mut PathInterner) -> Result<ResolvedAsset, AssetResolveError> {
+//!     fn resolve(&mut self, _: &str, _: Option<LayerId>, _: &TokenInterner,
+//!                _: &PathInterner) -> Result<ResolvedAsset, AssetResolveError> {
 //!         Err(AssetResolveError::NotFound)
 //!     }
 //!     fn resolved_path(&self, _: LayerId) -> Option<&str> { None }

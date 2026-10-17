@@ -40,7 +40,7 @@ struct CatalogResolver {
         clippy::type_complexity,
         reason = "example code, clarity over abstraction"
     )]
-    builders: StdHashMap<String, Box<dyn Fn(&mut TokenInterner, &mut PathInterner) -> Layer>>,
+    builders: StdHashMap<String, Box<dyn Fn(&TokenInterner, &PathInterner) -> Layer>>,
     /// Maps asset URI to resolved info for deduplication.
     resolved: StdHashMap<String, (LayerId, Arc<str>)>,
     next_id: u64,
@@ -58,7 +58,7 @@ impl CatalogResolver {
     fn register(
         &mut self,
         uri: &str,
-        builder: impl Fn(&mut TokenInterner, &mut PathInterner) -> Layer + 'static,
+        builder: impl Fn(&TokenInterner, &PathInterner) -> Layer + 'static,
     ) {
         self.builders.insert(uri.to_string(), Box::new(builder));
     }
@@ -69,8 +69,8 @@ impl AssetResolver for CatalogResolver {
         &mut self,
         asset_path: &str,
         _anchor: Option<LayerId>,
-        tokens: &mut TokenInterner,
-        paths: &mut PathInterner,
+        tokens: &TokenInterner,
+        paths: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         // Deduplication: return cached result if already resolved.
         if let Some((layer_id, resolved_path)) = self.resolved.get(asset_path) {
@@ -155,18 +155,13 @@ fn main() {
 
     // Resolve assets through the AssetResolver trait.
     let robot_asset = resolver
-        .resolve(
-            "props/robot.layer",
-            None,
-            &mut store.tokens,
-            &mut store.paths,
-        )
+        .resolve("props/robot.layer", None, &store.tokens, &store.paths)
         .expect("robot asset should resolve");
     let robot_layer_id = robot_asset.layer_id;
     store.insert_layer(robot_asset.layer.expect("first resolve returns layer"));
 
     let env_asset = resolver
-        .resolve("sets/env.layer", None, &mut store.tokens, &mut store.paths)
+        .resolve("sets/env.layer", None, &store.tokens, &store.paths)
         .expect("env asset should resolve");
     let env_layer_id = env_asset.layer_id;
     store.insert_layer(env_asset.layer.expect("first resolve returns layer"));
@@ -174,12 +169,7 @@ fn main() {
     // Deduplication: resolving the same URI again returns the same LayerId,
     // with layer = None (no need to re-insert).
     let robot_again = resolver
-        .resolve(
-            "props/robot.layer",
-            None,
-            &mut store.tokens,
-            &mut store.paths,
-        )
+        .resolve("props/robot.layer", None, &store.tokens, &store.paths)
         .expect("should deduplicate");
     assert_eq!(
         robot_layer_id, robot_again.layer_id,

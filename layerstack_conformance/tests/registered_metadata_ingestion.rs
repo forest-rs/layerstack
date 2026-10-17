@@ -16,8 +16,8 @@ impl AssetResolver for NoAssets {
         &mut self,
         _: &str,
         _: Option<LayerId>,
-        _: &mut TokenInterner,
-        _: &mut PathInterner,
+        _: &TokenInterner,
+        _: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         Err(AssetResolveError::NotFound)
     }
@@ -107,8 +107,8 @@ fn registered_literals_use_declared_types_without_authoring_defaults() {
     let legacy = read_usda(
         VALID,
         LayerId(1),
-        &mut store.tokens,
-        &mut store.paths,
+        &store.tokens,
+        &store.paths,
         &mut NoAssets,
     );
     let path = store.path("/P");
@@ -124,8 +124,8 @@ fn registered_literals_use_declared_types_without_authoring_defaults() {
     let compact = read_usda_with_registry(
         VALID,
         LayerId(1),
-        &mut store.tokens,
-        &mut store.paths,
+        &store.tokens,
+        &store.paths,
         &mut NoAssets,
         &registry,
     );
@@ -150,8 +150,8 @@ fn registered_literals_use_declared_types_without_authoring_defaults() {
     let ast = emit::emit_with_registry(
         &parsed.layer,
         LayerId(1),
-        &mut store.tokens,
-        &mut store.paths,
+        &store.tokens,
+        &store.paths,
         &mut NoAssets,
         &registry,
     );
@@ -269,8 +269,8 @@ fn invalid_registered_literals_and_targets_reject_without_foreign_kind_fields() 
         let result = read_usda_with_registry(
             &source,
             LayerId(1),
-            &mut store.tokens,
-            &mut store.paths,
+            &store.tokens,
+            &store.paths,
             &mut NoAssets,
             &registry,
         );
@@ -303,8 +303,8 @@ fn registered_list_none_is_an_explicit_empty_op() {
     let result = read_usda_with_registry(
         "#usda 1.0\ndef \"P\" (hostInts = None) {}",
         LayerId(1),
-        &mut store.tokens,
-        &mut store.paths,
+        &store.tokens,
+        &store.paths,
         &mut NoAssets,
         &registry,
     );
@@ -330,8 +330,8 @@ fn integer_list_literals_use_checked_cpp_numeric_coercion() {
     let result = read_usda_with_registry(
         source,
         LayerId(1),
-        &mut store.tokens,
-        &mut store.paths,
+        &store.tokens,
+        &store.paths,
         &mut NoAssets,
         &registry,
     );
@@ -378,8 +378,8 @@ fn empty_arrays_cannot_validate_unsupported_registered_type_names() {
         let result = read_usda_with_registry(
             "#usda 1.0\ndef \"P\" (hostField = []) {}",
             LayerId(1),
-            &mut store.tokens,
-            &mut store.paths,
+            &store.tokens,
+            &store.paths,
             &mut NoAssets,
             &registry,
         );

@@ -31,8 +31,8 @@ impl AssetResolver for Sources {
         &mut self,
         asset: &str,
         _: Option<LayerId>,
-        _: &mut TokenInterner,
-        _: &mut PathInterner,
+        _: &TokenInterner,
+        _: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         let layer_id = match asset {
             "assets.usd" => ASSET,
@@ -52,8 +52,7 @@ impl AssetResolver for Sources {
 
 /// Imports a fixture layer with the same strict diagnostics as the runnable example.
 pub(crate) fn import(store: &mut InMemoryStore, text: &str, id: LayerId) {
-    let read =
-        layerstack_usda::read_usda(text, id, &mut store.tokens, &mut store.paths, &mut Sources);
+    let read = layerstack_usda::read_usda(text, id, &store.tokens, &store.paths, &mut Sources);
     assert!(
         read.parse_diagnostics.is_empty(),
         "{:?}",

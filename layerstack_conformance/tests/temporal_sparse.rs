@@ -316,8 +316,8 @@ impl AssetResolver for MemoryResolver<'_> {
         &mut self,
         asset_path: &str,
         _anchor: Option<LayerId>,
-        tokens: &mut TokenInterner,
-        paths: &mut PathInterner,
+        tokens: &TokenInterner,
+        paths: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         let name = asset_path.trim_start_matches("./");
         if let Some(id) = self.by_name.get(name) {
@@ -348,8 +348,8 @@ impl AssetResolver for MemoryResolver<'_> {
 fn emit_layer(
     source: &str,
     layer_id: LayerId,
-    tokens: &mut TokenInterner,
-    paths: &mut PathInterner,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
     resolver: &mut MemoryResolver<'_>,
 ) -> Layer {
     let cst = parse_cst(source);
@@ -383,8 +383,8 @@ impl Composed {
         let layer = emit_layer(
             &sources[root],
             LayerId(1),
-            &mut store.tokens,
-            &mut store.paths,
+            &store.tokens,
+            &store.paths,
             &mut resolver,
         );
         store.insert_layer(layer);
@@ -416,7 +416,7 @@ impl Composed {
     }
 
     fn resolve(&mut self, query: &Query) -> Option<Resolved> {
-        let path = PropertyPath::parse(&query.attr, &mut self.store.tokens, &mut self.store.paths)
+        let path = PropertyPath::parse(&query.attr, &self.store.tokens, &self.store.paths)
             .expect("attribute path");
         let (prim, property) = (path.prim_path(), path.property());
         let value = match (query.time, self.schema) {

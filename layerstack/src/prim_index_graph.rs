@@ -587,9 +587,9 @@ mod tests {
     use alloc::{vec, vec::Vec};
 
     fn spec_path(text: &str) -> SpecPath {
-        let mut tokens = TokenInterner::default();
+        let tokens = TokenInterner::default();
         let paths = PathInterner::default();
-        let path = paths.intern(Path::parse_absolute(text, &mut tokens).expect("path"));
+        let path = paths.intern(Path::parse_absolute(text, &tokens).expect("path"));
         SpecPath::from_prim_path(path)
     }
 
@@ -679,10 +679,10 @@ mod tests {
         // Spec: AOUSD Core §10.4. Layer stack order breaks ties within a
         // node; nothing else does, so the order of the prim's opinions
         // does not depend on how its paths were interned.
-        let mut tokens = TokenInterner::default();
+        let tokens = TokenInterner::default();
         let paths = PathInterner::default();
-        let mut path = |text: &str| {
-            let path = paths.intern(Path::parse_absolute(text, &mut tokens).expect("path"));
+        let path = |text: &str| {
+            let path = paths.intern(Path::parse_absolute(text, &tokens).expect("path"));
             SpecPath::from_prim_path(path)
         };
         let (a, b) = (path("/A"), path("/B"));

@@ -21,8 +21,8 @@ impl AssetResolver for NoAssets {
         &mut self,
         _: &str,
         _: Option<LayerId>,
-        _: &mut TokenInterner,
-        _: &mut PathInterner,
+        _: &TokenInterner,
+        _: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         Err(AssetResolveError::NotFound)
     }
@@ -105,13 +105,13 @@ fn bench_open(c: &mut Criterion) {
                 &retained_bytes,
                 |b, bytes| {
                     b.iter(|| {
-                        let mut tokens = TokenInterner::default();
-                        let mut paths = PathInterner::default();
+                        let tokens = TokenInterner::default();
+                        let paths = PathInterner::default();
                         let read = layerstack_usdc::read_usdc_lazy(
                             Arc::clone(bytes),
                             LayerId(1),
-                            &mut tokens,
-                            &mut paths,
+                            &tokens,
+                            &paths,
                             &mut NoAssets,
                         )
                         .unwrap();
@@ -147,8 +147,8 @@ fn bench_open(c: &mut Criterion) {
                         layerstack_usdc::read_usdc(
                             black_box(bytes),
                             LayerId(1),
-                            &mut TokenInterner::default(),
-                            &mut PathInterner::default(),
+                            &TokenInterner::default(),
+                            &PathInterner::default(),
                             &mut NoAssets,
                         )
                         .unwrap(),
@@ -239,16 +239,11 @@ fn bench_integer_import(c: &mut Criterion) {
                     .with_field("default", values),
             ])
             .unwrap();
-            let mut tokens = TokenInterner::default();
-            let mut paths = PathInterner::default();
-            let read = layerstack_usdc::read_usdc(
-                &bytes,
-                LayerId(1),
-                &mut tokens,
-                &mut paths,
-                &mut NoAssets,
-            )
-            .unwrap();
+            let tokens = TokenInterner::default();
+            let paths = PathInterner::default();
+            let read =
+                layerstack_usdc::read_usdc(&bytes, LayerId(1), &tokens, &paths, &mut NoAssets)
+                    .unwrap();
             assert!(read.diagnostics.is_empty(), "fixture imports completely");
             let field = tokens.intern("indices");
             let value = read
@@ -271,14 +266,14 @@ fn bench_integer_import(c: &mut Criterion) {
                 b.iter_custom(|iterations| {
                     let mut elapsed = std::time::Duration::ZERO;
                     for _ in 0..iterations {
-                        let mut tokens = TokenInterner::default();
-                        let mut paths = PathInterner::default();
+                        let tokens = TokenInterner::default();
+                        let paths = PathInterner::default();
                         let start = std::time::Instant::now();
                         let read = layerstack_usdc::read_usdc(
                             black_box(&bytes),
                             LayerId(1),
-                            &mut tokens,
-                            &mut paths,
+                            &tokens,
+                            &paths,
                             &mut NoAssets,
                         )
                         .unwrap();

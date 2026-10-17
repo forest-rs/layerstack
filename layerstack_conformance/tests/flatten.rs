@@ -280,8 +280,8 @@ impl AssetResolver for Locations {
         &mut self,
         _: &str,
         _: Option<LayerId>,
-        _: &mut TokenInterner,
-        _: &mut PathInterner,
+        _: &TokenInterner,
+        _: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         Err(AssetResolveError::NotFound)
     }
@@ -317,8 +317,8 @@ impl AssetResolver for NoAssets {
         &mut self,
         _: &str,
         _: Option<LayerId>,
-        _: &mut TokenInterner,
-        _: &mut PathInterner,
+        _: &TokenInterner,
+        _: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         Err(AssetResolveError::NotFound)
     }
@@ -337,8 +337,8 @@ fn read_usda(store: &mut InMemoryStore, id: LayerId, text: &str) -> Result<(), S
     let result = layerstack_usda::emit::emit(
         &parsed.layer,
         id,
-        &mut store.tokens,
-        &mut store.paths,
+        &store.tokens,
+        &store.paths,
         &mut NoAssets,
     );
     if !result.diagnostics.is_empty() {
@@ -350,14 +350,8 @@ fn read_usda(store: &mut InMemoryStore, id: LayerId, text: &str) -> Result<(), S
 
 /// Reads `bytes` back into `store` as layer `id`.
 fn read_usdc(store: &mut InMemoryStore, id: LayerId, bytes: &[u8]) -> Result<(), String> {
-    let result = layerstack_usdc::read_usdc(
-        bytes,
-        id,
-        &mut store.tokens,
-        &mut store.paths,
-        &mut NoAssets,
-    )
-    .map_err(|e| format!("{e:?}"))?;
+    let result = layerstack_usdc::read_usdc(bytes, id, &store.tokens, &store.paths, &mut NoAssets)
+        .map_err(|e| format!("{e:?}"))?;
     store.insert_layer(result.layer);
     Ok(())
 }

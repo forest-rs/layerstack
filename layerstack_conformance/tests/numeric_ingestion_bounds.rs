@@ -16,8 +16,8 @@ impl AssetResolver for NoAssets {
         &mut self,
         _: &str,
         _: Option<LayerId>,
-        _: &mut TokenInterner,
-        _: &mut PathInterner,
+        _: &TokenInterner,
+        _: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         Err(AssetResolveError::NotFound)
     }
@@ -59,8 +59,8 @@ fn numeric_import_preserves_integer_minimum_and_rejects_rounded_overflow() {
         let result = read_usda(
             &source,
             LayerId(1),
-            &mut store.tokens,
-            &mut store.paths,
+            &store.tokens,
+            &store.paths,
             &mut NoAssets,
         );
         let path = store.path("/P");
@@ -103,8 +103,8 @@ fn numeric_import_preserves_integer_minimum_and_rejects_rounded_overflow() {
         let ast = emit::emit(
             &parsed.layer,
             LayerId(1),
-            &mut store.tokens,
-            &mut store.paths,
+            &store.tokens,
+            &store.paths,
             &mut NoAssets,
         );
         assert_eq!(

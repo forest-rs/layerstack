@@ -116,7 +116,7 @@ fn compose(store: &mut InMemoryStore) -> Stage {
 }
 
 fn spec(store: &mut InMemoryStore, text: &str) -> SpecPath {
-    SpecPath::parse(text, &mut store.tokens, &mut store.paths).expect("spec path")
+    SpecPath::parse(text, &store.tokens, &store.paths).expect("spec path")
 }
 
 fn node(stage: &Stage, prim: PathId, kind: ArcKind) -> NodeId {

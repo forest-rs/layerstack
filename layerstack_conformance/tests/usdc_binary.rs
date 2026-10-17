@@ -44,14 +44,9 @@ fn read_usdc_file(path: &Path) -> ParsedUsdc {
     let layer_id = LayerId(1);
     let mut resolver = StubResolver;
 
-    let result = layerstack_usdc::read_usdc(
-        &data,
-        layer_id,
-        &mut store.tokens,
-        &mut store.paths,
-        &mut resolver,
-    )
-    .unwrap_or_else(|e| panic!("failed to parse {}: {e}", path.display()));
+    let result =
+        layerstack_usdc::read_usdc(&data, layer_id, &store.tokens, &store.paths, &mut resolver)
+            .unwrap_or_else(|e| panic!("failed to parse {}: {e}", path.display()));
 
     store.insert_layer(result.layer);
 
@@ -71,7 +66,7 @@ struct ParsedUsdc {
 impl ParsedUsdc {
     /// Returns the prim spec at a given path, panicking when absent.
     fn prim(&mut self, prim_path: &str) -> layerstack::PrimSpec {
-        let path = layerstack::path::Path::parse_absolute(prim_path, &mut self.store.tokens)
+        let path = layerstack::path::Path::parse_absolute(prim_path, &self.store.tokens)
             .expect("invalid path");
         let path_id = self.store.paths.lookup(&path).expect("path interned");
         self.store.layers[&self.layer_id].prims[&path_id].clone()
@@ -79,7 +74,7 @@ impl ParsedUsdc {
 
     /// Returns the authored property spec at a given prim path and name.
     fn property(&mut self, prim_path: &str, name: &str) -> Option<PropertySpec> {
-        let path = layerstack::path::Path::parse_absolute(prim_path, &mut self.store.tokens)
+        let path = layerstack::path::Path::parse_absolute(prim_path, &self.store.tokens)
             .expect("invalid path");
         let path_id = self.store.paths.lookup(&path)?;
         let name_tok = self.store.tokens.intern(name);
@@ -103,7 +98,7 @@ impl ParsedUsdc {
 
     /// Helper to check if a prim exists.
     fn has_prim(&mut self, prim_path: &str) -> bool {
-        let path = layerstack::path::Path::parse_absolute(prim_path, &mut self.store.tokens)
+        let path = layerstack::path::Path::parse_absolute(prim_path, &self.store.tokens)
             .expect("invalid path");
         let Some(path_id) = self.store.paths.lookup(&path) else {
             return false;
@@ -123,8 +118,8 @@ impl AssetResolver for StubResolver {
         &mut self,
         asset_path: &str,
         _anchor: Option<LayerId>,
-        _tokens: &mut TokenInterner,
-        _paths: &mut PathInterner,
+        _tokens: &TokenInterner,
+        _paths: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         let _ = asset_path;
         Err(AssetResolveError::NotFound)
@@ -142,22 +137,20 @@ impl AssetResolver for StubResolver {
 #[test]
 fn invalid_magic_rejected() {
     let data = vec![0_u8; 64];
-    let mut tokens = TokenInterner::default();
-    let mut paths = PathInterner::default();
+    let tokens = TokenInterner::default();
+    let paths = PathInterner::default();
     let mut resolver = StubResolver;
-    let result =
-        layerstack_usdc::read_usdc(&data, LayerId(1), &mut tokens, &mut paths, &mut resolver);
+    let result = layerstack_usdc::read_usdc(&data, LayerId(1), &tokens, &paths, &mut resolver);
     assert!(result.is_err());
 }
 
 #[test]
 fn truncated_file_rejected() {
     let data = b"PXR-USDC";
-    let mut tokens = TokenInterner::default();
-    let mut paths = PathInterner::default();
+    let tokens = TokenInterner::default();
+    let paths = PathInterner::default();
     let mut resolver = StubResolver;
-    let result =
-        layerstack_usdc::read_usdc(data, LayerId(1), &mut tokens, &mut paths, &mut resolver);
+    let result = layerstack_usdc::read_usdc(data, LayerId(1), &tokens, &paths, &mut resolver);
     assert!(result.is_err());
 }
 
@@ -581,7 +574,7 @@ fn openusd_optional_encodings_decode() {
 
     // `typeName` is `int[]`; the declared type is the element type plus
     // the array flag, as for USDA.
-    let path = layerstack::path::Path::parse_absolute(root, &mut parsed.store.tokens).unwrap();
+    let path = layerstack::path::Path::parse_absolute(root, &parsed.store.tokens).unwrap();
     let prim_id = parsed.store.paths.lookup(&path).unwrap();
     let name = parsed.store.tokens.intern("ints");
     let layer = &parsed.store.layers[&parsed.layer_id];
@@ -618,16 +611,11 @@ fn all_gen_files_parse_without_error() {
         {
             // Parse each file; panic on error.
             let data = std::fs::read(&path).unwrap_or_else(|e| panic!("read {name}: {e}"));
-            let mut tokens = TokenInterner::default();
-            let mut paths = PathInterner::default();
+            let tokens = TokenInterner::default();
+            let paths = PathInterner::default();
             let mut resolver = StubResolver;
-            let result = layerstack_usdc::read_usdc(
-                &data,
-                LayerId(1),
-                &mut tokens,
-                &mut paths,
-                &mut resolver,
-            );
+            let result =
+                layerstack_usdc::read_usdc(&data, LayerId(1), &tokens, &paths, &mut resolver);
             assert!(result.is_ok(), "failed to parse {name}: {:?}", result.err());
             count += 1;
         }
@@ -647,7 +635,7 @@ fn read_composition_asset(fixture: &str, file: &str) -> ParsedUsdc {
 
 impl ParsedUsdc {
     fn path_id(&mut self, prim_path: &str) -> layerstack::path::PathId {
-        let path = layerstack::path::Path::parse_absolute(prim_path, &mut self.store.tokens)
+        let path = layerstack::path::Path::parse_absolute(prim_path, &self.store.tokens)
             .expect("invalid path");
         self.store.paths.intern(path)
     }
@@ -708,8 +696,8 @@ fn read_within(
     layerstack_usdc::read_usdc_within(
         data,
         LayerId(1),
-        &mut TokenInterner::default(),
-        &mut PathInterner::default(),
+        &TokenInterner::default(),
+        &PathInterner::default(),
         &mut StubResolver,
         budget,
     )

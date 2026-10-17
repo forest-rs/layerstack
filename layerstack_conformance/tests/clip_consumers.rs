@@ -20,8 +20,8 @@ impl AssetResolver for NoArcs {
         &mut self,
         _: &str,
         _: Option<LayerId>,
-        _: &mut TokenInterner,
-        _: &mut PathInterner,
+        _: &TokenInterner,
+        _: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         Err(AssetResolveError::NotFound)
     }
@@ -81,8 +81,8 @@ def "Clip" {
         let emitted = layerstack_usda::emit::emit(
             &parsed.layer,
             id,
-            &mut store.tokens,
-            &mut store.paths,
+            &store.tokens,
+            &store.paths,
             &mut NoArcs,
         );
         assert!(emitted.diagnostics.is_empty(), "{:?}", emitted.diagnostics);

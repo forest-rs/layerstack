@@ -21,8 +21,8 @@ impl AssetResolver for NoAssets {
         &mut self,
         _: &str,
         _: Option<LayerId>,
-        _: &mut TokenInterner,
-        _: &mut PathInterner,
+        _: &TokenInterner,
+        _: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         Err(AssetResolveError::NotFound)
     }
@@ -41,8 +41,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         let result = layerstack_usdc::read_usdc(
             &data,
             LayerId(1),
-            &mut store.tokens,
-            &mut store.paths,
+            &store.tokens,
+            &store.paths,
             &mut NoAssets,
         )?;
         assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
@@ -55,8 +55,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         let result = layerstack_usdz::read_usdz(
             &data,
             LayerId(1),
-            &mut store.tokens,
-            &mut store.paths,
+            &store.tokens,
+            &store.paths,
             &mut NoAssets,
         )?;
         assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
@@ -70,8 +70,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         let imported = layerstack_usda::read_usda(
             source,
             LayerId(1),
-            &mut store.tokens,
-            &mut store.paths,
+            &store.tokens,
+            &store.paths,
             &mut NoAssets,
         );
         assert!(

@@ -119,14 +119,14 @@ fn coordinated_namespace_matches_native_usd_and_restores_every_layer() {
             .collect();
         let from = TargetPath::parse(
             evidence["source"].as_str().unwrap(),
-            &mut loaded.store.tokens,
-            &mut loaded.store.paths,
+            &loaded.store.tokens,
+            &loaded.store.paths,
         )
         .unwrap();
         let to = TargetPath::parse(
             evidence["destination"].as_str().unwrap(),
-            &mut loaded.store.tokens,
-            &mut loaded.store.paths,
+            &loaded.store.tokens,
+            &loaded.store.paths,
         )
         .unwrap();
         let dependent_refs: Vec<_> = dependents.iter().map(LiveStage::stage).collect();

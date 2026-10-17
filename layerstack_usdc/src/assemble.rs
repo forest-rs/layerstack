@@ -86,8 +86,8 @@ pub fn assemble(
     data: &[u8],
     sections: &CrateSections,
     layer_id: LayerId,
-    tokens: &mut TokenInterner,
-    paths: &mut PathInterner,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
     resolver: &mut dyn AssetResolver,
     budget: &mut DecodeBudget,
 ) -> Result<AssembleResult, UsdcError> {
@@ -121,8 +121,8 @@ pub fn assemble(
 struct AssembleCtx<'a> {
     data: &'a [u8],
     sections: &'a CrateSections,
-    tokens: &'a mut TokenInterner,
-    paths: &'a mut PathInterner,
+    tokens: &'a TokenInterner,
+    paths: &'a PathInterner,
     resolver: &'a mut dyn AssetResolver,
     /// Whether arcs inside variant branches are left for composition to
     /// resolve ([`AssetResolver::defers_variant_arcs`]).
@@ -1511,23 +1511,21 @@ impl<'a> AssembleCtx<'a> {
     fn convert_path_listop(&mut self, listop: &CrateListOp) -> Result<ListOp<PathId>, UsdcError> {
         let mut result = ListOp::default();
 
-        let convert_items = |items: &[CrateValue],
-                             tokens: &mut TokenInterner,
-                             paths: &mut PathInterner|
-         -> Vec<PathId> {
-            items
-                .iter()
-                .filter_map(|v| {
-                    if let CrateValue::String(s) = v {
-                        Path::parse_absolute(s, tokens)
-                            .ok()
-                            .map(|p| paths.intern(p))
-                    } else {
-                        None
-                    }
-                })
-                .collect()
-        };
+        let convert_items =
+            |items: &[CrateValue], tokens: &TokenInterner, paths: &PathInterner| -> Vec<PathId> {
+                items
+                    .iter()
+                    .filter_map(|v| {
+                        if let CrateValue::String(s) = v {
+                            Path::parse_absolute(s, tokens)
+                                .ok()
+                                .map(|p| paths.intern(p))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect()
+            };
 
         if let Some(items) = &listop.explicit_items {
             result.explicit = Some(convert_items(items, self.tokens, self.paths));
@@ -1545,7 +1543,7 @@ impl<'a> AssembleCtx<'a> {
     fn convert_token_listop(&mut self, listop: &CrateListOp) -> ListOp<TokenId> {
         let mut result = ListOp::default();
 
-        let convert_items = |items: &[CrateValue], tokens: &mut TokenInterner| -> Vec<TokenId> {
+        let convert_items = |items: &[CrateValue], tokens: &TokenInterner| -> Vec<TokenId> {
             items
                 .iter()
                 .filter_map(|v| match v {
@@ -1596,8 +1594,8 @@ impl<'a> AssembleCtx<'a> {
         let mut result = ListOp::default();
 
         let convert_items = |items: &[CrateValue],
-                             tokens: &mut TokenInterner,
-                             paths: &mut PathInterner|
+                             tokens: &TokenInterner,
+                             paths: &PathInterner|
          -> Vec<TargetPath> {
             items
                 .iter()
@@ -1843,7 +1841,7 @@ impl<'a> AssembleCtx<'a> {
         valid: &mut HashMap<&'a str, bool>,
     ) -> Option<(&'a str, &'a str)> {
         let (prim, name) = PropertyPath::split(path).ok()?;
-        let tokens = &mut *self.tokens;
+        let tokens = self.tokens;
         let ok = *valid
             .entry(prim)
             .or_insert_with(|| Path::parse_absolute(prim, tokens).is_ok());
@@ -2058,7 +2056,7 @@ fn array_edit_element_name(value_type: ValueType) -> &'static str {
     }
 }
 
-fn default_scalar_for_type(type_hint: &str, tokens: &mut TokenInterner) -> Value {
+fn default_scalar_for_type(type_hint: &str, tokens: &TokenInterner) -> Value {
     match type_hint {
         "bool" => Value::Bool(false),
         "uchar" => Value::UChar(0),
@@ -2231,8 +2229,8 @@ mod tests {
             &mut self,
             _: &str,
             _: Option<LayerId>,
-            _: &mut TokenInterner,
-            _: &mut PathInterner,
+            _: &TokenInterner,
+            _: &PathInterner,
         ) -> Result<ResolvedAsset, AssetResolveError> {
             Err(AssetResolveError::NotFound)
         }
@@ -2282,13 +2280,13 @@ mod tests {
                 ],
                 version: CrateVersion::NEWEST_READABLE,
             };
-            let mut tokens = TokenInterner::default();
+            let tokens = TokenInterner::default();
             let read = assemble(
                 &[],
                 &sections,
                 LayerId(1),
-                &mut tokens,
-                &mut PathInterner::default(),
+                &tokens,
+                &PathInterner::default(),
                 &mut NoAssets,
                 &mut DecodeBudget::with_limit(10_000),
             )
@@ -2305,7 +2303,7 @@ mod tests {
             assert!(actual.is_array);
             assert_eq!(
                 actual.default_scalar,
-                default_scalar_for_type(array_edit_element_name(kind), &mut tokens)
+                default_scalar_for_type(array_edit_element_name(kind), &tokens)
             );
         }
     }
@@ -2467,14 +2465,14 @@ mod tests {
                 ],
                 version: CrateVersion::NEWEST_READABLE,
             };
-            let mut tokens = TokenInterner::default();
-            let mut paths = PathInterner::default();
+            let tokens = TokenInterner::default();
+            let paths = PathInterner::default();
             let result = assemble(
                 &data,
                 &sections,
                 LayerId(1),
-                &mut tokens,
-                &mut paths,
+                &tokens,
+                &paths,
                 &mut NoAssets,
                 &mut DecodeBudget::with_limit(100),
             )
@@ -2578,8 +2576,8 @@ mod tests {
             &[],
             sections,
             LayerId(1),
-            &mut TokenInterner::default(),
-            &mut PathInterner::default(),
+            &TokenInterner::default(),
+            &PathInterner::default(),
             &mut NoAssets,
             budget,
         )
@@ -2636,9 +2634,9 @@ mod tests {
             "/P[x].a[b]",
             "/P.a b",
         ] {
-            let mut tokens = TokenInterner::default();
-            let mut paths = PathInterner::default();
-            let property = PropertyPath::parse(text, &mut tokens, &mut paths).unwrap();
+            let tokens = TokenInterner::default();
+            let paths = PathInterner::default();
+            let property = PropertyPath::parse(text, &tokens, &paths).unwrap();
             let (prim, name) = text.rsplit_once('.').unwrap();
             assert_eq!(prim, paths.display(property.prim_path(), &tokens));
             assert_eq!(name, tokens.resolve(property.property()));
@@ -2647,28 +2645,27 @@ mod tests {
 
     #[test]
     fn split_property_simple() {
-        let mut tokens = TokenInterner::default();
-        let mut paths = PathInterner::default();
-        let property = PropertyPath::parse("/Cube.size", &mut tokens, &mut paths).unwrap();
+        let tokens = TokenInterner::default();
+        let paths = PathInterner::default();
+        let property = PropertyPath::parse("/Cube.size", &tokens, &paths).unwrap();
         assert_eq!(paths.display(property.prim_path(), &tokens), "/Cube");
         assert_eq!(tokens.resolve(property.property()), "size");
     }
 
     #[test]
     fn split_property_nested() {
-        let mut tokens = TokenInterner::default();
-        let mut paths = PathInterner::default();
-        let property =
-            PropertyPath::parse("/World/Cube.visibility", &mut tokens, &mut paths).unwrap();
+        let tokens = TokenInterner::default();
+        let paths = PathInterner::default();
+        let property = PropertyPath::parse("/World/Cube.visibility", &tokens, &paths).unwrap();
         assert_eq!(paths.display(property.prim_path(), &tokens), "/World/Cube");
         assert_eq!(tokens.resolve(property.property()), "visibility");
     }
 
     #[test]
     fn split_property_none() {
-        let mut tokens = TokenInterner::default();
-        let mut paths = PathInterner::default();
-        assert!(PropertyPath::parse("/Cube", &mut tokens, &mut paths).is_err());
+        let tokens = TokenInterner::default();
+        let paths = PathInterner::default();
+        assert!(PropertyPath::parse("/Cube", &tokens, &paths).is_err());
     }
 
     #[test]

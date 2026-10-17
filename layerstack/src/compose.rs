@@ -550,7 +550,7 @@ mod child_order_tests {
         let [p, a, b, c] = ["/P", "/P/A", "/P/B", "/P/C"].map(|path| {
             store
                 .paths
-                .intern(Path::parse_absolute(path, &mut store.tokens).unwrap())
+                .intern(Path::parse_absolute(path, &store.tokens).unwrap())
         });
         let name = |store: &InMemoryStore, path: PathId| store.paths.resolve(path).leaf().unwrap();
         let (a_tok, b_tok, c_tok) = (name(&store, a), name(&store, b), name(&store, c));
@@ -620,7 +620,7 @@ mod child_order_tests {
                 let mut store = InMemoryStore::default();
                 let p = store
                     .paths
-                    .intern(Path::parse_absolute("/P", &mut store.tokens).unwrap());
+                    .intern(Path::parse_absolute("/P", &store.tokens).unwrap());
                 let tokens = |names: &str| -> Vec<TokenId> {
                     names
                         .split_whitespace()

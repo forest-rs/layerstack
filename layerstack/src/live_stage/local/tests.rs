@@ -51,7 +51,7 @@ fn scene() -> (InMemoryStore, LiveStage) {
 fn address(store: &mut InMemoryStore, path: &str) -> Address {
     Address::spec(
         ROOT,
-        crate::SpecPath::parse(path, &mut store.tokens, &mut store.paths).unwrap(),
+        crate::SpecPath::parse(path, &store.tokens, &store.paths).unwrap(),
     )
 }
 

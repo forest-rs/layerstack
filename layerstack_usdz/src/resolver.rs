@@ -112,8 +112,8 @@ impl<'a, P: PackageAccess> UsdzResolver<'a, P> {
     pub(crate) fn load_selected_member(
         &mut self,
         member: &str,
-        tokens: &mut TokenInterner,
-        paths: &mut PathInterner,
+        tokens: &TokenInterner,
+        paths: &PathInterner,
     ) -> Result<(), P::Error> {
         let resolved =
             self.load_member(member, tokens, paths)
@@ -166,8 +166,8 @@ impl<'a, P: PackageAccess> UsdzResolver<'a, P> {
     fn load_member(
         &mut self,
         member: &str,
-        tokens: &mut TokenInterner,
-        paths: &mut PathInterner,
+        tokens: &TokenInterner,
+        paths: &PathInterner,
     ) -> Option<Result<ResolvedAsset, AssetResolveError>> {
         // A fixed source and an imported layer already establish this identity.
         // Repeated arcs must not spend transport/CRC budget on the same payload.
@@ -264,8 +264,8 @@ impl<P: PackageAccess> AssetResolver for UsdzResolver<'_, P> {
         &mut self,
         asset_path: &str,
         anchor: Option<LayerId>,
-        tokens: &mut TokenInterner,
-        paths: &mut PathInterner,
+        tokens: &TokenInterner,
+        paths: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         // A layer the outer resolver loaded resolves its paths there.
         let Some(authoring) = self.member_paths.get(&anchor.unwrap_or(self.root)).cloned() else {
@@ -370,8 +370,8 @@ pub(crate) fn parse_layer_data(
     data: EncodedBytes,
     name: &str,
     layer_id: LayerId,
-    tokens: &mut TokenInterner,
-    paths: &mut PathInterner,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
     resolver: &mut dyn AssetResolver,
     options: crate::UsdcReadOptions,
 ) -> Result<ParsedLayer, UsdzError> {
@@ -403,8 +403,8 @@ fn parse_usdc(
     data: EncodedBytes,
     name: &str,
     layer_id: LayerId,
-    tokens: &mut TokenInterner,
-    paths: &mut PathInterner,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
     resolver: &mut dyn AssetResolver,
     options: crate::UsdcReadOptions,
 ) -> Result<ParsedLayer, UsdzError> {
@@ -466,8 +466,8 @@ fn parse_usda(
     data: &[u8],
     name: &str,
     layer_id: LayerId,
-    tokens: &mut TokenInterner,
-    paths: &mut PathInterner,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
     resolver: &mut dyn AssetResolver,
 ) -> Result<ParsedLayer, UsdzError> {
     let source = core::str::from_utf8(data).map_err(|error| UsdzError::LayerRead {
@@ -573,8 +573,8 @@ mod tests {
             &mut self,
             asset_path: &str,
             _anchor: Option<LayerId>,
-            _tokens: &mut TokenInterner,
-            _paths: &mut PathInterner,
+            _tokens: &TokenInterner,
+            _paths: &PathInterner,
         ) -> Result<ResolvedAsset, AssetResolveError> {
             self.asked.push(String::from(asset_path));
             if !self.files.contains(&asset_path) {
@@ -627,8 +627,8 @@ mod tests {
             &mut ranges,
             None,
             LayerId(1),
-            &mut TokenInterner::default(),
-            &mut PathInterner::default(),
+            &TokenInterner::default(),
+            &PathInterner::default(),
             &mut range_outside,
             &[],
             crate::UsdcReadOptions::default(),
@@ -636,8 +636,8 @@ mod tests {
         let complete = read_usdz(
             &package,
             LayerId(1),
-            &mut TokenInterner::default(),
-            &mut PathInterner::default(),
+            &TokenInterner::default(),
+            &PathInterner::default(),
             outside,
         );
         match (&complete, &ranged) {

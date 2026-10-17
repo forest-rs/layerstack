@@ -26,8 +26,8 @@ impl AssetResolver for NoAssets {
         &mut self,
         _: &str,
         _: Option<LayerId>,
-        _: &mut TokenInterner,
-        _: &mut PathInterner,
+        _: &TokenInterner,
+        _: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         Err(AssetResolveError::NotFound)
     }
@@ -68,8 +68,8 @@ fn main() {
             layerstack_usda::read_usda(
                 black_box(&source),
                 LayerId(1),
-                &mut store.tokens,
-                &mut store.paths,
+                &store.tokens,
+                &store.paths,
                 &mut NoAssets,
             )
         });
@@ -124,8 +124,8 @@ fn main() {
             emit::emit(
                 &ast.layer,
                 LayerId(1),
-                &mut store.tokens,
-                &mut store.paths,
+                &store.tokens,
+                &store.paths,
                 &mut NoAssets,
             )
         };

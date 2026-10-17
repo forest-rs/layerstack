@@ -44,8 +44,8 @@ impl AssetResolver for NoAssets {
         &mut self,
         asset_path: &str,
         _anchor: Option<LayerId>,
-        _tokens: &mut TokenInterner,
-        _paths: &mut PathInterner,
+        _tokens: &TokenInterner,
+        _paths: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         let _ = asset_path;
         Err(AssetResolveError::NotFound)
@@ -66,8 +66,8 @@ fn load_usda(path: &Path) -> InMemoryStore {
     let result = emit(
         &ast.layer,
         LayerId(1),
-        &mut store.tokens,
-        &mut store.paths,
+        &store.tokens,
+        &store.paths,
         &mut NoAssets,
     );
     let diagnostics: Vec<_> = cst
@@ -116,8 +116,8 @@ fn load_usdc(path: &Path) -> InMemoryStore {
     let result = layerstack_usdc::read_usdc(
         &data,
         LayerId(1),
-        &mut store.tokens,
-        &mut store.paths,
+        &store.tokens,
+        &store.paths,
         &mut NoAssets,
     )
     .unwrap_or_else(|e| panic!("failed to read {}: {e}", path.display()));

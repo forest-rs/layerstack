@@ -33,13 +33,8 @@ pub fn load_usdz(data: &[u8], directory: &Path) -> Result<LoadedStage, layerstac
     let mut store = InMemoryStore::default();
     let mut resolver = FileResolver::new(directory.to_path_buf());
     let layer_id = resolver.allocate_layer_id().expect("allocates");
-    let result = layerstack_usdz::read_usdz(
-        data,
-        layer_id,
-        &mut store.tokens,
-        &mut store.paths,
-        &mut resolver,
-    )?;
+    let result =
+        layerstack_usdz::read_usdz(data, layer_id, &store.tokens, &store.paths, &mut resolver)?;
 
     let mut layer_names = resolver.layer_names;
     for (id, path) in result.member_paths {

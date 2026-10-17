@@ -98,14 +98,14 @@ fn namespace_moves_match_native_usd() {
         );
         let source = TargetPath::parse(
             case["source"].as_str().unwrap(),
-            &mut loaded.store.tokens,
-            &mut loaded.store.paths,
+            &loaded.store.tokens,
+            &loaded.store.paths,
         )
         .unwrap();
         let destination = TargetPath::parse(
             case["destination"].as_str().unwrap(),
-            &mut loaded.store.tokens,
-            &mut loaded.store.paths,
+            &loaded.store.tokens,
+            &loaded.store.paths,
         )
         .unwrap();
         let edit = NamespaceEdit::prepare(

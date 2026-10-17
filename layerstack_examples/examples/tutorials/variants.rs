@@ -21,8 +21,8 @@ fn main() {
     for (name, rgb) in [("red", [1.0, 0.0, 0.0]), ("green", [0.0, 1.0, 0.0])] {
         let branch = SpecPath::parse(
             &format!("/hello{{shadingVariant={name}}}"),
-            &mut store.tokens,
-            &mut store.paths,
+            &store.tokens,
+            &store.paths,
         )
         .unwrap();
         let mut edit = SchemaEdit::new(

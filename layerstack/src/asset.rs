@@ -151,8 +151,8 @@ pub fn expression_asset_paths_for_stack(
 pub fn resolve_selected_deferred_arcs(
     layer: &mut Layer,
     resolver: &mut dyn AssetResolver,
-    tokens: &mut TokenInterner,
-    paths: &mut PathInterner,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
 ) -> Vec<Layer> {
     let mut selected = HashSet::new();
     for (&host, spec) in layer.prims.iter().chain(
@@ -335,8 +335,8 @@ pub trait AssetResolver {
         &mut self,
         asset_path: &str,
         anchor: Option<LayerId>,
-        tokens: &mut TokenInterner,
-        paths: &mut PathInterner,
+        tokens: &TokenInterner,
+        paths: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError>;
 
     /// Returns the canonical resolved path for a previously resolved layer.
@@ -632,8 +632,8 @@ mod tests {
                 &mut self,
                 _: &str,
                 _: Option<LayerId>,
-                _: &mut TokenInterner,
-                _: &mut PathInterner,
+                _: &TokenInterner,
+                _: &PathInterner,
             ) -> Result<ResolvedAsset, AssetResolveError> {
                 Err(AssetResolveError::NotFound)
             }

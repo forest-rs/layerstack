@@ -1594,7 +1594,7 @@ mod tests {
     };
 
     fn p(store: &mut InMemoryStore, s: &str) -> PathId {
-        let path = Path::parse_absolute(s, &mut store.tokens).expect("valid path");
+        let path = Path::parse_absolute(s, &store.tokens).expect("valid path");
         store.paths.intern(path)
     }
 

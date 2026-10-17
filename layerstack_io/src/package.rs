@@ -189,8 +189,8 @@ impl<B: Storage> StageDocument<B> {
                     match reader.load(
                         &dependency.identifier,
                         Some(id),
-                        &mut store.tokens,
-                        &mut store.paths,
+                        &store.tokens,
+                        &store.paths,
                     ) {
                         Ok(resolved) => {
                             let target = resolved.layer_id;

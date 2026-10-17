@@ -16,8 +16,8 @@ impl AssetResolver for NoAssets {
         &mut self,
         _: &str,
         _: Option<LayerId>,
-        _: &mut TokenInterner,
-        _: &mut PathInterner,
+        _: &TokenInterner,
+        _: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         Err(AssetResolveError::NotFound)
     }
@@ -49,8 +49,8 @@ fn main() {
             let result = layerstack_usdc::read_usdc_lazy(
                 Arc::from(data.as_slice()),
                 LayerId(1),
-                &mut store.tokens,
-                &mut store.paths,
+                &store.tokens,
+                &store.paths,
                 &mut NoAssets,
             )
             .expect("retained USDC");
@@ -69,8 +69,8 @@ fn main() {
             let result = layerstack_usdc::read_usdc(
                 &data,
                 LayerId(1),
-                &mut store.tokens,
-                &mut store.paths,
+                &store.tokens,
+                &store.paths,
                 &mut NoAssets,
             )
             .expect("import USDC");
@@ -81,8 +81,8 @@ fn main() {
             let result = layerstack_usdz::read_usdz(
                 &data,
                 LayerId(1),
-                &mut store.tokens,
-                &mut store.paths,
+                &store.tokens,
+                &store.paths,
                 &mut NoAssets,
             )
             .expect("import USDZ");

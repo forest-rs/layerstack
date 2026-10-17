@@ -58,8 +58,8 @@ pub struct ReadResult {
 pub fn read_usda(
     source: &str,
     layer_id: LayerId,
-    tokens: &mut TokenInterner,
-    paths: &mut PathInterner,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
     resolver: &mut dyn AssetResolver,
 ) -> ReadResult {
     read_with_registry(source, layer_id, tokens, paths, resolver, None)
@@ -79,8 +79,8 @@ pub fn read_usda(
 pub fn read_usda_with_registry(
     source: &str,
     layer_id: LayerId,
-    tokens: &mut TokenInterner,
-    paths: &mut PathInterner,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
     resolver: &mut dyn AssetResolver,
     registry: &SchemaRegistry,
 ) -> ReadResult {
@@ -90,8 +90,8 @@ pub fn read_usda_with_registry(
 fn read_with_registry(
     source: &str,
     layer_id: LayerId,
-    tokens: &mut TokenInterner,
-    paths: &mut PathInterner,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
     resolver: &mut dyn AssetResolver,
     registry: Option<&SchemaRegistry>,
 ) -> ReadResult {
@@ -341,8 +341,8 @@ mod tests {
             &mut self,
             _: &str,
             _: Option<LayerId>,
-            _: &mut TokenInterner,
-            _: &mut PathInterner,
+            _: &TokenInterner,
+            _: &PathInterner,
         ) -> Result<ResolvedAsset, AssetResolveError> {
             Err(AssetResolveError::NotFound)
         }
@@ -352,23 +352,17 @@ mod tests {
     }
 
     fn compare(source: &str) -> ReadStats {
-        let mut old = InMemoryStore::default();
+        let old = InMemoryStore::default();
         let parsed = crate::parser::parse(source);
         let emitted = crate::emit::emit(
             &parsed.layer,
             LayerId(1),
-            &mut old.tokens,
-            &mut old.paths,
+            &old.tokens,
+            &old.paths,
             &mut NoAssets,
         );
-        let mut new = InMemoryStore::default();
-        let imported = read_usda(
-            source,
-            LayerId(1),
-            &mut new.tokens,
-            &mut new.paths,
-            &mut NoAssets,
-        );
+        let new = InMemoryStore::default();
+        let imported = read_usda(source, LayerId(1), &new.tokens, &new.paths, &mut NoAssets);
         let diagnostics: Vec<_> = imported
             .parse_diagnostics
             .into_iter()
@@ -558,12 +552,12 @@ def "A" {
             source.push_str("(1, 2, 3),");
         }
         source.push_str("] }");
-        let mut store = InMemoryStore::default();
+        let store = InMemoryStore::default();
         let imported = read_usda(
             &source,
             LayerId(1),
-            &mut store.tokens,
-            &mut store.paths,
+            &store.tokens,
+            &store.paths,
             &mut NoAssets,
         );
         assert!(imported.parse_diagnostics.is_empty());

@@ -179,9 +179,9 @@ fn variant_targets_participate_only_when_the_branch_is_selected() {
     store.insert_layer(root);
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
     let selected_spec =
-        crate::SpecPath::parse("/P{mode=selected}", &mut store.tokens, &mut store.paths).unwrap();
+        crate::SpecPath::parse("/P{mode=selected}", &store.tokens, &store.paths).unwrap();
     let hidden_spec =
-        crate::SpecPath::parse("/P{mode=hidden}", &mut store.tokens, &mut store.paths).unwrap();
+        crate::SpecPath::parse("/P{mode=hidden}", &store.tokens, &store.paths).unwrap();
     for (spec, active) in [(selected_spec, true), (hidden_spec, false)] {
         let target = EditTarget::for_local_variant(LayerId(1), &spec);
         let result = stage

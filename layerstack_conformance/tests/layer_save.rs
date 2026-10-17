@@ -38,8 +38,8 @@ fn emit_into(store: &mut InMemoryStore, id: u64, text: &str) {
     let result = layerstack_usda::emit::emit(
         &parsed.layer,
         LayerId(id),
-        &mut store.tokens,
-        &mut store.paths,
+        &store.tokens,
+        &store.paths,
         &mut AnyAsset::default(),
     );
     assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
@@ -324,8 +324,8 @@ def "Clay" (
 "#;
     let mut layer = Imported::usda(SOURCE);
     let grain = layer.tokens.intern("grain");
-    let mut path = |text: &str| {
-        let parsed = layerstack::Path::parse_absolute(text, &mut layer.tokens).expect("prim path");
+    let path = |text: &str| {
+        let parsed = layerstack::Path::parse_absolute(text, &layer.tokens).expect("prim path");
         layer.paths.intern(parsed)
     };
     let (loam, clay) = (path("/Loam"), path("/Clay"));
@@ -360,8 +360,8 @@ fn reimport_usda(layer: &mut Imported, text: &str) -> Layer {
     let result = layerstack_usda::emit::emit(
         &parsed.layer,
         LayerId(1),
-        &mut layer.tokens,
-        &mut layer.paths,
+        &layer.tokens,
+        &layer.paths,
         &mut AnyAsset::default(),
     );
     assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
@@ -373,8 +373,8 @@ fn reimport_usdc(layer: &mut Imported, bytes: &[u8]) -> Layer {
     let result = layerstack_usdc::read_usdc(
         bytes,
         LayerId(1),
-        &mut layer.tokens,
-        &mut layer.paths,
+        &layer.tokens,
+        &layer.paths,
         &mut AnyAsset::default(),
     )
     .expect("USDC reads");
@@ -655,8 +655,8 @@ fn text_refuses_sparse_edit_kind_changes_while_binary_preserves_retiming() {
             let read = layerstack_usdc::read_usdc(
                 &bytes,
                 LayerId(1),
-                &mut store.tokens,
-                &mut store.paths,
+                &store.tokens,
+                &store.paths,
                 &mut AnyAsset::default(),
             )
             .unwrap();

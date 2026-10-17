@@ -55,8 +55,7 @@ fn shading_matches_openusd() {
         },
     );
     for (name, expected) in oracle.connections {
-        let path =
-            PropertyPath::parse(&name, &mut loaded.store.tokens, &mut loaded.store.paths).unwrap();
+        let path = PropertyPath::parse(&name, &loaded.store.tokens, &loaded.store.paths).unwrap();
         let scene = Scene::new(&stage, &loaded.store);
         let actual = scene.connected_sources(path);
         let display = |p: PropertyPath| p.display(&loaded.store.paths, &loaded.store.tokens);
@@ -225,16 +224,12 @@ fn retarget_and_undo_preserve_source_and_dependency_evidence() {
     let material = loaded.store.path("/Through");
     let graph_input = PropertyPath::parse(
         "/Graph.inputs:in",
-        &mut loaded.store.tokens,
-        &mut loaded.store.paths,
+        &loaded.store.tokens,
+        &loaded.store.paths,
     )
     .unwrap();
-    let new_output = PropertyPath::parse(
-        "/T.outputs:out",
-        &mut loaded.store.tokens,
-        &mut loaded.store.paths,
-    )
-    .unwrap();
+    let new_output =
+        PropertyPath::parse("/T.outputs:out", &loaded.store.tokens, &loaded.store.paths).unwrap();
     let schemas = Arc::new(layerstack_schemas::openusd(&mut loaded.store.tokens));
     let mut live = LiveStage::compose(
         &mut loaded.store,

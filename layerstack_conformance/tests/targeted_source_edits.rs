@@ -194,8 +194,7 @@ fn shared_variants_propagate_through_references_classes_and_specializes() {
     };
     let mut live = LiveStage::compose(&mut store, LayerId(1), options);
     let variant =
-        layerstack::SpecPath::parse("/Asset{shape=high}", &mut store.tokens, &mut store.paths)
-            .unwrap();
+        layerstack::SpecPath::parse("/Asset{shape=high}", &store.tokens, &store.paths).unwrap();
     let target = EditTarget::for_local_variant(LayerId(2), &variant);
     let child = store.path("/Asset/VariantChild");
     let choice = store.tokens.intern("shape");

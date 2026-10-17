@@ -781,8 +781,7 @@ def Xform "Asset" (variants = { string shape = "cube" }; prepend variantSets = "
     let mut live = layerstack::LiveStage::compose(&mut store, support::ROOT, options);
     let path = store.path("/Asset/Geometry");
     let variant =
-        layerstack::SpecPath::parse("/Asset{shape=mesh}", &mut store.tokens, &mut store.paths)
-            .unwrap();
+        layerstack::SpecPath::parse("/Asset{shape=mesh}", &store.tokens, &store.paths).unwrap();
     let target = EditTarget::for_local_variant(support::ROOT, &variant);
     let data = support::mesh();
     let update = data
@@ -842,8 +841,7 @@ def Xform "Asset" (variants = { string shape = "mesh" }; prepend variantSets = "
     let mut live = layerstack::LiveStage::compose(&mut store, support::ROOT, options);
     let path = store.path("/Asset/Geometry");
     let variant =
-        layerstack::SpecPath::parse("/Asset{shape=mesh}", &mut store.tokens, &mut store.paths)
-            .unwrap();
+        layerstack::SpecPath::parse("/Asset{shape=mesh}", &store.tokens, &store.paths).unwrap();
     let target = EditTarget::for_local_variant(support::ROOT, &variant);
     let data = support::mesh();
     let update = data
@@ -862,8 +860,7 @@ def Xform "Asset" (variants = { string shape = "mesh" }; prepend variantSets = "
         "Mesh"
     );
     let variant =
-        layerstack::SpecPath::parse("/Asset{shape=cube}", &mut store.tokens, &mut store.paths)
-            .unwrap();
+        layerstack::SpecPath::parse("/Asset{shape=cube}", &store.tokens, &store.paths).unwrap();
     let cube_target = EditTarget::for_local_variant(support::ROOT, &variant);
     assert!(
         matches!(data.prepare(live.stage(), &mut store, &cube_target, path, &[]), Err(MeshPublicationError::NotMesh(p)) if p == path)
@@ -1007,8 +1004,8 @@ fn authored_layers_round_trip_in_both_formats_and_match_openusd() {
                 let read = layerstack_usdc::read_usdc(
                     &bytes,
                     id,
-                    &mut imported.tokens,
-                    &mut imported.paths,
+                    &imported.tokens,
+                    &imported.paths,
                     &mut support::Sources,
                 )
                 .unwrap();

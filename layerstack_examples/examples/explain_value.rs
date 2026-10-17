@@ -105,8 +105,8 @@ impl InlineResolver {
         &mut self,
         name: &str,
         id: LayerId,
-        tokens: &mut TokenInterner,
-        paths: &mut PathInterner,
+        tokens: &TokenInterner,
+        paths: &PathInterner,
     ) -> Option<Layer> {
         let source = *self.sources.get(name)?;
         self.ids.insert(name.to_string(), id);
@@ -127,8 +127,8 @@ impl AssetResolver for InlineResolver {
         &mut self,
         asset_path: &str,
         _anchor: Option<LayerId>,
-        tokens: &mut TokenInterner,
-        paths: &mut PathInterner,
+        tokens: &TokenInterner,
+        paths: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         if let Some(&layer_id) = self.ids.get(asset_path) {
             return Ok(ResolvedAsset {
@@ -224,7 +224,7 @@ fn main() {
     };
     let root = LayerId(1);
     let layer = resolver
-        .emit("grove.usda", root, &mut store.tokens, &mut store.paths)
+        .emit("grove.usda", root, &store.tokens, &store.paths)
         .expect("root layer");
     store.insert_layer(layer);
     for layer in resolver.pending.drain(..) {

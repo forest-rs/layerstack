@@ -1496,13 +1496,13 @@ mod tests {
     fn import_usda(source: &str) -> (Layer, TokenInterner, PathInterner) {
         let parsed = layerstack_usda::parser::parse(source);
         assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
-        let mut tokens = TokenInterner::default();
-        let mut paths = PathInterner::default();
+        let tokens = TokenInterner::default();
+        let paths = PathInterner::default();
         let result = layerstack_usda::emit::emit(
             &parsed.layer,
             layerstack::LayerId(1),
-            &mut tokens,
-            &mut paths,
+            &tokens,
+            &paths,
             &mut NoAssets,
         );
         assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
@@ -1516,8 +1516,8 @@ mod tests {
             &mut self,
             _: &str,
             _: Option<layerstack::LayerId>,
-            _: &mut TokenInterner,
-            _: &mut PathInterner,
+            _: &TokenInterner,
+            _: &PathInterner,
         ) -> Result<layerstack::ResolvedAsset, layerstack::AssetResolveError> {
             Err(layerstack::AssetResolveError::NotFound)
         }
@@ -1600,13 +1600,13 @@ def Xform "A" (
         let usda = layerstack_usda::save::save_usda(&layer, &tokens, &paths).unwrap();
         let bytes = save_layer(&layer, &tokens, &paths).unwrap();
 
-        let mut tokens = TokenInterner::default();
-        let mut paths = PathInterner::default();
+        let tokens = TokenInterner::default();
+        let paths = PathInterner::default();
         let read = crate::read_usdc(
             &bytes,
             layerstack::LayerId(1),
-            &mut tokens,
-            &mut paths,
+            &tokens,
+            &paths,
             &mut NoAssets,
         )
         .unwrap();
@@ -1631,14 +1631,14 @@ def Xform "A" (
             prims: vec![root],
             ..Document::new()
         };
-        let (layer, mut tokens, mut paths) = import_usda(&doc.to_usda().unwrap());
-        let mut usdc_tokens = TokenInterner::default();
-        let mut usdc_paths = PathInterner::default();
+        let (layer, tokens, paths) = import_usda(&doc.to_usda().unwrap());
+        let usdc_tokens = TokenInterner::default();
+        let usdc_paths = PathInterner::default();
         let read = crate::read_usdc(
             &write_document(&doc).unwrap(),
             layerstack::LayerId(1),
-            &mut usdc_tokens,
-            &mut usdc_paths,
+            &usdc_tokens,
+            &usdc_paths,
             &mut NoAssets,
         )
         .unwrap();
@@ -1646,15 +1646,10 @@ def Xform "A" (
         let expected = Some(layerstack::Value::Array(
             quats.iter().map(|&q| layerstack::Value::Quath(q)).collect(),
         ));
-        let path =
-            layerstack::PropertyPath::parse("/Root.orientations", &mut tokens, &mut paths).unwrap();
+        let path = layerstack::PropertyPath::parse("/Root.orientations", &tokens, &paths).unwrap();
         assert_eq!(layer.property(path).unwrap().default, expected, "USDA");
-        let path = layerstack::PropertyPath::parse(
-            "/Root.orientations",
-            &mut usdc_tokens,
-            &mut usdc_paths,
-        )
-        .unwrap();
+        let path = layerstack::PropertyPath::parse("/Root.orientations", &usdc_tokens, &usdc_paths)
+            .unwrap();
         assert_eq!(read.layer.property(path).unwrap().default, expected, "USDC");
     }
 

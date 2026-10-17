@@ -55,7 +55,7 @@ fn read_alike(name: &str) -> Imported {
 fn default_value(imported: &mut Imported, path: &str) -> Value {
     let prim_path = path.split('.').next().unwrap();
     let name = path.rsplit('.').next().unwrap();
-    let prim = layerstack::path::Path::parse_absolute(prim_path, &mut imported.tokens).unwrap();
+    let prim = layerstack::path::Path::parse_absolute(prim_path, &imported.tokens).unwrap();
     let prim = imported.paths.lookup(&prim).unwrap();
     let name = imported.tokens.intern(name);
     let spec = imported.layer.prims[&prim]
@@ -219,13 +219,13 @@ fn values_openusd_rejects_are_reported() {
         );
         let parsed = layerstack_usda::parser::parse(&source);
         assert!(parsed.diagnostics.is_empty(), "{statement}");
-        let mut tokens = TokenInterner::default();
-        let mut paths = PathInterner::default();
+        let tokens = TokenInterner::default();
+        let paths = PathInterner::default();
         let result = layerstack_usda::emit::emit(
             &parsed.layer,
             LayerId(1),
-            &mut tokens,
-            &mut paths,
+            &tokens,
+            &paths,
             &mut layerstack_conformance::save_corpus::AnyAsset::default(),
         );
         assert!(!result.diagnostics.is_empty(), "{statement}: not reported");
@@ -254,8 +254,8 @@ impl AssetResolver for FixtureResolver {
         &mut self,
         asset_path: &str,
         _: Option<LayerId>,
-        tokens: &mut TokenInterner,
-        paths: &mut PathInterner,
+        tokens: &TokenInterner,
+        paths: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         let path = fixture_dir().join(asset_path);
         let text = std::fs::read_to_string(&path).map_err(|_| AssetResolveError::NotFound)?;
@@ -293,8 +293,8 @@ fn unresolved_sublayers_are_reported_by_both_readers() {
             let emitted = layerstack_usda::emit::emit(
                 &parsed.layer,
                 root,
-                &mut store.tokens,
-                &mut store.paths,
+                &store.tokens,
+                &store.paths,
                 &mut FixtureResolver,
             );
             assert!(emitted.diagnostics.is_empty(), "{:?}", emitted.diagnostics);
@@ -303,8 +303,8 @@ fn unresolved_sublayers_are_reported_by_both_readers() {
             let read = layerstack_usdc::read_usdc(
                 &bytes,
                 root,
-                &mut store.tokens,
-                &mut store.paths,
+                &store.tokens,
+                &store.paths,
                 &mut FixtureResolver,
             )
             .unwrap();

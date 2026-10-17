@@ -218,10 +218,10 @@ fn population_masks_select_subtrees_ancestors_and_empty_namespace() {
 
 #[test]
 fn literal_rules_and_convenience_operations_match_native_effective_rules() {
-    let mut store = InMemoryStore::default();
-    let a = Path::parse_absolute("/A", &mut store.tokens).unwrap();
-    let b = Path::parse_absolute("/A/B", &mut store.tokens).unwrap();
-    let c = Path::parse_absolute("/A/B/C", &mut store.tokens).unwrap();
+    let store = InMemoryStore::default();
+    let a = Path::parse_absolute("/A", &store.tokens).unwrap();
+    let b = Path::parse_absolute("/A/B", &store.tokens).unwrap();
+    let c = Path::parse_absolute("/A/B/C", &store.tokens).unwrap();
     let mut rules = PayloadLoadRules::load_none();
     rules.load_with_descendants(c.clone());
     assert_eq!(rules.effective_rule(&a), PayloadRule::Only);

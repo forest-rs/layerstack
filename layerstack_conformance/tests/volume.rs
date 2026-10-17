@@ -258,7 +258,7 @@ fn variant_target_preserves_local_relationship_metadata_and_child_branch_specs()
     let field = store.path("/Field");
     for (path_text, spec_text) in [("/V", "/V{look=a}"), ("/V/Child", "/V{look=a}Child")] {
         let path = store.path(path_text);
-        let spec = SpecPath::parse(spec_text, &mut store.tokens, &mut store.paths).unwrap();
+        let spec = SpecPath::parse(spec_text, &store.tokens, &store.paths).unwrap();
         let target = EditTarget::for_local_variant(LayerId(1), &spec);
         let name = store.tokens.intern("field:density");
         let before = live

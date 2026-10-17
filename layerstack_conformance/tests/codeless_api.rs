@@ -17,8 +17,8 @@ impl AssetResolver for NoAssets {
         &mut self,
         _: &str,
         _: Option<LayerId>,
-        _: &mut TokenInterner,
-        _: &mut PathInterner,
+        _: &TokenInterner,
+        _: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         Err(AssetResolveError::NotFound)
     }
@@ -35,8 +35,8 @@ class "PipelineSlotAPI" { float pipeline:__INSTANCE_NAME__:gain = 2 }
     let library = layerstack_usda::read_usda(
         source,
         LayerId(9),
-        &mut store.tokens,
-        &mut store.paths,
+        &store.tokens,
+        &store.paths,
         &mut NoAssets,
     )
     .emitted

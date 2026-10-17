@@ -97,8 +97,8 @@ pub struct EmitResult {
 pub fn emit(
     ast: &ast::Layer<'_>,
     layer_id: LayerId,
-    tokens: &mut TokenInterner,
-    paths: &mut PathInterner,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
     resolver: &mut dyn AssetResolver,
 ) -> EmitResult {
     emit_with_arrays(
@@ -125,8 +125,8 @@ pub fn emit(
 pub fn emit_with_registry(
     ast: &ast::Layer<'_>,
     layer_id: LayerId,
-    tokens: &mut TokenInterner,
-    paths: &mut PathInterner,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
     resolver: &mut dyn AssetResolver,
     registry: &SchemaRegistry,
 ) -> EmitResult {
@@ -144,8 +144,8 @@ pub fn emit_with_registry(
 pub(crate) fn emit_with_arrays(
     ast: &ast::Layer<'_>,
     layer_id: LayerId,
-    tokens: &mut TokenInterner,
-    paths: &mut PathInterner,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
     resolver: &mut dyn AssetResolver,
     arrays: crate::read::PreparedArrays,
     registry: Option<&SchemaRegistry>,
@@ -177,8 +177,8 @@ pub(crate) fn emit_with_arrays(
 struct EmitCtx<'a> {
     registry: Option<&'a SchemaRegistry>,
     arrays: crate::read::PreparedArrays,
-    tokens: &'a mut TokenInterner,
-    paths: &'a mut PathInterner,
+    tokens: &'a TokenInterner,
+    paths: &'a PathInterner,
     resolver: &'a mut dyn AssetResolver,
     /// Whether arcs inside variant branches are left for composition to
     /// resolve ([`AssetResolver::defers_variant_arcs`]).
@@ -1325,7 +1325,7 @@ impl EmitCtx<'_> {
     ///
     /// Spec: AOUSD Core §16.2.18.5 (layer relocates metadata), §7.6.1.2.4.
     fn emit_relocate(&mut self, entry: &ast::RelocateEntry<'_>) -> Option<layerstack::Relocate> {
-        let mut prim_path = |text: &str| {
+        let prim_path = |text: &str| {
             let absolute = absolute_path(text, "/");
             let segments_are_names = absolute.split('/').skip(1).all(is_prim_name);
             match Path::parse_absolute(&absolute, self.tokens) {
@@ -2028,7 +2028,7 @@ fn convert_specifier(spec: ast::Specifier) -> Specifier {
     }
 }
 
-fn default_scalar_for_type(type_hint: &str, tokens: &mut TokenInterner) -> Value {
+fn default_scalar_for_type(type_hint: &str, tokens: &TokenInterner) -> Value {
     match type_hint {
         "bool" => Value::Bool(false),
         "uchar" => Value::UChar(0),
@@ -2131,8 +2131,8 @@ mod tests {
             &mut self,
             _asset_path: &str,
             _anchor: Option<LayerId>,
-            _tokens: &mut TokenInterner,
-            _paths: &mut PathInterner,
+            _tokens: &TokenInterner,
+            _paths: &PathInterner,
         ) -> Result<ResolvedAsset, layerstack::AssetResolveError> {
             let id = LayerId(self.next_id);
             self.next_id += 1;
@@ -2162,14 +2162,14 @@ mod tests {
             "AST errors: {:?}",
             ast_result.diagnostics
         );
-        let mut tokens = TokenInterner::default();
-        let mut paths = PathInterner::default();
+        let tokens = TokenInterner::default();
+        let paths = PathInterner::default();
         let mut resolver = StubResolver::new();
         let result = emit(
             &ast_result.layer,
             LayerId(1),
-            &mut tokens,
-            &mut paths,
+            &tokens,
+            &paths,
             &mut resolver,
         );
         (result, tokens, paths)
@@ -2177,8 +2177,8 @@ mod tests {
 
     #[test]
     fn emit_simple_prim() {
-        let (result, mut tokens, paths) = emit_source("#usda 1.0\ndef Xform \"root\" {\n}\n");
-        let root_path = Path::parse_absolute("/root", &mut tokens).unwrap();
+        let (result, tokens, paths) = emit_source("#usda 1.0\ndef Xform \"root\" {\n}\n");
+        let root_path = Path::parse_absolute("/root", &tokens).unwrap();
         let root_id = paths.lookup(&root_path).expect("root path interned");
         let spec = result.layer.prims.get(&root_id).expect("root prim");
         assert_eq!(spec.specifier, Some(Specifier::Def));
@@ -2193,14 +2193,14 @@ def \"A\" {
     }
 }
 ";
-        let (result, mut tokens, paths) = emit_source(src);
-        let a_path = Path::parse_absolute("/A", &mut tokens).unwrap();
+        let (result, tokens, paths) = emit_source(src);
+        let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = paths.lookup(&a_path).expect("/A interned");
         let a_spec = result.layer.prims.get(&a_id).expect("prim /A");
         let b_tok = tokens.intern("B");
         assert!(a_spec.authored_children.contains(&b_tok));
 
-        let b_path = Path::parse_absolute("/A/B", &mut tokens).unwrap();
+        let b_path = Path::parse_absolute("/A/B", &tokens).unwrap();
         let b_id = paths.lookup(&b_path).expect("/A/B interned");
         assert!(result.layer.prims.contains_key(&b_id));
     }
@@ -2208,8 +2208,8 @@ def \"A\" {
     #[test]
     fn emit_attribute_int() {
         let src = "#usda 1.0\ndef \"A\" {\n    int x = 42\n}\n";
-        let (result, mut tokens, paths) = emit_source(src);
-        let a_path = Path::parse_absolute("/A", &mut tokens).unwrap();
+        let (result, tokens, paths) = emit_source(src);
+        let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = paths.lookup(&a_path).expect("/A");
         let spec = result.layer.prims.get(&a_id).unwrap();
         let x_tok = tokens.intern("x");
@@ -2222,8 +2222,8 @@ def \"A\" {
     #[test]
     fn emit_attribute_double() {
         let src = "#usda 1.0\ndef \"A\" {\n    double y = 2.5\n}\n";
-        let (result, mut tokens, paths) = emit_source(src);
-        let a_path = Path::parse_absolute("/A", &mut tokens).unwrap();
+        let (result, tokens, paths) = emit_source(src);
+        let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = paths.lookup(&a_path).unwrap();
         let spec = result.layer.prims.get(&a_id).unwrap();
         let y_tok = tokens.intern("y");
@@ -2256,12 +2256,12 @@ def \"A\" {
     #[test]
     fn emit_inherits() {
         let src = "#usda 1.0\ndef \"A\" (\n    inherits = </B>\n) {\n}\n";
-        let (result, mut tokens, paths) = emit_source(src);
-        let a_path = Path::parse_absolute("/A", &mut tokens).unwrap();
+        let (result, tokens, paths) = emit_source(src);
+        let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = paths.lookup(&a_path).unwrap();
         let spec = result.layer.prims.get(&a_id).unwrap();
         assert!(spec.inherits.explicit.is_some());
-        let b_path = Path::parse_absolute("/B", &mut tokens).unwrap();
+        let b_path = Path::parse_absolute("/B", &tokens).unwrap();
         let b_id = paths.lookup(&b_path).expect("/B");
         assert_eq!(spec.inherits.explicit.as_ref().unwrap(), &[b_id]);
     }
@@ -2269,8 +2269,8 @@ def \"A\" {
     #[test]
     fn emit_references() {
         let src = "#usda 1.0\ndef \"A\" (\n    prepend references = @./ref.usd@\n) {\n}\n";
-        let (result, mut tokens, paths) = emit_source(src);
-        let a_path = Path::parse_absolute("/A", &mut tokens).unwrap();
+        let (result, tokens, paths) = emit_source(src);
+        let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = paths.lookup(&a_path).unwrap();
         let spec = result.layer.prims.get(&a_id).unwrap();
         assert_eq!(spec.references.prepend.len(), 1);
@@ -2288,8 +2288,8 @@ def \"A\" (
 ) {
 }
 ";
-        let (result, mut tokens, paths) = emit_source(src);
-        let a_path = Path::parse_absolute("/A", &mut tokens).unwrap();
+        let (result, tokens, paths) = emit_source(src);
+        let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = paths.lookup(&a_path).unwrap();
         let spec = result.layer.prims.get(&a_id).unwrap();
         let shade_tok = tokens.intern("shade");
@@ -2308,8 +2308,8 @@ def \"A\" (
 ) {
 }
 ";
-        let (result, mut tokens, paths) = emit_source(src);
-        let a_path = Path::parse_absolute("/A", &mut tokens).unwrap();
+        let (result, tokens, paths) = emit_source(src);
+        let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = paths.lookup(&a_path).unwrap();
         let spec = result.layer.prims.get(&a_id).unwrap();
         let shade_tok = tokens.intern("shade");
@@ -2332,8 +2332,8 @@ def \"A\" {
     }
 }
 ";
-        let (result, mut tokens, paths) = emit_source(src);
-        let a_path = Path::parse_absolute("/A", &mut tokens).unwrap();
+        let (result, tokens, paths) = emit_source(src);
+        let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = paths.lookup(&a_path).unwrap();
         let spec = result.layer.prims.get(&a_id).unwrap();
         let color_tok = tokens.intern("color");
@@ -2362,8 +2362,8 @@ def \"A\" {
     reorder nameChildren = [\"B\", \"C\"]
 }
 ";
-        let (result, mut tokens, paths) = emit_source(src);
-        let a_path = Path::parse_absolute("/A", &mut tokens).unwrap();
+        let (result, tokens, paths) = emit_source(src);
+        let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = paths.lookup(&a_path).unwrap();
         let spec = result.layer.prims.get(&a_id).unwrap();
         let b = tokens.intern("B");
@@ -2382,8 +2382,8 @@ def \"A\" {
     }
 }
 ";
-        let (result, mut tokens, paths) = emit_source(src);
-        let a_path = Path::parse_absolute("/A", &mut tokens).unwrap();
+        let (result, tokens, paths) = emit_source(src);
+        let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = paths.lookup(&a_path).unwrap();
         let spec = result.layer.prims.get(&a_id).unwrap();
         let x_tok = tokens.intern("x");
@@ -2410,8 +2410,8 @@ def \"A\" {
     }
 }
 ";
-        let (result, mut tokens, paths) = emit_source(src);
-        let a_path = Path::parse_absolute("/A", &mut tokens).unwrap();
+        let (result, tokens, paths) = emit_source(src);
+        let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = paths.lookup(&a_path).unwrap();
         let spec = result.layer.prims.get(&a_id).unwrap();
         let x_tok = tokens.intern("x");
@@ -2446,11 +2446,11 @@ def \"A\" {
 def \"Rig\" {
 }
 ";
-        let (result, mut tokens, paths) = emit_source(src);
+        let (result, tokens, paths) = emit_source(src);
         assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
-        let mut path = |text: &str| {
+        let path = |text: &str| {
             paths
-                .lookup(&Path::parse_absolute(text, &mut tokens).unwrap())
+                .lookup(&Path::parse_absolute(text, &tokens).unwrap())
                 .unwrap()
         };
         assert_eq!(
@@ -2571,11 +2571,11 @@ def \"A\" (
     }
 }
 ";
-        let (result, mut tokens, paths) = emit_source(src);
+        let (result, tokens, paths) = emit_source(src);
         assert!(!result.rejected, "{:?}", result.diagnostics);
         // `<../../D>` climbs `C` and the selection `{v=x}` of `/A{v=x}C`:
         // `/A/D`. The connection is anchored at `/A/C`.
-        let child = Path::parse_absolute("/A/C", &mut tokens).unwrap();
+        let child = Path::parse_absolute("/A/C", &tokens).unwrap();
         let spec = result
             .layer
             .prim_specs(paths.lookup(&child).unwrap())
@@ -2597,8 +2597,8 @@ def \"A\" (
     #[test]
     fn emit_relationship() {
         let src = "#usda 1.0\ndef \"A\" {\n    rel target = </B>\n}\n";
-        let (result, mut tokens, paths) = emit_source(src);
-        let a_path = Path::parse_absolute("/A", &mut tokens).unwrap();
+        let (result, tokens, paths) = emit_source(src);
+        let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = paths.lookup(&a_path).unwrap();
         let spec = result.layer.prims.get(&a_id).unwrap();
         let target_tok = tokens.intern("target");
@@ -2628,9 +2628,9 @@ def \"A\" (
     }
 }
 ";
-        let (result, mut tokens, paths) = emit_source(src);
+        let (result, tokens, paths) = emit_source(src);
         // The `over "Rig"` inside the variant should produce a PrimSpec at /A/Rig.
-        let rig_path = Path::parse_absolute("/A/Rig", &mut tokens).unwrap();
+        let rig_path = Path::parse_absolute("/A/Rig", &tokens).unwrap();
         let rig_id = paths.lookup(&rig_path).expect("/A/Rig interned");
         let spec = result.layer.prims.get(&rig_id).expect("prim /A/Rig");
         let connect_key = tokens.intern("focalLength");
@@ -2644,8 +2644,8 @@ def \"A\" (
     #[test]
     fn emit_blocked_value() {
         let src = "#usda 1.0\ndef \"A\" {\n    int x = None\n}\n";
-        let (result, mut tokens, paths) = emit_source(src);
-        let a_path = Path::parse_absolute("/A", &mut tokens).unwrap();
+        let (result, tokens, paths) = emit_source(src);
+        let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = paths.lookup(&a_path).unwrap();
         let spec = result.layer.prims.get(&a_id).unwrap();
         let x_tok = tokens.intern("x");
@@ -2689,7 +2689,7 @@ def Scope "D" (
 }
 "##;
         let (result, mut tokens, paths) = emit_source(src);
-        let d_path = Path::parse_absolute("/D", &mut tokens).unwrap();
+        let d_path = Path::parse_absolute("/D", &tokens).unwrap();
         let d_id = paths.lookup(&d_path).unwrap();
         let d_spec = result.layer.prims.get(&d_id).unwrap();
 
@@ -2731,7 +2731,7 @@ def Scope "D" (
             set,
             variant,
         };
-        let branch_sites = |name: &str, tokens: &mut TokenInterner| {
+        let branch_sites = |name: &str, tokens: &TokenInterner| {
             let path = Path::parse_absolute(&format!("/D/{name}"), tokens).unwrap();
             let specs: Vec<_> = result
                 .layer
@@ -2817,7 +2817,7 @@ def Scope "D" (
 }
 "##;
         let (result, mut tokens, paths) = emit_source(src);
-        let d_path = Path::parse_absolute("/D", &mut tokens).unwrap();
+        let d_path = Path::parse_absolute("/D", &tokens).unwrap();
         let d_id = paths.lookup(&d_path).unwrap();
         let d_spec = result.layer.prims.get(&d_id).unwrap();
 
@@ -2878,7 +2878,7 @@ def Scope "D" (
             set,
             variant,
         };
-        let branch_sites = |name: &str, tokens: &mut TokenInterner| {
+        let branch_sites = |name: &str, tokens: &TokenInterner| {
             let path = Path::parse_absolute(&format!("/D/{name}"), tokens).unwrap();
             let specs: Vec<_> = result
                 .layer
@@ -2906,8 +2906,8 @@ def Scope "D" (
     #[test]
     fn emit_type_name_stored() {
         let src = "#usda 1.0\ndef Xform \"root\" {\n}\n";
-        let (result, mut tokens, paths) = emit_source(src);
-        let root_path = Path::parse_absolute("/root", &mut tokens).unwrap();
+        let (result, tokens, paths) = emit_source(src);
+        let root_path = Path::parse_absolute("/root", &tokens).unwrap();
         let root_id = paths.lookup(&root_path).expect("root path interned");
         let spec = result.layer.prims.get(&root_id).expect("root prim");
         let xform_tok = tokens.intern("Xform");
@@ -2917,8 +2917,8 @@ def Scope "D" (
     #[test]
     fn emit_type_name_none_for_untyped() {
         let src = "#usda 1.0\ndef \"root\" {\n}\n";
-        let (result, mut tokens, paths) = emit_source(src);
-        let root_path = Path::parse_absolute("/root", &mut tokens).unwrap();
+        let (result, tokens, paths) = emit_source(src);
+        let root_path = Path::parse_absolute("/root", &tokens).unwrap();
         let root_id = paths.lookup(&root_path).expect("root path interned");
         let spec = result.layer.prims.get(&root_id).expect("root prim");
         assert_eq!(spec.type_name, None);
@@ -2927,8 +2927,8 @@ def Scope "D" (
     #[test]
     fn emit_type_name_mesh() {
         let src = "#usda 1.0\ndef Mesh \"geo\" {\n}\n";
-        let (result, mut tokens, paths) = emit_source(src);
-        let root_path = Path::parse_absolute("/geo", &mut tokens).unwrap();
+        let (result, tokens, paths) = emit_source(src);
+        let root_path = Path::parse_absolute("/geo", &tokens).unwrap();
         let root_id = paths.lookup(&root_path).expect("geo path interned");
         let spec = result.layer.prims.get(&root_id).expect("geo prim");
         let mesh_tok = tokens.intern("Mesh");
@@ -2939,8 +2939,8 @@ def Scope "D" (
     fn emit_instanceable() {
         // Lowercase `true` (Rust-style).
         let src = "#usda 1.0\ndef Xform \"root\" (instanceable = true) {\n}\n";
-        let (result, mut tokens, paths) = emit_source(src);
-        let root_path = Path::parse_absolute("/root", &mut tokens).unwrap();
+        let (result, tokens, paths) = emit_source(src);
+        let root_path = Path::parse_absolute("/root", &tokens).unwrap();
         let root_id = paths.lookup(&root_path).expect("root path interned");
         let spec = result.layer.prims.get(&root_id).expect("root prim");
         assert_eq!(spec.instanceable, Some(true));
@@ -2950,8 +2950,8 @@ def Scope "D" (
     fn emit_instanceable_capitalized() {
         // Capitalized `True` (Python-style, common in USDA files).
         let src = "#usda 1.0\ndef Xform \"root\" (instanceable = True) {\n}\n";
-        let (result, mut tokens, paths) = emit_source(src);
-        let root_path = Path::parse_absolute("/root", &mut tokens).unwrap();
+        let (result, tokens, paths) = emit_source(src);
+        let root_path = Path::parse_absolute("/root", &tokens).unwrap();
         let root_id = paths.lookup(&root_path).expect("root path interned");
         let spec = result.layer.prims.get(&root_id).expect("root prim");
         assert_eq!(spec.instanceable, Some(true));
@@ -2960,8 +2960,8 @@ def Scope "D" (
     #[test]
     fn emit_active_false() {
         let src = "#usda 1.0\ndef Xform \"root\" (active = false) {\n}\n";
-        let (result, mut tokens, paths) = emit_source(src);
-        let root_path = Path::parse_absolute("/root", &mut tokens).unwrap();
+        let (result, tokens, paths) = emit_source(src);
+        let root_path = Path::parse_absolute("/root", &tokens).unwrap();
         let root_id = paths.lookup(&root_path).expect("root path interned");
         let spec = result.layer.prims.get(&root_id).expect("root prim");
         assert_eq!(spec.active, Some(false));
@@ -2970,8 +2970,8 @@ def Scope "D" (
     #[test]
     fn emit_active_true() {
         let src = "#usda 1.0\ndef Xform \"root\" (active = true) {\n}\n";
-        let (result, mut tokens, paths) = emit_source(src);
-        let root_path = Path::parse_absolute("/root", &mut tokens).unwrap();
+        let (result, tokens, paths) = emit_source(src);
+        let root_path = Path::parse_absolute("/root", &tokens).unwrap();
         let root_id = paths.lookup(&root_path).expect("root path interned");
         let spec = result.layer.prims.get(&root_id).expect("root prim");
         assert_eq!(spec.active, Some(true));
@@ -2980,8 +2980,8 @@ def Scope "D" (
     #[test]
     fn emit_active_capitalized() {
         let src = "#usda 1.0\ndef Xform \"root\" (active = False) {\n}\n";
-        let (result, mut tokens, paths) = emit_source(src);
-        let root_path = Path::parse_absolute("/root", &mut tokens).unwrap();
+        let (result, tokens, paths) = emit_source(src);
+        let root_path = Path::parse_absolute("/root", &tokens).unwrap();
         let root_id = paths.lookup(&root_path).expect("root path interned");
         let spec = result.layer.prims.get(&root_id).expect("root prim");
         assert_eq!(spec.active, Some(false));
@@ -2993,8 +2993,8 @@ def Scope "D" (
                    def Mesh \"card\" (\n\
                        prepend apiSchemas = [\"MaterialBindingAPI\"]\n\
                    ) {\n}\n";
-        let (result, mut tokens, paths) = emit_source(src);
-        let card_path = Path::parse_absolute("/card", &mut tokens).unwrap();
+        let (result, tokens, paths) = emit_source(src);
+        let card_path = Path::parse_absolute("/card", &tokens).unwrap();
         let card_id = paths.lookup(&card_path).expect("card path interned");
         let spec = result.layer.prims.get(&card_id).expect("card prim");
 
@@ -3036,8 +3036,8 @@ def \"A\" (
 ) {
 }
 ";
-        let (result, mut tokens, _paths) = emit_source(src);
-        let a_path = Path::parse_absolute("/A", &mut tokens).unwrap();
+        let (result, tokens, _paths) = emit_source(src);
+        let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = _paths.lookup(&a_path).expect("/A");
         let spec = result.layer.prims.get(&a_id).unwrap();
         let cd_tok = tokens.intern("customData");
@@ -3067,8 +3067,8 @@ def \"A\" (
 ) {
 }
 ";
-        let (result, mut tokens, _paths) = emit_source(src);
-        let a_path = Path::parse_absolute("/A", &mut tokens).unwrap();
+        let (result, tokens, _paths) = emit_source(src);
+        let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = _paths.lookup(&a_path).expect("/A");
         let spec = result.layer.prims.get(&a_id).unwrap();
         let cd_tok = tokens.intern("customData");
@@ -3100,8 +3100,8 @@ def \"A\" {
     }
 }
 ";
-        let (result, mut tokens, _paths) = emit_source(src);
-        let a_path = Path::parse_absolute("/A", &mut tokens).unwrap();
+        let (result, tokens, _paths) = emit_source(src);
+        let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = _paths.lookup(&a_path).expect("/A");
         let spec = result.layer.prims.get(&a_id).unwrap();
         let d_tok = tokens.intern("d");
@@ -3123,8 +3123,8 @@ def \"A\" {
     #[test]
     fn emit_tuple_float3() {
         let src = "#usda 1.0\ndef \"A\" {\n    float3 pos = (1.0, 2.0, 3.0)\n}\n";
-        let (result, mut tokens, _paths) = emit_source(src);
-        let a_path = Path::parse_absolute("/A", &mut tokens).unwrap();
+        let (result, tokens, _paths) = emit_source(src);
+        let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = _paths.lookup(&a_path).expect("/A");
         let spec = result.layer.prims.get(&a_id).unwrap();
         let pos_tok = tokens.intern("pos");
@@ -3144,8 +3144,8 @@ def \"A\" {
     #[test]
     fn emit_array_int() {
         let src = "#usda 1.0\ndef \"A\" {\n    int[] ids = [1, 2, 3]\n}\n";
-        let (result, mut tokens, _paths) = emit_source(src);
-        let a_path = Path::parse_absolute("/A", &mut tokens).unwrap();
+        let (result, tokens, _paths) = emit_source(src);
+        let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = _paths.lookup(&a_path).expect("/A");
         let spec = result.layer.prims.get(&a_id).unwrap();
         let ids_tok = tokens.intern("ids");
@@ -3166,8 +3166,8 @@ def \"A\" {
     fn emit_nested_array() {
         // Array of tuples: float3[] points = [(1, 2, 3), (4, 5, 6)]
         let src = "#usda 1.0\ndef \"A\" {\n    float3[] points = [(1, 2, 3), (4, 5, 6)]\n}\n";
-        let (result, mut tokens, _paths) = emit_source(src);
-        let a_path = Path::parse_absolute("/A", &mut tokens).unwrap();
+        let (result, tokens, _paths) = emit_source(src);
+        let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = _paths.lookup(&a_path).expect("/A");
         let spec = result.layer.prims.get(&a_id).unwrap();
         let pts_tok = tokens.intern("points");
@@ -3187,8 +3187,8 @@ def \"A\" {
     #[test]
     fn emit_empty_array() {
         let src = "#usda 1.0\ndef \"A\" {\n    int[] empty = []\n}\n";
-        let (result, mut tokens, _paths) = emit_source(src);
-        let a_path = Path::parse_absolute("/A", &mut tokens).unwrap();
+        let (result, tokens, _paths) = emit_source(src);
+        let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = _paths.lookup(&a_path).expect("/A");
         let spec = result.layer.prims.get(&a_id).unwrap();
         let empty_tok = tokens.intern("empty");
@@ -3208,8 +3208,8 @@ def \"A\" {
     #[test]
     fn emit_double3() {
         let src = "#usda 1.0\ndef \"A\" {\n    double3 pos = (1.5, 2.5, 3.5)\n}\n";
-        let (result, mut tokens, _paths) = emit_source(src);
-        let a_path = Path::parse_absolute("/A", &mut tokens).unwrap();
+        let (result, tokens, _paths) = emit_source(src);
+        let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = _paths.lookup(&a_path).expect("/A");
         let spec = result.layer.prims.get(&a_id).unwrap();
         let pos_tok = tokens.intern("pos");
@@ -3224,8 +3224,8 @@ def \"A\" {
     #[test]
     fn emit_int2() {
         let src = "#usda 1.0\ndef \"A\" {\n    int2 v = (10, 20)\n}\n";
-        let (result, mut tokens, _paths) = emit_source(src);
-        let a_path = Path::parse_absolute("/A", &mut tokens).unwrap();
+        let (result, tokens, _paths) = emit_source(src);
+        let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = _paths.lookup(&a_path).expect("/A");
         let spec = result.layer.prims.get(&a_id).unwrap();
         let v_tok = tokens.intern("v");
@@ -3240,8 +3240,8 @@ def \"A\" {
     #[test]
     fn emit_matrix4d() {
         let src = "#usda 1.0\ndef \"A\" {\n    matrix4d xform = ((1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1))\n}\n";
-        let (result, mut tokens, _paths) = emit_source(src);
-        let a_path = Path::parse_absolute("/A", &mut tokens).unwrap();
+        let (result, tokens, _paths) = emit_source(src);
+        let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = _paths.lookup(&a_path).expect("/A");
         let spec = result.layer.prims.get(&a_id).unwrap();
         let xf_tok = tokens.intern("xform");
@@ -3264,8 +3264,8 @@ def \"A\" {
     #[test]
     fn emit_color3f_semantic_alias() {
         let src = "#usda 1.0\ndef \"A\" {\n    color3f primvars:displayColor = (1, 0, 0)\n}\n";
-        let (result, mut tokens, _paths) = emit_source(src);
-        let a_path = Path::parse_absolute("/A", &mut tokens).unwrap();
+        let (result, tokens, _paths) = emit_source(src);
+        let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = _paths.lookup(&a_path).expect("/A");
         let spec = result.layer.prims.get(&a_id).unwrap();
         let c_tok = tokens.intern("primvars:displayColor");
@@ -3282,8 +3282,8 @@ def \"A\" {
         // USDA text order: (r, i, j, k) = (1.0, 0.0, 0.0, 0.0)
         // Storage order: [i, j, k, r] = [0.0, 0.0, 0.0, 1.0]
         let src = "#usda 1.0\ndef \"A\" {\n    quatf rot = (1.0, 0.0, 0.0, 0.0)\n}\n";
-        let (result, mut tokens, _paths) = emit_source(src);
-        let a_path = Path::parse_absolute("/A", &mut tokens).unwrap();
+        let (result, tokens, _paths) = emit_source(src);
+        let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = _paths.lookup(&a_path).expect("/A");
         let spec = result.layer.prims.get(&a_id).unwrap();
         let rot_tok = tokens.intern("rot");
@@ -3303,8 +3303,8 @@ def \"A\" {
     fn emit_array_edit_value() {
         let src =
             "#usda 1.0\ndef \"A\" {\n    int[] x = edit [write 3 to [0]; append 4; resize 3]\n}\n";
-        let (result, mut tokens, paths) = emit_source(src);
-        let a_path = Path::parse_absolute("/A", &mut tokens).unwrap();
+        let (result, tokens, paths) = emit_source(src);
+        let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = paths.lookup(&a_path).expect("/A");
         let spec = result.layer.prims.get(&a_id).unwrap();
         let x_tok = tokens.intern("x");
@@ -3342,8 +3342,8 @@ def \"A\" {
             timecode[] clock.timeSamples = {1: edit [resize 2]}\n\
             float[] scalar = edit [erase [0]]\n\
         }\n";
-        let (result, mut tokens, paths) = emit_source(src);
-        let a = prim(&result, &mut tokens, &paths, "/A");
+        let (result, tokens, paths) = emit_source(src);
+        let a = prim(&result, &tokens, &paths, "/A");
         for (name, expected, storage, prototype) in [
             ("points", "point3f", "float3", Value::Vec3f([0.0; 3])),
             ("clock", "timecode", "timecode", Value::TimeCode(0.0)),
@@ -3375,7 +3375,7 @@ def \"A\" {
     /// Returns the prim spec at `path` from an emit result.
     fn prim<'r>(
         result: &'r EmitResult,
-        tokens: &mut TokenInterner,
+        tokens: &TokenInterner,
         paths: &PathInterner,
         path: &str,
     ) -> &'r PrimSpec {
@@ -3394,8 +3394,8 @@ def \"A\" {
         usize,
     ) {
         let src = alloc::format!("#usda 1.0\ndef \"P\" {{\n{body}\n}}\n");
-        let (result, mut tokens, paths) = emit_source(&src);
-        let spec = prim(&result, &mut tokens, &paths, "/P");
+        let (result, tokens, paths) = emit_source(&src);
+        let spec = prim(&result, &tokens, &paths, "/P");
         let values = spec
             .properties
             .iter()
@@ -3529,8 +3529,8 @@ def \"Root\" {
     float b.connect = </Root.a>
 }
 ";
-        let (result, mut tokens, paths) = emit_source(src);
-        let spec = prim(&result, &mut tokens, &paths, "/Root");
+        let (result, tokens, paths) = emit_source(src);
+        let spec = prim(&result, &tokens, &paths, "/Root");
         let a = prop(&spec.properties, &tokens.intern("a"));
         assert!(a.custom);
         assert_eq!(a.default, Some(Value::Float(1.0)));
@@ -3575,9 +3575,9 @@ def \"A\" {
     )
 }
 ";
-        let (result, mut tokens, paths) = emit_source(src);
+        let (result, tokens, paths) = emit_source(src);
         assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
-        let spec = prim(&result, &mut tokens, &paths, "/A");
+        let spec = prim(&result, &tokens, &paths, "/A");
         let names: Vec<_> = spec.properties.iter().map(|e| e.name).collect();
         assert_eq!(
             names,
@@ -3665,8 +3665,8 @@ def Xform \"A\" (
     reorder properties = [\"x\", \"y\"]
 }
 ";
-        let (result, mut tokens, paths) = emit_source(src);
-        let spec = prim(&result, &mut tokens, &paths, "/A");
+        let (result, tokens, paths) = emit_source(src);
+        let spec = prim(&result, &tokens, &paths, "/A");
         let api = tokens.intern("apiSchemas");
         let geom = tokens.intern("GeomModelAPI");
         let review = tokens.intern("StudioReviewAPI:main");
@@ -3702,8 +3702,8 @@ def Xform \"A\" (
     #[test]
     fn emit_explicit_api_schemas_is_a_list_op() {
         let src = "#usda 1.0\ndef \"A\" (\n    apiSchemas = [\"GeomModelAPI\"]\n)\n{\n}\n";
-        let (result, mut tokens, paths) = emit_source(src);
-        let spec = prim(&result, &mut tokens, &paths, "/A");
+        let (result, tokens, paths) = emit_source(src);
+        let spec = prim(&result, &tokens, &paths, "/A");
         let geom = tokens.intern("GeomModelAPI");
         assert_eq!(
             spec.field(tokens.intern("apiSchemas")),
@@ -3768,13 +3768,13 @@ def \"A\" {
     fn emit_reports_attribute_relationship_name_clash() {
         // Spec: AOUSD Core §7.3.3 (properties of one prim share a name space).
         let src = "#usda 1.0\ndef \"A\" {\n    float x = 1\n    rel x = </B>\n}\n";
-        let (result, mut tokens, paths) = emit_source(src);
+        let (result, tokens, paths) = emit_source(src);
         assert_eq!(result.diagnostics.len(), 1, "{:?}", result.diagnostics);
         assert_eq!(
             result.diagnostics[0].span.text(src).trim_end(),
             "rel x = </B>"
         );
-        let spec = prim(&result, &mut tokens, &paths, "/A");
+        let spec = prim(&result, &tokens, &paths, "/A");
         let x = prop(&spec.properties, &tokens.intern("x"));
         assert!(x.is_attribute());
         assert!(x.targets.is_none());
@@ -3800,8 +3800,8 @@ def \"A\" (
     }
 }
 ";
-        let (result, mut tokens, paths) = emit_source(src);
-        let spec = prim(&result, &mut tokens, &paths, "/A");
+        let (result, tokens, paths) = emit_source(src);
+        let spec = prim(&result, &tokens, &paths, "/A");
         let branch = &spec.variant_sets[&tokens.intern("v")].variants[&tokens.intern("one")];
         let group = tokens.intern("group");
         assert_eq!(
@@ -3817,8 +3817,8 @@ def \"A\" (
     #[test]
     fn emit_path_expression_is_typed() {
         let src = "#usda 1.0\ndef \"A\" {\n    pathExpression e = \"/A/B //C\"\n    pathExpression[] l = [\"/X\"]\n}\n";
-        let (result, mut tokens, paths) = emit_source(src);
-        let spec = prim(&result, &mut tokens, &paths, "/A");
+        let (result, tokens, paths) = emit_source(src);
+        let spec = prim(&result, &tokens, &paths, "/A");
         assert_eq!(
             attr_default(&spec.properties, &tokens.intern("e")),
             Some(&Value::PathExpression(Arc::from("/A/B //C")))
@@ -3852,8 +3852,8 @@ def \"A\" (
             &mut self,
             asset_path: &str,
             _anchor: Option<LayerId>,
-            _tokens: &mut TokenInterner,
-            _paths: &mut PathInterner,
+            _tokens: &TokenInterner,
+            _paths: &PathInterner,
         ) -> Result<ResolvedAsset, layerstack::AssetResolveError> {
             self.resolved.push(asset_path.into());
             let id = LayerId(100 + self.resolved.len() as u64);
@@ -3905,16 +3905,10 @@ def "P" (
 "#;
         let cst = parse_cst(src);
         let ast = crate::lower::lower(&cst.tree, src);
-        let mut tokens = TokenInterner::default();
-        let mut paths = PathInterner::default();
+        let tokens = TokenInterner::default();
+        let paths = PathInterner::default();
         let mut resolver = DeferringResolver::default();
-        let result = emit(
-            &ast.layer,
-            LayerId(1),
-            &mut tokens,
-            &mut paths,
-            &mut resolver,
-        );
+        let result = emit(&ast.layer, LayerId(1), &tokens, &paths, &mut resolver);
         let mut resolved = resolver.resolved.clone();
         resolved.sort();
         assert_eq!(
@@ -3924,7 +3918,7 @@ def "P" (
         assert_eq!(result.resolved_layers.len(), 4);
 
         let p = paths
-            .lookup(&Path::parse_absolute("/P", &mut tokens).unwrap())
+            .lookup(&Path::parse_absolute("/P", &tokens).unwrap())
             .unwrap();
         let (a, y) = (tokens.intern("a"), tokens.intern("y"));
         let spec = result.layer.prims.get(&p).unwrap();
@@ -3933,7 +3927,7 @@ def "P" (
         assert_eq!(deferred.layer, LayerId(1));
         assert_eq!(deferred.asset.as_deref(), Some("ay.usda"));
         let c = paths
-            .lookup(&Path::parse_absolute("/P/C", &mut tokens).unwrap())
+            .lookup(&Path::parse_absolute("/P/C", &tokens).unwrap())
             .unwrap();
         let deferred_children: Vec<_> = result
             .layer

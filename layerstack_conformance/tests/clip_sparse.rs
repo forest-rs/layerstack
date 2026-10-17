@@ -55,8 +55,8 @@ impl AssetResolver for Assets {
         &mut self,
         asset: &str,
         anchor: Option<LayerId>,
-        _: &mut TokenInterner,
-        _: &mut PathInterner,
+        _: &TokenInterner,
+        _: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         let (name, id) = self
             .lookup(asset, anchor)
@@ -96,8 +96,8 @@ fn compose(layers: &Layers) -> (InMemoryStore, Stage) {
         let emitted = layerstack_usda::emit::emit(
             &parsed.layer,
             id,
-            &mut store.tokens,
-            &mut store.paths,
+            &store.tokens,
+            &store.paths,
             &mut assets,
         );
         assert!(

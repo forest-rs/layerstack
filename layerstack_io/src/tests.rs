@@ -1602,8 +1602,8 @@ fn value_edits_in_one_variant_branch_refresh_without_recomposing_sibling_branche
     let blue = doc.store.property_path("/Blue/Geom.size");
     let spec = layerstack::SpecPath::parse(
         "/Asset{look=red}Geom.size",
-        &mut doc.store.tokens,
-        &mut doc.store.paths,
+        &doc.store.tokens,
+        &doc.store.paths,
     )
     .unwrap();
     let mut edit = Transaction::new();

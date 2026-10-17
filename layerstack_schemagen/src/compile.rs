@@ -216,7 +216,7 @@
 mod classes;
 mod codegen;
 mod error;
-mod names;
+pub(crate) mod names;
 mod plug_info;
 mod registry;
 mod rust;

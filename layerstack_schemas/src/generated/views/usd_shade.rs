@@ -124,7 +124,7 @@ impl<'a> CoordSysApi<'a> {
 
     #[doc = "Prim binding expressing the appropriate coordinate systems."]
     #[doc = ""]
-    #[doc = "USD relationship `coordSys:&lt;instance&gt;:binding` (`rel`)."]
+    #[doc = "USD relationship `coordSys:<instance>:binding` (`rel`)."]
     #[doc = "C++ read: `UsdShadeCoordSysAPI::GetBindingRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdShadeCoordSysAPI::GetBindingRel")]
     #[doc(alias = "GetBindingRel")]
@@ -166,7 +166,7 @@ impl CoordSysApiEdit {
 
     #[doc = "Prim binding expressing the appropriate coordinate systems."]
     #[doc = ""]
-    #[doc = "USD relationship `coordSys:&lt;instance&gt;:binding` (`rel`)."]
+    #[doc = "USD relationship `coordSys:<instance>:binding` (`rel`)."]
     #[doc = "C++ authoring: `UsdShadeCoordSysAPI::CreateBindingRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdShadeCoordSysAPI::CreateBindingRel")]
     #[doc(alias = "CreateBindingRel")]

@@ -88,7 +88,7 @@ impl<'a> BlendShape<'a> {
 
     #[doc = "\\*\\*Required property\\*\\*."]
     #[doc = ""]
-    #[doc = "USD attribute `normalOffsets` (`vector3f\\[\\]`, uniform)."]
+    #[doc = "USD attribute `normalOffsets` (`vector3f[]`, uniform)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdSkelBlendShape::GetNormalOffsetsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -117,7 +117,7 @@ impl<'a> BlendShape<'a> {
 
     #[doc = "\\*\\*Required property\\*\\*."]
     #[doc = ""]
-    #[doc = "USD attribute `offsets` (`vector3f\\[\\]`, uniform)."]
+    #[doc = "USD attribute `offsets` (`vector3f[]`, uniform)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdSkelBlendShape::GetOffsetsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -142,7 +142,7 @@ impl<'a> BlendShape<'a> {
 
     #[doc = "\\*\\*Optional property\\*\\*."]
     #[doc = ""]
-    #[doc = "USD attribute `pointIndices` (`int\\[\\]`, uniform)."]
+    #[doc = "USD attribute `pointIndices` (`int[]`, uniform)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdSkelBlendShape::GetPointIndicesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -197,7 +197,7 @@ impl BlendShapeEdit {
 
     #[doc = "\\*\\*Required property\\*\\*."]
     #[doc = ""]
-    #[doc = "USD attribute `normalOffsets` (`vector3f\\[\\]`, uniform)."]
+    #[doc = "USD attribute `normalOffsets` (`vector3f[]`, uniform)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdSkelBlendShape::CreateNormalOffsetsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -233,7 +233,7 @@ impl BlendShapeEdit {
 
     #[doc = "\\*\\*Required property\\*\\*."]
     #[doc = ""]
-    #[doc = "USD attribute `offsets` (`vector3f\\[\\]`, uniform)."]
+    #[doc = "USD attribute `offsets` (`vector3f[]`, uniform)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdSkelBlendShape::CreateOffsetsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -269,7 +269,7 @@ impl BlendShapeEdit {
 
     #[doc = "\\*\\*Optional property\\*\\*."]
     #[doc = ""]
-    #[doc = "USD attribute `pointIndices` (`int\\[\\]`, uniform)."]
+    #[doc = "USD attribute `pointIndices` (`int[]`, uniform)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdSkelBlendShape::CreatePointIndicesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -369,7 +369,7 @@ impl<'a> SkelAnimation<'a> {
 
     #[doc = "Array of tokens identifying which blend shapes this animation's data applies to."]
     #[doc = ""]
-    #[doc = "USD attribute `blendShapes` (`token\\[\\]`, uniform)."]
+    #[doc = "USD attribute `blendShapes` (`token[]`, uniform)."]
     #[doc = "C++ read: `UsdSkelAnimation::GetBlendShapesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdSkelAnimation::GetBlendShapesAttr")]
     #[doc(alias = "GetBlendShapesAttr")]
@@ -395,7 +395,7 @@ impl<'a> SkelAnimation<'a> {
 
     #[doc = "Array of weight values for each blend shape."]
     #[doc = ""]
-    #[doc = "USD attribute `blendShapeWeights` (`float\\[\\]`)."]
+    #[doc = "USD attribute `blendShapeWeights` (`float[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdSkelAnimation::GetBlendShapeWeightsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -439,7 +439,7 @@ impl<'a> SkelAnimation<'a> {
 
     #[doc = "Array of tokens identifying which joints this animation's data applies to."]
     #[doc = ""]
-    #[doc = "USD attribute `joints` (`token\\[\\]`, uniform)."]
+    #[doc = "USD attribute `joints` (`token[]`, uniform)."]
     #[doc = "C++ read: `UsdSkelAnimation::GetJointsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdSkelAnimation::GetJointsAttr")]
     #[doc(alias = "GetJointsAttr")]
@@ -465,7 +465,7 @@ impl<'a> SkelAnimation<'a> {
 
     #[doc = "Joint-local unit quaternion rotations of all affected joints, in 32-bit precision."]
     #[doc = ""]
-    #[doc = "USD attribute `rotations` (`quatf\\[\\]`)."]
+    #[doc = "USD attribute `rotations` (`quatf[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdSkelAnimation::GetRotationsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -505,7 +505,7 @@ impl<'a> SkelAnimation<'a> {
 
     #[doc = "Joint-local scales of all affected joints, in 16 bit precision."]
     #[doc = ""]
-    #[doc = "USD attribute `scales` (`half3\\[\\]`)."]
+    #[doc = "USD attribute `scales` (`half3[]`)."]
     #[doc = "C++ read: `UsdSkelAnimation::GetScalesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdSkelAnimation::GetScalesAttr")]
     #[doc(alias = "GetScalesAttr")]
@@ -537,7 +537,7 @@ impl<'a> SkelAnimation<'a> {
 
     #[doc = "Joint-local translations of all affected joints."]
     #[doc = ""]
-    #[doc = "USD attribute `translations` (`float3\\[\\]`)."]
+    #[doc = "USD attribute `translations` (`float3[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdSkelAnimation::GetTranslationsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -607,7 +607,7 @@ impl SkelAnimationEdit {
 
     #[doc = "Array of tokens identifying which blend shapes this animation's data applies to."]
     #[doc = ""]
-    #[doc = "USD attribute `blendShapes` (`token\\[\\]`, uniform)."]
+    #[doc = "USD attribute `blendShapes` (`token[]`, uniform)."]
     #[doc = "C++ authoring: `UsdSkelAnimation::CreateBlendShapesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdSkelAnimation::CreateBlendShapesAttr")]
     #[doc(alias = "CreateBlendShapesAttr")]
@@ -619,7 +619,7 @@ impl SkelAnimationEdit {
 
     #[doc = "Array of weight values for each blend shape."]
     #[doc = ""]
-    #[doc = "USD attribute `blendShapeWeights` (`float\\[\\]`)."]
+    #[doc = "USD attribute `blendShapeWeights` (`float[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdSkelAnimation::CreateBlendShapeWeightsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -691,7 +691,7 @@ impl SkelAnimationEdit {
 
     #[doc = "Array of tokens identifying which joints this animation's data applies to."]
     #[doc = ""]
-    #[doc = "USD attribute `joints` (`token\\[\\]`, uniform)."]
+    #[doc = "USD attribute `joints` (`token[]`, uniform)."]
     #[doc = "C++ authoring: `UsdSkelAnimation::CreateJointsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdSkelAnimation::CreateJointsAttr")]
     #[doc(alias = "CreateJointsAttr")]
@@ -703,7 +703,7 @@ impl SkelAnimationEdit {
 
     #[doc = "Joint-local unit quaternion rotations of all affected joints, in 32-bit precision."]
     #[doc = ""]
-    #[doc = "USD attribute `rotations` (`quatf\\[\\]`)."]
+    #[doc = "USD attribute `rotations` (`quatf[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdSkelAnimation::CreateRotationsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -775,7 +775,7 @@ impl SkelAnimationEdit {
 
     #[doc = "Joint-local scales of all affected joints, in 16 bit precision."]
     #[doc = ""]
-    #[doc = "USD attribute `scales` (`half3\\[\\]`)."]
+    #[doc = "USD attribute `scales` (`half3[]`)."]
     #[doc = "C++ authoring: `UsdSkelAnimation::CreateScalesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdSkelAnimation::CreateScalesAttr")]
     #[doc(alias = "CreateScalesAttr")]
@@ -794,7 +794,7 @@ impl SkelAnimationEdit {
 
     #[doc = "Joint-local translations of all affected joints."]
     #[doc = ""]
-    #[doc = "USD attribute `translations` (`float3\\[\\]`)."]
+    #[doc = "USD attribute `translations` (`float3[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdSkelAnimation::CreateTranslationsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -1018,7 +1018,7 @@ impl<'a> SkelBindingApi<'a> {
 
     #[doc = "Indices into the \\*joints\\* attribute of the closest (in namespace) bound Skeleton that affect each point of a PointBased gprim."]
     #[doc = ""]
-    #[doc = "USD attribute `primvars:skel:jointIndices` (`int\\[\\]`)."]
+    #[doc = "USD attribute `primvars:skel:jointIndices` (`int[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdSkelBindingAPI::GetJointIndicesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -1065,7 +1065,7 @@ impl<'a> SkelBindingApi<'a> {
 
     #[doc = "Weights for the joints that affect each point of a PointBased gprim."]
     #[doc = ""]
-    #[doc = "USD attribute `primvars:skel:jointWeights` (`float\\[\\]`)."]
+    #[doc = "USD attribute `primvars:skel:jointWeights` (`float[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ read: `UsdSkelBindingAPI::GetJointWeightsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -1143,7 +1143,7 @@ impl<'a> SkelBindingApi<'a> {
 
     #[doc = "An array of tokens defining the order onto which blend shape weights from an animation source map onto the \\*skel:blendShapeTargets\\* rel of a binding site."]
     #[doc = ""]
-    #[doc = "USD attribute `skel:blendShapes` (`token\\[\\]`, uniform)."]
+    #[doc = "USD attribute `skel:blendShapes` (`token[]`, uniform)."]
     #[doc = "C++ read: `UsdSkelBindingAPI::GetBlendShapesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdSkelBindingAPI::GetBlendShapesAttr")]
     #[doc(alias = "GetBlendShapesAttr")]
@@ -1183,7 +1183,7 @@ impl<'a> SkelBindingApi<'a> {
 
     #[doc = "An (optional) array of tokens defining the list of joints to which jointIndices apply."]
     #[doc = ""]
-    #[doc = "USD attribute `skel:joints` (`token\\[\\]`, uniform)."]
+    #[doc = "USD attribute `skel:joints` (`token[]`, uniform)."]
     #[doc = "C++ read: `UsdSkelBindingAPI::GetJointsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdSkelBindingAPI::GetJointsAttr")]
     #[doc(alias = "GetJointsAttr")]
@@ -1279,7 +1279,7 @@ impl SkelBindingApiEdit {
 
     #[doc = "Indices into the \\*joints\\* attribute of the closest (in namespace) bound Skeleton that affect each point of a PointBased gprim."]
     #[doc = ""]
-    #[doc = "USD attribute `primvars:skel:jointIndices` (`int\\[\\]`)."]
+    #[doc = "USD attribute `primvars:skel:jointIndices` (`int[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdSkelBindingAPI::CreateJointIndicesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -1351,7 +1351,7 @@ impl SkelBindingApiEdit {
 
     #[doc = "Weights for the joints that affect each point of a PointBased gprim."]
     #[doc = ""]
-    #[doc = "USD attribute `primvars:skel:jointWeights` (`float\\[\\]`)."]
+    #[doc = "USD attribute `primvars:skel:jointWeights` (`float[]`)."]
     #[doc = ""]
     #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
     #[doc = "C++ authoring: `UsdSkelBindingAPI::CreateJointWeightsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
@@ -1454,7 +1454,7 @@ impl SkelBindingApiEdit {
 
     #[doc = "An array of tokens defining the order onto which blend shape weights from an animation source map onto the \\*skel:blendShapeTargets\\* rel of a binding site."]
     #[doc = ""]
-    #[doc = "USD attribute `skel:blendShapes` (`token\\[\\]`, uniform)."]
+    #[doc = "USD attribute `skel:blendShapes` (`token[]`, uniform)."]
     #[doc = "C++ authoring: `UsdSkelBindingAPI::CreateBlendShapesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdSkelBindingAPI::CreateBlendShapesAttr")]
     #[doc(alias = "CreateBlendShapesAttr")]
@@ -1481,7 +1481,7 @@ impl SkelBindingApiEdit {
 
     #[doc = "An (optional) array of tokens defining the list of joints to which jointIndices apply."]
     #[doc = ""]
-    #[doc = "USD attribute `skel:joints` (`token\\[\\]`, uniform)."]
+    #[doc = "USD attribute `skel:joints` (`token[]`, uniform)."]
     #[doc = "C++ authoring: `UsdSkelBindingAPI::CreateJointsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdSkelBindingAPI::CreateJointsAttr")]
     #[doc(alias = "CreateJointsAttr")]
@@ -1666,7 +1666,7 @@ impl<'a> Skeleton<'a> {
 
     #[doc = "Specifies the bind-pose transforms of each joint in \\*\\*world space\\*\\*, in the ordering imposed by \\*joints\\*."]
     #[doc = ""]
-    #[doc = "USD attribute `bindTransforms` (`matrix4d\\[\\]`, uniform)."]
+    #[doc = "USD attribute `bindTransforms` (`matrix4d[]`, uniform)."]
     #[doc = "C++ read: `UsdSkelSkeleton::GetBindTransformsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdSkelSkeleton::GetBindTransformsAttr")]
     #[doc(alias = "GetBindTransformsAttr")]
@@ -1688,7 +1688,7 @@ impl<'a> Skeleton<'a> {
 
     #[doc = "If authored, provides a unique name per joint."]
     #[doc = ""]
-    #[doc = "USD attribute `jointNames` (`token\\[\\]`, uniform)."]
+    #[doc = "USD attribute `jointNames` (`token[]`, uniform)."]
     #[doc = "C++ read: `UsdSkelSkeleton::GetJointNamesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdSkelSkeleton::GetJointNamesAttr")]
     #[doc(alias = "GetJointNamesAttr")]
@@ -1714,7 +1714,7 @@ impl<'a> Skeleton<'a> {
 
     #[doc = "An array of path tokens identifying the set of joints that make up the skeleton, and their order."]
     #[doc = ""]
-    #[doc = "USD attribute `joints` (`token\\[\\]`, uniform)."]
+    #[doc = "USD attribute `joints` (`token[]`, uniform)."]
     #[doc = "C++ read: `UsdSkelSkeleton::GetJointsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdSkelSkeleton::GetJointsAttr")]
     #[doc(alias = "GetJointsAttr")]
@@ -1740,7 +1740,7 @@ impl<'a> Skeleton<'a> {
 
     #[doc = "Specifies the rest-pose transforms of each joint in \\*\\*local space\\*\\*, in the ordering imposed by \\*joints\\*."]
     #[doc = ""]
-    #[doc = "USD attribute `restTransforms` (`matrix4d\\[\\]`, uniform)."]
+    #[doc = "USD attribute `restTransforms` (`matrix4d[]`, uniform)."]
     #[doc = "C++ read: `UsdSkelSkeleton::GetRestTransformsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdSkelSkeleton::GetRestTransformsAttr")]
     #[doc(alias = "GetRestTransformsAttr")]
@@ -1792,7 +1792,7 @@ impl SkeletonEdit {
 
     #[doc = "Specifies the bind-pose transforms of each joint in \\*\\*world space\\*\\*, in the ordering imposed by \\*joints\\*."]
     #[doc = ""]
-    #[doc = "USD attribute `bindTransforms` (`matrix4d\\[\\]`, uniform)."]
+    #[doc = "USD attribute `bindTransforms` (`matrix4d[]`, uniform)."]
     #[doc = "C++ authoring: `UsdSkelSkeleton::CreateBindTransformsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdSkelSkeleton::CreateBindTransformsAttr")]
     #[doc(alias = "CreateBindTransformsAttr")]
@@ -1804,7 +1804,7 @@ impl SkeletonEdit {
 
     #[doc = "If authored, provides a unique name per joint."]
     #[doc = ""]
-    #[doc = "USD attribute `jointNames` (`token\\[\\]`, uniform)."]
+    #[doc = "USD attribute `jointNames` (`token[]`, uniform)."]
     #[doc = "C++ authoring: `UsdSkelSkeleton::CreateJointNamesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdSkelSkeleton::CreateJointNamesAttr")]
     #[doc(alias = "CreateJointNamesAttr")]
@@ -1816,7 +1816,7 @@ impl SkeletonEdit {
 
     #[doc = "An array of path tokens identifying the set of joints that make up the skeleton, and their order."]
     #[doc = ""]
-    #[doc = "USD attribute `joints` (`token\\[\\]`, uniform)."]
+    #[doc = "USD attribute `joints` (`token[]`, uniform)."]
     #[doc = "C++ authoring: `UsdSkelSkeleton::CreateJointsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdSkelSkeleton::CreateJointsAttr")]
     #[doc(alias = "CreateJointsAttr")]
@@ -1828,7 +1828,7 @@ impl SkeletonEdit {
 
     #[doc = "Specifies the rest-pose transforms of each joint in \\*\\*local space\\*\\*, in the ordering imposed by \\*joints\\*."]
     #[doc = ""]
-    #[doc = "USD attribute `restTransforms` (`matrix4d\\[\\]`, uniform)."]
+    #[doc = "USD attribute `restTransforms` (`matrix4d[]`, uniform)."]
     #[doc = "C++ authoring: `UsdSkelSkeleton::CreateRestTransformsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdSkelSkeleton::CreateRestTransformsAttr")]
     #[doc(alias = "CreateRestTransformsAttr")]

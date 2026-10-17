@@ -870,7 +870,7 @@ impl<'a> PhysicsDriveApi<'a> {
         )))
     }
 
-    #[doc = "USD attribute `drive:&lt;instance&gt;:physics:damping` (`float`; fallback `0.0`)."]
+    #[doc = "USD attribute `drive:<instance>:physics:damping` (`float`; fallback `0.0`)."]
     #[doc = "C++ read: `UsdPhysicsDriveAPI::GetDampingAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdPhysicsDriveAPI::GetDampingAttr")]
     #[doc(alias = "GetDampingAttr")]
@@ -893,7 +893,7 @@ impl<'a> PhysicsDriveApi<'a> {
         )
     }
 
-    #[doc = "USD attribute `drive:&lt;instance&gt;:physics:maxForce` (`float`; fallback `inf`)."]
+    #[doc = "USD attribute `drive:<instance>:physics:maxForce` (`float`; fallback `inf`)."]
     #[doc = "C++ read: `UsdPhysicsDriveAPI::GetMaxForceAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdPhysicsDriveAPI::GetMaxForceAttr")]
     #[doc(alias = "GetMaxForceAttr")]
@@ -916,7 +916,7 @@ impl<'a> PhysicsDriveApi<'a> {
         )
     }
 
-    #[doc = "USD attribute `drive:&lt;instance&gt;:physics:stiffness` (`float`; fallback `0.0`)."]
+    #[doc = "USD attribute `drive:<instance>:physics:stiffness` (`float`; fallback `0.0`)."]
     #[doc = "C++ read: `UsdPhysicsDriveAPI::GetStiffnessAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdPhysicsDriveAPI::GetStiffnessAttr")]
     #[doc(alias = "GetStiffnessAttr")]
@@ -939,7 +939,7 @@ impl<'a> PhysicsDriveApi<'a> {
         )
     }
 
-    #[doc = "USD attribute `drive:&lt;instance&gt;:physics:targetPosition` (`float`; fallback `0.0`)."]
+    #[doc = "USD attribute `drive:<instance>:physics:targetPosition` (`float`; fallback `0.0`)."]
     #[doc = "C++ read: `UsdPhysicsDriveAPI::GetTargetPositionAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdPhysicsDriveAPI::GetTargetPositionAttr")]
     #[doc(alias = "GetTargetPositionAttr")]
@@ -966,7 +966,7 @@ impl<'a> PhysicsDriveApi<'a> {
         )
     }
 
-    #[doc = "USD attribute `drive:&lt;instance&gt;:physics:targetVelocity` (`float`; fallback `0.0`)."]
+    #[doc = "USD attribute `drive:<instance>:physics:targetVelocity` (`float`; fallback `0.0`)."]
     #[doc = "C++ read: `UsdPhysicsDriveAPI::GetTargetVelocityAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdPhysicsDriveAPI::GetTargetVelocityAttr")]
     #[doc(alias = "GetTargetVelocityAttr")]
@@ -993,7 +993,7 @@ impl<'a> PhysicsDriveApi<'a> {
         )
     }
 
-    #[doc = "USD attribute `drive:&lt;instance&gt;:physics:type` (`token`, uniform; fallback `\"force\"`)."]
+    #[doc = "USD attribute `drive:<instance>:physics:type` (`token`, uniform; fallback `\"force\"`)."]
     #[doc = "C++ read: `UsdPhysicsDriveAPI::GetTypeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdPhysicsDriveAPI::GetTypeAttr")]
     #[doc(alias = "GetTypeAttr")]
@@ -1036,7 +1036,7 @@ impl PhysicsDriveApiEdit {
         Self { base: instance }
     }
 
-    #[doc = "USD attribute `drive:&lt;instance&gt;:physics:damping` (`float`; fallback `0.0`)."]
+    #[doc = "USD attribute `drive:<instance>:physics:damping` (`float`; fallback `0.0`)."]
     #[doc = "C++ authoring: `UsdPhysicsDriveAPI::CreateDampingAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdPhysicsDriveAPI::CreateDampingAttr")]
     #[doc(alias = "CreateDampingAttr")]
@@ -1058,7 +1058,7 @@ impl PhysicsDriveApiEdit {
         self
     }
 
-    #[doc = "USD attribute `drive:&lt;instance&gt;:physics:maxForce` (`float`; fallback `inf`)."]
+    #[doc = "USD attribute `drive:<instance>:physics:maxForce` (`float`; fallback `inf`)."]
     #[doc = "C++ authoring: `UsdPhysicsDriveAPI::CreateMaxForceAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdPhysicsDriveAPI::CreateMaxForceAttr")]
     #[doc(alias = "CreateMaxForceAttr")]
@@ -1085,7 +1085,7 @@ impl PhysicsDriveApiEdit {
         self
     }
 
-    #[doc = "USD attribute `drive:&lt;instance&gt;:physics:stiffness` (`float`; fallback `0.0`)."]
+    #[doc = "USD attribute `drive:<instance>:physics:stiffness` (`float`; fallback `0.0`)."]
     #[doc = "C++ authoring: `UsdPhysicsDriveAPI::CreateStiffnessAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdPhysicsDriveAPI::CreateStiffnessAttr")]
     #[doc(alias = "CreateStiffnessAttr")]
@@ -1112,7 +1112,7 @@ impl PhysicsDriveApiEdit {
         self
     }
 
-    #[doc = "USD attribute `drive:&lt;instance&gt;:physics:targetPosition` (`float`; fallback `0.0`)."]
+    #[doc = "USD attribute `drive:<instance>:physics:targetPosition` (`float`; fallback `0.0`)."]
     #[doc = "C++ authoring: `UsdPhysicsDriveAPI::CreateTargetPositionAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdPhysicsDriveAPI::CreateTargetPositionAttr")]
     #[doc(alias = "CreateTargetPositionAttr")]
@@ -1144,7 +1144,7 @@ impl PhysicsDriveApiEdit {
         self
     }
 
-    #[doc = "USD attribute `drive:&lt;instance&gt;:physics:targetVelocity` (`float`; fallback `0.0`)."]
+    #[doc = "USD attribute `drive:<instance>:physics:targetVelocity` (`float`; fallback `0.0`)."]
     #[doc = "C++ authoring: `UsdPhysicsDriveAPI::CreateTargetVelocityAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdPhysicsDriveAPI::CreateTargetVelocityAttr")]
     #[doc(alias = "CreateTargetVelocityAttr")]
@@ -1176,7 +1176,7 @@ impl PhysicsDriveApiEdit {
         self
     }
 
-    #[doc = "USD attribute `drive:&lt;instance&gt;:physics:type` (`token`, uniform; fallback `\"force\"`)."]
+    #[doc = "USD attribute `drive:<instance>:physics:type` (`token`, uniform; fallback `\"force\"`)."]
     #[doc = "C++ authoring: `UsdPhysicsDriveAPI::CreateTypeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdPhysicsDriveAPI::CreateTypeAttr")]
     #[doc(alias = "CreateTypeAttr")]
@@ -2074,7 +2074,7 @@ impl<'a> PhysicsLimitApi<'a> {
         )))
     }
 
-    #[doc = "USD attribute `limit:&lt;instance&gt;:physics:high` (`float`; fallback `inf`)."]
+    #[doc = "USD attribute `limit:<instance>:physics:high` (`float`; fallback `inf`)."]
     #[doc = "C++ read: `UsdPhysicsLimitAPI::GetHighAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdPhysicsLimitAPI::GetHighAttr")]
     #[doc(alias = "GetHighAttr")]
@@ -2097,7 +2097,7 @@ impl<'a> PhysicsLimitApi<'a> {
         )
     }
 
-    #[doc = "USD attribute `limit:&lt;instance&gt;:physics:low` (`float`; fallback `-inf`)."]
+    #[doc = "USD attribute `limit:<instance>:physics:low` (`float`; fallback `-inf`)."]
     #[doc = "C++ read: `UsdPhysicsLimitAPI::GetLowAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdPhysicsLimitAPI::GetLowAttr")]
     #[doc(alias = "GetLowAttr")]
@@ -2151,7 +2151,7 @@ impl PhysicsLimitApiEdit {
         Self { base: instance }
     }
 
-    #[doc = "USD attribute `limit:&lt;instance&gt;:physics:high` (`float`; fallback `inf`)."]
+    #[doc = "USD attribute `limit:<instance>:physics:high` (`float`; fallback `inf`)."]
     #[doc = "C++ authoring: `UsdPhysicsLimitAPI::CreateHighAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdPhysicsLimitAPI::CreateHighAttr")]
     #[doc(alias = "CreateHighAttr")]
@@ -2173,7 +2173,7 @@ impl PhysicsLimitApiEdit {
         self
     }
 
-    #[doc = "USD attribute `limit:&lt;instance&gt;:physics:low` (`float`; fallback `-inf`)."]
+    #[doc = "USD attribute `limit:<instance>:physics:low` (`float`; fallback `-inf`)."]
     #[doc = "C++ authoring: `UsdPhysicsLimitAPI::CreateLowAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdPhysicsLimitAPI::CreateLowAttr")]
     #[doc(alias = "CreateLowAttr")]

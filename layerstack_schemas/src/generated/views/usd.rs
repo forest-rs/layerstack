@@ -231,7 +231,7 @@ impl<'a> CollectionApi<'a> {
 
     #[doc = "Specifies a list of targets that are excluded below the included paths in this collection."]
     #[doc = ""]
-    #[doc = "USD relationship `collection:&lt;instance&gt;:excludes` (`rel`)."]
+    #[doc = "USD relationship `collection:<instance>:excludes` (`rel`)."]
     #[doc = "C++ read: `UsdCollectionAPI::GetExcludesRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdCollectionAPI::GetExcludesRel")]
     #[doc(alias = "GetExcludesRel")]
@@ -242,7 +242,7 @@ impl<'a> CollectionApi<'a> {
 
     #[doc = "Specifies how the paths that are included in the collection must be expanded to determine its members."]
     #[doc = ""]
-    #[doc = "USD attribute `collection:&lt;instance&gt;:expansionRule` (`token`, uniform; fallback `\"expandPrims\"`)."]
+    #[doc = "USD attribute `collection:<instance>:expansionRule` (`token`, uniform; fallback `\"expandPrims\"`)."]
     #[doc = "C++ read: `UsdCollectionAPI::GetExpansionRuleAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdCollectionAPI::GetExpansionRuleAttr")]
     #[doc(alias = "GetExpansionRuleAttr")]
@@ -254,9 +254,9 @@ impl<'a> CollectionApi<'a> {
         )
     }
 
-    #[doc = "Boolean attribute indicating whether the pseudo-root path `&lt;/&gt;` should be counted as one of the included target paths."]
+    #[doc = "Boolean attribute indicating whether the pseudo-root path `</>` should be counted as one of the included target paths."]
     #[doc = ""]
-    #[doc = "USD attribute `collection:&lt;instance&gt;:includeRoot` (`bool`, uniform)."]
+    #[doc = "USD attribute `collection:<instance>:includeRoot` (`bool`, uniform)."]
     #[doc = "C++ read: `UsdCollectionAPI::GetIncludeRootAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdCollectionAPI::GetIncludeRootAttr")]
     #[doc(alias = "GetIncludeRootAttr")]
@@ -270,7 +270,7 @@ impl<'a> CollectionApi<'a> {
 
     #[doc = "Specifies a list of targets that are included in the collection."]
     #[doc = ""]
-    #[doc = "USD relationship `collection:&lt;instance&gt;:includes` (`rel`)."]
+    #[doc = "USD relationship `collection:<instance>:includes` (`rel`)."]
     #[doc = "C++ read: `UsdCollectionAPI::GetIncludesRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdCollectionAPI::GetIncludesRel")]
     #[doc(alias = "GetIncludesRel")]
@@ -281,7 +281,7 @@ impl<'a> CollectionApi<'a> {
 
     #[doc = "Specifies a path expression that determines membership in this collection."]
     #[doc = ""]
-    #[doc = "USD attribute `collection:&lt;instance&gt;:membershipExpression` (`pathExpression`, uniform)."]
+    #[doc = "USD attribute `collection:<instance>:membershipExpression` (`pathExpression`, uniform)."]
     #[doc = "C++ read: `UsdCollectionAPI::GetMembershipExpressionAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdCollectionAPI::GetMembershipExpressionAttr")]
     #[doc(alias = "GetMembershipExpressionAttr")]
@@ -295,7 +295,7 @@ impl<'a> CollectionApi<'a> {
 
     #[doc = "Specifies which mode the collection uses to determine membership: `automatic`, `relationship`, or `expression`."]
     #[doc = ""]
-    #[doc = "USD attribute `collection:&lt;instance&gt;:mode` (`token`, uniform; fallback `\"automatic\"`)."]
+    #[doc = "USD attribute `collection:<instance>:mode` (`token`, uniform; fallback `\"automatic\"`)."]
     #[doc = "C++ read: `UsdCollectionAPI::GetModeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdCollectionAPI::GetModeAttr")]
     #[doc(alias = "GetModeAttr")]
@@ -337,7 +337,7 @@ impl CollectionApiEdit {
 
     #[doc = "Specifies a list of targets that are excluded below the included paths in this collection."]
     #[doc = ""]
-    #[doc = "USD relationship `collection:&lt;instance&gt;:excludes` (`rel`)."]
+    #[doc = "USD relationship `collection:<instance>:excludes` (`rel`)."]
     #[doc = "C++ authoring: `UsdCollectionAPI::CreateExcludesRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdCollectionAPI::CreateExcludesRel")]
     #[doc(alias = "CreateExcludesRel")]
@@ -352,7 +352,7 @@ impl CollectionApiEdit {
 
     #[doc = "Specifies how the paths that are included in the collection must be expanded to determine its members."]
     #[doc = ""]
-    #[doc = "USD attribute `collection:&lt;instance&gt;:expansionRule` (`token`, uniform; fallback `\"expandPrims\"`)."]
+    #[doc = "USD attribute `collection:<instance>:expansionRule` (`token`, uniform; fallback `\"expandPrims\"`)."]
     #[doc = "C++ authoring: `UsdCollectionAPI::CreateExpansionRuleAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdCollectionAPI::CreateExpansionRuleAttr")]
     #[doc(alias = "CreateExpansionRuleAttr")]
@@ -371,9 +371,9 @@ impl CollectionApiEdit {
         self
     }
 
-    #[doc = "Boolean attribute indicating whether the pseudo-root path `&lt;/&gt;` should be counted as one of the included target paths."]
+    #[doc = "Boolean attribute indicating whether the pseudo-root path `</>` should be counted as one of the included target paths."]
     #[doc = ""]
-    #[doc = "USD attribute `collection:&lt;instance&gt;:includeRoot` (`bool`, uniform)."]
+    #[doc = "USD attribute `collection:<instance>:includeRoot` (`bool`, uniform)."]
     #[doc = "C++ authoring: `UsdCollectionAPI::CreateIncludeRootAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdCollectionAPI::CreateIncludeRootAttr")]
     #[doc(alias = "CreateIncludeRootAttr")]
@@ -390,7 +390,7 @@ impl CollectionApiEdit {
 
     #[doc = "Specifies a list of targets that are included in the collection."]
     #[doc = ""]
-    #[doc = "USD relationship `collection:&lt;instance&gt;:includes` (`rel`)."]
+    #[doc = "USD relationship `collection:<instance>:includes` (`rel`)."]
     #[doc = "C++ authoring: `UsdCollectionAPI::CreateIncludesRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdCollectionAPI::CreateIncludesRel")]
     #[doc(alias = "CreateIncludesRel")]
@@ -405,7 +405,7 @@ impl CollectionApiEdit {
 
     #[doc = "Specifies a path expression that determines membership in this collection."]
     #[doc = ""]
-    #[doc = "USD attribute `collection:&lt;instance&gt;:membershipExpression` (`pathExpression`, uniform)."]
+    #[doc = "USD attribute `collection:<instance>:membershipExpression` (`pathExpression`, uniform)."]
     #[doc = "C++ authoring: `UsdCollectionAPI::CreateMembershipExpressionAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdCollectionAPI::CreateMembershipExpressionAttr")]
     #[doc(alias = "CreateMembershipExpressionAttr")]
@@ -422,7 +422,7 @@ impl CollectionApiEdit {
 
     #[doc = "Specifies which mode the collection uses to determine membership: `automatic`, `relationship`, or `expression`."]
     #[doc = ""]
-    #[doc = "USD attribute `collection:&lt;instance&gt;:mode` (`token`, uniform; fallback `\"automatic\"`)."]
+    #[doc = "USD attribute `collection:<instance>:mode` (`token`, uniform; fallback `\"automatic\"`)."]
     #[doc = "C++ authoring: `UsdCollectionAPI::CreateModeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdCollectionAPI::CreateModeAttr")]
     #[doc(alias = "CreateModeAttr")]
@@ -659,7 +659,7 @@ impl<'a> ColorSpaceDefinitionApi<'a> {
 
     #[doc = "Blue chromaticity coordinates."]
     #[doc = ""]
-    #[doc = "USD attribute `colorSpaceDefinition:&lt;instance&gt;:blueChroma` (`float2`; fallback `(0.0, 0.0)`)."]
+    #[doc = "USD attribute `colorSpaceDefinition:<instance>:blueChroma` (`float2`; fallback `(0.0, 0.0)`)."]
     #[doc = "C++ read: `UsdColorSpaceDefinitionAPI::GetBlueChromaAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdColorSpaceDefinitionAPI::GetBlueChromaAttr")]
     #[doc(alias = "GetBlueChromaAttr")]
@@ -688,7 +688,7 @@ impl<'a> ColorSpaceDefinitionApi<'a> {
 
     #[doc = "Gamma value of the log section."]
     #[doc = ""]
-    #[doc = "USD attribute `colorSpaceDefinition:&lt;instance&gt;:gamma` (`float`; fallback `1.0`)."]
+    #[doc = "USD attribute `colorSpaceDefinition:<instance>:gamma` (`float`; fallback `1.0`)."]
     #[doc = "C++ read: `UsdColorSpaceDefinitionAPI::GetGammaAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdColorSpaceDefinitionAPI::GetGammaAttr")]
     #[doc(alias = "GetGammaAttr")]
@@ -713,7 +713,7 @@ impl<'a> ColorSpaceDefinitionApi<'a> {
 
     #[doc = "Green chromaticity coordinates."]
     #[doc = ""]
-    #[doc = "USD attribute `colorSpaceDefinition:&lt;instance&gt;:greenChroma` (`float2`; fallback `(0.0, 1.0)`)."]
+    #[doc = "USD attribute `colorSpaceDefinition:<instance>:greenChroma` (`float2`; fallback `(0.0, 1.0)`)."]
     #[doc = "C++ read: `UsdColorSpaceDefinitionAPI::GetGreenChromaAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdColorSpaceDefinitionAPI::GetGreenChromaAttr")]
     #[doc(alias = "GetGreenChromaAttr")]
@@ -742,7 +742,7 @@ impl<'a> ColorSpaceDefinitionApi<'a> {
 
     #[doc = "Linear bias of the log section."]
     #[doc = ""]
-    #[doc = "USD attribute `colorSpaceDefinition:&lt;instance&gt;:linearBias` (`float`; fallback `0.0`)."]
+    #[doc = "USD attribute `colorSpaceDefinition:<instance>:linearBias` (`float`; fallback `0.0`)."]
     #[doc = "C++ read: `UsdColorSpaceDefinitionAPI::GetLinearBiasAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdColorSpaceDefinitionAPI::GetLinearBiasAttr")]
     #[doc(alias = "GetLinearBiasAttr")]
@@ -771,7 +771,7 @@ impl<'a> ColorSpaceDefinitionApi<'a> {
 
     #[doc = "The name of the color space defined on this prim."]
     #[doc = ""]
-    #[doc = "USD attribute `colorSpaceDefinition:&lt;instance&gt;:name` (`token`, uniform; fallback `\"custom\"`)."]
+    #[doc = "USD attribute `colorSpaceDefinition:<instance>:name` (`token`, uniform; fallback `\"custom\"`)."]
     #[doc = "C++ read: `UsdColorSpaceDefinitionAPI::GetNameAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdColorSpaceDefinitionAPI::GetNameAttr")]
     #[doc(alias = "GetNameAttr")]
@@ -785,7 +785,7 @@ impl<'a> ColorSpaceDefinitionApi<'a> {
 
     #[doc = "Red chromaticity coordinates."]
     #[doc = ""]
-    #[doc = "USD attribute `colorSpaceDefinition:&lt;instance&gt;:redChroma` (`float2`; fallback `(1.0, 0.0)`)."]
+    #[doc = "USD attribute `colorSpaceDefinition:<instance>:redChroma` (`float2`; fallback `(1.0, 0.0)`)."]
     #[doc = "C++ read: `UsdColorSpaceDefinitionAPI::GetRedChromaAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdColorSpaceDefinitionAPI::GetRedChromaAttr")]
     #[doc(alias = "GetRedChromaAttr")]
@@ -814,7 +814,7 @@ impl<'a> ColorSpaceDefinitionApi<'a> {
 
     #[doc = "Whitepoint chromaticity coordinates."]
     #[doc = ""]
-    #[doc = "USD attribute `colorSpaceDefinition:&lt;instance&gt;:whitePoint` (`float2`; fallback `(0.33333334, 0.33333334)`)."]
+    #[doc = "USD attribute `colorSpaceDefinition:<instance>:whitePoint` (`float2`; fallback `(0.33333334, 0.33333334)`)."]
     #[doc = "C++ read: `UsdColorSpaceDefinitionAPI::GetWhitePointAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdColorSpaceDefinitionAPI::GetWhitePointAttr")]
     #[doc(alias = "GetWhitePointAttr")]
@@ -874,7 +874,7 @@ impl ColorSpaceDefinitionApiEdit {
 
     #[doc = "Blue chromaticity coordinates."]
     #[doc = ""]
-    #[doc = "USD attribute `colorSpaceDefinition:&lt;instance&gt;:blueChroma` (`float2`; fallback `(0.0, 0.0)`)."]
+    #[doc = "USD attribute `colorSpaceDefinition:<instance>:blueChroma` (`float2`; fallback `(0.0, 0.0)`)."]
     #[doc = "C++ authoring: `UsdColorSpaceDefinitionAPI::CreateBlueChromaAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdColorSpaceDefinitionAPI::CreateBlueChromaAttr")]
     #[doc(alias = "CreateBlueChromaAttr")]
@@ -908,7 +908,7 @@ impl ColorSpaceDefinitionApiEdit {
 
     #[doc = "Gamma value of the log section."]
     #[doc = ""]
-    #[doc = "USD attribute `colorSpaceDefinition:&lt;instance&gt;:gamma` (`float`; fallback `1.0`)."]
+    #[doc = "USD attribute `colorSpaceDefinition:<instance>:gamma` (`float`; fallback `1.0`)."]
     #[doc = "C++ authoring: `UsdColorSpaceDefinitionAPI::CreateGammaAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdColorSpaceDefinitionAPI::CreateGammaAttr")]
     #[doc(alias = "CreateGammaAttr")]
@@ -937,7 +937,7 @@ impl ColorSpaceDefinitionApiEdit {
 
     #[doc = "Green chromaticity coordinates."]
     #[doc = ""]
-    #[doc = "USD attribute `colorSpaceDefinition:&lt;instance&gt;:greenChroma` (`float2`; fallback `(0.0, 1.0)`)."]
+    #[doc = "USD attribute `colorSpaceDefinition:<instance>:greenChroma` (`float2`; fallback `(0.0, 1.0)`)."]
     #[doc = "C++ authoring: `UsdColorSpaceDefinitionAPI::CreateGreenChromaAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdColorSpaceDefinitionAPI::CreateGreenChromaAttr")]
     #[doc(alias = "CreateGreenChromaAttr")]
@@ -971,7 +971,7 @@ impl ColorSpaceDefinitionApiEdit {
 
     #[doc = "Linear bias of the log section."]
     #[doc = ""]
-    #[doc = "USD attribute `colorSpaceDefinition:&lt;instance&gt;:linearBias` (`float`; fallback `0.0`)."]
+    #[doc = "USD attribute `colorSpaceDefinition:<instance>:linearBias` (`float`; fallback `0.0`)."]
     #[doc = "C++ authoring: `UsdColorSpaceDefinitionAPI::CreateLinearBiasAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdColorSpaceDefinitionAPI::CreateLinearBiasAttr")]
     #[doc(alias = "CreateLinearBiasAttr")]
@@ -1000,7 +1000,7 @@ impl ColorSpaceDefinitionApiEdit {
 
     #[doc = "The name of the color space defined on this prim."]
     #[doc = ""]
-    #[doc = "USD attribute `colorSpaceDefinition:&lt;instance&gt;:name` (`token`, uniform; fallback `\"custom\"`)."]
+    #[doc = "USD attribute `colorSpaceDefinition:<instance>:name` (`token`, uniform; fallback `\"custom\"`)."]
     #[doc = "C++ authoring: `UsdColorSpaceDefinitionAPI::CreateNameAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdColorSpaceDefinitionAPI::CreateNameAttr")]
     #[doc(alias = "CreateNameAttr")]
@@ -1017,7 +1017,7 @@ impl ColorSpaceDefinitionApiEdit {
 
     #[doc = "Red chromaticity coordinates."]
     #[doc = ""]
-    #[doc = "USD attribute `colorSpaceDefinition:&lt;instance&gt;:redChroma` (`float2`; fallback `(1.0, 0.0)`)."]
+    #[doc = "USD attribute `colorSpaceDefinition:<instance>:redChroma` (`float2`; fallback `(1.0, 0.0)`)."]
     #[doc = "C++ authoring: `UsdColorSpaceDefinitionAPI::CreateRedChromaAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdColorSpaceDefinitionAPI::CreateRedChromaAttr")]
     #[doc(alias = "CreateRedChromaAttr")]
@@ -1051,7 +1051,7 @@ impl ColorSpaceDefinitionApiEdit {
 
     #[doc = "Whitepoint chromaticity coordinates."]
     #[doc = ""]
-    #[doc = "USD attribute `colorSpaceDefinition:&lt;instance&gt;:whitePoint` (`float2`; fallback `(0.33333334, 0.33333334)`)."]
+    #[doc = "USD attribute `colorSpaceDefinition:<instance>:whitePoint` (`float2`; fallback `(0.33333334, 0.33333334)`)."]
     #[doc = "C++ authoring: `UsdColorSpaceDefinitionAPI::CreateWhitePointAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdColorSpaceDefinitionAPI::CreateWhitePointAttr")]
     #[doc(alias = "CreateWhitePointAttr")]

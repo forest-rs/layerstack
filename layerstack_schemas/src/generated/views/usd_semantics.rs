@@ -124,7 +124,7 @@ impl<'a> SemanticsLabelsApi<'a> {
 
     #[doc = "Array of labels specified directly at this prim."]
     #[doc = ""]
-    #[doc = "USD attribute `semantics:labels:&lt;instance&gt;` (`token\\[\\]`; fallback `\\[\\]`)."]
+    #[doc = "USD attribute `semantics:labels:<instance>` (`token[]`; fallback `[]`)."]
     #[doc = "C++ read: `UsdSemanticsLabelsAPI::GetLabelsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdSemanticsLabelsAPI::GetLabelsAttr")]
     #[doc(alias = "GetLabelsAttr")]
@@ -193,7 +193,7 @@ impl SemanticsLabelsApiEdit {
 
     #[doc = "Array of labels specified directly at this prim."]
     #[doc = ""]
-    #[doc = "USD attribute `semantics:labels:&lt;instance&gt;` (`token\\[\\]`; fallback `\\[\\]`)."]
+    #[doc = "USD attribute `semantics:labels:<instance>` (`token[]`; fallback `[]`)."]
     #[doc = "C++ authoring: `UsdSemanticsLabelsAPI::CreateLabelsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
     #[doc(alias = "UsdSemanticsLabelsAPI::CreateLabelsAttr")]
     #[doc(alias = "CreateLabelsAttr")]

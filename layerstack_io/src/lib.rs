@@ -143,25 +143,28 @@ impl core::error::Error for IoError {
 
 /// Host-owned identifier policy and byte transport, usable without `std`.
 /// `identify` must return stable canonical identifiers within this document.
+/// Reads take `&self`: with the `std` feature a storage is [`Sync`]
+/// ([`layerstack::MaybeSync`]), and opening a stage may identify and read
+/// several sources at once from different threads.
 /// Writes must either complete or return an error; atomic replacement is the
 /// backend's responsibility. No retries or background work are scheduled.
-pub trait Storage {
+pub trait Storage: layerstack::MaybeSync {
     /// Resolves an authored asset identifier relative to a source identifier.
     fn identify(&self, asset: &str, anchor: Option<&str>) -> Result<String, IoError>;
     /// Reads a complete source.
-    fn read(&mut self, identifier: &str) -> Result<Vec<u8>, IoError>;
+    fn read(&self, identifier: &str) -> Result<Vec<u8>, IoError>;
     /// Reads immutable encoded storage, permitting an ownership-preserving
     /// transport or cache hit. The default transfers [`Self::read`]'s vector
     /// without copying payload bytes. Source owners and their views stay valid
     /// independently of later reads or filesystem replacement.
-    fn read_encoded(&mut self, identifier: &str) -> Result<EncodedBytes, IoError> {
+    fn read_encoded(&self, identifier: &str) -> Result<EncodedBytes, IoError> {
         self.read(identifier).map(EncodedBytes::from)
     }
     /// Reads at most `max_bytes` of a resource, rejecting excessive size before
     /// allocating its complete payload. Implementations may read one extra byte
     /// to detect growth. The default fails without reading; it never falls back
     /// to the unbounded `read` method. AOUSD Core §9 (host asset transport).
-    fn read_bounded(&mut self, _identifier: &str, _max_bytes: u64) -> Result<Vec<u8>, IoError> {
+    fn read_bounded(&self, _identifier: &str, _max_bytes: u64) -> Result<Vec<u8>, IoError> {
         Err(IoError::new(
             IoErrorKind::Unsupported,
             "storage does not implement bounded resource reads",
@@ -172,7 +175,7 @@ pub trait Storage {
     /// it never falls back to an unbounded read. Overrides must enforce the bound
     /// before allocating or returning the payload. AOUSD Core §9 (host transport).
     fn read_encoded_bounded(
-        &mut self,
+        &self,
         identifier: &str,
         max_bytes: u64,
     ) -> Result<EncodedBytes, IoError> {
@@ -200,7 +203,7 @@ pub trait Storage {
     /// # }
     /// ```
     fn open_ranges(
-        &mut self,
+        &self,
         _identifier: &str,
     ) -> Result<Arc<dyn layerstack_usdz::range::RangeSource<Error = IoError> + Send + Sync>, IoError>
     {

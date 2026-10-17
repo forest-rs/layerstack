@@ -504,10 +504,10 @@ fn reference_custom_data_resources_are_localized_and_missing_assets_prevent_expo
                 .and_then(|anchor| layerstack::asset::anchor_asset_path(asset, anchor))
                 .unwrap_or_else(|| asset.into()))
         }
-        fn read(&mut self, identifier: &str) -> Result<Vec<u8>, IoError> {
+        fn read(&self, identifier: &str) -> Result<Vec<u8>, IoError> {
             self.0.read(identifier)
         }
-        fn read_bounded(&mut self, identifier: &str, max_bytes: u64) -> Result<Vec<u8>, IoError> {
+        fn read_bounded(&self, identifier: &str, max_bytes: u64) -> Result<Vec<u8>, IoError> {
             self.0.read_bounded(identifier, max_bytes)
         }
         fn write(&mut self, identifier: &str, bytes: &[u8]) -> Result<(), IoError> {
@@ -827,12 +827,63 @@ fn nested_packages_resolve_defaults_explicit_layers_relative_dependencies_and_re
 use alloc::{format, vec};
 use layerstack::{EditTarget, PrimSpec, PropertySpec, Transaction, Value};
 
+/// The sources a storage read, in order; storages read through `&self`.
+#[derive(Debug, Default)]
+struct Reads(std::sync::Mutex<Vec<String>>);
+impl Reads {
+    fn list(&self) -> std::sync::MutexGuard<'_, Vec<String>> {
+        self.0.lock().unwrap()
+    }
+    fn push(&self, identifier: String) {
+        self.list().push(identifier);
+    }
+    fn iter(&self) -> vec::IntoIter<String> {
+        self.list().clone().into_iter()
+    }
+    fn len(&self) -> usize {
+        self.list().len()
+    }
+    fn is_empty(&self) -> bool {
+        self.list().is_empty()
+    }
+    fn clear(&self) {
+        self.list().clear();
+    }
+}
+impl Clone for Reads {
+    fn clone(&self) -> Self {
+        Self(std::sync::Mutex::new(self.list().clone()))
+    }
+}
+impl PartialEq<Vec<String>> for Reads {
+    fn eq(&self, other: &Vec<String>) -> bool {
+        *self.list() == *other
+    }
+}
+
+/// How many times a storage identified an asset.
+#[derive(Debug, Default)]
+struct Count(core::sync::atomic::AtomicUsize);
+impl Count {
+    fn get(&self) -> usize {
+        self.0.load(core::sync::atomic::Ordering::Relaxed)
+    }
+    fn add(&self) {
+        self.0.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+    }
+}
+impl Clone for Count {
+    fn clone(&self) -> Self {
+        Self(core::sync::atomic::AtomicUsize::new(self.get()))
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 struct Memory {
     files: BTreeMap<String, Vec<u8>>,
     writes: Vec<String>,
-    reads: Vec<String>,
-    identifies: core::cell::Cell<usize>,
+    reads: Reads,
+    identifies: Count,
     fail_write: bool,
 }
 impl Memory {
@@ -848,17 +899,17 @@ impl Memory {
 }
 impl Storage for Memory {
     fn identify(&self, asset: &str, _: Option<&str>) -> Result<String, IoError> {
-        self.identifies.set(self.identifies.get() + 1);
+        self.identifies.add();
         Ok(asset.into())
     }
-    fn read(&mut self, identifier: &str) -> Result<Vec<u8>, IoError> {
+    fn read(&self, identifier: &str) -> Result<Vec<u8>, IoError> {
         self.reads.push(identifier.into());
         self.files
             .get(identifier)
             .cloned()
             .ok_or_else(|| IoError::new(IoErrorKind::NotFound, format!("missing {identifier}")))
     }
-    fn read_bounded(&mut self, identifier: &str, max_bytes: u64) -> Result<Vec<u8>, IoError> {
+    fn read_bounded(&self, identifier: &str, max_bytes: u64) -> Result<Vec<u8>, IoError> {
         let bytes = self
             .files
             .get(identifier)
@@ -1700,7 +1751,7 @@ fn top_level_transport_errors_keep_machine_readable_categories() {
         fn identify(&self, _: &str, _: Option<&str>) -> Result<String, IoError> {
             Ok("scene.usda".into())
         }
-        fn read(&mut self, _: &str) -> Result<Vec<u8>, IoError> {
+        fn read(&self, _: &str) -> Result<Vec<u8>, IoError> {
             Err(IoError::new(IoErrorKind::Storage, "transport unavailable"))
         }
         fn write(&mut self, _: &str, _: &[u8]) -> Result<(), IoError> {
@@ -2276,7 +2327,7 @@ fn bounded_reads_never_fall_back_to_a_transport_without_limit_support() {
         fn identify(&self, asset: &str, _: Option<&str>) -> Result<String, IoError> {
             Ok(asset.into())
         }
-        fn read(&mut self, identifier: &str) -> Result<Vec<u8>, IoError> {
+        fn read(&self, identifier: &str) -> Result<Vec<u8>, IoError> {
             assert_eq!(
                 identifier, "root.usda",
                 "a resource must never reach unbounded transport"

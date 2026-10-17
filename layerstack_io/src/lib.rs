@@ -47,6 +47,11 @@
 //! loads what it needs; [`VariantArcLoading::All`] resolves every branch's
 //! arcs up front instead.
 //!
+//! [`LoadOptions::formats`] registers host [`FileFormat`]s, such as procedural
+//! generators, by extension. Format arguments in an asset path
+//! (`terrain.grid:SDF_FORMAT_ARGS:rows=4`) are part of the layer's identity
+//! and reach the format; see the [`format`] module.
+//!
 //! [`StageDocument::prepare_reload`] separates import/validation from publication.
 //! Dropping its candidate rejects it; [`PreparedReload::commit`] reuses the
 //! candidate composition and preserves stage observers. Both document and
@@ -72,6 +77,11 @@ use layerstack_usdz::snapshot::{PackageLimits, PackageSnapshot, PackageStats};
 use layerstack_usdz::{ImportDiagnostic, MemberDiagnostic};
 pub use layerstack_usdz::{UsdcArrayLoading, UsdcReadOptions};
 
+pub mod format;
+pub use format::{
+    FORMAT_ARGS_DELIMITER, FileFormat, FileFormats, FormatArgs, FormatRegistrationError,
+    FormatSource,
+};
 mod reload;
 pub use reload::PreparedReload;
 mod asset_bytes;
@@ -246,7 +256,7 @@ pub enum VariantArcLoading {
 /// Document import policy applied consistently to root, dependencies and package members.
 /// Existing opening methods use strict import. Set these options explicitly
 /// to defer USDC numeric decoding; checked reads then report payload errors later.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct LoadOptions {
     /// Whether recovery diagnostics reject an import.
     pub import_policy: ImportPolicy,
@@ -256,6 +266,8 @@ pub struct LoadOptions {
     pub package: PackageLimits,
     /// Which arcs authored inside variant branches import resolves.
     pub variant_arcs: VariantArcLoading,
+    /// File formats read beyond USDA, USDC and USDZ, by extension.
+    pub formats: FileFormats,
 }
 /// Explicit protection against overwriting unsaved authored state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -322,6 +334,8 @@ enum Format {
     Usda,
     Usdc,
     Usdz,
+    /// The registered format at this index of the document's [`FileFormats`].
+    Custom(usize),
 }
 #[derive(Clone, Debug)]
 struct Source {
@@ -415,6 +429,7 @@ pub struct StageDocument<B> {
     usdc_options: UsdcReadOptions,
     package_limits: PackageLimits,
     variant_arcs: VariantArcLoading,
+    formats: FileFormats,
     load_report: LoadReport,
 }
 impl<B: core::fmt::Debug> core::fmt::Debug for StageDocument<B> {
@@ -425,6 +440,7 @@ impl<B: core::fmt::Debug> core::fmt::Debug for StageDocument<B> {
             .field("import_policy", &self.import_policy)
             .field("usdc_options", &self.usdc_options)
             .field("variant_arcs", &self.variant_arcs)
+            .field("formats", &self.formats)
             .field("load_report", &self.load_report)
             .finish_non_exhaustive()
     }
@@ -445,7 +461,7 @@ impl<B: Storage> StageDocument<B> {
         options: StageOptions,
     ) -> Result<Self, IoError> {
         let identifier = storage.identify(target, None)?;
-        let format = identifier_format(&identifier)?;
+        let format = identifier_format(&identifier, &FileFormats::default())?;
         if format == Format::Usdz {
             return Err(IoError::new(
                 IoErrorKind::ReadOnly,
@@ -478,6 +494,7 @@ impl<B: Storage> StageDocument<B> {
             usdc_options: UsdcReadOptions::default(),
             package_limits: PackageLimits::default(),
             variant_arcs: VariantArcLoading::default(),
+            formats: FileFormats::default(),
             load_report: LoadReport::default(),
         })
     }
@@ -543,6 +560,7 @@ impl<B: Storage> StageDocument<B> {
             options.schemas.clone(),
         );
         reader.variant_arcs = loading.variant_arcs;
+        reader.formats = loading.formats.clone();
         #[cfg(feature = "std")]
         let threaded = reader.load_on_threads(asset, options.threads, &store.tokens, &store.paths);
         #[cfg(not(feature = "std"))]
@@ -572,6 +590,7 @@ impl<B: Storage> StageDocument<B> {
             usdc_options: loading.usdc,
             package_limits: loading.package,
             variant_arcs: loading.variant_arcs,
+            formats: loading.formats,
             load_report: report,
         };
         let requested = document.load_requested_assets()?;
@@ -622,6 +641,7 @@ impl<B: Storage> StageDocument<B> {
                 self.stage.options().schemas.clone(),
             );
             reader.variant_arcs = self.variant_arcs;
+            reader.formats = self.formats.clone();
             for (anchor, asset) in requests {
                 let result =
                     reader.load(&asset, Some(anchor), &self.store.tokens, &self.store.paths);
@@ -676,6 +696,7 @@ impl<B: Storage> StageDocument<B> {
             self.stage.options().schemas.clone(),
         );
         reader.variant_arcs = self.variant_arcs;
+        reader.formats = self.formats.clone();
         let resolved = reader.load(asset, anchor, &self.store.tokens, &self.store.paths)?;
         let id = resolved.layer_id;
         if let Some(anchor) = anchor {
@@ -703,6 +724,7 @@ impl<B: Storage> StageDocument<B> {
             usdc: self.usdc_options,
             package: self.package_limits,
             variant_arcs: self.variant_arcs,
+            formats: self.formats.clone(),
         }
     }
     /// Cache inspection for a retained USDC layer without decoding arrays.
@@ -836,6 +858,11 @@ impl<B: Storage> StageDocument<B> {
                     IoErrorKind::ReadOnly,
                     "package layers are read-only; export a localization plan instead",
                 ))
+            } else if source.identifier.contains(FORMAT_ARGS_DELIMITER) {
+                Err(IoError::new(
+                    IoErrorKind::ReadOnly,
+                    "a layer read with format arguments is built from them; export a copy instead",
+                ))
             } else {
                 self.serialize(id, source.format)
                     .and_then(|bytes| self.storage.write(&source.identifier, &bytes))
@@ -856,7 +883,7 @@ impl<B: Storage> StageDocument<B> {
     /// Writes a copy: does not rebind arcs, rename the source or mark it saved.
     pub fn export_layer(&mut self, layer: LayerId, target: &str) -> Result<(), IoError> {
         let identifier = self.storage.identify(target, None)?;
-        let format = identifier_format(&identifier)?;
+        let format = identifier_format(&identifier, &self.formats)?;
         let bytes = self.serialize(layer, format)?;
         self.storage.write(&identifier, &bytes)
     }
@@ -912,6 +939,11 @@ impl<B: Storage> StageDocument<B> {
                 IoErrorKind::Unsupported,
                 "package export requires an explicit localization plan",
             )),
+            Format::Custom(index) => {
+                self.formats
+                    .get(index)
+                    .write(layer, &self.store.tokens, &self.store.paths)
+            }
         }
     }
     fn session_layers(&self) -> BTreeSet<LayerId> {
@@ -955,6 +987,8 @@ struct Reader<'a, B> {
     /// Which arcs inside variant branches the layers read resolve
     /// ([`AssetResolver::defers_variant_arcs`]).
     variant_arcs: VariantArcLoading,
+    /// The registered formats ([`LoadOptions::formats`]).
+    formats: FileFormats,
 }
 impl<'a, B: Storage> Reader<'a, B> {
     fn new(
@@ -979,6 +1013,7 @@ impl<'a, B: Storage> Reader<'a, B> {
             failures: Vec::new(),
             reachable_only: false,
             variant_arcs: VariantArcLoading::All,
+            formats: FileFormats::default(),
         }
     }
     fn resolve_expressions(
@@ -1101,13 +1136,7 @@ impl<'a, B: Storage> Reader<'a, B> {
         tokens: &TokenInterner,
         paths: &PathInterner,
     ) -> Result<Layer, IoError> {
-        let format = if data.starts_with(b"PXR-USDC") {
-            Format::Usdc
-        } else if data.starts_with(b"PK\x03\x04") {
-            Format::Usdz
-        } else {
-            Format::Usda
-        };
+        let format = source_format(&self.formats, identifier, &data);
         self.catalog
             .sources
             .get_mut(&id)
@@ -1116,9 +1145,10 @@ impl<'a, B: Storage> Reader<'a, B> {
         let first_diagnostic = self.diagnostics.len();
         let first_failure = self.failures.len();
         let layer = match format {
-            Format::Usda | Format::Usdc => {
+            Format::Usda | Format::Usdc | Format::Custom(_) => {
                 let schemas = self.schemas.clone();
                 let usdc_options = self.usdc_options;
+                let formats = self.formats.clone();
                 let read = read_loose(
                     format,
                     &data,
@@ -1129,6 +1159,7 @@ impl<'a, B: Storage> Reader<'a, B> {
                     self,
                     schemas.as_deref(),
                     usdc_options,
+                    &formats,
                 );
                 self.pending.extend(read.resolved_layers);
                 self.diagnostics.extend(read.diagnostics);
@@ -1191,7 +1222,7 @@ impl<'a, B: Storage> Reader<'a, B> {
                         member_id,
                         Source {
                             identifier: member_identifier.clone(),
-                            format: identifier_format(member)?,
+                            format: identifier_format(member, &FileFormats::default())?,
                             package: Some(id),
                         },
                     );
@@ -1269,8 +1300,8 @@ struct LooseRead {
     retained: Option<layerstack_usdc::RetainedValues>,
 }
 
-/// Reads the USDA or USDC layer `data`, `identifier` read as `id`,
-/// resolving its arcs through `resolver`.
+/// Reads the USDA, USDC or registered-format layer `data`, `identifier`
+/// read as `id`, resolving its arcs through `resolver`.
 #[expect(
     clippy::too_many_arguments,
     reason = "one reader's inputs, passed through"
@@ -1285,6 +1316,7 @@ fn read_loose(
     resolver: &mut dyn AssetResolver,
     schemas: Option<&layerstack::SchemaRegistry>,
     usdc_options: UsdcReadOptions,
+    formats: &FileFormats,
 ) -> LooseRead {
     let mut read = LooseRead {
         layer: Err(IoError::new(IoErrorKind::Rejected, "unread layer")),
@@ -1298,6 +1330,19 @@ fn read_loose(
         layer_id: id,
         diagnostic,
     };
+    if let Format::Custom(index) = format {
+        read.layer = read_custom(
+            formats.get(index),
+            data,
+            identifier,
+            id,
+            tokens,
+            paths,
+            resolver,
+            &mut read.resolved_layers,
+        );
+        return read;
+    }
     if format == Format::Usda {
         let source = match core::str::from_utf8(data) {
             Ok(source) => source,
@@ -1463,7 +1508,7 @@ impl<B: Storage> Reader<'_, B> {
             id,
             Source {
                 identifier: identifier.clone(),
-                format: identifier_format(&member)?,
+                format: identifier_format(&member, &FileFormats::default())?,
                 package: Some(package),
             },
         );
@@ -1493,16 +1538,21 @@ impl<B: Storage> Reader<'_, B> {
         let anchor_identifier = anchor
             .and_then(|id| self.catalog.sources.get(&id))
             .map(|s| {
+                let identifier = s
+                    .identifier
+                    .split_once(FORMAT_ARGS_DELIMITER)
+                    .map_or(s.identifier.as_str(), |(path, _)| path);
                 String::from(
-                    s.identifier
+                    identifier
                         .split_once('[')
-                        .map_or(s.identifier.as_str(), |(outer, _)| outer),
+                        .map_or(identifier, |(outer, _)| outer),
                 )
             });
+        let (asset, args) = FormatArgs::split(asset)?;
         let path = PackagePath::parse(asset, 32)
             .map_err(|reason| IoError::new(IoErrorKind::Rejected, reason))?;
         let outer = self.identify(path.outer(), anchor_identifier)?;
-        let identifier = path.with_outer(&outer);
+        let identifier = source_identifier(&self.formats, &path, &outer, args);
         if let Some((first, rest)) = path.members().split_first()
             && let Some(&package) = self.catalog.ids.get(&outer)
             && self.catalog.states.get(&package) == Some(&State::Loaded)
@@ -1537,7 +1587,15 @@ impl<B: Storage> Reader<'_, B> {
                 layer: None,
             });
         }
-        let bytes = self.storage.read_encoded(&outer)?;
+        let bytes = if self
+            .formats
+            .for_identifier(&identifier)
+            .is_none_or(FileFormat::reads_source)
+        {
+            self.storage.read_encoded(&outer)?
+        } else {
+            EncodedBytes::from(Vec::new())
+        };
         self.catalog.states.insert(id, State::Loading);
         match self.read_layer(bytes, &identifier, id, tokens, paths) {
             Ok(layer) => {
@@ -1633,7 +1691,10 @@ fn asset_error(error: IoError) -> AssetResolveError {
         AssetResolveError::LoadError(Arc::from(error.message))
     }
 }
-fn identifier_format(identifier: &str) -> Result<Format, IoError> {
+fn identifier_format(identifier: &str, formats: &FileFormats) -> Result<Format, IoError> {
+    if let Some(index) = formats.index_for(identifier) {
+        return Ok(Format::Custom(index));
+    }
     let path = PackagePath::parse(identifier, 32)
         .map_err(|reason| IoError::new(IoErrorKind::Rejected, reason))?;
     match path.leaf().rsplit('.').next() {
@@ -1642,9 +1703,85 @@ fn identifier_format(identifier: &str) -> Result<Format, IoError> {
         Some("usdz") => Ok(Format::Usdz),
         _ => Err(IoError::new(
             IoErrorKind::Unsupported,
-            "target requires .usda, .usd, .usdc or .usdz extension",
+            "target requires .usda, .usd, .usdc or .usdz extension, or a registered format's",
         )),
     }
+}
+
+/// The format of the source `identifier` with the bytes `data`: a
+/// registered format by extension, else a built-in one by its bytes.
+fn source_format(formats: &FileFormats, identifier: &str, data: &[u8]) -> Format {
+    if let Some(index) = formats.index_for(identifier) {
+        Format::Custom(index)
+    } else if data.starts_with(b"PXR-USDC") {
+        Format::Usdc
+    } else if data.starts_with(b"PK\x03\x04") {
+        Format::Usdz
+    } else {
+        Format::Usda
+    }
+}
+
+/// The canonical identifier of the source named by `asset` once its path
+/// without arguments identifies as `outer`: that identity, followed by the
+/// arguments naming a distinct layer ([`FormatArgs::canonical`]).
+fn source_identifier(
+    formats: &FileFormats,
+    path: &PackagePath,
+    outer: &str,
+    args: FormatArgs,
+) -> String {
+    let base = path.with_outer(outer);
+    let format = formats.for_identifier(&base);
+    args.canonical(format).identifier(&base)
+}
+
+/// Builds the layer `identifier` names with the registered `format`,
+/// resolving the sublayers it authors by asset path through `resolver`.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "one reader's inputs, passed through"
+)]
+fn read_custom(
+    format: &dyn FileFormat,
+    data: &EncodedBytes,
+    identifier: &str,
+    id: LayerId,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
+    resolver: &mut dyn AssetResolver,
+    resolved_layers: &mut Vec<Layer>,
+) -> Result<Layer, IoError> {
+    let (_, args) = FormatArgs::split(identifier)?;
+    let source = FormatSource {
+        identifier,
+        layer: id,
+        bytes: format.reads_source().then_some(&**data),
+        args: &args,
+        tokens,
+        paths,
+    };
+    let mut layer = format.read(&source)?;
+    if layer.id() != id {
+        return Err(source.rejected(alloc::format!(
+            "the {} format built layer {:?}, not {id:?}",
+            format.name(),
+            layer.id()
+        )));
+    }
+    for entry in layer.sublayers_mut() {
+        if entry.layer != LayerId::UNRESOLVED || entry.is_expression() {
+            continue;
+        }
+        let Some(asset) = entry.asset.clone() else {
+            continue;
+        };
+        if let Ok(resolved) = resolver.resolve(&asset, Some(id), tokens, paths) {
+            entry.layer = resolved.layer_id;
+            resolved_layers.extend(resolved.layer);
+        }
+    }
+    Ok(layer)
 }
 
 fn package_member_path(identifier: &str) -> Option<String> {

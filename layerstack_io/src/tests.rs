@@ -5,6 +5,7 @@ use super::*;
 
 mod deferred_arcs;
 mod encoded_ownership;
+mod file_formats;
 mod package_identity;
 mod registered_metadata;
 mod threaded_open;

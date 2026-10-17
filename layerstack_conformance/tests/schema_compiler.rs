@@ -386,13 +386,6 @@ fn value_json(value: &Value, tokens: &TokenInterner) -> Json {
 
 #[test]
 fn fixture_registry_matches_openusd() {
-    let oracle: Oracle =
-        serde_json::from_str(&read(&fixture().join("oracle.json"))).expect("oracle.json");
-    assert!(
-        oracle.openusd_version.starts_with("0.26.8"),
-        "{}",
-        oracle.openusd_version
-    );
     let mut store = InMemoryStore::default();
     let mut builder = SchemaRegistry::builder();
     layerstack_schemas::register(
@@ -408,6 +401,42 @@ fn fixture_registry_matches_openusd() {
         register_plugin(&fixture().join(plugin), &mut builder, &mut store);
     }
     let registry = builder.build(&mut store.tokens);
+    assert_matches_oracle(&registry, &mut store.tokens);
+}
+
+/// The Rust modules `compile --rust` generates for the fixtures
+/// (`layerstack_custom_schemas`) register from their static tables what
+/// OpenUSD's registry reads from the compiled files.
+#[test]
+fn generated_registration_matches_openusd() {
+    use layerstack_custom_schemas::{lab, observatory};
+    let mut tokens = TokenInterner::default();
+    let mut builder = SchemaRegistry::builder();
+    let domains: Vec<layerstack_schemas::Domain> = lab::DEPENDENCIES
+        .iter()
+        .chain(observatory::DEPENDENCIES)
+        .copied()
+        .collect();
+    layerstack_schemas::register(&mut builder, &domains, &mut tokens).expect("OpenUSD's schemas");
+    lab::register(&mut builder, &mut tokens).expect("the lab schemas");
+    observatory::register(&mut builder, &mut tokens).expect("the observatory schemas");
+    let registry = builder.build(&mut tokens);
+    assert_matches_oracle(&registry, &mut tokens);
+}
+
+/// `registry`, with OpenUSD's `Usd` and `UsdGeom` and the lab and observatory
+/// fixture schemas, is what usd-core's registry reads from the fixtures
+/// (`oracle.json`): every schema's kind, `IsA`, application rules,
+/// auto-applies and prim definitions, with each property's kind, type,
+/// variability, fallback and `allowedTokens`.
+fn assert_matches_oracle(registry: &SchemaRegistry, tokens: &mut TokenInterner) {
+    let oracle: Oracle =
+        serde_json::from_str(&read(&fixture().join("oracle.json"))).expect("oracle.json");
+    assert!(
+        oracle.openusd_version.starts_with("0.26.8"),
+        "{}",
+        oracle.openusd_version
+    );
     assert!(registry.issues().is_empty(), "{:?}", registry.issues());
     let declared_types: BTreeMap<String, Json> = ["lab", "observatory"]
         .iter()
@@ -422,7 +451,6 @@ fn fixture_registry_matches_openusd() {
             )
         })
         .collect();
-    let tokens = &mut store.tokens;
 
     let mut failures = Vec::new();
     let mut check = |what: String, ours: Json, theirs: Json| {

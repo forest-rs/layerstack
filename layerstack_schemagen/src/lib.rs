@@ -293,6 +293,7 @@ pub(crate) fn rustfmt(source: &str) -> Result<String, String> {
         .args(["--edition", "2024", "--emit", "stdout", "--quiet"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
         .spawn()
         .map_err(|e| format!("running rustfmt: {e}"))?;
     child
@@ -305,7 +306,8 @@ pub(crate) fn rustfmt(source: &str) -> Result<String, String> {
         .wait_with_output()
         .map_err(|e| format!("rustfmt: {e}"))?;
     if !output.status.success() {
-        return Err("rustfmt rejected the generated code".into());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("rustfmt failed: {}", stderr.trim()));
     }
     String::from_utf8(output.stdout).map_err(|e| e.to_string())
 }

@@ -58,6 +58,8 @@ cargo run -p layerstack_examples --example light_rig_slots
 - [`layerstack_examples`](layerstack_examples/) contains runnable examples.
 - [`layerstack_conformance`](layerstack_conformance/) contains fixture and interoperability tests.
 - [`layerstack_schemagen`](layerstack_schemagen/) regenerates schema tables and views.
+- [`layerstack_custom_schemas`](layerstack_custom_schemas/) is a schema library of its own,
+  built as a downstream crate builds one with `layerstack_schemagen compile --rust`.
 - [`wind_tunnel`](wind_tunnel/) contains benchmarks.
 - [Architecture and authoring](docs/architecture-and-authoring.md) describes ownership,
   mapped edits, undo and publication contracts.
@@ -71,8 +73,8 @@ cargo run -p layerstack_examples --example light_rig_slots
 ## Release verification
 
 The eight library crates share version `0.1.0` and Rust 1.89. The conformance
-harness, examples, schema generator and benchmarks are repository tools marked
-`publish = false`.
+harness, examples, schema generator, its downstream fixture crate and benchmarks
+are repository tools marked `publish = false`.
 
 Verify the actual library archives, including their registry dependency versions
 and license files, before publishing. The archive checker requires Python 3.11

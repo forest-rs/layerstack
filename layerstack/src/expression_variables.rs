@@ -339,6 +339,8 @@ pub(crate) struct ArcAnchor<'a> {
     scope: Option<&'a ExpressionScope>,
     /// Whether the arcs read are payloads, for error reports.
     payloads: bool,
+    /// The dynamic file formats whose payloads stay as authored.
+    dynamic: Option<&'a crate::dynamic_format::DynamicFormats>,
 }
 
 impl<'a> ArcAnchor<'a> {
@@ -352,6 +354,7 @@ impl<'a> ArcAnchor<'a> {
             layer: layer.into().root,
             scope,
             payloads: false,
+            dynamic: None,
         }
     }
 
@@ -362,6 +365,25 @@ impl<'a> ArcAnchor<'a> {
             payloads: true,
             ..self
         }
+    }
+
+    /// This anchor, keeping payloads to `formats` as authored.
+    #[must_use]
+    pub(crate) fn dynamic(self, formats: &'a crate::dynamic_format::DynamicFormats) -> Self {
+        Self {
+            dynamic: Some(formats),
+            ..self
+        }
+    }
+
+    /// Whether `arc` is a payload to a dynamic file format of this anchor,
+    /// whose layer composition names with the arguments it composes.
+    pub(crate) fn is_dynamic(&self, arc: &Reference) -> bool {
+        self.dynamic.is_some_and(|formats| {
+            arc.asset
+                .as_deref()
+                .is_some_and(|asset| formats.for_asset(asset).is_some())
+        })
     }
 
     /// The reference or payload `arc`, authored in `layer` with a variable

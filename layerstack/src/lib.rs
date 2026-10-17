@@ -166,6 +166,7 @@ pub use change_history::{ChangeHistoryBudget, ChangeHistoryStats};
 pub mod composition_error;
 pub mod dependency_map;
 pub mod doc;
+pub mod dynamic_format;
 mod shared_vec;
 mod store_identity;
 pub use store_identity::StoreIdentity;
@@ -226,6 +227,10 @@ pub use doc::{
     SublayerEntry, Value, VariantBranch, VariantBranches, VariantSetSpec, VariantSpec,
     combine_dictionaries, combine_dictionary_chain, get_field, get_field_mut,
     insert_field_if_absent, remove_field, set_field_vec,
+};
+pub use dynamic_format::{
+    DynamicArgs, DynamicDependency, DynamicFileFormat, DynamicFormatContext,
+    DynamicFormatRegistrationError, DynamicFormats, UnregisteredField,
 };
 pub use edit::{
     Address, Applied, Changes, EditError, EditTarget, ListPosition, NamespaceEdit, NamespaceError,

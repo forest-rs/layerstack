@@ -15,6 +15,7 @@
 //! (stage population). OpenUSD: `PcpComputePrimIndex`,
 //! `PcpPrimIndex::ComputePrimChildNames` (`pxr/usd/pcp/primIndex.cpp`).
 
+pub(crate) mod dynamic_args;
 pub(crate) mod graph;
 pub(crate) mod indexer;
 pub(crate) mod layer_stacks;
@@ -173,6 +174,8 @@ pub(crate) fn compose(
         stage_stack: StackId(0),
         cache: ReadLock::default(),
         root_path,
+        dynamic_formats: &options.dynamic_formats,
+        schemas: options.schemas.as_deref(),
     };
     let identifier = LayerStackIdentifier {
         root,
@@ -346,7 +349,9 @@ fn index_prim(
 
     let names = child_names(ctx, &graph);
     let mut findings = crate::composition_checks::Findings::default();
-    let index = prim_index(ctx, path, &graph, &mut findings);
+    let mut index = prim_index(ctx, path, &graph, &mut findings);
+    let dynamic = core::mem::take(&mut outputs.dynamic);
+    index.dynamic = (!dynamic.is_empty()).then(|| Arc::new(dynamic));
     let active = path == ctx.root_path || is_active(ctx, &graph);
     // An exact scope lists every child but composes only the listed
     // prims and their ancestors: the live stage merges whole child

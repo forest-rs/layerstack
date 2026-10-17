@@ -346,6 +346,20 @@ pub struct StageOptions {
     ///
     /// Spec: AOUSD Core §13 (schemas), §13.3.2.3 (the prim definition).
     pub schemas: Option<Arc<SchemaRegistry>>,
+    /// The most threads composition indexes prims on, the calling thread
+    /// included. `0` and `1`, the default, compose on the calling thread;
+    /// above that, composition spawns scoped worker threads for as long as
+    /// it runs, and reads the store from all of them. Without the `std`
+    /// feature composition always runs on the calling thread.
+    ///
+    /// The composed stage is the same for every count: its prims, values
+    /// and the order of its composition errors. Only the order in which
+    /// paths new to the store are interned varies, which no result is
+    /// ordered by ([`crate::PathId`]).
+    ///
+    /// OpenUSD composes on as many threads as `WorkGetConcurrencyLimit`,
+    /// every core unless the host lowers it.
+    pub threads: usize,
 }
 
 /// A composed stage: read-only facade over composition results.

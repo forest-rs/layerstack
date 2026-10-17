@@ -1469,6 +1469,7 @@ impl LiveStage {
             schemas: self.options.schemas.clone(),
             load_rules: self.options.load_rules.clone(),
             muted_layers: self.options.muted_layers.clone(),
+            threads: self.options.threads,
         };
         Stage::compose_retained(store, self.root, scoped_opts, true)
     }

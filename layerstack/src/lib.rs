@@ -179,6 +179,7 @@ pub mod interner;
 mod interning;
 pub mod layer_stack;
 pub mod layer_stack_flatten;
+mod parallel;
 mod sync;
 pub use layer_stack_flatten::{
     FlattenedLayerStack, LayerStackFlattenAssetPath, LayerStackFlattenError,
@@ -220,7 +221,7 @@ pub use composition_error::{
 pub use dependency_map::{ArcDependency, LayerDependencyStorage};
 pub use doc::{
     AssetAvailability, FieldEntry, FieldValue, InMemoryStore, InterpolationType, Layer, LayerId,
-    LayerOffset, LayerStore, PrimSpec, Reference, ReferenceTarget, Relocate, Specifier,
+    LayerOffset, LayerStore, MaybeSync, PrimSpec, Reference, ReferenceTarget, Relocate, Specifier,
     SublayerEntry, Value, VariantBranch, VariantBranches, VariantSetSpec, VariantSpec,
     combine_dictionaries, combine_dictionary_chain, get_field, get_field_mut,
     insert_field_if_absent, remove_field, set_field_vec,

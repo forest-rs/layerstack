@@ -39,7 +39,7 @@ use crate::{
     prim_index_graph::{NodeArc, NodeId, PrimIndexGraph},
     spec_path::SpecPath,
     stage::StageOptions,
-    sync::Lock,
+    sync::ReadLock,
 };
 
 use self::{
@@ -71,6 +71,8 @@ pub(crate) struct Composition {
     records: HashMap<PathId, PrimRecord>,
     /// The layer stacks whose errors a prim has reported.
     reported_stacks: HashSet<StackId>,
+    /// The layer stacks whose layers are in `used_layers`.
+    used_stacks: HashSet<StackId>,
 }
 
 /// The dependencies one prim index records (see [`DependencyBuilder`]).
@@ -169,7 +171,7 @@ pub(crate) fn compose(
         fallbacks: &options.variant_fallbacks,
         include_payload: &include_payload,
         stage_stack: StackId(0),
-        cache: Lock::default(),
+        cache: ReadLock::default(),
         root_path,
     };
     let identifier = LayerStackIdentifier {
@@ -189,19 +191,26 @@ pub(crate) fn compose(
             .load_rules
             .rules()
             .all(|(path, rule)| path.depth() == 0 && rule == crate::stage::PayloadRule::All);
-    let mut instances = Instances {
+    let mut instances = Instances::default();
+    let ctx = ctx;
+    let claims = Claims {
         share,
-        ..Instances::default()
+        keys: ReadLock::default(),
     };
-    walk(
-        &mut ctx,
-        &mut out,
-        &scope,
-        checks,
-        &mut instances,
-        alloc::vec![root_path],
-    );
-    share_prototypes(&mut ctx, &mut out, &scope, checks, &mut instances);
+    let work =
+        |path: PathId, added: &mut Vec<PathId>| index_prim(&ctx, &scope, &claims, path, added);
+    crate::parallel::with_pool(options.threads, &work, |pool| {
+        let mut walk = Walk {
+            ctx: &ctx,
+            pool,
+            out: &mut out,
+            scope: &scope,
+            checks,
+            instances: &mut instances,
+        };
+        walk.walk(alloc::vec![root_path]);
+        walk.share_prototypes();
+    });
 
     if let Some(deps) = out.deps.as_mut() {
         for (path, record) in &out.records {
@@ -244,9 +253,6 @@ pub(crate) fn compose(
 /// shared by.
 #[derive(Default)]
 struct Instances {
-    /// Whether instances may share prototypes: every prim is composed and
-    /// payloads load everywhere alike.
-    share: bool,
     /// The first instance composed with each key.
     representatives: HashMap<InstanceKey, PathId>,
     /// Instances whose descendants wait for their representative's.
@@ -285,70 +291,181 @@ fn instance_key(graph: &Graph) -> InstanceKey {
     InstanceKey(out)
 }
 
-/// Indexes the prims of `pending` and their descendants, each from its
-/// parent's index, depth first.
-fn walk(
-    ctx: &mut Ctx<'_>,
-    out: &mut Composition,
-    scope: &Scope<'_>,
-    checks: &mut crate::composition_checks::Findings,
-    instances: &mut Instances,
-    mut pending: Vec<PathId>,
-) {
-    let root_path = ctx.root_path;
-    while let Some(path) = pending.pop() {
-        let site = Site {
-            stack: ctx.stage_stack,
-            path: SpecPath::from_prim_path(path),
-        };
-        let mut outputs = Outputs::default();
-        build_prim_index(ctx, &site, &site, true, true, true, None, &mut outputs);
-        out.composed_prim_indexes += 1;
-        let mut graph = core::mem::take(&mut outputs.graph);
-        cull(&mut graph, ctx.store.paths(), ctx.stage_stack);
-        graph.instanceable = path != root_path && is_instanceable(ctx.store, &ctx.stacks, &graph);
-        graph.finalize();
+/// The instance keys whose descendants some instance is indexing, while
+/// instances share prototypes.
+struct Claims {
+    /// Whether instances may share prototypes: every prim is composed and
+    /// payloads load everywhere alike.
+    share: bool,
+    keys: ReadLock<HashSet<InstanceKey>>,
+}
 
-        let names = child_names(ctx, &graph);
-        let index = prim_index(ctx, path, &graph, checks);
-        record(out, ctx, path, &graph, &index, outputs);
+/// What indexing one prim found, before it joins the composition.
+struct Indexed {
+    path: PathId,
+    graph: Arc<Graph>,
+    index: PrimIndex,
+    outputs: Outputs,
+    findings: crate::composition_checks::Findings,
+    active: bool,
+    /// The key of an active instance, while instances share prototypes.
+    key: Option<InstanceKey>,
+    /// Whether the children it composes were indexed with it.
+    descended: bool,
+    /// The children the scope lists, and those it composes.
+    children: Vec<PathId>,
+    composed_children: Vec<PathId>,
+}
+
+/// Indexes the prim at `path` from its parent's index, and adds the
+/// children it composes to `added`, unless the prim is inactive, or an
+/// active instance whose key another instance has claimed: one instance's
+/// descendants are indexed for each key, and the rest copy them.
+///
+/// Any number of threads index prims at once; the cached parent of a
+/// child is in place before the child is added. Which instance claims a
+/// key is whichever gets there first, so [`Walk::join`] still decides
+/// which composes them.
+fn index_prim(
+    ctx: &Ctx<'_>,
+    scope: &Scope<'_>,
+    claims: &Claims,
+    path: PathId,
+    added: &mut Vec<PathId>,
+) -> Indexed {
+    let site = Site {
+        stack: ctx.stage_stack,
+        path: SpecPath::from_prim_path(path),
+    };
+    let mut outputs = Outputs::default();
+    build_prim_index(ctx, &site, &site, true, true, true, None, &mut outputs);
+    let mut graph = core::mem::take(&mut outputs.graph);
+    cull(&mut graph, ctx.store.paths(), ctx.stage_stack);
+    graph.instanceable = path != ctx.root_path && is_instanceable(ctx.store, &ctx.stacks, &graph);
+    graph.finalize();
+
+    let names = child_names(ctx, &graph);
+    let mut findings = crate::composition_checks::Findings::default();
+    let index = prim_index(ctx, path, &graph, &mut findings);
+    let active = path == ctx.root_path || is_active(ctx, &graph);
+    // An exact scope lists every child but composes only the listed
+    // prims and their ancestors: the live stage merges whole child
+    // lists. A population mask lists only the children it includes.
+    let paths = ctx.store.paths();
+    let mut children = Vec::with_capacity(names.len());
+    let mut composed_children = Vec::with_capacity(names.len());
+    for name in names {
+        let child = paths.intern_joined(path, &[name]);
+        if scope.includes(paths, child) {
+            composed_children.push(child);
+        }
+        if scope.lists(paths, child) {
+            children.push(child);
+        }
+    }
+    let key = (claims.share && active && graph.instanceable).then(|| instance_key(&graph));
+    let graph = Arc::new(graph);
+    ctx.cache.write(|cache| cache.insert(path, graph.clone()));
+    let descended = active
+        && key
+            .as_ref()
+            .is_none_or(|key| claims.keys.write(|keys| keys.insert(key.clone())));
+    if descended {
+        added.extend(composed_children.iter().copied());
+    }
+    Indexed {
+        path,
+        graph,
+        index,
+        outputs,
+        findings,
+        active,
+        key,
+        descended,
+        children,
+        composed_children,
+    }
+}
+
+/// The prims a composition indexes on a pool of threads, joined into it
+/// one by one in traversal order, as if indexed one by one: each prim's
+/// records, errors and instance keys are recorded in the same order
+/// whatever the number of threads.
+struct Walk<'a, 'c, 'p> {
+    ctx: &'a Ctx<'c>,
+    pool: &'a crate::parallel::Pool<'p, PathId, Indexed>,
+    out: &'a mut Composition,
+    scope: &'a Scope<'a>,
+    checks: &'a mut crate::composition_checks::Findings,
+    instances: &'a mut Instances,
+}
+
+impl Walk<'_, '_, '_> {
+    /// Indexes the prims of `roots` and their descendants, each from its
+    /// parent's index, and joins them depth first, `roots` in order.
+    fn walk(&mut self, roots: Vec<PathId>) {
+        let indexed = self.pool.run(roots.clone());
+        // One thread indexes prims in the order they join: a prim, then
+        // the children it adds, depth first.
+        if self.pool.in_order() {
+            for prim in indexed {
+                self.join(prim);
+            }
+            return;
+        }
+        let mut indexed: HashMap<PathId, Indexed> =
+            indexed.into_iter().map(|prim| (prim.path, prim)).collect();
+        let mut pending = roots;
+        pending.reverse();
+        while let Some(path) = pending.pop() {
+            let prim = indexed.remove(&path).expect("indexed prim");
+            if let Some(children) = self.join(prim) {
+                pending.extend(children.into_iter().rev());
+            }
+        }
+    }
+
+    /// Joins the indexed `prim` into the composition, and returns the
+    /// children to join after it, which are indexed, or `None` when there
+    /// are none to join now.
+    fn join(&mut self, prim: Indexed) -> Option<Vec<PathId>> {
+        let Indexed {
+            path,
+            graph,
+            index,
+            outputs,
+            findings,
+            active,
+            key,
+            descended,
+            children,
+            composed_children,
+        } = prim;
+        let out = &mut *self.out;
+        out.composed_prim_indexes += 1;
+        self.checks.extend(findings);
+        record(out, self.ctx, path, &graph, &index, outputs);
         if graph.has_payloads {
             out.loadable.insert(path);
         }
-        let active = path == root_path || is_active(ctx, &graph);
         let mut deferred = false;
         if graph.instanceable {
             out.instances.insert(path);
-            // An inactive instance composes no descendants to share.
-            if instances.share && active {
-                let key = instance_key(&graph);
-                match instances.representatives.get(&key) {
-                    Some(&representative) => {
-                        instances.deferred.push((path, representative));
-                        deferred = true;
-                    }
-                    None => {
-                        instances.representatives.insert(key, path);
-                    }
+        }
+        // An inactive instance composes no descendants to share. The first
+        // instance of a key, in traversal order, composes them.
+        if let Some(key) = key {
+            match self.instances.representatives.get(&key) {
+                Some(&representative) => {
+                    self.instances.deferred.push((path, representative));
+                    deferred = true;
+                }
+                None => {
+                    self.instances.representatives.insert(key, path);
                 }
             }
         }
-
-        // An exact scope lists every child but composes only the listed
-        // prims and their ancestors: the live stage merges whole child
-        // lists. A population mask lists only the children it includes.
-        let mut children = Vec::with_capacity(names.len());
-        let mut composed_children = Vec::with_capacity(names.len());
-        for name in names {
-            let child = ctx.store.paths().intern_joined(path, &[name]);
-            if scope.includes(ctx.store.paths(), child) {
-                composed_children.push(child);
-            }
-            if scope.lists(ctx.store.paths(), child) {
-                children.push(child);
-            }
-        }
-        let keep = scope.keeps(ctx.store.paths(), path);
+        let keep = self.scope.keeps(self.ctx.store.paths(), path);
         if keep {
             out.prims.insert(path, index);
         }
@@ -356,56 +473,57 @@ fn walk(
             if keep {
                 out.inactive.insert(path);
             }
-            ctx.cache.with(|cache| cache.insert(path, Arc::new(graph)));
-            continue;
-        }
-        if !deferred {
-            for child in composed_children.iter().rev() {
-                pending.push(*child);
-            }
+            return None;
         }
         if keep && !children.is_empty() {
             out.children.insert(path, children);
         }
-        ctx.cache.with(|cache| cache.insert(path, Arc::new(graph)));
-    }
-}
-
-/// Gives each deferred instance its descendants: copies of its
-/// representative's, re-rooted, when their records do not depend on where
-/// the instance is; composed otherwise.
-///
-/// Instances with one key read the same specs below them through the same
-/// sites: only the sites of the stage's own layer stack, which contribute
-/// nothing beneath an instance, name the instance.
-///
-/// Spec: AOUSD Core §11.3.3 (instances share prototypes). OpenUSD:
-/// `Usd_InstanceCache`, `PcpInstanceKey`.
-fn share_prototypes(
-    ctx: &mut Ctx<'_>,
-    out: &mut Composition,
-    scope: &Scope<'_>,
-    checks: &mut crate::composition_checks::Findings,
-    instances: &mut Instances,
-) {
-    let mut shareable: HashMap<PathId, bool> = HashMap::new();
-    // Composing an instance's descendants can defer the instances nested
-    // in them in turn.
-    while let Some((instance, representative)) = instances.deferred.pop() {
-        let can_share = *shareable
-            .entry(representative)
-            .or_insert_with(|| prototype_is_shareable(ctx, out, representative));
-        if !can_share {
-            let children = out.children.get(&instance).cloned().unwrap_or_default();
-            let mut pending: Vec<PathId> = children
-                .into_iter()
-                .filter(|child| scope.includes(ctx.store.paths(), *child))
-                .collect();
-            pending.reverse();
-            walk(ctx, out, scope, checks, instances, pending);
-            continue;
+        if deferred {
+            return None;
         }
-        copy_prototype(ctx, out, instances, representative, instance);
+        // Another instance of the key claimed its descendants first: index
+        // this one's now, as its own subtree.
+        if !descended {
+            self.walk(composed_children);
+            return None;
+        }
+        Some(composed_children)
+    }
+    /// Gives each deferred instance its descendants: copies of its
+    /// representative's, re-rooted, when their records do not depend on where
+    /// the instance is; composed otherwise.
+    ///
+    /// Instances with one key read the same specs below them through the same
+    /// sites: only the sites of the stage's own layer stack, which contribute
+    /// nothing beneath an instance, name the instance.
+    ///
+    /// Spec: AOUSD Core §11.3.3 (instances share prototypes). OpenUSD:
+    /// `Usd_InstanceCache`, `PcpInstanceKey`.
+    fn share_prototypes(&mut self) {
+        let mut shareable: HashMap<PathId, bool> = HashMap::new();
+        // Composing an instance's descendants can defer the instances nested
+        // in them in turn.
+        while let Some((instance, representative)) = self.instances.deferred.pop() {
+            let can_share = *shareable
+                .entry(representative)
+                .or_insert_with(|| prototype_is_shareable(self.ctx, self.out, representative));
+            if !can_share {
+                let children = self
+                    .out
+                    .children
+                    .get(&instance)
+                    .cloned()
+                    .unwrap_or_default();
+                let paths = self.ctx.store.paths();
+                let roots: Vec<PathId> = children
+                    .into_iter()
+                    .filter(|child| self.scope.includes(paths, *child))
+                    .collect();
+                self.walk(roots);
+                continue;
+            }
+            copy_prototype(self.ctx, self.out, self.instances, representative, instance);
+        }
     }
 }
 
@@ -550,7 +668,7 @@ fn reroot_opinion_paths(store: &dyn LayerStore, index: &mut PrimIndex, from: Pat
 /// Copies the descendants of the instance `from` beneath the instance
 /// `to`, re-rooting the sites of the stage's layer stack.
 fn copy_prototype(
-    ctx: &mut Ctx<'_>,
+    ctx: &Ctx<'_>,
     out: &mut Composition,
     instances: &mut Instances,
     from: PathId,
@@ -704,7 +822,7 @@ fn origin_root(graph: &Graph, node: NodeIndex) -> NodeIndex {
 
 /// The composed child names of the prim `graph` indexes, weakest site
 /// first. OpenUSD: `PcpPrimIndex::ComputePrimChildNames`.
-fn child_names(ctx: &mut Ctx<'_>, graph: &Graph) -> Vec<TokenId> {
+fn child_names(ctx: &Ctx<'_>, graph: &Graph) -> Vec<TokenId> {
     let mut order = Vec::new();
     let mut names = HashSet::new();
     let mut prohibited = HashSet::new();
@@ -790,7 +908,7 @@ fn instanceable_weak_to_strong(
 /// the names gathered so far. OpenUSD: the relocation part of
 /// `_ComposePrimChildNamesAtNode`.
 fn apply_relocated_names(
-    ctx: &mut Ctx<'_>,
+    ctx: &Ctx<'_>,
     stack: StackId,
     parent: PathId,
     order: &mut Vec<TokenId>,
@@ -880,7 +998,7 @@ fn is_active(ctx: &Ctx<'_>, graph: &Graph) -> bool {
 /// their specs, strongest first, each node's target paths mapped into the
 /// stage namespace.
 fn prim_index(
-    ctx: &mut Ctx<'_>,
+    ctx: &Ctx<'_>,
     prim: PathId,
     graph: &Graph,
     checks: &mut crate::composition_checks::Findings,
@@ -1157,7 +1275,9 @@ fn record(
     // node reading it; its descendants inherit the node.
     for (at, node) in graph.nodes.iter().enumerate() {
         let stack = ctx.stacks.get(node.site.stack);
-        out.used_layers.extend(stack.layers.iter().copied());
+        if out.used_stacks.insert(node.site.stack) {
+            out.used_layers.extend(stack.layers.iter().copied());
+        }
         if at != 0 && !node.from_parent_prim {
             out.used_layer_sites
                 .entry(path)

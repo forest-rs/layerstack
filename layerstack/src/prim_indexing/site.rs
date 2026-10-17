@@ -23,7 +23,7 @@ use crate::{
     listop::ListOp,
     path::{PathId, PathInterner},
     spec_path::SpecPath,
-    sync::Lock,
+    sync::ReadLock,
 };
 
 use super::layer_stacks::ComputedStack;
@@ -487,7 +487,7 @@ fn has_child_spec(store: &dyn LayerStore, layer: &Layer, site: &SpecPath, name: 
 #[derive(Default)]
 pub(crate) struct ChildIndex {
     /// Per layer, its generation and the children under each parent site.
-    layers: Lock<HashMap<LayerId, Arc<(u64, LayerChildren)>>>,
+    layers: ReadLock<HashMap<LayerId, Arc<(u64, LayerChildren)>>>,
 }
 
 /// The children of a layer's parent sites, keyed by the parent's prim
@@ -508,7 +508,7 @@ impl ChildIndex {
         f: impl FnOnce(&[TokenId]) -> R,
     ) -> R {
         let generation = layer.generation();
-        let current = self.layers.with(|layers| {
+        let current = self.layers.read(|layers| {
             layers
                 .get(&layer.id)
                 .filter(|entry| entry.0 == generation)
@@ -519,7 +519,7 @@ impl ChildIndex {
         let entry = current.unwrap_or_else(|| {
             let entry = Arc::new((generation, index_layer(store, layer)));
             self.layers
-                .with(|layers| layers.insert(layer.id, entry.clone()));
+                .write(|layers| layers.insert(layer.id, entry.clone()));
             entry
         });
         let segments = store.paths().resolve(site.prim_path()).segments();

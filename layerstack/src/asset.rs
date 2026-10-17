@@ -45,7 +45,9 @@
 
 use alloc::{string::String, sync::Arc, vec::Vec};
 
+mod format_args;
 mod package_path;
+pub use format_args::{FORMAT_ARGS_DELIMITER, FormatArgs, FormatArgsError};
 pub use package_path::PackagePath;
 
 use hashbrown::{HashMap, HashSet};

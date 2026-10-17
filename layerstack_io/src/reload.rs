@@ -210,6 +210,7 @@ impl<B: Storage> StageDocument<B> {
             self.stage.options().schemas.clone(),
         );
         reader.variant_arcs = self.variant_arcs;
+        reader.formats = self.formats.clone();
         reader.reachable_only = root_closure;
         for id in roots {
             let identifier = reader.catalog.sources[&id].identifier.clone();

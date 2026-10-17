@@ -2524,6 +2524,49 @@ impl Layer {
         }
     }
 
+    /// Inserts `spec` at the prim path `path` as [`Layer::insert_prim`] does,
+    /// and lists its name after its parent's children when they do not list
+    /// it yet. A missing parent spec is created as an `over` (the
+    /// pseudo-root's holding children alone) and listed in turn.
+    ///
+    /// A layer built outside a store, as a file format builds one, keeps the
+    /// namespace its specs describe this way, so it can be written: a spec
+    /// its parent does not list has no place in a USDA or USDC layer.
+    /// Specs inside variant branches go through [`Layer::insert_prim`].
+    ///
+    /// OpenUSD: `SdfCreatePrimInLayer` and `SdfPrimSpec::New`. AOUSD Core
+    /// §7 (prim specs and their children).
+    pub fn define_prim(&mut self, path: PathId, spec: PrimSpec, paths: &PathInterner) {
+        self.insert_prim(path, spec);
+        let mut child = path;
+        while let Some(parent) = paths.parent(child) {
+            let Some(name) = paths.resolve(child).leaf() else {
+                return;
+            };
+            let created = !self.prims.contains_key(&parent);
+            if created {
+                let specifier = paths.parent(parent).map(|_| Specifier::Over);
+                self.insert_prim(
+                    parent,
+                    PrimSpec {
+                        specifier,
+                        ..PrimSpec::default()
+                    },
+                );
+            }
+            let parent_spec = self.prims.get_mut(&parent).expect("inserted above");
+            if parent_spec.authored_children.contains(&name) {
+                return;
+            }
+            parent_spec.authored_children.push(name);
+            self.record_change(true, Some(alloc::vec![parent]));
+            if !created {
+                return;
+            }
+            child = parent;
+        }
+    }
+
     /// Returns the absolute prim path named by [`Layer::default_prim`], or
     /// `None` when `defaultPrim` is not authored or is not a prim path.
     ///
@@ -3132,6 +3175,26 @@ mod tests {
 
     fn entry(key: &str, val: Value) -> (Arc<str>, Value) {
         (Arc::from(key), val)
+    }
+
+    #[test]
+    fn defined_prims_are_listed_among_their_parents_children() {
+        let mut store = InMemoryStore::default();
+        let (abc, ad) = (store.path("/A/B/C"), store.path("/A/D"));
+        let (root, a, b) = (store.path("/"), store.path("/A"), store.path("/A/B"));
+        let name = |s: &str| store.tokens.intern(s);
+        let mut layer = Layer::new(LayerId(1));
+        layer.define_prim(abc, PrimSpec::def(), &store.paths);
+        layer.define_prim(ad, PrimSpec::def(), &store.paths);
+        layer.define_prim(ad, PrimSpec::def().with_active(false), &store.paths);
+        assert_eq!(layer.prim(root).unwrap().authored_children, [name("A")]);
+        assert_eq!(layer.prim(root).unwrap().specifier, None);
+        let parent = layer.prim(a).unwrap();
+        assert_eq!(parent.specifier, Some(Specifier::Over));
+        assert_eq!(parent.authored_children, [name("B"), name("D")]);
+        assert_eq!(layer.prim(b).unwrap().authored_children, [name("C")]);
+        assert_eq!(layer.prim(abc).unwrap().specifier, Some(Specifier::Def));
+        assert_eq!(layer.prim(ad).unwrap().active, Some(false));
     }
 
     #[test]

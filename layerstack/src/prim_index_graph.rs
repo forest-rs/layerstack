@@ -390,7 +390,7 @@ impl PrimIndexGraph {
     /// another.
     pub(crate) fn reroot_stage_sites(
         &mut self,
-        paths: &mut crate::path::PathInterner,
+        paths: &crate::path::PathInterner,
         stage_stack: LayerStackIdentifier,
         from: crate::path::PathId,
         to: crate::path::PathId,

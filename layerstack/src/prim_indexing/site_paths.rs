@@ -28,7 +28,7 @@ pub(crate) fn is_variant_selection_path(site: &SpecPath) -> bool {
 /// The parent of `site`: without its trailing variant selection, or
 /// without its last prim name. `None` for the root.
 /// OpenUSD: `SdfPath::GetParentPath`.
-pub(crate) fn parent(paths: &mut PathInterner, site: &SpecPath) -> Option<SpecPath> {
+pub(crate) fn parent(paths: &PathInterner, site: &SpecPath) -> Option<SpecPath> {
     let prim = site.prim_path();
     let depth = paths.resolve(prim).depth();
     let entries = site.selection_entries();
@@ -95,7 +95,7 @@ pub(crate) fn apply_selections_of(
 /// rest of its prim names and variant selections.
 /// OpenUSD: `SdfPath::ReplacePrefix` on variant-qualified paths.
 pub(crate) fn replace_prefix(
-    paths: &mut PathInterner,
+    paths: &PathInterner,
     site: &SpecPath,
     from: &SpecPath,
     to: &SpecPath,

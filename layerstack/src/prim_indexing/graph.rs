@@ -205,18 +205,14 @@ impl Graph {
 
     /// The node's site path at the namespace depth its arc was introduced
     /// at. OpenUSD: `PcpNodeRef::GetPathAtIntroduction`.
-    pub(crate) fn path_at_introduction(
-        &self,
-        paths: &mut PathInterner,
-        node: NodeIndex,
-    ) -> SpecPath {
+    pub(crate) fn path_at_introduction(&self, paths: &PathInterner, node: NodeIndex) -> SpecPath {
         let levels = self.depth_below_introduction(paths, node);
         truncated(paths, &self.node(node).site.path, levels)
     }
 
     /// The parent's site path at the namespace depth `node`'s arc was
     /// introduced at. OpenUSD: `PcpNodeRef::GetIntroPath`.
-    pub(crate) fn intro_path(&self, paths: &mut PathInterner, node: NodeIndex) -> SpecPath {
+    pub(crate) fn intro_path(&self, paths: &PathInterner, node: NodeIndex) -> SpecPath {
         let parent = self.node(node).parent;
         if parent == NONE {
             let root = paths.intern_segments(&[]);
@@ -312,7 +308,7 @@ impl Graph {
     /// index of the subgraph's root. OpenUSD: `InsertChildSubgraph`.
     pub(crate) fn insert_subgraph(
         &mut self,
-        paths: &mut PathInterner,
+        paths: &PathInterner,
         parent: NodeIndex,
         mut subgraph: Self,
         arc: SubgraphArc,
@@ -686,7 +682,7 @@ impl Graph {
     /// prim `name`. OpenUSD: `AppendChildNameToAllSites`.
     pub(crate) fn append_child_name(
         &mut self,
-        paths: &mut PathInterner,
+        paths: &PathInterner,
         name: crate::interner::TokenId,
     ) {
         for node in &mut self.nodes {
@@ -735,7 +731,7 @@ impl Iterator for Children<'_> {
 
 /// `path` with its last `levels` prim names removed, each with the
 /// variant selections that follow it. OpenUSD: `_GetPathAtIntroDepth`.
-pub(crate) fn truncated(paths: &mut PathInterner, path: &SpecPath, levels: u16) -> SpecPath {
+pub(crate) fn truncated(paths: &PathInterner, path: &SpecPath, levels: u16) -> SpecPath {
     if levels == 0 {
         return path.clone();
     }

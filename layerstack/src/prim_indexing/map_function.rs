@@ -69,7 +69,7 @@ fn has_prefix(paths: &PathInterner, path: PathId, prefix: PathId) -> bool {
 }
 
 /// `path` with its prefix `from` replaced by `to`.
-fn replace_prefix(paths: &mut PathInterner, path: PathId, from: PathId, to: PathId) -> PathId {
+fn replace_prefix(paths: &PathInterner, path: PathId, from: PathId, to: PathId) -> PathId {
     if path == from {
         return to;
     }
@@ -102,7 +102,7 @@ fn best_source(
 }
 
 /// The parent of `path`, interned; `path` itself for the root.
-fn parent_of(paths: &mut PathInterner, path: PathId) -> PathId {
+fn parent_of(paths: &PathInterner, path: PathId) -> PathId {
     let segments = paths.resolve(path).segments();
     match segments.split_last() {
         Some((_, parent)) => {
@@ -159,7 +159,7 @@ fn has_better_target(
 
 /// Maps `path` through `pairs` (source to target, or back when `invert`).
 fn map_path(
-    paths: &mut PathInterner,
+    paths: &PathInterner,
     pairs: &[Pair],
     root_identity: bool,
     path: PathId,
@@ -195,7 +195,7 @@ fn sort_pairs(paths: &PathInterner, pairs: &mut [Pair]) {
 }
 
 /// Whether removing `pairs[at]` changes no mapping.
-fn is_redundant(paths: &mut PathInterner, pairs: &[Pair], at: usize, root: PathId) -> bool {
+fn is_redundant(paths: &PathInterner, pairs: &[Pair], at: usize, root: PathId) -> bool {
     let (source, target) = pairs[at];
     if source == root {
         return false;
@@ -240,7 +240,7 @@ fn is_redundant(paths: &mut PathInterner, pairs: &[Pair], at: usize, root: PathI
 
 /// Removes redundant pairs from sorted `pairs`, returning whether the root
 /// identity pair was among them (it is removed too).
-fn canonicalize(paths: &mut PathInterner, pairs: &mut Vec<Pair>, root: PathId) -> bool {
+fn canonicalize(paths: &PathInterner, pairs: &mut Vec<Pair>, root: PathId) -> bool {
     let mut at = 0;
     while at < pairs.len() {
         if is_redundant(paths, pairs, at, root) {
@@ -290,7 +290,7 @@ impl MapFunction {
     }
 
     /// This mapping with its parts composed into one list of pairs.
-    pub(crate) fn normalized(&self, paths: &mut PathInterner) -> Self {
+    pub(crate) fn normalized(&self, paths: &PathInterner) -> Self {
         let Some(parts) = &self.parts else {
             return self.clone();
         };
@@ -308,7 +308,7 @@ impl MapFunction {
     /// The mapping of `pairs` (a pair whose source and target are both the
     /// root is the root identity), with `offset`.
     pub(crate) fn new(
-        paths: &mut PathInterner,
+        paths: &PathInterner,
         pairs: impl IntoIterator<Item = Pair>,
         offset: LayerOffset,
     ) -> Self {
@@ -350,7 +350,7 @@ impl MapFunction {
     }
 
     /// This mapping with every other path mapping to itself.
-    pub(crate) fn with_root_identity(&self, paths: &mut PathInterner) -> Self {
+    pub(crate) fn with_root_identity(&self, paths: &PathInterner) -> Self {
         Self {
             root_identity: true,
             ..self.normalized(paths)
@@ -358,7 +358,7 @@ impl MapFunction {
     }
 
     /// This mapping with the root identity removed.
-    pub(crate) fn without_root_identity(&self, paths: &mut PathInterner) -> Self {
+    pub(crate) fn without_root_identity(&self, paths: &PathInterner) -> Self {
         Self {
             root_identity: false,
             ..self.normalized(paths)
@@ -368,7 +368,7 @@ impl MapFunction {
     /// Maps `path` from the source namespace to the target namespace.
     pub(crate) fn map_source_to_target(
         &self,
-        paths: &mut PathInterner,
+        paths: &PathInterner,
         path: PathId,
     ) -> Option<PathId> {
         match &self.parts {
@@ -384,7 +384,7 @@ impl MapFunction {
     /// Maps `path` from the target namespace back to the source namespace.
     pub(crate) fn map_target_to_source(
         &self,
-        paths: &mut PathInterner,
+        paths: &PathInterner,
         path: PathId,
     ) -> Option<PathId> {
         match &self.parts {
@@ -396,7 +396,7 @@ impl MapFunction {
     }
 
     /// The mapping that applies `inner`, then `self`.
-    pub(crate) fn compose(&self, paths: &mut PathInterner, inner: &Self) -> Self {
+    pub(crate) fn compose(&self, paths: &PathInterner, inner: &Self) -> Self {
         if self.is_identity() {
             return inner.clone();
         }
@@ -451,11 +451,7 @@ impl MapFunction {
     ///
     /// OpenUSD: `PcpMapFunction::ImpliedClass` and
     /// `_ComposeImpliedClassPathPairs` (`pxr/usd/pcp/mapFunction.cpp`).
-    pub(crate) fn implied_class(
-        paths: &mut PathInterner,
-        transfer: &Self,
-        class_arc: &Self,
-    ) -> Self {
+    pub(crate) fn implied_class(paths: &PathInterner, transfer: &Self, class_arc: &Self) -> Self {
         if transfer.is_identity() || class_arc.is_identity() {
             return class_arc.clone();
         }
@@ -560,18 +556,18 @@ mod tests {
                 .iter()
                 .map(|(source, target)| (self.path(source), Some(self.path(target))))
                 .collect();
-            MapFunction::new(&mut self.paths, pairs, LayerOffset::IDENTITY)
+            MapFunction::new(&self.paths, pairs, LayerOffset::IDENTITY)
         }
 
         fn forward(&mut self, map: &MapFunction, path: &str) -> Option<String> {
             let path = self.path(path);
-            map.map_source_to_target(&mut self.paths, path)
+            map.map_source_to_target(&self.paths, path)
                 .map(|id| self.paths.display(id, &self.tokens))
         }
 
         fn backward(&mut self, map: &MapFunction, path: &str) -> Option<String> {
             let path = self.path(path);
-            map.map_target_to_source(&mut self.paths, path)
+            map.map_target_to_source(&self.paths, path)
                 .map(|id| self.paths.display(id, &self.tokens))
         }
     }
@@ -632,7 +628,7 @@ mod tests {
         let mut f = Fixture::new();
         let inner = f.map(&[("/Model", "/Lamp")]);
         let outer = f.map(&[("/Lamp", "/Shot/Lamp")]);
-        let composed = outer.compose(&mut f.paths, &inner);
+        let composed = outer.compose(&f.paths, &inner);
         assert_eq!(
             f.forward(&composed, "/Model/Shade").as_deref(),
             Some("/Shot/Lamp/Shade")
@@ -653,8 +649,8 @@ mod tests {
         let mut f = Fixture::new();
         let inner = f.map(&[("/", "/"), ("/X", "/Y")]);
         let outer = f.map(&[("/", "/"), ("/Y", "/Z")]);
-        let composed = outer.compose(&mut f.paths, &inner);
-        let deferred = outer.clone().deferred().compose(&mut f.paths, &inner);
+        let composed = outer.compose(&f.paths, &inner);
+        let deferred = outer.clone().deferred().compose(&f.paths, &inner);
         assert_eq!(f.forward(&composed, "/Y").as_deref(), Some("/Y"));
         assert_eq!(f.forward(&deferred, "/Y"), None);
         for map in [&composed, &deferred] {
@@ -662,7 +658,7 @@ mod tests {
             assert_eq!(f.backward(map, "/Z/A").as_deref(), Some("/X/A"));
             assert_eq!(f.forward(map, "/Other").as_deref(), Some("/Other"));
         }
-        assert_eq!(deferred.normalized(&mut f.paths), composed);
+        assert_eq!(deferred.normalized(&f.paths), composed);
     }
 
     #[test]
@@ -670,7 +666,7 @@ mod tests {
         let mut f = Fixture::new();
         let transfer = f.map(&[("/", "/"), ("/Model", "/Model_1")]);
         let class_arc = f.map(&[("/", "/"), ("/Model/Class", "/Model/Inst")]);
-        let implied = MapFunction::implied_class(&mut f.paths, &transfer, &class_arc);
+        let implied = MapFunction::implied_class(&f.paths, &transfer, &class_arc);
         assert_eq!(
             f.forward(&implied, "/Model_1/Class").as_deref(),
             Some("/Model_1/Inst")
@@ -683,7 +679,7 @@ mod tests {
         let mut f = Fixture::new();
         let (a, b, c) = (f.path("/A"), f.path("/B"), f.path("/C"));
         let inner = MapFunction::new(
-            &mut f.paths,
+            &f.paths,
             [(a, Some(b))],
             LayerOffset {
                 offset: 10.0,
@@ -691,14 +687,14 @@ mod tests {
             },
         );
         let outer = MapFunction::new(
-            &mut f.paths,
+            &f.paths,
             [(b, Some(c))],
             LayerOffset {
                 offset: 5.0,
                 scale: 1.0,
             },
         );
-        let composed = outer.compose(&mut f.paths, &inner);
+        let composed = outer.compose(&f.paths, &inner);
         assert_eq!(
             composed.offset(),
             LayerOffset {

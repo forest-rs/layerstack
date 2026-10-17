@@ -316,25 +316,32 @@ pub(crate) fn rust_type_in(
 }
 
 /// Text for a `#[doc = ...]` attribute: Markdown-escaped, on one line.
+/// Code spans are kept as written: Markdown decodes neither entities nor
+/// backslash escapes inside them, so escaping there would show literally.
 fn doc_text(text: &str) -> String {
     let mut out = String::new();
+    let mut in_code = false;
     for word in text.split_whitespace() {
         if !out.is_empty() {
             out.push(' ');
         }
-        if word.contains("://") {
+        if !in_code && word.contains("://") {
             let _ = write!(out, "`{}`", word.replace('`', ""));
             continue;
         }
         for c in word.chars() {
             match c {
+                '`' => {
+                    in_code = !in_code;
+                    out.push(c);
+                }
+                c if in_code => out.push(c),
                 '<' => out.push_str("&lt;"),
                 '>' => out.push_str("&gt;"),
                 '[' => out.push_str("\\["),
                 ']' => out.push_str("\\]"),
                 '\\' => out.push_str("\\\\"),
                 '*' => out.push_str("\\*"),
-                '_' if false => {}
                 c => out.push(c),
             }
         }
@@ -1039,6 +1046,39 @@ fn accessors(
     })
 }
 
+/// The enum variant naming the allowed token `token`: its words in
+/// upper camel case (`catmullClark` → `CatmullClark`). A token that does
+/// not split into such words is named as usdGenSchema names its token
+/// identifiers (`_MakeValidToken`: a leading digit gets a `_`, the rest is
+/// camel-cased with non-word characters dropped, `TfMakeValidIdentifier`
+/// last), in upper camel case: `choice/mandatory` → `ChoiceMandatory`,
+/// `3d` → `_3d`.
+fn token_variant(token: &str) -> String {
+    let direct = pascal(&snake(token));
+    if !direct.is_empty()
+        && direct.starts_with(|c: char| c.is_ascii_alphabetic())
+        && direct.chars().all(|c| c.is_ascii_alphanumeric())
+    {
+        return direct;
+    }
+    use crate::compile::names;
+    let digit = token.starts_with(|c: char| c.is_ascii_digit());
+    let mut id = names::camel_case(&if digit {
+        format!("_{token}")
+    } else {
+        token.to_string()
+    });
+    if !names::is_valid_identifier(&id) {
+        id = names::make_valid_identifier(&id);
+    }
+    let words = pascal(&snake(&id));
+    if words.starts_with(|c: char| c.is_ascii_alphabetic()) {
+        words
+    } else {
+        format!("_{words}")
+    }
+}
+
 /// The enum of a property's `allowedTokens`, with `Other` for any token
 /// the schema does not list.
 fn token_enum(cx: &Context<'_, '_>, name: &str, property: &Property) -> Result<String, String> {
@@ -1047,26 +1087,30 @@ fn token_enum(cx: &Context<'_, '_>, name: &str, property: &Property) -> Result<S
     let mut from = String::new();
     let mut to = String::new();
     for token in &property.allowed_tokens {
-        let variant = pascal(&snake(token));
-        if variant.is_empty()
-            || variant.starts_with(|c: char| c.is_ascii_digit())
-            || variant == "Other"
-            || !variant.chars().all(|c| c.is_ascii_alphanumeric())
-        {
+        let variant = token_variant(token);
+        if variant == "Other" {
             return Err(format!(
-                "{}: the allowed token {token:?} makes no enum variant",
+                "{}: the allowed token {token:?} makes the variant `Other`, which stands \
+                 for unlisted tokens",
                 property.name
             ));
         }
         if !variants.insert(variant.clone()) {
             return Err(format!(
-                "{}: two allowed tokens make the variant `{variant}`",
+                "{}: two allowed tokens make the variant `{variant}`; usdGenSchema \
+                 requires token identifiers to map to exactly one token value",
                 property.name
             ));
         }
+        // A token starting with a digit keeps usdGenSchema's leading `_`.
+        let allow = if variant.starts_with('_') {
+            "    #[allow(non_camel_case_types, reason = \"usdGenSchema's identifier\")]\n"
+        } else {
+            ""
+        };
         let _ = writeln!(
             declared,
-            "    #[doc = {:?}]\n    {variant},",
+            "    #[doc = {:?}]\n{allow}    {variant},",
             format!("`{token}`")
         );
         let _ = writeln!(from, "            {token:?} => Self::{variant},");
@@ -1852,4 +1896,34 @@ fn literal(zero: &Value, is_array: bool, k: u32) -> Result<String, String> {
         Value::Matrix4d(_) => matrix(4),
         other => return Err(format!("no literal for values like {other:?}")),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Identifier tokens keep the names the built-in views have; others are
+    /// named as usdGenSchema names their token identifiers.
+    #[test]
+    fn token_variants_follow_usd_gen_schema() {
+        let names = |tokens: &[&str]| tokens.iter().map(|t| token_variant(t)).collect::<Vec<_>>();
+        assert_eq!(
+            names(&["catmullClark", "none", "half-to-even", "fromTexture"]),
+            ["CatmullClark", "None", "HalfToEven", "FromTexture"]
+        );
+        assert_eq!(
+            names(&["choice/mandatory", "excludes-rows", "3d", "x-ray"]),
+            ["ChoiceMandatory", "ExcludesRows", "_3d", "XRay"]
+        );
+    }
+
+    /// `doc_text` escapes Markdown outside code spans only: inside them
+    /// neither entities nor backslash escapes are decoded.
+    #[test]
+    fn code_spans_are_written_literally() {
+        assert_eq!(
+            doc_text("USD attribute `price:<instance>:base` [*] <b>"),
+            "USD attribute `price:<instance>:base` \\[\\*\\] &lt;b&gt;"
+        );
+    }
 }

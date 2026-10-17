@@ -236,31 +236,15 @@ pub(crate) fn read(pxr: &Path, source: &Path) -> Result<Model, String> {
                                 .unwrap_or_default(),
                         },
                     );
-                    if let Some(identifier) = entry["schemaIdentifier"].as_str() {
-                        for target in strings(&entry["apiSchemaAutoApplyTo"]) {
-                            plugin_auto_applies
-                                .entry(plugin)
-                                .or_default()
-                                .push((identifier.into(), target));
-                        }
-                    }
                 }
             }
-            if let Some(auto) = info["AutoApplyAPISchemas"].as_object() {
-                for (schema, entry) in auto {
-                    for target in strings(&entry["apiSchemaAutoApplyTo"]) {
-                        plugin_auto_applies
-                            .entry(plugin)
-                            .or_default()
-                            .push((schema.clone(), target));
-                    }
-                }
-            }
+            plugin_auto_applies
+                .entry(plugin)
+                .or_default()
+                .extend(auto_applies(info));
         }
     }
 
-    let custom_data = store.tokens.intern("customData");
-    let allowed_tokens = store.tokens.intern("allowedTokens");
     let mut domains = Vec::new();
     for (index, &(plugin, variant, origin)) in DOMAINS.iter().enumerate() {
         let path = definitions(pxr, source, plugin, origin).join("generatedSchema.usda");
@@ -332,12 +316,10 @@ pub(crate) fn read(pxr: &Path, source: &Path) -> Result<Model, String> {
 
         let api_names = source_api_names(source, plugin, &mut files)?;
         let mut used_api_names: Vec<(String, String)> = Vec::new();
-        let mut schemas = Vec::new();
-        for definition in definitions {
-            let name = String::from(store.tokens.resolve(definition.name));
-            let cpp = types
+        let cpp_of = |name: &str| {
+            types
                 .iter()
-                .find(|(_, info)| info.identifier.as_deref() == Some(&name))
+                .find(|(_, info)| info.identifier.as_deref() == Some(name))
                 .and_then(|(cpp_name, _)| {
                     let stem = cpp_name.strip_prefix(variant)?;
                     let mut chars = stem.chars();
@@ -348,103 +330,30 @@ pub(crate) fn read(pxr: &Path, source: &Path) -> Result<Model, String> {
                     if !text.contains(&format!("class {cpp_name}")) {
                         return None;
                     }
-                    files.push(relative(&header));
-                    Some((cpp_name.clone(), text))
-                });
-            let spec = store
-                .paths
-                .lookup(&layerstack::Path::root().join(&[definition.name]))
-                .and_then(|path| emitted.layer.prim(path))
-                .ok_or_else(|| format!("{name}: no prim spec"))?;
-            let class_doc = doc_of(spec.field(custom_data));
-            let schema_name = name.clone();
-            let property_spec = |property: layerstack::TokenId| {
-                spec.properties
-                    .iter()
-                    .find(|entry| entry.name == property)
-                    .map(|entry| &entry.spec)
-            };
-            let convert = |p: &layerstack::PropertyDefinition, tokens: &TokenInterner| Property {
-                doc: property_spec(p.name)
-                    .map(|s| doc_of(s.metadata(custom_data)))
-                    .unwrap_or_default(),
-                allowed_tokens: property_spec(p.name)
-                    .and_then(|s| s.metadata(allowed_tokens))
-                    .map(|allowed| match allowed {
-                        FieldValue::Value(Value::Array(items)) => items
-                            .iter()
-                            .filter_map(|item| match item {
-                                Value::Token(token) => Some(tokens.resolve(*token).to_string()),
-                                Value::String(text) => Some(text.to_string()),
-                                _ => None,
-                            })
-                            .collect(),
-                        _ => Vec::new(),
-                    })
-                    .unwrap_or_default(),
-                api_name: api_names
-                    .get(&(schema_name.clone(), tokens.resolve(p.name).to_string()))
-                    .cloned(),
-                name: tokens.resolve(p.name).to_string(),
-                kind: p.kind,
-                value_type: p.type_name.as_ref().map(|t| {
-                    (
-                        t.type_name.to_string(),
-                        t.is_array,
-                        t.default_scalar.clone(),
-                    )
-                }),
-                variability: p.variability,
-                fallback: p.fallback.clone(),
-                metadata: p.metadata.clone(),
-            };
-            let names = |ids: &[layerstack::TokenId], tokens: &TokenInterner| -> Vec<String> {
-                ids.iter()
-                    .map(|id| tokens.resolve(*id).to_string())
-                    .collect()
-            };
+                    Some((cpp_name.clone(), text, relative(&header)))
+                })
+        };
+        let mut schemas = Vec::new();
+        for definition in definitions {
+            let name = String::from(store.tokens.resolve(definition.name));
+            let cpp = cpp_of(&name).map(|(class, header, path)| {
+                files.push(path);
+                (class, header)
+            });
             for property in definition.properties.iter().chain(&definition.overrides) {
                 used_api_names.push((
                     name.clone(),
                     store.tokens.resolve(property.name).to_string(),
                 ));
             }
-            schemas.push(Schema {
+            schemas.push(schema_of(
+                &emitted.layer,
+                definition,
+                &api_names,
                 cpp,
-                doc: class_doc,
-                can_only_apply_to: names(&definition.can_only_apply_to, &store.tokens),
-                allowed_instance_names: names(&definition.allowed_instance_names, &store.tokens),
-                instance_can_only_apply_to: definition
-                    .instance_can_only_apply_to
-                    .iter()
-                    .map(|(instance, types)| {
-                        (
-                            store.tokens.resolve(*instance).to_string(),
-                            names(types, &store.tokens),
-                        )
-                    })
-                    .collect(),
-                name,
-                kind: definition.kind,
-                parent: definition
-                    .parent
-                    .map(|parent| store.tokens.resolve(parent).to_string()),
-                built_ins: definition
-                    .built_ins
-                    .iter()
-                    .map(|built_in| store.tokens.resolve(*built_in).to_string())
-                    .collect(),
-                properties: definition
-                    .properties
-                    .iter()
-                    .map(|p| convert(p, &store.tokens))
-                    .collect(),
-                overrides: definition
-                    .overrides
-                    .iter()
-                    .map(|p| convert(p, &store.tokens))
-                    .collect(),
-            });
+                &store.tokens,
+                &store.paths,
+            )?);
         }
         // Every `apiName` of a generated schema names one of its properties;
         // one that does not means the source and the wheel differ.
@@ -529,6 +438,95 @@ pub(crate) fn read(pxr: &Path, source: &Path) -> Result<Model, String> {
         files,
         domains,
         tokens: store.tokens,
+    })
+}
+
+/// The schema `definition` reads from the generated schema layer `layer`,
+/// with its documentation and `allowedTokens` from the layer and each
+/// property's `apiName` from `api_names`, by `(schema, property)`.
+pub(crate) fn schema_of(
+    layer: &layerstack::Layer,
+    definition: layerstack::SchemaDefinition,
+    api_names: &BTreeMap<(String, String), String>,
+    cpp: Option<(String, String)>,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
+) -> Result<Schema, String> {
+    let custom_data = tokens.intern("customData");
+    let allowed_tokens = tokens.intern("allowedTokens");
+    let name = String::from(tokens.resolve(definition.name));
+    let spec = paths
+        .lookup(&layerstack::Path::root().join(&[definition.name]))
+        .and_then(|path| layer.prim(path))
+        .ok_or_else(|| format!("{name}: no prim spec"))?;
+    let class_doc = doc_of(spec.field(custom_data));
+    let property_spec = |property: layerstack::TokenId| {
+        spec.properties
+            .iter()
+            .find(|entry| entry.name == property)
+            .map(|entry| &entry.spec)
+    };
+    let convert = |p: &layerstack::PropertyDefinition| Property {
+        doc: property_spec(p.name)
+            .map(|s| doc_of(s.metadata(custom_data)))
+            .unwrap_or_default(),
+        allowed_tokens: property_spec(p.name)
+            .and_then(|s| s.metadata(allowed_tokens))
+            .map(|allowed| match allowed {
+                FieldValue::Value(Value::Array(items)) => items
+                    .iter()
+                    .filter_map(|item| match item {
+                        Value::Token(token) => Some(tokens.resolve(*token).to_string()),
+                        Value::String(text) => Some(text.to_string()),
+                        _ => None,
+                    })
+                    .collect(),
+                _ => Vec::new(),
+            })
+            .unwrap_or_default(),
+        api_name: api_names
+            .get(&(name.clone(), tokens.resolve(p.name).to_string()))
+            .cloned(),
+        name: tokens.resolve(p.name).to_string(),
+        kind: p.kind,
+        value_type: p.type_name.as_ref().map(|t| {
+            (
+                t.type_name.to_string(),
+                t.is_array,
+                t.default_scalar.clone(),
+            )
+        }),
+        variability: p.variability,
+        fallback: p.fallback.clone(),
+        metadata: p.metadata.clone(),
+    };
+    let names = |ids: &[layerstack::TokenId]| -> Vec<String> {
+        ids.iter()
+            .map(|id| tokens.resolve(*id).to_string())
+            .collect()
+    };
+    Ok(Schema {
+        cpp,
+        doc: class_doc,
+        can_only_apply_to: names(&definition.can_only_apply_to),
+        allowed_instance_names: names(&definition.allowed_instance_names),
+        instance_can_only_apply_to: definition
+            .instance_can_only_apply_to
+            .iter()
+            .map(|(instance, types)| (tokens.resolve(*instance).to_string(), names(types)))
+            .collect(),
+        kind: definition.kind,
+        parent: definition
+            .parent
+            .map(|parent| tokens.resolve(parent).to_string()),
+        built_ins: definition
+            .built_ins
+            .iter()
+            .map(|built_in| tokens.resolve(*built_in).to_string())
+            .collect(),
+        properties: definition.properties.iter().map(convert).collect(),
+        overrides: definition.overrides.iter().map(convert).collect(),
+        name,
     })
 }
 
@@ -659,6 +657,32 @@ fn parent_of<'t>(
     Ok(None)
 }
 
+/// The auto-applies a plugin's `Info` declares, `(applied schema,
+/// target)`: each type's `apiSchemaAutoApplyTo`, in type name order, then
+/// `AutoApplyAPISchemas`'.
+pub(crate) fn auto_applies(info: &Json) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    for entry in info["Types"]
+        .as_object()
+        .into_iter()
+        .flat_map(|t| t.values())
+    {
+        if let Some(identifier) = entry["schemaIdentifier"].as_str() {
+            for target in strings(&entry["apiSchemaAutoApplyTo"]) {
+                out.push((identifier.into(), target));
+            }
+        }
+    }
+    if let Some(auto) = info["AutoApplyAPISchemas"].as_object() {
+        for (schema, entry) in auto {
+            for target in strings(&entry["apiSchemaAutoApplyTo"]) {
+                out.push((schema.clone(), target));
+            }
+        }
+    }
+    out
+}
+
 fn strings(json: &Json) -> Vec<String> {
     json.as_array()
         .map(|items| {
@@ -682,12 +706,17 @@ fn definitions(pxr: &Path, source: &Path, plugin: &str, origin: Origin) -> PathB
 /// A `plugInfo.json`, without its `#` comment lines, which JSON has not.
 pub(crate) fn plug_info(path: &Path) -> Result<Json, String> {
     let text = fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    plug_info_text(&text).map_err(|e| format!("{}: {e}", path.display()))
+}
+
+/// [`plug_info`] of the text of a `plugInfo.json`.
+pub(crate) fn plug_info_text(text: &str) -> Result<Json, String> {
     let json: String = text
         .lines()
         .filter(|line| !line.trim_start().starts_with('#'))
         .collect::<Vec<_>>()
         .join("\n");
-    serde_json::from_str(&json).map_err(|e| format!("{}: {e}", path.display()))
+    serde_json::from_str(&json).map_err(|e| e.to_string())
 }
 
 /// The release of the usd-core wheel installed in `site_packages`.

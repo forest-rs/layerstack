@@ -214,10 +214,63 @@ fn bench_batch_removals(c: &mut Criterion) {
     group.finish();
 }
 
+/// One transaction creating `n` sibling prims, each with three attributes,
+/// as a procedural generator authors them, then undoing it: the cost of a
+/// bulk edit should grow with `n`, not with `n` squared.
+fn bench_bulk_create(c: &mut Criterion) {
+    let mut group = c.benchmark_group("live_bulk_create");
+    group.sample_size(10);
+    for n in [1_000, 10_000, 100_000] {
+        let mut store = InMemoryStore::default();
+        let world = store.path("/World");
+        let root = store.path("/");
+        let name = store.tokens.intern("World");
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(world, PrimSpec::def());
+        layer.insert_prim(root, PrimSpec::default().with_children(vec![name]));
+        store.insert_layer(layer);
+        let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+        let target = EditTarget::for_layer(LayerId(1));
+        let cube = store.tokens.intern("Cube");
+        let names = ["x", "y", "z"].map(|name| store.tokens.intern(name));
+        let mut create = Transaction::new();
+        for i in 0..n {
+            let path = store.path(&format!("/World/Item{i}"));
+            create.create_prim(target.prim(path), layerstack::Specifier::Def, Some(cube));
+            for (at, &property) in names.iter().enumerate() {
+                create.create_property(
+                    target.property(PropertyPath::new(path, property)),
+                    PropertySpec::typed_attribute(PropertyType::new(
+                        "double",
+                        false,
+                        Value::Double(0.0),
+                    ))
+                    .with_default(Value::Double(at as f64)),
+                );
+            }
+        }
+        group.bench_with_input(BenchmarkId::new("create", n), &n, |b, _| {
+            b.iter_custom(|iterations| {
+                let mut total = core::time::Duration::ZERO;
+                for _ in 0..iterations {
+                    let start = std::time::Instant::now();
+                    let applied = live.apply(&mut store, &create).unwrap();
+                    total += start.elapsed();
+                    black_box(&applied.recomposed);
+                    live.apply(&mut store, &applied.inverse).unwrap();
+                }
+                total
+            });
+        });
+    }
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_live_edits,
     bench_local_structure,
-    bench_batch_removals
+    bench_batch_removals,
+    bench_bulk_create
 );
 criterion_main!(benches);

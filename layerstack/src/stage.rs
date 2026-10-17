@@ -14,11 +14,13 @@ pub use authoring::{
 mod objects;
 mod relationships;
 mod targets;
+mod view;
 pub use objects::{
     Attribute, AttributeQuery, AttributeQueryWork, Object, Prim, PrimSnapshot, Relationship,
 };
 pub use relationships::{RelationshipQuery, RelationshipQueryWork};
 pub use targets::{DropReason, DroppedTarget, TargetOpinion, TargetsExplanation};
+pub use view::{FromValue, PrimPathArg, PropertyPathArg, StageView};
 mod traversal;
 pub use traversal::{PrimPredicate, PrimRange, PrimStatus, PrimVisit, PrimVisits};
 pub(crate) mod metadata;

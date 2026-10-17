@@ -735,6 +735,13 @@ impl<B: Storage> StageDocument<B> {
     pub fn stage(&self) -> &LiveStage {
         &self.stage
     }
+    /// The composed stage bound to the document's store: the canonical way
+    /// to read it ([`layerstack::StageView`]).
+    ///
+    /// OpenUSD: the `UsdStage` this document opened.
+    pub fn view(&self) -> layerstack::StageView<'_> {
+        self.stage.view(&self.store)
+    }
     /// Disjoint mutable access for atomic stage edits and explicit controls.
     pub fn parts_mut(&mut self) -> (&mut InMemoryStore, &mut LiveStage) {
         (&mut self.store, &mut self.stage)

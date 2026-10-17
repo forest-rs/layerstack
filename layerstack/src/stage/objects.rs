@@ -6,7 +6,7 @@
 //! `UsdAttributeQuery`. Views borrow immutable snapshots; queries never hide
 //! synchronization or keep a mutable stage borrowed between evaluations.
 use super::*;
-use crate::{PropertyKind, TargetPath};
+use crate::{FromValue, PropertyKind, TargetPath};
 
 /// A generic object in a composed snapshot.
 #[derive(Clone, Copy, Debug)]
@@ -186,6 +186,36 @@ impl Attribute<'_> {
     pub fn get(self, time: Time) -> Option<Resolved<Value>> {
         self.stage
             .read_property(self.path, time, |v| Some(v.clone()))
+    }
+    /// The value at `time` as a `T`, schema fallback included. At the
+    /// default time this is the strongest default that converts
+    /// ([`FromValue`]); at a time code, the strongest source's value if it
+    /// converts. `None` when nothing converts, the value is blocked, or
+    /// `time`'s samples hold none.
+    ///
+    /// ```
+    /// # use layerstack::{InMemoryStore, Layer, LayerId, PrimSpec, PropertySpec, PropertyType, Stage, StageOptions, Time, Value};
+    /// # let mut store = InMemoryStore::default();
+    /// # let (world, radius) = (store.path("/World"), store.tokens.intern("radius"));
+    /// # let double = PropertyType::new("double", false, Value::Double(0.0));
+    /// # let mut layer = Layer::new(LayerId(1));
+    /// # layer.insert_prim(world, PrimSpec::def().with_property(radius,
+    /// #     PropertySpec::typed_attribute(double).with_default(Value::Double(2.5))));
+    /// # store.insert_layer(layer);
+    /// # let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+    /// let attribute = stage.view(&store).attribute("/World.radius").unwrap();
+    /// assert_eq!(attribute.value::<f64>(Time::Default), Some(2.5));
+    /// assert_eq!(attribute.value::<f32>(Time::Default), None);
+    /// ```
+    ///
+    /// OpenUSD: `UsdAttribute::Get<T>`.
+    ///
+    /// Spec: AOUSD Core §12.3 (value resolution), §13.3.2.4 (fallbacks).
+    pub fn value<T: FromValue>(self, time: Time) -> Option<T> {
+        let tokens = self.store.tokens();
+        self.stage
+            .read_property(self.path, time, |v| T::from_value(v, tokens))
+            .map(|resolved| resolved.value)
     }
     /// Reads and materializes the selected numeric array, exposing decode failure.
     #[doc(alias = "UsdAttribute::Get")]

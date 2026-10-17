@@ -2270,6 +2270,53 @@ impl Layer {
         &self.variant_prims
     }
 
+    /// Every prim spec of this layer, those inside variant branches
+    /// included, in namespace order: by path ([`PathInterner::cmp_paths`],
+    /// parents before children), the spec outside any branch first at each
+    /// path, then branch specs by their enclosing selections. The order
+    /// depends only on the layer's content, not on how it was built. Each
+    /// spec's properties keep their authored order
+    /// ([`PrimSpec::properties`]); sort them by name for an order that does
+    /// not depend on authoring either.
+    ///
+    /// Spec: AOUSD Core §7.3.6 (variant specs contain their own prim
+    /// specs), §8 (namespace).
+    #[must_use]
+    pub fn prim_specs_in_order(
+        &self,
+        paths: &PathInterner,
+        tokens: &TokenInterner,
+    ) -> Vec<(PathId, &PrimSpec)> {
+        let mut specs: Vec<(PathId, &PrimSpec)> = self
+            .prims
+            .iter()
+            .map(|(path, spec)| (*path, spec))
+            .chain(
+                self.variant_prims
+                    .iter()
+                    .flat_map(|(path, specs)| specs.iter().map(move |spec| (*path, spec))),
+            )
+            .collect();
+        let site = |spec: &PrimSpec| {
+            spec.outer_variant_sites
+                .iter()
+                .map(|s| {
+                    (
+                        paths.resolve(s.host_path).depth(),
+                        tokens.resolve(s.set),
+                        tokens.resolve(s.variant),
+                    )
+                })
+                .collect::<Vec<_>>()
+        };
+        specs.sort_by(|(a, x), (b, y)| {
+            paths
+                .cmp_paths(*a, *b, tokens)
+                .then_with(|| site(x).cmp(&site(y)))
+        });
+        specs
+    }
+
     /// Returns the variant branch prim specs for bulk editing.
     ///
     /// Records a structural change of the whole layer, as

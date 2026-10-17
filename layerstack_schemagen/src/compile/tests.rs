@@ -483,3 +483,24 @@ fn the_command_writes_checks_and_keeps_plug_info_edits() {
     run(false).unwrap();
     assert_eq!(std::fs::read_to_string(&plug_info).unwrap(), edited);
 }
+
+#[test]
+fn installing_fills_template_placeholders_and_keeps_edits() {
+    let template = "# comment\n{\"Plugins\": [{\"Info\": {\"Types\": {}}, \"LibraryPath\": \"@PLUG_INFO_LIBRARY_PATH@\", \"Name\": \"x\", \"ResourcePath\": \"@PLUG_INFO_RESOURCE_PATH@\", \"Root\": \"@PLUG_INFO_ROOT@\", \"Type\": \"resource\"}]}\n";
+    let installed = super::plug_info::install(template, true).unwrap();
+    assert!(!installed.contains('#'), "{installed}");
+    let json: serde_json::Value = serde_json::from_str(&installed).unwrap();
+    let plugin = &json["Plugins"][0];
+    assert_eq!(plugin["Root"], "..");
+    assert_eq!(plugin["ResourcePath"], "resources");
+    assert_eq!(plugin["LibraryPath"], "");
+    let edited = template.replace("@PLUG_INFO_ROOT@", "../..");
+    let json: serde_json::Value =
+        serde_json::from_str(&super::plug_info::install(&edited, true).unwrap()).unwrap();
+    assert_eq!(
+        json["Plugins"][0]["Root"], "../..",
+        "an edited value is kept"
+    );
+    let error = super::plug_info::install(template, false).unwrap_err();
+    assert!(error.to_string().contains("LibraryPath"), "{error}");
+}

@@ -54,10 +54,14 @@
 //!   but the generated types, as usdGenSchema builds on the file in its
 //!   output directory; otherwise on OpenUSD's template, whose
 //!   `@PLUG_INFO_LIBRARY_PATH@`, `@PLUG_INFO_RESOURCE_PATH@` and
-//!   `@PLUG_INFO_ROOT@` OpenUSD's build fills in. A codeless
-//!   plugin loaded from its own directory sets those once (`"Root":
-//!   "."`, `"ResourcePath": "."`, no `LibraryPath`), and the edit
-//!   survives regeneration.
+//!   `@PLUG_INFO_ROOT@` OpenUSD's build fills in. Like usdGenSchema's,
+//!   that file starts with `#` comment lines, which OpenUSD's plugin
+//!   reader accepts and strict JSON readers do not, and it does not
+//!   register as written: its placeholders are not paths.
+//!   [`CompiledSchema::installed_plug_info_json`] is the form to register,
+//!   for a plugin directory with both files in `resources/` (`compile
+//!   --install <dir>`): placeholders filled as OpenUSD's build fills them,
+//!   no comments. Edits to an existing file survive either way.
 //!
 //! # Resolving upstream schemas
 //!
@@ -212,6 +216,26 @@ impl CompiledSchema {
     #[must_use]
     pub fn plug_info_json(&self) -> Option<&str> {
         self.plug_info.as_deref()
+    }
+
+    /// `plugInfo.json` as installed in a plugin directory that holds it and
+    /// `generatedSchema.usda` in `resources/`, as OpenUSD installs a schema
+    /// plugin: [`Self::plug_info_json`] with the template's placeholders
+    /// filled in for that layout (`Root` `..`, `ResourcePath` `resources`,
+    /// an empty `LibraryPath`) and without its comment lines, so it is
+    /// strict JSON. Values an existing file set are kept. Register the
+    /// `resources` directory (`PXR_PLUGINPATH_NAME`, `Plug.Registry
+    /// .RegisterPlugins`). `None` when there are no classes.
+    ///
+    /// # Errors
+    ///
+    /// [`CompileError::PlugInfo`] for a library with code whose
+    /// `LibraryPath` is still the template's: only its build knows it.
+    pub fn installed_plug_info_json(&self) -> Result<Option<String>, CompileError> {
+        self.plug_info
+            .as_deref()
+            .map(|text| plug_info::install(text, self.library.skip_code_generation))
+            .transpose()
     }
 
     /// The library, from the schema file's `/GLOBAL` prim.
@@ -404,16 +428,20 @@ pub fn compile(source: &Path, options: &CompileOptions) -> Result<CompiledSchema
     })
 }
 
-/// The `compile` subcommand: `compile <schema.usda> --out <dir>
-/// [--search <dir>]... [--openusd-source <dir>]... [--plugin-root <dir>]...
-/// [--check]`.
+/// The `compile` subcommand: `compile <schema.usda> (--out <dir> |
+/// --install <dir>) [--search <dir>]... [--openusd-source <dir>]...
+/// [--plugin-root <dir>]... [--check]`.
 ///
-/// Writes `generatedSchema.usda` and `plugInfo.json` into `<dir>`, building
-/// `plugInfo.json` on the one already there, as usdGenSchema does. With
-/// `--check` it writes nothing and fails when either file differs.
+/// `--out` writes `generatedSchema.usda` and `plugInfo.json` into `<dir>`
+/// as usdGenSchema does, `plugInfo.json` as OpenUSD's template;
+/// `--install` writes them into `<dir>/resources` in their installed form
+/// ([`CompiledSchema::installed_plug_info_json`]), ready to register.
+/// Either builds `plugInfo.json` on the one already there. With `--check`
+/// it writes nothing and fails when either file differs.
 pub(crate) fn run(mut args: impl Iterator<Item = String>) -> Result<String, String> {
     let mut source = None;
     let mut out = None;
+    let mut install = None;
     let mut check = false;
     let mut options = CompileOptions::new();
     while let Some(arg) = args.next() {
@@ -423,6 +451,7 @@ pub(crate) fn run(mut args: impl Iterator<Item = String>) -> Result<String, Stri
         };
         match arg.as_str() {
             "--out" => out = Some(PathBuf::from(value("--out")?)),
+            "--install" => install = Some(PathBuf::from(value("--install")?)),
             "--search" => options = options.with_search_path(value("--search")?),
             "--openusd-source" => options = options.with_openusd_source(value("--openusd-source")?),
             "--plugin-root" => options = options.with_plugin_root(value("--plugin-root")?),
@@ -435,17 +464,31 @@ pub(crate) fn run(mut args: impl Iterator<Item = String>) -> Result<String, Stri
         }
     }
     let source = source.ok_or("compile requires a schema.usda")?;
-    let out = out.ok_or("compile requires --out <directory>")?;
+    let out = match (out, &install) {
+        (Some(out), None) => out,
+        (None, Some(plugin)) => plugin.join("resources"),
+        (Some(_), Some(_)) => return Err("compile takes --out or --install, not both".into()),
+        (None, None) => {
+            return Err("compile requires --out <directory> or --install <directory>".into());
+        }
+    };
     let plug_info_path = out.join("plugInfo.json");
     if let Ok(existing) = std::fs::read_to_string(&plug_info_path) {
         options = options.with_existing_plug_info(existing);
     }
     let compiled = compile(&source, &options).map_err(|e| e.to_string())?;
+    let installed = if install.is_some() {
+        compiled
+            .installed_plug_info_json()
+            .map_err(|e| e.to_string())?
+    } else {
+        None
+    };
     let mut files = vec![(
         out.join("generatedSchema.usda"),
         compiled.generated_schema_usda(),
     )];
-    if let Some(plug_info) = compiled.plug_info_json() {
+    if let Some(plug_info) = installed.as_deref().or(compiled.plug_info_json()) {
         files.push((plug_info_path, plug_info));
     }
     if check {
@@ -467,6 +510,7 @@ pub(crate) fn run(mut args: impl Iterator<Item = String>) -> Result<String, Stri
             compiled.library().name
         ));
     }
+    std::fs::create_dir_all(&out).map_err(|error| format!("{}: {error}", out.display()))?;
     for (path, text) in &files {
         crate::output::write_if_changed(path, text)?;
     }

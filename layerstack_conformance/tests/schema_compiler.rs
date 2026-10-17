@@ -660,6 +660,49 @@ fn openusd_domains_compile_to_their_checked_in_files() {
     }
 }
 
+/// Compiled from OpenUSD's template, the installed form of a codeless
+/// plugin is the committed one the oracle registers: placeholders filled
+/// for `resources/`, strict JSON.
+fn assert_installed(plugin: &str, options: CompileOptions) {
+    let root = fixture();
+    let compiled = compile(&root.join(plugin).join("schema.usda"), &options)
+        .unwrap_or_else(|e| panic!("{plugin}: {e}"));
+    let installed = root.join("installed").join(plugin).join("resources");
+    let plug_info = compiled
+        .installed_plug_info_json()
+        .expect("a codeless library installs")
+        .expect("a plugInfo.json");
+    assert_same_text(
+        &format!("installed/{plugin}/resources/plugInfo.json"),
+        &plug_info,
+        &read(&installed.join("plugInfo.json")),
+    );
+    assert_same_text(
+        &format!("installed/{plugin}/resources/generatedSchema.usda"),
+        compiled.generated_schema_usda(),
+        &read(&installed.join("generatedSchema.usda")),
+    );
+    let json: Json = serde_json::from_str(&plug_info).expect("strict JSON");
+    let entry = &json["Plugins"][0];
+    assert_eq!(
+        (
+            &entry["Root"],
+            &entry["ResourcePath"],
+            &entry["LibraryPath"]
+        ),
+        (&Json::from(".."), &Json::from("resources"), &Json::from("")),
+        "{plugin} installs into resources/ with no library"
+    );
+}
+
+#[test]
+fn installed_plugins_are_the_committed_ones() {
+    assert_installed("lab", CompileOptions::new().with_search_path(fixture()));
+    if let Some(source) = openusd_source() {
+        assert_installed("bench", CompileOptions::new().with_openusd_source(&source));
+    }
+}
+
 #[test]
 fn fixtures_compile_against_openusd() {
     let Some(source) = openusd_source() else {

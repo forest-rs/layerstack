@@ -331,11 +331,9 @@ impl LiveStage {
             resynced: alloc::vec![store.paths_mut().intern(crate::Path::root())],
             ..Default::default()
         };
-        changes.created.sort_unstable();
-        changes.removed.sort_unstable();
         replacement.notices = core::mem::take(&mut self.notices);
         *self = replacement;
-        self.notices.publish(&changes, &self.stage, store);
+        self.notices.publish(&mut changes, &self.stage, store);
         changes
     }
 
@@ -533,7 +531,7 @@ impl LiveStage {
             && let Some(properties) = &outcome.properties
         {
             for &(layer, source, field) in properties {
-                for prim in self.composed_prims_for_source(layer, source) {
+                for prim in self.prims_for_source(layer, source) {
                     property_changes
                         .entry(prim)
                         .or_insert_with(Vec::new)
@@ -544,18 +542,19 @@ impl LiveStage {
         let declaration_resyncs: Vec<_> = outcome
             .resync_sites
             .iter()
-            .flat_map(|&(layer, path)| self.composed_prims_for_source(layer, path))
+            .flat_map(|&(layer, path)| self.prims_for_source(layer, path))
             .collect();
         if outcome.structural
             && local_current
             && outcome.layers.iter().all(|layer| *layer == self.root)
             && let Some(paths) = &outcome.local_structure
             && !paths.is_empty()
-            && let Some((recomposed, mut changes)) =
+            && let Some((mut recomposed, mut changes)) =
                 self.refresh_local_structure(store, paths, &outcome.touched)
         {
             include_resyncs(store, &mut changes, &declaration_resyncs);
-            self.notices.publish(&changes, &self.stage, store);
+            self.notices.publish(&mut changes, &self.stage, store);
+            store.paths().sort_paths(&mut recomposed, store.tokens());
             return Ok(Applied {
                 inverse: outcome.inverse,
                 recomposed,
@@ -579,7 +578,10 @@ impl LiveStage {
             }
             let dependents: Vec<Vec<PathId>> = edits
                 .iter()
-                .map(|edit| self.composed_prims_for_source(edit.layer, edit.path.prim_path()))
+                .map(|edit| {
+                    self.prims_for_source(edit.layer, edit.path.prim_path())
+                        .collect()
+                })
                 .collect();
             let mut affected: Vec<PathId> = dependents.iter().flatten().copied().collect();
             affected.sort_unstable();
@@ -647,7 +649,7 @@ impl LiveStage {
             }
         }
         let mut changes = Changes::default();
-        let recomposed = match refreshed {
+        let mut recomposed = match refreshed {
             Some(paths) => {
                 changes.changed_info_only = paths.clone();
                 paths
@@ -664,13 +666,10 @@ impl LiveStage {
         changes.property_changes = property_changes
             .into_iter()
             .filter(|(prim, _)| changes.changed_info_only.contains(prim))
-            .map(|(prim, mut fields)| {
-                fields.sort_unstable();
-                fields.dedup();
-                crate::PrimPropertyChanges { prim, fields }
-            })
+            .map(|(prim, fields)| crate::PrimPropertyChanges { prim, fields })
             .collect();
-        self.notices.publish(&changes, &self.stage, store);
+        self.notices.publish(&mut changes, &self.stage, store);
+        store.paths().sort_paths(&mut recomposed, store.tokens());
         Ok(Applied {
             inverse: outcome.inverse,
             recomposed,
@@ -768,8 +767,6 @@ impl LiveStage {
                 _ => {}
             }
         }
-        changes.created.sort_unstable();
-        changes.removed.sort_unstable();
         changes.resynced = roots
             .into_iter()
             .filter(|root| self.stage.has_prim(*root) || partial.has_prim(*root))
@@ -780,8 +777,6 @@ impl LiveStage {
             .chain(touched.iter().map(|(_, path)| *path))
             .filter(|path| partial.has_prim(*path) && !is_beneath(store, *path, &changes.resynced))
             .collect();
-        changes.changed_info_only.sort_unstable();
-        changes.changed_info_only.dedup();
         let mut affected: Vec<_> = affected.into_iter().collect();
         affected.sort_unstable();
         self.stage.merge_local_subtrees(
@@ -967,7 +962,8 @@ impl LiveStage {
     }
 
     /// Returns the composed prims whose prim index draws specs or opinions
-    /// from the prim spec at `source` within `layer`, sorted by [`PathId`].
+    /// from the prim spec at `source` within `layer`, in namespace order
+    /// ([`crate::PathInterner::cmp_paths`]).
     ///
     /// The mapping is taken from the composed prim indexes (local opinions,
     /// variants, and every arc, including nested ones), so a library prim
@@ -975,14 +971,23 @@ impl LiveStage {
     /// reflects the last composition; it is updated by
     /// [`recompose`](Self::recompose).
     #[must_use]
-    pub fn composed_prims_for_source(&self, layer: LayerId, source: PathId) -> Vec<PathId> {
-        let mut prims: Vec<PathId> = self
-            .source_to_prims
-            .get(&(layer, source))
-            .map(|set| set.iter().copied().collect())
-            .unwrap_or_default();
-        prims.sort_unstable();
+    pub fn composed_prims_for_source(
+        &self,
+        layer: LayerId,
+        source: PathId,
+        store: &dyn LayerStore,
+    ) -> Vec<PathId> {
+        let mut prims: Vec<PathId> = self.prims_for_source(layer, source).collect();
+        store.paths().sort_paths(&mut prims, store.tokens());
         prims
+    }
+
+    /// The prims of [`Self::composed_prims_for_source`], in no order.
+    fn prims_for_source(&self, layer: LayerId, source: PathId) -> impl Iterator<Item = PathId> {
+        self.source_to_prims
+            .get(&(layer, source))
+            .into_iter()
+            .flat_map(|set| set.iter().copied())
     }
 
     /// Notifies that a specific prim's opinions have changed (any layer).
@@ -1039,13 +1044,13 @@ impl LiveStage {
     /// [`notify_default_prim_edit`](Self::notify_default_prim_edit) of
     /// `layer` recomposes. The set reflects the last composition.
     #[must_use]
-    pub fn prims_using_default_prim(&self, layer: LayerId) -> Vec<PathId> {
+    pub fn prims_using_default_prim(&self, layer: LayerId, store: &dyn LayerStore) -> Vec<PathId> {
         let mut prims: Vec<PathId> = self
             .default_prim_dependents
             .get(&layer)
             .map(|set| set.iter().copied().collect())
             .unwrap_or_default();
-        prims.sort_unstable();
+        store.paths().sort_paths(&mut prims, store.tokens());
         prims
     }
 
@@ -1108,8 +1113,8 @@ impl LiveStage {
     ///
     /// - If a structural change was notified, performs a full rebuild and
     ///   returns every prim path of the new stage plus every path that the
-    ///   previous stage had and the new one lacks (removed prims), sorted by
-    ///   [`PathId`]. Removal is computed as a before/after difference; callers
+    ///   previous stage had and the new one lacks (removed prims), in
+    ///   namespace order ([`crate::PathInterner::cmp_paths`]). Removal is computed as a before/after difference; callers
     ///   can tell removed paths apart with [`Stage::has_prim`]. Surviving
     ///   paths are reported whether or not they changed: the rebuild does not
     ///   classify value, hierarchy, or asset changes per path.
@@ -1136,10 +1141,11 @@ impl LiveStage {
     /// edited without a notification.
     pub fn recompose(&mut self, store: &mut dyn LayerStore) -> Vec<PathId> {
         let mut changes = Changes::default();
-        let paths = self.recompose_report(store, Some(&mut changes));
+        let mut paths = self.recompose_report(store, Some(&mut changes));
         let info_only = core::mem::take(&mut changes.changed_info_only);
         include_resyncs(store, &mut changes, &info_only);
-        self.notices.publish(&changes, &self.stage, store);
+        self.notices.publish(&mut changes, &self.stage, store);
+        store.paths().sort_paths(&mut paths, store.tokens());
         paths
     }
 
@@ -1153,7 +1159,7 @@ impl LiveStage {
         self.recompose_report(store, Some(&mut changes));
         let info_only = core::mem::take(&mut changes.changed_info_only);
         include_resyncs(store, &mut changes, &info_only);
-        self.notices.publish(&changes, &self.stage, store);
+        self.notices.publish(&mut changes, &self.stage, store);
         changes
     }
 
@@ -1521,8 +1527,6 @@ impl LiveStage {
                 .copied()
                 .filter(|path| !self.stage.has_prim(*path))
                 .collect();
-            changes.created.sort_unstable();
-            changes.removed.sort_unstable();
             changes.resynced = alloc::vec![store.paths_mut().intern(crate::Path::root())];
         }
 
@@ -1800,7 +1804,7 @@ mod tests {
         let (_, c, field_x) = relocated_scene(&mut store);
         let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
         let r_b = p(&mut store, "/R/B");
-        assert_eq!(live.composed_prims_for_source(LayerId(2), r_b), [c]);
+        assert_eq!(live.composed_prims_for_source(LayerId(2), r_b, &store), [c]);
 
         let spec = store
             .layers
@@ -2242,15 +2246,14 @@ mod tests {
         let updated = live.recompose(&mut store);
 
         let mut expected = vec![root, a, b, b_child, c];
-        expected.sort_unstable();
+        store.paths.sort_paths(&mut expected, &store.tokens);
         assert_eq!(updated, expected, "new-stage paths plus removed paths");
         let removed: Vec<PathId> = updated
             .iter()
             .copied()
             .filter(|path| !live.stage().has_prim(*path))
             .collect();
-        let mut expected_removed = vec![b, b_child];
-        expected_removed.sort_unstable();
+        let expected_removed = vec![b, b_child];
         assert_eq!(removed, expected_removed, "removed paths are identifiable");
     }
 
@@ -2995,10 +2998,14 @@ mod tests {
             ..StageOptions::default()
         };
         let mut live = LiveStage::compose(&mut store, LayerId(1), options);
-        assert_eq!(live.composed_prims_for_source(LayerId(2), source), [a, b]);
-        assert_eq!(live.composed_prims_for_source(LayerId(1), c), [c]);
+        assert_eq!(
+            live.composed_prims_for_source(LayerId(2), source, &store),
+            [a, b]
+        );
+        assert_eq!(live.composed_prims_for_source(LayerId(1), c, &store), [c]);
         assert!(
-            live.composed_prims_for_source(LayerId(2), a).is_empty(),
+            live.composed_prims_for_source(LayerId(2), a, &store)
+                .is_empty(),
             "`/A` is not a path in the library layer"
         );
 
@@ -3008,8 +3015,7 @@ mod tests {
             .unwrap()
             .set_property(PropertyPath::new(source, field_x), attr(2_i64));
         live.notify_layer_prim_edits(LayerId(2), &[source]);
-        let mut updated = live.recompose(&mut store);
-        updated.sort_unstable();
+        let updated = live.recompose(&mut store);
         assert_eq!(updated, [a, b], "exactly the referencing prims recompose");
         assert_eq!(
             live.stage()
@@ -3029,8 +3035,7 @@ mod tests {
                 .unwrap()
                 .set_property(PropertyPath::new(site, field_x), attr(11));
             live.notify_layer_prim_edits(LayerId(2), &[site]);
-            let mut updated = live.recompose(&mut store);
-            updated.sort_unstable();
+            let updated = live.recompose(&mut store);
             assert_eq!(updated, expected);
             assert_matches_fresh(&live, &mut store, &[field_x]);
         }
@@ -3107,7 +3112,10 @@ mod tests {
                 .value
         };
         assert_eq!(x_of(&live), Value::Int64(1));
-        assert_eq!(live.composed_prims_for_source(LayerId(1), geom), [geom]);
+        assert_eq!(
+            live.composed_prims_for_source(LayerId(1), geom, &store),
+            [geom]
+        );
 
         let edit = |store: &mut InMemoryStore, variant, value: i64| {
             let layer = store.layers.get_mut(&LayerId(1)).unwrap();
@@ -3366,7 +3374,7 @@ mod tests {
         assert_eq!(x_of(&live, a), Value::Int64(10));
         assert_eq!(x_of(&live, b), Value::Int64(1));
         assert_eq!(
-            live.composed_prims_for_source(LayerId(2), source_child),
+            live.composed_prims_for_source(LayerId(2), source_child, &store),
             [a]
         );
 
@@ -3470,7 +3478,7 @@ mod tests {
                 .map(|resolved| resolved.value)
         };
         assert_eq!(x_of(&live, r), None);
-        assert_eq!(live.prims_using_default_prim(LayerId(3)), [r, pl]);
+        assert_eq!(live.prims_using_default_prim(LayerId(3), &store), [pl, r]);
         let unresolved: Vec<PathId> = live
             .stage()
             .composition_errors()
@@ -3947,8 +3955,8 @@ mod tests {
             ..StageOptions::default()
         };
         let mut live = LiveStage::compose(&mut store, LayerId(1), options);
-        assert_eq!(live.prims_using_default_prim(LayerId(2)), [a, b]);
-        assert!(live.prims_using_default_prim(LayerId(1)).is_empty());
+        assert_eq!(live.prims_using_default_prim(LayerId(2), &store), [a, b]);
+        assert!(live.prims_using_default_prim(LayerId(1), &store).is_empty());
         assert_matches_fresh(&live, &mut store, &[field_x]);
 
         store
@@ -3958,7 +3966,7 @@ mod tests {
             .set_property(PropertyPath::new(model, field_x), attr(3));
         live.notify_layer_prim_edits(LayerId(2), &[model]);
         live.recompose(&mut store);
-        assert_eq!(live.prims_using_default_prim(LayerId(2)), [a, b]);
+        assert_eq!(live.prims_using_default_prim(LayerId(2), &store), [a, b]);
         assert_matches_fresh(&live, &mut store, &[field_x]);
 
         let a_child = |live: &LiveStage, store: &mut InMemoryStore, name: &str| {
@@ -3973,7 +3981,7 @@ mod tests {
         assert!(live.recompose(&mut store).is_empty());
         live.notify_prim_edit(a);
         assert_eq!(live.recompose(&mut store), [a]);
-        assert_eq!(live.prims_using_default_prim(LayerId(2)), [a, b]);
+        assert_eq!(live.prims_using_default_prim(LayerId(2), &store), [a, b]);
         assert_matches_fresh(&live, &mut store, &[field_x]);
 
         // Retarget: `/A` and `/B` now compose `/Other`; `/C` is unchanged.
@@ -3992,7 +4000,7 @@ mod tests {
         assert!(live.stage().children_of(a).unwrap_or(&[]).is_empty());
         assert_eq!(live.stage().composition_errors().len(), 2);
         assert_eq!(
-            live.prims_using_default_prim(LayerId(2)),
+            live.prims_using_default_prim(LayerId(2), &store),
             [a, b],
             "unresolved arcs still depend on the `defaultPrim`"
         );

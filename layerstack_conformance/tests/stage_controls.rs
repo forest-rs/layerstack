@@ -27,8 +27,8 @@ fn snapshot(stage: &Stage, store: &mut InMemoryStore) -> Json {
     let root = store.path("/");
     let tint = store.property_path("/World.tint");
     json!({"prims": names(stage.traverse_all(root).filter(|p| *p != root), store),
-        "loadable": names(stage.loadable_paths(&store.paths, root), store),
-        "loaded": names(stage.loaded_payload_paths(&store.paths), store),
+        "loadable": names(stage.loadable_paths(root, store), store),
+        "loaded": names(stage.loaded_payload_paths(store), store),
         "tint": stage.resolve_field_path(tint).map(|r| match r.value {layerstack::Value::Int(i)=>i,_=>panic!("int tint")})})
 }
 #[test]
@@ -402,9 +402,9 @@ fn inactive_payload_is_inspectable_but_not_loadable() {
         assert!(stage.has_prim(a));
         assert!(!stage.is_active(a));
         assert!(!stage.is_loaded(a, &store.paths));
-        assert!(stage.loadable_paths(&store.paths, root).is_empty());
+        assert!(stage.loadable_paths(root, &store).is_empty());
         assert_eq!(
-            stage.loaded_payload_paths(&store.paths),
+            stage.loaded_payload_paths(&store),
             if stage.load_rules().is_loaded(store.paths.resolve(a)) {
                 vec![a]
             } else {

@@ -523,7 +523,8 @@ impl BoundsCache {
         }
     }
     /// Prototype roots consulted by the last bounds computations under `path`,
-    /// including nested, masked and missing prototypes. Results are unique.
+    /// including nested, masked and missing prototypes. Results are unique,
+    /// in namespace order.
     /// Dependencies remain conservative after edits until recomputation, so a
     /// failed retained query can recover when a missing prototype is created.
     #[must_use]
@@ -551,7 +552,8 @@ impl BoundsCache {
             }
         }
         let mut result: Vec<_> = result.into_iter().collect();
-        result.sort_unstable();
+        let store = scene.store();
+        store.paths().sort_paths(&mut result, store.tokens());
         result
     }
 

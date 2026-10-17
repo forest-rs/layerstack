@@ -132,7 +132,10 @@ impl Journal {
         }
     }
 
-    pub(super) fn publish(&mut self, changes: &Changes, stage: &Stage, store: &dyn LayerStore) {
+    /// Puts `changes` in order ([`Changes::sort`]) and reports it.
+    pub(super) fn publish(&mut self, changes: &mut Changes, stage: &Stage, store: &dyn LayerStore) {
+        changes.sort(store.paths(), store.tokens());
+        let changes = &*changes;
         if changes.created.is_empty()
             && changes.removed.is_empty()
             && changes.resynced.is_empty()

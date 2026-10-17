@@ -184,7 +184,8 @@ pub struct SceneMaterials {
     pub subsets: Option<MaterialBindingSubsets>,
 }
 impl SceneMaterials {
-    /// Distinct resolved materials, including face-subset overrides.
+    /// Distinct resolved materials, including face-subset overrides, ordered
+    /// by store-local path IDs, not lexical path spelling.
     pub fn material_paths(&self) -> Vec<PathId> {
         let mut paths = Vec::new();
         paths.extend(self.binding.material);

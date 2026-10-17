@@ -55,11 +55,10 @@ fn compare(
         );
     }
     for id in [LayerId(1), LayerId(2), LayerId(3)] {
-        let mut fast = fast.prims_affected_by_layer(id);
-        let mut general = general.prims_affected_by_layer(id);
-        fast.sort_unstable();
-        general.sort_unstable();
-        assert_eq!(fast, general);
+        assert_eq!(
+            fast.prims_affected_by_layer(id, store),
+            general.prims_affected_by_layer(id, store)
+        );
     }
 }
 

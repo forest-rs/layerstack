@@ -424,7 +424,7 @@ class "ClassB"
             }
         }
     }
-    for prim in stage.prims_affected_by_layer(LayerId(2)) {
+    for prim in stage.prims_affected_by_layer(LayerId(2), &store) {
         let name = name_of(&store, prim);
         if name.contains("OnlyA") {
             failures.push(format!("library layer feeds {name}"));
@@ -989,9 +989,11 @@ fn matrix_cell(outer: MatrixArc, inner: MatrixArc, selection: MatrixSelection) -
             .iter()
             .find(|(_, layer)| layer.prims.contains_key(&selected_source_id))
             .map(|(id, _)| *id);
-        if !target_layer
-            .is_some_and(|layer| stage.prims_affected_by_layer(layer).contains(&owner_id))
-        {
+        if !target_layer.is_some_and(|layer| {
+            stage
+                .prims_affected_by_layer(layer, &store)
+                .contains(&owner_id)
+        }) {
             failures.push(format!(
                 "{owner} lacks a layer dependency on the layer holding {selected_source}"
             ));
@@ -1003,7 +1005,7 @@ fn matrix_cell(outer: MatrixArc, inner: MatrixArc, selection: MatrixSelection) -
     // Dependency data may only name prims that exist: a dependency on a prim
     // an unselected branch introduced would invalidate phantom prims.
     for layer in 1..=4 {
-        for prim in stage.prims_affected_by_layer(LayerId(layer)) {
+        for prim in stage.prims_affected_by_layer(LayerId(layer), &store) {
             if !stage.has_prim(prim) {
                 let name = store.paths.display(prim, &store.tokens);
                 failures.push(format!("layer {layer} dependency on missing {name}"));

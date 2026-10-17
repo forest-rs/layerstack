@@ -1184,6 +1184,9 @@ fn definitions(
             .chain(orders)
             .filter(|o| o.key.node == node)
             .collect();
+        // Weakest layer first. The sort is stable and a layer's opinions
+        // compare equal, so each layer's `clips` come before its
+        // `clipSets`, which reorder the sets those `clips` add.
         layers.sort_by(|a, b| index.graph.cmp_keys(&b.key, &a.key));
         let mut node_sets: BTreeMap<Arc<str>, Definition> = BTreeMap::new();
         let mut names = Vec::new();

@@ -62,12 +62,12 @@ impl ArcKind {
 /// Identifies one authored opinion of a composed prim and ranks it.
 ///
 /// The opinion's arc path lives in the prim's [`PrimIndexGraph`]: `node`
-/// names the site the opinion was read from, and the node ranks the
-/// opinion against the prim's other opinions. The remaining fields identify
-/// the authored spec within that node and break ties between opinions of
-/// equally strong nodes.
+/// names the site the opinion was read from, and the node, then
+/// `layer_strength` within the node's layer stack, rank the opinion
+/// against the prim's other opinions. The remaining fields identify the
+/// authored spec.
 ///
-/// Spec: AOUSD Core §10.4 (strength ordering and tie-breakers).
+/// Spec: AOUSD Core §10.4 (strength ordering).
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct OpinionKey {
     /// The node of the prim's [`PrimIndexGraph`] this opinion belongs to

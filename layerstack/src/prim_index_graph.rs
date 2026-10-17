@@ -472,14 +472,15 @@ impl PrimIndexGraph {
 
     /// Compares two opinions of this prim with "strongest first" ordering:
     /// by their nodes ([`Self::cmp_nodes`]), then by layer strength within
-    /// the layer stack, then by stable ids.
+    /// the node's layer stack. Two opinions at the same node and layer
+    /// strength are opinions of one site in one layer, and compare equal.
     ///
-    /// Spec: AOUSD Core §10.4 (strength ordering and tie-breakers).
+    /// Spec: AOUSD Core §10.4 (strength ordering). OpenUSD orders a prim's
+    /// opinions by node, then by layer within the node's layer stack
+    /// (`PcpBuildPrimPropertyIndex` in `pxr/usd/pcp/propertyIndex.cpp`).
     pub(crate) fn cmp_keys(&self, a: &OpinionKey, b: &OpinionKey) -> Ordering {
         self.cmp_nodes(a.node, b.node)
             .then_with(|| a.layer_strength.cmp(&b.layer_strength))
-            .then_with(|| a.layer_id.cmp(&b.layer_id))
-            .then_with(|| a.spec_path.cmp(&b.spec_path))
     }
 
     /// The root node, the composed prim's own site; `None` only for an empty
@@ -674,9 +675,10 @@ mod tests {
     }
 
     #[test]
-    fn opinions_rank_by_node_then_layer_then_stable_ids() {
+    fn opinions_rank_by_node_then_layer() {
         // Spec: AOUSD Core §10.4. Layer stack order breaks ties within a
-        // node; stable ids break the remaining ties.
+        // node; nothing else does, so the order of the prim's opinions
+        // does not depend on how its paths were interned.
         let mut tokens = TokenInterner::default();
         let paths = PathInterner::default();
         let mut path = |text: &str| {
@@ -688,15 +690,17 @@ mod tests {
         let variant = NodeId(1);
         let order = [
             key(NodeId::ROOT, 0, 1, a.clone()),
-            key(NodeId::ROOT, 0, 1, b),
-            key(NodeId::ROOT, 0, 2, a.clone()),
-            key(NodeId::ROOT, 1, 0, a.clone()),
-            key(variant, 0, 0, a),
+            key(NodeId::ROOT, 1, 0, b.clone()),
+            key(variant, 0, 0, a.clone()),
         ];
         for pair in order.windows(2) {
             assert_eq!(graph.cmp_keys(&pair[0], &pair[1]), Ordering::Less);
             assert_eq!(graph.cmp_keys(&pair[1], &pair[0]), Ordering::Greater);
         }
+        assert_eq!(
+            graph.cmp_keys(&key(NodeId::ROOT, 0, 1, a), &key(NodeId::ROOT, 0, 1, b)),
+            Ordering::Equal
+        );
     }
 
     /// Every opinion of every prim is read with its node's layer offset

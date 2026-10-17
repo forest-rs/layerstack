@@ -555,7 +555,17 @@ def "Tagged" (payload = @cone.testpcpdynamic:SDF_FORMAT_ARGS:TestPcp_payloadId=A
 "#;
 
 const ROOT: &str = r#"#usda 1.0
-def "Lab" (references = [@params.usda@</Params>, @payloads.usda@</ConePayload>]) {}
+def "Lab" (references = [@params.usda@</Params>, @payloads.usda@</ConePayload>]) {
+    # Declared without defaults, for the edits to author them as defaults.
+    custom string documentation
+    custom double TestPcp_height
+    over "geom" {
+        custom int TestPcp_depth
+    }
+    over "Xform__3_0" {
+        custom int TestPcp_depth
+    }
+}
 def "Siblings" (references = @payloads.usda@</Siblings>) {}
 def "Variant" (
     TestPcp_depth = 3
@@ -564,6 +574,8 @@ def "Variant" (
 )
 {
     int TestPcp_depth = 3
+    custom string documentation
+    custom double TestPcp_radius
     variantSet "x" = {
         "a" (
             TestPcp_num = 2
@@ -782,4 +794,241 @@ fn readers_leave_dynamic_payloads_to_composition() {
             (String::from("params.usda"), false),
         ]
     );
+}
+
+/// Authors `value` as the field `name` of the spec at `prim` of the layer
+/// `layer` names, or, when `attributes`, as the default of its attribute
+/// `name`, then loads the layers the stage asks for.
+pub(super) fn author<B: Storage>(
+    doc: &mut StageDocument<B>,
+    layer: &str,
+    prim: &str,
+    name: &str,
+    value: Value,
+    attributes: bool,
+) -> layerstack::Applied {
+    use layerstack::{Address, PropertyPath, SpecPath, Transaction};
+    let layer = doc
+        .store()
+        .layers
+        .keys()
+        .copied()
+        .find(|&id| {
+            doc.identifier(id)
+                .is_some_and(|found| found.ends_with(layer))
+        })
+        .unwrap();
+    let (store, live) = doc.parts_mut();
+    let path = store.path(prim);
+    let token = store.tokens.intern(name);
+    let mut txn = Transaction::new();
+    if attributes {
+        let at = Address::spec(
+            layer,
+            SpecPath::from_property_path(PropertyPath::new(path, token)),
+        );
+        let exists = store.layers[&layer]
+            .prims()
+            .get(&path)
+            .is_some_and(|spec| spec.property(token).is_some());
+        if exists {
+            txn.set_default(at, value);
+        } else {
+            let type_name = match value {
+                Value::Int(_) => "int",
+                Value::Double(_) => "double",
+                _ => "string",
+            };
+            let fallback = value.clone();
+            txn.create_property(
+                at,
+                PropertySpec::typed_attribute(PropertyType::new(type_name, false, fallback))
+                    .custom()
+                    .with_default(value),
+            );
+        }
+    } else {
+        txn.set_metadata(
+            Address::spec(layer, SpecPath::from_prim_path(path)),
+            token,
+            layerstack::FieldValue::Value(value),
+        );
+    }
+    let applied = live.apply(store, &txn).unwrap();
+    doc.load_requested_assets().unwrap();
+    applied
+}
+
+/// The paths of `prims`, sorted.
+pub(super) fn displayed<B: Storage>(
+    doc: &StageDocument<B>,
+    prims: &[layerstack::PathId],
+) -> Vec<String> {
+    let store = doc.store();
+    let mut out: Vec<String> = prims
+        .iter()
+        .map(|path| store.paths.display(*path, &store.tokens))
+        .collect();
+    out.sort_unstable();
+    out
+}
+
+#[test]
+fn argument_input_edits_resync_the_prims_whose_arguments_they_change() {
+    for attributes in [false, true] {
+        let mut doc = open(lab(), "root.usda", attributes);
+        let resynced =
+            |doc: &mut StageDocument<Memory>, layer: &str, prim: &str, name: &str, value: Value| {
+                let applied = author(doc, layer, prim, name, value, attributes);
+                displayed(doc, &applied.changes.resynced)
+            };
+        // An input no argument reads changes nothing.
+        let none: [&str; 0] = [];
+        assert_eq!(
+            resynced(
+                &mut doc,
+                "root.usda",
+                "/Lab",
+                "documentation",
+                Value::String("text".into())
+            ),
+            none
+        );
+        // A height on `/Lab` is stronger than every other: all of its
+        // payloads read another layer.
+        assert_eq!(
+            resynced(&mut doc, "root.usda", "/Lab", HEIGHT, Value::Double(2.0)),
+            ["/Lab"]
+        );
+        verify(
+            &doc,
+            &dynamic_paths("/Lab", 4, 3, 40, ""),
+            &INPUTS,
+            attributes,
+        );
+        assert!(
+            generated(&doc, "").contains(&with_args(
+                CONE_FILE,
+                &[(DEPTH, "4"), (HEIGHT, "2"), (NUM, "3"), (RADIUS, "50")]
+            )),
+            "{:?}",
+            generated(&doc, "")
+        );
+        // The parameter prim's count reaches `/Lab` only: `/Tagged` takes
+        // its count from its overrides, `/Variant` from its branch.
+        assert_eq!(
+            resynced(&mut doc, "params.usda", "/Params", NUM, Value::Int(2)),
+            ["/Lab"]
+        );
+        verify(
+            &doc,
+            &dynamic_paths("/Lab", 4, 2, 15, ""),
+            &INPUTS,
+            attributes,
+        );
+        // With no depth, the format reads the depth alone.
+        assert_eq!(
+            resynced(&mut doc, "params.usda", "/Params", DEPTH, Value::Int(0)),
+            ["/Lab", "/Tagged"]
+        );
+        verify(&doc, &["/Lab".into()], &[DEPTH], attributes);
+        // Below one, every depth reads as none: the format says the change
+        // cannot affect the arguments.
+        assert_eq!(
+            resynced(&mut doc, "params.usda", "/Params", DEPTH, Value::Int(-1)),
+            none
+        );
+        assert_eq!(
+            resynced(&mut doc, "params.usda", "/Params", DEPTH, Value::Int(4)),
+            ["/Lab", "/Tagged"]
+        );
+        verify(
+            &doc,
+            &dynamic_paths("/Lab", 4, 2, 15, ""),
+            &INPUTS,
+            attributes,
+        );
+        // A generated prim's own over changes its subtree only.
+        assert_eq!(
+            resynced(
+                &mut doc,
+                "root.usda",
+                "/Lab/Xform__3_0",
+                DEPTH,
+                Value::Int(4)
+            ),
+            ["/Lab/Xform__3_0"]
+        );
+        verify(
+            &doc,
+            &dynamic_paths("/Lab/Xform__3_0", 4, 2, 15, ""),
+            &INPUTS,
+            attributes,
+        );
+        verify(
+            &doc,
+            &dynamic_paths("/Lab/Xform__3_1", 3, 2, 7, ""),
+            &INPUTS,
+            attributes,
+        );
+        // `geom` composes no dynamic arguments: a depth there is inert.
+        assert_eq!(
+            resynced(&mut doc, "root.usda", "/Lab/geom", DEPTH, Value::Int(4)),
+            none
+        );
+    }
+}
+
+#[test]
+fn argument_inputs_read_beyond_a_prims_own_specs_recompose_it() {
+    for attributes in [false, true] {
+        let mut doc = open(lab(), "root.usda", attributes);
+        let prim = |doc: &StageDocument<Memory>, path: &str| {
+            let store = doc.store();
+            store
+                .paths
+                .lookup(&layerstack::Path::parse_absolute(path, &store.tokens).unwrap())
+                .unwrap()
+        };
+        let subroot = prim(&doc, "/SubrootVariant");
+        // `/SubrootVariant`'s reference reads `/Variant`'s spec for the
+        // arguments of the payload in its branch, though no opinion of
+        // `/Variant` is one of `/SubrootVariant`'s.
+        let applied = author(
+            &mut doc,
+            "root.usda",
+            "/Variant",
+            "documentation",
+            Value::String("text".into()),
+            attributes,
+        );
+        assert!(applied.changes.resynced.is_empty());
+        assert!(
+            !applied.recomposed.contains(&subroot),
+            "an irrelevant input"
+        );
+        let applied = author(
+            &mut doc,
+            "root.usda",
+            "/Variant",
+            RADIUS,
+            Value::Double(60.0),
+            attributes,
+        );
+        assert_eq!(
+            displayed(&doc, &applied.changes.resynced),
+            ["/SubrootVariant", "/Variant"]
+        );
+        let identifier = with_args(CONE_FILE, &[(DEPTH, "3"), (NUM, "2"), (RADIUS, "60")]);
+        assert!(generated(&doc, "").contains(&identifier));
+        let stage = doc.stage().stage();
+        let errors: Vec<_> = stage
+            .composition_errors()
+            .iter()
+            .filter(|error| error.prim() == Some(subroot))
+            .collect();
+        assert!(errors.is_empty(), "{errors:?}");
+        let dependency = stage.dynamic_dependency(subroot).unwrap();
+        assert!(dependency.relevant_fields().len() + dependency.relevant_attributes().len() > 0);
+    }
 }

@@ -57,6 +57,11 @@ impl LiveStage {
             if local {
                 self.structural_roots.push(source);
             }
+            // The prims whose dynamic payload arguments read the spec may
+            // target other layers now.
+            if let Some(dests) = self.dynamic_to_prims.get(&(layer, source)) {
+                self.structural_roots.extend(dests.iter().copied());
+            }
             let source_path = store.paths().resolve(source).clone();
             let mut ancestor = Some(source_path.clone());
             let mut mapped = false;

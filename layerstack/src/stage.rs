@@ -1057,6 +1057,7 @@ impl Stage {
         fallback: Option<&Value>,
         accepts: Option<&dyn Fn(&Value) -> bool>,
         with_source: bool,
+        below: Option<LayerId>,
     ) -> (Option<Resolved<Value>>, bool) {
         let Some(index) = self.prims.get(&prim) else {
             return (None, false);
@@ -1067,6 +1068,7 @@ impl Stage {
             selected,
             kinds,
         } = self.clip_time_opinions(prim, field, index, time, interp);
+        let opinions = &opinions[self.below_start(&opinions, below)..];
         let classify = |opinion: &Opinion, sample_time| {
             kinds.entry(opinion).and_then(|entry| {
                 self.clips
@@ -1077,7 +1079,7 @@ impl Stage {
             (!kinds.entries.is_empty()).then_some(&classify as &SampleComposability<'_>);
         let mut resolved = self.resolve_at_time_with_source(
             field,
-            &opinions,
+            opinions,
             index.property_type_for(&field),
             time,
             interp,
@@ -2207,6 +2209,7 @@ impl Stage {
                     fallback,
                     None,
                     self.with_provenance,
+                    None,
                 )
                 .0;
         }
@@ -3171,7 +3174,7 @@ impl Stage {
         time: Time,
         read: impl Fn(&Value) -> Option<T>,
     ) -> Option<Resolved<T>> {
-        self.read_property_by(property, time, read, self.with_provenance)
+        self.read_property_by(property, time, read, self.with_provenance, None)
     }
 
     /// Reads a typed value while preserving deferred numeric decode failures.
@@ -3204,6 +3207,7 @@ impl Stage {
                 property.property(),
                 checked_read,
                 self.with_provenance,
+                None,
             )?,
             Time::At { .. } => self.read_property(property, time, checked_read),
         };
@@ -3227,7 +3231,59 @@ impl Stage {
         time: Time,
         read: impl Fn(&Value) -> Option<T>,
     ) -> Option<Resolved<T>> {
-        self.read_property_by(property, time, read, true)
+        self.read_property_by(property, time, read, true, None)
+    }
+
+    /// Reads the typed value `property` has beneath `layer`: from the
+    /// opinions weaker than every opinion `layer` authors for it, or when
+    /// `layer` authors none and belongs to the stage's own layer stack,
+    /// weaker than every opinion of the stack's layers stronger than it.
+    /// The schema fallback answers when nothing beneath holds a value, and
+    /// the winning source is always included.
+    ///
+    /// This answers "what would this field be without this overlay" for one
+    /// field at a time, without composing anything again. The cut is in the
+    /// composed opinion stack, so the arcs `layer` authors still shape it:
+    /// opinions a reference, payload, inherit or sublayer that `layer`
+    /// authors brings in are weaker than `layer`'s own and count as beneath
+    /// it. For a layer that authors only values this is the value the stage
+    /// has with `layer` muted; for one that authors arcs it is not, and the
+    /// layer's basis composed as its own stage answers structural questions.
+    /// Source selection and conversion are those of [`Stage::read_property`].
+    ///
+    /// Spec: AOUSD Core §12.3 (value resolution in strength order).
+    #[must_use]
+    pub fn read_property_below<T>(
+        &self,
+        property: PropertyPath,
+        layer: LayerId,
+        time: Time,
+        read: impl Fn(&Value) -> Option<T>,
+    ) -> Option<Resolved<T>> {
+        self.read_property_by(property, time, read, true, Some(layer))
+    }
+
+    /// Where the opinions beneath `below` start in `opinions`, strongest
+    /// first (see [`Stage::read_property_below`]); `0` for no cut.
+    fn below_start(&self, opinions: &[Opinion], below: Option<LayerId>) -> usize {
+        let Some(layer) = below else {
+            return 0;
+        };
+        let stack = self.layer_stack();
+        if let Some(at) = stack.iter().position(|id| *id == layer) {
+            // The stage's own stack opinions are its root node's; an arc
+            // that brings the same layer in again is weaker and stays.
+            let cut = &stack[..=at];
+            opinions
+                .iter()
+                .rposition(|o| o.key.node == NodeId::ROOT && cut.contains(&o.key.layer_id))
+                .map_or(0, |i| i + 1)
+        } else {
+            opinions
+                .iter()
+                .rposition(|o| o.key.layer_id == layer)
+                .map_or(0, |i| i + 1)
+        }
     }
 
     fn read_property_by<T>(
@@ -3236,10 +3292,11 @@ impl Stage {
         time: Time,
         read: impl Fn(&Value) -> Option<T>,
         with_source: bool,
+        below: Option<LayerId>,
     ) -> Option<Resolved<T>> {
         let (prim, field) = (property.prim_path(), property.property());
         match time {
-            Time::Default => self.read_default(prim, field, read, with_source),
+            Time::Default => self.read_default(prim, field, read, with_source, below),
             Time::At {
                 code,
                 interpolation,
@@ -3253,6 +3310,7 @@ impl Stage {
                     fallback,
                     Some(&|value| read(value).is_some()),
                     with_source,
+                    below,
                 );
                 match resolved {
                     Some(resolved) => Some(Resolved {
@@ -3295,8 +3353,9 @@ impl Stage {
         field: TokenId,
         read: impl Fn(&Value) -> Option<T>,
         with_source: bool,
+        below: Option<LayerId>,
     ) -> Option<Resolved<T>> {
-        self.try_read_default(prim, field, read, with_source)
+        self.try_read_default(prim, field, read, with_source, below)
             .ok()
             .flatten()
     }
@@ -3309,9 +3368,11 @@ impl Stage {
         field: TokenId,
         read: impl Fn(&Value) -> Option<T>,
         with_source: bool,
+        below: Option<LayerId>,
     ) -> Result<Option<Resolved<T>>, crate::ArrayReadError> {
         let fallback = self.schema_fallback(prim, field);
         if let Some((index, opinions)) = self.opinions(prim, field, Lookup::Property) {
+            let opinions = &opinions[self.below_start(opinions, below)..];
             for (position, opinion) in opinions.iter().enumerate() {
                 let Some(value) = opinion.value.default_value() else {
                     continue;
@@ -3469,6 +3530,7 @@ impl Stage {
             fallback,
             None,
             self.with_provenance,
+            None,
         );
         if resolved.is_some() || clip_selected {
             return resolved;

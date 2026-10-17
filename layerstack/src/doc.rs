@@ -2044,6 +2044,45 @@ impl PartialEq for Layer {
 }
 
 impl Layer {
+    /// Rewrites every layer id this layer stores through `map`: its own
+    /// [`Layer::id`], its sublayers', and those of the references and
+    /// payloads of its prim and variant specs, nested variants included.
+    ///
+    /// A reader that numbers layers in another order than it reads them
+    /// renumbers them with this; mapping a layer to
+    /// [`LayerId::UNRESOLVED`] makes its arcs unresolved, keeping their
+    /// asset paths. Records no change: the layer is not yet in a store.
+    pub fn map_layer_ids(&mut self, map: impl Fn(LayerId) -> LayerId) {
+        fn arcs(op: &mut ListOp<Reference>, map: &dyn Fn(LayerId) -> LayerId) {
+            for arc in op.lists_mut().flatten() {
+                arc.layer = map(arc.layer);
+            }
+        }
+        fn variant_sets(
+            sets: &mut HashMap<TokenId, VariantSetSpec>,
+            map: &dyn Fn(LayerId) -> LayerId,
+        ) {
+            for variant in sets.values_mut().flat_map(|set| set.variants.values_mut()) {
+                arcs(&mut variant.references, map);
+                arcs(&mut variant.payloads, map);
+                variant_sets(&mut variant.variant_sets, map);
+            }
+        }
+        self.id = map(self.id);
+        for sublayer in &mut self.sublayers {
+            sublayer.layer = map(sublayer.layer);
+        }
+        let specs = self
+            .prims
+            .values_mut()
+            .chain(self.variant_prims.values_mut().flatten());
+        for spec in specs {
+            arcs(&mut spec.references, &map);
+            arcs(&mut spec.payloads, &map);
+            variant_sets(&mut spec.variant_sets, &map);
+        }
+    }
+
     /// Creates an empty layer with no sublayers or prims.
     pub fn new(id: LayerId) -> Self {
         Self {

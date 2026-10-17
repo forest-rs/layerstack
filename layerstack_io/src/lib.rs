@@ -84,6 +84,8 @@ pub use package::{PackageInclusion, PackagePreparationLimits, PreparedPackage};
 #[cfg(feature = "std")]
 mod filesystem;
 #[cfg(feature = "std")]
+mod parallel_open;
+#[cfg(feature = "std")]
 pub use filesystem::Filesystem;
 
 /// Error category retained separately from its explanatory message.
@@ -541,7 +543,14 @@ impl<B: Storage> StageDocument<B> {
             options.schemas.clone(),
         );
         reader.variant_arcs = loading.variant_arcs;
-        let resolved = reader.load(asset, None, &store.tokens, &store.paths)?;
+        #[cfg(feature = "std")]
+        let threaded = reader.load_on_threads(asset, options.threads, &store.tokens, &store.paths);
+        #[cfg(not(feature = "std"))]
+        let threaded: Option<Result<ResolvedAsset, IoError>> = None;
+        let resolved = match threaded {
+            Some(resolved) => resolved?,
+            None => reader.load(asset, None, &store.tokens, &store.paths)?,
+        };
         if let Some(layer) = resolved.layer {
             reader.pending.push(layer);
         }
@@ -915,6 +924,9 @@ impl<B: Storage> StageDocument<B> {
     }
 }
 
+/// Storage identities, keyed by anchor identifier and authored asset.
+type Identities = BTreeMap<(Option<String>, String), Result<String, IoError>>;
+
 struct Reader<'a, B> {
     schemas: Option<Arc<layerstack::SchemaRegistry>>,
     storage: &'a mut B,
@@ -930,7 +942,7 @@ struct Reader<'a, B> {
     /// a document, so a scene that references one asset from many sites asks
     /// its transport once. Dropped with the operation, so later loads observe
     /// newly created or removed files.
-    identities: BTreeMap<(Option<String>, String), Result<String, IoError>>,
+    identities: Identities,
     failures: Vec<AssetFailure>,
     reachable_only: bool,
     /// Which arcs inside variant branches the layers read resolve
@@ -1097,89 +1109,27 @@ impl<'a, B: Storage> Reader<'a, B> {
         let first_diagnostic = self.diagnostics.len();
         let first_failure = self.failures.len();
         let layer = match format {
-            Format::Usda => {
-                let source = core::str::from_utf8(&data)
-                    .map_err(|e| IoError::new(IoErrorKind::Rejected, e.to_string()))?;
+            Format::Usda | Format::Usdc => {
                 let schemas = self.schemas.clone();
-                let result = if let Some(registry) = schemas {
-                    layerstack_usda::read_usda_with_registry(
-                        source, id, tokens, paths, self, &registry,
-                    )
-                } else {
-                    layerstack_usda::read_usda(source, id, tokens, paths, self)
-                };
-                self.pending.extend(result.emitted.resolved_layers);
-                for diagnostic in result
-                    .parse_diagnostics
-                    .into_iter()
-                    .map(ImportDiagnostic::UsdaParse)
-                    .chain(
-                        result
-                            .lower_diagnostics
-                            .into_iter()
-                            .map(ImportDiagnostic::UsdaLower),
-                    )
-                    .chain(
-                        result
-                            .emitted
-                            .diagnostics
-                            .into_iter()
-                            .map(ImportDiagnostic::UsdaEmit),
-                    )
-                {
-                    self.diagnostics.push(MemberDiagnostic {
-                        member: Arc::from(identifier),
-                        layer_id: id,
-                        diagnostic,
-                    });
-                }
-                if result.emitted.rejected {
-                    return Err(IoError::new(
-                        IoErrorKind::Rejected,
-                        alloc::format!("{identifier}: USDA reader rejected the layer"),
-                    ));
-                }
-                result.emitted.layer
-            }
-            Format::Usdc => {
-                let mut budget = self.usdc_options.budget(data.len());
+                let usdc_options = self.usdc_options;
+                let read = read_loose(
+                    format,
+                    &data,
+                    identifier,
+                    id,
+                    tokens,
+                    paths,
+                    self,
+                    schemas.as_deref(),
+                    usdc_options,
+                );
+                self.pending.extend(read.resolved_layers);
+                self.diagnostics.extend(read.diagnostics);
                 #[cfg(feature = "std")]
-                let result = match self.usdc_options.arrays {
-                    UsdcArrayLoading::Retained => {
-                        let result = layerstack_usdc::read_usdc_lazy_range_within(
-                            data.clone(),
-                            id,
-                            tokens,
-                            paths,
-                            self,
-                            budget,
-                        )
-                        .map_err(|e| IoError::new(IoErrorKind::Rejected, e.to_string()))?;
-                        self.catalog.retained_values.insert(id, result.values);
-                        result.assembled
-                    }
-                    UsdcArrayLoading::Eager => layerstack_usdc::read_usdc_within(
-                        &data,
-                        id,
-                        tokens,
-                        paths,
-                        self,
-                        &mut budget,
-                    )
-                    .map_err(|e| IoError::new(IoErrorKind::Rejected, e.to_string()))?,
-                };
-                #[cfg(not(feature = "std"))]
-                let result =
-                    layerstack_usdc::read_usdc_within(&data, id, tokens, paths, self, &mut budget)
-                        .map_err(|e| IoError::new(IoErrorKind::Rejected, e.to_string()))?;
-                self.pending.extend(result.resolved_layers);
-                self.diagnostics
-                    .extend(result.diagnostics.into_iter().map(|d| MemberDiagnostic {
-                        member: Arc::from(identifier),
-                        layer_id: id,
-                        diagnostic: ImportDiagnostic::UsdcAssemble(d),
-                    }));
-                result.layer
+                if let Some(values) = read.retained {
+                    self.catalog.retained_values.insert(id, values);
+                }
+                read.layer?
             }
             Format::Usdz => {
                 if self.reachable_only {
@@ -1301,6 +1251,127 @@ impl<'a, B: Storage> Reader<'a, B> {
         Ok(layer)
     }
 }
+/// What reading one USDA or USDC layer found: the layer, or the error
+/// rejecting it, with its diagnostics and the layers its arcs resolved to
+/// (a rejected text layer keeps both, a rejected binary layer neither).
+struct LooseRead {
+    layer: Result<Layer, IoError>,
+    resolved_layers: Vec<Layer>,
+    diagnostics: Vec<MemberDiagnostic>,
+    #[cfg(feature = "std")]
+    retained: Option<layerstack_usdc::RetainedValues>,
+}
+
+/// Reads the USDA or USDC layer `data`, `identifier` read as `id`,
+/// resolving its arcs through `resolver`.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "one reader's inputs, passed through"
+)]
+fn read_loose(
+    format: Format,
+    data: &EncodedBytes,
+    identifier: &str,
+    id: LayerId,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
+    resolver: &mut dyn AssetResolver,
+    schemas: Option<&layerstack::SchemaRegistry>,
+    usdc_options: UsdcReadOptions,
+) -> LooseRead {
+    let mut read = LooseRead {
+        layer: Err(IoError::new(IoErrorKind::Rejected, "unread layer")),
+        resolved_layers: Vec::new(),
+        diagnostics: Vec::new(),
+        #[cfg(feature = "std")]
+        retained: None,
+    };
+    let member = |diagnostic| MemberDiagnostic {
+        member: Arc::from(identifier),
+        layer_id: id,
+        diagnostic,
+    };
+    if format == Format::Usda {
+        let source = match core::str::from_utf8(data) {
+            Ok(source) => source,
+            Err(e) => {
+                read.layer = Err(IoError::new(IoErrorKind::Rejected, e.to_string()));
+                return read;
+            }
+        };
+        let result = if let Some(registry) = schemas {
+            layerstack_usda::read_usda_with_registry(source, id, tokens, paths, resolver, registry)
+        } else {
+            layerstack_usda::read_usda(source, id, tokens, paths, resolver)
+        };
+        read.resolved_layers = result.emitted.resolved_layers;
+        read.diagnostics = result
+            .parse_diagnostics
+            .into_iter()
+            .map(ImportDiagnostic::UsdaParse)
+            .chain(
+                result
+                    .lower_diagnostics
+                    .into_iter()
+                    .map(ImportDiagnostic::UsdaLower),
+            )
+            .chain(
+                result
+                    .emitted
+                    .diagnostics
+                    .into_iter()
+                    .map(ImportDiagnostic::UsdaEmit),
+            )
+            .map(member)
+            .collect();
+        read.layer = if result.emitted.rejected {
+            Err(IoError::new(
+                IoErrorKind::Rejected,
+                alloc::format!("{identifier}: USDA reader rejected the layer"),
+            ))
+        } else {
+            Ok(result.emitted.layer)
+        };
+        return read;
+    }
+    let mut budget = usdc_options.budget(data.len());
+    let rejected =
+        |e: layerstack_usdc::UsdcError| IoError::new(IoErrorKind::Rejected, e.to_string());
+    #[cfg(feature = "std")]
+    let result = match usdc_options.arrays {
+        UsdcArrayLoading::Retained => layerstack_usdc::read_usdc_lazy_range_within(
+            data.clone(),
+            id,
+            tokens,
+            paths,
+            resolver,
+            budget,
+        )
+        .map(|result| {
+            read.retained = Some(result.values);
+            result.assembled
+        }),
+        UsdcArrayLoading::Eager => {
+            layerstack_usdc::read_usdc_within(data, id, tokens, paths, resolver, &mut budget)
+        }
+    };
+    #[cfg(not(feature = "std"))]
+    let result = layerstack_usdc::read_usdc_within(data, id, tokens, paths, resolver, &mut budget);
+    match result {
+        Ok(result) => {
+            read.resolved_layers = result.resolved_layers;
+            read.diagnostics = result
+                .diagnostics
+                .into_iter()
+                .map(|d| member(ImportDiagnostic::UsdcAssemble(d)))
+                .collect();
+            read.layer = Ok(result.layer);
+        }
+        Err(e) => read.layer = Err(rejected(e)),
+    }
+    read
+}
+
 impl<B: Storage> Reader<'_, B> {
     fn identify(&mut self, asset: &str, anchor: Option<String>) -> Result<String, IoError> {
         let storage = &*self.storage;

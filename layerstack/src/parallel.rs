@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 //! A pool of scoped worker threads for tree-shaped work: each task may add
-//! more, and a phase ends when no task is left.
+//! more, and a phase ends when no task is left. Composition indexes prims
+//! on one ([`crate::StageOptions::threads`]), and a host may read layers on
+//! one.
 //!
 //! With the `std` feature a pool of `n` threads works on the calling thread
 //! during each [`Pool::run`], and starts up to `n - 1` workers, one each
@@ -20,14 +22,28 @@ use alloc::vec::Vec;
 /// What a pool does with each task: returns its result and pushes the
 /// tasks it adds. Shared by every worker, so [`Sync`] with `std`.
 #[cfg(feature = "std")]
-pub(crate) type Work<'w, T, R> = dyn Fn(T, &mut Vec<T>) -> R + Sync + 'w;
+pub type Work<'w, T, R> = dyn Fn(T, &mut Vec<T>) -> R + Sync + 'w;
 /// What a pool does with each task: returns its result and pushes the
 /// tasks it adds.
 #[cfg(not(feature = "std"))]
-pub(crate) type Work<'w, T, R> = dyn Fn(T, &mut Vec<T>) -> R + 'w;
+pub type Work<'w, T, R> = dyn Fn(T, &mut Vec<T>) -> R + 'w;
 
 /// Runs `body` with a pool of up to `threads` threads doing `work`.
-pub(crate) fn with_pool<T, R, B>(
+///
+/// ```
+/// use layerstack::parallel::with_pool;
+///
+/// // Each task `n` adds `n - 1` twice, down to 0.
+/// let tree = |n: u32, added: &mut Vec<u32>| {
+///     if n > 0 {
+///         added.extend([n - 1, n - 1]);
+///     }
+///     n
+/// };
+/// let results = with_pool(4, &tree, |pool| pool.run(vec![3]));
+/// assert_eq!(results.len(), 15);
+/// ```
+pub fn with_pool<T, R, B>(
     threads: usize,
     work: &Work<'_, T, R>,
     body: impl FnOnce(&Pool<'_, T, R>) -> B,
@@ -75,7 +91,7 @@ where
 }
 
 /// A pool of threads doing one kind of task (see [`with_pool`]).
-pub(crate) struct Pool<'s, T, R> {
+pub struct Pool<'s, T, R> {
     work: &'s Work<'s, T, R>,
     #[cfg(feature = "std")]
     threaded: Option<(&'s Threaded<T, R>, &'s dyn Spawn)>,
@@ -106,6 +122,20 @@ impl<T: Send, R: Send> Spawn for Spawner<'_, '_, T, R> {
     }
 }
 
+impl<T, R> core::fmt::Debug for Pool<'_, T, R> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        #[cfg(feature = "std")]
+        let threads = self
+            .threaded
+            .map_or(1, |(threaded, _)| threaded.max_workers + 1);
+        #[cfg(not(feature = "std"))]
+        let threads = 1;
+        f.debug_struct("Pool")
+            .field("threads", &threads)
+            .finish_non_exhaustive()
+    }
+}
+
 #[cfg(feature = "std")]
 struct Threaded<T, R> {
     shared: std::sync::Mutex<Shared<T, R>>,
@@ -132,7 +162,7 @@ impl<T: Send, R: Send> Pool<'_, T, R> {
     /// Whether [`Self::run`] returns results in the order a single thread
     /// does tasks: depth first, each task's added tasks in order before
     /// the next.
-    pub(crate) fn in_order(&self) -> bool {
+    pub fn in_order(&self) -> bool {
         #[cfg(feature = "std")]
         let in_order = self.threaded.is_none();
         #[cfg(not(feature = "std"))]
@@ -141,7 +171,7 @@ impl<T: Send, R: Send> Pool<'_, T, R> {
     }
 
     /// Does `tasks` and every task they add, and returns their results.
-    pub(crate) fn run(&self, tasks: Vec<T>) -> Vec<R> {
+    pub fn run(&self, tasks: Vec<T>) -> Vec<R> {
         #[cfg(feature = "std")]
         if let Some((threaded, spawner)) = self.threaded {
             let mut shared = lock(&threaded.shared);

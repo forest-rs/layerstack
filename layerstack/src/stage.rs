@@ -4192,7 +4192,7 @@ mod tests {
     #[test]
     fn resolves_sparse_array_edit_over_dense_default() {
         let mut tokens = TokenInterner::default();
-        let mut paths = PathInterner::default();
+        let paths = PathInterner::default();
         let prim = paths.intern(Path::parse_absolute("/A", &mut tokens).expect("valid path"));
         let field = tokens.intern("x");
 
@@ -4234,7 +4234,7 @@ mod tests {
     #[test]
     fn resolves_time_sampled_sparse_array_edits() {
         let mut tokens = TokenInterner::default();
-        let mut paths = PathInterner::default();
+        let paths = PathInterner::default();
         let prim = paths.intern(Path::parse_absolute("/A", &mut tokens).expect("valid path"));
         let field = tokens.intern("x");
 
@@ -4304,7 +4304,7 @@ mod tests {
     #[test]
     fn sampled_block_hides_weaker_array_at_time() {
         let mut tokens = TokenInterner::default();
-        let mut paths = PathInterner::default();
+        let paths = PathInterner::default();
         let prim = paths.intern(Path::parse_absolute("/A", &mut tokens).expect("valid path"));
         let field = tokens.intern("x");
 

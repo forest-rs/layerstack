@@ -24,7 +24,7 @@ fn fixture() -> (InMemoryStore, Layer, Layer, ClipBundleOptions) {
     let static_name = store.tokens.intern("static");
     let start = store.tokens.intern("startTimeCode");
     let end = store.tokens.intern("endTimeCode");
-    let mut layer = |id, begin, finish, initial, final_value, default, static_value| {
+    let layer = |id, begin, finish, initial, final_value, default, static_value| {
         let mut layer = Layer::new(LayerId(id));
         layer.metadata = vec![
             FieldEntry {

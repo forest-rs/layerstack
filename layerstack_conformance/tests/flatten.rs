@@ -231,7 +231,7 @@ fn flatten_with(
 /// defines them (`pxr/usd/usdGeom/schema.usda`): `Imageable`'s `visibility`
 /// and uniform `purpose`, and `Xformable`'s uniform `xformOpOrder`.
 fn schemas(store: &mut InMemoryStore) -> SchemaRegistry {
-    let mut token = |name: &str| store.tokens.intern(name);
+    let token = |name: &str| store.tokens.intern(name);
     let (imageable, xformable, xform) = (token("Imageable"), token("Xformable"), token("Xform"));
     let (visibility, purpose, order) =
         (token("visibility"), token("purpose"), token("xformOpOrder"));

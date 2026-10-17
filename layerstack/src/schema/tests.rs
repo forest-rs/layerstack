@@ -475,7 +475,7 @@ fn generated_schema_layers_read_as_definitions() {
     use alloc::sync::Arc;
 
     let mut t = TokenInterner::default();
-    let mut paths = PathInterner::default();
+    let paths = PathInterner::default();
     let (slot, pin, tile) = (t.intern("SlotAPI"), t.intern("PinAPI"), t.intern("Tile"));
     let [by_type, by_instance] =
         ["PinAPI:__INSTANCE_NAME__", "PinAPI:__INSTANCE_NAME__:extra"].map(|n| t.intern(n));

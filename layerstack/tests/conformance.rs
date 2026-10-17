@@ -2827,7 +2827,7 @@ fn metadata_property_collision(
 #[test]
 fn prim_metadata_and_property_with_one_name_stay_separate() {
     for split in [None, Some(true), Some(false)] {
-        let (stage, mut store, p, kind) = metadata_property_collision(split);
+        let (stage, store, p, kind) = metadata_property_collision(split);
         let component = store.tokens.intern("component");
         let attribute = PropertyPath::new(p, kind);
         assert_eq!(

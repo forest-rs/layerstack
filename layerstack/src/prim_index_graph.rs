@@ -587,7 +587,7 @@ mod tests {
 
     fn spec_path(text: &str) -> SpecPath {
         let mut tokens = TokenInterner::default();
-        let mut paths = PathInterner::default();
+        let paths = PathInterner::default();
         let path = paths.intern(Path::parse_absolute(text, &mut tokens).expect("path"));
         SpecPath::from_prim_path(path)
     }
@@ -678,7 +678,7 @@ mod tests {
         // Spec: AOUSD Core §10.4. Layer stack order breaks ties within a
         // node; stable ids break the remaining ties.
         let mut tokens = TokenInterner::default();
-        let mut paths = PathInterner::default();
+        let paths = PathInterner::default();
         let mut path = |text: &str| {
             let path = paths.intern(Path::parse_absolute(text, &mut tokens).expect("path"));
             SpecPath::from_prim_path(path)

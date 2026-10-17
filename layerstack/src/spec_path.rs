@@ -490,7 +490,7 @@ mod tests {
     #[test]
     fn from_variant_qualified_prim_path_formats_expected_string() {
         let mut tokens = TokenInterner::default();
-        let mut paths = PathInterner::default();
+        let paths = PathInterner::default();
         let host = paths.intern(Path::parse_absolute("/Sarah", &mut tokens).expect("path"));
         let concrete = paths
             .intern(Path::parse_absolute("/Sarah/FaceRig/EyesRig", &mut tokens).expect("path"));
@@ -508,7 +508,7 @@ mod tests {
     #[test]
     fn from_variant_selection_sites_supports_multiple_hosts() {
         let mut tokens = TokenInterner::default();
-        let mut paths = PathInterner::default();
+        let paths = PathInterner::default();
         let foo = paths.intern(Path::parse_absolute("/Foo", &mut tokens).expect("path"));
         let foo_a_number =
             paths.intern(Path::parse_absolute("/Foo/A/Number", &mut tokens).expect("path"));
@@ -543,7 +543,7 @@ mod tests {
     #[test]
     fn from_variant_selection_sites_supports_repeated_set_names_on_same_host() {
         let mut tokens = TokenInterner::default();
-        let mut paths = PathInterner::default();
+        let paths = PathInterner::default();
         let host = paths
             .intern(Path::parse_absolute("/DirectlyNestedVariants", &mut tokens).expect("path"));
         let concrete = paths.intern(

@@ -497,7 +497,7 @@ mod tests {
 
     #[test]
     fn property_list_keeps_authored_order() {
-        let mut tokens = crate::interner::TokenInterner::default();
+        let tokens = crate::interner::TokenInterner::default();
         let b = tokens.intern("b");
         let a = tokens.intern("a");
         let mut properties = Vec::new();

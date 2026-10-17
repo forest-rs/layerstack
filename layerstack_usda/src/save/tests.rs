@@ -789,7 +789,7 @@ def "A"
     );
 
     let a = Path::parse_absolute("/A", &mut Imported::new(source).tokens).unwrap();
-    let mut imported = Imported::new(source);
+    let imported = Imported::new(source);
     let a = imported.paths.intern(a);
     let height = imported.tokens.intern("height");
     let spline = imported.layer.prims[&a]

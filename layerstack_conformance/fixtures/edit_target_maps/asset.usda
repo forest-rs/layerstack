@@ -2,7 +2,7 @@
 
 def "Asset" (
     variants = {
-        string "v" = "x"
+        string v = "x"
     }
     prepend variantSets = ["v"]
 )
@@ -12,3 +12,4 @@ def "Asset" (
         }
     }
 }
+

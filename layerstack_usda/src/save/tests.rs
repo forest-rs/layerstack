@@ -148,7 +148,7 @@ fn saves_an_edited_layer_as_authored() {
     doc = "Layer docs."
     metersPerUnit = 0.01
     customLayerData = {
-        string "source" = "./textures/a.png"
+        string source = "./textures/a.png"
     }
 )
 
@@ -158,7 +158,7 @@ def Xform "Asset" (
     prepend apiSchemas = ["MaterialBindingAPI", "CollectionAPI:lod"]
     kind = "component"
     customData = {
-        dictionary "profilesInfo" = {
+        dictionary profilesInfo = {
             string[] "vnd.example" = ["usd.geom.mesh"]
         }
     }
@@ -173,9 +173,9 @@ def Xform "Asset" (
     )
     float a = 2.5 (
         limits = {
-            dictionary "soft" = {
-                float "min" = 0
-                float "max" = 5
+            dictionary soft = {
+                float min = 0
+                float max = 5
             }
         }
     )
@@ -199,6 +199,7 @@ def Xform "Asset" (
 over "Other"
 {
 }
+
 "#;
     assert_eq!(text, expected, "saved text");
 
@@ -447,6 +448,7 @@ class "C"
 class "D"
 {
 }
+
 "#;
     assert_eq!(text, expected, "saved text");
     assert_eq!(Imported::new(&text).save().unwrap(), text, "stable");
@@ -652,6 +654,7 @@ def "A"
         0: "idle",
     }
 }
+
 "#;
     assert_eq!(text, expected, "saved text");
     assert_eq!(Imported::new(&text).save().unwrap(), text, "stable");
@@ -716,7 +719,8 @@ def "A" (
     let text = Imported::new(source).save().unwrap();
     // A half is written as the shortest decimal of its exact value, which
     // reads back as the same half.
-    let expected = source.replace("half h = 0.1", "half h = 0.099975586");
+    // OpenUSD ends a layer with a blank line.
+    let expected = source.replace("half h = 0.1", "half h = 0.099975586") + "\n";
     assert_eq!(text, expected, "saved text");
     assert_eq!(Imported::new(&text).save().unwrap(), text, "stable");
 
@@ -771,6 +775,7 @@ def "A"
         0: 0.5; pre (0, 0); post held,
     }
 }
+
 "#;
     let imported = Imported::new(source);
     let text = imported.save().unwrap();
@@ -973,9 +978,9 @@ fn saves_permissions_and_timecode_metadata() {
 def "A" (
     permission = private
     customData = {
-        timecode "cue" = 12
-        dictionary "season" = {
-            timecode[] "frost" = [1, 9.5]
+        timecode cue = 12
+        dictionary season = {
+            timecode[] frost = [1, 9.5]
         }
     }
 )
@@ -987,6 +992,7 @@ def "A" (
         permission = private
     )
 }
+
 "#;
     let text = Imported::new(source).save().unwrap();
     assert_eq!(text, source, "saved text");
@@ -1137,16 +1143,14 @@ class "Library"
 fn saves_variant_sets_and_selections() {
     let imported = Imported::new(VARIANTS);
     let text = imported.save().unwrap();
-    // The source as the writer spells it: quoted selection keys and
-    // bracketed `variantSets` lists.
-    let mut expected = String::from(VARIANTS);
+    // The source as the writer spells it: bracketed `variantSets` lists,
+    // and a blank line at the end.
+    let mut expected = String::from(VARIANTS) + "\n";
     for set in ["density", "moss", "season", "size"] {
-        expected = expected
-            .replace(&format!("string {set} ="), &format!("string \"{set}\" ="))
-            .replace(
-                &format!("prepend variantSets = \"{set}\""),
-                &format!("prepend variantSets = [\"{set}\"]"),
-            );
+        expected = expected.replace(
+            &format!("prepend variantSets = \"{set}\""),
+            &format!("prepend variantSets = [\"{set}\"]"),
+        );
     }
     assert_eq!(text, expected);
     assert_eq!(Imported::new(&text).save().unwrap(), text, "stable");

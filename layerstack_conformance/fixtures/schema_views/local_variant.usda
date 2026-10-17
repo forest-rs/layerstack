@@ -2,7 +2,7 @@
 
 def "Rock" (
     variants = {
-        string "look" = "a"
+        string look = "a"
     }
     prepend variantSets = ["look"]
 )
@@ -19,3 +19,4 @@ def "Rock" (
 def "Light"
 {
 }
+

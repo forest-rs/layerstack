@@ -317,6 +317,7 @@ name = "layerstack_conformance"
 version = "0.1.0"
 dependencies = [
  "layerstack",
+ "layerstack_custom_schemas",
  "layerstack_mesh_export",
  "layerstack_schemagen",
  "layerstack_schemas",
@@ -325,6 +326,16 @@ dependencies = [
  "layerstack_usdz",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "layerstack_custom_schemas"
+version = "0.1.0"
+dependencies = [
+ "layerstack",
+ "layerstack_schemagen",
+ "layerstack_schemas",
+ "layerstack_usda",
 ]
 
 [[package]]

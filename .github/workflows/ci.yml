@@ -229,6 +229,8 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_STABLE_VER }}
+          # The schema compiler formats the Rust modules it writes with rustfmt.
+          components: rustfmt
 
       - name: install cargo-nextest
         uses: taiki-e/install-action@v2
@@ -429,6 +431,13 @@ jobs:
         env:
           LAYERSTACK_OPENUSD_SOURCE: ${{ github.workspace }}/openusd
         run: cargo test --locked -p layerstack_conformance --test schema_compiler
+
+      # The checked-in Rust module of the observatory fixture must be what the
+      # schema compiler generates from OpenUSD's `Xformable` today.
+      - name: check generated schema library module
+        env:
+          LAYERSTACK_OPENUSD_SOURCE: ${{ github.workspace }}/openusd
+        run: cargo test --locked -p layerstack_custom_schemas --test generated
 
       # The compiled fixture plugins must be what OpenUSD's registry reads.
       - name: check schema compiler oracle

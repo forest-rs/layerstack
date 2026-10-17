@@ -1,0 +1,24 @@
+#usda 1.0
+(
+    """The two base classes of OpenUSD's `usd/schema.usda`, which every
+    schema inherits from, so the fixtures compile without OpenUSD's
+    sources. Compiled against those sources instead, they generate the
+    same files."""
+)
+
+def "GLOBAL" (
+    customData = {
+        string libraryName = "usd"
+        string libraryPath = "pxr/usd/usd"
+    }
+)
+{
+}
+
+class "Typed"
+{
+}
+
+class "APISchemaBase"
+{
+}

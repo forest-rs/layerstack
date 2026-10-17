@@ -76,6 +76,21 @@ fn is_beneath(store: &dyn LayerStore, path: PathId, roots: &[PathId]) -> bool {
     })
 }
 
+/// Whether `path` is one of `roots` or beneath one, as [`is_beneath`]
+/// tells, walking `path`'s ancestors: the cost is its depth, not the
+/// number of roots, which a bulk edit makes as many as the prims it
+/// creates.
+fn is_beneath_set(store: &dyn LayerStore, path: PathId, roots: &HashSet<PathId>) -> bool {
+    let mut current = Some(path);
+    while let Some(at) = current {
+        if roots.contains(&at) {
+            return true;
+        }
+        current = store.paths().parent(at);
+    }
+    false
+}
+
 fn minimal_roots(store: &dyn LayerStore, paths: &[PathId]) -> Vec<PathId> {
     let set: HashSet<_> = paths.iter().copied().collect();
     let mut roots: Vec<_> = set
@@ -106,9 +121,10 @@ fn include_resyncs(store: &dyn LayerStore, changes: &mut Changes, paths: &[PathI
     }
     changes.resynced.extend_from_slice(paths);
     changes.resynced = minimal_roots(store, &changes.resynced);
+    let resynced: HashSet<PathId> = changes.resynced.iter().copied().collect();
     changes
         .changed_info_only
-        .retain(|path| !is_beneath(store, *path, &changes.resynced));
+        .retain(|path| !is_beneath_set(store, *path, &resynced));
 }
 
 /// Every layer a stage rooted at `root` reads or would read: the root's
@@ -730,6 +746,7 @@ impl LiveStage {
             affected.extend(index.subtree(*root));
         }
         let hierarchy: Vec<_> = affected.iter().copied().collect();
+        let in_hierarchy = affected.clone();
         affected.extend(touched.iter().map(|(_, path)| *path));
         let mut parents: Vec<PathId> = roots
             .iter()
@@ -740,7 +757,7 @@ impl LiveStage {
                     .parent()
                     .and_then(|p| store.paths().lookup(&p))
             })
-            .filter(|parent| !hierarchy.contains(parent))
+            .filter(|parent| !in_hierarchy.contains(parent))
             .collect();
         parents.sort_unstable();
         parents.dedup();
@@ -792,11 +809,12 @@ impl LiveStage {
             .into_iter()
             .filter(|root| self.stage.has_prim(*root) || partial.has_prim(*root))
             .collect();
+        let resynced: HashSet<PathId> = changes.resynced.iter().copied().collect();
         changes.changed_info_only = parents
             .iter()
             .copied()
             .chain(touched.iter().map(|(_, path)| *path))
-            .filter(|path| partial.has_prim(*path) && !is_beneath(store, *path, &changes.resynced))
+            .filter(|path| partial.has_prim(*path) && !is_beneath_set(store, *path, &resynced))
             .collect();
         let mut affected: Vec<_> = affected.into_iter().collect();
         affected.sort_unstable();
@@ -1441,10 +1459,11 @@ impl LiveStage {
 
         if let Some(changes) = changes.as_mut() {
             changes.resynced = minimal_roots(store, &resynced_roots);
+            let resynced: HashSet<PathId> = changes.resynced.iter().copied().collect();
             changes.changed_info_only = affected
                 .iter()
                 .copied()
-                .filter(|path| !is_beneath(store, *path, &changes.resynced))
+                .filter(|path| !is_beneath_set(store, *path, &resynced))
                 .collect();
         }
         affected

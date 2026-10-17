@@ -77,6 +77,9 @@ struct Parser<'a, const LOSSLESS: bool> {
     diagnostics: Vec<Diagnostic>,
     builder: TreeBuilder,
     direct_arrays: Option<crate::read::PreparedArrays>,
+    /// Whether a line break was consumed since the last non-trivia token,
+    /// so a property statement there has ended.
+    line_break: bool,
 }
 
 impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
@@ -88,6 +91,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
             diagnostics: Vec::new(),
             builder: TreeBuilder::new(source.len() as u32),
             direct_arrays: None,
+            line_break: false,
         }
     }
 
@@ -134,6 +138,11 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
                 self.builder.token(SyntaxKind::from(t.kind), t.span);
             }
             self.pos += 1;
+            if t.kind == TokenKind::Newline {
+                self.line_break = true;
+            } else if !is_trivia(t.kind) {
+                self.line_break = false;
+            }
         }
         tok
     }
@@ -145,6 +154,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
                 if LOSSLESS {
                     self.builder.token(SyntaxKind::from(tok.kind), tok.span);
                 }
+                self.line_break |= tok.kind == TokenKind::Newline;
                 self.pos += 1;
             } else {
                 break;
@@ -159,6 +169,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
                 if LOSSLESS {
                     self.builder.token(SyntaxKind::from(tok.kind), tok.span);
                 }
+                self.line_break |= tok.kind == TokenKind::Newline;
                 self.pos += 1;
             } else {
                 break;
@@ -849,6 +860,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
     /// Rollback parser position and builder nodes.
     fn restore_to(&mut self, pos: usize, node_count: usize) {
         self.pos = pos;
+        self.line_break = false;
         self.builder.truncate(node_count);
     }
 
@@ -985,6 +997,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
     // ── Attributes ─────────────────────────────────────────────────
 
     fn parse_attribute(&mut self) {
+        let errors = self.diagnostics.len();
         let start = self.current_span().start;
         self.builder.start_node(SyntaxKind::AttributeDef, start);
 
@@ -1036,14 +1049,69 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
             self.parse_attribute_value(start, None, type_name, is_array);
         }
 
-        // Optional metadata block.
+        // Optional metadata block, which opens on the property's own line
+        // (OpenUSD rejects one on the next with "Expected }").
         self.eat_trivia();
-        if self.peek() == Some(TokenKind::LeftParen) {
+        if !self.line_break && self.peek() == Some(TokenKind::LeftParen) {
             self.parse_attribute_metadata();
         }
+        self.expect_property_end(errors);
 
         let end = self.current_span().start;
         self.builder.finish_node(end);
+    }
+
+    /// Reports anything on a property's line after its name, value and
+    /// metadata, and skips it to the end of the line. A `;` or a closing
+    /// brace also ends the property; OpenUSD wants a line break or `;` even
+    /// before the brace. A property that
+    /// reported an error since `errors` diagnostics were recorded is
+    /// skipped silently: its value parser said what went wrong. A word there is not another
+    /// property: OpenUSD's parser rejects `keep rel targets = </A>` (`keep`
+    /// is no list-op keyword, so `keep` reads as a type name and `rel` as
+    /// the name) and `double x = 1 junk` with "Expected }".
+    ///
+    /// Spec: AOUSD Core §16.2 (property statements).
+    fn expect_property_end(&mut self, errors: usize) {
+        if self.line_break {
+            return;
+        }
+        let mut index = self.pos;
+        while let Some(tok) = self.tokens.get(index) {
+            if tok.kind == TokenKind::Newline || !is_trivia(tok.kind) {
+                break;
+            }
+            index += 1;
+        }
+        let next = self.tokens.get(index).map(|tok| tok.kind);
+        if matches!(
+            next,
+            None | Some(TokenKind::Newline | TokenKind::Semicolon | TokenKind::RightBrace)
+        ) {
+            return;
+        }
+        while self.pos < index {
+            self.bump();
+        }
+        let span = self.current_span();
+        let text = self.current_text();
+        if self.diagnostics.len() == errors {
+            self.error(
+            span,
+                format!(
+                    "unexpected {text:?} after a property; expected '=', '.', '(' or the end of the line"
+                ),
+            );
+        }
+        while let Some(tok) = self.current() {
+            if matches!(
+                tok.kind,
+                TokenKind::Newline | TokenKind::Semicolon | TokenKind::RightBrace
+            ) {
+                break;
+            }
+            self.bump();
+        }
     }
 
     fn parse_attribute_suffix(&mut self, attribute: u32, type_name: &str, is_array: bool) {
@@ -1234,6 +1302,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
     // ── Relationships ──────────────────────────────────────────────
 
     fn parse_relationship(&mut self) {
+        let errors = self.diagnostics.len();
         let start = self.current_span().start;
         self.builder.start_node(SyntaxKind::RelationshipDef, start);
 
@@ -1293,11 +1362,13 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
             }
         }
 
-        // Optional metadata block.
+        // Optional metadata block, which opens on the property's own line
+        // (OpenUSD rejects one on the next with "Expected }").
         self.eat_trivia();
-        if self.peek() == Some(TokenKind::LeftParen) {
+        if !self.line_break && self.peek() == Some(TokenKind::LeftParen) {
             self.parse_attribute_metadata();
         }
+        self.expect_property_end(errors);
 
         let end = self.current_span().start;
         self.builder.finish_node(end);
@@ -1404,6 +1475,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
                 self.builder.start_node(SyntaxKind::ValueExpr, start);
                 self.builder.start_node(SyntaxKind::ArrayValue, start);
                 self.pos = end;
+                self.line_break = false;
                 // Private placeholders: emission consumes the matching source
                 // range by declaration offset and sample ordinal.
                 self.builder.finish_node(array.span.end);
@@ -1574,6 +1646,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
                 break;
             }
             newline |= tok.kind == TokenKind::Newline;
+            self.line_break |= tok.kind == TokenKind::Newline;
             if LOSSLESS {
                 self.builder.token(SyntaxKind::from(tok.kind), tok.span);
             }
@@ -2137,6 +2210,67 @@ def Xform "Root" (
         } else {
             panic!("expected SubLayers metadata");
         }
+    }
+
+    /// OpenUSD 26.08 rejects each of these with "Expected }": a word after
+    /// a property is no property of its own, and `keep` is no list-op
+    /// keyword. AOUSD Core §16.2.
+    #[test]
+    fn words_after_a_property_are_errors() {
+        for property in [
+            "keep rel targets = </A/B>",
+            "bogus rel other = </A>",
+            "keep int x = 1",
+            "keep double z.connect = </A.y>",
+            "double x = 1 junk",
+            "double x junk",
+            "double a = 1 double b = 2",
+            "double meta = 1 (doc = \"d\") junk",
+        ] {
+            let text =
+                format!("#usda 1.0\ndef \"W\" {{\n    {property}\n    double after = 2\n}}\n");
+            let parsed = parse_cst(&text);
+            assert_eq!(
+                parsed.diagnostics.len(),
+                1,
+                "{property}: {:?}",
+                parsed.diagnostics
+            );
+        }
+    }
+
+    /// What OpenUSD 26.08 accepts around a property's end: another
+    /// property on the next line or after `;`, metadata opening on the
+    /// property's line, a trailing comment, and an unknown type name (a
+    /// type name is any identifier to the parser).
+    #[test]
+    fn properties_end_at_a_line_break_or_semicolon() {
+        let text = "#usda 1.0\ndef \"W\" {\n    double a = 1 # note\n    double b\n    double c (\n        doc = \"d\"\n    )\n    double d = 1; double e = 2\n    rel r = </W>\n    notatype f = 1\n}\n";
+        let parsed = parse_cst(text);
+        assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
+    }
+
+    /// More leniently than OpenUSD, which wants a line break or `;` after
+    /// every statement of a prim body, a closing brace may end a property
+    /// on its line (`def "W" { double x = 1 }`).
+    #[test]
+    fn a_closing_brace_ends_a_property_on_its_line() {
+        let parsed = parse_cst("#usda 1.0\ndef \"W\" { double x = 1 }\n");
+        assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
+    }
+
+    /// OpenUSD 26.08 rejects a property's metadata opening on the next
+    /// line ("Expected }"); a prim's may.
+    #[test]
+    fn property_metadata_opens_on_the_property_line() {
+        for property in ["double c", "rel r"] {
+            let text = format!(
+                "#usda 1.0\ndef \"W\" {{\n    {property}\n    (\n        doc = \"d\"\n    )\n}}\n"
+            );
+            assert!(!parse_cst(&text).diagnostics.is_empty(), "{property}");
+        }
+        let prim = "#usda 1.0\ndef \"W\"\n(\n    doc = \"d\"\n)\n{\n}\n";
+        assert!(parse_cst(prim).diagnostics.is_empty());
     }
 
     #[test]

@@ -136,7 +136,7 @@ fn validated_primvars_preserve_value_and_index_decode_errors() {
     use layerstack_schemas::primvar::{Primvar, PrimvarError};
     for name in ["primvars:x", "primvars:x:indices"] {
         let (mut store, _) = support::scene(
-            "#usda 1.0\ndef Mesh \"M\" { point3f[] primvars:x = [(1,2,3)] int[] primvars:x:indices = [0] }",
+            "#usda 1.0\ndef Mesh \"M\" { point3f[] primvars:x = [(1,2,3)]\nint[] primvars:x:indices = [0] }",
         );
         let path = store.path("/M");
         let token = store.tokens.lookup(name).unwrap();

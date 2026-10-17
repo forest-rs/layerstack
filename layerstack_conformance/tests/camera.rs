@@ -161,7 +161,7 @@ fn compute(attributes: &str, time: Time) -> Result<ComputedCamera, CameraError> 
 #[test]
 fn prepared_frusta_own_planes_and_preserve_degenerate_and_nonfinite_query_policy() {
     for projection in ["perspective", "orthographic"] {
-        let camera = compute(&format!("token projection = \"{projection}\" float2 clippingRange = (1,100) float4[] clippingPlanes = [(0,0,0,-1)]"), Time::Default).unwrap();
+        let camera = compute(&format!("token projection = \"{projection}\"\nfloat2 clippingRange = (1,100)\nfloat4[] clippingPlanes = [(0,0,0,-1)]"), Time::Default).unwrap();
         let frustum = camera.prepare_frustum();
         let planes = camera.frustum_planes();
         drop(camera);
@@ -249,11 +249,11 @@ fn invalid_parameters_error_instead_of_returning_partial_frusta() {
             CameraError::InvalidAttribute("shutter:close"),
         ),
         (
-            "float3 xformOp:scale = (1,0,1) uniform token[] xformOpOrder = [\"xformOp:scale\"]",
+            "float3 xformOp:scale = (1,0,1)\nuniform token[] xformOpOrder = [\"xformOp:scale\"]",
             CameraError::InvalidTransform,
         ),
         (
-            "double3 xformOp:translate = (nan,0,0) uniform token[] xformOpOrder = [\"xformOp:translate\"]",
+            "double3 xformOp:translate = (nan,0,0)\nuniform token[] xformOpOrder = [\"xformOp:translate\"]",
             CameraError::InvalidTransform,
         ),
     ] {
@@ -281,7 +281,7 @@ fn distant_far_planes_remain_finite_and_orthographic_near_can_be_negative() {
     assert!(!camera.contains_world_point([0., 0., -2e30]));
     assert!(!camera.contains_world_point([0., 0., 0.]));
     let ortho = compute(
-        "token projection = \"orthographic\" float2 clippingRange = (-2,10)",
+        "token projection = \"orthographic\"\nfloat2 clippingRange = (-2,10)",
         Time::Default,
     )
     .unwrap();
@@ -333,7 +333,7 @@ fn edits_and_undo_refresh_lens_and_shared_ancestor_transforms() {
 }
 #[test]
 fn shutter_intervals_preserve_sampling_policy_and_reversed_exposure() {
-    let source = "double shutter:open.timeSamples = {0: -0.5, 2: 0.5} double shutter:close.timeSamples = {0: 0.5, 2: -0.5}";
+    let source = "double shutter:open.timeSamples = {0: -0.5, 2: 0.5}\ndouble shutter:close.timeSamples = {0: 0.5, 2: -0.5}";
     let linear = compute(source, Time::at(1.)).unwrap();
     assert_eq!(linear.shutter_interval(24.).unwrap(), [24., 24.]);
     let held = compute(source, Time::held(1.)).unwrap();

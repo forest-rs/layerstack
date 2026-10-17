@@ -1538,17 +1538,14 @@ impl<B: Storage> Reader<'_, B> {
         let anchor_identifier = anchor
             .and_then(|id| self.catalog.sources.get(&id))
             .map(|s| {
-                let identifier = s
-                    .identifier
-                    .split_once(FORMAT_ARGS_DELIMITER)
-                    .map_or(s.identifier.as_str(), |(path, _)| path);
+                let identifier = FormatArgs::strip(&s.identifier);
                 String::from(
                     identifier
                         .split_once('[')
                         .map_or(identifier, |(outer, _)| outer),
                 )
             });
-        let (asset, args) = FormatArgs::split(asset)?;
+        let (asset, args) = format::split_args(asset)?;
         let path = PackagePath::parse(asset, 32)
             .map_err(|reason| IoError::new(IoErrorKind::Rejected, reason))?;
         let outer = self.identify(path.outer(), anchor_identifier)?;
@@ -1724,7 +1721,7 @@ fn source_format(formats: &FileFormats, identifier: &str, data: &[u8]) -> Format
 
 /// The canonical identifier of the source named by `asset` once its path
 /// without arguments identifies as `outer`: that identity, followed by the
-/// arguments naming a distinct layer ([`FormatArgs::canonical`]).
+/// arguments naming a distinct layer ([`format::canonical_args`]).
 fn source_identifier(
     formats: &FileFormats,
     path: &PackagePath,
@@ -1733,7 +1730,7 @@ fn source_identifier(
 ) -> String {
     let base = path.with_outer(outer);
     let format = formats.for_identifier(&base);
-    args.canonical(format).identifier(&base)
+    format::canonical_args(args, format).identifier(&base)
 }
 
 /// Builds the layer `identifier` names with the registered `format`,
@@ -1752,7 +1749,7 @@ fn read_custom(
     resolver: &mut dyn AssetResolver,
     resolved_layers: &mut Vec<Layer>,
 ) -> Result<Layer, IoError> {
-    let (_, args) = FormatArgs::split(identifier)?;
+    let (_, args) = format::split_args(identifier)?;
     let source = FormatSource {
         identifier,
         layer: id,

@@ -477,8 +477,10 @@ pub(crate) fn compose_child_names_in(
                 // Child specs a list leaves out still exist; they follow
                 // every named child.
                 children.with_children(store, layer, site, |children| {
+                    // A set, so a prim listing many children stays linear.
+                    let listed: HashSet<TokenId> = authored.iter().copied().collect();
                     for &name in children {
-                        if !authored.contains(&name) {
+                        if !listed.contains(&name) {
                             unlisted.push(name);
                         }
                     }
@@ -598,15 +600,16 @@ fn index_layer(store: &dyn LayerStore, layer: &Layer) -> LayerChildren {
                         branches.len() - 1
                     }
                 };
-                let names = &mut branches[at].1;
-                if !names.contains(&segments[depth]) {
-                    names.push(segments[depth]);
-                }
+                branches[at].1.push(segments[depth]);
             }
         }
     }
+    // Names repeat once per spec beneath them; deduplicating after sorting
+    // keeps a parent with many children linear.
     let tokens = store.tokens();
     for (_, names) in index.values_mut().flatten() {
+        names.sort_unstable();
+        names.dedup();
         names.sort_by(|a, b| tokens.resolve(*a).cmp(tokens.resolve(*b)));
     }
     index

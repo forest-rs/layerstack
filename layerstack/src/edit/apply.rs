@@ -12,6 +12,7 @@
 //! only while its slot still holds what that step wrote.
 
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
+use hashbrown::HashMap;
 
 use super::{
     error::{EditError, Rejection, Slot},
@@ -748,6 +749,14 @@ pub(super) struct Journal<'a> {
     /// The layers whose edits may change namespace or arcs.
     structural_layers: Vec<LayerId>,
     touched: Vec<(LayerId, PathId)>,
+    /// `touched` as a set: a bulk edit touches as many prims as it has
+    /// steps.
+    touched_set: hashbrown::HashSet<(LayerId, PathId)>,
+    /// The child names of prim specs outside variant branches that
+    /// [`add_child`] has looked at, kept current by the `Child` steps run
+    /// since and dropped when a step replaces the spec, so creating many
+    /// children of one prim does not scan its growing list each time.
+    children: HashMap<(LayerId, PathId), hashbrown::HashSet<TokenId>>,
 }
 
 impl Journal<'_> {
@@ -758,6 +767,30 @@ impl Journal<'_> {
     /// Applies `step`, records its inverse, and returns the inverse.
     fn run_step(&mut self, store: &mut dyn LayerStore, step: Raw) -> Result<&Raw, Rejection> {
         let inverse = apply_raw(store, &step)?;
+        match &step {
+            Raw::Child {
+                layer,
+                parent: Loc::Prim { path, sites },
+                name,
+                index,
+            } if sites.is_empty() => {
+                if let Some(names) = self.children.get_mut(&(*layer, *path)) {
+                    if index.is_some() {
+                        names.insert(*name);
+                    } else {
+                        names.remove(name);
+                    }
+                }
+            }
+            Raw::PrimSlots { layer, path, .. } => {
+                self.children.remove(&(*layer, *path));
+            }
+            Raw::Variant { layer, host, .. } => {
+                let host = host.prim_path();
+                self.children.remove(&(*layer, host));
+            }
+            _ => {}
+        }
         if let Raw::PrimSlots { main, branches, .. } = &step
             && (main.is_some() || branches.is_some())
         {
@@ -768,10 +801,11 @@ impl Journal<'_> {
             self.layers.push(layer);
         }
         match step.opinion_site() {
-            Some(prim) if !self.touched.contains(&(layer, prim)) => {
-                self.touched.push((layer, prim));
+            Some(prim) => {
+                if self.touched_set.insert((layer, prim)) {
+                    self.touched.push((layer, prim));
+                }
             }
-            Some(_) => {}
             None if !self.structural_layers.contains(&layer) => {
                 self.structural_layers.push(layer);
             }
@@ -893,6 +927,8 @@ pub(crate) fn apply(
         structural_layers,
         touched,
         namespace: _,
+        touched_set: _,
+        children: _,
     } = journal;
     let mut local_structure = Some(Vec::new());
     let mut resync_sites = Vec::new();
@@ -1006,21 +1042,32 @@ fn support_only_prims(
         .iter()
         .filter(|g| g.written.layer() == layer)
         .collect();
-    let mut candidates: Vec<PathId> = steps
-        .iter()
-        .filter(|g| matches!(g.written, Raw::PrimSlots { .. } | Raw::Child { .. }))
-        .filter_map(|g| g.written.change_path(store))
-        .filter(|path| Some(*path) != root)
-        .collect();
+    // Each step's paths once, and the steps changing each path: a bulk
+    // edit has as many candidates as steps, so a scan per candidate would
+    // be quadratic.
+    let mut by_path: HashMap<PathId, Vec<usize>> = HashMap::new();
+    let mut candidates = Vec::new();
+    for (at, g) in steps.iter().enumerate() {
+        let written = g.written.change_path(store);
+        let step = g.step.change_path(store);
+        for path in [written, step.filter(|path| Some(*path) != written)]
+            .into_iter()
+            .flatten()
+        {
+            by_path.entry(path).or_default().push(at);
+        }
+        if matches!(g.written, Raw::PrimSlots { .. } | Raw::Child { .. })
+            && let Some(path) = written.filter(|path| Some(*path) != root)
+        {
+            candidates.push(path);
+        }
+    }
     candidates.sort_unstable();
     candidates.dedup();
     candidates.retain(|&path| {
-        steps
+        by_path[&path]
             .iter()
-            .filter(|g| {
-                g.written.change_path(store) == Some(path)
-                    || g.step.change_path(store) == Some(path)
-            })
+            .map(|&at| steps[at])
             .all(|g| supports(&g.written, path) && supports(&g.step, path))
             && stage.prim_stack(path).is_some_and(|stack| {
                 stack
@@ -1817,7 +1864,15 @@ pub(super) fn add_child(
 ) -> Result<(), Rejection> {
     let spec = spec_at(layer(store, id)?, parent).ok_or_else(|| diverged(store, parent))?;
     let children = spec.children();
-    if children.contains(&name) {
+    let listed = match parent {
+        Loc::Prim { path, sites } if sites.is_empty() => journal
+            .children
+            .entry((id, *path))
+            .or_insert_with(|| children.iter().copied().collect())
+            .contains(&name),
+        _ => children.contains(&name),
+    };
+    if listed {
         return Ok(());
     }
     let index = children.len();

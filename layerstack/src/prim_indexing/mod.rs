@@ -975,7 +975,8 @@ fn apply_relocated_names(
 }
 
 /// Whether the prim `graph` indexes is active: its strongest `active`
-/// opinion, `true` without one.
+/// opinion, on a prim spec or a selected variant branch, `true` without
+/// one.
 fn is_active(ctx: &Ctx<'_>, graph: &Graph) -> bool {
     for node in graph.strength_order() {
         let entry = graph.node(node);
@@ -984,9 +985,7 @@ fn is_active(ctx: &Ctx<'_>, graph: &Graph) -> bool {
         }
         let stack = ctx.stacks.get(entry.site.stack);
         for (_, _, spec) in site::specs(ctx.store, stack, &entry.site.path) {
-            if let site::SpecRef::Prim(prim) = spec
-                && let Some(active) = prim.active
-            {
+            if let Some(active) = spec.active(ctx.store.tokens()) {
                 return active;
             }
         }

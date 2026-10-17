@@ -2358,9 +2358,7 @@ pub(crate) fn is_instanceable(store: &dyn LayerStore, stacks: &LayerStacks, grap
         }
         let stack = stacks.get(entry.site.stack);
         for (_, _, spec) in site::specs(store, stack, &entry.site.path) {
-            if let site::SpecRef::Prim(prim) = spec
-                && let Some(value) = prim.instanceable
-            {
+            if let Some(value) = spec.instanceable(store.tokens()) {
                 return value;
             }
         }

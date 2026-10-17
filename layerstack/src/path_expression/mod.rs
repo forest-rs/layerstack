@@ -826,6 +826,51 @@ impl PathExpression {
         }
     }
 
+    /// This expression without the patterns and references that name
+    /// `source` (a prim path, with everything beneath it) or, with
+    /// `source_property`, that property: what is left when namespace
+    /// editing deletes the object. Removing an operand simplifies as
+    /// [`PathExpression::op`] does, so `~/A` without `/A` matches
+    /// everything. Relative patterns are anchored at `anchor` first; an
+    /// expression that names nothing deleted is returned unchanged.
+    ///
+    /// OpenUSD: `SdfPathExpression::ReplacePrefix` with an empty
+    /// replacement, as `UsdNamespaceEditor` deletes.
+    pub(crate) fn remove_namespace(
+        &self,
+        source: &[String],
+        source_property: Option<&str>,
+        anchor: &[String],
+    ) -> Self {
+        let absolute = self.make_absolute(anchor);
+        let names = |prims: &[String], property: Option<&str>| match source_property {
+            Some(name) => prims == source && property == Some(name),
+            None => prims.starts_with(source),
+        };
+        let edited = absolute.clone().rebuild(&mut |atom| match atom {
+            Expr::Pattern(pattern)
+                if names(&pattern.prefix.prims, pattern.prefix.property.as_deref()) =>
+            {
+                Self::nothing()
+            }
+            Expr::Reference(reference)
+                if source_property.is_none()
+                    && reference
+                        .path
+                        .as_ref()
+                        .is_some_and(|path| path.prims.starts_with(source)) =>
+            {
+                Self::nothing()
+            }
+            atom => Self { root: Some(atom) },
+        });
+        if edited == absolute {
+            self.clone()
+        } else {
+            edited
+        }
+    }
+
     /// The expression's text, as `SdfPathExpression::GetText` writes it.
     ///
     /// That text does not always parse back to the same expression:

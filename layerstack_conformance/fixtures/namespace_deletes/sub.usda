@@ -1,0 +1,10 @@
+#usda 1.0
+
+over "A"
+{
+    double y = 3
+
+    def "SubChild"
+    {
+    }
+}

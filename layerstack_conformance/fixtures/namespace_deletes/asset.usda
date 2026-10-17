@@ -1,0 +1,13 @@
+#usda 1.0
+
+def "Asset"
+{
+    def "FromAsset"
+    {
+        double p = 1
+    }
+
+    def "Local"
+    {
+    }
+}

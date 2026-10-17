@@ -1,7 +1,8 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! Composition-aware namespace moves lowered to ordinary atomic transactions.
+//! Composition-aware namespace moves and deletes lowered to ordinary atomic
+//! transactions.
 //!
 //! AOUSD Core §8 (namespace), §10 (composition arcs), §12.4 (path list ops).
 //! OpenUSD: `UsdNamespaceEditor` validates all required layer edits before
@@ -11,6 +12,7 @@ use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use core::fmt;
 
 mod coordinated;
+mod delete;
 
 use super::{
     EditTarget, Transaction,
@@ -25,7 +27,8 @@ use crate::{
     Value, VariantSetSpec, VariantSpec,
 };
 
-/// A validated namespace move, including dependent authored path repairs.
+/// A validated namespace move or delete, including dependent authored path
+/// repairs.
 ///
 /// Prepare against a stage reflecting the current store, inspect the affected
 /// layers and specs, then pass [`Self::transaction`] to [`crate::LiveStage::apply`].
@@ -51,14 +54,15 @@ use crate::{
 pub struct NamespaceEdit {
     transaction: Transaction,
     source: TargetPath,
-    destination: TargetPath,
+    destination: Option<TargetPath>,
     layers: Vec<LayerId>,
     specs: Vec<(LayerId, SpecPath)>,
     namespace_moves: Vec<(LayerId, TargetPath, TargetPath)>,
     relocates: Vec<(LayerId, Vec<crate::Relocate>)>,
 }
 
-/// Why a namespace move cannot be prepared. No layer has been modified.
+/// Why a namespace move or delete cannot be prepared. No layer has been
+/// modified.
 #[derive(Clone, Debug, PartialEq)]
 pub enum NamespaceError {
     /// Paths must be distinct non-root prims, or distinct properties.
@@ -249,7 +253,7 @@ impl NamespaceEdit {
         Ok(Self {
             transaction,
             source,
-            destination,
+            destination: Some(destination),
             layers: edited_layers,
             specs,
             namespace_moves: alloc::vec![(root, source, destination)],
@@ -262,9 +266,10 @@ impl NamespaceEdit {
     pub fn source(&self) -> TargetPath {
         self.source
     }
-    /// New composed object path.
+    /// New composed object path; `None` for a delete
+    /// ([`Self::prepare_delete`]).
     #[must_use]
-    pub fn destination(&self) -> TargetPath {
+    pub fn destination(&self) -> Option<TargetPath> {
         self.destination
     }
     /// Sorted source and dependency layers whose authored content changes.
@@ -303,6 +308,45 @@ impl NamespaceEdit {
     #[must_use]
     pub fn into_transaction(self) -> Transaction {
         self.transaction
+    }
+
+    /// Prepares the delete of the composed prim or property `object`, and
+    /// of every authored path that names it, as one atomic transaction.
+    ///
+    /// Every layer of the stage's root layer stack loses its specs of the
+    /// object: for a prim, every spec at or beneath it, with its name in its
+    /// parent's children (specs inside an ancestor's variant branches belong
+    /// to that arc and stay). A prim that still composes from across an arc
+    /// (a reference, payload, variant branch or relocate) is removed from
+    /// namespace with a relocate to `<>`, authored in `target`'s layer, or
+    /// by retargeting a relocate that moves a prim to it; a property with
+    /// opinions across an arc cannot be deleted
+    /// ([`NamespaceError::UnsupportedComposition`]). The root stack's
+    /// authored paths that name the object, and for a prim anything beneath
+    /// it, are then dropped: relationship targets, attribute connections,
+    /// inherits, specializes, internal references and payloads, path
+    /// expression terms (`/A /B` without `/A` is `/B`) and `defaultPrim`.
+    ///
+    /// `target` must address a layer of the root layer stack without
+    /// remapping paths ([`NamespaceError::Unmappable`]). The object must be
+    /// composed ([`NamespaceError::NoSuchObject`]) and not beneath an
+    /// instance ([`NamespaceError::InstanceProxy`]). Preparation composes the
+    /// edited layers to check that the object is gone before returning.
+    ///
+    /// OpenUSD: `UsdNamespaceEditor::DeletePrimAtPath` and
+    /// `DeletePropertyAtPath`, which remove arcs to the deleted namespace
+    /// only where a prim index depends on it, so an inherit whose site
+    /// another arc of the same prim already reaches keeps naming it.
+    ///
+    /// Spec: AOUSD Core §8 (namespace), §10.3.2.6 (relocates), §12.4 (list
+    /// ops).
+    pub fn prepare_delete(
+        stage: &Stage,
+        store: &mut dyn LayerStore,
+        target: &EditTarget,
+        object: TargetPath,
+    ) -> Result<Self, NamespaceError> {
+        delete::prepare(stage, store, target, object)
     }
 
     /// Prepares one atomic root-stack namespace edit and repairs supplied stages.

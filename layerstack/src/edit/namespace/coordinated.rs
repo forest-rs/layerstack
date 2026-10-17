@@ -245,7 +245,7 @@ pub(super) fn prepare(
     Ok(NamespaceEdit {
         transaction,
         source,
-        destination,
+        destination: Some(destination),
         layers,
         specs,
         namespace_moves: stages
@@ -651,9 +651,10 @@ fn repair_default_prim(store: &mut dyn LayerStore, layer: &mut Layer, mapping: &
     }
 }
 
-struct Overlay<'a> {
-    store: &'a mut dyn LayerStore,
-    layers: &'a HashMap<LayerId, Layer>,
+/// The store, with edited copies of some of its layers in place of theirs.
+pub(super) struct Overlay<'a> {
+    pub(super) store: &'a mut dyn LayerStore,
+    pub(super) layers: &'a HashMap<LayerId, Layer>,
 }
 impl LayerStore for Overlay<'_> {
     fn layer(&self, id: LayerId) -> Option<&Layer> {

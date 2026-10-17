@@ -78,7 +78,8 @@ It provides:
   dependency graph
 - **Authoring** — via [`edit`]: edit targets through any node of a
   prim's composition, and atomic transactions of spec edits that
-  return their inverses and check preconditions
+  return their inverses and check preconditions, including composition
+  arcs added and removed as OpenUSD's list editors do
 - **Schemas** — prim definitions (type, applied schemas, defined
   properties and their fallbacks) from the [`SchemaRegistry`] a stage is
   composed with ([`StageOptions::schemas`], [`Stage::prim_definition`])

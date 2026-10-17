@@ -1,0 +1,49 @@
+#usda 1.0
+(
+    subLayers = [
+        @sub.usda@
+    ]
+)
+
+def "A"
+{
+}
+
+def "B"
+{
+}
+
+def "C"
+{
+}
+
+def "D"
+{
+}
+
+def "E"
+{
+}
+
+class "Cls"
+{
+}
+
+def "V" (
+    variants = {
+        string v = "x"
+    }
+    prepend variantSets = "v"
+)
+{
+    variantSet "v" = {
+        "x" {
+        }
+    }
+}
+
+def "R" (
+    prepend references = @asset.usda@</Asset>
+)
+{
+}

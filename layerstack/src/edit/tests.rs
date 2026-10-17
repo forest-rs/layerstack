@@ -2227,3 +2227,134 @@ fn attribute_block_preserves_empty_sample_fields_and_splines_on_undo() {
         "all authored bits survive block/undo"
     );
 }
+
+#[test]
+fn prim_field_inverses_guard_their_field_alone() {
+    let mut store = rocks();
+    let (rock_a, rock) = (store.path("/World/RockA"), store.path("/Rock"));
+    let at = EditTarget::for_layer(SCENE).prim(rock_a);
+    let mut add = Transaction::new();
+    add.add_inherit(at.clone(), rock, ListPosition::BackOfPrepend);
+    let undo = add.apply(&mut store).unwrap();
+
+    // A later edit of another field of the spec does not stop the undo.
+    let mut other = Transaction::new();
+    other.set_active(at.clone(), false);
+    other.apply(&mut store).unwrap();
+    undo.apply(&mut store).unwrap();
+    let spec = &store.layers[&SCENE].prims[&rock_a];
+    assert_eq!(spec.inherits, crate::ListOp::default());
+    assert_eq!(spec.active, Some(false));
+
+    // A later edit of the same field does.
+    let undo = add.apply(&mut store).unwrap();
+    let mut again = Transaction::new();
+    again.add_inherit(at, rock_a, ListPosition::BackOfAppend);
+    again.apply(&mut store).unwrap();
+    let before = layers(&store);
+    assert!(matches!(
+        undo.apply(&mut store),
+        Err(EditError::StaleValue {
+            slot: Slot::Prim(PrimField::Inherits),
+            ..
+        })
+    ));
+    assert_eq!(layers(&store), before);
+}
+
+#[test]
+fn prepared_prim_field_edits_expect_their_authored_values() {
+    let mut store = rocks();
+    let rock_a = store.path("/World/RockA");
+    let at = EditTarget::for_layer(SCENE).prim(rock_a);
+    let mut edit = Transaction::new();
+    edit.set_instanceable(at, true).expect_unchanged(&mut store);
+    // A write that bypasses transactions leaves the generation alone, but
+    // not the value the prepared edit expects.
+    let layer = store.layers.get_mut(&SCENE).unwrap();
+    layer.prims.get_mut(&rock_a).unwrap().instanceable = Some(false);
+    assert!(matches!(
+        edit.apply(&mut store),
+        Err(EditError::StaleValue {
+            slot: Slot::Prim(PrimField::Instanceable),
+            ..
+        })
+    ));
+}
+
+#[test]
+fn prim_field_edits_reject_what_they_cannot_author() {
+    let mut store = rocks();
+    let stage = compose(&mut store);
+    let (root, rock_a, rock) = (
+        store.path("/"),
+        store.path("/World/RockA"),
+        store.path("/Rock"),
+    );
+    let layer = EditTarget::for_layer(SCENE);
+    let reason = |store: &mut InMemoryStore, txn: &Transaction| match txn.apply(store) {
+        Err(EditError::Rejected { reason, .. }) => reason,
+        other => panic!("expected a rejection, got {other:?}"),
+    };
+
+    let mut txn = Transaction::new();
+    txn.set_active(layer.prim(root), false);
+    assert_eq!(reason(&mut store, &txn), Rejection::PseudoRoot);
+
+    let mut txn = Transaction::new();
+    txn.add_inherit(layer.prim(rock_a), root, ListPosition::BackOfPrepend);
+    assert_eq!(reason(&mut store, &txn), Rejection::PseudoRootArc);
+
+    let mut txn = Transaction::new();
+    let size = store.property_path("/World/RockA.size");
+    txn.set_active(layer.property(size), false);
+    assert!(matches!(reason(&mut store, &txn), Rejection::NotAPrim(_)));
+
+    // A variant spec has no specifier.
+    let round = spec(&mut store, "/Rock{shape=round}");
+    let mut txn = Transaction::new();
+    txn.set_specifier(Address::spec(ROCK, round), Specifier::Class);
+    assert_eq!(
+        reason(&mut store, &txn),
+        Rejection::NotOnVariant(PrimField::Specifier)
+    );
+
+    // Through `/World/RockA`'s reference, `/Rock` (a path outside the
+    // reference's namespace) does not map.
+    let node = node(&stage, rock_a, ArcKind::References);
+    let target = EditTarget::for_node(&stage, rock_a, node).unwrap();
+    let mut txn = Transaction::new();
+    txn.add_inherit(target.prim(rock_a), rock, ListPosition::BackOfPrepend);
+    assert_eq!(
+        reason(&mut store, &txn),
+        Rejection::UnmappableTarget(crate::TargetPath::Prim(rock))
+    );
+    let mut txn = Transaction::new();
+    txn.add_reference(
+        target.prim(rock_a),
+        Reference::new(ROCK, rock),
+        ListPosition::BackOfPrepend,
+    );
+    assert_eq!(
+        reason(&mut store, &txn),
+        Rejection::UnmappableTarget(crate::TargetPath::Prim(rock))
+    );
+}
+
+#[test]
+fn writing_what_a_prim_field_holds_changes_nothing() {
+    let mut store = rocks();
+    let rock_a = store.path("/World/RockA");
+    let at = EditTarget::for_layer(SCENE).prim(rock_a);
+    let generation = store.layers[&SCENE].generation();
+    let mut txn = Transaction::new();
+    txn.set_specifier(at.clone(), Specifier::Def)
+        .clear_active(at.clone())
+        .remove_applied_schema(at.clone(), store.tokens.intern("NoneAPI"))
+        .clear_inherits(at);
+    // Removing an applied schema authors its deletion, so only that edit
+    // changes the layer.
+    let undo = txn.apply(&mut store).unwrap();
+    assert_eq!(undo.len(), 1);
+    assert_eq!(store.layers[&SCENE].generation(), generation + 1);
+}

@@ -12,7 +12,11 @@
 //!   identifies every affected layer and prim slot.
 //! - A [`Transaction`] lists spec edits, each addressed through a target
 //!   or by spec path ([`Address`]), and optional preconditions: layer
-//!   generations and expected authored values.
+//!   generations and expected authored values. Besides values, metadata
+//!   and targets, it authors the prim fields kept in dedicated members
+//!   ([`PrimField`]): the specifier, type name, `active`, `instanceable`,
+//!   child and property order, and the composition arcs, whose list ops
+//!   it also edits item by item ([`ListPosition`]).
 //! - Applying a transaction checks its preconditions, validates and
 //!   applies every edit or none, and returns the inverse transaction,
 //!   which restores each slot only while it holds what was written there.
@@ -81,6 +85,7 @@
 mod apply;
 mod error;
 mod namespace;
+mod prim_fields;
 pub(crate) mod same;
 mod spec;
 mod target;
@@ -97,6 +102,7 @@ use crate::path::PathId;
 
 pub use error::{EditError, Rejection, Slot};
 pub use namespace::{NamespaceEdit, NamespaceError};
+pub use prim_fields::{ListPosition, PrimField};
 pub use target::{Address, EditTarget};
 pub use transaction::Transaction;
 

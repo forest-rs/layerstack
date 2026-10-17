@@ -12,7 +12,7 @@ use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
 use core::{borrow::Borrow, cmp::Ordering};
 
 use crate::interner::{TokenId, TokenInterner};
-use hashbrown::HashMap;
+use crate::interning::Interned;
 use smallvec::SmallVec;
 
 /// The segments of a path being assembled, inline up to a depth few prim
@@ -216,6 +216,9 @@ impl TargetPath {
 /// A segmented absolute path.
 ///
 /// v0.1 supports prim-style absolute paths like `/A/B/C`.
+///
+/// Paths compare by their segments' [`TokenId`]s, an order for maps and
+/// sets; [`Path::cmp_with_tokens`] is namespace order.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[doc(alias = "SdfPath")]
 pub struct Path {
@@ -368,11 +371,18 @@ impl Path {
 
 /// Interns [`Path`] values to stable [`PathId`]s.
 ///
+/// Interning takes a shared reference, so threads can intern into one
+/// interner at once (with the `std` feature, which makes it [`Sync`]). Ids
+/// number paths in the order they are first interned; paths interned by
+/// several threads at once take ids in whichever order the threads get
+/// there, so ordering by id is not namespace order
+/// ([`Path::cmp_with_tokens`] is).
+///
 /// ```
 /// use layerstack::{Path, PathInterner, TokenInterner};
 ///
 /// let mut tokens = TokenInterner::default();
-/// let mut paths = PathInterner::default();
+/// let paths = PathInterner::default();
 ///
 /// let path = Path::parse_absolute("/Robot/Arm", &mut tokens).unwrap();
 /// let id = paths.intern(path);
@@ -381,57 +391,49 @@ impl Path {
 #[derive(Debug, Default)]
 pub struct PathInterner {
     pub(crate) affinity: Arc<()>,
-    by_path: HashMap<Path, PathId>,
-    paths: Vec<Path>,
+    paths: Interned<Path>,
 }
 
 impl PathInterner {
     pub(crate) fn snapshot(&self) -> Self {
         Self {
             affinity: Arc::default(),
-            by_path: self.by_path.clone(),
-            paths: self.paths.clone(),
+            paths: self.paths.snapshot(),
         }
     }
+
     /// Interns a path, returning a stable [`PathId`].
     #[must_use]
-    pub fn intern(&mut self, path: Path) -> PathId {
-        if let Some(id) = self.by_path.get(&path) {
-            return *id;
-        }
-        let id = PathId(u32::try_from(self.paths.len()).expect("path interner overflow"));
-        self.paths.push(path.clone());
-        self.by_path.insert(path, id);
-        id
+    pub fn intern(&self, path: Path) -> PathId {
+        let key = Segments::from_slice(path.segments());
+        PathId(self.paths.intern(&key[..], || path).0)
     }
 
     /// Resolves a [`PathId`] back to a [`Path`].
     #[must_use]
     pub fn resolve(&self, id: PathId) -> &Path {
-        &self.paths[usize::try_from(id.0).expect("path id out of range")]
+        self.paths.get(id.0).expect("path id out of range")
     }
 
     /// Looks up a path without interning. Returns `None` if the path hasn't been interned.
     #[must_use]
     pub fn lookup(&self, path: &Path) -> Option<PathId> {
-        self.by_path.get(path).copied()
+        self.lookup_segments(path.segments())
     }
 
     /// Looks up the path made of `segments` without interning or allocating.
     #[must_use]
     pub(crate) fn lookup_segments(&self, segments: &[TokenId]) -> Option<PathId> {
-        self.by_path.get(segments).copied()
+        self.paths.find(segments).map(PathId)
     }
 
     /// Interns the path made of `segments`, allocating only for a path not
     /// interned yet.
-    pub(crate) fn intern_segments(&mut self, segments: &[TokenId]) -> PathId {
-        match self.lookup_segments(segments) {
-            Some(id) => id,
-            None => self.intern(Path {
-                segments: segments.into(),
-            }),
-        }
+    pub(crate) fn intern_segments(&self, segments: &[TokenId]) -> PathId {
+        let make = || Path {
+            segments: segments.into(),
+        };
+        PathId(self.paths.intern(segments, make).0)
     }
 
     fn joined(&self, base: PathId, extra: &[TokenId]) -> Segments {
@@ -451,7 +453,7 @@ impl PathInterner {
     }
 
     /// Interns `base` joined with `extra` (see [`Path::join`]).
-    pub(crate) fn intern_joined(&mut self, base: PathId, extra: &[TokenId]) -> PathId {
+    pub(crate) fn intern_joined(&self, base: PathId, extra: &[TokenId]) -> PathId {
         if extra.is_empty() {
             return base;
         }
@@ -462,7 +464,7 @@ impl PathInterner {
     /// Interns `path` moved from beneath `from` to beneath `to`: `to` itself
     /// for `from`, and `None` for a path outside `from`.
     pub(crate) fn intern_reparented(
-        &mut self,
+        &self,
         path: PathId,
         from: PathId,
         to: PathId,
@@ -482,7 +484,7 @@ impl PathInterner {
     #[must_use]
     pub fn parent(&self, id: PathId) -> Option<PathId> {
         let (_, parent) = self.resolve(id).segments().split_last()?;
-        self.by_path.get(parent).copied()
+        self.lookup_segments(parent)
     }
 
     /// Formats a [`PathId`] as a string (e.g. `/Robot/Arm`).
@@ -550,7 +552,7 @@ mod tests {
     #[test]
     fn interned_parent_lookup_handles_missing_and_later_ancestors() {
         let mut tokens = TokenInterner::default();
-        let mut paths = PathInterner::default();
+        let paths = PathInterner::default();
         let child = paths.intern(Path::parse_absolute("/World/Leaf", &mut tokens).unwrap());
         assert_eq!(paths.parent(child), None);
         let parent = paths.intern(Path::parse_absolute("/World", &mut tokens).unwrap());

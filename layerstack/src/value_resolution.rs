@@ -1837,7 +1837,7 @@ mod tests {
 
     fn test_ids() -> (PathId, TokenId) {
         let mut tokens = TokenInterner::default();
-        let mut paths = PathInterner::default();
+        let paths = PathInterner::default();
         let spec_path = paths.intern(Path::parse_absolute("/A", &mut tokens).expect("valid path"));
         let field = tokens.intern("x");
         (spec_path, field)

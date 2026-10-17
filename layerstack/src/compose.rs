@@ -621,7 +621,7 @@ mod child_order_tests {
                 let p = store
                     .paths
                     .intern(Path::parse_absolute("/P", &mut store.tokens).unwrap());
-                let mut tokens = |names: &str| -> Vec<TokenId> {
+                let tokens = |names: &str| -> Vec<TokenId> {
                     names
                         .split_whitespace()
                         .map(|name| store.tokens.intern(name))

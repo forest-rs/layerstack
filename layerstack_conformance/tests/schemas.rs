@@ -205,7 +205,7 @@ fn registry(set: &str, store: &mut InMemoryStore) -> SchemaRegistry {
             .iter()
             .find_map(|base| info.types.get(base))
             .map(|base| store.tokens.intern(&base.identifier));
-        let mut intern_all = |names: &[String]| {
+        let intern_all = |names: &[String]| {
             names
                 .iter()
                 .map(|n| store.tokens.intern(n))
@@ -253,7 +253,7 @@ fn registry(set: &str, store: &mut InMemoryStore) -> SchemaRegistry {
     for definition in definitions {
         builder.register(definition);
     }
-    let mut token = |name: &str| store.tokens.intern(name);
+    let token = |name: &str| store.tokens.intern(name);
     for info_type in info.types.values() {
         for target in &info_type.auto_apply_to {
             builder.auto_apply(token(&info_type.identifier), token(target));

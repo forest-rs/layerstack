@@ -351,7 +351,7 @@ mod tests {
             property::PropertyType,
             spec_path::SpecPath,
         };
-        let mut paths = PathInterner::default();
+        let paths = PathInterner::default();
         let path = paths.intern(Path::root());
         let key = OpinionKey {
             node: NodeId::ROOT,

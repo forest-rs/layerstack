@@ -3016,7 +3016,7 @@ def Scope "D" (
     #[test]
     fn emit_default_prim() {
         let src = "#usda 1.0\n(\n    defaultPrim = \"Root\"\n)\n\ndef Xform \"Root\"\n{\n}\n";
-        let (result, mut tokens, _paths) = emit_source(src);
+        let (result, tokens, _paths) = emit_source(src);
         assert_eq!(
             result.layer.default_prim,
             Some(tokens.intern("Root")),
@@ -3729,7 +3729,7 @@ def Xform \"A\" (
 def \"A\" {
 }
 ";
-        let (result, mut tokens, _paths) = emit_source(src);
+        let (result, tokens, _paths) = emit_source(src);
         let layer = &result.layer;
         assert_eq!(layer.default_prim, Some(tokens.intern("A")));
         let z = tokens.intern("Z");

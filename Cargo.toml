@@ -62,6 +62,11 @@ rust.unused_import_braces = "warn"
 rust.unused_lifetimes = "warn"
 rust.unused_macro_rules = "warn"
 rust.unused_qualifications = "warn"
+# `--cfg layerstack_reverse_ids` numbers interned tokens and paths in reverse,
+# so a result ordered by id instead of by value changes.
+rust.unexpected_cfgs = { check-cfg = [
+    "cfg(layerstack_reverse_ids)",
+], level = "warn" }
 
 clippy.too_many_arguments = "allow"
 

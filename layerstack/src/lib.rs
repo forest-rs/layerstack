@@ -176,6 +176,7 @@ pub(crate) mod expression_variables;
 pub mod half;
 pub mod ident;
 pub mod interner;
+mod interning;
 pub mod layer_stack;
 pub mod layer_stack_flatten;
 pub use layer_stack_flatten::{

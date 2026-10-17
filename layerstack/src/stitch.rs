@@ -582,7 +582,7 @@ mod tests {
     }
     #[test]
     fn time_envelope_conflicts_and_info_do_not_copy_children() {
-        let mut tokens = TokenInterner::default();
+        let tokens = TokenInterner::default();
         let start = tokens.intern("startTimeCode");
         let end = tokens.intern("endTimeCode");
         let fps = tokens.intern("framesPerSecond");

@@ -26,7 +26,7 @@ def PointInstancer "Base" {
 #[test]
 fn sparse_defaults_preserve_weaker_motion_grid_and_integrate_composed_values() {
     let source = format!(
-        "{BASE}\ndef PointInstancer \"I\" (references = </Base>) {{ point3f[] positions = edit [write (10,0,0) to [0]] vector3f[] velocities = edit [write (8,0,0) to [0]] }}"
+        "{BASE}\ndef PointInstancer \"I\" (references = </Base>) {{ point3f[] positions = edit [write (10,0,0) to [0]]\nvector3f[] velocities = edit [write (8,0,0) to [0]] }}"
     );
     let (mut store, live) = support::scene(&source);
     let path = store.path("/I");
@@ -63,7 +63,7 @@ fn sparse_sample_grids_union_and_mixed_dense_samples_mask_weaker_sources() {
         ),
     ] {
         let source = format!(
-            "{BASE}\ndef PointInstancer \"I\" (references = </Base>) {{ point3f[] positions.timeSamples = {positions} vector3f[] velocities.timeSamples = {velocities} }}"
+            "{BASE}\ndef PointInstancer \"I\" (references = </Base>) {{ point3f[] positions.timeSamples = {positions}\nvector3f[] velocities.timeSamples = {velocities} }}"
         );
         let (mut store, live) = support::scene(&source);
         let path = store.path("/I");

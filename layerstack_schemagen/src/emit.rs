@@ -171,7 +171,7 @@ fn mod_file(model: &Model, types: &ValueTypes) -> String {
         );
     }
     out.push_str(
-        "        }\n    }\n\n    pub(crate) fn tables(self) -> &'static DomainTables {\n        match self {\n",
+        "        }\n    }\n\n    pub(crate) fn tables(self) -> &'static SchemaTables {\n        match self {\n",
     );
     for domain in &model.domains {
         let _ = writeln!(
@@ -209,7 +209,7 @@ fn mod_file(model: &Model, types: &ValueTypes) -> String {
     out.replace(
         "@IMPORTS@\n",
         &format!(
-            "{arc}use layerstack::Value;\n\nuse crate::table::{{DomainTables, ValueType}};\n\n"
+            "{arc}use layerstack::Value;\n\nuse crate::table::{{SchemaTables, ValueType}};\n\n"
         ),
     )
 }
@@ -260,7 +260,7 @@ fn domain_file(
          #![allow(\n    clippy::unreadable_literal,\n    clippy::approx_constant,\n    \
          clippy::excessive_precision,\n    reason = \"values as OpenUSD writes them\"\n)]\n\n\
          @IMPORTS@\n\
-         pub(crate) static TABLES: DomainTables = DomainTables {{\n    schemas: &[\n",
+         pub(crate) static TABLES: SchemaTables = SchemaTables {{\n    schemas: &[\n",
         domain.name,
         origin_note(domain)
     );
@@ -366,7 +366,7 @@ fn domain_file(
         layerstack.join(", ")
     );
     let table = used(&[
-        ("DomainTables {", "DomainTables"),
+        ("SchemaTables {", "SchemaTables"),
         ("Property {", "Property"),
         ("Metadata {", "Metadata"),
         ("Schema {", "Schema"),

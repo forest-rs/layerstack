@@ -390,7 +390,7 @@ pub(crate) fn render(model: &Model, external: bool) -> Result<Vec<(String, Strin
                 } else {
                     let _ = writeln!(
                         out,
-                        "    uniform_attribute! {{ #[doc = {:?}] {m}, {full:?}, {}, {} }}",
+                        "    #[doc = {:?}]\n    #[must_use]\n    pub fn {m}(&self) -> Option<{}> {{ self.read_value({full:?}, {}) }}",
                         format!(
                             "The composed value of `{full}`, without following connections or applying the node default. {}{compatibility}",
                             port.doc

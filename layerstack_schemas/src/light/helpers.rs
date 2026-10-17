@@ -6,7 +6,7 @@
 //! AOUSD Core §6.3, §7.6.4.1.2, §12.3–12.5; OpenUSD 26.8 `UsdLux`.
 
 use crate::{
-    PrimView, SchemaEdit,
+    InstanceView, PrimEdit, PrimView, SchemaEdit,
     usd::CollectionApi,
     usd_geom::XformableEdit,
     usd_lux::{DomeLightEdit, LightApi, LightApiEdit, LightFilter, LightFilterEdit},
@@ -166,12 +166,18 @@ impl<'a> LightApi<'a> {
     /// The builtin collection includes the root by default.
     #[must_use]
     pub fn light_link_collection(&self) -> CollectionApi<'a> {
-        CollectionApi::from_view(PrimView::new(self.scene(), self.path()), "lightLink")
+        CollectionApi::from_instance_unchecked(InstanceView::new(
+            PrimView::new(self.scene(), self.path()),
+            "lightLink",
+        ))
     }
     /// Collection controlling which objects cast shadows for this light.
     #[must_use]
     pub fn shadow_link_collection(&self) -> CollectionApi<'a> {
-        CollectionApi::from_view(PrimView::new(self.scene(), self.path()), "shadowLink")
+        CollectionApi::from_instance_unchecked(InstanceView::new(
+            PrimView::new(self.scene(), self.path()),
+            "shadowLink",
+        ))
     }
 }
 impl<'a> LightFilter<'a> {
@@ -185,7 +191,10 @@ impl<'a> LightFilter<'a> {
     /// Collection controlling which objects receive this filter's effect.
     #[must_use]
     pub fn filter_link_collection(&self) -> CollectionApi<'a> {
-        CollectionApi::from_view(PrimView::new(self.scene(), self.path()), "filterLink")
+        CollectionApi::from_instance_unchecked(InstanceView::new(
+            PrimView::new(self.scene(), self.path()),
+            "filterLink",
+        ))
     }
 }
 
@@ -307,7 +316,7 @@ impl DomeLightEdit {
         if edit.stage_up_axis() != "Z" {
             return Ok(DomeOrientation::NotZUp);
         }
-        let xform = XformableEdit::from_path(self.path());
+        let xform = XformableEdit::from_prim(PrimEdit::from_path_unchecked(self.path()));
         const NAME: &str = "xformOp:rotateX:orientToStageUpAxis";
         let ordered = xform
             .order(edit)

@@ -25,7 +25,7 @@ use layerstack::{CannotApply, PathId};
 use crate::{PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "Field3D field primitive."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `Field3DAsset`, inheriting [`FieldAsset`]. Construct it with [`Field3DAsset::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `Field3DAsset`, inheriting [`FieldAsset`]. Construct it with [`Field3DAsset::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolField3DAsset`."]
 #[doc(alias = "UsdVolField3DAsset")]
 #[derive(Clone, Copy, Debug)]
@@ -52,19 +52,24 @@ impl<'a> Field3DAsset<'a> {
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .is_a(path, Self::SCHEMA)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of `prim` as of the schema, without checking that it is
+    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// authors, and the schema's fallbacks only for a prim of the schema.
+    /// For the view of a schema built on this one.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self {
-            base: FieldAsset::from_view(prim),
+            base: FieldAsset::from_prim_unchecked(prim),
         }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> Field3DAssetEdit {
-        Field3DAssetEdit::from_path(self.path())
+        Field3DAssetEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Defines `path` as a new `def Field3DAsset` prim spec in the edit's target.
@@ -75,21 +80,31 @@ impl<'a> Field3DAsset<'a> {
     #[doc(alias = "UsdVolField3DAsset::Define")]
     #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Field3DAssetEdit {
-        edit.define(path, Self::SCHEMA);
-        Field3DAssetEdit::from_path(path)
+        Field3DAssetEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
     }
 
     /// The USD name of [`Self::field_purpose`].
     pub const FIELD_PURPOSE: &'static str = "fieldPurpose";
 
-    attribute! {
-        #[doc = "Optional token used to indicate the purpose or grouping of an individual field."]
-        #[doc = ""]
-        #[doc = "USD attribute `fieldPurpose` (`token`)."]
-        #[doc = "C++ read: `UsdVolField3DAsset::GetFieldPurposeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdVolField3DAsset::GetFieldPurposeAttr")]
-        #[doc(alias = "GetFieldPurposeAttr")]
-        field_purpose, field_purpose_at, "fieldPurpose", &'a str, crate::value::read_token
+    #[doc = "Optional token used to indicate the purpose or grouping of an individual field."]
+    #[doc = ""]
+    #[doc = "USD attribute `fieldPurpose` (`token`)."]
+    #[doc = "C++ read: `UsdVolField3DAsset::GetFieldPurposeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdVolField3DAsset::GetFieldPurposeAttr")]
+    #[doc(alias = "GetFieldPurposeAttr")]
+    #[must_use]
+    pub fn field_purpose(&self) -> Option<&'a str> {
+        self.read_value("fieldPurpose", crate::value::read_token)
+    }
+
+    #[doc = "[`Self::field_purpose`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn field_purpose_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<&'a str> {
+        self.read_value_at("fieldPurpose", time, interp, crate::value::read_token)
     }
 }
 
@@ -113,29 +128,41 @@ impl Field3DAssetEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whatever its type.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
         Self {
-            base: FieldAssetEdit::from_path(path),
+            base: FieldAssetEdit::from_prim(prim),
         }
     }
 
-    set_attribute! {
-        #[doc = "Optional token used to indicate the purpose or grouping of an individual field."]
-        #[doc = ""]
-        #[doc = "USD attribute `fieldPurpose` (`token`)."]
-        #[doc = "C++ authoring: `UsdVolField3DAsset::CreateFieldPurposeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdVolField3DAsset::CreateFieldPurposeAttr")]
-        #[doc(alias = "CreateFieldPurposeAttr")]
-        set_field_purpose, set_field_purpose_at, "fieldPurpose", &str, crate::value::write_token
+    #[doc = "Optional token used to indicate the purpose or grouping of an individual field."]
+    #[doc = ""]
+    #[doc = "USD attribute `fieldPurpose` (`token`)."]
+    #[doc = "C++ authoring: `UsdVolField3DAsset::CreateFieldPurposeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdVolField3DAsset::CreateFieldPurposeAttr")]
+    #[doc(alias = "CreateFieldPurposeAttr")]
+    pub fn set_field_purpose(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
+        let value = crate::value::write_token(value, edit.tokens());
+        self.write_value(edit, "fieldPurpose", None, value);
+        self
+    }
+
+    #[doc = "[`Self::set_field_purpose`] as a time sample at the time code `time`."]
+    pub fn set_field_purpose_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &str) -> &Self {
+        let value = crate::value::write_token(value, edit.tokens());
+        self.write_value(edit, "fieldPurpose", Some(time), value);
+        self
     }
 }
 
 #[doc = "This schema is deprecated and VolumeFieldAsset should be used instead."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's abstract typed schema `FieldAsset`, inheriting [`VolumeFieldAsset`]. Construct it with [`FieldAsset::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's abstract typed schema `FieldAsset`, inheriting [`VolumeFieldAsset`]. Construct it with [`FieldAsset::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolFieldAsset`."]
 #[doc(alias = "UsdVolFieldAsset")]
 #[derive(Clone, Copy, Debug)]
@@ -162,19 +189,24 @@ impl<'a> FieldAsset<'a> {
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .is_a(path, Self::SCHEMA)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of `prim` as of the schema, without checking that it is
+    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// authors, and the schema's fallbacks only for a prim of the schema.
+    /// For the view of a schema built on this one.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self {
-            base: VolumeFieldAsset::from_view(prim),
+            base: VolumeFieldAsset::from_prim_unchecked(prim),
         }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> FieldAssetEdit {
-        FieldAssetEdit::from_path(self.path())
+        FieldAssetEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 }
 
@@ -198,19 +230,22 @@ impl FieldAssetEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whatever its type.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
         Self {
-            base: VolumeFieldAssetEdit::from_path(path),
+            base: VolumeFieldAssetEdit::from_prim(prim),
         }
     }
 }
 
 #[doc = "This schema is deprecated and VolumeFieldBase should be used instead."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's abstract typed schema `FieldBase`, inheriting [`VolumeFieldBase`]. Construct it with [`FieldBase::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's abstract typed schema `FieldBase`, inheriting [`VolumeFieldBase`]. Construct it with [`FieldBase::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolFieldBase`."]
 #[doc(alias = "UsdVolFieldBase")]
 #[derive(Clone, Copy, Debug)]
@@ -237,19 +272,24 @@ impl<'a> FieldBase<'a> {
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .is_a(path, Self::SCHEMA)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of `prim` as of the schema, without checking that it is
+    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// authors, and the schema's fallbacks only for a prim of the schema.
+    /// For the view of a schema built on this one.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self {
-            base: VolumeFieldBase::from_view(prim),
+            base: VolumeFieldBase::from_prim_unchecked(prim),
         }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> FieldBaseEdit {
-        FieldBaseEdit::from_path(self.path())
+        FieldBaseEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 }
 
@@ -273,33 +313,79 @@ impl FieldBaseEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whatever its type.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
         Self {
-            base: VolumeFieldBaseEdit::from_path(path),
+            base: VolumeFieldBaseEdit::from_prim(prim),
         }
     }
 }
 
-token_enum! {
-    #[doc = "The tokens `fieldClass` allows."]
-    OpenVDBAssetFieldClass {
-        #[doc = "`levelSet`"]
-        LevelSet = "levelSet",
-        #[doc = "`fogVolume`"]
-        FogVolume = "fogVolume",
-        #[doc = "`staggered`"]
-        Staggered = "staggered",
-        #[doc = "`unknown`"]
-        Unknown = "unknown",
+#[doc = "The tokens `fieldClass` allows."]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum OpenVDBAssetFieldClass {
+    #[doc = "`levelSet`"]
+    LevelSet,
+    #[doc = "`fogVolume`"]
+    FogVolume,
+    #[doc = "`staggered`"]
+    Staggered,
+    #[doc = "`unknown`"]
+    Unknown,
+    /// A token the schema does not list: OpenUSD does not enforce
+    /// `allowedTokens`, so an authored value may be anything.
+    Other(::alloc::sync::Arc<str>),
+}
+
+impl OpenVDBAssetFieldClass {
+    /// The tokens the schema allows, in its order.
+    pub const TOKENS: &'static [&'static str] = &["levelSet", "fogVolume", "staggered", "unknown"];
+
+    /// The value `token` names, `Other` when the schema does not
+    /// list it.
+    #[must_use]
+    pub fn from_token(token: &str) -> Self {
+        match token {
+            "levelSet" => Self::LevelSet,
+            "fogVolume" => Self::FogVolume,
+            "staggered" => Self::Staggered,
+            "unknown" => Self::Unknown,
+            other => Self::Other(::alloc::sync::Arc::from(other)),
+        }
+    }
+
+    /// The token this value is.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::LevelSet => "levelSet",
+            Self::FogVolume => "fogVolume",
+            Self::Staggered => "staggered",
+            Self::Unknown => "unknown",
+            Self::Other(token) => token,
+        }
+    }
+
+    pub(crate) fn read(
+        value: &::layerstack::Value,
+        tokens: &::layerstack::TokenInterner,
+    ) -> Option<Self> {
+        crate::value::read_token(value, tokens).map(Self::from_token)
+    }
+
+    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+        crate::value::write_token(self.as_str(), tokens)
     }
 }
 
 #[doc = "OpenVDB field primitive."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `OpenVDBAsset`, inheriting [`FieldAsset`]. Construct it with [`OpenVDBAsset::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `OpenVDBAsset`, inheriting [`FieldAsset`]. Construct it with [`OpenVDBAsset::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolOpenVDBAsset`."]
 #[doc(alias = "UsdVolOpenVDBAsset")]
 #[derive(Clone, Copy, Debug)]
@@ -326,19 +412,24 @@ impl<'a> OpenVDBAsset<'a> {
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .is_a(path, Self::SCHEMA)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of `prim` as of the schema, without checking that it is
+    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// authors, and the schema's fallbacks only for a prim of the schema.
+    /// For the view of a schema built on this one.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self {
-            base: FieldAsset::from_view(prim),
+            base: FieldAsset::from_prim_unchecked(prim),
         }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> OpenVDBAssetEdit {
-        OpenVDBAssetEdit::from_path(self.path())
+        OpenVDBAssetEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Defines `path` as a new `def OpenVDBAsset` prim spec in the edit's target.
@@ -349,21 +440,31 @@ impl<'a> OpenVDBAsset<'a> {
     #[doc(alias = "UsdVolOpenVDBAsset::Define")]
     #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> OpenVDBAssetEdit {
-        edit.define(path, Self::SCHEMA);
-        OpenVDBAssetEdit::from_path(path)
+        OpenVDBAssetEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
     }
 
     /// The USD name of [`Self::field_class`].
     pub const FIELD_CLASS: &'static str = "fieldClass";
 
-    attribute! {
-        #[doc = "Optional token used to indicate the class of an individual grid."]
-        #[doc = ""]
-        #[doc = "USD attribute `fieldClass` (`token`)."]
-        #[doc = "C++ read: `UsdVolOpenVDBAsset::GetFieldClassAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdVolOpenVDBAsset::GetFieldClassAttr")]
-        #[doc(alias = "GetFieldClassAttr")]
-        field_class, field_class_at, "fieldClass", OpenVDBAssetFieldClass, OpenVDBAssetFieldClass::read
+    #[doc = "Optional token used to indicate the class of an individual grid."]
+    #[doc = ""]
+    #[doc = "USD attribute `fieldClass` (`token`)."]
+    #[doc = "C++ read: `UsdVolOpenVDBAsset::GetFieldClassAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdVolOpenVDBAsset::GetFieldClassAttr")]
+    #[doc(alias = "GetFieldClassAttr")]
+    #[must_use]
+    pub fn field_class(&self) -> Option<OpenVDBAssetFieldClass> {
+        self.read_value("fieldClass", OpenVDBAssetFieldClass::read)
+    }
+
+    #[doc = "[`Self::field_class`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn field_class_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<OpenVDBAssetFieldClass> {
+        self.read_value_at("fieldClass", time, interp, OpenVDBAssetFieldClass::read)
     }
 }
 
@@ -387,29 +488,50 @@ impl OpenVDBAssetEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whatever its type.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
         Self {
-            base: FieldAssetEdit::from_path(path),
+            base: FieldAssetEdit::from_prim(prim),
         }
     }
 
-    set_attribute! {
-        #[doc = "Optional token used to indicate the class of an individual grid."]
-        #[doc = ""]
-        #[doc = "USD attribute `fieldClass` (`token`)."]
-        #[doc = "C++ authoring: `UsdVolOpenVDBAsset::CreateFieldClassAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdVolOpenVDBAsset::CreateFieldClassAttr")]
-        #[doc(alias = "CreateFieldClassAttr")]
-        set_field_class, set_field_class_at, "fieldClass", OpenVDBAssetFieldClass, OpenVDBAssetFieldClass::write
+    #[doc = "Optional token used to indicate the class of an individual grid."]
+    #[doc = ""]
+    #[doc = "USD attribute `fieldClass` (`token`)."]
+    #[doc = "C++ authoring: `UsdVolOpenVDBAsset::CreateFieldClassAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdVolOpenVDBAsset::CreateFieldClassAttr")]
+    #[doc(alias = "CreateFieldClassAttr")]
+    pub fn set_field_class(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        value: OpenVDBAssetFieldClass,
+    ) -> &Self {
+        let value = value.write(edit.tokens());
+        self.write_value(edit, "fieldClass", None, value);
+        self
+    }
+
+    #[doc = "[`Self::set_field_class`] as a time sample at the time code `time`."]
+    pub fn set_field_class_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: OpenVDBAssetFieldClass,
+    ) -> &Self {
+        let value = value.write(edit.tokens());
+        self.write_value(edit, "fieldClass", Some(time), value);
+        self
     }
 }
 
 #[doc = "The base schema to describe different types of concrete ParticleField implementations, such as 3D Gaussian Splats."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `ParticleField`, inheriting [`crate::usd_geom::Gprim`]. Construct it with [`ParticleField::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `ParticleField`, inheriting [`crate::usd_geom::Gprim`]. Construct it with [`ParticleField::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolParticleField`."]
 #[doc(alias = "UsdVolParticleField")]
 #[derive(Clone, Copy, Debug)]
@@ -436,19 +558,24 @@ impl<'a> ParticleField<'a> {
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .is_a(path, Self::SCHEMA)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of `prim` as of the schema, without checking that it is
+    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// authors, and the schema's fallbacks only for a prim of the schema.
+    /// For the view of a schema built on this one.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self {
-            base: crate::usd_geom::Gprim::from_view(prim),
+            base: crate::usd_geom::Gprim::from_prim_unchecked(prim),
         }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> ParticleFieldEdit {
-        ParticleFieldEdit::from_path(self.path())
+        ParticleFieldEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Defines `path` as a new `def ParticleField` prim spec in the edit's target.
@@ -459,8 +586,7 @@ impl<'a> ParticleField<'a> {
     #[doc(alias = "UsdVolParticleField::Define")]
     #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> ParticleFieldEdit {
-        edit.define(path, Self::SCHEMA);
-        ParticleFieldEdit::from_path(path)
+        ParticleFieldEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
     }
 }
 
@@ -484,41 +610,124 @@ impl ParticleFieldEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whatever its type.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
         Self {
-            base: crate::usd_geom::GprimEdit::from_path(path),
+            base: crate::usd_geom::GprimEdit::from_prim(prim),
         }
     }
 }
 
-token_enum! {
-    #[doc = "The tokens `projectionModeHint` allows."]
-    ParticleField3DGaussianSplatProjectionModeHint {
-        #[doc = "`perspective`"]
-        Perspective = "perspective",
-        #[doc = "`tangential`"]
-        Tangential = "tangential",
+#[doc = "The tokens `projectionModeHint` allows."]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum ParticleField3DGaussianSplatProjectionModeHint {
+    #[doc = "`perspective`"]
+    Perspective,
+    #[doc = "`tangential`"]
+    Tangential,
+    /// A token the schema does not list: OpenUSD does not enforce
+    /// `allowedTokens`, so an authored value may be anything.
+    Other(::alloc::sync::Arc<str>),
+}
+
+impl ParticleField3DGaussianSplatProjectionModeHint {
+    /// The tokens the schema allows, in its order.
+    pub const TOKENS: &'static [&'static str] = &["perspective", "tangential"];
+
+    /// The value `token` names, `Other` when the schema does not
+    /// list it.
+    #[must_use]
+    pub fn from_token(token: &str) -> Self {
+        match token {
+            "perspective" => Self::Perspective,
+            "tangential" => Self::Tangential,
+            other => Self::Other(::alloc::sync::Arc::from(other)),
+        }
+    }
+
+    /// The token this value is.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Perspective => "perspective",
+            Self::Tangential => "tangential",
+            Self::Other(token) => token,
+        }
+    }
+
+    pub(crate) fn read(
+        value: &::layerstack::Value,
+        tokens: &::layerstack::TokenInterner,
+    ) -> Option<Self> {
+        crate::value::read_token(value, tokens).map(Self::from_token)
+    }
+
+    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+        crate::value::write_token(self.as_str(), tokens)
     }
 }
 
-token_enum! {
-    #[doc = "The tokens `sortingModeHint` allows."]
-    ParticleField3DGaussianSplatSortingModeHint {
-        #[doc = "`zDepth`"]
-        ZDepth = "zDepth",
-        #[doc = "`cameraDistance`"]
-        CameraDistance = "cameraDistance",
-        #[doc = "`rayHitDistance`"]
-        RayHitDistance = "rayHitDistance",
+#[doc = "The tokens `sortingModeHint` allows."]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum ParticleField3DGaussianSplatSortingModeHint {
+    #[doc = "`zDepth`"]
+    ZDepth,
+    #[doc = "`cameraDistance`"]
+    CameraDistance,
+    #[doc = "`rayHitDistance`"]
+    RayHitDistance,
+    /// A token the schema does not list: OpenUSD does not enforce
+    /// `allowedTokens`, so an authored value may be anything.
+    Other(::alloc::sync::Arc<str>),
+}
+
+impl ParticleField3DGaussianSplatSortingModeHint {
+    /// The tokens the schema allows, in its order.
+    pub const TOKENS: &'static [&'static str] = &["zDepth", "cameraDistance", "rayHitDistance"];
+
+    /// The value `token` names, `Other` when the schema does not
+    /// list it.
+    #[must_use]
+    pub fn from_token(token: &str) -> Self {
+        match token {
+            "zDepth" => Self::ZDepth,
+            "cameraDistance" => Self::CameraDistance,
+            "rayHitDistance" => Self::RayHitDistance,
+            other => Self::Other(::alloc::sync::Arc::from(other)),
+        }
+    }
+
+    /// The token this value is.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::ZDepth => "zDepth",
+            Self::CameraDistance => "cameraDistance",
+            Self::RayHitDistance => "rayHitDistance",
+            Self::Other(token) => token,
+        }
+    }
+
+    pub(crate) fn read(
+        value: &::layerstack::Value,
+        tokens: &::layerstack::TokenInterner,
+    ) -> Option<Self> {
+        crate::value::read_token(value, tokens).map(Self::from_token)
+    }
+
+    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+        crate::value::write_token(self.as_str(), tokens)
     }
 }
 
 #[doc = "A ParticleField that represents a 3D Gaussian splat."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `ParticleField3DGaussianSplat`, inheriting [`ParticleField`]. Construct it with [`ParticleField3DGaussianSplat::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `ParticleField3DGaussianSplat`, inheriting [`ParticleField`]. Construct it with [`ParticleField3DGaussianSplat::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolParticleField3DGaussianSplat`."]
 #[doc(alias = "UsdVolParticleField3DGaussianSplat")]
 #[derive(Clone, Copy, Debug)]
@@ -545,19 +754,24 @@ impl<'a> ParticleField3DGaussianSplat<'a> {
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .is_a(path, Self::SCHEMA)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of `prim` as of the schema, without checking that it is
+    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// authors, and the schema's fallbacks only for a prim of the schema.
+    /// For the view of a schema built on this one.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self {
-            base: ParticleField::from_view(prim),
+            base: ParticleField::from_prim_unchecked(prim),
         }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> ParticleField3DGaussianSplatEdit {
-        ParticleField3DGaussianSplatEdit::from_path(self.path())
+        ParticleField3DGaussianSplatEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Defines `path` as a new `def ParticleField3DGaussianSplat` prim spec in the edit's target.
@@ -568,38 +782,50 @@ impl<'a> ParticleField3DGaussianSplat<'a> {
     #[doc(alias = "UsdVolParticleField3DGaussianSplat::Define")]
     #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> ParticleField3DGaussianSplatEdit {
-        edit.define(path, Self::SCHEMA);
-        ParticleField3DGaussianSplatEdit::from_path(path)
+        ParticleField3DGaussianSplatEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
     }
 
     /// The USD name of [`Self::projection_mode_hint`].
     pub const PROJECTION_MODE_HINT: &'static str = "projectionModeHint";
 
-    uniform_attribute! {
-        #[doc = "A renderer hint on how to project the Gaussian to achieve a perspective correct view."]
-        #[doc = ""]
-        #[doc = "USD attribute `projectionModeHint` (`token`, uniform; fallback `\"perspective\"`)."]
-        #[doc = "C++ read: `UsdVolParticleField3DGaussianSplat::GetProjectionModeHintAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdVolParticleField3DGaussianSplat::GetProjectionModeHintAttr")]
-        #[doc(alias = "GetProjectionModeHintAttr")]
-        projection_mode_hint, "projectionModeHint", ParticleField3DGaussianSplatProjectionModeHint, ParticleField3DGaussianSplatProjectionModeHint::read
+    #[doc = "A renderer hint on how to project the Gaussian to achieve a perspective correct view."]
+    #[doc = ""]
+    #[doc = "USD attribute `projectionModeHint` (`token`, uniform; fallback `\"perspective\"`)."]
+    #[doc = "C++ read: `UsdVolParticleField3DGaussianSplat::GetProjectionModeHintAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdVolParticleField3DGaussianSplat::GetProjectionModeHintAttr")]
+    #[doc(alias = "GetProjectionModeHintAttr")]
+    #[must_use]
+    pub fn projection_mode_hint(&self) -> Option<ParticleField3DGaussianSplatProjectionModeHint> {
+        self.read_value(
+            "projectionModeHint",
+            ParticleField3DGaussianSplatProjectionModeHint::read,
+        )
     }
+
     /// The USD name of [`Self::sorting_mode_hint`].
     pub const SORTING_MODE_HINT: &'static str = "sortingModeHint";
 
-    uniform_attribute! {
-        #[doc = "A renderer hint on how to sort the Gaussian while drawing."]
-        #[doc = ""]
-        #[doc = "USD attribute `sortingModeHint` (`token`, uniform; fallback `\"zDepth\"`)."]
-        #[doc = "C++ read: `UsdVolParticleField3DGaussianSplat::GetSortingModeHintAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdVolParticleField3DGaussianSplat::GetSortingModeHintAttr")]
-        #[doc(alias = "GetSortingModeHintAttr")]
-        sorting_mode_hint, "sortingModeHint", ParticleField3DGaussianSplatSortingModeHint, ParticleField3DGaussianSplatSortingModeHint::read
+    #[doc = "A renderer hint on how to sort the Gaussian while drawing."]
+    #[doc = ""]
+    #[doc = "USD attribute `sortingModeHint` (`token`, uniform; fallback `\"zDepth\"`)."]
+    #[doc = "C++ read: `UsdVolParticleField3DGaussianSplat::GetSortingModeHintAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdVolParticleField3DGaussianSplat::GetSortingModeHintAttr")]
+    #[doc(alias = "GetSortingModeHintAttr")]
+    #[must_use]
+    pub fn sorting_mode_hint(&self) -> Option<ParticleField3DGaussianSplatSortingModeHint> {
+        self.read_value(
+            "sortingModeHint",
+            ParticleField3DGaussianSplatSortingModeHint::read,
+        )
     }
+
     #[doc = "The prim's built-in `ParticleFieldPositionAttributeAPI`, which every `ParticleField3DGaussianSplat` has."]
     #[must_use]
     pub fn particle_field_position_attribute_api(&self) -> ParticleFieldPositionAttributeApi<'a> {
-        ParticleFieldPositionAttributeApi::from_view(PrimView::new(self.scene(), self.path()))
+        ParticleFieldPositionAttributeApi::from_prim_unchecked(PrimView::new(
+            self.scene(),
+            self.path(),
+        ))
     }
 
     #[doc = "The prim's built-in `ParticleFieldOrientationAttributeAPI`, which every `ParticleField3DGaussianSplat` has."]
@@ -607,19 +833,28 @@ impl<'a> ParticleField3DGaussianSplat<'a> {
     pub fn particle_field_orientation_attribute_api(
         &self,
     ) -> ParticleFieldOrientationAttributeApi<'a> {
-        ParticleFieldOrientationAttributeApi::from_view(PrimView::new(self.scene(), self.path()))
+        ParticleFieldOrientationAttributeApi::from_prim_unchecked(PrimView::new(
+            self.scene(),
+            self.path(),
+        ))
     }
 
     #[doc = "The prim's built-in `ParticleFieldScaleAttributeAPI`, which every `ParticleField3DGaussianSplat` has."]
     #[must_use]
     pub fn particle_field_scale_attribute_api(&self) -> ParticleFieldScaleAttributeApi<'a> {
-        ParticleFieldScaleAttributeApi::from_view(PrimView::new(self.scene(), self.path()))
+        ParticleFieldScaleAttributeApi::from_prim_unchecked(PrimView::new(
+            self.scene(),
+            self.path(),
+        ))
     }
 
     #[doc = "The prim's built-in `ParticleFieldOpacityAttributeAPI`, which every `ParticleField3DGaussianSplat` has."]
     #[must_use]
     pub fn particle_field_opacity_attribute_api(&self) -> ParticleFieldOpacityAttributeApi<'a> {
-        ParticleFieldOpacityAttributeApi::from_view(PrimView::new(self.scene(), self.path()))
+        ParticleFieldOpacityAttributeApi::from_prim_unchecked(PrimView::new(
+            self.scene(),
+            self.path(),
+        ))
     }
 
     #[doc = "The prim's built-in `ParticleFieldKernelGaussianEllipsoidAPI`, which every `ParticleField3DGaussianSplat` has."]
@@ -627,7 +862,10 @@ impl<'a> ParticleField3DGaussianSplat<'a> {
     pub fn particle_field_kernel_gaussian_ellipsoid_api(
         &self,
     ) -> ParticleFieldKernelGaussianEllipsoidApi<'a> {
-        ParticleFieldKernelGaussianEllipsoidApi::from_view(PrimView::new(self.scene(), self.path()))
+        ParticleFieldKernelGaussianEllipsoidApi::from_prim_unchecked(PrimView::new(
+            self.scene(),
+            self.path(),
+        ))
     }
 
     #[doc = "The prim's built-in `ParticleFieldSphericalHarmonicsAttributeAPI`, which every `ParticleField3DGaussianSplat` has."]
@@ -635,7 +873,7 @@ impl<'a> ParticleField3DGaussianSplat<'a> {
     pub fn particle_field_spherical_harmonics_attribute_api(
         &self,
     ) -> ParticleFieldSphericalHarmonicsAttributeApi<'a> {
-        ParticleFieldSphericalHarmonicsAttributeApi::from_view(PrimView::new(
+        ParticleFieldSphericalHarmonicsAttributeApi::from_prim_unchecked(PrimView::new(
             self.scene(),
             self.path(),
         ))
@@ -662,37 +900,54 @@ impl ParticleField3DGaussianSplatEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whatever its type.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
         Self {
-            base: ParticleFieldEdit::from_path(path),
+            base: ParticleFieldEdit::from_prim(prim),
         }
     }
 
-    set_uniform_attribute! {
-        #[doc = "A renderer hint on how to project the Gaussian to achieve a perspective correct view."]
-        #[doc = ""]
-        #[doc = "USD attribute `projectionModeHint` (`token`, uniform; fallback `\"perspective\"`)."]
-        #[doc = "C++ authoring: `UsdVolParticleField3DGaussianSplat::CreateProjectionModeHintAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdVolParticleField3DGaussianSplat::CreateProjectionModeHintAttr")]
-        #[doc(alias = "CreateProjectionModeHintAttr")]
-        set_projection_mode_hint, "projectionModeHint", ParticleField3DGaussianSplatProjectionModeHint, ParticleField3DGaussianSplatProjectionModeHint::write
+    #[doc = "A renderer hint on how to project the Gaussian to achieve a perspective correct view."]
+    #[doc = ""]
+    #[doc = "USD attribute `projectionModeHint` (`token`, uniform; fallback `\"perspective\"`)."]
+    #[doc = "C++ authoring: `UsdVolParticleField3DGaussianSplat::CreateProjectionModeHintAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdVolParticleField3DGaussianSplat::CreateProjectionModeHintAttr")]
+    #[doc(alias = "CreateProjectionModeHintAttr")]
+    pub fn set_projection_mode_hint(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        value: ParticleField3DGaussianSplatProjectionModeHint,
+    ) -> &Self {
+        let value = value.write(edit.tokens());
+        self.write_value(edit, "projectionModeHint", None, value);
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "A renderer hint on how to sort the Gaussian while drawing."]
-        #[doc = ""]
-        #[doc = "USD attribute `sortingModeHint` (`token`, uniform; fallback `\"zDepth\"`)."]
-        #[doc = "C++ authoring: `UsdVolParticleField3DGaussianSplat::CreateSortingModeHintAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdVolParticleField3DGaussianSplat::CreateSortingModeHintAttr")]
-        #[doc(alias = "CreateSortingModeHintAttr")]
-        set_sorting_mode_hint, "sortingModeHint", ParticleField3DGaussianSplatSortingModeHint, ParticleField3DGaussianSplatSortingModeHint::write
+
+    #[doc = "A renderer hint on how to sort the Gaussian while drawing."]
+    #[doc = ""]
+    #[doc = "USD attribute `sortingModeHint` (`token`, uniform; fallback `\"zDepth\"`)."]
+    #[doc = "C++ authoring: `UsdVolParticleField3DGaussianSplat::CreateSortingModeHintAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdVolParticleField3DGaussianSplat::CreateSortingModeHintAttr")]
+    #[doc(alias = "CreateSortingModeHintAttr")]
+    pub fn set_sorting_mode_hint(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        value: ParticleField3DGaussianSplatSortingModeHint,
+    ) -> &Self {
+        let value = value.write(edit.tokens());
+        self.write_value(edit, "sortingModeHint", None, value);
+        self
     }
+
     #[doc = "An edit handle for the prim's built-in `ParticleFieldPositionAttributeAPI`."]
     #[must_use]
     pub fn particle_field_position_attribute_api(&self) -> ParticleFieldPositionAttributeApiEdit {
-        ParticleFieldPositionAttributeApiEdit::from_path(self.path())
+        ParticleFieldPositionAttributeApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     #[doc = "An edit handle for the prim's built-in `ParticleFieldOrientationAttributeAPI`."]
@@ -700,19 +955,21 @@ impl ParticleField3DGaussianSplatEdit {
     pub fn particle_field_orientation_attribute_api(
         &self,
     ) -> ParticleFieldOrientationAttributeApiEdit {
-        ParticleFieldOrientationAttributeApiEdit::from_path(self.path())
+        ParticleFieldOrientationAttributeApiEdit::from_prim(PrimEdit::from_path_unchecked(
+            self.path(),
+        ))
     }
 
     #[doc = "An edit handle for the prim's built-in `ParticleFieldScaleAttributeAPI`."]
     #[must_use]
     pub fn particle_field_scale_attribute_api(&self) -> ParticleFieldScaleAttributeApiEdit {
-        ParticleFieldScaleAttributeApiEdit::from_path(self.path())
+        ParticleFieldScaleAttributeApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     #[doc = "An edit handle for the prim's built-in `ParticleFieldOpacityAttributeAPI`."]
     #[must_use]
     pub fn particle_field_opacity_attribute_api(&self) -> ParticleFieldOpacityAttributeApiEdit {
-        ParticleFieldOpacityAttributeApiEdit::from_path(self.path())
+        ParticleFieldOpacityAttributeApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     #[doc = "An edit handle for the prim's built-in `ParticleFieldKernelGaussianEllipsoidAPI`."]
@@ -720,7 +977,9 @@ impl ParticleField3DGaussianSplatEdit {
     pub fn particle_field_kernel_gaussian_ellipsoid_api(
         &self,
     ) -> ParticleFieldKernelGaussianEllipsoidApiEdit {
-        ParticleFieldKernelGaussianEllipsoidApiEdit::from_path(self.path())
+        ParticleFieldKernelGaussianEllipsoidApiEdit::from_prim(PrimEdit::from_path_unchecked(
+            self.path(),
+        ))
     }
 
     #[doc = "An edit handle for the prim's built-in `ParticleFieldSphericalHarmonicsAttributeAPI`."]
@@ -728,13 +987,15 @@ impl ParticleField3DGaussianSplatEdit {
     pub fn particle_field_spherical_harmonics_attribute_api(
         &self,
     ) -> ParticleFieldSphericalHarmonicsAttributeApiEdit {
-        ParticleFieldSphericalHarmonicsAttributeApiEdit::from_path(self.path())
+        ParticleFieldSphericalHarmonicsAttributeApiEdit::from_prim(PrimEdit::from_path_unchecked(
+            self.path(),
+        ))
     }
 }
 
 #[doc = "A base schema for ParticleField kernel spatial basis function data."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `ParticleFieldKernelBaseAPI`. Get it with [`ParticleFieldKernelBaseApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `ParticleFieldKernelBaseAPI`. Get it with [`ParticleFieldKernelBaseApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolParticleFieldKernelBaseAPI`."]
 #[doc(alias = "UsdVolParticleFieldKernelBaseAPI")]
 #[doc(alias = "ParticleFieldKernelBaseAPI")]
@@ -763,17 +1024,22 @@ impl<'a> ParticleFieldKernelBaseApi<'a> {
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of the schema on `prim`, without checking that the prim
+    /// has it applied (`HasAPI`), as [`Self::get`] does: a getter reads
+    /// what the prim authors, and the schema's fallbacks only for a
+    /// prim with the schema applied. For a built-in's view.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self { base: prim }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> ParticleFieldKernelBaseApiEdit {
-        ParticleFieldKernelBaseApiEdit::from_path(self.path())
+        ParticleFieldKernelBaseApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
@@ -790,8 +1056,8 @@ impl<'a> ParticleFieldKernelBaseApi<'a> {
         edit: &mut SchemaEdit<'_>,
         path: PathId,
     ) -> Result<ParticleFieldKernelBaseApiEdit, CannotApply> {
-        edit.apply(path, Self::SCHEMA, None)?;
-        Ok(ParticleFieldKernelBaseApiEdit::from_path(path))
+        edit.apply_api(path, Self::SCHEMA, None)
+            .map(ParticleFieldKernelBaseApiEdit::from_prim)
     }
 }
 
@@ -815,19 +1081,20 @@ impl ParticleFieldKernelBaseApiEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
-        Self {
-            base: PrimEdit::new(path),
-        }
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whether or not it has the schema applied.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
+        Self { base: prim }
     }
 }
 
 #[doc = "Defines the constant surflet kernel for a ParticleField."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `ParticleFieldKernelConstantSurfletAPI`. Get it with [`ParticleFieldKernelConstantSurfletApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `ParticleFieldKernelConstantSurfletAPI`. Get it with [`ParticleFieldKernelConstantSurfletApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolParticleFieldKernelConstantSurfletAPI`."]
 #[doc(alias = "UsdVolParticleFieldKernelConstantSurfletAPI")]
 #[doc(alias = "ParticleFieldKernelConstantSurfletAPI")]
@@ -856,17 +1123,24 @@ impl<'a> ParticleFieldKernelConstantSurfletApi<'a> {
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of the schema on `prim`, without checking that the prim
+    /// has it applied (`HasAPI`), as [`Self::get`] does: a getter reads
+    /// what the prim authors, and the schema's fallbacks only for a
+    /// prim with the schema applied. For a built-in's view.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self { base: prim }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> ParticleFieldKernelConstantSurfletApiEdit {
-        ParticleFieldKernelConstantSurfletApiEdit::from_path(self.path())
+        ParticleFieldKernelConstantSurfletApiEdit::from_prim(PrimEdit::from_path_unchecked(
+            self.path(),
+        ))
     }
 
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
@@ -883,8 +1157,8 @@ impl<'a> ParticleFieldKernelConstantSurfletApi<'a> {
         edit: &mut SchemaEdit<'_>,
         path: PathId,
     ) -> Result<ParticleFieldKernelConstantSurfletApiEdit, CannotApply> {
-        edit.apply(path, Self::SCHEMA, None)?;
-        Ok(ParticleFieldKernelConstantSurfletApiEdit::from_path(path))
+        edit.apply_api(path, Self::SCHEMA, None)
+            .map(ParticleFieldKernelConstantSurfletApiEdit::from_prim)
     }
 }
 
@@ -908,19 +1182,20 @@ impl ParticleFieldKernelConstantSurfletApiEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
-        Self {
-            base: PrimEdit::new(path),
-        }
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whether or not it has the schema applied.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
+        Self { base: prim }
     }
 }
 
 #[doc = "Defines the Gaussian ellipsoid kernel for a ParticleField."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `ParticleFieldKernelGaussianEllipsoidAPI`. Get it with [`ParticleFieldKernelGaussianEllipsoidApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `ParticleFieldKernelGaussianEllipsoidAPI`. Get it with [`ParticleFieldKernelGaussianEllipsoidApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolParticleFieldKernelGaussianEllipsoidAPI`."]
 #[doc(alias = "UsdVolParticleFieldKernelGaussianEllipsoidAPI")]
 #[doc(alias = "ParticleFieldKernelGaussianEllipsoidAPI")]
@@ -949,17 +1224,24 @@ impl<'a> ParticleFieldKernelGaussianEllipsoidApi<'a> {
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of the schema on `prim`, without checking that the prim
+    /// has it applied (`HasAPI`), as [`Self::get`] does: a getter reads
+    /// what the prim authors, and the schema's fallbacks only for a
+    /// prim with the schema applied. For a built-in's view.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self { base: prim }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> ParticleFieldKernelGaussianEllipsoidApiEdit {
-        ParticleFieldKernelGaussianEllipsoidApiEdit::from_path(self.path())
+        ParticleFieldKernelGaussianEllipsoidApiEdit::from_prim(PrimEdit::from_path_unchecked(
+            self.path(),
+        ))
     }
 
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
@@ -976,8 +1258,8 @@ impl<'a> ParticleFieldKernelGaussianEllipsoidApi<'a> {
         edit: &mut SchemaEdit<'_>,
         path: PathId,
     ) -> Result<ParticleFieldKernelGaussianEllipsoidApiEdit, CannotApply> {
-        edit.apply(path, Self::SCHEMA, None)?;
-        Ok(ParticleFieldKernelGaussianEllipsoidApiEdit::from_path(path))
+        edit.apply_api(path, Self::SCHEMA, None)
+            .map(ParticleFieldKernelGaussianEllipsoidApiEdit::from_prim)
     }
 }
 
@@ -1001,19 +1283,20 @@ impl ParticleFieldKernelGaussianEllipsoidApiEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
-        Self {
-            base: PrimEdit::new(path),
-        }
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whether or not it has the schema applied.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
+        Self { base: prim }
     }
 }
 
 #[doc = "Defines the Gaussian surflet kernel for a ParticleField."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `ParticleFieldKernelGaussianSurfletAPI`. Get it with [`ParticleFieldKernelGaussianSurfletApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `ParticleFieldKernelGaussianSurfletAPI`. Get it with [`ParticleFieldKernelGaussianSurfletApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolParticleFieldKernelGaussianSurfletAPI`."]
 #[doc(alias = "UsdVolParticleFieldKernelGaussianSurfletAPI")]
 #[doc(alias = "ParticleFieldKernelGaussianSurfletAPI")]
@@ -1042,17 +1325,24 @@ impl<'a> ParticleFieldKernelGaussianSurfletApi<'a> {
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of the schema on `prim`, without checking that the prim
+    /// has it applied (`HasAPI`), as [`Self::get`] does: a getter reads
+    /// what the prim authors, and the schema's fallbacks only for a
+    /// prim with the schema applied. For a built-in's view.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self { base: prim }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> ParticleFieldKernelGaussianSurfletApiEdit {
-        ParticleFieldKernelGaussianSurfletApiEdit::from_path(self.path())
+        ParticleFieldKernelGaussianSurfletApiEdit::from_prim(PrimEdit::from_path_unchecked(
+            self.path(),
+        ))
     }
 
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
@@ -1069,8 +1359,8 @@ impl<'a> ParticleFieldKernelGaussianSurfletApi<'a> {
         edit: &mut SchemaEdit<'_>,
         path: PathId,
     ) -> Result<ParticleFieldKernelGaussianSurfletApiEdit, CannotApply> {
-        edit.apply(path, Self::SCHEMA, None)?;
-        Ok(ParticleFieldKernelGaussianSurfletApiEdit::from_path(path))
+        edit.apply_api(path, Self::SCHEMA, None)
+            .map(ParticleFieldKernelGaussianSurfletApiEdit::from_prim)
     }
 }
 
@@ -1094,19 +1384,20 @@ impl ParticleFieldKernelGaussianSurfletApiEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
-        Self {
-            base: PrimEdit::new(path),
-        }
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whether or not it has the schema applied.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
+        Self { base: prim }
     }
 }
 
 #[doc = "A ParticleField related applied schema that provides attributes to define the opacity of the particles."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `ParticleFieldOpacityAttributeAPI`. Get it with [`ParticleFieldOpacityAttributeApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `ParticleFieldOpacityAttributeAPI`. Get it with [`ParticleFieldOpacityAttributeApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolParticleFieldOpacityAttributeAPI`."]
 #[doc(alias = "UsdVolParticleFieldOpacityAttributeAPI")]
 #[doc(alias = "ParticleFieldOpacityAttributeAPI")]
@@ -1135,17 +1426,22 @@ impl<'a> ParticleFieldOpacityAttributeApi<'a> {
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of the schema on `prim`, without checking that the prim
+    /// has it applied (`HasAPI`), as [`Self::get`] does: a getter reads
+    /// what the prim authors, and the schema's fallbacks only for a
+    /// prim with the schema applied. For a built-in's view.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self { base: prim }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> ParticleFieldOpacityAttributeApiEdit {
-        ParticleFieldOpacityAttributeApiEdit::from_path(self.path())
+        ParticleFieldOpacityAttributeApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
@@ -1162,49 +1458,79 @@ impl<'a> ParticleFieldOpacityAttributeApi<'a> {
         edit: &mut SchemaEdit<'_>,
         path: PathId,
     ) -> Result<ParticleFieldOpacityAttributeApiEdit, CannotApply> {
-        edit.apply(path, Self::SCHEMA, None)?;
-        Ok(ParticleFieldOpacityAttributeApiEdit::from_path(path))
+        edit.apply_api(path, Self::SCHEMA, None)
+            .map(ParticleFieldOpacityAttributeApiEdit::from_prim)
     }
 
     /// The USD name of [`Self::opacities`].
     pub const OPACITIES: &'static str = "opacities";
 
-    attribute! {
-        #[doc = "Defines the opacity for each particle."]
-        #[doc = ""]
-        #[doc = "USD attribute `opacities` (`float\\[\\]`)."]
-        #[doc = ""]
-        #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
-        #[doc = "C++ read: `UsdVolParticleFieldOpacityAttributeAPI::GetOpacitiesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdVolParticleFieldOpacityAttributeAPI::GetOpacitiesAttr")]
-        #[doc(alias = "GetOpacitiesAttr")]
-        opacities, opacities_at, "opacities", ::alloc::sync::Arc<::alloc::vec::Vec<f32>>, crate::value::read_float_array_shared
+    #[doc = "Defines the opacity for each particle."]
+    #[doc = ""]
+    #[doc = "USD attribute `opacities` (`float\\[\\]`)."]
+    #[doc = ""]
+    #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+    #[doc = "C++ read: `UsdVolParticleFieldOpacityAttributeAPI::GetOpacitiesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdVolParticleFieldOpacityAttributeAPI::GetOpacitiesAttr")]
+    #[doc(alias = "GetOpacitiesAttr")]
+    #[must_use]
+    pub fn opacities(&self) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<f32>>> {
+        self.read_value("opacities", crate::value::read_float_array_shared)
     }
+
+    #[doc = "[`Self::opacities`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn opacities_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<f32>>> {
+        self.read_value_at(
+            "opacities",
+            time,
+            interp,
+            crate::value::read_float_array_shared,
+        )
+    }
+
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
     pub fn try_opacities(
         &self,
         time: crate::Time,
-    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<f32>>>, layerstack::ArrayReadError>
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<f32>>>, ::layerstack::ArrayReadError>
     {
         self.try_read_value("opacities", time, crate::value::read_float_array_shared)
     }
+
     /// The USD name of [`Self::opacitiesh`].
     pub const OPACITIESH: &'static str = "opacitiesh";
 
-    attribute! {
-        #[doc = "Defines the opacity for each particle."]
-        #[doc = ""]
-        #[doc = "USD attribute `opacitiesh` (`half\\[\\]`)."]
-        #[doc = "C++ read: `UsdVolParticleFieldOpacityAttributeAPI::GetOpacitieshAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdVolParticleFieldOpacityAttributeAPI::GetOpacitieshAttr")]
-        #[doc(alias = "GetOpacitieshAttr")]
-        opacitiesh, opacitiesh_at, "opacitiesh", ::alloc::vec::Vec<f32>, crate::value::read_half_array
+    #[doc = "Defines the opacity for each particle."]
+    #[doc = ""]
+    #[doc = "USD attribute `opacitiesh` (`half\\[\\]`)."]
+    #[doc = "C++ read: `UsdVolParticleFieldOpacityAttributeAPI::GetOpacitieshAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdVolParticleFieldOpacityAttributeAPI::GetOpacitieshAttr")]
+    #[doc(alias = "GetOpacitieshAttr")]
+    #[must_use]
+    pub fn opacitiesh(&self) -> Option<::alloc::vec::Vec<f32>> {
+        self.read_value("opacitiesh", crate::value::read_half_array)
     }
+
+    #[doc = "[`Self::opacitiesh`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn opacitiesh_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<::alloc::vec::Vec<f32>> {
+        self.read_value_at("opacitiesh", time, interp, crate::value::read_half_array)
+    }
+
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
     pub fn try_opacitiesh(
         &self,
         time: crate::Time,
-    ) -> Result<Option<::alloc::vec::Vec<f32>>, layerstack::ArrayReadError> {
+    ) -> Result<Option<::alloc::vec::Vec<f32>>, ::layerstack::ArrayReadError> {
         self.try_read_value("opacitiesh", time, crate::value::read_half_array)
     }
 }
@@ -1229,48 +1555,106 @@ impl ParticleFieldOpacityAttributeApiEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
-        Self {
-            base: PrimEdit::new(path),
-        }
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whether or not it has the schema applied.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
+        Self { base: prim }
     }
 
-    set_attribute! {
-        #[doc = "Defines the opacity for each particle."]
-        #[doc = ""]
-        #[doc = "USD attribute `opacities` (`float\\[\\]`)."]
-        #[doc = ""]
-        #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
-        #[doc = "C++ authoring: `UsdVolParticleFieldOpacityAttributeAPI::CreateOpacitiesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdVolParticleFieldOpacityAttributeAPI::CreateOpacitiesAttr")]
-        #[doc(alias = "CreateOpacitiesAttr")]
-        set_opacities, set_opacities_at, "opacities", &[f32], crate::value::write_float_array
+    #[doc = "Defines the opacity for each particle."]
+    #[doc = ""]
+    #[doc = "USD attribute `opacities` (`float\\[\\]`)."]
+    #[doc = ""]
+    #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+    #[doc = "C++ authoring: `UsdVolParticleFieldOpacityAttributeAPI::CreateOpacitiesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdVolParticleFieldOpacityAttributeAPI::CreateOpacitiesAttr")]
+    #[doc(alias = "CreateOpacitiesAttr")]
+    pub fn set_opacities(&self, edit: &mut SchemaEdit<'_>, value: &[f32]) -> &Self {
+        let value = crate::value::write_float_array(value, edit.tokens());
+        self.write_value(edit, "opacities", None, value);
+        self
     }
-    set_attribute! {
-        #[doc = "Transfers the vector allocation and capacity; allocates only its shared owner. Slice callers can use `set_opacities`."]
-        set_opacities_owned, set_opacities_owned_at, "opacities", ::alloc::vec::Vec<f32>, crate::value::write_float_array_owned
+
+    #[doc = "[`Self::set_opacities`] as a time sample at the time code `time`."]
+    pub fn set_opacities_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &[f32]) -> &Self {
+        let value = crate::value::write_float_array(value, edit.tokens());
+        self.write_value(edit, "opacities", Some(time), value);
+        self
     }
-    set_attribute! {
-        #[doc = "Transfers a shared owner without allocating or copying elements. Slice callers can use `set_opacities`."]
-        set_opacities_shared, set_opacities_shared_at, "opacities", ::alloc::sync::Arc<::alloc::vec::Vec<f32>>, crate::value::write_float_array_shared
+
+    #[doc = "Transfers the vector allocation and capacity; allocates only its shared owner. Slice callers can use `set_opacities`."]
+    pub fn set_opacities_owned(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        value: ::alloc::vec::Vec<f32>,
+    ) -> &Self {
+        let value = crate::value::write_float_array_owned(value, edit.tokens());
+        self.write_value(edit, "opacities", None, value);
+        self
     }
-    set_attribute! {
-        #[doc = "Defines the opacity for each particle."]
-        #[doc = ""]
-        #[doc = "USD attribute `opacitiesh` (`half\\[\\]`)."]
-        #[doc = "C++ authoring: `UsdVolParticleFieldOpacityAttributeAPI::CreateOpacitieshAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdVolParticleFieldOpacityAttributeAPI::CreateOpacitieshAttr")]
-        #[doc(alias = "CreateOpacitieshAttr")]
-        set_opacitiesh, set_opacitiesh_at, "opacitiesh", &[f32], crate::value::write_half_array
+
+    #[doc = "[`Self::set_opacities_owned`] as a time sample at the time code `time`."]
+    pub fn set_opacities_owned_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: ::alloc::vec::Vec<f32>,
+    ) -> &Self {
+        let value = crate::value::write_float_array_owned(value, edit.tokens());
+        self.write_value(edit, "opacities", Some(time), value);
+        self
+    }
+
+    #[doc = "Transfers a shared owner without allocating or copying elements. Slice callers can use `set_opacities`."]
+    pub fn set_opacities_shared(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        value: ::alloc::sync::Arc<::alloc::vec::Vec<f32>>,
+    ) -> &Self {
+        let value = crate::value::write_float_array_shared(value, edit.tokens());
+        self.write_value(edit, "opacities", None, value);
+        self
+    }
+
+    #[doc = "[`Self::set_opacities_shared`] as a time sample at the time code `time`."]
+    pub fn set_opacities_shared_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: ::alloc::sync::Arc<::alloc::vec::Vec<f32>>,
+    ) -> &Self {
+        let value = crate::value::write_float_array_shared(value, edit.tokens());
+        self.write_value(edit, "opacities", Some(time), value);
+        self
+    }
+
+    #[doc = "Defines the opacity for each particle."]
+    #[doc = ""]
+    #[doc = "USD attribute `opacitiesh` (`half\\[\\]`)."]
+    #[doc = "C++ authoring: `UsdVolParticleFieldOpacityAttributeAPI::CreateOpacitieshAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdVolParticleFieldOpacityAttributeAPI::CreateOpacitieshAttr")]
+    #[doc(alias = "CreateOpacitieshAttr")]
+    pub fn set_opacitiesh(&self, edit: &mut SchemaEdit<'_>, value: &[f32]) -> &Self {
+        let value = crate::value::write_half_array(value, edit.tokens());
+        self.write_value(edit, "opacitiesh", None, value);
+        self
+    }
+
+    #[doc = "[`Self::set_opacitiesh`] as a time sample at the time code `time`."]
+    pub fn set_opacitiesh_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &[f32]) -> &Self {
+        let value = crate::value::write_half_array(value, edit.tokens());
+        self.write_value(edit, "opacitiesh", Some(time), value);
+        self
     }
 }
 
 #[doc = "A ParticleField related applied schema that provides attributes to define the orientation of particles."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `ParticleFieldOrientationAttributeAPI`. Get it with [`ParticleFieldOrientationAttributeApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `ParticleFieldOrientationAttributeAPI`. Get it with [`ParticleFieldOrientationAttributeApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolParticleFieldOrientationAttributeAPI`."]
 #[doc(alias = "UsdVolParticleFieldOrientationAttributeAPI")]
 #[doc(alias = "ParticleFieldOrientationAttributeAPI")]
@@ -1299,17 +1683,24 @@ impl<'a> ParticleFieldOrientationAttributeApi<'a> {
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of the schema on `prim`, without checking that the prim
+    /// has it applied (`HasAPI`), as [`Self::get`] does: a getter reads
+    /// what the prim authors, and the schema's fallbacks only for a
+    /// prim with the schema applied. For a built-in's view.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self { base: prim }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> ParticleFieldOrientationAttributeApiEdit {
-        ParticleFieldOrientationAttributeApiEdit::from_path(self.path())
+        ParticleFieldOrientationAttributeApiEdit::from_prim(PrimEdit::from_path_unchecked(
+            self.path(),
+        ))
     }
 
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
@@ -1326,49 +1717,84 @@ impl<'a> ParticleFieldOrientationAttributeApi<'a> {
         edit: &mut SchemaEdit<'_>,
         path: PathId,
     ) -> Result<ParticleFieldOrientationAttributeApiEdit, CannotApply> {
-        edit.apply(path, Self::SCHEMA, None)?;
-        Ok(ParticleFieldOrientationAttributeApiEdit::from_path(path))
+        edit.apply_api(path, Self::SCHEMA, None)
+            .map(ParticleFieldOrientationAttributeApiEdit::from_prim)
     }
 
     /// The USD name of [`Self::orientations`].
     pub const ORIENTATIONS: &'static str = "orientations";
 
-    attribute! {
-        #[doc = "Defines the quaternion orientation for each particle."]
-        #[doc = ""]
-        #[doc = "USD attribute `orientations` (`quatf\\[\\]`)."]
-        #[doc = ""]
-        #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
-        #[doc = "C++ read: `UsdVolParticleFieldOrientationAttributeAPI::GetOrientationsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdVolParticleFieldOrientationAttributeAPI::GetOrientationsAttr")]
-        #[doc(alias = "GetOrientationsAttr")]
-        orientations, orientations_at, "orientations", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 4]>>, crate::value::read_quatf_array_shared
+    #[doc = "Defines the quaternion orientation for each particle."]
+    #[doc = ""]
+    #[doc = "USD attribute `orientations` (`quatf\\[\\]`)."]
+    #[doc = ""]
+    #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+    #[doc = "C++ read: `UsdVolParticleFieldOrientationAttributeAPI::GetOrientationsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdVolParticleFieldOrientationAttributeAPI::GetOrientationsAttr")]
+    #[doc(alias = "GetOrientationsAttr")]
+    #[must_use]
+    pub fn orientations(&self) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 4]>>> {
+        self.read_value("orientations", crate::value::read_quatf_array_shared)
     }
+
+    #[doc = "[`Self::orientations`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn orientations_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 4]>>> {
+        self.read_value_at(
+            "orientations",
+            time,
+            interp,
+            crate::value::read_quatf_array_shared,
+        )
+    }
+
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
     pub fn try_orientations(
         &self,
         time: crate::Time,
-    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 4]>>>, layerstack::ArrayReadError>
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 4]>>>, ::layerstack::ArrayReadError>
     {
         self.try_read_value("orientations", time, crate::value::read_quatf_array_shared)
     }
+
     /// The USD name of [`Self::orientationsh`].
     pub const ORIENTATIONSH: &'static str = "orientationsh";
 
-    attribute! {
-        #[doc = "Defines the quaternion orientation for each particle."]
-        #[doc = ""]
-        #[doc = "USD attribute `orientationsh` (`quath\\[\\]`)."]
-        #[doc = "C++ read: `UsdVolParticleFieldOrientationAttributeAPI::GetOrientationshAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdVolParticleFieldOrientationAttributeAPI::GetOrientationshAttr")]
-        #[doc(alias = "GetOrientationshAttr")]
-        orientationsh, orientationsh_at, "orientationsh", ::alloc::vec::Vec<[f32; 4]>, crate::value::read_quath_array
+    #[doc = "Defines the quaternion orientation for each particle."]
+    #[doc = ""]
+    #[doc = "USD attribute `orientationsh` (`quath\\[\\]`)."]
+    #[doc = "C++ read: `UsdVolParticleFieldOrientationAttributeAPI::GetOrientationshAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdVolParticleFieldOrientationAttributeAPI::GetOrientationshAttr")]
+    #[doc(alias = "GetOrientationshAttr")]
+    #[must_use]
+    pub fn orientationsh(&self) -> Option<::alloc::vec::Vec<[f32; 4]>> {
+        self.read_value("orientationsh", crate::value::read_quath_array)
     }
+
+    #[doc = "[`Self::orientationsh`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn orientationsh_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<::alloc::vec::Vec<[f32; 4]>> {
+        self.read_value_at(
+            "orientationsh",
+            time,
+            interp,
+            crate::value::read_quath_array,
+        )
+    }
+
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
     pub fn try_orientationsh(
         &self,
         time: crate::Time,
-    ) -> Result<Option<::alloc::vec::Vec<[f32; 4]>>, layerstack::ArrayReadError> {
+    ) -> Result<Option<::alloc::vec::Vec<[f32; 4]>>, ::layerstack::ArrayReadError> {
         self.try_read_value("orientationsh", time, crate::value::read_quath_array)
     }
 }
@@ -1393,48 +1819,116 @@ impl ParticleFieldOrientationAttributeApiEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
-        Self {
-            base: PrimEdit::new(path),
-        }
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whether or not it has the schema applied.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
+        Self { base: prim }
     }
 
-    set_attribute! {
-        #[doc = "Defines the quaternion orientation for each particle."]
-        #[doc = ""]
-        #[doc = "USD attribute `orientations` (`quatf\\[\\]`)."]
-        #[doc = ""]
-        #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
-        #[doc = "C++ authoring: `UsdVolParticleFieldOrientationAttributeAPI::CreateOrientationsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdVolParticleFieldOrientationAttributeAPI::CreateOrientationsAttr")]
-        #[doc(alias = "CreateOrientationsAttr")]
-        set_orientations, set_orientations_at, "orientations", &[[f32; 4]], crate::value::write_quatf_array
+    #[doc = "Defines the quaternion orientation for each particle."]
+    #[doc = ""]
+    #[doc = "USD attribute `orientations` (`quatf\\[\\]`)."]
+    #[doc = ""]
+    #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+    #[doc = "C++ authoring: `UsdVolParticleFieldOrientationAttributeAPI::CreateOrientationsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdVolParticleFieldOrientationAttributeAPI::CreateOrientationsAttr")]
+    #[doc(alias = "CreateOrientationsAttr")]
+    pub fn set_orientations(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 4]]) -> &Self {
+        let value = crate::value::write_quatf_array(value, edit.tokens());
+        self.write_value(edit, "orientations", None, value);
+        self
     }
-    set_attribute! {
-        #[doc = "Transfers the vector allocation and capacity; allocates only its shared owner. Slice callers can use `set_orientations`."]
-        set_orientations_owned, set_orientations_owned_at, "orientations", ::alloc::vec::Vec<[f32; 4]>, crate::value::write_quatf_array_owned
+
+    #[doc = "[`Self::set_orientations`] as a time sample at the time code `time`."]
+    pub fn set_orientations_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: &[[f32; 4]],
+    ) -> &Self {
+        let value = crate::value::write_quatf_array(value, edit.tokens());
+        self.write_value(edit, "orientations", Some(time), value);
+        self
     }
-    set_attribute! {
-        #[doc = "Transfers a shared owner without allocating or copying elements. Slice callers can use `set_orientations`."]
-        set_orientations_shared, set_orientations_shared_at, "orientations", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 4]>>, crate::value::write_quatf_array_shared
+
+    #[doc = "Transfers the vector allocation and capacity; allocates only its shared owner. Slice callers can use `set_orientations`."]
+    pub fn set_orientations_owned(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        value: ::alloc::vec::Vec<[f32; 4]>,
+    ) -> &Self {
+        let value = crate::value::write_quatf_array_owned(value, edit.tokens());
+        self.write_value(edit, "orientations", None, value);
+        self
     }
-    set_attribute! {
-        #[doc = "Defines the quaternion orientation for each particle."]
-        #[doc = ""]
-        #[doc = "USD attribute `orientationsh` (`quath\\[\\]`)."]
-        #[doc = "C++ authoring: `UsdVolParticleFieldOrientationAttributeAPI::CreateOrientationshAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdVolParticleFieldOrientationAttributeAPI::CreateOrientationshAttr")]
-        #[doc(alias = "CreateOrientationshAttr")]
-        set_orientationsh, set_orientationsh_at, "orientationsh", &[[f32; 4]], crate::value::write_quath_array
+
+    #[doc = "[`Self::set_orientations_owned`] as a time sample at the time code `time`."]
+    pub fn set_orientations_owned_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: ::alloc::vec::Vec<[f32; 4]>,
+    ) -> &Self {
+        let value = crate::value::write_quatf_array_owned(value, edit.tokens());
+        self.write_value(edit, "orientations", Some(time), value);
+        self
+    }
+
+    #[doc = "Transfers a shared owner without allocating or copying elements. Slice callers can use `set_orientations`."]
+    pub fn set_orientations_shared(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 4]>>,
+    ) -> &Self {
+        let value = crate::value::write_quatf_array_shared(value, edit.tokens());
+        self.write_value(edit, "orientations", None, value);
+        self
+    }
+
+    #[doc = "[`Self::set_orientations_shared`] as a time sample at the time code `time`."]
+    pub fn set_orientations_shared_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 4]>>,
+    ) -> &Self {
+        let value = crate::value::write_quatf_array_shared(value, edit.tokens());
+        self.write_value(edit, "orientations", Some(time), value);
+        self
+    }
+
+    #[doc = "Defines the quaternion orientation for each particle."]
+    #[doc = ""]
+    #[doc = "USD attribute `orientationsh` (`quath\\[\\]`)."]
+    #[doc = "C++ authoring: `UsdVolParticleFieldOrientationAttributeAPI::CreateOrientationshAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdVolParticleFieldOrientationAttributeAPI::CreateOrientationshAttr")]
+    #[doc(alias = "CreateOrientationshAttr")]
+    pub fn set_orientationsh(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 4]]) -> &Self {
+        let value = crate::value::write_quath_array(value, edit.tokens());
+        self.write_value(edit, "orientationsh", None, value);
+        self
+    }
+
+    #[doc = "[`Self::set_orientationsh`] as a time sample at the time code `time`."]
+    pub fn set_orientationsh_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: &[[f32; 4]],
+    ) -> &Self {
+        let value = crate::value::write_quath_array(value, edit.tokens());
+        self.write_value(edit, "orientationsh", Some(time), value);
+        self
     }
 }
 
 #[doc = "A ParticleField related applied schema that provides attributes to define the positions of particles."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `ParticleFieldPositionAttributeAPI`. Get it with [`ParticleFieldPositionAttributeApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `ParticleFieldPositionAttributeAPI`. Get it with [`ParticleFieldPositionAttributeApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolParticleFieldPositionAttributeAPI`."]
 #[doc(alias = "UsdVolParticleFieldPositionAttributeAPI")]
 #[doc(alias = "ParticleFieldPositionAttributeAPI")]
@@ -1463,17 +1957,22 @@ impl<'a> ParticleFieldPositionAttributeApi<'a> {
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of the schema on `prim`, without checking that the prim
+    /// has it applied (`HasAPI`), as [`Self::get`] does: a getter reads
+    /// what the prim authors, and the schema's fallbacks only for a
+    /// prim with the schema applied. For a built-in's view.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self { base: prim }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> ParticleFieldPositionAttributeApiEdit {
-        ParticleFieldPositionAttributeApiEdit::from_path(self.path())
+        ParticleFieldPositionAttributeApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
@@ -1490,49 +1989,79 @@ impl<'a> ParticleFieldPositionAttributeApi<'a> {
         edit: &mut SchemaEdit<'_>,
         path: PathId,
     ) -> Result<ParticleFieldPositionAttributeApiEdit, CannotApply> {
-        edit.apply(path, Self::SCHEMA, None)?;
-        Ok(ParticleFieldPositionAttributeApiEdit::from_path(path))
+        edit.apply_api(path, Self::SCHEMA, None)
+            .map(ParticleFieldPositionAttributeApiEdit::from_prim)
     }
 
     /// The USD name of [`Self::positions`].
     pub const POSITIONS: &'static str = "positions";
 
-    attribute! {
-        #[doc = "Defines the position for each particle in local space."]
-        #[doc = ""]
-        #[doc = "USD attribute `positions` (`point3f\\[\\]`)."]
-        #[doc = ""]
-        #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
-        #[doc = "C++ read: `UsdVolParticleFieldPositionAttributeAPI::GetPositionsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdVolParticleFieldPositionAttributeAPI::GetPositionsAttr")]
-        #[doc(alias = "GetPositionsAttr")]
-        positions, positions_at, "positions", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::read_float3_array_shared
+    #[doc = "Defines the position for each particle in local space."]
+    #[doc = ""]
+    #[doc = "USD attribute `positions` (`point3f\\[\\]`)."]
+    #[doc = ""]
+    #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+    #[doc = "C++ read: `UsdVolParticleFieldPositionAttributeAPI::GetPositionsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdVolParticleFieldPositionAttributeAPI::GetPositionsAttr")]
+    #[doc(alias = "GetPositionsAttr")]
+    #[must_use]
+    pub fn positions(&self) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>> {
+        self.read_value("positions", crate::value::read_float3_array_shared)
     }
+
+    #[doc = "[`Self::positions`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn positions_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>> {
+        self.read_value_at(
+            "positions",
+            time,
+            interp,
+            crate::value::read_float3_array_shared,
+        )
+    }
+
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
     pub fn try_positions(
         &self,
         time: crate::Time,
-    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>>, layerstack::ArrayReadError>
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>>, ::layerstack::ArrayReadError>
     {
         self.try_read_value("positions", time, crate::value::read_float3_array_shared)
     }
+
     /// The USD name of [`Self::positionsh`].
     pub const POSITIONSH: &'static str = "positionsh";
 
-    attribute! {
-        #[doc = "Defines the position for each particle in local space."]
-        #[doc = ""]
-        #[doc = "USD attribute `positionsh` (`point3h\\[\\]`)."]
-        #[doc = "C++ read: `UsdVolParticleFieldPositionAttributeAPI::GetPositionshAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdVolParticleFieldPositionAttributeAPI::GetPositionshAttr")]
-        #[doc(alias = "GetPositionshAttr")]
-        positionsh, positionsh_at, "positionsh", ::alloc::vec::Vec<[f32; 3]>, crate::value::read_half3_array
+    #[doc = "Defines the position for each particle in local space."]
+    #[doc = ""]
+    #[doc = "USD attribute `positionsh` (`point3h\\[\\]`)."]
+    #[doc = "C++ read: `UsdVolParticleFieldPositionAttributeAPI::GetPositionshAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdVolParticleFieldPositionAttributeAPI::GetPositionshAttr")]
+    #[doc(alias = "GetPositionshAttr")]
+    #[must_use]
+    pub fn positionsh(&self) -> Option<::alloc::vec::Vec<[f32; 3]>> {
+        self.read_value("positionsh", crate::value::read_half3_array)
     }
+
+    #[doc = "[`Self::positionsh`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn positionsh_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<::alloc::vec::Vec<[f32; 3]>> {
+        self.read_value_at("positionsh", time, interp, crate::value::read_half3_array)
+    }
+
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
     pub fn try_positionsh(
         &self,
         time: crate::Time,
-    ) -> Result<Option<::alloc::vec::Vec<[f32; 3]>>, layerstack::ArrayReadError> {
+    ) -> Result<Option<::alloc::vec::Vec<[f32; 3]>>, ::layerstack::ArrayReadError> {
         self.try_read_value("positionsh", time, crate::value::read_half3_array)
     }
 }
@@ -1557,48 +2086,116 @@ impl ParticleFieldPositionAttributeApiEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
-        Self {
-            base: PrimEdit::new(path),
-        }
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whether or not it has the schema applied.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
+        Self { base: prim }
     }
 
-    set_attribute! {
-        #[doc = "Defines the position for each particle in local space."]
-        #[doc = ""]
-        #[doc = "USD attribute `positions` (`point3f\\[\\]`)."]
-        #[doc = ""]
-        #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
-        #[doc = "C++ authoring: `UsdVolParticleFieldPositionAttributeAPI::CreatePositionsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdVolParticleFieldPositionAttributeAPI::CreatePositionsAttr")]
-        #[doc(alias = "CreatePositionsAttr")]
-        set_positions, set_positions_at, "positions", &[[f32; 3]], crate::value::write_float3_array
+    #[doc = "Defines the position for each particle in local space."]
+    #[doc = ""]
+    #[doc = "USD attribute `positions` (`point3f\\[\\]`)."]
+    #[doc = ""]
+    #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+    #[doc = "C++ authoring: `UsdVolParticleFieldPositionAttributeAPI::CreatePositionsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdVolParticleFieldPositionAttributeAPI::CreatePositionsAttr")]
+    #[doc(alias = "CreatePositionsAttr")]
+    pub fn set_positions(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 3]]) -> &Self {
+        let value = crate::value::write_float3_array(value, edit.tokens());
+        self.write_value(edit, "positions", None, value);
+        self
     }
-    set_attribute! {
-        #[doc = "Transfers the vector allocation and capacity; allocates only its shared owner. Slice callers can use `set_positions`."]
-        set_positions_owned, set_positions_owned_at, "positions", ::alloc::vec::Vec<[f32; 3]>, crate::value::write_float3_array_owned
+
+    #[doc = "[`Self::set_positions`] as a time sample at the time code `time`."]
+    pub fn set_positions_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: &[[f32; 3]],
+    ) -> &Self {
+        let value = crate::value::write_float3_array(value, edit.tokens());
+        self.write_value(edit, "positions", Some(time), value);
+        self
     }
-    set_attribute! {
-        #[doc = "Transfers a shared owner without allocating or copying elements. Slice callers can use `set_positions`."]
-        set_positions_shared, set_positions_shared_at, "positions", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::write_float3_array_shared
+
+    #[doc = "Transfers the vector allocation and capacity; allocates only its shared owner. Slice callers can use `set_positions`."]
+    pub fn set_positions_owned(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        value: ::alloc::vec::Vec<[f32; 3]>,
+    ) -> &Self {
+        let value = crate::value::write_float3_array_owned(value, edit.tokens());
+        self.write_value(edit, "positions", None, value);
+        self
     }
-    set_attribute! {
-        #[doc = "Defines the position for each particle in local space."]
-        #[doc = ""]
-        #[doc = "USD attribute `positionsh` (`point3h\\[\\]`)."]
-        #[doc = "C++ authoring: `UsdVolParticleFieldPositionAttributeAPI::CreatePositionshAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdVolParticleFieldPositionAttributeAPI::CreatePositionshAttr")]
-        #[doc(alias = "CreatePositionshAttr")]
-        set_positionsh, set_positionsh_at, "positionsh", &[[f32; 3]], crate::value::write_half3_array
+
+    #[doc = "[`Self::set_positions_owned`] as a time sample at the time code `time`."]
+    pub fn set_positions_owned_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: ::alloc::vec::Vec<[f32; 3]>,
+    ) -> &Self {
+        let value = crate::value::write_float3_array_owned(value, edit.tokens());
+        self.write_value(edit, "positions", Some(time), value);
+        self
+    }
+
+    #[doc = "Transfers a shared owner without allocating or copying elements. Slice callers can use `set_positions`."]
+    pub fn set_positions_shared(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
+    ) -> &Self {
+        let value = crate::value::write_float3_array_shared(value, edit.tokens());
+        self.write_value(edit, "positions", None, value);
+        self
+    }
+
+    #[doc = "[`Self::set_positions_shared`] as a time sample at the time code `time`."]
+    pub fn set_positions_shared_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
+    ) -> &Self {
+        let value = crate::value::write_float3_array_shared(value, edit.tokens());
+        self.write_value(edit, "positions", Some(time), value);
+        self
+    }
+
+    #[doc = "Defines the position for each particle in local space."]
+    #[doc = ""]
+    #[doc = "USD attribute `positionsh` (`point3h\\[\\]`)."]
+    #[doc = "C++ authoring: `UsdVolParticleFieldPositionAttributeAPI::CreatePositionshAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdVolParticleFieldPositionAttributeAPI::CreatePositionshAttr")]
+    #[doc(alias = "CreatePositionshAttr")]
+    pub fn set_positionsh(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 3]]) -> &Self {
+        let value = crate::value::write_half3_array(value, edit.tokens());
+        self.write_value(edit, "positionsh", None, value);
+        self
+    }
+
+    #[doc = "[`Self::set_positionsh`] as a time sample at the time code `time`."]
+    pub fn set_positionsh_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: &[[f32; 3]],
+    ) -> &Self {
+        let value = crate::value::write_half3_array(value, edit.tokens());
+        self.write_value(edit, "positionsh", Some(time), value);
+        self
     }
 }
 
 #[doc = "A base schema for ParticleField position data."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `ParticleFieldPositionBaseAPI`. Get it with [`ParticleFieldPositionBaseApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `ParticleFieldPositionBaseAPI`. Get it with [`ParticleFieldPositionBaseApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolParticleFieldPositionBaseAPI`."]
 #[doc(alias = "UsdVolParticleFieldPositionBaseAPI")]
 #[doc(alias = "ParticleFieldPositionBaseAPI")]
@@ -1627,17 +2224,22 @@ impl<'a> ParticleFieldPositionBaseApi<'a> {
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of the schema on `prim`, without checking that the prim
+    /// has it applied (`HasAPI`), as [`Self::get`] does: a getter reads
+    /// what the prim authors, and the schema's fallbacks only for a
+    /// prim with the schema applied. For a built-in's view.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self { base: prim }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> ParticleFieldPositionBaseApiEdit {
-        ParticleFieldPositionBaseApiEdit::from_path(self.path())
+        ParticleFieldPositionBaseApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
@@ -1654,8 +2256,8 @@ impl<'a> ParticleFieldPositionBaseApi<'a> {
         edit: &mut SchemaEdit<'_>,
         path: PathId,
     ) -> Result<ParticleFieldPositionBaseApiEdit, CannotApply> {
-        edit.apply(path, Self::SCHEMA, None)?;
-        Ok(ParticleFieldPositionBaseApiEdit::from_path(path))
+        edit.apply_api(path, Self::SCHEMA, None)
+            .map(ParticleFieldPositionBaseApiEdit::from_prim)
     }
 }
 
@@ -1679,19 +2281,20 @@ impl ParticleFieldPositionBaseApiEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
-        Self {
-            base: PrimEdit::new(path),
-        }
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whether or not it has the schema applied.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
+        Self { base: prim }
     }
 }
 
 #[doc = "A base schema for ParticleField radiance definition data."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `ParticleFieldRadianceBaseAPI`. Get it with [`ParticleFieldRadianceBaseApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `ParticleFieldRadianceBaseAPI`. Get it with [`ParticleFieldRadianceBaseApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolParticleFieldRadianceBaseAPI`."]
 #[doc(alias = "UsdVolParticleFieldRadianceBaseAPI")]
 #[doc(alias = "ParticleFieldRadianceBaseAPI")]
@@ -1720,17 +2323,22 @@ impl<'a> ParticleFieldRadianceBaseApi<'a> {
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of the schema on `prim`, without checking that the prim
+    /// has it applied (`HasAPI`), as [`Self::get`] does: a getter reads
+    /// what the prim authors, and the schema's fallbacks only for a
+    /// prim with the schema applied. For a built-in's view.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self { base: prim }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> ParticleFieldRadianceBaseApiEdit {
-        ParticleFieldRadianceBaseApiEdit::from_path(self.path())
+        ParticleFieldRadianceBaseApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
@@ -1747,8 +2355,8 @@ impl<'a> ParticleFieldRadianceBaseApi<'a> {
         edit: &mut SchemaEdit<'_>,
         path: PathId,
     ) -> Result<ParticleFieldRadianceBaseApiEdit, CannotApply> {
-        edit.apply(path, Self::SCHEMA, None)?;
-        Ok(ParticleFieldRadianceBaseApiEdit::from_path(path))
+        edit.apply_api(path, Self::SCHEMA, None)
+            .map(ParticleFieldRadianceBaseApiEdit::from_prim)
     }
 }
 
@@ -1772,19 +2380,20 @@ impl ParticleFieldRadianceBaseApiEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
-        Self {
-            base: PrimEdit::new(path),
-        }
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whether or not it has the schema applied.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
+        Self { base: prim }
     }
 }
 
 #[doc = "A ParticleField related applied schema that provides attributes to define the linear scale factor applied to particles."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `ParticleFieldScaleAttributeAPI`. Get it with [`ParticleFieldScaleAttributeApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `ParticleFieldScaleAttributeAPI`. Get it with [`ParticleFieldScaleAttributeApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolParticleFieldScaleAttributeAPI`."]
 #[doc(alias = "UsdVolParticleFieldScaleAttributeAPI")]
 #[doc(alias = "ParticleFieldScaleAttributeAPI")]
@@ -1813,17 +2422,22 @@ impl<'a> ParticleFieldScaleAttributeApi<'a> {
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of the schema on `prim`, without checking that the prim
+    /// has it applied (`HasAPI`), as [`Self::get`] does: a getter reads
+    /// what the prim authors, and the schema's fallbacks only for a
+    /// prim with the schema applied. For a built-in's view.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self { base: prim }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> ParticleFieldScaleAttributeApiEdit {
-        ParticleFieldScaleAttributeApiEdit::from_path(self.path())
+        ParticleFieldScaleAttributeApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
@@ -1840,49 +2454,79 @@ impl<'a> ParticleFieldScaleAttributeApi<'a> {
         edit: &mut SchemaEdit<'_>,
         path: PathId,
     ) -> Result<ParticleFieldScaleAttributeApiEdit, CannotApply> {
-        edit.apply(path, Self::SCHEMA, None)?;
-        Ok(ParticleFieldScaleAttributeApiEdit::from_path(path))
+        edit.apply_api(path, Self::SCHEMA, None)
+            .map(ParticleFieldScaleAttributeApiEdit::from_prim)
     }
 
     /// The USD name of [`Self::scales`].
     pub const SCALES: &'static str = "scales";
 
-    attribute! {
-        #[doc = "Affine linear scale factor applied to the kernel that is instantiated at each particle."]
-        #[doc = ""]
-        #[doc = "USD attribute `scales` (`float3\\[\\]`)."]
-        #[doc = ""]
-        #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
-        #[doc = "C++ read: `UsdVolParticleFieldScaleAttributeAPI::GetScalesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdVolParticleFieldScaleAttributeAPI::GetScalesAttr")]
-        #[doc(alias = "GetScalesAttr")]
-        scales, scales_at, "scales", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::read_float3_array_shared
+    #[doc = "Affine linear scale factor applied to the kernel that is instantiated at each particle."]
+    #[doc = ""]
+    #[doc = "USD attribute `scales` (`float3\\[\\]`)."]
+    #[doc = ""]
+    #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+    #[doc = "C++ read: `UsdVolParticleFieldScaleAttributeAPI::GetScalesAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdVolParticleFieldScaleAttributeAPI::GetScalesAttr")]
+    #[doc(alias = "GetScalesAttr")]
+    #[must_use]
+    pub fn scales(&self) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>> {
+        self.read_value("scales", crate::value::read_float3_array_shared)
     }
+
+    #[doc = "[`Self::scales`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn scales_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>> {
+        self.read_value_at(
+            "scales",
+            time,
+            interp,
+            crate::value::read_float3_array_shared,
+        )
+    }
+
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
     pub fn try_scales(
         &self,
         time: crate::Time,
-    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>>, layerstack::ArrayReadError>
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>>, ::layerstack::ArrayReadError>
     {
         self.try_read_value("scales", time, crate::value::read_float3_array_shared)
     }
+
     /// The USD name of [`Self::scalesh`].
     pub const SCALESH: &'static str = "scalesh";
 
-    attribute! {
-        #[doc = "Affine linear scale factor applied to the kernel that is instantiated at each particle."]
-        #[doc = ""]
-        #[doc = "USD attribute `scalesh` (`half3\\[\\]`)."]
-        #[doc = "C++ read: `UsdVolParticleFieldScaleAttributeAPI::GetScaleshAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdVolParticleFieldScaleAttributeAPI::GetScaleshAttr")]
-        #[doc(alias = "GetScaleshAttr")]
-        scalesh, scalesh_at, "scalesh", ::alloc::vec::Vec<[f32; 3]>, crate::value::read_half3_array
+    #[doc = "Affine linear scale factor applied to the kernel that is instantiated at each particle."]
+    #[doc = ""]
+    #[doc = "USD attribute `scalesh` (`half3\\[\\]`)."]
+    #[doc = "C++ read: `UsdVolParticleFieldScaleAttributeAPI::GetScaleshAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdVolParticleFieldScaleAttributeAPI::GetScaleshAttr")]
+    #[doc(alias = "GetScaleshAttr")]
+    #[must_use]
+    pub fn scalesh(&self) -> Option<::alloc::vec::Vec<[f32; 3]>> {
+        self.read_value("scalesh", crate::value::read_half3_array)
     }
+
+    #[doc = "[`Self::scalesh`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn scalesh_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<::alloc::vec::Vec<[f32; 3]>> {
+        self.read_value_at("scalesh", time, interp, crate::value::read_half3_array)
+    }
+
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
     pub fn try_scalesh(
         &self,
         time: crate::Time,
-    ) -> Result<Option<::alloc::vec::Vec<[f32; 3]>>, layerstack::ArrayReadError> {
+    ) -> Result<Option<::alloc::vec::Vec<[f32; 3]>>, ::layerstack::ArrayReadError> {
         self.try_read_value("scalesh", time, crate::value::read_half3_array)
     }
 }
@@ -1907,48 +2551,111 @@ impl ParticleFieldScaleAttributeApiEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
-        Self {
-            base: PrimEdit::new(path),
-        }
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whether or not it has the schema applied.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
+        Self { base: prim }
     }
 
-    set_attribute! {
-        #[doc = "Affine linear scale factor applied to the kernel that is instantiated at each particle."]
-        #[doc = ""]
-        #[doc = "USD attribute `scales` (`float3\\[\\]`)."]
-        #[doc = ""]
-        #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
-        #[doc = "C++ authoring: `UsdVolParticleFieldScaleAttributeAPI::CreateScalesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdVolParticleFieldScaleAttributeAPI::CreateScalesAttr")]
-        #[doc(alias = "CreateScalesAttr")]
-        set_scales, set_scales_at, "scales", &[[f32; 3]], crate::value::write_float3_array
+    #[doc = "Affine linear scale factor applied to the kernel that is instantiated at each particle."]
+    #[doc = ""]
+    #[doc = "USD attribute `scales` (`float3\\[\\]`)."]
+    #[doc = ""]
+    #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+    #[doc = "C++ authoring: `UsdVolParticleFieldScaleAttributeAPI::CreateScalesAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdVolParticleFieldScaleAttributeAPI::CreateScalesAttr")]
+    #[doc(alias = "CreateScalesAttr")]
+    pub fn set_scales(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 3]]) -> &Self {
+        let value = crate::value::write_float3_array(value, edit.tokens());
+        self.write_value(edit, "scales", None, value);
+        self
     }
-    set_attribute! {
-        #[doc = "Transfers the vector allocation and capacity; allocates only its shared owner. Slice callers can use `set_scales`."]
-        set_scales_owned, set_scales_owned_at, "scales", ::alloc::vec::Vec<[f32; 3]>, crate::value::write_float3_array_owned
+
+    #[doc = "[`Self::set_scales`] as a time sample at the time code `time`."]
+    pub fn set_scales_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &[[f32; 3]]) -> &Self {
+        let value = crate::value::write_float3_array(value, edit.tokens());
+        self.write_value(edit, "scales", Some(time), value);
+        self
     }
-    set_attribute! {
-        #[doc = "Transfers a shared owner without allocating or copying elements. Slice callers can use `set_scales`."]
-        set_scales_shared, set_scales_shared_at, "scales", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::write_float3_array_shared
+
+    #[doc = "Transfers the vector allocation and capacity; allocates only its shared owner. Slice callers can use `set_scales`."]
+    pub fn set_scales_owned(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        value: ::alloc::vec::Vec<[f32; 3]>,
+    ) -> &Self {
+        let value = crate::value::write_float3_array_owned(value, edit.tokens());
+        self.write_value(edit, "scales", None, value);
+        self
     }
-    set_attribute! {
-        #[doc = "Affine linear scale factor applied to the kernel that is instantiated at each particle."]
-        #[doc = ""]
-        #[doc = "USD attribute `scalesh` (`half3\\[\\]`)."]
-        #[doc = "C++ authoring: `UsdVolParticleFieldScaleAttributeAPI::CreateScaleshAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdVolParticleFieldScaleAttributeAPI::CreateScaleshAttr")]
-        #[doc(alias = "CreateScaleshAttr")]
-        set_scalesh, set_scalesh_at, "scalesh", &[[f32; 3]], crate::value::write_half3_array
+
+    #[doc = "[`Self::set_scales_owned`] as a time sample at the time code `time`."]
+    pub fn set_scales_owned_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: ::alloc::vec::Vec<[f32; 3]>,
+    ) -> &Self {
+        let value = crate::value::write_float3_array_owned(value, edit.tokens());
+        self.write_value(edit, "scales", Some(time), value);
+        self
+    }
+
+    #[doc = "Transfers a shared owner without allocating or copying elements. Slice callers can use `set_scales`."]
+    pub fn set_scales_shared(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
+    ) -> &Self {
+        let value = crate::value::write_float3_array_shared(value, edit.tokens());
+        self.write_value(edit, "scales", None, value);
+        self
+    }
+
+    #[doc = "[`Self::set_scales_shared`] as a time sample at the time code `time`."]
+    pub fn set_scales_shared_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
+    ) -> &Self {
+        let value = crate::value::write_float3_array_shared(value, edit.tokens());
+        self.write_value(edit, "scales", Some(time), value);
+        self
+    }
+
+    #[doc = "Affine linear scale factor applied to the kernel that is instantiated at each particle."]
+    #[doc = ""]
+    #[doc = "USD attribute `scalesh` (`half3\\[\\]`)."]
+    #[doc = "C++ authoring: `UsdVolParticleFieldScaleAttributeAPI::CreateScaleshAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdVolParticleFieldScaleAttributeAPI::CreateScaleshAttr")]
+    #[doc(alias = "CreateScaleshAttr")]
+    pub fn set_scalesh(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 3]]) -> &Self {
+        let value = crate::value::write_half3_array(value, edit.tokens());
+        self.write_value(edit, "scalesh", None, value);
+        self
+    }
+
+    #[doc = "[`Self::set_scalesh`] as a time sample at the time code `time`."]
+    pub fn set_scalesh_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: &[[f32; 3]],
+    ) -> &Self {
+        let value = crate::value::write_half3_array(value, edit.tokens());
+        self.write_value(edit, "scalesh", Some(time), value);
+        self
     }
 }
 
 #[doc = "Defines the spherical harmonics attributes for a ParticleField."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `ParticleFieldSphericalHarmonicsAttributeAPI`. Get it with [`ParticleFieldSphericalHarmonicsAttributeApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `ParticleFieldSphericalHarmonicsAttributeAPI`. Get it with [`ParticleFieldSphericalHarmonicsAttributeApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolParticleFieldSphericalHarmonicsAttributeAPI`."]
 #[doc(alias = "UsdVolParticleFieldSphericalHarmonicsAttributeAPI")]
 #[doc(alias = "ParticleFieldSphericalHarmonicsAttributeAPI")]
@@ -1977,17 +2684,24 @@ impl<'a> ParticleFieldSphericalHarmonicsAttributeApi<'a> {
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of the schema on `prim`, without checking that the prim
+    /// has it applied (`HasAPI`), as [`Self::get`] does: a getter reads
+    /// what the prim authors, and the schema's fallbacks only for a
+    /// prim with the schema applied. For a built-in's view.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self { base: prim }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> ParticleFieldSphericalHarmonicsAttributeApiEdit {
-        ParticleFieldSphericalHarmonicsAttributeApiEdit::from_path(self.path())
+        ParticleFieldSphericalHarmonicsAttributeApiEdit::from_prim(PrimEdit::from_path_unchecked(
+            self.path(),
+        ))
     }
 
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
@@ -2004,32 +2718,54 @@ impl<'a> ParticleFieldSphericalHarmonicsAttributeApi<'a> {
         edit: &mut SchemaEdit<'_>,
         path: PathId,
     ) -> Result<ParticleFieldSphericalHarmonicsAttributeApiEdit, CannotApply> {
-        edit.apply(path, Self::SCHEMA, None)?;
-        Ok(ParticleFieldSphericalHarmonicsAttributeApiEdit::from_path(
-            path,
-        ))
+        edit.apply_api(path, Self::SCHEMA, None)
+            .map(ParticleFieldSphericalHarmonicsAttributeApiEdit::from_prim)
     }
 
     /// The USD name of [`Self::radiance_spherical_harmonics_coefficients`].
     pub const RADIANCE_SPHERICAL_HARMONICS_COEFFICIENTS: &'static str =
         "radiance:sphericalHarmonicsCoefficients";
 
-    attribute! {
-        #[doc = "An array of spherical harmonics coefficients."]
-        #[doc = ""]
-        #[doc = "USD attribute `radiance:sphericalHarmonicsCoefficients` (`float3\\[\\]`)."]
-        #[doc = ""]
-        #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
-        #[doc = "C++ read: `UsdVolParticleFieldSphericalHarmonicsAttributeAPI::GetRadianceSphericalHarmonicsCoefficientsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdVolParticleFieldSphericalHarmonicsAttributeAPI::GetRadianceSphericalHarmonicsCoefficientsAttr")]
-        #[doc(alias = "GetRadianceSphericalHarmonicsCoefficientsAttr")]
-        radiance_spherical_harmonics_coefficients, radiance_spherical_harmonics_coefficients_at, "radiance:sphericalHarmonicsCoefficients", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::read_float3_array_shared
+    #[doc = "An array of spherical harmonics coefficients."]
+    #[doc = ""]
+    #[doc = "USD attribute `radiance:sphericalHarmonicsCoefficients` (`float3\\[\\]`)."]
+    #[doc = ""]
+    #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+    #[doc = "C++ read: `UsdVolParticleFieldSphericalHarmonicsAttributeAPI::GetRadianceSphericalHarmonicsCoefficientsAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(
+        alias = "UsdVolParticleFieldSphericalHarmonicsAttributeAPI::GetRadianceSphericalHarmonicsCoefficientsAttr"
+    )]
+    #[doc(alias = "GetRadianceSphericalHarmonicsCoefficientsAttr")]
+    #[must_use]
+    pub fn radiance_spherical_harmonics_coefficients(
+        &self,
+    ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>> {
+        self.read_value(
+            "radiance:sphericalHarmonicsCoefficients",
+            crate::value::read_float3_array_shared,
+        )
     }
+
+    #[doc = "[`Self::radiance_spherical_harmonics_coefficients`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn radiance_spherical_harmonics_coefficients_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>> {
+        self.read_value_at(
+            "radiance:sphericalHarmonicsCoefficients",
+            time,
+            interp,
+            crate::value::read_float3_array_shared,
+        )
+    }
+
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
     pub fn try_radiance_spherical_harmonics_coefficients(
         &self,
         time: crate::Time,
-    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>>, layerstack::ArrayReadError>
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>>, ::layerstack::ArrayReadError>
     {
         self.try_read_value(
             "radiance:sphericalHarmonicsCoefficients",
@@ -2037,42 +2773,71 @@ impl<'a> ParticleFieldSphericalHarmonicsAttributeApi<'a> {
             crate::value::read_float3_array_shared,
         )
     }
+
     /// The USD name of [`Self::radiance_spherical_harmonics_coefficientsh`].
     pub const RADIANCE_SPHERICAL_HARMONICS_COEFFICIENTSH: &'static str =
         "radiance:sphericalHarmonicsCoefficientsh";
 
-    attribute! {
-        #[doc = "An array of spherical harmonics coefficients."]
-        #[doc = ""]
-        #[doc = "USD attribute `radiance:sphericalHarmonicsCoefficientsh` (`half3\\[\\]`)."]
-        #[doc = "C++ read: `UsdVolParticleFieldSphericalHarmonicsAttributeAPI::GetRadianceSphericalHarmonicsCoefficientshAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdVolParticleFieldSphericalHarmonicsAttributeAPI::GetRadianceSphericalHarmonicsCoefficientshAttr")]
-        #[doc(alias = "GetRadianceSphericalHarmonicsCoefficientshAttr")]
-        radiance_spherical_harmonics_coefficientsh, radiance_spherical_harmonics_coefficientsh_at, "radiance:sphericalHarmonicsCoefficientsh", ::alloc::vec::Vec<[f32; 3]>, crate::value::read_half3_array
+    #[doc = "An array of spherical harmonics coefficients."]
+    #[doc = ""]
+    #[doc = "USD attribute `radiance:sphericalHarmonicsCoefficientsh` (`half3\\[\\]`)."]
+    #[doc = "C++ read: `UsdVolParticleFieldSphericalHarmonicsAttributeAPI::GetRadianceSphericalHarmonicsCoefficientshAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(
+        alias = "UsdVolParticleFieldSphericalHarmonicsAttributeAPI::GetRadianceSphericalHarmonicsCoefficientshAttr"
+    )]
+    #[doc(alias = "GetRadianceSphericalHarmonicsCoefficientshAttr")]
+    #[must_use]
+    pub fn radiance_spherical_harmonics_coefficientsh(
+        &self,
+    ) -> Option<::alloc::vec::Vec<[f32; 3]>> {
+        self.read_value(
+            "radiance:sphericalHarmonicsCoefficientsh",
+            crate::value::read_half3_array,
+        )
     }
+
+    #[doc = "[`Self::radiance_spherical_harmonics_coefficientsh`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn radiance_spherical_harmonics_coefficientsh_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<::alloc::vec::Vec<[f32; 3]>> {
+        self.read_value_at(
+            "radiance:sphericalHarmonicsCoefficientsh",
+            time,
+            interp,
+            crate::value::read_half3_array,
+        )
+    }
+
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
     pub fn try_radiance_spherical_harmonics_coefficientsh(
         &self,
         time: crate::Time,
-    ) -> Result<Option<::alloc::vec::Vec<[f32; 3]>>, layerstack::ArrayReadError> {
+    ) -> Result<Option<::alloc::vec::Vec<[f32; 3]>>, ::layerstack::ArrayReadError> {
         self.try_read_value(
             "radiance:sphericalHarmonicsCoefficientsh",
             time,
             crate::value::read_half3_array,
         )
     }
+
     /// The USD name of [`Self::radiance_spherical_harmonics_degree`].
     pub const RADIANCE_SPHERICAL_HARMONICS_DEGREE: &'static str =
         "radiance:sphericalHarmonicsDegree";
 
-    uniform_attribute! {
-        #[doc = "The highest degree of the spherical harmonics."]
-        #[doc = ""]
-        #[doc = "USD attribute `radiance:sphericalHarmonicsDegree` (`int`, uniform; fallback `3`)."]
-        #[doc = "C++ read: `UsdVolParticleFieldSphericalHarmonicsAttributeAPI::GetRadianceSphericalHarmonicsDegreeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdVolParticleFieldSphericalHarmonicsAttributeAPI::GetRadianceSphericalHarmonicsDegreeAttr")]
-        #[doc(alias = "GetRadianceSphericalHarmonicsDegreeAttr")]
-        radiance_spherical_harmonics_degree, "radiance:sphericalHarmonicsDegree", i32, crate::value::read_int
+    #[doc = "The highest degree of the spherical harmonics."]
+    #[doc = ""]
+    #[doc = "USD attribute `radiance:sphericalHarmonicsDegree` (`int`, uniform; fallback `3`)."]
+    #[doc = "C++ read: `UsdVolParticleFieldSphericalHarmonicsAttributeAPI::GetRadianceSphericalHarmonicsDegreeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(
+        alias = "UsdVolParticleFieldSphericalHarmonicsAttributeAPI::GetRadianceSphericalHarmonicsDegreeAttr"
+    )]
+    #[doc(alias = "GetRadianceSphericalHarmonicsDegreeAttr")]
+    #[must_use]
+    pub fn radiance_spherical_harmonics_degree(&self) -> Option<i32> {
+        self.read_value("radiance:sphericalHarmonicsDegree", crate::value::read_int)
     }
 }
 
@@ -2096,57 +2861,171 @@ impl ParticleFieldSphericalHarmonicsAttributeApiEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
-        Self {
-            base: PrimEdit::new(path),
-        }
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whether or not it has the schema applied.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
+        Self { base: prim }
     }
 
-    set_attribute! {
-        #[doc = "An array of spherical harmonics coefficients."]
-        #[doc = ""]
-        #[doc = "USD attribute `radiance:sphericalHarmonicsCoefficients` (`float3\\[\\]`)."]
-        #[doc = ""]
-        #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
-        #[doc = "C++ authoring: `UsdVolParticleFieldSphericalHarmonicsAttributeAPI::CreateRadianceSphericalHarmonicsCoefficientsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdVolParticleFieldSphericalHarmonicsAttributeAPI::CreateRadianceSphericalHarmonicsCoefficientsAttr")]
-        #[doc(alias = "CreateRadianceSphericalHarmonicsCoefficientsAttr")]
-        set_radiance_spherical_harmonics_coefficients, set_radiance_spherical_harmonics_coefficients_at, "radiance:sphericalHarmonicsCoefficients", &[[f32; 3]], crate::value::write_float3_array
+    #[doc = "An array of spherical harmonics coefficients."]
+    #[doc = ""]
+    #[doc = "USD attribute `radiance:sphericalHarmonicsCoefficients` (`float3\\[\\]`)."]
+    #[doc = ""]
+    #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+    #[doc = "C++ authoring: `UsdVolParticleFieldSphericalHarmonicsAttributeAPI::CreateRadianceSphericalHarmonicsCoefficientsAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(
+        alias = "UsdVolParticleFieldSphericalHarmonicsAttributeAPI::CreateRadianceSphericalHarmonicsCoefficientsAttr"
+    )]
+    #[doc(alias = "CreateRadianceSphericalHarmonicsCoefficientsAttr")]
+    pub fn set_radiance_spherical_harmonics_coefficients(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        value: &[[f32; 3]],
+    ) -> &Self {
+        let value = crate::value::write_float3_array(value, edit.tokens());
+        self.write_value(edit, "radiance:sphericalHarmonicsCoefficients", None, value);
+        self
     }
-    set_attribute! {
-        #[doc = "Transfers the vector allocation and capacity; allocates only its shared owner. Slice callers can use `set_radiance_spherical_harmonics_coefficients`."]
-        set_radiance_spherical_harmonics_coefficients_owned, set_radiance_spherical_harmonics_coefficients_owned_at, "radiance:sphericalHarmonicsCoefficients", ::alloc::vec::Vec<[f32; 3]>, crate::value::write_float3_array_owned
+
+    #[doc = "[`Self::set_radiance_spherical_harmonics_coefficients`] as a time sample at the time code `time`."]
+    pub fn set_radiance_spherical_harmonics_coefficients_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: &[[f32; 3]],
+    ) -> &Self {
+        let value = crate::value::write_float3_array(value, edit.tokens());
+        self.write_value(
+            edit,
+            "radiance:sphericalHarmonicsCoefficients",
+            Some(time),
+            value,
+        );
+        self
     }
-    set_attribute! {
-        #[doc = "Transfers a shared owner without allocating or copying elements. Slice callers can use `set_radiance_spherical_harmonics_coefficients`."]
-        set_radiance_spherical_harmonics_coefficients_shared, set_radiance_spherical_harmonics_coefficients_shared_at, "radiance:sphericalHarmonicsCoefficients", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::write_float3_array_shared
+
+    #[doc = "Transfers the vector allocation and capacity; allocates only its shared owner. Slice callers can use `set_radiance_spherical_harmonics_coefficients`."]
+    pub fn set_radiance_spherical_harmonics_coefficients_owned(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        value: ::alloc::vec::Vec<[f32; 3]>,
+    ) -> &Self {
+        let value = crate::value::write_float3_array_owned(value, edit.tokens());
+        self.write_value(edit, "radiance:sphericalHarmonicsCoefficients", None, value);
+        self
     }
-    set_attribute! {
-        #[doc = "An array of spherical harmonics coefficients."]
-        #[doc = ""]
-        #[doc = "USD attribute `radiance:sphericalHarmonicsCoefficientsh` (`half3\\[\\]`)."]
-        #[doc = "C++ authoring: `UsdVolParticleFieldSphericalHarmonicsAttributeAPI::CreateRadianceSphericalHarmonicsCoefficientshAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdVolParticleFieldSphericalHarmonicsAttributeAPI::CreateRadianceSphericalHarmonicsCoefficientshAttr")]
-        #[doc(alias = "CreateRadianceSphericalHarmonicsCoefficientshAttr")]
-        set_radiance_spherical_harmonics_coefficientsh, set_radiance_spherical_harmonics_coefficientsh_at, "radiance:sphericalHarmonicsCoefficientsh", &[[f32; 3]], crate::value::write_half3_array
+
+    #[doc = "[`Self::set_radiance_spherical_harmonics_coefficients_owned`] as a time sample at the time code `time`."]
+    pub fn set_radiance_spherical_harmonics_coefficients_owned_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: ::alloc::vec::Vec<[f32; 3]>,
+    ) -> &Self {
+        let value = crate::value::write_float3_array_owned(value, edit.tokens());
+        self.write_value(
+            edit,
+            "radiance:sphericalHarmonicsCoefficients",
+            Some(time),
+            value,
+        );
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "The highest degree of the spherical harmonics."]
-        #[doc = ""]
-        #[doc = "USD attribute `radiance:sphericalHarmonicsDegree` (`int`, uniform; fallback `3`)."]
-        #[doc = "C++ authoring: `UsdVolParticleFieldSphericalHarmonicsAttributeAPI::CreateRadianceSphericalHarmonicsDegreeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdVolParticleFieldSphericalHarmonicsAttributeAPI::CreateRadianceSphericalHarmonicsDegreeAttr")]
-        #[doc(alias = "CreateRadianceSphericalHarmonicsDegreeAttr")]
-        set_radiance_spherical_harmonics_degree, "radiance:sphericalHarmonicsDegree", i32, crate::value::write_int
+
+    #[doc = "Transfers a shared owner without allocating or copying elements. Slice callers can use `set_radiance_spherical_harmonics_coefficients`."]
+    pub fn set_radiance_spherical_harmonics_coefficients_shared(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
+    ) -> &Self {
+        let value = crate::value::write_float3_array_shared(value, edit.tokens());
+        self.write_value(edit, "radiance:sphericalHarmonicsCoefficients", None, value);
+        self
+    }
+
+    #[doc = "[`Self::set_radiance_spherical_harmonics_coefficients_shared`] as a time sample at the time code `time`."]
+    pub fn set_radiance_spherical_harmonics_coefficients_shared_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
+    ) -> &Self {
+        let value = crate::value::write_float3_array_shared(value, edit.tokens());
+        self.write_value(
+            edit,
+            "radiance:sphericalHarmonicsCoefficients",
+            Some(time),
+            value,
+        );
+        self
+    }
+
+    #[doc = "An array of spherical harmonics coefficients."]
+    #[doc = ""]
+    #[doc = "USD attribute `radiance:sphericalHarmonicsCoefficientsh` (`half3\\[\\]`)."]
+    #[doc = "C++ authoring: `UsdVolParticleFieldSphericalHarmonicsAttributeAPI::CreateRadianceSphericalHarmonicsCoefficientshAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(
+        alias = "UsdVolParticleFieldSphericalHarmonicsAttributeAPI::CreateRadianceSphericalHarmonicsCoefficientshAttr"
+    )]
+    #[doc(alias = "CreateRadianceSphericalHarmonicsCoefficientshAttr")]
+    pub fn set_radiance_spherical_harmonics_coefficientsh(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        value: &[[f32; 3]],
+    ) -> &Self {
+        let value = crate::value::write_half3_array(value, edit.tokens());
+        self.write_value(
+            edit,
+            "radiance:sphericalHarmonicsCoefficientsh",
+            None,
+            value,
+        );
+        self
+    }
+
+    #[doc = "[`Self::set_radiance_spherical_harmonics_coefficientsh`] as a time sample at the time code `time`."]
+    pub fn set_radiance_spherical_harmonics_coefficientsh_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: &[[f32; 3]],
+    ) -> &Self {
+        let value = crate::value::write_half3_array(value, edit.tokens());
+        self.write_value(
+            edit,
+            "radiance:sphericalHarmonicsCoefficientsh",
+            Some(time),
+            value,
+        );
+        self
+    }
+
+    #[doc = "The highest degree of the spherical harmonics."]
+    #[doc = ""]
+    #[doc = "USD attribute `radiance:sphericalHarmonicsDegree` (`int`, uniform; fallback `3`)."]
+    #[doc = "C++ authoring: `UsdVolParticleFieldSphericalHarmonicsAttributeAPI::CreateRadianceSphericalHarmonicsDegreeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(
+        alias = "UsdVolParticleFieldSphericalHarmonicsAttributeAPI::CreateRadianceSphericalHarmonicsDegreeAttr"
+    )]
+    #[doc(alias = "CreateRadianceSphericalHarmonicsDegreeAttr")]
+    pub fn set_radiance_spherical_harmonics_degree(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        value: i32,
+    ) -> &Self {
+        let value = crate::value::write_int(value, edit.tokens());
+        self.write_value(edit, "radiance:sphericalHarmonicsDegree", None, value);
+        self
     }
 }
 
 #[doc = "A renderable volume containing one or more volumetric data fields, used to represent a volume effect such as smoke or fire."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `Volume`, inheriting [`crate::usd_geom::Gprim`]. Construct it with [`Volume::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `Volume`, inheriting [`crate::usd_geom::Gprim`]. Construct it with [`Volume::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolVolume`."]
 #[doc(alias = "UsdVolVolume")]
 #[derive(Clone, Copy, Debug)]
@@ -2173,19 +3052,24 @@ impl<'a> Volume<'a> {
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .is_a(path, Self::SCHEMA)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of `prim` as of the schema, without checking that it is
+    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// authors, and the schema's fallbacks only for a prim of the schema.
+    /// For the view of a schema built on this one.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self {
-            base: crate::usd_geom::Gprim::from_view(prim),
+            base: crate::usd_geom::Gprim::from_prim_unchecked(prim),
         }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> VolumeEdit {
-        VolumeEdit::from_path(self.path())
+        VolumeEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Defines `path` as a new `def Volume` prim spec in the edit's target.
@@ -2196,8 +3080,7 @@ impl<'a> Volume<'a> {
     #[doc(alias = "UsdVolVolume::Define")]
     #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> VolumeEdit {
-        edit.define(path, Self::SCHEMA);
-        VolumeEdit::from_path(path)
+        VolumeEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
     }
 }
 
@@ -2221,35 +3104,83 @@ impl VolumeEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whatever its type.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
         Self {
-            base: crate::usd_geom::GprimEdit::from_path(path),
+            base: crate::usd_geom::GprimEdit::from_prim(prim),
         }
     }
 }
 
-token_enum! {
-    #[doc = "The tokens `vectorDataRoleHint` allows."]
-    VolumeFieldAssetVectorDataRoleHint {
-        #[doc = "`None`"]
-        None = "None",
-        #[doc = "`Point`"]
-        Point = "Point",
-        #[doc = "`Normal`"]
-        Normal = "Normal",
-        #[doc = "`Vector`"]
-        Vector = "Vector",
-        #[doc = "`Color`"]
-        Color = "Color",
+#[doc = "The tokens `vectorDataRoleHint` allows."]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum VolumeFieldAssetVectorDataRoleHint {
+    #[doc = "`None`"]
+    None,
+    #[doc = "`Point`"]
+    Point,
+    #[doc = "`Normal`"]
+    Normal,
+    #[doc = "`Vector`"]
+    Vector,
+    #[doc = "`Color`"]
+    Color,
+    /// A token the schema does not list: OpenUSD does not enforce
+    /// `allowedTokens`, so an authored value may be anything.
+    Other(::alloc::sync::Arc<str>),
+}
+
+impl VolumeFieldAssetVectorDataRoleHint {
+    /// The tokens the schema allows, in its order.
+    pub const TOKENS: &'static [&'static str] = &["None", "Point", "Normal", "Vector", "Color"];
+
+    /// The value `token` names, `Other` when the schema does not
+    /// list it.
+    #[must_use]
+    pub fn from_token(token: &str) -> Self {
+        match token {
+            "None" => Self::None,
+            "Point" => Self::Point,
+            "Normal" => Self::Normal,
+            "Vector" => Self::Vector,
+            "Color" => Self::Color,
+            other => Self::Other(::alloc::sync::Arc::from(other)),
+        }
+    }
+
+    /// The token this value is.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::None => "None",
+            Self::Point => "Point",
+            Self::Normal => "Normal",
+            Self::Vector => "Vector",
+            Self::Color => "Color",
+            Self::Other(token) => token,
+        }
+    }
+
+    pub(crate) fn read(
+        value: &::layerstack::Value,
+        tokens: &::layerstack::TokenInterner,
+    ) -> Option<Self> {
+        crate::value::read_token(value, tokens).map(Self::from_token)
+    }
+
+    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+        crate::value::write_token(self.as_str(), tokens)
     }
 }
 
 #[doc = "The base schema class for volume field primitives defined by an external file."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's abstract typed schema `VolumeFieldAsset`, inheriting [`FieldBase`]. Construct it with [`VolumeFieldAsset::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's abstract typed schema `VolumeFieldAsset`, inheriting [`FieldBase`]. Construct it with [`VolumeFieldAsset::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolVolumeFieldAsset`."]
 #[doc(alias = "UsdVolVolumeFieldAsset")]
 #[derive(Clone, Copy, Debug)]
@@ -2276,80 +3207,152 @@ impl<'a> VolumeFieldAsset<'a> {
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .is_a(path, Self::SCHEMA)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of `prim` as of the schema, without checking that it is
+    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// authors, and the schema's fallbacks only for a prim of the schema.
+    /// For the view of a schema built on this one.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self {
-            base: FieldBase::from_view(prim),
+            base: FieldBase::from_prim_unchecked(prim),
         }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> VolumeFieldAssetEdit {
-        VolumeFieldAssetEdit::from_path(self.path())
+        VolumeFieldAssetEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// The USD name of [`Self::field_data_type`].
     pub const FIELD_DATA_TYPE: &'static str = "fieldDataType";
 
-    attribute! {
-        #[doc = "Token used to indicate the data type of an individual field"]
-        #[doc = ""]
-        #[doc = "USD attribute `fieldDataType` (`token`)."]
-        #[doc = "C++ read: `UsdVolVolumeFieldAsset::GetFieldDataTypeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdVolVolumeFieldAsset::GetFieldDataTypeAttr")]
-        #[doc(alias = "GetFieldDataTypeAttr")]
-        field_data_type, field_data_type_at, "fieldDataType", &'a str, crate::value::read_token
+    #[doc = "Token used to indicate the data type of an individual field"]
+    #[doc = ""]
+    #[doc = "USD attribute `fieldDataType` (`token`)."]
+    #[doc = "C++ read: `UsdVolVolumeFieldAsset::GetFieldDataTypeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdVolVolumeFieldAsset::GetFieldDataTypeAttr")]
+    #[doc(alias = "GetFieldDataTypeAttr")]
+    #[must_use]
+    pub fn field_data_type(&self) -> Option<&'a str> {
+        self.read_value("fieldDataType", crate::value::read_token)
     }
+
+    #[doc = "[`Self::field_data_type`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn field_data_type_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<&'a str> {
+        self.read_value_at("fieldDataType", time, interp, crate::value::read_token)
+    }
+
     /// The USD name of [`Self::field_index`].
     pub const FIELD_INDEX: &'static str = "fieldIndex";
 
-    attribute! {
-        #[doc = "Optional attribute that stores an index used to disambiguate between fields with the same name."]
-        #[doc = ""]
-        #[doc = "USD attribute `fieldIndex` (`int`)."]
-        #[doc = "C++ read: `UsdVolVolumeFieldAsset::GetFieldIndexAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdVolVolumeFieldAsset::GetFieldIndexAttr")]
-        #[doc(alias = "GetFieldIndexAttr")]
-        field_index, field_index_at, "fieldIndex", i32, crate::value::read_int
+    #[doc = "Optional attribute that stores an index used to disambiguate between fields with the same name."]
+    #[doc = ""]
+    #[doc = "USD attribute `fieldIndex` (`int`)."]
+    #[doc = "C++ read: `UsdVolVolumeFieldAsset::GetFieldIndexAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdVolVolumeFieldAsset::GetFieldIndexAttr")]
+    #[doc(alias = "GetFieldIndexAttr")]
+    #[must_use]
+    pub fn field_index(&self) -> Option<i32> {
+        self.read_value("fieldIndex", crate::value::read_int)
     }
+
+    #[doc = "[`Self::field_index`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn field_index_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<i32> {
+        self.read_value_at("fieldIndex", time, interp, crate::value::read_int)
+    }
+
     /// The USD name of [`Self::field_name`].
     pub const FIELD_NAME: &'static str = "fieldName";
 
-    attribute! {
-        #[doc = "Name of an individual field within the file specified by the filePath attribute."]
-        #[doc = ""]
-        #[doc = "USD attribute `fieldName` (`token`)."]
-        #[doc = "C++ read: `UsdVolVolumeFieldAsset::GetFieldNameAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdVolVolumeFieldAsset::GetFieldNameAttr")]
-        #[doc(alias = "GetFieldNameAttr")]
-        field_name, field_name_at, "fieldName", &'a str, crate::value::read_token
+    #[doc = "Name of an individual field within the file specified by the filePath attribute."]
+    #[doc = ""]
+    #[doc = "USD attribute `fieldName` (`token`)."]
+    #[doc = "C++ read: `UsdVolVolumeFieldAsset::GetFieldNameAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdVolVolumeFieldAsset::GetFieldNameAttr")]
+    #[doc(alias = "GetFieldNameAttr")]
+    #[must_use]
+    pub fn field_name(&self) -> Option<&'a str> {
+        self.read_value("fieldName", crate::value::read_token)
     }
+
+    #[doc = "[`Self::field_name`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn field_name_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<&'a str> {
+        self.read_value_at("fieldName", time, interp, crate::value::read_token)
+    }
+
     /// The USD name of [`Self::file_path`].
     pub const FILE_PATH: &'static str = "filePath";
 
-    attribute! {
-        #[doc = "An asset path attribute that points to a file on disk."]
-        #[doc = ""]
-        #[doc = "USD attribute `filePath` (`asset`)."]
-        #[doc = "C++ read: `UsdVolVolumeFieldAsset::GetFilePathAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdVolVolumeFieldAsset::GetFilePathAttr")]
-        #[doc(alias = "GetFilePathAttr")]
-        file_path, file_path_at, "filePath", ::alloc::sync::Arc<str>, crate::value::read_asset
+    #[doc = "An asset path attribute that points to a file on disk."]
+    #[doc = ""]
+    #[doc = "USD attribute `filePath` (`asset`)."]
+    #[doc = "C++ read: `UsdVolVolumeFieldAsset::GetFilePathAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdVolVolumeFieldAsset::GetFilePathAttr")]
+    #[doc(alias = "GetFilePathAttr")]
+    #[must_use]
+    pub fn file_path(&self) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value("filePath", crate::value::read_asset)
     }
+
+    #[doc = "[`Self::file_path`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn file_path_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value_at("filePath", time, interp, crate::value::read_asset)
+    }
+
     /// The USD name of [`Self::vector_data_role_hint`].
     pub const VECTOR_DATA_ROLE_HINT: &'static str = "vectorDataRoleHint";
 
-    attribute! {
-        #[doc = "Optional token used to indicate the role of a vector valued field."]
-        #[doc = ""]
-        #[doc = "USD attribute `vectorDataRoleHint` (`token`; fallback `\"None\"`)."]
-        #[doc = "C++ read: `UsdVolVolumeFieldAsset::GetVectorDataRoleHintAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdVolVolumeFieldAsset::GetVectorDataRoleHintAttr")]
-        #[doc(alias = "GetVectorDataRoleHintAttr")]
-        vector_data_role_hint, vector_data_role_hint_at, "vectorDataRoleHint", VolumeFieldAssetVectorDataRoleHint, VolumeFieldAssetVectorDataRoleHint::read
+    #[doc = "Optional token used to indicate the role of a vector valued field."]
+    #[doc = ""]
+    #[doc = "USD attribute `vectorDataRoleHint` (`token`; fallback `\"None\"`)."]
+    #[doc = "C++ read: `UsdVolVolumeFieldAsset::GetVectorDataRoleHintAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdVolVolumeFieldAsset::GetVectorDataRoleHintAttr")]
+    #[doc(alias = "GetVectorDataRoleHintAttr")]
+    #[must_use]
+    pub fn vector_data_role_hint(&self) -> Option<VolumeFieldAssetVectorDataRoleHint> {
+        self.read_value(
+            "vectorDataRoleHint",
+            VolumeFieldAssetVectorDataRoleHint::read,
+        )
+    }
+
+    #[doc = "[`Self::vector_data_role_hint`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn vector_data_role_hint_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<VolumeFieldAssetVectorDataRoleHint> {
+        self.read_value_at(
+            "vectorDataRoleHint",
+            time,
+            interp,
+            VolumeFieldAssetVectorDataRoleHint::read,
+        )
     }
 }
 
@@ -2373,65 +3376,131 @@ impl VolumeFieldAssetEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whatever its type.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
         Self {
-            base: FieldBaseEdit::from_path(path),
+            base: FieldBaseEdit::from_prim(prim),
         }
     }
 
-    set_attribute! {
-        #[doc = "Token used to indicate the data type of an individual field"]
-        #[doc = ""]
-        #[doc = "USD attribute `fieldDataType` (`token`)."]
-        #[doc = "C++ authoring: `UsdVolVolumeFieldAsset::CreateFieldDataTypeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdVolVolumeFieldAsset::CreateFieldDataTypeAttr")]
-        #[doc(alias = "CreateFieldDataTypeAttr")]
-        set_field_data_type, set_field_data_type_at, "fieldDataType", &str, crate::value::write_token
+    #[doc = "Token used to indicate the data type of an individual field"]
+    #[doc = ""]
+    #[doc = "USD attribute `fieldDataType` (`token`)."]
+    #[doc = "C++ authoring: `UsdVolVolumeFieldAsset::CreateFieldDataTypeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdVolVolumeFieldAsset::CreateFieldDataTypeAttr")]
+    #[doc(alias = "CreateFieldDataTypeAttr")]
+    pub fn set_field_data_type(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
+        let value = crate::value::write_token(value, edit.tokens());
+        self.write_value(edit, "fieldDataType", None, value);
+        self
     }
-    set_attribute! {
-        #[doc = "Optional attribute that stores an index used to disambiguate between fields with the same name."]
-        #[doc = ""]
-        #[doc = "USD attribute `fieldIndex` (`int`)."]
-        #[doc = "C++ authoring: `UsdVolVolumeFieldAsset::CreateFieldIndexAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdVolVolumeFieldAsset::CreateFieldIndexAttr")]
-        #[doc(alias = "CreateFieldIndexAttr")]
-        set_field_index, set_field_index_at, "fieldIndex", i32, crate::value::write_int
+
+    #[doc = "[`Self::set_field_data_type`] as a time sample at the time code `time`."]
+    pub fn set_field_data_type_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: &str,
+    ) -> &Self {
+        let value = crate::value::write_token(value, edit.tokens());
+        self.write_value(edit, "fieldDataType", Some(time), value);
+        self
     }
-    set_attribute! {
-        #[doc = "Name of an individual field within the file specified by the filePath attribute."]
-        #[doc = ""]
-        #[doc = "USD attribute `fieldName` (`token`)."]
-        #[doc = "C++ authoring: `UsdVolVolumeFieldAsset::CreateFieldNameAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdVolVolumeFieldAsset::CreateFieldNameAttr")]
-        #[doc(alias = "CreateFieldNameAttr")]
-        set_field_name, set_field_name_at, "fieldName", &str, crate::value::write_token
+
+    #[doc = "Optional attribute that stores an index used to disambiguate between fields with the same name."]
+    #[doc = ""]
+    #[doc = "USD attribute `fieldIndex` (`int`)."]
+    #[doc = "C++ authoring: `UsdVolVolumeFieldAsset::CreateFieldIndexAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdVolVolumeFieldAsset::CreateFieldIndexAttr")]
+    #[doc(alias = "CreateFieldIndexAttr")]
+    pub fn set_field_index(&self, edit: &mut SchemaEdit<'_>, value: i32) -> &Self {
+        let value = crate::value::write_int(value, edit.tokens());
+        self.write_value(edit, "fieldIndex", None, value);
+        self
     }
-    set_attribute! {
-        #[doc = "An asset path attribute that points to a file on disk."]
-        #[doc = ""]
-        #[doc = "USD attribute `filePath` (`asset`)."]
-        #[doc = "C++ authoring: `UsdVolVolumeFieldAsset::CreateFilePathAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdVolVolumeFieldAsset::CreateFilePathAttr")]
-        #[doc(alias = "CreateFilePathAttr")]
-        set_file_path, set_file_path_at, "filePath", &str, crate::value::write_asset
+
+    #[doc = "[`Self::set_field_index`] as a time sample at the time code `time`."]
+    pub fn set_field_index_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: i32) -> &Self {
+        let value = crate::value::write_int(value, edit.tokens());
+        self.write_value(edit, "fieldIndex", Some(time), value);
+        self
     }
-    set_attribute! {
-        #[doc = "Optional token used to indicate the role of a vector valued field."]
-        #[doc = ""]
-        #[doc = "USD attribute `vectorDataRoleHint` (`token`; fallback `\"None\"`)."]
-        #[doc = "C++ authoring: `UsdVolVolumeFieldAsset::CreateVectorDataRoleHintAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdVolVolumeFieldAsset::CreateVectorDataRoleHintAttr")]
-        #[doc(alias = "CreateVectorDataRoleHintAttr")]
-        set_vector_data_role_hint, set_vector_data_role_hint_at, "vectorDataRoleHint", VolumeFieldAssetVectorDataRoleHint, VolumeFieldAssetVectorDataRoleHint::write
+
+    #[doc = "Name of an individual field within the file specified by the filePath attribute."]
+    #[doc = ""]
+    #[doc = "USD attribute `fieldName` (`token`)."]
+    #[doc = "C++ authoring: `UsdVolVolumeFieldAsset::CreateFieldNameAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdVolVolumeFieldAsset::CreateFieldNameAttr")]
+    #[doc(alias = "CreateFieldNameAttr")]
+    pub fn set_field_name(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
+        let value = crate::value::write_token(value, edit.tokens());
+        self.write_value(edit, "fieldName", None, value);
+        self
+    }
+
+    #[doc = "[`Self::set_field_name`] as a time sample at the time code `time`."]
+    pub fn set_field_name_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &str) -> &Self {
+        let value = crate::value::write_token(value, edit.tokens());
+        self.write_value(edit, "fieldName", Some(time), value);
+        self
+    }
+
+    #[doc = "An asset path attribute that points to a file on disk."]
+    #[doc = ""]
+    #[doc = "USD attribute `filePath` (`asset`)."]
+    #[doc = "C++ authoring: `UsdVolVolumeFieldAsset::CreateFilePathAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdVolVolumeFieldAsset::CreateFilePathAttr")]
+    #[doc(alias = "CreateFilePathAttr")]
+    pub fn set_file_path(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
+        let value = crate::value::write_asset(value, edit.tokens());
+        self.write_value(edit, "filePath", None, value);
+        self
+    }
+
+    #[doc = "[`Self::set_file_path`] as a time sample at the time code `time`."]
+    pub fn set_file_path_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &str) -> &Self {
+        let value = crate::value::write_asset(value, edit.tokens());
+        self.write_value(edit, "filePath", Some(time), value);
+        self
+    }
+
+    #[doc = "Optional token used to indicate the role of a vector valued field."]
+    #[doc = ""]
+    #[doc = "USD attribute `vectorDataRoleHint` (`token`; fallback `\"None\"`)."]
+    #[doc = "C++ authoring: `UsdVolVolumeFieldAsset::CreateVectorDataRoleHintAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdVolVolumeFieldAsset::CreateVectorDataRoleHintAttr")]
+    #[doc(alias = "CreateVectorDataRoleHintAttr")]
+    pub fn set_vector_data_role_hint(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        value: VolumeFieldAssetVectorDataRoleHint,
+    ) -> &Self {
+        let value = value.write(edit.tokens());
+        self.write_value(edit, "vectorDataRoleHint", None, value);
+        self
+    }
+
+    #[doc = "[`Self::set_vector_data_role_hint`] as a time sample at the time code `time`."]
+    pub fn set_vector_data_role_hint_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: VolumeFieldAssetVectorDataRoleHint,
+    ) -> &Self {
+        let value = value.write(edit.tokens());
+        self.write_value(edit, "vectorDataRoleHint", Some(time), value);
+        self
     }
 }
 
 #[doc = "The base schema class for volume field primitives."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's abstract typed schema `VolumeFieldBase`, inheriting [`crate::usd_geom::Xformable`]. Construct it with [`VolumeFieldBase::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's abstract typed schema `VolumeFieldBase`, inheriting [`crate::usd_geom::Xformable`]. Construct it with [`VolumeFieldBase::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolVolumeFieldBase`."]
 #[doc(alias = "UsdVolVolumeFieldBase")]
 #[derive(Clone, Copy, Debug)]
@@ -2458,19 +3527,24 @@ impl<'a> VolumeFieldBase<'a> {
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .is_a(path, Self::SCHEMA)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of `prim` as of the schema, without checking that it is
+    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// authors, and the schema's fallbacks only for a prim of the schema.
+    /// For the view of a schema built on this one.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self {
-            base: crate::usd_geom::Xformable::from_view(prim),
+            base: crate::usd_geom::Xformable::from_prim_unchecked(prim),
         }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> VolumeFieldBaseEdit {
-        VolumeFieldBaseEdit::from_path(self.path())
+        VolumeFieldBaseEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 }
 
@@ -2494,12 +3568,15 @@ impl VolumeFieldBaseEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whatever its type.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
         Self {
-            base: crate::usd_geom::XformableEdit::from_path(path),
+            base: crate::usd_geom::XformableEdit::from_prim(prim),
         }
     }
 }

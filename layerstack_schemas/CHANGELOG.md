@@ -4,6 +4,16 @@
 
 Initial release.
 
+- The views' building blocks are public, so generated views of schema
+  libraries outside this crate share them: `PrimView::read_targets`,
+  `PrimEdit::new`, `PrimEdit::from_path_unchecked`, `PrimEdit::write_value`,
+  `PrimEdit::write_targets`, the `InstanceView` and `InstanceEdit`
+  constructors and accessors, each view's `from_prim_unchecked` (or
+  `from_instance_unchecked`) and each edit handle's `from_prim` (or
+  `from_instance`). `SchemaEdit::define_prim` defines a prim of a schema
+  named at run time, and `SchemaEdit::apply_api` returns the prim's
+  `PrimEdit`. The `table` module's `SchemaTables` registers a library's
+  static tables.
 - Producer bindings capture store affinity at construction. Migration:
   `Procedural::new(recipe, evaluator)` becomes
   `Procedural::new(&store, recipe, evaluator)`. Different interners are rejected

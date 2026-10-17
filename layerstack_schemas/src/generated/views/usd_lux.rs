@@ -25,7 +25,7 @@ use layerstack::{CannotApply, PathId};
 use crate::{PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "A base class used by intrinsic lights. Not intended to be used directly."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's abstract typed schema `BoundableLightBase`, inheriting [`crate::usd_geom::Boundable`]. Construct it with [`BoundableLightBase::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's abstract typed schema `BoundableLightBase`, inheriting [`crate::usd_geom::Boundable`]. Construct it with [`BoundableLightBase::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxBoundableLightBase`."]
 #[doc(alias = "UsdLuxBoundableLightBase")]
 #[derive(Clone, Copy, Debug)]
@@ -52,25 +52,30 @@ impl<'a> BoundableLightBase<'a> {
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .is_a(path, Self::SCHEMA)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of `prim` as of the schema, without checking that it is
+    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// authors, and the schema's fallbacks only for a prim of the schema.
+    /// For the view of a schema built on this one.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self {
-            base: crate::usd_geom::Boundable::from_view(prim),
+            base: crate::usd_geom::Boundable::from_prim_unchecked(prim),
         }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> BoundableLightBaseEdit {
-        BoundableLightBaseEdit::from_path(self.path())
+        BoundableLightBaseEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     #[doc = "The prim's built-in `LightAPI`, which every `BoundableLightBase` has."]
     #[must_use]
     pub fn light_api(&self) -> LightApi<'a> {
-        LightApi::from_view(PrimView::new(self.scene(), self.path()))
+        LightApi::from_prim_unchecked(PrimView::new(self.scene(), self.path()))
     }
 }
 
@@ -94,25 +99,28 @@ impl BoundableLightBaseEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whatever its type.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
         Self {
-            base: crate::usd_geom::BoundableEdit::from_path(path),
+            base: crate::usd_geom::BoundableEdit::from_prim(prim),
         }
     }
 
     #[doc = "An edit handle for the prim's built-in `LightAPI`."]
     #[must_use]
     pub fn light_api(&self) -> LightApiEdit {
-        LightApiEdit::from_path(self.path())
+        LightApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 }
 
 #[doc = "A light that is emitted outwards from a cylinder."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `CylinderLight`, inheriting [`BoundableLightBase`]. Construct it with [`CylinderLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `CylinderLight`, inheriting [`BoundableLightBase`]. Construct it with [`CylinderLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxCylinderLight`."]
 #[doc(alias = "UsdLuxCylinderLight")]
 #[derive(Clone, Copy, Debug)]
@@ -139,19 +147,24 @@ impl<'a> CylinderLight<'a> {
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .is_a(path, Self::SCHEMA)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of `prim` as of the schema, without checking that it is
+    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// authors, and the schema's fallbacks only for a prim of the schema.
+    /// For the view of a schema built on this one.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self {
-            base: BoundableLightBase::from_view(prim),
+            base: BoundableLightBase::from_prim_unchecked(prim),
         }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> CylinderLightEdit {
-        CylinderLightEdit::from_path(self.path())
+        CylinderLightEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Defines `path` as a new `def CylinderLight` prim spec in the edit's target.
@@ -162,45 +175,71 @@ impl<'a> CylinderLight<'a> {
     #[doc(alias = "UsdLuxCylinderLight::Define")]
     #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> CylinderLightEdit {
-        edit.define(path, Self::SCHEMA);
-        CylinderLightEdit::from_path(path)
+        CylinderLightEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
     }
 
     /// The USD name of [`Self::length`].
     pub const LENGTH: &'static str = "inputs:length";
 
-    attribute! {
-        #[doc = "Specifies the length of the cylinder in the local X axis."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:length` (`float`; fallback `1.0`)."]
-        #[doc = "C++ read: `UsdLuxCylinderLight::GetLengthAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxCylinderLight::GetLengthAttr")]
-        #[doc(alias = "GetLengthAttr")]
-        length, length_at, "inputs:length", f32, crate::value::read_float
+    #[doc = "Specifies the length of the cylinder in the local X axis."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:length` (`float`; fallback `1.0`)."]
+    #[doc = "C++ read: `UsdLuxCylinderLight::GetLengthAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxCylinderLight::GetLengthAttr")]
+    #[doc(alias = "GetLengthAttr")]
+    #[must_use]
+    pub fn length(&self) -> Option<f32> {
+        self.read_value("inputs:length", crate::value::read_float)
     }
+
+    #[doc = "[`Self::length`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn length_at(&self, time: f64, interp: ::layerstack::InterpolationType) -> Option<f32> {
+        self.read_value_at("inputs:length", time, interp, crate::value::read_float)
+    }
+
     /// The USD name of [`Self::radius`].
     pub const RADIUS: &'static str = "inputs:radius";
 
-    attribute! {
-        #[doc = "Specifies the radius of the cylinder."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:radius` (`float`; fallback `0.5`)."]
-        #[doc = "C++ read: `UsdLuxCylinderLight::GetRadiusAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxCylinderLight::GetRadiusAttr")]
-        #[doc(alias = "GetRadiusAttr")]
-        radius, radius_at, "inputs:radius", f32, crate::value::read_float
+    #[doc = "Specifies the radius of the cylinder."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:radius` (`float`; fallback `0.5`)."]
+    #[doc = "C++ read: `UsdLuxCylinderLight::GetRadiusAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxCylinderLight::GetRadiusAttr")]
+    #[doc(alias = "GetRadiusAttr")]
+    #[must_use]
+    pub fn radius(&self) -> Option<f32> {
+        self.read_value("inputs:radius", crate::value::read_float)
     }
+
+    #[doc = "[`Self::radius`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn radius_at(&self, time: f64, interp: ::layerstack::InterpolationType) -> Option<f32> {
+        self.read_value_at("inputs:radius", time, interp, crate::value::read_float)
+    }
+
     /// The USD name of [`Self::treat_as_line`].
     pub const TREAT_AS_LINE: &'static str = "treatAsLine";
 
-    attribute! {
-        #[doc = "Specifies that renderers can treat this light as a zero-radius line."]
-        #[doc = ""]
-        #[doc = "USD attribute `treatAsLine` (`bool`; fallback `false`)."]
-        #[doc = "C++ read: `UsdLuxCylinderLight::GetTreatAsLineAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxCylinderLight::GetTreatAsLineAttr")]
-        #[doc(alias = "GetTreatAsLineAttr")]
-        treat_as_line, treat_as_line_at, "treatAsLine", bool, crate::value::read_bool
+    #[doc = "Specifies that renderers can treat this light as a zero-radius line."]
+    #[doc = ""]
+    #[doc = "USD attribute `treatAsLine` (`bool`; fallback `false`)."]
+    #[doc = "C++ read: `UsdLuxCylinderLight::GetTreatAsLineAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxCylinderLight::GetTreatAsLineAttr")]
+    #[doc(alias = "GetTreatAsLineAttr")]
+    #[must_use]
+    pub fn treat_as_line(&self) -> Option<bool> {
+        self.read_value("treatAsLine", crate::value::read_bool)
+    }
+
+    #[doc = "[`Self::treat_as_line`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn treat_as_line_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<bool> {
+        self.read_value_at("treatAsLine", time, interp, crate::value::read_bool)
     }
 }
 
@@ -224,47 +263,79 @@ impl CylinderLightEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whatever its type.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
         Self {
-            base: BoundableLightBaseEdit::from_path(path),
+            base: BoundableLightBaseEdit::from_prim(prim),
         }
     }
 
-    set_attribute! {
-        #[doc = "Specifies the length of the cylinder in the local X axis."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:length` (`float`; fallback `1.0`)."]
-        #[doc = "C++ authoring: `UsdLuxCylinderLight::CreateLengthAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxCylinderLight::CreateLengthAttr")]
-        #[doc(alias = "CreateLengthAttr")]
-        set_length, set_length_at, "inputs:length", f32, crate::value::write_float
+    #[doc = "Specifies the length of the cylinder in the local X axis."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:length` (`float`; fallback `1.0`)."]
+    #[doc = "C++ authoring: `UsdLuxCylinderLight::CreateLengthAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxCylinderLight::CreateLengthAttr")]
+    #[doc(alias = "CreateLengthAttr")]
+    pub fn set_length(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "inputs:length", None, value);
+        self
     }
-    set_attribute! {
-        #[doc = "Specifies the radius of the cylinder."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:radius` (`float`; fallback `0.5`)."]
-        #[doc = "C++ authoring: `UsdLuxCylinderLight::CreateRadiusAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxCylinderLight::CreateRadiusAttr")]
-        #[doc(alias = "CreateRadiusAttr")]
-        set_radius, set_radius_at, "inputs:radius", f32, crate::value::write_float
+
+    #[doc = "[`Self::set_length`] as a time sample at the time code `time`."]
+    pub fn set_length_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "inputs:length", Some(time), value);
+        self
     }
-    set_attribute! {
-        #[doc = "Specifies that renderers can treat this light as a zero-radius line."]
-        #[doc = ""]
-        #[doc = "USD attribute `treatAsLine` (`bool`; fallback `false`)."]
-        #[doc = "C++ authoring: `UsdLuxCylinderLight::CreateTreatAsLineAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxCylinderLight::CreateTreatAsLineAttr")]
-        #[doc(alias = "CreateTreatAsLineAttr")]
-        set_treat_as_line, set_treat_as_line_at, "treatAsLine", bool, crate::value::write_bool
+
+    #[doc = "Specifies the radius of the cylinder."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:radius` (`float`; fallback `0.5`)."]
+    #[doc = "C++ authoring: `UsdLuxCylinderLight::CreateRadiusAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxCylinderLight::CreateRadiusAttr")]
+    #[doc(alias = "CreateRadiusAttr")]
+    pub fn set_radius(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "inputs:radius", None, value);
+        self
+    }
+
+    #[doc = "[`Self::set_radius`] as a time sample at the time code `time`."]
+    pub fn set_radius_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "inputs:radius", Some(time), value);
+        self
+    }
+
+    #[doc = "Specifies that renderers can treat this light as a zero-radius line."]
+    #[doc = ""]
+    #[doc = "USD attribute `treatAsLine` (`bool`; fallback `false`)."]
+    #[doc = "C++ authoring: `UsdLuxCylinderLight::CreateTreatAsLineAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxCylinderLight::CreateTreatAsLineAttr")]
+    #[doc(alias = "CreateTreatAsLineAttr")]
+    pub fn set_treat_as_line(&self, edit: &mut SchemaEdit<'_>, value: bool) -> &Self {
+        let value = crate::value::write_bool(value, edit.tokens());
+        self.write_value(edit, "treatAsLine", None, value);
+        self
+    }
+
+    #[doc = "[`Self::set_treat_as_line`] as a time sample at the time code `time`."]
+    pub fn set_treat_as_line_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: bool) -> &Self {
+        let value = crate::value::write_bool(value, edit.tokens());
+        self.write_value(edit, "treatAsLine", Some(time), value);
+        self
     }
 }
 
 #[doc = "A light that emits from one side of a circular disk (along the -Z axis), centered in the XY plane."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `DiskLight`, inheriting [`BoundableLightBase`]. Construct it with [`DiskLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `DiskLight`, inheriting [`BoundableLightBase`]. Construct it with [`DiskLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxDiskLight`."]
 #[doc(alias = "UsdLuxDiskLight")]
 #[derive(Clone, Copy, Debug)]
@@ -291,19 +362,24 @@ impl<'a> DiskLight<'a> {
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .is_a(path, Self::SCHEMA)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of `prim` as of the schema, without checking that it is
+    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// authors, and the schema's fallbacks only for a prim of the schema.
+    /// For the view of a schema built on this one.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self {
-            base: BoundableLightBase::from_view(prim),
+            base: BoundableLightBase::from_prim_unchecked(prim),
         }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> DiskLightEdit {
-        DiskLightEdit::from_path(self.path())
+        DiskLightEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Defines `path` as a new `def DiskLight` prim spec in the edit's target.
@@ -314,21 +390,27 @@ impl<'a> DiskLight<'a> {
     #[doc(alias = "UsdLuxDiskLight::Define")]
     #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> DiskLightEdit {
-        edit.define(path, Self::SCHEMA);
-        DiskLightEdit::from_path(path)
+        DiskLightEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
     }
 
     /// The USD name of [`Self::radius`].
     pub const RADIUS: &'static str = "inputs:radius";
 
-    attribute! {
-        #[doc = "Specifies the radius of the disk."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:radius` (`float`; fallback `0.5`)."]
-        #[doc = "C++ read: `UsdLuxDiskLight::GetRadiusAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxDiskLight::GetRadiusAttr")]
-        #[doc(alias = "GetRadiusAttr")]
-        radius, radius_at, "inputs:radius", f32, crate::value::read_float
+    #[doc = "Specifies the radius of the disk."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:radius` (`float`; fallback `0.5`)."]
+    #[doc = "C++ read: `UsdLuxDiskLight::GetRadiusAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxDiskLight::GetRadiusAttr")]
+    #[doc(alias = "GetRadiusAttr")]
+    #[must_use]
+    pub fn radius(&self) -> Option<f32> {
+        self.read_value("inputs:radius", crate::value::read_float)
+    }
+
+    #[doc = "[`Self::radius`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn radius_at(&self, time: f64, interp: ::layerstack::InterpolationType) -> Option<f32> {
+        self.read_value_at("inputs:radius", time, interp, crate::value::read_float)
     }
 }
 
@@ -352,29 +434,41 @@ impl DiskLightEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whatever its type.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
         Self {
-            base: BoundableLightBaseEdit::from_path(path),
+            base: BoundableLightBaseEdit::from_prim(prim),
         }
     }
 
-    set_attribute! {
-        #[doc = "Specifies the radius of the disk."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:radius` (`float`; fallback `0.5`)."]
-        #[doc = "C++ authoring: `UsdLuxDiskLight::CreateRadiusAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxDiskLight::CreateRadiusAttr")]
-        #[doc(alias = "CreateRadiusAttr")]
-        set_radius, set_radius_at, "inputs:radius", f32, crate::value::write_float
+    #[doc = "Specifies the radius of the disk."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:radius` (`float`; fallback `0.5`)."]
+    #[doc = "C++ authoring: `UsdLuxDiskLight::CreateRadiusAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxDiskLight::CreateRadiusAttr")]
+    #[doc(alias = "CreateRadiusAttr")]
+    pub fn set_radius(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "inputs:radius", None, value);
+        self
+    }
+
+    #[doc = "[`Self::set_radius`] as a time sample at the time code `time`."]
+    pub fn set_radius_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "inputs:radius", Some(time), value);
+        self
     }
 }
 
 #[doc = "A light that provides light from a far distant source, along the -Z axis. Also known as a \"directional light\"."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `DistantLight`, inheriting [`NonboundableLightBase`]. Construct it with [`DistantLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `DistantLight`, inheriting [`NonboundableLightBase`]. Construct it with [`DistantLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxDistantLight`."]
 #[doc(alias = "UsdLuxDistantLight")]
 #[derive(Clone, Copy, Debug)]
@@ -401,19 +495,24 @@ impl<'a> DistantLight<'a> {
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .is_a(path, Self::SCHEMA)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of `prim` as of the schema, without checking that it is
+    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// authors, and the schema's fallbacks only for a prim of the schema.
+    /// For the view of a schema built on this one.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self {
-            base: NonboundableLightBase::from_view(prim),
+            base: NonboundableLightBase::from_prim_unchecked(prim),
         }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> DistantLightEdit {
-        DistantLightEdit::from_path(self.path())
+        DistantLightEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Defines `path` as a new `def DistantLight` prim spec in the edit's target.
@@ -424,21 +523,27 @@ impl<'a> DistantLight<'a> {
     #[doc(alias = "UsdLuxDistantLight::Define")]
     #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> DistantLightEdit {
-        edit.define(path, Self::SCHEMA);
-        DistantLightEdit::from_path(path)
+        DistantLightEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
     }
 
     /// The USD name of [`Self::angle`].
     pub const ANGLE: &'static str = "inputs:angle";
 
-    attribute! {
-        #[doc = "The angular diameter of the light in degrees. The fallback value is 0.53. Higher values make the light rays less parallel, thereby increasing shadow softness, but also increasing the overall amount of light."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:angle` (`float`; fallback `0.53`)."]
-        #[doc = "C++ read: `UsdLuxDistantLight::GetAngleAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxDistantLight::GetAngleAttr")]
-        #[doc(alias = "GetAngleAttr")]
-        angle, angle_at, "inputs:angle", f32, crate::value::read_float
+    #[doc = "The angular diameter of the light in degrees. The fallback value is 0.53. Higher values make the light rays less parallel, thereby increasing shadow softness, but also increasing the overall amount of light."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:angle` (`float`; fallback `0.53`)."]
+    #[doc = "C++ read: `UsdLuxDistantLight::GetAngleAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxDistantLight::GetAngleAttr")]
+    #[doc(alias = "GetAngleAttr")]
+    #[must_use]
+    pub fn angle(&self) -> Option<f32> {
+        self.read_value("inputs:angle", crate::value::read_float)
+    }
+
+    #[doc = "[`Self::angle`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn angle_at(&self, time: f64, interp: ::layerstack::InterpolationType) -> Option<f32> {
+        self.read_value_at("inputs:angle", time, interp, crate::value::read_float)
     }
 }
 
@@ -462,45 +567,108 @@ impl DistantLightEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whatever its type.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
         Self {
-            base: NonboundableLightBaseEdit::from_path(path),
+            base: NonboundableLightBaseEdit::from_prim(prim),
         }
     }
 
-    set_attribute! {
-        #[doc = "The angular diameter of the light in degrees. The fallback value is 0.53. Higher values make the light rays less parallel, thereby increasing shadow softness, but also increasing the overall amount of light."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:angle` (`float`; fallback `0.53`)."]
-        #[doc = "C++ authoring: `UsdLuxDistantLight::CreateAngleAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxDistantLight::CreateAngleAttr")]
-        #[doc(alias = "CreateAngleAttr")]
-        set_angle, set_angle_at, "inputs:angle", f32, crate::value::write_float
+    #[doc = "The angular diameter of the light in degrees. The fallback value is 0.53. Higher values make the light rays less parallel, thereby increasing shadow softness, but also increasing the overall amount of light."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:angle` (`float`; fallback `0.53`)."]
+    #[doc = "C++ authoring: `UsdLuxDistantLight::CreateAngleAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxDistantLight::CreateAngleAttr")]
+    #[doc(alias = "CreateAngleAttr")]
+    pub fn set_angle(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "inputs:angle", None, value);
+        self
+    }
+
+    #[doc = "[`Self::set_angle`] as a time sample at the time code `time`."]
+    pub fn set_angle_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "inputs:angle", Some(time), value);
+        self
     }
 }
 
-token_enum! {
-    #[doc = "The tokens `inputs:texture:format` allows."]
-    DomeLightTextureFormat {
-        #[doc = "`automatic`"]
-        Automatic = "automatic",
-        #[doc = "`latlong`"]
-        Latlong = "latlong",
-        #[doc = "`mirroredBall`"]
-        MirroredBall = "mirroredBall",
-        #[doc = "`angular`"]
-        Angular = "angular",
-        #[doc = "`cubeMapVerticalCross`"]
-        CubeMapVerticalCross = "cubeMapVerticalCross",
+#[doc = "The tokens `inputs:texture:format` allows."]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum DomeLightTextureFormat {
+    #[doc = "`automatic`"]
+    Automatic,
+    #[doc = "`latlong`"]
+    Latlong,
+    #[doc = "`mirroredBall`"]
+    MirroredBall,
+    #[doc = "`angular`"]
+    Angular,
+    #[doc = "`cubeMapVerticalCross`"]
+    CubeMapVerticalCross,
+    /// A token the schema does not list: OpenUSD does not enforce
+    /// `allowedTokens`, so an authored value may be anything.
+    Other(::alloc::sync::Arc<str>),
+}
+
+impl DomeLightTextureFormat {
+    /// The tokens the schema allows, in its order.
+    pub const TOKENS: &'static [&'static str] = &[
+        "automatic",
+        "latlong",
+        "mirroredBall",
+        "angular",
+        "cubeMapVerticalCross",
+    ];
+
+    /// The value `token` names, `Other` when the schema does not
+    /// list it.
+    #[must_use]
+    pub fn from_token(token: &str) -> Self {
+        match token {
+            "automatic" => Self::Automatic,
+            "latlong" => Self::Latlong,
+            "mirroredBall" => Self::MirroredBall,
+            "angular" => Self::Angular,
+            "cubeMapVerticalCross" => Self::CubeMapVerticalCross,
+            other => Self::Other(::alloc::sync::Arc::from(other)),
+        }
+    }
+
+    /// The token this value is.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Automatic => "automatic",
+            Self::Latlong => "latlong",
+            Self::MirroredBall => "mirroredBall",
+            Self::Angular => "angular",
+            Self::CubeMapVerticalCross => "cubeMapVerticalCross",
+            Self::Other(token) => token,
+        }
+    }
+
+    pub(crate) fn read(
+        value: &::layerstack::Value,
+        tokens: &::layerstack::TokenInterner,
+    ) -> Option<Self> {
+        crate::value::read_token(value, tokens).map(Self::from_token)
+    }
+
+    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+        crate::value::write_token(self.as_str(), tokens)
     }
 }
 
 #[doc = "A light that is emitted inwards from a distant external environment such as a sky or a light environment captured in an HDR image used for Image Based Lighting (IBL)."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `DomeLight`, inheriting [`NonboundableLightBase`]. Construct it with [`DomeLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `DomeLight`, inheriting [`NonboundableLightBase`]. Construct it with [`DomeLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxDomeLight`."]
 #[doc(alias = "UsdLuxDomeLight")]
 #[derive(Clone, Copy, Debug)]
@@ -527,19 +695,24 @@ impl<'a> DomeLight<'a> {
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .is_a(path, Self::SCHEMA)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of `prim` as of the schema, without checking that it is
+    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// authors, and the schema's fallbacks only for a prim of the schema.
+    /// For the view of a schema built on this one.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self {
-            base: NonboundableLightBase::from_view(prim),
+            base: NonboundableLightBase::from_prim_unchecked(prim),
         }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> DomeLightEdit {
-        DomeLightEdit::from_path(self.path())
+        DomeLightEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Defines `path` as a new `def DomeLight` prim spec in the edit's target.
@@ -550,57 +723,103 @@ impl<'a> DomeLight<'a> {
     #[doc(alias = "UsdLuxDomeLight::Define")]
     #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> DomeLightEdit {
-        edit.define(path, Self::SCHEMA);
-        DomeLightEdit::from_path(path)
+        DomeLightEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
     }
 
     /// The USD name of [`Self::guide_radius`].
     pub const GUIDE_RADIUS: &'static str = "guideRadius";
 
-    attribute! {
-        #[doc = "Specifies the radius of guide geometry to use to visualize the dome light."]
-        #[doc = ""]
-        #[doc = "USD attribute `guideRadius` (`float`; fallback `100000.0`)."]
-        #[doc = "C++ read: `UsdLuxDomeLight::GetGuideRadiusAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxDomeLight::GetGuideRadiusAttr")]
-        #[doc(alias = "GetGuideRadiusAttr")]
-        guide_radius, guide_radius_at, "guideRadius", f32, crate::value::read_float
+    #[doc = "Specifies the radius of guide geometry to use to visualize the dome light."]
+    #[doc = ""]
+    #[doc = "USD attribute `guideRadius` (`float`; fallback `100000.0`)."]
+    #[doc = "C++ read: `UsdLuxDomeLight::GetGuideRadiusAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxDomeLight::GetGuideRadiusAttr")]
+    #[doc(alias = "GetGuideRadiusAttr")]
+    #[must_use]
+    pub fn guide_radius(&self) -> Option<f32> {
+        self.read_value("guideRadius", crate::value::read_float)
     }
+
+    #[doc = "[`Self::guide_radius`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn guide_radius_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<f32> {
+        self.read_value_at("guideRadius", time, interp, crate::value::read_float)
+    }
+
     /// The USD name of [`Self::texture_file`].
     pub const TEXTURE_FILE: &'static str = "inputs:texture:file";
 
-    attribute! {
-        #[doc = "Specifies the color texture (typically an HDR image intended for IBL) used by the DomeLight."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:texture:file` (`asset`)."]
-        #[doc = "C++ read: `UsdLuxDomeLight::GetTextureFileAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxDomeLight::GetTextureFileAttr")]
-        #[doc(alias = "GetTextureFileAttr")]
-        texture_file, texture_file_at, "inputs:texture:file", ::alloc::sync::Arc<str>, crate::value::read_asset
+    #[doc = "Specifies the color texture (typically an HDR image intended for IBL) used by the DomeLight."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:texture:file` (`asset`)."]
+    #[doc = "C++ read: `UsdLuxDomeLight::GetTextureFileAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxDomeLight::GetTextureFileAttr")]
+    #[doc(alias = "GetTextureFileAttr")]
+    #[must_use]
+    pub fn texture_file(&self) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value("inputs:texture:file", crate::value::read_asset)
     }
+
+    #[doc = "[`Self::texture_file`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn texture_file_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value_at(
+            "inputs:texture:file",
+            time,
+            interp,
+            crate::value::read_asset,
+        )
+    }
+
     /// The USD name of [`Self::texture_format`].
     pub const TEXTURE_FORMAT: &'static str = "inputs:texture:format";
 
-    attribute! {
-        #[doc = "Specifies the parameterization of the color texture. Values include: automatic, latlong, mirroredBall, angular, and cubeMapVerticalCross."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:texture:format` (`token`; fallback `\"automatic\"`)."]
-        #[doc = "C++ read: `UsdLuxDomeLight::GetTextureFormatAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxDomeLight::GetTextureFormatAttr")]
-        #[doc(alias = "GetTextureFormatAttr")]
-        texture_format, texture_format_at, "inputs:texture:format", DomeLightTextureFormat, DomeLightTextureFormat::read
+    #[doc = "Specifies the parameterization of the color texture. Values include: automatic, latlong, mirroredBall, angular, and cubeMapVerticalCross."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:texture:format` (`token`; fallback `\"automatic\"`)."]
+    #[doc = "C++ read: `UsdLuxDomeLight::GetTextureFormatAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxDomeLight::GetTextureFormatAttr")]
+    #[doc(alias = "GetTextureFormatAttr")]
+    #[must_use]
+    pub fn texture_format(&self) -> Option<DomeLightTextureFormat> {
+        self.read_value("inputs:texture:format", DomeLightTextureFormat::read)
     }
+
+    #[doc = "[`Self::texture_format`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn texture_format_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<DomeLightTextureFormat> {
+        self.read_value_at(
+            "inputs:texture:format",
+            time,
+            interp,
+            DomeLightTextureFormat::read,
+        )
+    }
+
     /// The USD name of [`Self::portals`].
     pub const PORTALS: &'static str = "portals";
 
-    relationship! {
-        #[doc = "Optional portals to guide light sampling."]
-        #[doc = ""]
-        #[doc = "USD relationship `portals` (`rel`)."]
-        #[doc = "C++ read: `UsdLuxDomeLight::GetPortalsRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxDomeLight::GetPortalsRel")]
-        #[doc(alias = "GetPortalsRel")]
-        portals, "portals"
+    #[doc = "Optional portals to guide light sampling."]
+    #[doc = ""]
+    #[doc = "USD relationship `portals` (`rel`)."]
+    #[doc = "C++ read: `UsdLuxDomeLight::GetPortalsRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxDomeLight::GetPortalsRel")]
+    #[doc(alias = "GetPortalsRel")]
+    #[must_use]
+    pub fn portals(&self) -> ::alloc::vec::Vec<::layerstack::TargetPath> {
+        self.read_targets("portals")
     }
 }
 
@@ -624,84 +843,223 @@ impl DomeLightEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whatever its type.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
         Self {
-            base: NonboundableLightBaseEdit::from_path(path),
+            base: NonboundableLightBaseEdit::from_prim(prim),
         }
     }
 
-    set_attribute! {
-        #[doc = "Specifies the radius of guide geometry to use to visualize the dome light."]
-        #[doc = ""]
-        #[doc = "USD attribute `guideRadius` (`float`; fallback `100000.0`)."]
-        #[doc = "C++ authoring: `UsdLuxDomeLight::CreateGuideRadiusAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxDomeLight::CreateGuideRadiusAttr")]
-        #[doc(alias = "CreateGuideRadiusAttr")]
-        set_guide_radius, set_guide_radius_at, "guideRadius", f32, crate::value::write_float
+    #[doc = "Specifies the radius of guide geometry to use to visualize the dome light."]
+    #[doc = ""]
+    #[doc = "USD attribute `guideRadius` (`float`; fallback `100000.0`)."]
+    #[doc = "C++ authoring: `UsdLuxDomeLight::CreateGuideRadiusAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxDomeLight::CreateGuideRadiusAttr")]
+    #[doc(alias = "CreateGuideRadiusAttr")]
+    pub fn set_guide_radius(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "guideRadius", None, value);
+        self
     }
-    set_attribute! {
-        #[doc = "Specifies the color texture (typically an HDR image intended for IBL) used by the DomeLight."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:texture:file` (`asset`)."]
-        #[doc = "C++ authoring: `UsdLuxDomeLight::CreateTextureFileAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxDomeLight::CreateTextureFileAttr")]
-        #[doc(alias = "CreateTextureFileAttr")]
-        set_texture_file, set_texture_file_at, "inputs:texture:file", &str, crate::value::write_asset
+
+    #[doc = "[`Self::set_guide_radius`] as a time sample at the time code `time`."]
+    pub fn set_guide_radius_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "guideRadius", Some(time), value);
+        self
     }
-    set_attribute! {
-        #[doc = "Specifies the parameterization of the color texture. Values include: automatic, latlong, mirroredBall, angular, and cubeMapVerticalCross."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:texture:format` (`token`; fallback `\"automatic\"`)."]
-        #[doc = "C++ authoring: `UsdLuxDomeLight::CreateTextureFormatAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxDomeLight::CreateTextureFormatAttr")]
-        #[doc(alias = "CreateTextureFormatAttr")]
-        set_texture_format, set_texture_format_at, "inputs:texture:format", DomeLightTextureFormat, DomeLightTextureFormat::write
+
+    #[doc = "Specifies the color texture (typically an HDR image intended for IBL) used by the DomeLight."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:texture:file` (`asset`)."]
+    #[doc = "C++ authoring: `UsdLuxDomeLight::CreateTextureFileAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxDomeLight::CreateTextureFileAttr")]
+    #[doc(alias = "CreateTextureFileAttr")]
+    pub fn set_texture_file(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
+        let value = crate::value::write_asset(value, edit.tokens());
+        self.write_value(edit, "inputs:texture:file", None, value);
+        self
     }
-    set_relationship! {
-        #[doc = "Optional portals to guide light sampling."]
-        #[doc = ""]
-        #[doc = "USD relationship `portals` (`rel`)."]
-        #[doc = "C++ authoring: `UsdLuxDomeLight::CreatePortalsRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxDomeLight::CreatePortalsRel")]
-        #[doc(alias = "CreatePortalsRel")]
-        set_portals, "portals"
+
+    #[doc = "[`Self::set_texture_file`] as a time sample at the time code `time`."]
+    pub fn set_texture_file_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &str) -> &Self {
+        let value = crate::value::write_asset(value, edit.tokens());
+        self.write_value(edit, "inputs:texture:file", Some(time), value);
+        self
+    }
+
+    #[doc = "Specifies the parameterization of the color texture. Values include: automatic, latlong, mirroredBall, angular, and cubeMapVerticalCross."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:texture:format` (`token`; fallback `\"automatic\"`)."]
+    #[doc = "C++ authoring: `UsdLuxDomeLight::CreateTextureFormatAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxDomeLight::CreateTextureFormatAttr")]
+    #[doc(alias = "CreateTextureFormatAttr")]
+    pub fn set_texture_format(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        value: DomeLightTextureFormat,
+    ) -> &Self {
+        let value = value.write(edit.tokens());
+        self.write_value(edit, "inputs:texture:format", None, value);
+        self
+    }
+
+    #[doc = "[`Self::set_texture_format`] as a time sample at the time code `time`."]
+    pub fn set_texture_format_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: DomeLightTextureFormat,
+    ) -> &Self {
+        let value = value.write(edit.tokens());
+        self.write_value(edit, "inputs:texture:format", Some(time), value);
+        self
+    }
+
+    #[doc = "Optional portals to guide light sampling."]
+    #[doc = ""]
+    #[doc = "USD relationship `portals` (`rel`)."]
+    #[doc = "C++ authoring: `UsdLuxDomeLight::CreatePortalsRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxDomeLight::CreatePortalsRel")]
+    #[doc(alias = "CreatePortalsRel")]
+    pub fn set_portals(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        targets: &[::layerstack::TargetPath],
+    ) -> &Self {
+        self.write_targets(edit, "portals", targets);
+        self
     }
 }
 
-token_enum! {
-    #[doc = "The tokens `inputs:texture:format` allows."]
-    DomeLight1TextureFormat {
-        #[doc = "`automatic`"]
-        Automatic = "automatic",
-        #[doc = "`latlong`"]
-        Latlong = "latlong",
-        #[doc = "`mirroredBall`"]
-        MirroredBall = "mirroredBall",
-        #[doc = "`angular`"]
-        Angular = "angular",
-        #[doc = "`cubeMapVerticalCross`"]
-        CubeMapVerticalCross = "cubeMapVerticalCross",
+#[doc = "The tokens `inputs:texture:format` allows."]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum DomeLight1TextureFormat {
+    #[doc = "`automatic`"]
+    Automatic,
+    #[doc = "`latlong`"]
+    Latlong,
+    #[doc = "`mirroredBall`"]
+    MirroredBall,
+    #[doc = "`angular`"]
+    Angular,
+    #[doc = "`cubeMapVerticalCross`"]
+    CubeMapVerticalCross,
+    /// A token the schema does not list: OpenUSD does not enforce
+    /// `allowedTokens`, so an authored value may be anything.
+    Other(::alloc::sync::Arc<str>),
+}
+
+impl DomeLight1TextureFormat {
+    /// The tokens the schema allows, in its order.
+    pub const TOKENS: &'static [&'static str] = &[
+        "automatic",
+        "latlong",
+        "mirroredBall",
+        "angular",
+        "cubeMapVerticalCross",
+    ];
+
+    /// The value `token` names, `Other` when the schema does not
+    /// list it.
+    #[must_use]
+    pub fn from_token(token: &str) -> Self {
+        match token {
+            "automatic" => Self::Automatic,
+            "latlong" => Self::Latlong,
+            "mirroredBall" => Self::MirroredBall,
+            "angular" => Self::Angular,
+            "cubeMapVerticalCross" => Self::CubeMapVerticalCross,
+            other => Self::Other(::alloc::sync::Arc::from(other)),
+        }
+    }
+
+    /// The token this value is.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Automatic => "automatic",
+            Self::Latlong => "latlong",
+            Self::MirroredBall => "mirroredBall",
+            Self::Angular => "angular",
+            Self::CubeMapVerticalCross => "cubeMapVerticalCross",
+            Self::Other(token) => token,
+        }
+    }
+
+    pub(crate) fn read(
+        value: &::layerstack::Value,
+        tokens: &::layerstack::TokenInterner,
+    ) -> Option<Self> {
+        crate::value::read_token(value, tokens).map(Self::from_token)
+    }
+
+    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+        crate::value::write_token(self.as_str(), tokens)
     }
 }
 
-token_enum! {
-    #[doc = "The tokens `poleAxis` allows."]
-    DomeLight1PoleAxis {
-        #[doc = "`scene`"]
-        Scene = "scene",
-        #[doc = "`Y`"]
-        Y = "Y",
-        #[doc = "`Z`"]
-        Z = "Z",
+#[doc = "The tokens `poleAxis` allows."]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum DomeLight1PoleAxis {
+    #[doc = "`scene`"]
+    Scene,
+    #[doc = "`Y`"]
+    Y,
+    #[doc = "`Z`"]
+    Z,
+    /// A token the schema does not list: OpenUSD does not enforce
+    /// `allowedTokens`, so an authored value may be anything.
+    Other(::alloc::sync::Arc<str>),
+}
+
+impl DomeLight1PoleAxis {
+    /// The tokens the schema allows, in its order.
+    pub const TOKENS: &'static [&'static str] = &["scene", "Y", "Z"];
+
+    /// The value `token` names, `Other` when the schema does not
+    /// list it.
+    #[must_use]
+    pub fn from_token(token: &str) -> Self {
+        match token {
+            "scene" => Self::Scene,
+            "Y" => Self::Y,
+            "Z" => Self::Z,
+            other => Self::Other(::alloc::sync::Arc::from(other)),
+        }
+    }
+
+    /// The token this value is.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Scene => "scene",
+            Self::Y => "Y",
+            Self::Z => "Z",
+            Self::Other(token) => token,
+        }
+    }
+
+    pub(crate) fn read(
+        value: &::layerstack::Value,
+        tokens: &::layerstack::TokenInterner,
+    ) -> Option<Self> {
+        crate::value::read_token(value, tokens).map(Self::from_token)
+    }
+
+    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+        crate::value::write_token(self.as_str(), tokens)
     }
 }
 
 #[doc = "A light that is emitted inwards from a distant external environment such as a sky or a light environment captured in an HDR image used for Image Based Lighting (IBL). Provides additional control over the dome's orientation via the poleAxis property."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `DomeLight_1`, inheriting [`NonboundableLightBase`]. Construct it with [`DomeLight1::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `DomeLight_1`, inheriting [`NonboundableLightBase`]. Construct it with [`DomeLight1::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxDomeLight_1`."]
 #[doc(alias = "UsdLuxDomeLight_1")]
 #[doc(alias = "DomeLight_1")]
@@ -729,19 +1087,24 @@ impl<'a> DomeLight1<'a> {
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .is_a(path, Self::SCHEMA)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of `prim` as of the schema, without checking that it is
+    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// authors, and the schema's fallbacks only for a prim of the schema.
+    /// For the view of a schema built on this one.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self {
-            base: NonboundableLightBase::from_view(prim),
+            base: NonboundableLightBase::from_prim_unchecked(prim),
         }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> DomeLight1Edit {
-        DomeLight1Edit::from_path(self.path())
+        DomeLight1Edit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Defines `path` as a new `def DomeLight_1` prim spec in the edit's target.
@@ -752,69 +1115,117 @@ impl<'a> DomeLight1<'a> {
     #[doc(alias = "UsdLuxDomeLight_1::Define")]
     #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> DomeLight1Edit {
-        edit.define(path, Self::SCHEMA);
-        DomeLight1Edit::from_path(path)
+        DomeLight1Edit::from_prim(edit.define_prim(path, Self::SCHEMA))
     }
 
     /// The USD name of [`Self::guide_radius`].
     pub const GUIDE_RADIUS: &'static str = "guideRadius";
 
-    attribute! {
-        #[doc = "Specifies the radius of guide geometry to use to visualize the dome light."]
-        #[doc = ""]
-        #[doc = "USD attribute `guideRadius` (`float`; fallback `100000.0`)."]
-        #[doc = "C++ read: `UsdLuxDomeLight_1::GetGuideRadiusAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxDomeLight_1::GetGuideRadiusAttr")]
-        #[doc(alias = "GetGuideRadiusAttr")]
-        guide_radius, guide_radius_at, "guideRadius", f32, crate::value::read_float
+    #[doc = "Specifies the radius of guide geometry to use to visualize the dome light."]
+    #[doc = ""]
+    #[doc = "USD attribute `guideRadius` (`float`; fallback `100000.0`)."]
+    #[doc = "C++ read: `UsdLuxDomeLight_1::GetGuideRadiusAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxDomeLight_1::GetGuideRadiusAttr")]
+    #[doc(alias = "GetGuideRadiusAttr")]
+    #[must_use]
+    pub fn guide_radius(&self) -> Option<f32> {
+        self.read_value("guideRadius", crate::value::read_float)
     }
+
+    #[doc = "[`Self::guide_radius`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn guide_radius_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<f32> {
+        self.read_value_at("guideRadius", time, interp, crate::value::read_float)
+    }
+
     /// The USD name of [`Self::texture_file`].
     pub const TEXTURE_FILE: &'static str = "inputs:texture:file";
 
-    attribute! {
-        #[doc = "Specifies the color texture (typically an HDR image intended for IBL) used by the DomeLight."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:texture:file` (`asset`)."]
-        #[doc = "C++ read: `UsdLuxDomeLight_1::GetTextureFileAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxDomeLight_1::GetTextureFileAttr")]
-        #[doc(alias = "GetTextureFileAttr")]
-        texture_file, texture_file_at, "inputs:texture:file", ::alloc::sync::Arc<str>, crate::value::read_asset
+    #[doc = "Specifies the color texture (typically an HDR image intended for IBL) used by the DomeLight."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:texture:file` (`asset`)."]
+    #[doc = "C++ read: `UsdLuxDomeLight_1::GetTextureFileAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxDomeLight_1::GetTextureFileAttr")]
+    #[doc(alias = "GetTextureFileAttr")]
+    #[must_use]
+    pub fn texture_file(&self) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value("inputs:texture:file", crate::value::read_asset)
     }
+
+    #[doc = "[`Self::texture_file`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn texture_file_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value_at(
+            "inputs:texture:file",
+            time,
+            interp,
+            crate::value::read_asset,
+        )
+    }
+
     /// The USD name of [`Self::texture_format`].
     pub const TEXTURE_FORMAT: &'static str = "inputs:texture:format";
 
-    attribute! {
-        #[doc = "Specifies the parameterization of the color texture. Values include: automatic, latlong, mirroredBall, angular, and cubeMapVerticalCross."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:texture:format` (`token`; fallback `\"automatic\"`)."]
-        #[doc = "C++ read: `UsdLuxDomeLight_1::GetTextureFormatAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxDomeLight_1::GetTextureFormatAttr")]
-        #[doc(alias = "GetTextureFormatAttr")]
-        texture_format, texture_format_at, "inputs:texture:format", DomeLight1TextureFormat, DomeLight1TextureFormat::read
+    #[doc = "Specifies the parameterization of the color texture. Values include: automatic, latlong, mirroredBall, angular, and cubeMapVerticalCross."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:texture:format` (`token`; fallback `\"automatic\"`)."]
+    #[doc = "C++ read: `UsdLuxDomeLight_1::GetTextureFormatAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxDomeLight_1::GetTextureFormatAttr")]
+    #[doc(alias = "GetTextureFormatAttr")]
+    #[must_use]
+    pub fn texture_format(&self) -> Option<DomeLight1TextureFormat> {
+        self.read_value("inputs:texture:format", DomeLight1TextureFormat::read)
     }
+
+    #[doc = "[`Self::texture_format`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn texture_format_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<DomeLight1TextureFormat> {
+        self.read_value_at(
+            "inputs:texture:format",
+            time,
+            interp,
+            DomeLight1TextureFormat::read,
+        )
+    }
+
     /// The USD name of [`Self::pole_axis`].
     pub const POLE_AXIS: &'static str = "poleAxis";
 
-    uniform_attribute! {
-        #[doc = "Specifies the starting alignment of the dome's top pole."]
-        #[doc = ""]
-        #[doc = "USD attribute `poleAxis` (`token`, uniform; fallback `\"scene\"`)."]
-        #[doc = "C++ read: `UsdLuxDomeLight_1::GetPoleAxisAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxDomeLight_1::GetPoleAxisAttr")]
-        #[doc(alias = "GetPoleAxisAttr")]
-        pole_axis, "poleAxis", DomeLight1PoleAxis, DomeLight1PoleAxis::read
+    #[doc = "Specifies the starting alignment of the dome's top pole."]
+    #[doc = ""]
+    #[doc = "USD attribute `poleAxis` (`token`, uniform; fallback `\"scene\"`)."]
+    #[doc = "C++ read: `UsdLuxDomeLight_1::GetPoleAxisAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxDomeLight_1::GetPoleAxisAttr")]
+    #[doc(alias = "GetPoleAxisAttr")]
+    #[must_use]
+    pub fn pole_axis(&self) -> Option<DomeLight1PoleAxis> {
+        self.read_value("poleAxis", DomeLight1PoleAxis::read)
     }
+
     /// The USD name of [`Self::portals`].
     pub const PORTALS: &'static str = "portals";
 
-    relationship! {
-        #[doc = "Optional portals to guide light sampling."]
-        #[doc = ""]
-        #[doc = "USD relationship `portals` (`rel`)."]
-        #[doc = "C++ read: `UsdLuxDomeLight_1::GetPortalsRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxDomeLight_1::GetPortalsRel")]
-        #[doc(alias = "GetPortalsRel")]
-        portals, "portals"
+    #[doc = "Optional portals to guide light sampling."]
+    #[doc = ""]
+    #[doc = "USD relationship `portals` (`rel`)."]
+    #[doc = "C++ read: `UsdLuxDomeLight_1::GetPortalsRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxDomeLight_1::GetPortalsRel")]
+    #[doc(alias = "GetPortalsRel")]
+    #[must_use]
+    pub fn portals(&self) -> ::alloc::vec::Vec<::layerstack::TargetPath> {
+        self.read_targets("portals")
     }
 }
 
@@ -838,65 +1249,115 @@ impl DomeLight1Edit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whatever its type.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
         Self {
-            base: NonboundableLightBaseEdit::from_path(path),
+            base: NonboundableLightBaseEdit::from_prim(prim),
         }
     }
 
-    set_attribute! {
-        #[doc = "Specifies the radius of guide geometry to use to visualize the dome light."]
-        #[doc = ""]
-        #[doc = "USD attribute `guideRadius` (`float`; fallback `100000.0`)."]
-        #[doc = "C++ authoring: `UsdLuxDomeLight_1::CreateGuideRadiusAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxDomeLight_1::CreateGuideRadiusAttr")]
-        #[doc(alias = "CreateGuideRadiusAttr")]
-        set_guide_radius, set_guide_radius_at, "guideRadius", f32, crate::value::write_float
+    #[doc = "Specifies the radius of guide geometry to use to visualize the dome light."]
+    #[doc = ""]
+    #[doc = "USD attribute `guideRadius` (`float`; fallback `100000.0`)."]
+    #[doc = "C++ authoring: `UsdLuxDomeLight_1::CreateGuideRadiusAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxDomeLight_1::CreateGuideRadiusAttr")]
+    #[doc(alias = "CreateGuideRadiusAttr")]
+    pub fn set_guide_radius(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "guideRadius", None, value);
+        self
     }
-    set_attribute! {
-        #[doc = "Specifies the color texture (typically an HDR image intended for IBL) used by the DomeLight."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:texture:file` (`asset`)."]
-        #[doc = "C++ authoring: `UsdLuxDomeLight_1::CreateTextureFileAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxDomeLight_1::CreateTextureFileAttr")]
-        #[doc(alias = "CreateTextureFileAttr")]
-        set_texture_file, set_texture_file_at, "inputs:texture:file", &str, crate::value::write_asset
+
+    #[doc = "[`Self::set_guide_radius`] as a time sample at the time code `time`."]
+    pub fn set_guide_radius_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "guideRadius", Some(time), value);
+        self
     }
-    set_attribute! {
-        #[doc = "Specifies the parameterization of the color texture. Values include: automatic, latlong, mirroredBall, angular, and cubeMapVerticalCross."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:texture:format` (`token`; fallback `\"automatic\"`)."]
-        #[doc = "C++ authoring: `UsdLuxDomeLight_1::CreateTextureFormatAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxDomeLight_1::CreateTextureFormatAttr")]
-        #[doc(alias = "CreateTextureFormatAttr")]
-        set_texture_format, set_texture_format_at, "inputs:texture:format", DomeLight1TextureFormat, DomeLight1TextureFormat::write
+
+    #[doc = "Specifies the color texture (typically an HDR image intended for IBL) used by the DomeLight."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:texture:file` (`asset`)."]
+    #[doc = "C++ authoring: `UsdLuxDomeLight_1::CreateTextureFileAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxDomeLight_1::CreateTextureFileAttr")]
+    #[doc(alias = "CreateTextureFileAttr")]
+    pub fn set_texture_file(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
+        let value = crate::value::write_asset(value, edit.tokens());
+        self.write_value(edit, "inputs:texture:file", None, value);
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "Specifies the starting alignment of the dome's top pole."]
-        #[doc = ""]
-        #[doc = "USD attribute `poleAxis` (`token`, uniform; fallback `\"scene\"`)."]
-        #[doc = "C++ authoring: `UsdLuxDomeLight_1::CreatePoleAxisAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxDomeLight_1::CreatePoleAxisAttr")]
-        #[doc(alias = "CreatePoleAxisAttr")]
-        set_pole_axis, "poleAxis", DomeLight1PoleAxis, DomeLight1PoleAxis::write
+
+    #[doc = "[`Self::set_texture_file`] as a time sample at the time code `time`."]
+    pub fn set_texture_file_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &str) -> &Self {
+        let value = crate::value::write_asset(value, edit.tokens());
+        self.write_value(edit, "inputs:texture:file", Some(time), value);
+        self
     }
-    set_relationship! {
-        #[doc = "Optional portals to guide light sampling."]
-        #[doc = ""]
-        #[doc = "USD relationship `portals` (`rel`)."]
-        #[doc = "C++ authoring: `UsdLuxDomeLight_1::CreatePortalsRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxDomeLight_1::CreatePortalsRel")]
-        #[doc(alias = "CreatePortalsRel")]
-        set_portals, "portals"
+
+    #[doc = "Specifies the parameterization of the color texture. Values include: automatic, latlong, mirroredBall, angular, and cubeMapVerticalCross."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:texture:format` (`token`; fallback `\"automatic\"`)."]
+    #[doc = "C++ authoring: `UsdLuxDomeLight_1::CreateTextureFormatAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxDomeLight_1::CreateTextureFormatAttr")]
+    #[doc(alias = "CreateTextureFormatAttr")]
+    pub fn set_texture_format(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        value: DomeLight1TextureFormat,
+    ) -> &Self {
+        let value = value.write(edit.tokens());
+        self.write_value(edit, "inputs:texture:format", None, value);
+        self
+    }
+
+    #[doc = "[`Self::set_texture_format`] as a time sample at the time code `time`."]
+    pub fn set_texture_format_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: DomeLight1TextureFormat,
+    ) -> &Self {
+        let value = value.write(edit.tokens());
+        self.write_value(edit, "inputs:texture:format", Some(time), value);
+        self
+    }
+
+    #[doc = "Specifies the starting alignment of the dome's top pole."]
+    #[doc = ""]
+    #[doc = "USD attribute `poleAxis` (`token`, uniform; fallback `\"scene\"`)."]
+    #[doc = "C++ authoring: `UsdLuxDomeLight_1::CreatePoleAxisAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxDomeLight_1::CreatePoleAxisAttr")]
+    #[doc(alias = "CreatePoleAxisAttr")]
+    pub fn set_pole_axis(&self, edit: &mut SchemaEdit<'_>, value: DomeLight1PoleAxis) -> &Self {
+        let value = value.write(edit.tokens());
+        self.write_value(edit, "poleAxis", None, value);
+        self
+    }
+
+    #[doc = "Optional portals to guide light sampling."]
+    #[doc = ""]
+    #[doc = "USD relationship `portals` (`rel`)."]
+    #[doc = "C++ authoring: `UsdLuxDomeLight_1::CreatePortalsRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxDomeLight_1::CreatePortalsRel")]
+    #[doc(alias = "CreatePortalsRel")]
+    pub fn set_portals(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        targets: &[::layerstack::TargetPath],
+    ) -> &Self {
+        self.write_targets(edit, "portals", targets);
+        self
     }
 }
 
 #[doc = "A light that emits outwards from a geometric prim. Deprecated, use MeshLight instead."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `GeometryLight`, inheriting [`NonboundableLightBase`]. Construct it with [`GeometryLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `GeometryLight`, inheriting [`NonboundableLightBase`]. Construct it with [`GeometryLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxGeometryLight`."]
 #[doc(alias = "UsdLuxGeometryLight")]
 #[derive(Clone, Copy, Debug)]
@@ -923,19 +1384,24 @@ impl<'a> GeometryLight<'a> {
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .is_a(path, Self::SCHEMA)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of `prim` as of the schema, without checking that it is
+    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// authors, and the schema's fallbacks only for a prim of the schema.
+    /// For the view of a schema built on this one.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self {
-            base: NonboundableLightBase::from_view(prim),
+            base: NonboundableLightBase::from_prim_unchecked(prim),
         }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> GeometryLightEdit {
-        GeometryLightEdit::from_path(self.path())
+        GeometryLightEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Defines `path` as a new `def GeometryLight` prim spec in the edit's target.
@@ -946,21 +1412,21 @@ impl<'a> GeometryLight<'a> {
     #[doc(alias = "UsdLuxGeometryLight::Define")]
     #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> GeometryLightEdit {
-        edit.define(path, Self::SCHEMA);
-        GeometryLightEdit::from_path(path)
+        GeometryLightEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
     }
 
     /// The USD name of [`Self::geometry`].
     pub const GEOMETRY: &'static str = "geometry";
 
-    relationship! {
-        #[doc = "Relationship to the geometry to use as the light source."]
-        #[doc = ""]
-        #[doc = "USD relationship `geometry` (`rel`)."]
-        #[doc = "C++ read: `UsdLuxGeometryLight::GetGeometryRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxGeometryLight::GetGeometryRel")]
-        #[doc(alias = "GetGeometryRel")]
-        geometry, "geometry"
+    #[doc = "Relationship to the geometry to use as the light source."]
+    #[doc = ""]
+    #[doc = "USD relationship `geometry` (`rel`)."]
+    #[doc = "C++ read: `UsdLuxGeometryLight::GetGeometryRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxGeometryLight::GetGeometryRel")]
+    #[doc(alias = "GetGeometryRel")]
+    #[must_use]
+    pub fn geometry(&self) -> ::alloc::vec::Vec<::layerstack::TargetPath> {
+        self.read_targets("geometry")
     }
 }
 
@@ -984,41 +1450,94 @@ impl GeometryLightEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whatever its type.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
         Self {
-            base: NonboundableLightBaseEdit::from_path(path),
+            base: NonboundableLightBaseEdit::from_prim(prim),
         }
     }
 
-    set_relationship! {
-        #[doc = "Relationship to the geometry to use as the light source."]
-        #[doc = ""]
-        #[doc = "USD relationship `geometry` (`rel`)."]
-        #[doc = "C++ authoring: `UsdLuxGeometryLight::CreateGeometryRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxGeometryLight::CreateGeometryRel")]
-        #[doc(alias = "CreateGeometryRel")]
-        set_geometry, "geometry"
+    #[doc = "Relationship to the geometry to use as the light source."]
+    #[doc = ""]
+    #[doc = "USD relationship `geometry` (`rel`)."]
+    #[doc = "C++ authoring: `UsdLuxGeometryLight::CreateGeometryRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxGeometryLight::CreateGeometryRel")]
+    #[doc(alias = "CreateGeometryRel")]
+    pub fn set_geometry(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        targets: &[::layerstack::TargetPath],
+    ) -> &Self {
+        self.write_targets(edit, "geometry", targets);
+        self
     }
 }
 
-token_enum! {
-    #[doc = "The tokens `light:materialSyncMode` allows."]
-    LightApiMaterialSyncMode {
-        #[doc = "`materialGlowTintsLight`"]
-        MaterialGlowTintsLight = "materialGlowTintsLight",
-        #[doc = "`independent`"]
-        Independent = "independent",
-        #[doc = "`noMaterialResponse`"]
-        NoMaterialResponse = "noMaterialResponse",
+#[doc = "The tokens `light:materialSyncMode` allows."]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum LightApiMaterialSyncMode {
+    #[doc = "`materialGlowTintsLight`"]
+    MaterialGlowTintsLight,
+    #[doc = "`independent`"]
+    Independent,
+    #[doc = "`noMaterialResponse`"]
+    NoMaterialResponse,
+    /// A token the schema does not list: OpenUSD does not enforce
+    /// `allowedTokens`, so an authored value may be anything.
+    Other(::alloc::sync::Arc<str>),
+}
+
+impl LightApiMaterialSyncMode {
+    /// The tokens the schema allows, in its order.
+    pub const TOKENS: &'static [&'static str] = &[
+        "materialGlowTintsLight",
+        "independent",
+        "noMaterialResponse",
+    ];
+
+    /// The value `token` names, `Other` when the schema does not
+    /// list it.
+    #[must_use]
+    pub fn from_token(token: &str) -> Self {
+        match token {
+            "materialGlowTintsLight" => Self::MaterialGlowTintsLight,
+            "independent" => Self::Independent,
+            "noMaterialResponse" => Self::NoMaterialResponse,
+            other => Self::Other(::alloc::sync::Arc::from(other)),
+        }
+    }
+
+    /// The token this value is.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::MaterialGlowTintsLight => "materialGlowTintsLight",
+            Self::Independent => "independent",
+            Self::NoMaterialResponse => "noMaterialResponse",
+            Self::Other(token) => token,
+        }
+    }
+
+    pub(crate) fn read(
+        value: &::layerstack::Value,
+        tokens: &::layerstack::TokenInterner,
+    ) -> Option<Self> {
+        crate::value::read_token(value, tokens).map(Self::from_token)
+    }
+
+    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+        crate::value::write_token(self.as_str(), tokens)
     }
 }
 
 #[doc = "This schema adds light capabilities to a prim."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `LightAPI`. Get it with [`LightApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `LightAPI`. Get it with [`LightApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxLightAPI`."]
 #[doc(alias = "UsdLuxLightAPI")]
 #[doc(alias = "LightAPI")]
@@ -1047,17 +1566,22 @@ impl<'a> LightApi<'a> {
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of the schema on `prim`, without checking that the prim
+    /// has it applied (`HasAPI`), as [`Self::get`] does: a getter reads
+    /// what the prim authors, and the schema's fallbacks only for a
+    /// prim with the schema applied. For a built-in's view.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self { base: prim }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> LightApiEdit {
-        LightApiEdit::from_path(self.path())
+        LightApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
@@ -1071,141 +1595,228 @@ impl<'a> LightApi<'a> {
     #[doc(alias = "UsdLuxLightAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<LightApiEdit, CannotApply> {
-        edit.apply(path, Self::SCHEMA, None)?;
-        Ok(LightApiEdit::from_path(path))
+        edit.apply_api(path, Self::SCHEMA, None)
+            .map(LightApiEdit::from_prim)
     }
 
     /// The USD name of [`Self::color`].
     pub const COLOR: &'static str = "inputs:color";
 
-    attribute! {
-        #[doc = "The color of the emitted light, in the rendering color space."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:color` (`color3f`; fallback `(1.0, 1.0, 1.0)`)."]
-        #[doc = "C++ read: `UsdLuxLightAPI::GetColorAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxLightAPI::GetColorAttr")]
-        #[doc(alias = "GetColorAttr")]
-        color, color_at, "inputs:color", [f32; 3], crate::value::read_float3
+    #[doc = "The color of the emitted light, in the rendering color space."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:color` (`color3f`; fallback `(1.0, 1.0, 1.0)`)."]
+    #[doc = "C++ read: `UsdLuxLightAPI::GetColorAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxLightAPI::GetColorAttr")]
+    #[doc(alias = "GetColorAttr")]
+    #[must_use]
+    pub fn color(&self) -> Option<[f32; 3]> {
+        self.read_value("inputs:color", crate::value::read_float3)
     }
+
+    #[doc = "[`Self::color`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn color_at(&self, time: f64, interp: ::layerstack::InterpolationType) -> Option<[f32; 3]> {
+        self.read_value_at("inputs:color", time, interp, crate::value::read_float3)
+    }
+
     /// The USD name of [`Self::color_temperature`].
     pub const COLOR_TEMPERATURE: &'static str = "inputs:colorTemperature";
 
-    attribute! {
-        #[doc = "The color temperature of the light, in degrees Kelvin."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:colorTemperature` (`float`; fallback `6500.0`)."]
-        #[doc = "C++ read: `UsdLuxLightAPI::GetColorTemperatureAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxLightAPI::GetColorTemperatureAttr")]
-        #[doc(alias = "GetColorTemperatureAttr")]
-        color_temperature, color_temperature_at, "inputs:colorTemperature", f32, crate::value::read_float
+    #[doc = "The color temperature of the light, in degrees Kelvin."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:colorTemperature` (`float`; fallback `6500.0`)."]
+    #[doc = "C++ read: `UsdLuxLightAPI::GetColorTemperatureAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxLightAPI::GetColorTemperatureAttr")]
+    #[doc(alias = "GetColorTemperatureAttr")]
+    #[must_use]
+    pub fn color_temperature(&self) -> Option<f32> {
+        self.read_value("inputs:colorTemperature", crate::value::read_float)
     }
+
+    #[doc = "[`Self::color_temperature`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn color_temperature_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<f32> {
+        self.read_value_at(
+            "inputs:colorTemperature",
+            time,
+            interp,
+            crate::value::read_float,
+        )
+    }
+
     /// The USD name of [`Self::diffuse`].
     pub const DIFFUSE: &'static str = "inputs:diffuse";
 
-    attribute! {
-        #[doc = "A multiplier for the effect of this light on the diffuse response of materials."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:diffuse` (`float`; fallback `1.0`)."]
-        #[doc = "C++ read: `UsdLuxLightAPI::GetDiffuseAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxLightAPI::GetDiffuseAttr")]
-        #[doc(alias = "GetDiffuseAttr")]
-        diffuse, diffuse_at, "inputs:diffuse", f32, crate::value::read_float
+    #[doc = "A multiplier for the effect of this light on the diffuse response of materials."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:diffuse` (`float`; fallback `1.0`)."]
+    #[doc = "C++ read: `UsdLuxLightAPI::GetDiffuseAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxLightAPI::GetDiffuseAttr")]
+    #[doc(alias = "GetDiffuseAttr")]
+    #[must_use]
+    pub fn diffuse(&self) -> Option<f32> {
+        self.read_value("inputs:diffuse", crate::value::read_float)
     }
+
+    #[doc = "[`Self::diffuse`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn diffuse_at(&self, time: f64, interp: ::layerstack::InterpolationType) -> Option<f32> {
+        self.read_value_at("inputs:diffuse", time, interp, crate::value::read_float)
+    }
+
     /// The USD name of [`Self::enable_color_temperature`].
     pub const ENABLE_COLOR_TEMPERATURE: &'static str = "inputs:enableColorTemperature";
 
-    attribute! {
-        #[doc = "Controls whether colorTemperature is used."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:enableColorTemperature` (`bool`; fallback `false`)."]
-        #[doc = "C++ read: `UsdLuxLightAPI::GetEnableColorTemperatureAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxLightAPI::GetEnableColorTemperatureAttr")]
-        #[doc(alias = "GetEnableColorTemperatureAttr")]
-        enable_color_temperature, enable_color_temperature_at, "inputs:enableColorTemperature", bool, crate::value::read_bool
+    #[doc = "Controls whether colorTemperature is used."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:enableColorTemperature` (`bool`; fallback `false`)."]
+    #[doc = "C++ read: `UsdLuxLightAPI::GetEnableColorTemperatureAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxLightAPI::GetEnableColorTemperatureAttr")]
+    #[doc(alias = "GetEnableColorTemperatureAttr")]
+    #[must_use]
+    pub fn enable_color_temperature(&self) -> Option<bool> {
+        self.read_value("inputs:enableColorTemperature", crate::value::read_bool)
     }
+
+    #[doc = "[`Self::enable_color_temperature`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn enable_color_temperature_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<bool> {
+        self.read_value_at(
+            "inputs:enableColorTemperature",
+            time,
+            interp,
+            crate::value::read_bool,
+        )
+    }
+
     /// The USD name of [`Self::exposure`].
     pub const EXPOSURE: &'static str = "inputs:exposure";
 
-    attribute! {
-        #[doc = "Exposure setting of the light. Scales the brightness of the light exponentially."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:exposure` (`float`; fallback `0.0`)."]
-        #[doc = "C++ read: `UsdLuxLightAPI::GetExposureAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxLightAPI::GetExposureAttr")]
-        #[doc(alias = "GetExposureAttr")]
-        exposure, exposure_at, "inputs:exposure", f32, crate::value::read_float
+    #[doc = "Exposure setting of the light. Scales the brightness of the light exponentially."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:exposure` (`float`; fallback `0.0`)."]
+    #[doc = "C++ read: `UsdLuxLightAPI::GetExposureAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxLightAPI::GetExposureAttr")]
+    #[doc(alias = "GetExposureAttr")]
+    #[must_use]
+    pub fn exposure(&self) -> Option<f32> {
+        self.read_value("inputs:exposure", crate::value::read_float)
     }
+
+    #[doc = "[`Self::exposure`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn exposure_at(&self, time: f64, interp: ::layerstack::InterpolationType) -> Option<f32> {
+        self.read_value_at("inputs:exposure", time, interp, crate::value::read_float)
+    }
+
     /// The USD name of [`Self::intensity`].
     pub const INTENSITY: &'static str = "inputs:intensity";
 
-    attribute! {
-        #[doc = "The base intensity of the light. Scales the brightness of the light linearly."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:intensity` (`float`; fallback `1.0`)."]
-        #[doc = "C++ read: `UsdLuxLightAPI::GetIntensityAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxLightAPI::GetIntensityAttr")]
-        #[doc(alias = "GetIntensityAttr")]
-        intensity, intensity_at, "inputs:intensity", f32, crate::value::read_float
+    #[doc = "The base intensity of the light. Scales the brightness of the light linearly."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:intensity` (`float`; fallback `1.0`)."]
+    #[doc = "C++ read: `UsdLuxLightAPI::GetIntensityAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxLightAPI::GetIntensityAttr")]
+    #[doc(alias = "GetIntensityAttr")]
+    #[must_use]
+    pub fn intensity(&self) -> Option<f32> {
+        self.read_value("inputs:intensity", crate::value::read_float)
     }
+
+    #[doc = "[`Self::intensity`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn intensity_at(&self, time: f64, interp: ::layerstack::InterpolationType) -> Option<f32> {
+        self.read_value_at("inputs:intensity", time, interp, crate::value::read_float)
+    }
+
     /// The USD name of [`Self::normalize`].
     pub const NORMALIZE: &'static str = "inputs:normalize";
 
-    attribute! {
-        #[doc = "Controls if the light power should be normalized by the surface area of the light. If enabled, the light power remains constant if the light's area or angular size is changed."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:normalize` (`bool`; fallback `false`)."]
-        #[doc = "C++ read: `UsdLuxLightAPI::GetNormalizeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxLightAPI::GetNormalizeAttr")]
-        #[doc(alias = "GetNormalizeAttr")]
-        normalize, normalize_at, "inputs:normalize", bool, crate::value::read_bool
+    #[doc = "Controls if the light power should be normalized by the surface area of the light. If enabled, the light power remains constant if the light's area or angular size is changed."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:normalize` (`bool`; fallback `false`)."]
+    #[doc = "C++ read: `UsdLuxLightAPI::GetNormalizeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxLightAPI::GetNormalizeAttr")]
+    #[doc(alias = "GetNormalizeAttr")]
+    #[must_use]
+    pub fn normalize(&self) -> Option<bool> {
+        self.read_value("inputs:normalize", crate::value::read_bool)
     }
+
+    #[doc = "[`Self::normalize`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn normalize_at(&self, time: f64, interp: ::layerstack::InterpolationType) -> Option<bool> {
+        self.read_value_at("inputs:normalize", time, interp, crate::value::read_bool)
+    }
+
     /// The USD name of [`Self::specular`].
     pub const SPECULAR: &'static str = "inputs:specular";
 
-    attribute! {
-        #[doc = "A multiplier for the effect of this light on the specular response of materials."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:specular` (`float`; fallback `1.0`)."]
-        #[doc = "C++ read: `UsdLuxLightAPI::GetSpecularAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxLightAPI::GetSpecularAttr")]
-        #[doc(alias = "GetSpecularAttr")]
-        specular, specular_at, "inputs:specular", f32, crate::value::read_float
+    #[doc = "A multiplier for the effect of this light on the specular response of materials."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:specular` (`float`; fallback `1.0`)."]
+    #[doc = "C++ read: `UsdLuxLightAPI::GetSpecularAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxLightAPI::GetSpecularAttr")]
+    #[doc(alias = "GetSpecularAttr")]
+    #[must_use]
+    pub fn specular(&self) -> Option<f32> {
+        self.read_value("inputs:specular", crate::value::read_float)
     }
+
+    #[doc = "[`Self::specular`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn specular_at(&self, time: f64, interp: ::layerstack::InterpolationType) -> Option<f32> {
+        self.read_value_at("inputs:specular", time, interp, crate::value::read_float)
+    }
+
     /// The USD name of [`Self::filters`].
     pub const FILTERS: &'static str = "light:filters";
 
-    relationship! {
-        #[doc = "The set of light filters, if any, that apply to this light."]
-        #[doc = ""]
-        #[doc = "USD relationship `light:filters` (`rel`)."]
-        #[doc = "C++ read: `UsdLuxLightAPI::GetFiltersRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxLightAPI::GetFiltersRel")]
-        #[doc(alias = "GetFiltersRel")]
-        filters, "light:filters"
+    #[doc = "The set of light filters, if any, that apply to this light."]
+    #[doc = ""]
+    #[doc = "USD relationship `light:filters` (`rel`)."]
+    #[doc = "C++ read: `UsdLuxLightAPI::GetFiltersRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxLightAPI::GetFiltersRel")]
+    #[doc(alias = "GetFiltersRel")]
+    #[must_use]
+    pub fn filters(&self) -> ::alloc::vec::Vec<::layerstack::TargetPath> {
+        self.read_targets("light:filters")
     }
+
     /// The USD name of [`Self::material_sync_mode`].
     pub const MATERIAL_SYNC_MODE: &'static str = "light:materialSyncMode";
 
-    uniform_attribute! {
-        #[doc = "Specifies the lighting response of a material (if any) bound to the prim that has this schema applied."]
-        #[doc = ""]
-        #[doc = "USD attribute `light:materialSyncMode` (`token`, uniform; fallback `\"noMaterialResponse\"`)."]
-        #[doc = "C++ read: `UsdLuxLightAPI::GetMaterialSyncModeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxLightAPI::GetMaterialSyncModeAttr")]
-        #[doc(alias = "GetMaterialSyncModeAttr")]
-        material_sync_mode, "light:materialSyncMode", LightApiMaterialSyncMode, LightApiMaterialSyncMode::read
+    #[doc = "Specifies the lighting response of a material (if any) bound to the prim that has this schema applied."]
+    #[doc = ""]
+    #[doc = "USD attribute `light:materialSyncMode` (`token`, uniform; fallback `\"noMaterialResponse\"`)."]
+    #[doc = "C++ read: `UsdLuxLightAPI::GetMaterialSyncModeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxLightAPI::GetMaterialSyncModeAttr")]
+    #[doc(alias = "GetMaterialSyncModeAttr")]
+    #[must_use]
+    pub fn material_sync_mode(&self) -> Option<LightApiMaterialSyncMode> {
+        self.read_value("light:materialSyncMode", LightApiMaterialSyncMode::read)
     }
+
     /// The USD name of [`Self::shader_id`].
     pub const SHADER_ID: &'static str = "light:shaderId";
 
-    uniform_attribute! {
-        #[doc = "The shader ID for this light, if any."]
-        #[doc = ""]
-        #[doc = "USD attribute `light:shaderId` (`token`, uniform; fallback `\"\"`)."]
-        #[doc = "C++ read: `UsdLuxLightAPI::GetShaderIdAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxLightAPI::GetShaderIdAttr")]
-        #[doc(alias = "GetShaderIdAttr")]
-        shader_id, "light:shaderId", &'a str, crate::value::read_token
+    #[doc = "The shader ID for this light, if any."]
+    #[doc = ""]
+    #[doc = "USD attribute `light:shaderId` (`token`, uniform; fallback `\"\"`)."]
+    #[doc = "C++ read: `UsdLuxLightAPI::GetShaderIdAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxLightAPI::GetShaderIdAttr")]
+    #[doc(alias = "GetShaderIdAttr")]
+    #[must_use]
+    pub fn shader_id(&self) -> Option<&'a str> {
+        self.read_value("light:shaderId", crate::value::read_token)
     }
 }
 
@@ -1229,119 +1840,225 @@ impl LightApiEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
-        Self {
-            base: PrimEdit::new(path),
-        }
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whether or not it has the schema applied.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
+        Self { base: prim }
     }
 
-    set_attribute! {
-        #[doc = "The color of the emitted light, in the rendering color space."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:color` (`color3f`; fallback `(1.0, 1.0, 1.0)`)."]
-        #[doc = "C++ authoring: `UsdLuxLightAPI::CreateColorAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxLightAPI::CreateColorAttr")]
-        #[doc(alias = "CreateColorAttr")]
-        set_color, set_color_at, "inputs:color", [f32; 3], crate::value::write_float3
+    #[doc = "The color of the emitted light, in the rendering color space."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:color` (`color3f`; fallback `(1.0, 1.0, 1.0)`)."]
+    #[doc = "C++ authoring: `UsdLuxLightAPI::CreateColorAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxLightAPI::CreateColorAttr")]
+    #[doc(alias = "CreateColorAttr")]
+    pub fn set_color(&self, edit: &mut SchemaEdit<'_>, value: [f32; 3]) -> &Self {
+        let value = crate::value::write_float3(value, edit.tokens());
+        self.write_value(edit, "inputs:color", None, value);
+        self
     }
-    set_attribute! {
-        #[doc = "The color temperature of the light, in degrees Kelvin."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:colorTemperature` (`float`; fallback `6500.0`)."]
-        #[doc = "C++ authoring: `UsdLuxLightAPI::CreateColorTemperatureAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxLightAPI::CreateColorTemperatureAttr")]
-        #[doc(alias = "CreateColorTemperatureAttr")]
-        set_color_temperature, set_color_temperature_at, "inputs:colorTemperature", f32, crate::value::write_float
+
+    #[doc = "[`Self::set_color`] as a time sample at the time code `time`."]
+    pub fn set_color_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: [f32; 3]) -> &Self {
+        let value = crate::value::write_float3(value, edit.tokens());
+        self.write_value(edit, "inputs:color", Some(time), value);
+        self
     }
-    set_attribute! {
-        #[doc = "A multiplier for the effect of this light on the diffuse response of materials."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:diffuse` (`float`; fallback `1.0`)."]
-        #[doc = "C++ authoring: `UsdLuxLightAPI::CreateDiffuseAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxLightAPI::CreateDiffuseAttr")]
-        #[doc(alias = "CreateDiffuseAttr")]
-        set_diffuse, set_diffuse_at, "inputs:diffuse", f32, crate::value::write_float
+
+    #[doc = "The color temperature of the light, in degrees Kelvin."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:colorTemperature` (`float`; fallback `6500.0`)."]
+    #[doc = "C++ authoring: `UsdLuxLightAPI::CreateColorTemperatureAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxLightAPI::CreateColorTemperatureAttr")]
+    #[doc(alias = "CreateColorTemperatureAttr")]
+    pub fn set_color_temperature(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "inputs:colorTemperature", None, value);
+        self
     }
-    set_attribute! {
-        #[doc = "Controls whether colorTemperature is used."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:enableColorTemperature` (`bool`; fallback `false`)."]
-        #[doc = "C++ authoring: `UsdLuxLightAPI::CreateEnableColorTemperatureAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxLightAPI::CreateEnableColorTemperatureAttr")]
-        #[doc(alias = "CreateEnableColorTemperatureAttr")]
-        set_enable_color_temperature, set_enable_color_temperature_at, "inputs:enableColorTemperature", bool, crate::value::write_bool
+
+    #[doc = "[`Self::set_color_temperature`] as a time sample at the time code `time`."]
+    pub fn set_color_temperature_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: f32,
+    ) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "inputs:colorTemperature", Some(time), value);
+        self
     }
-    set_attribute! {
-        #[doc = "Exposure setting of the light. Scales the brightness of the light exponentially."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:exposure` (`float`; fallback `0.0`)."]
-        #[doc = "C++ authoring: `UsdLuxLightAPI::CreateExposureAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxLightAPI::CreateExposureAttr")]
-        #[doc(alias = "CreateExposureAttr")]
-        set_exposure, set_exposure_at, "inputs:exposure", f32, crate::value::write_float
+
+    #[doc = "A multiplier for the effect of this light on the diffuse response of materials."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:diffuse` (`float`; fallback `1.0`)."]
+    #[doc = "C++ authoring: `UsdLuxLightAPI::CreateDiffuseAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxLightAPI::CreateDiffuseAttr")]
+    #[doc(alias = "CreateDiffuseAttr")]
+    pub fn set_diffuse(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "inputs:diffuse", None, value);
+        self
     }
-    set_attribute! {
-        #[doc = "The base intensity of the light. Scales the brightness of the light linearly."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:intensity` (`float`; fallback `1.0`)."]
-        #[doc = "C++ authoring: `UsdLuxLightAPI::CreateIntensityAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxLightAPI::CreateIntensityAttr")]
-        #[doc(alias = "CreateIntensityAttr")]
-        set_intensity, set_intensity_at, "inputs:intensity", f32, crate::value::write_float
+
+    #[doc = "[`Self::set_diffuse`] as a time sample at the time code `time`."]
+    pub fn set_diffuse_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "inputs:diffuse", Some(time), value);
+        self
     }
-    set_attribute! {
-        #[doc = "Controls if the light power should be normalized by the surface area of the light. If enabled, the light power remains constant if the light's area or angular size is changed."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:normalize` (`bool`; fallback `false`)."]
-        #[doc = "C++ authoring: `UsdLuxLightAPI::CreateNormalizeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxLightAPI::CreateNormalizeAttr")]
-        #[doc(alias = "CreateNormalizeAttr")]
-        set_normalize, set_normalize_at, "inputs:normalize", bool, crate::value::write_bool
+
+    #[doc = "Controls whether colorTemperature is used."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:enableColorTemperature` (`bool`; fallback `false`)."]
+    #[doc = "C++ authoring: `UsdLuxLightAPI::CreateEnableColorTemperatureAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxLightAPI::CreateEnableColorTemperatureAttr")]
+    #[doc(alias = "CreateEnableColorTemperatureAttr")]
+    pub fn set_enable_color_temperature(&self, edit: &mut SchemaEdit<'_>, value: bool) -> &Self {
+        let value = crate::value::write_bool(value, edit.tokens());
+        self.write_value(edit, "inputs:enableColorTemperature", None, value);
+        self
     }
-    set_attribute! {
-        #[doc = "A multiplier for the effect of this light on the specular response of materials."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:specular` (`float`; fallback `1.0`)."]
-        #[doc = "C++ authoring: `UsdLuxLightAPI::CreateSpecularAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxLightAPI::CreateSpecularAttr")]
-        #[doc(alias = "CreateSpecularAttr")]
-        set_specular, set_specular_at, "inputs:specular", f32, crate::value::write_float
+
+    #[doc = "[`Self::set_enable_color_temperature`] as a time sample at the time code `time`."]
+    pub fn set_enable_color_temperature_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: bool,
+    ) -> &Self {
+        let value = crate::value::write_bool(value, edit.tokens());
+        self.write_value(edit, "inputs:enableColorTemperature", Some(time), value);
+        self
     }
-    set_relationship! {
-        #[doc = "The set of light filters, if any, that apply to this light."]
-        #[doc = ""]
-        #[doc = "USD relationship `light:filters` (`rel`)."]
-        #[doc = "C++ authoring: `UsdLuxLightAPI::CreateFiltersRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxLightAPI::CreateFiltersRel")]
-        #[doc(alias = "CreateFiltersRel")]
-        set_filters, "light:filters"
+
+    #[doc = "Exposure setting of the light. Scales the brightness of the light exponentially."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:exposure` (`float`; fallback `0.0`)."]
+    #[doc = "C++ authoring: `UsdLuxLightAPI::CreateExposureAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxLightAPI::CreateExposureAttr")]
+    #[doc(alias = "CreateExposureAttr")]
+    pub fn set_exposure(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "inputs:exposure", None, value);
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "Specifies the lighting response of a material (if any) bound to the prim that has this schema applied."]
-        #[doc = ""]
-        #[doc = "USD attribute `light:materialSyncMode` (`token`, uniform; fallback `\"noMaterialResponse\"`)."]
-        #[doc = "C++ authoring: `UsdLuxLightAPI::CreateMaterialSyncModeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxLightAPI::CreateMaterialSyncModeAttr")]
-        #[doc(alias = "CreateMaterialSyncModeAttr")]
-        set_material_sync_mode, "light:materialSyncMode", LightApiMaterialSyncMode, LightApiMaterialSyncMode::write
+
+    #[doc = "[`Self::set_exposure`] as a time sample at the time code `time`."]
+    pub fn set_exposure_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "inputs:exposure", Some(time), value);
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "The shader ID for this light, if any."]
-        #[doc = ""]
-        #[doc = "USD attribute `light:shaderId` (`token`, uniform; fallback `\"\"`)."]
-        #[doc = "C++ authoring: `UsdLuxLightAPI::CreateShaderIdAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxLightAPI::CreateShaderIdAttr")]
-        #[doc(alias = "CreateShaderIdAttr")]
-        set_shader_id, "light:shaderId", &str, crate::value::write_token
+
+    #[doc = "The base intensity of the light. Scales the brightness of the light linearly."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:intensity` (`float`; fallback `1.0`)."]
+    #[doc = "C++ authoring: `UsdLuxLightAPI::CreateIntensityAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxLightAPI::CreateIntensityAttr")]
+    #[doc(alias = "CreateIntensityAttr")]
+    pub fn set_intensity(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "inputs:intensity", None, value);
+        self
+    }
+
+    #[doc = "[`Self::set_intensity`] as a time sample at the time code `time`."]
+    pub fn set_intensity_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "inputs:intensity", Some(time), value);
+        self
+    }
+
+    #[doc = "Controls if the light power should be normalized by the surface area of the light. If enabled, the light power remains constant if the light's area or angular size is changed."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:normalize` (`bool`; fallback `false`)."]
+    #[doc = "C++ authoring: `UsdLuxLightAPI::CreateNormalizeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxLightAPI::CreateNormalizeAttr")]
+    #[doc(alias = "CreateNormalizeAttr")]
+    pub fn set_normalize(&self, edit: &mut SchemaEdit<'_>, value: bool) -> &Self {
+        let value = crate::value::write_bool(value, edit.tokens());
+        self.write_value(edit, "inputs:normalize", None, value);
+        self
+    }
+
+    #[doc = "[`Self::set_normalize`] as a time sample at the time code `time`."]
+    pub fn set_normalize_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: bool) -> &Self {
+        let value = crate::value::write_bool(value, edit.tokens());
+        self.write_value(edit, "inputs:normalize", Some(time), value);
+        self
+    }
+
+    #[doc = "A multiplier for the effect of this light on the specular response of materials."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:specular` (`float`; fallback `1.0`)."]
+    #[doc = "C++ authoring: `UsdLuxLightAPI::CreateSpecularAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxLightAPI::CreateSpecularAttr")]
+    #[doc(alias = "CreateSpecularAttr")]
+    pub fn set_specular(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "inputs:specular", None, value);
+        self
+    }
+
+    #[doc = "[`Self::set_specular`] as a time sample at the time code `time`."]
+    pub fn set_specular_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "inputs:specular", Some(time), value);
+        self
+    }
+
+    #[doc = "The set of light filters, if any, that apply to this light."]
+    #[doc = ""]
+    #[doc = "USD relationship `light:filters` (`rel`)."]
+    #[doc = "C++ authoring: `UsdLuxLightAPI::CreateFiltersRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxLightAPI::CreateFiltersRel")]
+    #[doc(alias = "CreateFiltersRel")]
+    pub fn set_filters(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        targets: &[::layerstack::TargetPath],
+    ) -> &Self {
+        self.write_targets(edit, "light:filters", targets);
+        self
+    }
+
+    #[doc = "Specifies the lighting response of a material (if any) bound to the prim that has this schema applied."]
+    #[doc = ""]
+    #[doc = "USD attribute `light:materialSyncMode` (`token`, uniform; fallback `\"noMaterialResponse\"`)."]
+    #[doc = "C++ authoring: `UsdLuxLightAPI::CreateMaterialSyncModeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxLightAPI::CreateMaterialSyncModeAttr")]
+    #[doc(alias = "CreateMaterialSyncModeAttr")]
+    pub fn set_material_sync_mode(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        value: LightApiMaterialSyncMode,
+    ) -> &Self {
+        let value = value.write(edit.tokens());
+        self.write_value(edit, "light:materialSyncMode", None, value);
+        self
+    }
+
+    #[doc = "The shader ID for this light, if any."]
+    #[doc = ""]
+    #[doc = "USD attribute `light:shaderId` (`token`, uniform; fallback `\"\"`)."]
+    #[doc = "C++ authoring: `UsdLuxLightAPI::CreateShaderIdAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxLightAPI::CreateShaderIdAttr")]
+    #[doc(alias = "CreateShaderIdAttr")]
+    pub fn set_shader_id(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
+        let value = crate::value::write_token(value, edit.tokens());
+        self.write_value(edit, "light:shaderId", None, value);
+        self
     }
 }
 
 #[doc = "A light filter is used to modify the effect of a light."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `LightFilter`, inheriting [`crate::usd_geom::Xformable`]. Construct it with [`LightFilter::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `LightFilter`, inheriting [`crate::usd_geom::Xformable`]. Construct it with [`LightFilter::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxLightFilter`."]
 #[doc(alias = "UsdLuxLightFilter")]
 #[derive(Clone, Copy, Debug)]
@@ -1368,19 +2085,24 @@ impl<'a> LightFilter<'a> {
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .is_a(path, Self::SCHEMA)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of `prim` as of the schema, without checking that it is
+    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// authors, and the schema's fallbacks only for a prim of the schema.
+    /// For the view of a schema built on this one.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self {
-            base: crate::usd_geom::Xformable::from_view(prim),
+            base: crate::usd_geom::Xformable::from_prim_unchecked(prim),
         }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> LightFilterEdit {
-        LightFilterEdit::from_path(self.path())
+        LightFilterEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Defines `path` as a new `def LightFilter` prim spec in the edit's target.
@@ -1391,21 +2113,21 @@ impl<'a> LightFilter<'a> {
     #[doc(alias = "UsdLuxLightFilter::Define")]
     #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> LightFilterEdit {
-        edit.define(path, Self::SCHEMA);
-        LightFilterEdit::from_path(path)
+        LightFilterEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
     }
 
     /// The USD name of [`Self::shader_id`].
     pub const SHADER_ID: &'static str = "lightFilter:shaderId";
 
-    uniform_attribute! {
-        #[doc = "The shader ID for a LightFilter (the fallback value is no shader ID)."]
-        #[doc = ""]
-        #[doc = "USD attribute `lightFilter:shaderId` (`token`, uniform; fallback `\"\"`)."]
-        #[doc = "C++ read: `UsdLuxLightFilter::GetShaderIdAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxLightFilter::GetShaderIdAttr")]
-        #[doc(alias = "GetShaderIdAttr")]
-        shader_id, "lightFilter:shaderId", &'a str, crate::value::read_token
+    #[doc = "The shader ID for a LightFilter (the fallback value is no shader ID)."]
+    #[doc = ""]
+    #[doc = "USD attribute `lightFilter:shaderId` (`token`, uniform; fallback `\"\"`)."]
+    #[doc = "C++ read: `UsdLuxLightFilter::GetShaderIdAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxLightFilter::GetShaderIdAttr")]
+    #[doc(alias = "GetShaderIdAttr")]
+    #[must_use]
+    pub fn shader_id(&self) -> Option<&'a str> {
+        self.read_value("lightFilter:shaderId", crate::value::read_token)
     }
 }
 
@@ -1429,41 +2151,87 @@ impl LightFilterEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whatever its type.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
         Self {
-            base: crate::usd_geom::XformableEdit::from_path(path),
+            base: crate::usd_geom::XformableEdit::from_prim(prim),
         }
     }
 
-    set_uniform_attribute! {
-        #[doc = "The shader ID for a LightFilter (the fallback value is no shader ID)."]
-        #[doc = ""]
-        #[doc = "USD attribute `lightFilter:shaderId` (`token`, uniform; fallback `\"\"`)."]
-        #[doc = "C++ authoring: `UsdLuxLightFilter::CreateShaderIdAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxLightFilter::CreateShaderIdAttr")]
-        #[doc(alias = "CreateShaderIdAttr")]
-        set_shader_id, "lightFilter:shaderId", &str, crate::value::write_token
+    #[doc = "The shader ID for a LightFilter (the fallback value is no shader ID)."]
+    #[doc = ""]
+    #[doc = "USD attribute `lightFilter:shaderId` (`token`, uniform; fallback `\"\"`)."]
+    #[doc = "C++ authoring: `UsdLuxLightFilter::CreateShaderIdAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxLightFilter::CreateShaderIdAttr")]
+    #[doc(alias = "CreateShaderIdAttr")]
+    pub fn set_shader_id(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
+        let value = crate::value::write_token(value, edit.tokens());
+        self.write_value(edit, "lightFilter:shaderId", None, value);
+        self
     }
 }
 
-token_enum! {
-    #[doc = "The tokens `lightList:cacheBehavior` allows."]
-    LightListApiLightListCacheBehavior {
-        #[doc = "`consumeAndHalt`"]
-        ConsumeAndHalt = "consumeAndHalt",
-        #[doc = "`consumeAndContinue`"]
-        ConsumeAndContinue = "consumeAndContinue",
-        #[doc = "`ignore`"]
-        Ignore = "ignore",
+#[doc = "The tokens `lightList:cacheBehavior` allows."]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum LightListApiLightListCacheBehavior {
+    #[doc = "`consumeAndHalt`"]
+    ConsumeAndHalt,
+    #[doc = "`consumeAndContinue`"]
+    ConsumeAndContinue,
+    #[doc = "`ignore`"]
+    Ignore,
+    /// A token the schema does not list: OpenUSD does not enforce
+    /// `allowedTokens`, so an authored value may be anything.
+    Other(::alloc::sync::Arc<str>),
+}
+
+impl LightListApiLightListCacheBehavior {
+    /// The tokens the schema allows, in its order.
+    pub const TOKENS: &'static [&'static str] = &["consumeAndHalt", "consumeAndContinue", "ignore"];
+
+    /// The value `token` names, `Other` when the schema does not
+    /// list it.
+    #[must_use]
+    pub fn from_token(token: &str) -> Self {
+        match token {
+            "consumeAndHalt" => Self::ConsumeAndHalt,
+            "consumeAndContinue" => Self::ConsumeAndContinue,
+            "ignore" => Self::Ignore,
+            other => Self::Other(::alloc::sync::Arc::from(other)),
+        }
+    }
+
+    /// The token this value is.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::ConsumeAndHalt => "consumeAndHalt",
+            Self::ConsumeAndContinue => "consumeAndContinue",
+            Self::Ignore => "ignore",
+            Self::Other(token) => token,
+        }
+    }
+
+    pub(crate) fn read(
+        value: &::layerstack::Value,
+        tokens: &::layerstack::TokenInterner,
+    ) -> Option<Self> {
+        crate::value::read_token(value, tokens).map(Self::from_token)
+    }
+
+    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+        crate::value::write_token(self.as_str(), tokens)
     }
 }
 
 #[doc = "Facilitates discovery and publishing of lights in a scene. Provides a mechanism to create and utilize a cache if needed."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `LightListAPI`. Get it with [`LightListApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `LightListAPI`. Get it with [`LightListApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxLightListAPI`."]
 #[doc(alias = "UsdLuxLightListAPI")]
 #[doc(alias = "LightListAPI")]
@@ -1492,17 +2260,22 @@ impl<'a> LightListApi<'a> {
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of the schema on `prim`, without checking that the prim
+    /// has it applied (`HasAPI`), as [`Self::get`] does: a getter reads
+    /// what the prim authors, and the schema's fallbacks only for a
+    /// prim with the schema applied. For a built-in's view.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self { base: prim }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> LightListApiEdit {
-        LightListApiEdit::from_path(self.path())
+        LightListApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
@@ -1516,33 +2289,54 @@ impl<'a> LightListApi<'a> {
     #[doc(alias = "UsdLuxLightListAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<LightListApiEdit, CannotApply> {
-        edit.apply(path, Self::SCHEMA, None)?;
-        Ok(LightListApiEdit::from_path(path))
+        edit.apply_api(path, Self::SCHEMA, None)
+            .map(LightListApiEdit::from_prim)
     }
 
     /// The USD name of [`Self::light_list`].
     pub const LIGHT_LIST: &'static str = "lightList";
 
-    relationship! {
-        #[doc = "A list of relationships to lights, that describe the light list for a model hierarchy prim with this schema applied. If empty and used as a cached list, this indicates no lights are present."]
-        #[doc = ""]
-        #[doc = "USD relationship `lightList` (`rel`)."]
-        #[doc = "C++ read: `UsdLuxLightListAPI::GetLightListRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxLightListAPI::GetLightListRel")]
-        #[doc(alias = "GetLightListRel")]
-        light_list, "lightList"
+    #[doc = "A list of relationships to lights, that describe the light list for a model hierarchy prim with this schema applied. If empty and used as a cached list, this indicates no lights are present."]
+    #[doc = ""]
+    #[doc = "USD relationship `lightList` (`rel`)."]
+    #[doc = "C++ read: `UsdLuxLightListAPI::GetLightListRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxLightListAPI::GetLightListRel")]
+    #[doc(alias = "GetLightListRel")]
+    #[must_use]
+    pub fn light_list(&self) -> ::alloc::vec::Vec<::layerstack::TargetPath> {
+        self.read_targets("lightList")
     }
+
     /// The USD name of [`Self::light_list_cache_behavior`].
     pub const LIGHT_LIST_CACHE_BEHAVIOR: &'static str = "lightList:cacheBehavior";
 
-    attribute! {
-        #[doc = "Controls how the cached light list should be interpreted: consumeAndHalt, consumeAndContinue, or ignore."]
-        #[doc = ""]
-        #[doc = "USD attribute `lightList:cacheBehavior` (`token`)."]
-        #[doc = "C++ read: `UsdLuxLightListAPI::GetLightListCacheBehaviorAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxLightListAPI::GetLightListCacheBehaviorAttr")]
-        #[doc(alias = "GetLightListCacheBehaviorAttr")]
-        light_list_cache_behavior, light_list_cache_behavior_at, "lightList:cacheBehavior", LightListApiLightListCacheBehavior, LightListApiLightListCacheBehavior::read
+    #[doc = "Controls how the cached light list should be interpreted: consumeAndHalt, consumeAndContinue, or ignore."]
+    #[doc = ""]
+    #[doc = "USD attribute `lightList:cacheBehavior` (`token`)."]
+    #[doc = "C++ read: `UsdLuxLightListAPI::GetLightListCacheBehaviorAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxLightListAPI::GetLightListCacheBehaviorAttr")]
+    #[doc(alias = "GetLightListCacheBehaviorAttr")]
+    #[must_use]
+    pub fn light_list_cache_behavior(&self) -> Option<LightListApiLightListCacheBehavior> {
+        self.read_value(
+            "lightList:cacheBehavior",
+            LightListApiLightListCacheBehavior::read,
+        )
+    }
+
+    #[doc = "[`Self::light_list_cache_behavior`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn light_list_cache_behavior_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<LightListApiLightListCacheBehavior> {
+        self.read_value_at(
+            "lightList:cacheBehavior",
+            time,
+            interp,
+            LightListApiLightListCacheBehavior::read,
+        )
     }
 }
 
@@ -1566,50 +2360,116 @@ impl LightListApiEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
-        Self {
-            base: PrimEdit::new(path),
-        }
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whether or not it has the schema applied.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
+        Self { base: prim }
     }
 
-    set_relationship! {
-        #[doc = "A list of relationships to lights, that describe the light list for a model hierarchy prim with this schema applied. If empty and used as a cached list, this indicates no lights are present."]
-        #[doc = ""]
-        #[doc = "USD relationship `lightList` (`rel`)."]
-        #[doc = "C++ authoring: `UsdLuxLightListAPI::CreateLightListRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxLightListAPI::CreateLightListRel")]
-        #[doc(alias = "CreateLightListRel")]
-        set_light_list, "lightList"
+    #[doc = "A list of relationships to lights, that describe the light list for a model hierarchy prim with this schema applied. If empty and used as a cached list, this indicates no lights are present."]
+    #[doc = ""]
+    #[doc = "USD relationship `lightList` (`rel`)."]
+    #[doc = "C++ authoring: `UsdLuxLightListAPI::CreateLightListRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxLightListAPI::CreateLightListRel")]
+    #[doc(alias = "CreateLightListRel")]
+    pub fn set_light_list(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        targets: &[::layerstack::TargetPath],
+    ) -> &Self {
+        self.write_targets(edit, "lightList", targets);
+        self
     }
-    set_attribute! {
-        #[doc = "Controls how the cached light list should be interpreted: consumeAndHalt, consumeAndContinue, or ignore."]
-        #[doc = ""]
-        #[doc = "USD attribute `lightList:cacheBehavior` (`token`)."]
-        #[doc = "C++ authoring: `UsdLuxLightListAPI::CreateLightListCacheBehaviorAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxLightListAPI::CreateLightListCacheBehaviorAttr")]
-        #[doc(alias = "CreateLightListCacheBehaviorAttr")]
-        set_light_list_cache_behavior, set_light_list_cache_behavior_at, "lightList:cacheBehavior", LightListApiLightListCacheBehavior, LightListApiLightListCacheBehavior::write
+
+    #[doc = "Controls how the cached light list should be interpreted: consumeAndHalt, consumeAndContinue, or ignore."]
+    #[doc = ""]
+    #[doc = "USD attribute `lightList:cacheBehavior` (`token`)."]
+    #[doc = "C++ authoring: `UsdLuxLightListAPI::CreateLightListCacheBehaviorAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxLightListAPI::CreateLightListCacheBehaviorAttr")]
+    #[doc(alias = "CreateLightListCacheBehaviorAttr")]
+    pub fn set_light_list_cache_behavior(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        value: LightListApiLightListCacheBehavior,
+    ) -> &Self {
+        let value = value.write(edit.tokens());
+        self.write_value(edit, "lightList:cacheBehavior", None, value);
+        self
+    }
+
+    #[doc = "[`Self::set_light_list_cache_behavior`] as a time sample at the time code `time`."]
+    pub fn set_light_list_cache_behavior_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: LightListApiLightListCacheBehavior,
+    ) -> &Self {
+        let value = value.write(edit.tokens());
+        self.write_value(edit, "lightList:cacheBehavior", Some(time), value);
+        self
     }
 }
 
-token_enum! {
-    #[doc = "The tokens `lightList:cacheBehavior` allows."]
-    ListApiLightListCacheBehavior {
-        #[doc = "`consumeAndHalt`"]
-        ConsumeAndHalt = "consumeAndHalt",
-        #[doc = "`consumeAndContinue`"]
-        ConsumeAndContinue = "consumeAndContinue",
-        #[doc = "`ignore`"]
-        Ignore = "ignore",
+#[doc = "The tokens `lightList:cacheBehavior` allows."]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum ListApiLightListCacheBehavior {
+    #[doc = "`consumeAndHalt`"]
+    ConsumeAndHalt,
+    #[doc = "`consumeAndContinue`"]
+    ConsumeAndContinue,
+    #[doc = "`ignore`"]
+    Ignore,
+    /// A token the schema does not list: OpenUSD does not enforce
+    /// `allowedTokens`, so an authored value may be anything.
+    Other(::alloc::sync::Arc<str>),
+}
+
+impl ListApiLightListCacheBehavior {
+    /// The tokens the schema allows, in its order.
+    pub const TOKENS: &'static [&'static str] = &["consumeAndHalt", "consumeAndContinue", "ignore"];
+
+    /// The value `token` names, `Other` when the schema does not
+    /// list it.
+    #[must_use]
+    pub fn from_token(token: &str) -> Self {
+        match token {
+            "consumeAndHalt" => Self::ConsumeAndHalt,
+            "consumeAndContinue" => Self::ConsumeAndContinue,
+            "ignore" => Self::Ignore,
+            other => Self::Other(::alloc::sync::Arc::from(other)),
+        }
+    }
+
+    /// The token this value is.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::ConsumeAndHalt => "consumeAndHalt",
+            Self::ConsumeAndContinue => "consumeAndContinue",
+            Self::Ignore => "ignore",
+            Self::Other(token) => token,
+        }
+    }
+
+    pub(crate) fn read(
+        value: &::layerstack::Value,
+        tokens: &::layerstack::TokenInterner,
+    ) -> Option<Self> {
+        crate::value::read_token(value, tokens).map(Self::from_token)
+    }
+
+    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+        crate::value::write_token(self.as_str(), tokens)
     }
 }
 
 #[doc = "Facilitates discovery and publishing of lights in a scene. This schema is deprecated and LightListAPI should be used instead."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `ListAPI`. Get it with [`ListApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `ListAPI`. Get it with [`ListApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxListAPI`."]
 #[doc(alias = "UsdLuxListAPI")]
 #[doc(alias = "ListAPI")]
@@ -1638,17 +2498,22 @@ impl<'a> ListApi<'a> {
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of the schema on `prim`, without checking that the prim
+    /// has it applied (`HasAPI`), as [`Self::get`] does: a getter reads
+    /// what the prim authors, and the schema's fallbacks only for a
+    /// prim with the schema applied. For a built-in's view.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self { base: prim }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> ListApiEdit {
-        ListApiEdit::from_path(self.path())
+        ListApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
@@ -1662,33 +2527,54 @@ impl<'a> ListApi<'a> {
     #[doc(alias = "UsdLuxListAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<ListApiEdit, CannotApply> {
-        edit.apply(path, Self::SCHEMA, None)?;
-        Ok(ListApiEdit::from_path(path))
+        edit.apply_api(path, Self::SCHEMA, None)
+            .map(ListApiEdit::from_prim)
     }
 
     /// The USD name of [`Self::light_list`].
     pub const LIGHT_LIST: &'static str = "lightList";
 
-    relationship! {
-        #[doc = "A list of relationships to lights, that describe the light list for a model hierarchy prim with this schema applied. If empty and used as a cached list, this indicates no lights are present."]
-        #[doc = ""]
-        #[doc = "USD relationship `lightList` (`rel`)."]
-        #[doc = "C++ read: `UsdLuxListAPI::GetLightListRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxListAPI::GetLightListRel")]
-        #[doc(alias = "GetLightListRel")]
-        light_list, "lightList"
+    #[doc = "A list of relationships to lights, that describe the light list for a model hierarchy prim with this schema applied. If empty and used as a cached list, this indicates no lights are present."]
+    #[doc = ""]
+    #[doc = "USD relationship `lightList` (`rel`)."]
+    #[doc = "C++ read: `UsdLuxListAPI::GetLightListRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxListAPI::GetLightListRel")]
+    #[doc(alias = "GetLightListRel")]
+    #[must_use]
+    pub fn light_list(&self) -> ::alloc::vec::Vec<::layerstack::TargetPath> {
+        self.read_targets("lightList")
     }
+
     /// The USD name of [`Self::light_list_cache_behavior`].
     pub const LIGHT_LIST_CACHE_BEHAVIOR: &'static str = "lightList:cacheBehavior";
 
-    attribute! {
-        #[doc = "Controls how the cached light list should be interpreted: consumeAndHalt, consumeAndContinue, or ignore."]
-        #[doc = ""]
-        #[doc = "USD attribute `lightList:cacheBehavior` (`token`)."]
-        #[doc = "C++ read: `UsdLuxListAPI::GetLightListCacheBehaviorAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxListAPI::GetLightListCacheBehaviorAttr")]
-        #[doc(alias = "GetLightListCacheBehaviorAttr")]
-        light_list_cache_behavior, light_list_cache_behavior_at, "lightList:cacheBehavior", ListApiLightListCacheBehavior, ListApiLightListCacheBehavior::read
+    #[doc = "Controls how the cached light list should be interpreted: consumeAndHalt, consumeAndContinue, or ignore."]
+    #[doc = ""]
+    #[doc = "USD attribute `lightList:cacheBehavior` (`token`)."]
+    #[doc = "C++ read: `UsdLuxListAPI::GetLightListCacheBehaviorAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxListAPI::GetLightListCacheBehaviorAttr")]
+    #[doc(alias = "GetLightListCacheBehaviorAttr")]
+    #[must_use]
+    pub fn light_list_cache_behavior(&self) -> Option<ListApiLightListCacheBehavior> {
+        self.read_value(
+            "lightList:cacheBehavior",
+            ListApiLightListCacheBehavior::read,
+        )
+    }
+
+    #[doc = "[`Self::light_list_cache_behavior`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn light_list_cache_behavior_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<ListApiLightListCacheBehavior> {
+        self.read_value_at(
+            "lightList:cacheBehavior",
+            time,
+            interp,
+            ListApiLightListCacheBehavior::read,
+        )
     }
 }
 
@@ -1712,38 +2598,63 @@ impl ListApiEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
-        Self {
-            base: PrimEdit::new(path),
-        }
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whether or not it has the schema applied.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
+        Self { base: prim }
     }
 
-    set_relationship! {
-        #[doc = "A list of relationships to lights, that describe the light list for a model hierarchy prim with this schema applied. If empty and used as a cached list, this indicates no lights are present."]
-        #[doc = ""]
-        #[doc = "USD relationship `lightList` (`rel`)."]
-        #[doc = "C++ authoring: `UsdLuxListAPI::CreateLightListRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxListAPI::CreateLightListRel")]
-        #[doc(alias = "CreateLightListRel")]
-        set_light_list, "lightList"
+    #[doc = "A list of relationships to lights, that describe the light list for a model hierarchy prim with this schema applied. If empty and used as a cached list, this indicates no lights are present."]
+    #[doc = ""]
+    #[doc = "USD relationship `lightList` (`rel`)."]
+    #[doc = "C++ authoring: `UsdLuxListAPI::CreateLightListRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxListAPI::CreateLightListRel")]
+    #[doc(alias = "CreateLightListRel")]
+    pub fn set_light_list(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        targets: &[::layerstack::TargetPath],
+    ) -> &Self {
+        self.write_targets(edit, "lightList", targets);
+        self
     }
-    set_attribute! {
-        #[doc = "Controls how the cached light list should be interpreted: consumeAndHalt, consumeAndContinue, or ignore."]
-        #[doc = ""]
-        #[doc = "USD attribute `lightList:cacheBehavior` (`token`)."]
-        #[doc = "C++ authoring: `UsdLuxListAPI::CreateLightListCacheBehaviorAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxListAPI::CreateLightListCacheBehaviorAttr")]
-        #[doc(alias = "CreateLightListCacheBehaviorAttr")]
-        set_light_list_cache_behavior, set_light_list_cache_behavior_at, "lightList:cacheBehavior", ListApiLightListCacheBehavior, ListApiLightListCacheBehavior::write
+
+    #[doc = "Controls how the cached light list should be interpreted: consumeAndHalt, consumeAndContinue, or ignore."]
+    #[doc = ""]
+    #[doc = "USD attribute `lightList:cacheBehavior` (`token`)."]
+    #[doc = "C++ authoring: `UsdLuxListAPI::CreateLightListCacheBehaviorAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxListAPI::CreateLightListCacheBehaviorAttr")]
+    #[doc(alias = "CreateLightListCacheBehaviorAttr")]
+    pub fn set_light_list_cache_behavior(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        value: ListApiLightListCacheBehavior,
+    ) -> &Self {
+        let value = value.write(edit.tokens());
+        self.write_value(edit, "lightList:cacheBehavior", None, value);
+        self
+    }
+
+    #[doc = "[`Self::set_light_list_cache_behavior`] as a time sample at the time code `time`."]
+    pub fn set_light_list_cache_behavior_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: ListApiLightListCacheBehavior,
+    ) -> &Self {
+        let value = value.write(edit.tokens());
+        self.write_value(edit, "lightList:cacheBehavior", Some(time), value);
+        self
     }
 }
 
 #[doc = "Applies light behavior to a mesh."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `MeshLightAPI`. Get it with [`MeshLightApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `MeshLightAPI`. Get it with [`MeshLightApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxMeshLightAPI`."]
 #[doc(alias = "UsdLuxMeshLightAPI")]
 #[doc(alias = "MeshLightAPI")]
@@ -1772,17 +2683,22 @@ impl<'a> MeshLightApi<'a> {
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of the schema on `prim`, without checking that the prim
+    /// has it applied (`HasAPI`), as [`Self::get`] does: a getter reads
+    /// what the prim authors, and the schema's fallbacks only for a
+    /// prim with the schema applied. For a built-in's view.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self { base: prim }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> MeshLightApiEdit {
-        MeshLightApiEdit::from_path(self.path())
+        MeshLightApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
@@ -1796,8 +2712,8 @@ impl<'a> MeshLightApi<'a> {
     #[doc(alias = "UsdLuxMeshLightAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<MeshLightApiEdit, CannotApply> {
-        edit.apply(path, Self::SCHEMA, None)?;
-        Ok(MeshLightApiEdit::from_path(path))
+        edit.apply_api(path, Self::SCHEMA, None)
+            .map(MeshLightApiEdit::from_prim)
     }
 }
 
@@ -1821,19 +2737,20 @@ impl MeshLightApiEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
-        Self {
-            base: PrimEdit::new(path),
-        }
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whether or not it has the schema applied.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
+        Self { base: prim }
     }
 }
 
 #[doc = "A base class used by intrinsic lights. Not intended to be used directly."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's abstract typed schema `NonboundableLightBase`, inheriting [`crate::usd_geom::Xformable`]. Construct it with [`NonboundableLightBase::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's abstract typed schema `NonboundableLightBase`, inheriting [`crate::usd_geom::Xformable`]. Construct it with [`NonboundableLightBase::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxNonboundableLightBase`."]
 #[doc(alias = "UsdLuxNonboundableLightBase")]
 #[derive(Clone, Copy, Debug)]
@@ -1860,25 +2777,30 @@ impl<'a> NonboundableLightBase<'a> {
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .is_a(path, Self::SCHEMA)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of `prim` as of the schema, without checking that it is
+    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// authors, and the schema's fallbacks only for a prim of the schema.
+    /// For the view of a schema built on this one.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self {
-            base: crate::usd_geom::Xformable::from_view(prim),
+            base: crate::usd_geom::Xformable::from_prim_unchecked(prim),
         }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> NonboundableLightBaseEdit {
-        NonboundableLightBaseEdit::from_path(self.path())
+        NonboundableLightBaseEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     #[doc = "The prim's built-in `LightAPI`, which every `NonboundableLightBase` has."]
     #[must_use]
     pub fn light_api(&self) -> LightApi<'a> {
-        LightApi::from_view(PrimView::new(self.scene(), self.path()))
+        LightApi::from_prim_unchecked(PrimView::new(self.scene(), self.path()))
     }
 }
 
@@ -1902,25 +2824,28 @@ impl NonboundableLightBaseEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whatever its type.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
         Self {
-            base: crate::usd_geom::XformableEdit::from_path(path),
+            base: crate::usd_geom::XformableEdit::from_prim(prim),
         }
     }
 
     #[doc = "An edit handle for the prim's built-in `LightAPI`."]
     #[must_use]
     pub fn light_api(&self) -> LightApiEdit {
-        LightApiEdit::from_path(self.path())
+        LightApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 }
 
 #[doc = "A light that provides properties to allow it to identify an external Sdr shader node."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `PluginLight`, inheriting [`crate::usd_geom::Xformable`]. Construct it with [`PluginLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `PluginLight`, inheriting [`crate::usd_geom::Xformable`]. Construct it with [`PluginLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxPluginLight`."]
 #[doc(alias = "UsdLuxPluginLight")]
 #[derive(Clone, Copy, Debug)]
@@ -1947,19 +2872,24 @@ impl<'a> PluginLight<'a> {
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .is_a(path, Self::SCHEMA)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of `prim` as of the schema, without checking that it is
+    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// authors, and the schema's fallbacks only for a prim of the schema.
+    /// For the view of a schema built on this one.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self {
-            base: crate::usd_geom::Xformable::from_view(prim),
+            base: crate::usd_geom::Xformable::from_prim_unchecked(prim),
         }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> PluginLightEdit {
-        PluginLightEdit::from_path(self.path())
+        PluginLightEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Defines `path` as a new `def PluginLight` prim spec in the edit's target.
@@ -1970,20 +2900,19 @@ impl<'a> PluginLight<'a> {
     #[doc(alias = "UsdLuxPluginLight::Define")]
     #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> PluginLightEdit {
-        edit.define(path, Self::SCHEMA);
-        PluginLightEdit::from_path(path)
+        PluginLightEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
     }
 
     #[doc = "The prim's built-in `NodeDefAPI`, which every `PluginLight` has."]
     #[must_use]
     pub fn node_def_api(&self) -> crate::usd_shade::NodeDefApi<'a> {
-        crate::usd_shade::NodeDefApi::from_view(PrimView::new(self.scene(), self.path()))
+        crate::usd_shade::NodeDefApi::from_prim_unchecked(PrimView::new(self.scene(), self.path()))
     }
 
     #[doc = "The prim's built-in `LightAPI`, which every `PluginLight` has."]
     #[must_use]
     pub fn light_api(&self) -> LightApi<'a> {
-        LightApi::from_view(PrimView::new(self.scene(), self.path()))
+        LightApi::from_prim_unchecked(PrimView::new(self.scene(), self.path()))
     }
 }
 
@@ -2007,31 +2936,34 @@ impl PluginLightEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whatever its type.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
         Self {
-            base: crate::usd_geom::XformableEdit::from_path(path),
+            base: crate::usd_geom::XformableEdit::from_prim(prim),
         }
     }
 
     #[doc = "An edit handle for the prim's built-in `NodeDefAPI`."]
     #[must_use]
     pub fn node_def_api(&self) -> crate::usd_shade::NodeDefApiEdit {
-        crate::usd_shade::NodeDefApiEdit::from_path(self.path())
+        crate::usd_shade::NodeDefApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     #[doc = "An edit handle for the prim's built-in `LightAPI`."]
     #[must_use]
     pub fn light_api(&self) -> LightApiEdit {
-        LightApiEdit::from_path(self.path())
+        LightApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 }
 
 #[doc = "A Light filter that provides properties that allow it to identify an external SdrShadingNode definition, through UsdShadeNodeDefAPI, that can be provided to render delegates without the need to provide a schema definition for the light filter's type."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `PluginLightFilter`, inheriting [`LightFilter`]. Construct it with [`PluginLightFilter::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `PluginLightFilter`, inheriting [`LightFilter`]. Construct it with [`PluginLightFilter::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxPluginLightFilter`."]
 #[doc(alias = "UsdLuxPluginLightFilter")]
 #[derive(Clone, Copy, Debug)]
@@ -2058,19 +2990,24 @@ impl<'a> PluginLightFilter<'a> {
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .is_a(path, Self::SCHEMA)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of `prim` as of the schema, without checking that it is
+    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// authors, and the schema's fallbacks only for a prim of the schema.
+    /// For the view of a schema built on this one.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self {
-            base: LightFilter::from_view(prim),
+            base: LightFilter::from_prim_unchecked(prim),
         }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> PluginLightFilterEdit {
-        PluginLightFilterEdit::from_path(self.path())
+        PluginLightFilterEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Defines `path` as a new `def PluginLightFilter` prim spec in the edit's target.
@@ -2081,14 +3018,13 @@ impl<'a> PluginLightFilter<'a> {
     #[doc(alias = "UsdLuxPluginLightFilter::Define")]
     #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> PluginLightFilterEdit {
-        edit.define(path, Self::SCHEMA);
-        PluginLightFilterEdit::from_path(path)
+        PluginLightFilterEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
     }
 
     #[doc = "The prim's built-in `NodeDefAPI`, which every `PluginLightFilter` has."]
     #[must_use]
     pub fn node_def_api(&self) -> crate::usd_shade::NodeDefApi<'a> {
-        crate::usd_shade::NodeDefApi::from_view(PrimView::new(self.scene(), self.path()))
+        crate::usd_shade::NodeDefApi::from_prim_unchecked(PrimView::new(self.scene(), self.path()))
     }
 }
 
@@ -2112,25 +3048,28 @@ impl PluginLightFilterEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whatever its type.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
         Self {
-            base: LightFilterEdit::from_path(path),
+            base: LightFilterEdit::from_prim(prim),
         }
     }
 
     #[doc = "An edit handle for the prim's built-in `NodeDefAPI`."]
     #[must_use]
     pub fn node_def_api(&self) -> crate::usd_shade::NodeDefApiEdit {
-        crate::usd_shade::NodeDefApiEdit::from_path(self.path())
+        crate::usd_shade::NodeDefApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 }
 
 #[doc = "A rectangular portal in the local XY plane that guides sampling of a dome light (DomeLight, DomeLight_1)."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `PortalLight`, inheriting [`BoundableLightBase`]. Construct it with [`PortalLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `PortalLight`, inheriting [`BoundableLightBase`]. Construct it with [`PortalLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxPortalLight`."]
 #[doc(alias = "UsdLuxPortalLight")]
 #[derive(Clone, Copy, Debug)]
@@ -2157,19 +3096,24 @@ impl<'a> PortalLight<'a> {
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .is_a(path, Self::SCHEMA)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of `prim` as of the schema, without checking that it is
+    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// authors, and the schema's fallbacks only for a prim of the schema.
+    /// For the view of a schema built on this one.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self {
-            base: BoundableLightBase::from_view(prim),
+            base: BoundableLightBase::from_prim_unchecked(prim),
         }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> PortalLightEdit {
-        PortalLightEdit::from_path(self.path())
+        PortalLightEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Defines `path` as a new `def PortalLight` prim spec in the edit's target.
@@ -2180,33 +3124,47 @@ impl<'a> PortalLight<'a> {
     #[doc(alias = "UsdLuxPortalLight::Define")]
     #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> PortalLightEdit {
-        edit.define(path, Self::SCHEMA);
-        PortalLightEdit::from_path(path)
+        PortalLightEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
     }
 
     /// The USD name of [`Self::height`].
     pub const HEIGHT: &'static str = "inputs:height";
 
-    attribute! {
-        #[doc = "Specifies the height of the portal rectangle in the local Y axis."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:height` (`float`; fallback `1.0`)."]
-        #[doc = "C++ read: `UsdLuxPortalLight::GetHeightAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxPortalLight::GetHeightAttr")]
-        #[doc(alias = "GetHeightAttr")]
-        height, height_at, "inputs:height", f32, crate::value::read_float
+    #[doc = "Specifies the height of the portal rectangle in the local Y axis."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:height` (`float`; fallback `1.0`)."]
+    #[doc = "C++ read: `UsdLuxPortalLight::GetHeightAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxPortalLight::GetHeightAttr")]
+    #[doc(alias = "GetHeightAttr")]
+    #[must_use]
+    pub fn height(&self) -> Option<f32> {
+        self.read_value("inputs:height", crate::value::read_float)
     }
+
+    #[doc = "[`Self::height`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn height_at(&self, time: f64, interp: ::layerstack::InterpolationType) -> Option<f32> {
+        self.read_value_at("inputs:height", time, interp, crate::value::read_float)
+    }
+
     /// The USD name of [`Self::width`].
     pub const WIDTH: &'static str = "inputs:width";
 
-    attribute! {
-        #[doc = "Specifies the width of the portal rectangle in the local X axis."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:width` (`float`; fallback `1.0`)."]
-        #[doc = "C++ read: `UsdLuxPortalLight::GetWidthAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxPortalLight::GetWidthAttr")]
-        #[doc(alias = "GetWidthAttr")]
-        width, width_at, "inputs:width", f32, crate::value::read_float
+    #[doc = "Specifies the width of the portal rectangle in the local X axis."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:width` (`float`; fallback `1.0`)."]
+    #[doc = "C++ read: `UsdLuxPortalLight::GetWidthAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxPortalLight::GetWidthAttr")]
+    #[doc(alias = "GetWidthAttr")]
+    #[must_use]
+    pub fn width(&self) -> Option<f32> {
+        self.read_value("inputs:width", crate::value::read_float)
+    }
+
+    #[doc = "[`Self::width`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn width_at(&self, time: f64, interp: ::layerstack::InterpolationType) -> Option<f32> {
+        self.read_value_at("inputs:width", time, interp, crate::value::read_float)
     }
 }
 
@@ -2230,38 +3188,60 @@ impl PortalLightEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whatever its type.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
         Self {
-            base: BoundableLightBaseEdit::from_path(path),
+            base: BoundableLightBaseEdit::from_prim(prim),
         }
     }
 
-    set_attribute! {
-        #[doc = "Specifies the height of the portal rectangle in the local Y axis."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:height` (`float`; fallback `1.0`)."]
-        #[doc = "C++ authoring: `UsdLuxPortalLight::CreateHeightAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxPortalLight::CreateHeightAttr")]
-        #[doc(alias = "CreateHeightAttr")]
-        set_height, set_height_at, "inputs:height", f32, crate::value::write_float
+    #[doc = "Specifies the height of the portal rectangle in the local Y axis."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:height` (`float`; fallback `1.0`)."]
+    #[doc = "C++ authoring: `UsdLuxPortalLight::CreateHeightAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxPortalLight::CreateHeightAttr")]
+    #[doc(alias = "CreateHeightAttr")]
+    pub fn set_height(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "inputs:height", None, value);
+        self
     }
-    set_attribute! {
-        #[doc = "Specifies the width of the portal rectangle in the local X axis."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:width` (`float`; fallback `1.0`)."]
-        #[doc = "C++ authoring: `UsdLuxPortalLight::CreateWidthAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxPortalLight::CreateWidthAttr")]
-        #[doc(alias = "CreateWidthAttr")]
-        set_width, set_width_at, "inputs:width", f32, crate::value::write_float
+
+    #[doc = "[`Self::set_height`] as a time sample at the time code `time`."]
+    pub fn set_height_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "inputs:height", Some(time), value);
+        self
+    }
+
+    #[doc = "Specifies the width of the portal rectangle in the local X axis."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:width` (`float`; fallback `1.0`)."]
+    #[doc = "C++ authoring: `UsdLuxPortalLight::CreateWidthAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxPortalLight::CreateWidthAttr")]
+    #[doc(alias = "CreateWidthAttr")]
+    pub fn set_width(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "inputs:width", None, value);
+        self
+    }
+
+    #[doc = "[`Self::set_width`] as a time sample at the time code `time`."]
+    pub fn set_width_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "inputs:width", Some(time), value);
+        self
     }
 }
 
 #[doc = "A light that emits from one side of a rectangle (along the -Z axis), centered in the XY plane."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `RectLight`, inheriting [`BoundableLightBase`]. Construct it with [`RectLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `RectLight`, inheriting [`BoundableLightBase`]. Construct it with [`RectLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxRectLight`."]
 #[doc(alias = "UsdLuxRectLight")]
 #[derive(Clone, Copy, Debug)]
@@ -2288,19 +3268,24 @@ impl<'a> RectLight<'a> {
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .is_a(path, Self::SCHEMA)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of `prim` as of the schema, without checking that it is
+    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// authors, and the schema's fallbacks only for a prim of the schema.
+    /// For the view of a schema built on this one.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self {
-            base: BoundableLightBase::from_view(prim),
+            base: BoundableLightBase::from_prim_unchecked(prim),
         }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> RectLightEdit {
-        RectLightEdit::from_path(self.path())
+        RectLightEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Defines `path` as a new `def RectLight` prim spec in the edit's target.
@@ -2311,45 +3296,76 @@ impl<'a> RectLight<'a> {
     #[doc(alias = "UsdLuxRectLight::Define")]
     #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> RectLightEdit {
-        edit.define(path, Self::SCHEMA);
-        RectLightEdit::from_path(path)
+        RectLightEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
     }
 
     /// The USD name of [`Self::height`].
     pub const HEIGHT: &'static str = "inputs:height";
 
-    attribute! {
-        #[doc = "Specifies the height of the rectangle in the local Y axis."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:height` (`float`; fallback `1.0`)."]
-        #[doc = "C++ read: `UsdLuxRectLight::GetHeightAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxRectLight::GetHeightAttr")]
-        #[doc(alias = "GetHeightAttr")]
-        height, height_at, "inputs:height", f32, crate::value::read_float
+    #[doc = "Specifies the height of the rectangle in the local Y axis."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:height` (`float`; fallback `1.0`)."]
+    #[doc = "C++ read: `UsdLuxRectLight::GetHeightAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxRectLight::GetHeightAttr")]
+    #[doc(alias = "GetHeightAttr")]
+    #[must_use]
+    pub fn height(&self) -> Option<f32> {
+        self.read_value("inputs:height", crate::value::read_float)
     }
+
+    #[doc = "[`Self::height`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn height_at(&self, time: f64, interp: ::layerstack::InterpolationType) -> Option<f32> {
+        self.read_value_at("inputs:height", time, interp, crate::value::read_float)
+    }
+
     /// The USD name of [`Self::texture_file`].
     pub const TEXTURE_FILE: &'static str = "inputs:texture:file";
 
-    attribute! {
-        #[doc = "An optional color texture set on the rectangle."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:texture:file` (`asset`)."]
-        #[doc = "C++ read: `UsdLuxRectLight::GetTextureFileAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxRectLight::GetTextureFileAttr")]
-        #[doc(alias = "GetTextureFileAttr")]
-        texture_file, texture_file_at, "inputs:texture:file", ::alloc::sync::Arc<str>, crate::value::read_asset
+    #[doc = "An optional color texture set on the rectangle."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:texture:file` (`asset`)."]
+    #[doc = "C++ read: `UsdLuxRectLight::GetTextureFileAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxRectLight::GetTextureFileAttr")]
+    #[doc(alias = "GetTextureFileAttr")]
+    #[must_use]
+    pub fn texture_file(&self) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value("inputs:texture:file", crate::value::read_asset)
     }
+
+    #[doc = "[`Self::texture_file`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn texture_file_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value_at(
+            "inputs:texture:file",
+            time,
+            interp,
+            crate::value::read_asset,
+        )
+    }
+
     /// The USD name of [`Self::width`].
     pub const WIDTH: &'static str = "inputs:width";
 
-    attribute! {
-        #[doc = "Specifies the width of the rectangle in the local X axis."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:width` (`float`; fallback `1.0`)."]
-        #[doc = "C++ read: `UsdLuxRectLight::GetWidthAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxRectLight::GetWidthAttr")]
-        #[doc(alias = "GetWidthAttr")]
-        width, width_at, "inputs:width", f32, crate::value::read_float
+    #[doc = "Specifies the width of the rectangle in the local X axis."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:width` (`float`; fallback `1.0`)."]
+    #[doc = "C++ read: `UsdLuxRectLight::GetWidthAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxRectLight::GetWidthAttr")]
+    #[doc(alias = "GetWidthAttr")]
+    #[must_use]
+    pub fn width(&self) -> Option<f32> {
+        self.read_value("inputs:width", crate::value::read_float)
+    }
+
+    #[doc = "[`Self::width`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn width_at(&self, time: f64, interp: ::layerstack::InterpolationType) -> Option<f32> {
+        self.read_value_at("inputs:width", time, interp, crate::value::read_float)
     }
 }
 
@@ -2373,47 +3389,79 @@ impl RectLightEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whatever its type.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
         Self {
-            base: BoundableLightBaseEdit::from_path(path),
+            base: BoundableLightBaseEdit::from_prim(prim),
         }
     }
 
-    set_attribute! {
-        #[doc = "Specifies the height of the rectangle in the local Y axis."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:height` (`float`; fallback `1.0`)."]
-        #[doc = "C++ authoring: `UsdLuxRectLight::CreateHeightAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxRectLight::CreateHeightAttr")]
-        #[doc(alias = "CreateHeightAttr")]
-        set_height, set_height_at, "inputs:height", f32, crate::value::write_float
+    #[doc = "Specifies the height of the rectangle in the local Y axis."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:height` (`float`; fallback `1.0`)."]
+    #[doc = "C++ authoring: `UsdLuxRectLight::CreateHeightAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxRectLight::CreateHeightAttr")]
+    #[doc(alias = "CreateHeightAttr")]
+    pub fn set_height(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "inputs:height", None, value);
+        self
     }
-    set_attribute! {
-        #[doc = "An optional color texture set on the rectangle."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:texture:file` (`asset`)."]
-        #[doc = "C++ authoring: `UsdLuxRectLight::CreateTextureFileAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxRectLight::CreateTextureFileAttr")]
-        #[doc(alias = "CreateTextureFileAttr")]
-        set_texture_file, set_texture_file_at, "inputs:texture:file", &str, crate::value::write_asset
+
+    #[doc = "[`Self::set_height`] as a time sample at the time code `time`."]
+    pub fn set_height_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "inputs:height", Some(time), value);
+        self
     }
-    set_attribute! {
-        #[doc = "Specifies the width of the rectangle in the local X axis."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:width` (`float`; fallback `1.0`)."]
-        #[doc = "C++ authoring: `UsdLuxRectLight::CreateWidthAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxRectLight::CreateWidthAttr")]
-        #[doc(alias = "CreateWidthAttr")]
-        set_width, set_width_at, "inputs:width", f32, crate::value::write_float
+
+    #[doc = "An optional color texture set on the rectangle."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:texture:file` (`asset`)."]
+    #[doc = "C++ authoring: `UsdLuxRectLight::CreateTextureFileAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxRectLight::CreateTextureFileAttr")]
+    #[doc(alias = "CreateTextureFileAttr")]
+    pub fn set_texture_file(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
+        let value = crate::value::write_asset(value, edit.tokens());
+        self.write_value(edit, "inputs:texture:file", None, value);
+        self
+    }
+
+    #[doc = "[`Self::set_texture_file`] as a time sample at the time code `time`."]
+    pub fn set_texture_file_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &str) -> &Self {
+        let value = crate::value::write_asset(value, edit.tokens());
+        self.write_value(edit, "inputs:texture:file", Some(time), value);
+        self
+    }
+
+    #[doc = "Specifies the width of the rectangle in the local X axis."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:width` (`float`; fallback `1.0`)."]
+    #[doc = "C++ authoring: `UsdLuxRectLight::CreateWidthAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxRectLight::CreateWidthAttr")]
+    #[doc(alias = "CreateWidthAttr")]
+    pub fn set_width(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "inputs:width", None, value);
+        self
+    }
+
+    #[doc = "[`Self::set_width`] as a time sample at the time code `time`."]
+    pub fn set_width_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "inputs:width", Some(time), value);
+        self
     }
 }
 
 #[doc = "Controls to refine a light's shadow casting behavior. These are non-physical controls."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `ShadowAPI`. Get it with [`ShadowApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `ShadowAPI`. Get it with [`ShadowApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxShadowAPI`."]
 #[doc(alias = "UsdLuxShadowAPI")]
 #[doc(alias = "ShadowAPI")]
@@ -2442,17 +3490,22 @@ impl<'a> ShadowApi<'a> {
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of the schema on `prim`, without checking that the prim
+    /// has it applied (`HasAPI`), as [`Self::get`] does: a getter reads
+    /// what the prim authors, and the schema's fallbacks only for a
+    /// prim with the schema applied. For a built-in's view.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self { base: prim }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> ShadowApiEdit {
-        ShadowApiEdit::from_path(self.path())
+        ShadowApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
@@ -2466,69 +3519,153 @@ impl<'a> ShadowApi<'a> {
     #[doc(alias = "UsdLuxShadowAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<ShadowApiEdit, CannotApply> {
-        edit.apply(path, Self::SCHEMA, None)?;
-        Ok(ShadowApiEdit::from_path(path))
+        edit.apply_api(path, Self::SCHEMA, None)
+            .map(ShadowApiEdit::from_prim)
     }
 
     /// The USD name of [`Self::shadow_color`].
     pub const SHADOW_COLOR: &'static str = "inputs:shadow:color";
 
-    attribute! {
-        #[doc = "Specifies the color of the shadows cast by the light"]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:shadow:color` (`color3f`; fallback `(0.0, 0.0, 0.0)`)."]
-        #[doc = "C++ read: `UsdLuxShadowAPI::GetShadowColorAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxShadowAPI::GetShadowColorAttr")]
-        #[doc(alias = "GetShadowColorAttr")]
-        shadow_color, shadow_color_at, "inputs:shadow:color", [f32; 3], crate::value::read_float3
+    #[doc = "Specifies the color of the shadows cast by the light"]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:shadow:color` (`color3f`; fallback `(0.0, 0.0, 0.0)`)."]
+    #[doc = "C++ read: `UsdLuxShadowAPI::GetShadowColorAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxShadowAPI::GetShadowColorAttr")]
+    #[doc(alias = "GetShadowColorAttr")]
+    #[must_use]
+    pub fn shadow_color(&self) -> Option<[f32; 3]> {
+        self.read_value("inputs:shadow:color", crate::value::read_float3)
     }
+
+    #[doc = "[`Self::shadow_color`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn shadow_color_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<[f32; 3]> {
+        self.read_value_at(
+            "inputs:shadow:color",
+            time,
+            interp,
+            crate::value::read_float3,
+        )
+    }
+
     /// The USD name of [`Self::shadow_distance`].
     pub const SHADOW_DISTANCE: &'static str = "inputs:shadow:distance";
 
-    attribute! {
-        #[doc = "Specifies the maximum distance, measured between the occluder and the point on a surface, within which shadows are cast."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:shadow:distance` (`float`; fallback `-1.0`)."]
-        #[doc = "C++ read: `UsdLuxShadowAPI::GetShadowDistanceAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxShadowAPI::GetShadowDistanceAttr")]
-        #[doc(alias = "GetShadowDistanceAttr")]
-        shadow_distance, shadow_distance_at, "inputs:shadow:distance", f32, crate::value::read_float
+    #[doc = "Specifies the maximum distance, measured between the occluder and the point on a surface, within which shadows are cast."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:shadow:distance` (`float`; fallback `-1.0`)."]
+    #[doc = "C++ read: `UsdLuxShadowAPI::GetShadowDistanceAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxShadowAPI::GetShadowDistanceAttr")]
+    #[doc(alias = "GetShadowDistanceAttr")]
+    #[must_use]
+    pub fn shadow_distance(&self) -> Option<f32> {
+        self.read_value("inputs:shadow:distance", crate::value::read_float)
     }
+
+    #[doc = "[`Self::shadow_distance`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn shadow_distance_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<f32> {
+        self.read_value_at(
+            "inputs:shadow:distance",
+            time,
+            interp,
+            crate::value::read_float,
+        )
+    }
+
     /// The USD name of [`Self::shadow_enable`].
     pub const SHADOW_ENABLE: &'static str = "inputs:shadow:enable";
 
-    attribute! {
-        #[doc = "Enables or disables whether the light casts shadows."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:shadow:enable` (`bool`; fallback `true`)."]
-        #[doc = "C++ read: `UsdLuxShadowAPI::GetShadowEnableAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxShadowAPI::GetShadowEnableAttr")]
-        #[doc(alias = "GetShadowEnableAttr")]
-        shadow_enable, shadow_enable_at, "inputs:shadow:enable", bool, crate::value::read_bool
+    #[doc = "Enables or disables whether the light casts shadows."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:shadow:enable` (`bool`; fallback `true`)."]
+    #[doc = "C++ read: `UsdLuxShadowAPI::GetShadowEnableAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxShadowAPI::GetShadowEnableAttr")]
+    #[doc(alias = "GetShadowEnableAttr")]
+    #[must_use]
+    pub fn shadow_enable(&self) -> Option<bool> {
+        self.read_value("inputs:shadow:enable", crate::value::read_bool)
     }
+
+    #[doc = "[`Self::shadow_enable`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn shadow_enable_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<bool> {
+        self.read_value_at(
+            "inputs:shadow:enable",
+            time,
+            interp,
+            crate::value::read_bool,
+        )
+    }
+
     /// The USD name of [`Self::shadow_falloff`].
     pub const SHADOW_FALLOFF: &'static str = "inputs:shadow:falloff";
 
-    attribute! {
-        #[doc = "Specifies the size of the shadow falloff zone, within the maximum shadow distance."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:shadow:falloff` (`float`; fallback `-1.0`)."]
-        #[doc = "C++ read: `UsdLuxShadowAPI::GetShadowFalloffAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxShadowAPI::GetShadowFalloffAttr")]
-        #[doc(alias = "GetShadowFalloffAttr")]
-        shadow_falloff, shadow_falloff_at, "inputs:shadow:falloff", f32, crate::value::read_float
+    #[doc = "Specifies the size of the shadow falloff zone, within the maximum shadow distance."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:shadow:falloff` (`float`; fallback `-1.0`)."]
+    #[doc = "C++ read: `UsdLuxShadowAPI::GetShadowFalloffAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxShadowAPI::GetShadowFalloffAttr")]
+    #[doc(alias = "GetShadowFalloffAttr")]
+    #[must_use]
+    pub fn shadow_falloff(&self) -> Option<f32> {
+        self.read_value("inputs:shadow:falloff", crate::value::read_float)
     }
+
+    #[doc = "[`Self::shadow_falloff`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn shadow_falloff_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<f32> {
+        self.read_value_at(
+            "inputs:shadow:falloff",
+            time,
+            interp,
+            crate::value::read_float,
+        )
+    }
+
     /// The USD name of [`Self::shadow_falloff_gamma`].
     pub const SHADOW_FALLOFF_GAMMA: &'static str = "inputs:shadow:falloffGamma";
 
-    attribute! {
-        #[doc = "Controls the rate of falloff within the shadow falloff zone specified with `shadow:falloff`."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:shadow:falloffGamma` (`float`; fallback `1.0`)."]
-        #[doc = "C++ read: `UsdLuxShadowAPI::GetShadowFalloffGammaAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxShadowAPI::GetShadowFalloffGammaAttr")]
-        #[doc(alias = "GetShadowFalloffGammaAttr")]
-        shadow_falloff_gamma, shadow_falloff_gamma_at, "inputs:shadow:falloffGamma", f32, crate::value::read_float
+    #[doc = "Controls the rate of falloff within the shadow falloff zone specified with `shadow:falloff`."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:shadow:falloffGamma` (`float`; fallback `1.0`)."]
+    #[doc = "C++ read: `UsdLuxShadowAPI::GetShadowFalloffGammaAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxShadowAPI::GetShadowFalloffGammaAttr")]
+    #[doc(alias = "GetShadowFalloffGammaAttr")]
+    #[must_use]
+    pub fn shadow_falloff_gamma(&self) -> Option<f32> {
+        self.read_value("inputs:shadow:falloffGamma", crate::value::read_float)
+    }
+
+    #[doc = "[`Self::shadow_falloff_gamma`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn shadow_falloff_gamma_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<f32> {
+        self.read_value_at(
+            "inputs:shadow:falloffGamma",
+            time,
+            interp,
+            crate::value::read_float,
+        )
     }
 }
 
@@ -2552,65 +3689,130 @@ impl ShadowApiEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
-        Self {
-            base: PrimEdit::new(path),
-        }
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whether or not it has the schema applied.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
+        Self { base: prim }
     }
 
-    set_attribute! {
-        #[doc = "Specifies the color of the shadows cast by the light"]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:shadow:color` (`color3f`; fallback `(0.0, 0.0, 0.0)`)."]
-        #[doc = "C++ authoring: `UsdLuxShadowAPI::CreateShadowColorAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxShadowAPI::CreateShadowColorAttr")]
-        #[doc(alias = "CreateShadowColorAttr")]
-        set_shadow_color, set_shadow_color_at, "inputs:shadow:color", [f32; 3], crate::value::write_float3
+    #[doc = "Specifies the color of the shadows cast by the light"]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:shadow:color` (`color3f`; fallback `(0.0, 0.0, 0.0)`)."]
+    #[doc = "C++ authoring: `UsdLuxShadowAPI::CreateShadowColorAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxShadowAPI::CreateShadowColorAttr")]
+    #[doc(alias = "CreateShadowColorAttr")]
+    pub fn set_shadow_color(&self, edit: &mut SchemaEdit<'_>, value: [f32; 3]) -> &Self {
+        let value = crate::value::write_float3(value, edit.tokens());
+        self.write_value(edit, "inputs:shadow:color", None, value);
+        self
     }
-    set_attribute! {
-        #[doc = "Specifies the maximum distance, measured between the occluder and the point on a surface, within which shadows are cast."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:shadow:distance` (`float`; fallback `-1.0`)."]
-        #[doc = "C++ authoring: `UsdLuxShadowAPI::CreateShadowDistanceAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxShadowAPI::CreateShadowDistanceAttr")]
-        #[doc(alias = "CreateShadowDistanceAttr")]
-        set_shadow_distance, set_shadow_distance_at, "inputs:shadow:distance", f32, crate::value::write_float
+
+    #[doc = "[`Self::set_shadow_color`] as a time sample at the time code `time`."]
+    pub fn set_shadow_color_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: [f32; 3],
+    ) -> &Self {
+        let value = crate::value::write_float3(value, edit.tokens());
+        self.write_value(edit, "inputs:shadow:color", Some(time), value);
+        self
     }
-    set_attribute! {
-        #[doc = "Enables or disables whether the light casts shadows."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:shadow:enable` (`bool`; fallback `true`)."]
-        #[doc = "C++ authoring: `UsdLuxShadowAPI::CreateShadowEnableAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxShadowAPI::CreateShadowEnableAttr")]
-        #[doc(alias = "CreateShadowEnableAttr")]
-        set_shadow_enable, set_shadow_enable_at, "inputs:shadow:enable", bool, crate::value::write_bool
+
+    #[doc = "Specifies the maximum distance, measured between the occluder and the point on a surface, within which shadows are cast."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:shadow:distance` (`float`; fallback `-1.0`)."]
+    #[doc = "C++ authoring: `UsdLuxShadowAPI::CreateShadowDistanceAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxShadowAPI::CreateShadowDistanceAttr")]
+    #[doc(alias = "CreateShadowDistanceAttr")]
+    pub fn set_shadow_distance(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "inputs:shadow:distance", None, value);
+        self
     }
-    set_attribute! {
-        #[doc = "Specifies the size of the shadow falloff zone, within the maximum shadow distance."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:shadow:falloff` (`float`; fallback `-1.0`)."]
-        #[doc = "C++ authoring: `UsdLuxShadowAPI::CreateShadowFalloffAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxShadowAPI::CreateShadowFalloffAttr")]
-        #[doc(alias = "CreateShadowFalloffAttr")]
-        set_shadow_falloff, set_shadow_falloff_at, "inputs:shadow:falloff", f32, crate::value::write_float
+
+    #[doc = "[`Self::set_shadow_distance`] as a time sample at the time code `time`."]
+    pub fn set_shadow_distance_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: f32,
+    ) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "inputs:shadow:distance", Some(time), value);
+        self
     }
-    set_attribute! {
-        #[doc = "Controls the rate of falloff within the shadow falloff zone specified with `shadow:falloff`."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:shadow:falloffGamma` (`float`; fallback `1.0`)."]
-        #[doc = "C++ authoring: `UsdLuxShadowAPI::CreateShadowFalloffGammaAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxShadowAPI::CreateShadowFalloffGammaAttr")]
-        #[doc(alias = "CreateShadowFalloffGammaAttr")]
-        set_shadow_falloff_gamma, set_shadow_falloff_gamma_at, "inputs:shadow:falloffGamma", f32, crate::value::write_float
+
+    #[doc = "Enables or disables whether the light casts shadows."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:shadow:enable` (`bool`; fallback `true`)."]
+    #[doc = "C++ authoring: `UsdLuxShadowAPI::CreateShadowEnableAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxShadowAPI::CreateShadowEnableAttr")]
+    #[doc(alias = "CreateShadowEnableAttr")]
+    pub fn set_shadow_enable(&self, edit: &mut SchemaEdit<'_>, value: bool) -> &Self {
+        let value = crate::value::write_bool(value, edit.tokens());
+        self.write_value(edit, "inputs:shadow:enable", None, value);
+        self
+    }
+
+    #[doc = "[`Self::set_shadow_enable`] as a time sample at the time code `time`."]
+    pub fn set_shadow_enable_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: bool) -> &Self {
+        let value = crate::value::write_bool(value, edit.tokens());
+        self.write_value(edit, "inputs:shadow:enable", Some(time), value);
+        self
+    }
+
+    #[doc = "Specifies the size of the shadow falloff zone, within the maximum shadow distance."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:shadow:falloff` (`float`; fallback `-1.0`)."]
+    #[doc = "C++ authoring: `UsdLuxShadowAPI::CreateShadowFalloffAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxShadowAPI::CreateShadowFalloffAttr")]
+    #[doc(alias = "CreateShadowFalloffAttr")]
+    pub fn set_shadow_falloff(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "inputs:shadow:falloff", None, value);
+        self
+    }
+
+    #[doc = "[`Self::set_shadow_falloff`] as a time sample at the time code `time`."]
+    pub fn set_shadow_falloff_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "inputs:shadow:falloff", Some(time), value);
+        self
+    }
+
+    #[doc = "Controls the rate of falloff within the shadow falloff zone specified with `shadow:falloff`."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:shadow:falloffGamma` (`float`; fallback `1.0`)."]
+    #[doc = "C++ authoring: `UsdLuxShadowAPI::CreateShadowFalloffGammaAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxShadowAPI::CreateShadowFalloffGammaAttr")]
+    #[doc(alias = "CreateShadowFalloffGammaAttr")]
+    pub fn set_shadow_falloff_gamma(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "inputs:shadow:falloffGamma", None, value);
+        self
+    }
+
+    #[doc = "[`Self::set_shadow_falloff_gamma`] as a time sample at the time code `time`."]
+    pub fn set_shadow_falloff_gamma_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: f32,
+    ) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "inputs:shadow:falloffGamma", Some(time), value);
+        self
     }
 }
 
 #[doc = "Controls for shaping a light's emission, such as light cone angle and falloff."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `ShapingAPI`. Get it with [`ShapingApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `ShapingAPI`. Get it with [`ShapingApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxShapingAPI`."]
 #[doc(alias = "UsdLuxShapingAPI")]
 #[doc(alias = "ShapingAPI")]
@@ -2639,17 +3841,22 @@ impl<'a> ShapingApi<'a> {
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of the schema on `prim`, without checking that the prim
+    /// has it applied (`HasAPI`), as [`Self::get`] does: a getter reads
+    /// what the prim authors, and the schema's fallbacks only for a
+    /// prim with the schema applied. For a built-in's view.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self { base: prim }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> ShapingApiEdit {
-        ShapingApiEdit::from_path(self.path())
+        ShapingApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
@@ -2663,93 +3870,211 @@ impl<'a> ShapingApi<'a> {
     #[doc(alias = "UsdLuxShapingAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<ShapingApiEdit, CannotApply> {
-        edit.apply(path, Self::SCHEMA, None)?;
-        Ok(ShapingApiEdit::from_path(path))
+        edit.apply_api(path, Self::SCHEMA, None)
+            .map(ShapingApiEdit::from_prim)
     }
 
     /// The USD name of [`Self::shaping_cone_angle`].
     pub const SHAPING_CONE_ANGLE: &'static str = "inputs:shaping:cone:angle";
 
-    attribute! {
-        #[doc = "Specifies the angular limit off the primary axis to restrict the light spread, in degrees."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:shaping:cone:angle` (`float`; fallback `90.0`)."]
-        #[doc = "C++ read: `UsdLuxShapingAPI::GetShapingConeAngleAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxShapingAPI::GetShapingConeAngleAttr")]
-        #[doc(alias = "GetShapingConeAngleAttr")]
-        shaping_cone_angle, shaping_cone_angle_at, "inputs:shaping:cone:angle", f32, crate::value::read_float
+    #[doc = "Specifies the angular limit off the primary axis to restrict the light spread, in degrees."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:shaping:cone:angle` (`float`; fallback `90.0`)."]
+    #[doc = "C++ read: `UsdLuxShapingAPI::GetShapingConeAngleAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxShapingAPI::GetShapingConeAngleAttr")]
+    #[doc(alias = "GetShapingConeAngleAttr")]
+    #[must_use]
+    pub fn shaping_cone_angle(&self) -> Option<f32> {
+        self.read_value("inputs:shaping:cone:angle", crate::value::read_float)
     }
+
+    #[doc = "[`Self::shaping_cone_angle`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn shaping_cone_angle_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<f32> {
+        self.read_value_at(
+            "inputs:shaping:cone:angle",
+            time,
+            interp,
+            crate::value::read_float,
+        )
+    }
+
     /// The USD name of [`Self::shaping_cone_softness`].
     pub const SHAPING_CONE_SOFTNESS: &'static str = "inputs:shaping:cone:softness";
 
-    attribute! {
-        #[doc = "Controls the cutoff softness for the cone angle. Typical range is 0 (hard cut-off) to 1.0 (smooth)."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:shaping:cone:softness` (`float`; fallback `0.0`)."]
-        #[doc = "C++ read: `UsdLuxShapingAPI::GetShapingConeSoftnessAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxShapingAPI::GetShapingConeSoftnessAttr")]
-        #[doc(alias = "GetShapingConeSoftnessAttr")]
-        shaping_cone_softness, shaping_cone_softness_at, "inputs:shaping:cone:softness", f32, crate::value::read_float
+    #[doc = "Controls the cutoff softness for the cone angle. Typical range is 0 (hard cut-off) to 1.0 (smooth)."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:shaping:cone:softness` (`float`; fallback `0.0`)."]
+    #[doc = "C++ read: `UsdLuxShapingAPI::GetShapingConeSoftnessAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxShapingAPI::GetShapingConeSoftnessAttr")]
+    #[doc(alias = "GetShapingConeSoftnessAttr")]
+    #[must_use]
+    pub fn shaping_cone_softness(&self) -> Option<f32> {
+        self.read_value("inputs:shaping:cone:softness", crate::value::read_float)
     }
+
+    #[doc = "[`Self::shaping_cone_softness`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn shaping_cone_softness_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<f32> {
+        self.read_value_at(
+            "inputs:shaping:cone:softness",
+            time,
+            interp,
+            crate::value::read_float,
+        )
+    }
+
     /// The USD name of [`Self::shaping_focus`].
     pub const SHAPING_FOCUS: &'static str = "inputs:shaping:focus";
 
-    attribute! {
-        #[doc = "Controls the spread of the light. Higher focus values pull light towards the center and narrow the spread."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:shaping:focus` (`float`; fallback `0.0`)."]
-        #[doc = "C++ read: `UsdLuxShapingAPI::GetShapingFocusAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxShapingAPI::GetShapingFocusAttr")]
-        #[doc(alias = "GetShapingFocusAttr")]
-        shaping_focus, shaping_focus_at, "inputs:shaping:focus", f32, crate::value::read_float
+    #[doc = "Controls the spread of the light. Higher focus values pull light towards the center and narrow the spread."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:shaping:focus` (`float`; fallback `0.0`)."]
+    #[doc = "C++ read: `UsdLuxShapingAPI::GetShapingFocusAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxShapingAPI::GetShapingFocusAttr")]
+    #[doc(alias = "GetShapingFocusAttr")]
+    #[must_use]
+    pub fn shaping_focus(&self) -> Option<f32> {
+        self.read_value("inputs:shaping:focus", crate::value::read_float)
     }
+
+    #[doc = "[`Self::shaping_focus`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn shaping_focus_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<f32> {
+        self.read_value_at(
+            "inputs:shaping:focus",
+            time,
+            interp,
+            crate::value::read_float,
+        )
+    }
+
     /// The USD name of [`Self::shaping_focus_tint`].
     pub const SHAPING_FOCUS_TINT: &'static str = "inputs:shaping:focusTint";
 
-    attribute! {
-        #[doc = "Controls the tint of the emission in the falloff region."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:shaping:focusTint` (`color3f`; fallback `(0.0, 0.0, 0.0)`)."]
-        #[doc = "C++ read: `UsdLuxShapingAPI::GetShapingFocusTintAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxShapingAPI::GetShapingFocusTintAttr")]
-        #[doc(alias = "GetShapingFocusTintAttr")]
-        shaping_focus_tint, shaping_focus_tint_at, "inputs:shaping:focusTint", [f32; 3], crate::value::read_float3
+    #[doc = "Controls the tint of the emission in the falloff region."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:shaping:focusTint` (`color3f`; fallback `(0.0, 0.0, 0.0)`)."]
+    #[doc = "C++ read: `UsdLuxShapingAPI::GetShapingFocusTintAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxShapingAPI::GetShapingFocusTintAttr")]
+    #[doc(alias = "GetShapingFocusTintAttr")]
+    #[must_use]
+    pub fn shaping_focus_tint(&self) -> Option<[f32; 3]> {
+        self.read_value("inputs:shaping:focusTint", crate::value::read_float3)
     }
+
+    #[doc = "[`Self::shaping_focus_tint`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn shaping_focus_tint_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<[f32; 3]> {
+        self.read_value_at(
+            "inputs:shaping:focusTint",
+            time,
+            interp,
+            crate::value::read_float3,
+        )
+    }
+
     /// The USD name of [`Self::shaping_ies_angle_scale`].
     pub const SHAPING_IES_ANGLE_SCALE: &'static str = "inputs:shaping:ies:angleScale";
 
-    attribute! {
-        #[doc = "Specifies a rescaling of the angular distribution of the IES profile."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:shaping:ies:angleScale` (`float`; fallback `0.0`)."]
-        #[doc = "C++ read: `UsdLuxShapingAPI::GetShapingIesAngleScaleAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxShapingAPI::GetShapingIesAngleScaleAttr")]
-        #[doc(alias = "GetShapingIesAngleScaleAttr")]
-        shaping_ies_angle_scale, shaping_ies_angle_scale_at, "inputs:shaping:ies:angleScale", f32, crate::value::read_float
+    #[doc = "Specifies a rescaling of the angular distribution of the IES profile."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:shaping:ies:angleScale` (`float`; fallback `0.0`)."]
+    #[doc = "C++ read: `UsdLuxShapingAPI::GetShapingIesAngleScaleAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxShapingAPI::GetShapingIesAngleScaleAttr")]
+    #[doc(alias = "GetShapingIesAngleScaleAttr")]
+    #[must_use]
+    pub fn shaping_ies_angle_scale(&self) -> Option<f32> {
+        self.read_value("inputs:shaping:ies:angleScale", crate::value::read_float)
     }
+
+    #[doc = "[`Self::shaping_ies_angle_scale`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn shaping_ies_angle_scale_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<f32> {
+        self.read_value_at(
+            "inputs:shaping:ies:angleScale",
+            time,
+            interp,
+            crate::value::read_float,
+        )
+    }
+
     /// The USD name of [`Self::shaping_ies_file`].
     pub const SHAPING_IES_FILE: &'static str = "inputs:shaping:ies:file";
 
-    attribute! {
-        #[doc = "Specifies the IES profile file."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:shaping:ies:file` (`asset`)."]
-        #[doc = "C++ read: `UsdLuxShapingAPI::GetShapingIesFileAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxShapingAPI::GetShapingIesFileAttr")]
-        #[doc(alias = "GetShapingIesFileAttr")]
-        shaping_ies_file, shaping_ies_file_at, "inputs:shaping:ies:file", ::alloc::sync::Arc<str>, crate::value::read_asset
+    #[doc = "Specifies the IES profile file."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:shaping:ies:file` (`asset`)."]
+    #[doc = "C++ read: `UsdLuxShapingAPI::GetShapingIesFileAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxShapingAPI::GetShapingIesFileAttr")]
+    #[doc(alias = "GetShapingIesFileAttr")]
+    #[must_use]
+    pub fn shaping_ies_file(&self) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value("inputs:shaping:ies:file", crate::value::read_asset)
     }
+
+    #[doc = "[`Self::shaping_ies_file`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn shaping_ies_file_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value_at(
+            "inputs:shaping:ies:file",
+            time,
+            interp,
+            crate::value::read_asset,
+        )
+    }
+
     /// The USD name of [`Self::shaping_ies_normalize`].
     pub const SHAPING_IES_NORMALIZE: &'static str = "inputs:shaping:ies:normalize";
 
-    attribute! {
-        #[doc = "Normalizes the IES profile to affect the shaping of the light while preserving the overall energy output."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:shaping:ies:normalize` (`bool`; fallback `false`)."]
-        #[doc = "C++ read: `UsdLuxShapingAPI::GetShapingIesNormalizeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxShapingAPI::GetShapingIesNormalizeAttr")]
-        #[doc(alias = "GetShapingIesNormalizeAttr")]
-        shaping_ies_normalize, shaping_ies_normalize_at, "inputs:shaping:ies:normalize", bool, crate::value::read_bool
+    #[doc = "Normalizes the IES profile to affect the shaping of the light while preserving the overall energy output."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:shaping:ies:normalize` (`bool`; fallback `false`)."]
+    #[doc = "C++ read: `UsdLuxShapingAPI::GetShapingIesNormalizeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxShapingAPI::GetShapingIesNormalizeAttr")]
+    #[doc(alias = "GetShapingIesNormalizeAttr")]
+    #[must_use]
+    pub fn shaping_ies_normalize(&self) -> Option<bool> {
+        self.read_value("inputs:shaping:ies:normalize", crate::value::read_bool)
+    }
+
+    #[doc = "[`Self::shaping_ies_normalize`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn shaping_ies_normalize_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<bool> {
+        self.read_value_at(
+            "inputs:shaping:ies:normalize",
+            time,
+            interp,
+            crate::value::read_bool,
+        )
     }
 }
 
@@ -2773,83 +4098,183 @@ impl ShapingApiEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
-        Self {
-            base: PrimEdit::new(path),
-        }
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whether or not it has the schema applied.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
+        Self { base: prim }
     }
 
-    set_attribute! {
-        #[doc = "Specifies the angular limit off the primary axis to restrict the light spread, in degrees."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:shaping:cone:angle` (`float`; fallback `90.0`)."]
-        #[doc = "C++ authoring: `UsdLuxShapingAPI::CreateShapingConeAngleAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxShapingAPI::CreateShapingConeAngleAttr")]
-        #[doc(alias = "CreateShapingConeAngleAttr")]
-        set_shaping_cone_angle, set_shaping_cone_angle_at, "inputs:shaping:cone:angle", f32, crate::value::write_float
+    #[doc = "Specifies the angular limit off the primary axis to restrict the light spread, in degrees."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:shaping:cone:angle` (`float`; fallback `90.0`)."]
+    #[doc = "C++ authoring: `UsdLuxShapingAPI::CreateShapingConeAngleAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxShapingAPI::CreateShapingConeAngleAttr")]
+    #[doc(alias = "CreateShapingConeAngleAttr")]
+    pub fn set_shaping_cone_angle(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "inputs:shaping:cone:angle", None, value);
+        self
     }
-    set_attribute! {
-        #[doc = "Controls the cutoff softness for the cone angle. Typical range is 0 (hard cut-off) to 1.0 (smooth)."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:shaping:cone:softness` (`float`; fallback `0.0`)."]
-        #[doc = "C++ authoring: `UsdLuxShapingAPI::CreateShapingConeSoftnessAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxShapingAPI::CreateShapingConeSoftnessAttr")]
-        #[doc(alias = "CreateShapingConeSoftnessAttr")]
-        set_shaping_cone_softness, set_shaping_cone_softness_at, "inputs:shaping:cone:softness", f32, crate::value::write_float
+
+    #[doc = "[`Self::set_shaping_cone_angle`] as a time sample at the time code `time`."]
+    pub fn set_shaping_cone_angle_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: f32,
+    ) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "inputs:shaping:cone:angle", Some(time), value);
+        self
     }
-    set_attribute! {
-        #[doc = "Controls the spread of the light. Higher focus values pull light towards the center and narrow the spread."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:shaping:focus` (`float`; fallback `0.0`)."]
-        #[doc = "C++ authoring: `UsdLuxShapingAPI::CreateShapingFocusAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxShapingAPI::CreateShapingFocusAttr")]
-        #[doc(alias = "CreateShapingFocusAttr")]
-        set_shaping_focus, set_shaping_focus_at, "inputs:shaping:focus", f32, crate::value::write_float
+
+    #[doc = "Controls the cutoff softness for the cone angle. Typical range is 0 (hard cut-off) to 1.0 (smooth)."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:shaping:cone:softness` (`float`; fallback `0.0`)."]
+    #[doc = "C++ authoring: `UsdLuxShapingAPI::CreateShapingConeSoftnessAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxShapingAPI::CreateShapingConeSoftnessAttr")]
+    #[doc(alias = "CreateShapingConeSoftnessAttr")]
+    pub fn set_shaping_cone_softness(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "inputs:shaping:cone:softness", None, value);
+        self
     }
-    set_attribute! {
-        #[doc = "Controls the tint of the emission in the falloff region."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:shaping:focusTint` (`color3f`; fallback `(0.0, 0.0, 0.0)`)."]
-        #[doc = "C++ authoring: `UsdLuxShapingAPI::CreateShapingFocusTintAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxShapingAPI::CreateShapingFocusTintAttr")]
-        #[doc(alias = "CreateShapingFocusTintAttr")]
-        set_shaping_focus_tint, set_shaping_focus_tint_at, "inputs:shaping:focusTint", [f32; 3], crate::value::write_float3
+
+    #[doc = "[`Self::set_shaping_cone_softness`] as a time sample at the time code `time`."]
+    pub fn set_shaping_cone_softness_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: f32,
+    ) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "inputs:shaping:cone:softness", Some(time), value);
+        self
     }
-    set_attribute! {
-        #[doc = "Specifies a rescaling of the angular distribution of the IES profile."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:shaping:ies:angleScale` (`float`; fallback `0.0`)."]
-        #[doc = "C++ authoring: `UsdLuxShapingAPI::CreateShapingIesAngleScaleAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxShapingAPI::CreateShapingIesAngleScaleAttr")]
-        #[doc(alias = "CreateShapingIesAngleScaleAttr")]
-        set_shaping_ies_angle_scale, set_shaping_ies_angle_scale_at, "inputs:shaping:ies:angleScale", f32, crate::value::write_float
+
+    #[doc = "Controls the spread of the light. Higher focus values pull light towards the center and narrow the spread."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:shaping:focus` (`float`; fallback `0.0`)."]
+    #[doc = "C++ authoring: `UsdLuxShapingAPI::CreateShapingFocusAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxShapingAPI::CreateShapingFocusAttr")]
+    #[doc(alias = "CreateShapingFocusAttr")]
+    pub fn set_shaping_focus(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "inputs:shaping:focus", None, value);
+        self
     }
-    set_attribute! {
-        #[doc = "Specifies the IES profile file."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:shaping:ies:file` (`asset`)."]
-        #[doc = "C++ authoring: `UsdLuxShapingAPI::CreateShapingIesFileAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxShapingAPI::CreateShapingIesFileAttr")]
-        #[doc(alias = "CreateShapingIesFileAttr")]
-        set_shaping_ies_file, set_shaping_ies_file_at, "inputs:shaping:ies:file", &str, crate::value::write_asset
+
+    #[doc = "[`Self::set_shaping_focus`] as a time sample at the time code `time`."]
+    pub fn set_shaping_focus_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "inputs:shaping:focus", Some(time), value);
+        self
     }
-    set_attribute! {
-        #[doc = "Normalizes the IES profile to affect the shaping of the light while preserving the overall energy output."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:shaping:ies:normalize` (`bool`; fallback `false`)."]
-        #[doc = "C++ authoring: `UsdLuxShapingAPI::CreateShapingIesNormalizeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxShapingAPI::CreateShapingIesNormalizeAttr")]
-        #[doc(alias = "CreateShapingIesNormalizeAttr")]
-        set_shaping_ies_normalize, set_shaping_ies_normalize_at, "inputs:shaping:ies:normalize", bool, crate::value::write_bool
+
+    #[doc = "Controls the tint of the emission in the falloff region."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:shaping:focusTint` (`color3f`; fallback `(0.0, 0.0, 0.0)`)."]
+    #[doc = "C++ authoring: `UsdLuxShapingAPI::CreateShapingFocusTintAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxShapingAPI::CreateShapingFocusTintAttr")]
+    #[doc(alias = "CreateShapingFocusTintAttr")]
+    pub fn set_shaping_focus_tint(&self, edit: &mut SchemaEdit<'_>, value: [f32; 3]) -> &Self {
+        let value = crate::value::write_float3(value, edit.tokens());
+        self.write_value(edit, "inputs:shaping:focusTint", None, value);
+        self
+    }
+
+    #[doc = "[`Self::set_shaping_focus_tint`] as a time sample at the time code `time`."]
+    pub fn set_shaping_focus_tint_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: [f32; 3],
+    ) -> &Self {
+        let value = crate::value::write_float3(value, edit.tokens());
+        self.write_value(edit, "inputs:shaping:focusTint", Some(time), value);
+        self
+    }
+
+    #[doc = "Specifies a rescaling of the angular distribution of the IES profile."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:shaping:ies:angleScale` (`float`; fallback `0.0`)."]
+    #[doc = "C++ authoring: `UsdLuxShapingAPI::CreateShapingIesAngleScaleAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxShapingAPI::CreateShapingIesAngleScaleAttr")]
+    #[doc(alias = "CreateShapingIesAngleScaleAttr")]
+    pub fn set_shaping_ies_angle_scale(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "inputs:shaping:ies:angleScale", None, value);
+        self
+    }
+
+    #[doc = "[`Self::set_shaping_ies_angle_scale`] as a time sample at the time code `time`."]
+    pub fn set_shaping_ies_angle_scale_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: f32,
+    ) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "inputs:shaping:ies:angleScale", Some(time), value);
+        self
+    }
+
+    #[doc = "Specifies the IES profile file."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:shaping:ies:file` (`asset`)."]
+    #[doc = "C++ authoring: `UsdLuxShapingAPI::CreateShapingIesFileAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxShapingAPI::CreateShapingIesFileAttr")]
+    #[doc(alias = "CreateShapingIesFileAttr")]
+    pub fn set_shaping_ies_file(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
+        let value = crate::value::write_asset(value, edit.tokens());
+        self.write_value(edit, "inputs:shaping:ies:file", None, value);
+        self
+    }
+
+    #[doc = "[`Self::set_shaping_ies_file`] as a time sample at the time code `time`."]
+    pub fn set_shaping_ies_file_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: &str,
+    ) -> &Self {
+        let value = crate::value::write_asset(value, edit.tokens());
+        self.write_value(edit, "inputs:shaping:ies:file", Some(time), value);
+        self
+    }
+
+    #[doc = "Normalizes the IES profile to affect the shaping of the light while preserving the overall energy output."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:shaping:ies:normalize` (`bool`; fallback `false`)."]
+    #[doc = "C++ authoring: `UsdLuxShapingAPI::CreateShapingIesNormalizeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxShapingAPI::CreateShapingIesNormalizeAttr")]
+    #[doc(alias = "CreateShapingIesNormalizeAttr")]
+    pub fn set_shaping_ies_normalize(&self, edit: &mut SchemaEdit<'_>, value: bool) -> &Self {
+        let value = crate::value::write_bool(value, edit.tokens());
+        self.write_value(edit, "inputs:shaping:ies:normalize", None, value);
+        self
+    }
+
+    #[doc = "[`Self::set_shaping_ies_normalize`] as a time sample at the time code `time`."]
+    pub fn set_shaping_ies_normalize_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: bool,
+    ) -> &Self {
+        let value = crate::value::write_bool(value, edit.tokens());
+        self.write_value(edit, "inputs:shaping:ies:normalize", Some(time), value);
+        self
     }
 }
 
 #[doc = "A light that is emitted outwards from a sphere."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `SphereLight`, inheriting [`BoundableLightBase`]. Construct it with [`SphereLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `SphereLight`, inheriting [`BoundableLightBase`]. Construct it with [`SphereLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxSphereLight`."]
 #[doc(alias = "UsdLuxSphereLight")]
 #[derive(Clone, Copy, Debug)]
@@ -2876,19 +4301,24 @@ impl<'a> SphereLight<'a> {
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .is_a(path, Self::SCHEMA)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of `prim` as of the schema, without checking that it is
+    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// authors, and the schema's fallbacks only for a prim of the schema.
+    /// For the view of a schema built on this one.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self {
-            base: BoundableLightBase::from_view(prim),
+            base: BoundableLightBase::from_prim_unchecked(prim),
         }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> SphereLightEdit {
-        SphereLightEdit::from_path(self.path())
+        SphereLightEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Defines `path` as a new `def SphereLight` prim spec in the edit's target.
@@ -2899,33 +4329,51 @@ impl<'a> SphereLight<'a> {
     #[doc(alias = "UsdLuxSphereLight::Define")]
     #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> SphereLightEdit {
-        edit.define(path, Self::SCHEMA);
-        SphereLightEdit::from_path(path)
+        SphereLightEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
     }
 
     /// The USD name of [`Self::radius`].
     pub const RADIUS: &'static str = "inputs:radius";
 
-    attribute! {
-        #[doc = "Specifies the radius of the sphere."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:radius` (`float`; fallback `0.5`)."]
-        #[doc = "C++ read: `UsdLuxSphereLight::GetRadiusAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxSphereLight::GetRadiusAttr")]
-        #[doc(alias = "GetRadiusAttr")]
-        radius, radius_at, "inputs:radius", f32, crate::value::read_float
+    #[doc = "Specifies the radius of the sphere."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:radius` (`float`; fallback `0.5`)."]
+    #[doc = "C++ read: `UsdLuxSphereLight::GetRadiusAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxSphereLight::GetRadiusAttr")]
+    #[doc(alias = "GetRadiusAttr")]
+    #[must_use]
+    pub fn radius(&self) -> Option<f32> {
+        self.read_value("inputs:radius", crate::value::read_float)
     }
+
+    #[doc = "[`Self::radius`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn radius_at(&self, time: f64, interp: ::layerstack::InterpolationType) -> Option<f32> {
+        self.read_value_at("inputs:radius", time, interp, crate::value::read_float)
+    }
+
     /// The USD name of [`Self::treat_as_point`].
     pub const TREAT_AS_POINT: &'static str = "treatAsPoint";
 
-    attribute! {
-        #[doc = "Specifies that renderers can treat this light as a zero-radius point light."]
-        #[doc = ""]
-        #[doc = "USD attribute `treatAsPoint` (`bool`; fallback `false`)."]
-        #[doc = "C++ read: `UsdLuxSphereLight::GetTreatAsPointAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdLuxSphereLight::GetTreatAsPointAttr")]
-        #[doc(alias = "GetTreatAsPointAttr")]
-        treat_as_point, treat_as_point_at, "treatAsPoint", bool, crate::value::read_bool
+    #[doc = "Specifies that renderers can treat this light as a zero-radius point light."]
+    #[doc = ""]
+    #[doc = "USD attribute `treatAsPoint` (`bool`; fallback `false`)."]
+    #[doc = "C++ read: `UsdLuxSphereLight::GetTreatAsPointAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdLuxSphereLight::GetTreatAsPointAttr")]
+    #[doc(alias = "GetTreatAsPointAttr")]
+    #[must_use]
+    pub fn treat_as_point(&self) -> Option<bool> {
+        self.read_value("treatAsPoint", crate::value::read_bool)
+    }
+
+    #[doc = "[`Self::treat_as_point`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn treat_as_point_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<bool> {
+        self.read_value_at("treatAsPoint", time, interp, crate::value::read_bool)
     }
 }
 
@@ -2949,38 +4397,65 @@ impl SphereLightEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whatever its type.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
         Self {
-            base: BoundableLightBaseEdit::from_path(path),
+            base: BoundableLightBaseEdit::from_prim(prim),
         }
     }
 
-    set_attribute! {
-        #[doc = "Specifies the radius of the sphere."]
-        #[doc = ""]
-        #[doc = "USD attribute `inputs:radius` (`float`; fallback `0.5`)."]
-        #[doc = "C++ authoring: `UsdLuxSphereLight::CreateRadiusAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxSphereLight::CreateRadiusAttr")]
-        #[doc(alias = "CreateRadiusAttr")]
-        set_radius, set_radius_at, "inputs:radius", f32, crate::value::write_float
+    #[doc = "Specifies the radius of the sphere."]
+    #[doc = ""]
+    #[doc = "USD attribute `inputs:radius` (`float`; fallback `0.5`)."]
+    #[doc = "C++ authoring: `UsdLuxSphereLight::CreateRadiusAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxSphereLight::CreateRadiusAttr")]
+    #[doc(alias = "CreateRadiusAttr")]
+    pub fn set_radius(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "inputs:radius", None, value);
+        self
     }
-    set_attribute! {
-        #[doc = "Specifies that renderers can treat this light as a zero-radius point light."]
-        #[doc = ""]
-        #[doc = "USD attribute `treatAsPoint` (`bool`; fallback `false`)."]
-        #[doc = "C++ authoring: `UsdLuxSphereLight::CreateTreatAsPointAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdLuxSphereLight::CreateTreatAsPointAttr")]
-        #[doc(alias = "CreateTreatAsPointAttr")]
-        set_treat_as_point, set_treat_as_point_at, "treatAsPoint", bool, crate::value::write_bool
+
+    #[doc = "[`Self::set_radius`] as a time sample at the time code `time`."]
+    pub fn set_radius_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
+        let value = crate::value::write_float(value, edit.tokens());
+        self.write_value(edit, "inputs:radius", Some(time), value);
+        self
+    }
+
+    #[doc = "Specifies that renderers can treat this light as a zero-radius point light."]
+    #[doc = ""]
+    #[doc = "USD attribute `treatAsPoint` (`bool`; fallback `false`)."]
+    #[doc = "C++ authoring: `UsdLuxSphereLight::CreateTreatAsPointAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdLuxSphereLight::CreateTreatAsPointAttr")]
+    #[doc(alias = "CreateTreatAsPointAttr")]
+    pub fn set_treat_as_point(&self, edit: &mut SchemaEdit<'_>, value: bool) -> &Self {
+        let value = crate::value::write_bool(value, edit.tokens());
+        self.write_value(edit, "treatAsPoint", None, value);
+        self
+    }
+
+    #[doc = "[`Self::set_treat_as_point`] as a time sample at the time code `time`."]
+    pub fn set_treat_as_point_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: bool,
+    ) -> &Self {
+        let value = crate::value::write_bool(value, edit.tokens());
+        self.write_value(edit, "treatAsPoint", Some(time), value);
+        self
     }
 }
 
 #[doc = "Applies light behavior to a volume."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `VolumeLightAPI`. Get it with [`VolumeLightApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `VolumeLightAPI`. Get it with [`VolumeLightApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxVolumeLightAPI`."]
 #[doc(alias = "UsdLuxVolumeLightAPI")]
 #[doc(alias = "VolumeLightAPI")]
@@ -3009,17 +4484,22 @@ impl<'a> VolumeLightApi<'a> {
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of the schema on `prim`, without checking that the prim
+    /// has it applied (`HasAPI`), as [`Self::get`] does: a getter reads
+    /// what the prim authors, and the schema's fallbacks only for a
+    /// prim with the schema applied. For a built-in's view.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self { base: prim }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> VolumeLightApiEdit {
-        VolumeLightApiEdit::from_path(self.path())
+        VolumeLightApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
@@ -3036,8 +4516,8 @@ impl<'a> VolumeLightApi<'a> {
         edit: &mut SchemaEdit<'_>,
         path: PathId,
     ) -> Result<VolumeLightApiEdit, CannotApply> {
-        edit.apply(path, Self::SCHEMA, None)?;
-        Ok(VolumeLightApiEdit::from_path(path))
+        edit.apply_api(path, Self::SCHEMA, None)
+            .map(VolumeLightApiEdit::from_prim)
     }
 }
 
@@ -3061,12 +4541,13 @@ impl VolumeLightApiEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
-        Self {
-            base: PrimEdit::new(path),
-        }
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whether or not it has the schema applied.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
+        Self { base: prim }
     }
 }

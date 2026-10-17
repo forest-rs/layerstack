@@ -22,11 +22,10 @@ use core::ops::Deref;
 
 use layerstack::{CannotApply, PathId};
 
-use crate::view::{InstanceEdit, InstanceView};
-use crate::{PrimEdit, PrimView, Scene, SchemaEdit};
+use crate::{InstanceEdit, InstanceView, PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "UsdShadeCoordSysAPI provides a way to designate, name, and discover coordinate systems."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's multiple-apply API schema `CoordSysAPI`. Get it with [`CoordSysApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's multiple-apply API schema `CoordSysAPI`. Get it with [`CoordSysApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdShadeCoordSysAPI`."]
 #[doc(alias = "UsdShadeCoordSysAPI")]
 #[doc(alias = "CoordSysAPI")]
@@ -56,8 +55,14 @@ impl<'a> CoordSysApi<'a> {
         if !scene.has_api(path, Self::SCHEMA, Some(instance)) {
             return None;
         }
-        let instance = scene.instance_name(instance)?;
-        Some(Self::from_view(PrimView::new(*scene, path), instance))
+        let instance = scene
+            .instances(path, Self::SCHEMA)
+            .into_iter()
+            .find(|applied| *applied == instance)?;
+        Some(Self::from_instance_unchecked(InstanceView::new(
+            PrimView::new(*scene, path),
+            instance,
+        )))
     }
 
     /// Every instance of the schema the prim at `path` has applied, in the
@@ -69,20 +74,31 @@ impl<'a> CoordSysApi<'a> {
         scene
             .instances(path, Self::SCHEMA)
             .into_iter()
-            .map(|instance| Self::from_view(PrimView::new(*scene, path), instance))
+            .map(|instance| {
+                Self::from_instance_unchecked(InstanceView::new(
+                    PrimView::new(*scene, path),
+                    instance,
+                ))
+            })
             .collect()
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>, instance: &'a str) -> Self {
-        Self {
-            base: InstanceView::new(prim, instance),
-        }
+    /// A view of `instance` as an instance of the schema, without
+    /// checking that the prim has it applied (`HasAPI`), as [`Self::get`]
+    /// does: a getter reads what the prim authors, and the schema's
+    /// fallbacks only for an applied instance.
+    #[must_use]
+    pub fn from_instance_unchecked(instance: InstanceView<'a>) -> Self {
+        Self { base: instance }
     }
 
     /// An edit handle for this instance.
     #[must_use]
     pub fn edit(&self) -> CoordSysApiEdit {
-        CoordSysApiEdit::from_path(self.path(), self.instance())
+        CoordSysApiEdit::from_instance(InstanceEdit::new(
+            PrimEdit::from_path_unchecked(self.path()),
+            self.instance(),
+        ))
     }
 
     /// Applies the instance `instance` of the schema to `path` (a `prepend
@@ -100,18 +116,21 @@ impl<'a> CoordSysApi<'a> {
         path: PathId,
         instance: &str,
     ) -> Result<CoordSysApiEdit, CannotApply> {
-        edit.apply(path, Self::SCHEMA, Some(instance))?;
-        Ok(CoordSysApiEdit::from_path(path, instance))
+        let prim = edit.apply_api(path, Self::SCHEMA, Some(instance))?;
+        Ok(CoordSysApiEdit::from_instance(InstanceEdit::new(
+            prim, instance,
+        )))
     }
 
-    relationship! {
-        #[doc = "Prim binding expressing the appropriate coordinate systems."]
-        #[doc = ""]
-        #[doc = "USD relationship `coordSys:&lt;instance&gt;:binding` (`rel`)."]
-        #[doc = "C++ read: `UsdShadeCoordSysAPI::GetBindingRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdShadeCoordSysAPI::GetBindingRel")]
-        #[doc(alias = "GetBindingRel")]
-        binding, "coordSys:__INSTANCE_NAME__:binding"
+    #[doc = "Prim binding expressing the appropriate coordinate systems."]
+    #[doc = ""]
+    #[doc = "USD relationship `coordSys:&lt;instance&gt;:binding` (`rel`)."]
+    #[doc = "C++ read: `UsdShadeCoordSysAPI::GetBindingRel().GetTargets()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdShadeCoordSysAPI::GetBindingRel")]
+    #[doc(alias = "GetBindingRel")]
+    #[must_use]
+    pub fn binding(&self) -> ::alloc::vec::Vec<::layerstack::TargetPath> {
+        self.read_targets("coordSys:__INSTANCE_NAME__:binding")
     }
 }
 
@@ -135,29 +154,35 @@ impl CoordSysApiEdit {
     /// earlier in `edit`. Setters never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId, instance: &str) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path, instance))
+        PrimEdit::new(edit, path).map(|prim| Self::from_instance(InstanceEdit::new(prim, instance)))
     }
 
-    pub(crate) fn from_path(path: PathId, instance: &str) -> Self {
-        Self {
-            base: InstanceEdit::new(path, instance),
-        }
+    /// A handle authoring the schema's properties for `instance`, whether
+    /// or not the prim has it applied.
+    #[must_use]
+    pub fn from_instance(instance: InstanceEdit) -> Self {
+        Self { base: instance }
     }
 
-    set_relationship! {
-        #[doc = "Prim binding expressing the appropriate coordinate systems."]
-        #[doc = ""]
-        #[doc = "USD relationship `coordSys:&lt;instance&gt;:binding` (`rel`)."]
-        #[doc = "C++ authoring: `UsdShadeCoordSysAPI::CreateBindingRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdShadeCoordSysAPI::CreateBindingRel")]
-        #[doc(alias = "CreateBindingRel")]
-        set_binding, "coordSys:__INSTANCE_NAME__:binding"
+    #[doc = "Prim binding expressing the appropriate coordinate systems."]
+    #[doc = ""]
+    #[doc = "USD relationship `coordSys:&lt;instance&gt;:binding` (`rel`)."]
+    #[doc = "C++ authoring: `UsdShadeCoordSysAPI::CreateBindingRel().SetTargets()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdShadeCoordSysAPI::CreateBindingRel")]
+    #[doc(alias = "CreateBindingRel")]
+    pub fn set_binding(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        targets: &[::layerstack::TargetPath],
+    ) -> &Self {
+        self.write_targets(edit, "coordSys:__INSTANCE_NAME__:binding", targets);
+        self
     }
 }
 
 #[doc = "A Material provides a container into which multiple \"render contexts\" can add data that defines a \"shading material\" for a renderer."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `Material`, inheriting [`NodeGraph`]. Construct it with [`Material::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `Material`, inheriting [`NodeGraph`]. Construct it with [`Material::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdShadeMaterial`."]
 #[doc(alias = "UsdShadeMaterial")]
 #[derive(Clone, Copy, Debug)]
@@ -184,19 +209,24 @@ impl<'a> Material<'a> {
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .is_a(path, Self::SCHEMA)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of `prim` as of the schema, without checking that it is
+    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// authors, and the schema's fallbacks only for a prim of the schema.
+    /// For the view of a schema built on this one.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self {
-            base: NodeGraph::from_view(prim),
+            base: NodeGraph::from_prim_unchecked(prim),
         }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> MaterialEdit {
-        MaterialEdit::from_path(self.path())
+        MaterialEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Defines `path` as a new `def Material` prim spec in the edit's target.
@@ -207,45 +237,80 @@ impl<'a> Material<'a> {
     #[doc(alias = "UsdShadeMaterial::Define")]
     #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> MaterialEdit {
-        edit.define(path, Self::SCHEMA);
-        MaterialEdit::from_path(path)
+        MaterialEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
     }
 
     /// The USD name of [`Self::displacement`].
     pub const DISPLACEMENT: &'static str = "outputs:displacement";
 
-    attribute! {
-        #[doc = "Represents the universal \"displacement\" output terminal of a material."]
-        #[doc = ""]
-        #[doc = "USD attribute `outputs:displacement` (`token`)."]
-        #[doc = "C++ read: `UsdShadeMaterial::GetDisplacementAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdShadeMaterial::GetDisplacementAttr")]
-        #[doc(alias = "GetDisplacementAttr")]
-        displacement, displacement_at, "outputs:displacement", &'a str, crate::value::read_token
+    #[doc = "Represents the universal \"displacement\" output terminal of a material."]
+    #[doc = ""]
+    #[doc = "USD attribute `outputs:displacement` (`token`)."]
+    #[doc = "C++ read: `UsdShadeMaterial::GetDisplacementAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdShadeMaterial::GetDisplacementAttr")]
+    #[doc(alias = "GetDisplacementAttr")]
+    #[must_use]
+    pub fn displacement(&self) -> Option<&'a str> {
+        self.read_value("outputs:displacement", crate::value::read_token)
     }
+
+    #[doc = "[`Self::displacement`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn displacement_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<&'a str> {
+        self.read_value_at(
+            "outputs:displacement",
+            time,
+            interp,
+            crate::value::read_token,
+        )
+    }
+
     /// The USD name of [`Self::surface`].
     pub const SURFACE: &'static str = "outputs:surface";
 
-    attribute! {
-        #[doc = "Represents the universal \"surface\" output terminal of a material."]
-        #[doc = ""]
-        #[doc = "USD attribute `outputs:surface` (`token`)."]
-        #[doc = "C++ read: `UsdShadeMaterial::GetSurfaceAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdShadeMaterial::GetSurfaceAttr")]
-        #[doc(alias = "GetSurfaceAttr")]
-        surface, surface_at, "outputs:surface", &'a str, crate::value::read_token
+    #[doc = "Represents the universal \"surface\" output terminal of a material."]
+    #[doc = ""]
+    #[doc = "USD attribute `outputs:surface` (`token`)."]
+    #[doc = "C++ read: `UsdShadeMaterial::GetSurfaceAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdShadeMaterial::GetSurfaceAttr")]
+    #[doc(alias = "GetSurfaceAttr")]
+    #[must_use]
+    pub fn surface(&self) -> Option<&'a str> {
+        self.read_value("outputs:surface", crate::value::read_token)
     }
+
+    #[doc = "[`Self::surface`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn surface_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<&'a str> {
+        self.read_value_at("outputs:surface", time, interp, crate::value::read_token)
+    }
+
     /// The USD name of [`Self::volume`].
     pub const VOLUME: &'static str = "outputs:volume";
 
-    attribute! {
-        #[doc = "Represents the universal \"volume\" output terminal of a material."]
-        #[doc = ""]
-        #[doc = "USD attribute `outputs:volume` (`token`)."]
-        #[doc = "C++ read: `UsdShadeMaterial::GetVolumeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdShadeMaterial::GetVolumeAttr")]
-        #[doc(alias = "GetVolumeAttr")]
-        volume, volume_at, "outputs:volume", &'a str, crate::value::read_token
+    #[doc = "Represents the universal \"volume\" output terminal of a material."]
+    #[doc = ""]
+    #[doc = "USD attribute `outputs:volume` (`token`)."]
+    #[doc = "C++ read: `UsdShadeMaterial::GetVolumeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdShadeMaterial::GetVolumeAttr")]
+    #[doc(alias = "GetVolumeAttr")]
+    #[must_use]
+    pub fn volume(&self) -> Option<&'a str> {
+        self.read_value("outputs:volume", crate::value::read_token)
+    }
+
+    #[doc = "[`Self::volume`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn volume_at(&self, time: f64, interp: ::layerstack::InterpolationType) -> Option<&'a str> {
+        self.read_value_at("outputs:volume", time, interp, crate::value::read_token)
     }
 }
 
@@ -269,47 +334,79 @@ impl MaterialEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whatever its type.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
         Self {
-            base: NodeGraphEdit::from_path(path),
+            base: NodeGraphEdit::from_prim(prim),
         }
     }
 
-    set_attribute! {
-        #[doc = "Represents the universal \"displacement\" output terminal of a material."]
-        #[doc = ""]
-        #[doc = "USD attribute `outputs:displacement` (`token`)."]
-        #[doc = "C++ authoring: `UsdShadeMaterial::CreateDisplacementAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdShadeMaterial::CreateDisplacementAttr")]
-        #[doc(alias = "CreateDisplacementAttr")]
-        set_displacement, set_displacement_at, "outputs:displacement", &str, crate::value::write_token
+    #[doc = "Represents the universal \"displacement\" output terminal of a material."]
+    #[doc = ""]
+    #[doc = "USD attribute `outputs:displacement` (`token`)."]
+    #[doc = "C++ authoring: `UsdShadeMaterial::CreateDisplacementAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdShadeMaterial::CreateDisplacementAttr")]
+    #[doc(alias = "CreateDisplacementAttr")]
+    pub fn set_displacement(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
+        let value = crate::value::write_token(value, edit.tokens());
+        self.write_value(edit, "outputs:displacement", None, value);
+        self
     }
-    set_attribute! {
-        #[doc = "Represents the universal \"surface\" output terminal of a material."]
-        #[doc = ""]
-        #[doc = "USD attribute `outputs:surface` (`token`)."]
-        #[doc = "C++ authoring: `UsdShadeMaterial::CreateSurfaceAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdShadeMaterial::CreateSurfaceAttr")]
-        #[doc(alias = "CreateSurfaceAttr")]
-        set_surface, set_surface_at, "outputs:surface", &str, crate::value::write_token
+
+    #[doc = "[`Self::set_displacement`] as a time sample at the time code `time`."]
+    pub fn set_displacement_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &str) -> &Self {
+        let value = crate::value::write_token(value, edit.tokens());
+        self.write_value(edit, "outputs:displacement", Some(time), value);
+        self
     }
-    set_attribute! {
-        #[doc = "Represents the universal \"volume\" output terminal of a material."]
-        #[doc = ""]
-        #[doc = "USD attribute `outputs:volume` (`token`)."]
-        #[doc = "C++ authoring: `UsdShadeMaterial::CreateVolumeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdShadeMaterial::CreateVolumeAttr")]
-        #[doc(alias = "CreateVolumeAttr")]
-        set_volume, set_volume_at, "outputs:volume", &str, crate::value::write_token
+
+    #[doc = "Represents the universal \"surface\" output terminal of a material."]
+    #[doc = ""]
+    #[doc = "USD attribute `outputs:surface` (`token`)."]
+    #[doc = "C++ authoring: `UsdShadeMaterial::CreateSurfaceAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdShadeMaterial::CreateSurfaceAttr")]
+    #[doc(alias = "CreateSurfaceAttr")]
+    pub fn set_surface(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
+        let value = crate::value::write_token(value, edit.tokens());
+        self.write_value(edit, "outputs:surface", None, value);
+        self
+    }
+
+    #[doc = "[`Self::set_surface`] as a time sample at the time code `time`."]
+    pub fn set_surface_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &str) -> &Self {
+        let value = crate::value::write_token(value, edit.tokens());
+        self.write_value(edit, "outputs:surface", Some(time), value);
+        self
+    }
+
+    #[doc = "Represents the universal \"volume\" output terminal of a material."]
+    #[doc = ""]
+    #[doc = "USD attribute `outputs:volume` (`token`)."]
+    #[doc = "C++ authoring: `UsdShadeMaterial::CreateVolumeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdShadeMaterial::CreateVolumeAttr")]
+    #[doc(alias = "CreateVolumeAttr")]
+    pub fn set_volume(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
+        let value = crate::value::write_token(value, edit.tokens());
+        self.write_value(edit, "outputs:volume", None, value);
+        self
+    }
+
+    #[doc = "[`Self::set_volume`] as a time sample at the time code `time`."]
+    pub fn set_volume_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &str) -> &Self {
+        let value = crate::value::write_token(value, edit.tokens());
+        self.write_value(edit, "outputs:volume", Some(time), value);
+        self
     }
 }
 
 #[doc = "UsdShadeMaterialBindingAPI is an API schema that provides an interface for binding materials to prims or collections of prims (represented by UsdCollectionAPI objects)."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `MaterialBindingAPI`. Get it with [`MaterialBindingApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `MaterialBindingAPI`. Get it with [`MaterialBindingApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdShadeMaterialBindingAPI`."]
 #[doc(alias = "UsdShadeMaterialBindingAPI")]
 #[doc(alias = "MaterialBindingAPI")]
@@ -338,17 +435,22 @@ impl<'a> MaterialBindingApi<'a> {
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of the schema on `prim`, without checking that the prim
+    /// has it applied (`HasAPI`), as [`Self::get`] does: a getter reads
+    /// what the prim authors, and the schema's fallbacks only for a
+    /// prim with the schema applied. For a built-in's view.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self { base: prim }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> MaterialBindingApiEdit {
-        MaterialBindingApiEdit::from_path(self.path())
+        MaterialBindingApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
@@ -365,8 +467,8 @@ impl<'a> MaterialBindingApi<'a> {
         edit: &mut SchemaEdit<'_>,
         path: PathId,
     ) -> Result<MaterialBindingApiEdit, CannotApply> {
-        edit.apply(path, Self::SCHEMA, None)?;
-        Ok(MaterialBindingApiEdit::from_path(path))
+        edit.apply_api(path, Self::SCHEMA, None)
+            .map(MaterialBindingApiEdit::from_prim)
     }
 }
 
@@ -390,31 +492,73 @@ impl MaterialBindingApiEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
-        Self {
-            base: PrimEdit::new(path),
-        }
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whether or not it has the schema applied.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
+        Self { base: prim }
     }
 }
 
-token_enum! {
-    #[doc = "The tokens `info:implementationSource` allows."]
-    NodeDefApiImplementationSource {
-        #[doc = "`id`"]
-        Id = "id",
-        #[doc = "`sourceAsset`"]
-        SourceAsset = "sourceAsset",
-        #[doc = "`sourceCode`"]
-        SourceCode = "sourceCode",
+#[doc = "The tokens `info:implementationSource` allows."]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum NodeDefApiImplementationSource {
+    #[doc = "`id`"]
+    Id,
+    #[doc = "`sourceAsset`"]
+    SourceAsset,
+    #[doc = "`sourceCode`"]
+    SourceCode,
+    /// A token the schema does not list: OpenUSD does not enforce
+    /// `allowedTokens`, so an authored value may be anything.
+    Other(::alloc::sync::Arc<str>),
+}
+
+impl NodeDefApiImplementationSource {
+    /// The tokens the schema allows, in its order.
+    pub const TOKENS: &'static [&'static str] = &["id", "sourceAsset", "sourceCode"];
+
+    /// The value `token` names, `Other` when the schema does not
+    /// list it.
+    #[must_use]
+    pub fn from_token(token: &str) -> Self {
+        match token {
+            "id" => Self::Id,
+            "sourceAsset" => Self::SourceAsset,
+            "sourceCode" => Self::SourceCode,
+            other => Self::Other(::alloc::sync::Arc::from(other)),
+        }
+    }
+
+    /// The token this value is.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Id => "id",
+            Self::SourceAsset => "sourceAsset",
+            Self::SourceCode => "sourceCode",
+            Self::Other(token) => token,
+        }
+    }
+
+    pub(crate) fn read(
+        value: &::layerstack::Value,
+        tokens: &::layerstack::TokenInterner,
+    ) -> Option<Self> {
+        crate::value::read_token(value, tokens).map(Self::from_token)
+    }
+
+    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+        crate::value::write_token(self.as_str(), tokens)
     }
 }
 
 #[doc = "UsdShadeNodeDefAPI is an API schema that provides attributes for a prim to select a corresponding Shader Node Definition (\"Sdr Node\"), as well as to look up a runtime entry for that shader node in the form of an SdrShaderNode."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `NodeDefAPI`. Get it with [`NodeDefApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `NodeDefAPI`. Get it with [`NodeDefApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdShadeNodeDefAPI`."]
 #[doc(alias = "UsdShadeNodeDefAPI")]
 #[doc(alias = "NodeDefAPI")]
@@ -443,17 +587,22 @@ impl<'a> NodeDefApi<'a> {
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of the schema on `prim`, without checking that the prim
+    /// has it applied (`HasAPI`), as [`Self::get`] does: a getter reads
+    /// what the prim authors, and the schema's fallbacks only for a
+    /// prim with the schema applied. For a built-in's view.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self { base: prim }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> NodeDefApiEdit {
-        NodeDefApiEdit::from_path(self.path())
+        NodeDefApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
@@ -467,33 +616,39 @@ impl<'a> NodeDefApi<'a> {
     #[doc(alias = "UsdShadeNodeDefAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<NodeDefApiEdit, CannotApply> {
-        edit.apply(path, Self::SCHEMA, None)?;
-        Ok(NodeDefApiEdit::from_path(path))
+        edit.apply_api(path, Self::SCHEMA, None)
+            .map(NodeDefApiEdit::from_prim)
     }
 
     /// The USD name of [`Self::id`].
     pub const ID: &'static str = "info:id";
 
-    uniform_attribute! {
-        #[doc = "The id is an identifier for the type or purpose of the shader."]
-        #[doc = ""]
-        #[doc = "USD attribute `info:id` (`token`, uniform)."]
-        #[doc = "C++ read: `UsdShadeNodeDefAPI::GetIdAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdShadeNodeDefAPI::GetIdAttr")]
-        #[doc(alias = "GetIdAttr")]
-        id, "info:id", &'a str, crate::value::read_token
+    #[doc = "The id is an identifier for the type or purpose of the shader."]
+    #[doc = ""]
+    #[doc = "USD attribute `info:id` (`token`, uniform)."]
+    #[doc = "C++ read: `UsdShadeNodeDefAPI::GetIdAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdShadeNodeDefAPI::GetIdAttr")]
+    #[doc(alias = "GetIdAttr")]
+    #[must_use]
+    pub fn id(&self) -> Option<&'a str> {
+        self.read_value("info:id", crate::value::read_token)
     }
+
     /// The USD name of [`Self::implementation_source`].
     pub const IMPLEMENTATION_SOURCE: &'static str = "info:implementationSource";
 
-    uniform_attribute! {
-        #[doc = "Specifies the attribute that should be consulted to get the shader's implementation or its source code."]
-        #[doc = ""]
-        #[doc = "USD attribute `info:implementationSource` (`token`, uniform; fallback `\"id\"`)."]
-        #[doc = "C++ read: `UsdShadeNodeDefAPI::GetImplementationSourceAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdShadeNodeDefAPI::GetImplementationSourceAttr")]
-        #[doc(alias = "GetImplementationSourceAttr")]
-        implementation_source, "info:implementationSource", NodeDefApiImplementationSource, NodeDefApiImplementationSource::read
+    #[doc = "Specifies the attribute that should be consulted to get the shader's implementation or its source code."]
+    #[doc = ""]
+    #[doc = "USD attribute `info:implementationSource` (`token`, uniform; fallback `\"id\"`)."]
+    #[doc = "C++ read: `UsdShadeNodeDefAPI::GetImplementationSourceAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdShadeNodeDefAPI::GetImplementationSourceAttr")]
+    #[doc(alias = "GetImplementationSourceAttr")]
+    #[must_use]
+    pub fn implementation_source(&self) -> Option<NodeDefApiImplementationSource> {
+        self.read_value(
+            "info:implementationSource",
+            NodeDefApiImplementationSource::read,
+        )
     }
 }
 
@@ -517,38 +672,48 @@ impl NodeDefApiEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
-        Self {
-            base: PrimEdit::new(path),
-        }
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whether or not it has the schema applied.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
+        Self { base: prim }
     }
 
-    set_uniform_attribute! {
-        #[doc = "The id is an identifier for the type or purpose of the shader."]
-        #[doc = ""]
-        #[doc = "USD attribute `info:id` (`token`, uniform)."]
-        #[doc = "C++ authoring: `UsdShadeNodeDefAPI::CreateIdAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdShadeNodeDefAPI::CreateIdAttr")]
-        #[doc(alias = "CreateIdAttr")]
-        set_id, "info:id", &str, crate::value::write_token
+    #[doc = "The id is an identifier for the type or purpose of the shader."]
+    #[doc = ""]
+    #[doc = "USD attribute `info:id` (`token`, uniform)."]
+    #[doc = "C++ authoring: `UsdShadeNodeDefAPI::CreateIdAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdShadeNodeDefAPI::CreateIdAttr")]
+    #[doc(alias = "CreateIdAttr")]
+    pub fn set_id(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
+        let value = crate::value::write_token(value, edit.tokens());
+        self.write_value(edit, "info:id", None, value);
+        self
     }
-    set_uniform_attribute! {
-        #[doc = "Specifies the attribute that should be consulted to get the shader's implementation or its source code."]
-        #[doc = ""]
-        #[doc = "USD attribute `info:implementationSource` (`token`, uniform; fallback `\"id\"`)."]
-        #[doc = "C++ authoring: `UsdShadeNodeDefAPI::CreateImplementationSourceAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdShadeNodeDefAPI::CreateImplementationSourceAttr")]
-        #[doc(alias = "CreateImplementationSourceAttr")]
-        set_implementation_source, "info:implementationSource", NodeDefApiImplementationSource, NodeDefApiImplementationSource::write
+
+    #[doc = "Specifies the attribute that should be consulted to get the shader's implementation or its source code."]
+    #[doc = ""]
+    #[doc = "USD attribute `info:implementationSource` (`token`, uniform; fallback `\"id\"`)."]
+    #[doc = "C++ authoring: `UsdShadeNodeDefAPI::CreateImplementationSourceAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdShadeNodeDefAPI::CreateImplementationSourceAttr")]
+    #[doc(alias = "CreateImplementationSourceAttr")]
+    pub fn set_implementation_source(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        value: NodeDefApiImplementationSource,
+    ) -> &Self {
+        let value = value.write(edit.tokens());
+        self.write_value(edit, "info:implementationSource", None, value);
+        self
     }
 }
 
 #[doc = "A node-graph is a container for shading nodes, as well as other node-graphs."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `NodeGraph`, inheriting [`crate::usd::Typed`]. Construct it with [`NodeGraph::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `NodeGraph`, inheriting [`crate::usd::Typed`]. Construct it with [`NodeGraph::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdShadeNodeGraph`."]
 #[doc(alias = "UsdShadeNodeGraph")]
 #[derive(Clone, Copy, Debug)]
@@ -575,19 +740,24 @@ impl<'a> NodeGraph<'a> {
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .is_a(path, Self::SCHEMA)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of `prim` as of the schema, without checking that it is
+    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// authors, and the schema's fallbacks only for a prim of the schema.
+    /// For the view of a schema built on this one.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self {
-            base: crate::usd::Typed::from_view(prim),
+            base: crate::usd::Typed::from_prim_unchecked(prim),
         }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> NodeGraphEdit {
-        NodeGraphEdit::from_path(self.path())
+        NodeGraphEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Defines `path` as a new `def NodeGraph` prim spec in the edit's target.
@@ -598,8 +768,7 @@ impl<'a> NodeGraph<'a> {
     #[doc(alias = "UsdShadeNodeGraph::Define")]
     #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> NodeGraphEdit {
-        edit.define(path, Self::SCHEMA);
-        NodeGraphEdit::from_path(path)
+        NodeGraphEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
     }
 }
 
@@ -623,19 +792,22 @@ impl NodeGraphEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whatever its type.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
         Self {
-            base: crate::usd::TypedEdit::from_path(path),
+            base: crate::usd::TypedEdit::from_prim(prim),
         }
     }
 }
 
 #[doc = "Base class for all USD shaders."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `Shader`, inheriting [`crate::usd::Typed`]. Construct it with [`Shader::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `Shader`, inheriting [`crate::usd::Typed`]. Construct it with [`Shader::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdShadeShader`."]
 #[doc(alias = "UsdShadeShader")]
 #[derive(Clone, Copy, Debug)]
@@ -662,19 +834,24 @@ impl<'a> Shader<'a> {
     pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .is_a(path, Self::SCHEMA)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of `prim` as of the schema, without checking that it is
+    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// authors, and the schema's fallbacks only for a prim of the schema.
+    /// For the view of a schema built on this one.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self {
-            base: crate::usd::Typed::from_view(prim),
+            base: crate::usd::Typed::from_prim_unchecked(prim),
         }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> ShaderEdit {
-        ShaderEdit::from_path(self.path())
+        ShaderEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Defines `path` as a new `def Shader` prim spec in the edit's target.
@@ -685,14 +862,13 @@ impl<'a> Shader<'a> {
     #[doc(alias = "UsdShadeShader::Define")]
     #[doc(alias = "Define")]
     pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> ShaderEdit {
-        edit.define(path, Self::SCHEMA);
-        ShaderEdit::from_path(path)
+        ShaderEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
     }
 
     #[doc = "The prim's built-in `NodeDefAPI`, which every `Shader` has."]
     #[must_use]
     pub fn node_def_api(&self) -> NodeDefApi<'a> {
-        NodeDefApi::from_view(PrimView::new(self.scene(), self.path()))
+        NodeDefApi::from_prim_unchecked(PrimView::new(self.scene(), self.path()))
     }
 }
 
@@ -716,18 +892,21 @@ impl ShaderEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whatever its type.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
         Self {
-            base: crate::usd::TypedEdit::from_path(path),
+            base: crate::usd::TypedEdit::from_prim(prim),
         }
     }
 
     #[doc = "An edit handle for the prim's built-in `NodeDefAPI`."]
     #[must_use]
     pub fn node_def_api(&self) -> NodeDefApiEdit {
-        NodeDefApiEdit::from_path(self.path())
+        NodeDefApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 }

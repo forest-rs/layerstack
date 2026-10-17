@@ -220,12 +220,6 @@ impl<'a> Scene<'a> {
     pub(crate) fn root(&self) -> Option<PathId> {
         self.store.paths().lookup(&layerstack::Path::root())
     }
-
-    /// `instance` as the store holds it, if any prim could apply it.
-    pub(crate) fn instance_name(&self, instance: &str) -> Option<&'a str> {
-        let tokens = self.store.tokens();
-        tokens.lookup(instance).map(|token| tokens.resolve(token))
-    }
 }
 
 /// A composed prim, which every schema view reads through.
@@ -504,10 +498,12 @@ impl<'a> PrimView<'a> {
             .is_some_and(|defined| defined.kind == PropertyKind::Attribute)
     }
 
-    /// The composed targets of the relationship `name`.
+    /// The composed targets of the relationship `name` (its USD name);
+    /// empty when it has none.
     ///
     /// Spec: AOUSD Core §12.4.
-    pub(crate) fn read_targets(&self, name: &str) -> Vec<TargetPath> {
+    #[must_use]
+    pub fn read_targets(&self, name: &str) -> Vec<TargetPath> {
         self.scene
             .token(name)
             .and_then(|token| {
@@ -528,9 +524,19 @@ pub struct PrimEdit {
 }
 
 impl PrimEdit {
-    /// A handle authoring the prim at `path`, which the caller has
-    /// checked exists.
-    pub(crate) fn new(path: PathId) -> Self {
+    /// A handle authoring the prim at `path` through `edit`, if the prim
+    /// exists: on the edit's stage, or defined earlier in `edit`.
+    #[must_use]
+    pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
+        edit.exists(path).then_some(Self { path })
+    }
+
+    /// A handle authoring the prim at `path`, without checking that it
+    /// exists: a setter on a prim that does not authors an `over` for it,
+    /// which [`Self::new`] never lets happen. For a prim known to exist,
+    /// such as the prim of a schema view had from its `new` or `get`.
+    #[must_use]
+    pub fn from_path_unchecked(path: PathId) -> Self {
         Self { path }
     }
 
@@ -540,9 +546,16 @@ impl PrimEdit {
         self.path
     }
 
-    /// Authors `value` for the attribute `name`, at `time` or as its
-    /// default.
-    pub(crate) fn write_value(
+    /// Authors `value` for the attribute `name` (its USD name), as a time
+    /// sample at the time code `time`, or as its default for `None`. An
+    /// attribute no layer authors yet is created as the prim's schemas
+    /// define it: the type and variability of their definition.
+    ///
+    /// OpenUSD: `UsdAttribute::Set`, after `UsdPrim::CreateAttribute` for a
+    /// schema attribute.
+    ///
+    /// Spec: AOUSD Core §12.3 (attribute values).
+    pub fn write_value(
         &self,
         edit: &mut SchemaEdit<'_>,
         name: &str,
@@ -552,13 +565,13 @@ impl PrimEdit {
         edit.set_value(self.path, name, time, value);
     }
 
-    /// Authors `targets` as the explicit targets of the relationship `name`.
-    pub(crate) fn write_targets(
-        &self,
-        edit: &mut SchemaEdit<'_>,
-        name: &str,
-        targets: &[TargetPath],
-    ) {
+    /// Authors `targets`, stage paths, as the explicit targets of the
+    /// relationship `name` (its USD name), mapped through the edit target.
+    ///
+    /// OpenUSD: `UsdRelationship::SetTargets`.
+    ///
+    /// Spec: AOUSD Core §12.4 (relationships).
+    pub fn write_targets(&self, edit: &mut SchemaEdit<'_>, name: &str, targets: &[TargetPath]) {
         edit.set_targets(self.path, name, targets);
     }
 }
@@ -583,7 +596,10 @@ impl<'a> core::ops::Deref for InstanceView<'a> {
 }
 
 impl<'a> InstanceView<'a> {
-    pub(crate) fn new(prim: PrimView<'a>, instance: &'a str) -> Self {
+    /// A view of the instance `instance` of a multiple-apply schema on
+    /// `prim`, of no particular schema, as [`PrimView::new`] is.
+    #[must_use]
+    pub fn new(prim: PrimView<'a>, instance: &'a str) -> Self {
         Self { prim, instance }
     }
 
@@ -593,7 +609,12 @@ impl<'a> InstanceView<'a> {
         self.instance
     }
 
-    pub(crate) fn read_value<T>(
+    /// [`PrimView::read_value`] of the instance's property `template`: a
+    /// multiple-apply schema's property name, whose `__INSTANCE_NAME__`
+    /// segment is the instance name (`collection:__INSTANCE_NAME__:includes`
+    /// reads `collection:<instance>:includes`); a name without that segment
+    /// is read as it is.
+    pub fn read_value<T>(
         &self,
         template: &str,
         read: impl Fn(&Value, &'a TokenInterner) -> Option<T>,
@@ -602,7 +623,9 @@ impl<'a> InstanceView<'a> {
             .read_value(&instance_name(template, self.instance), read)
     }
 
-    pub(crate) fn read_value_at<T>(
+    /// [`PrimView::read_value_at`] of the instance's property `template`
+    /// (see [`Self::read_value`]).
+    pub fn read_value_at<T>(
         &self,
         template: &str,
         time: f64,
@@ -626,7 +649,10 @@ impl<'a> InstanceView<'a> {
             .try_read_value(&instance_name(template, self.instance), time, read)
     }
 
-    pub(crate) fn read_targets(&self, template: &str) -> Vec<TargetPath> {
+    /// [`PrimView::read_targets`] of the instance's relationship `template`
+    /// (see [`Self::read_value`]).
+    #[must_use]
+    pub fn read_targets(&self, template: &str) -> Vec<TargetPath> {
         self.prim
             .read_targets(&instance_name(template, self.instance))
     }
@@ -649,9 +675,12 @@ impl core::ops::Deref for InstanceEdit {
 }
 
 impl InstanceEdit {
-    pub(crate) fn new(path: PathId, instance: &str) -> Self {
+    /// A handle authoring the instance `instance` of a multiple-apply
+    /// schema on the prim `prim` authors.
+    #[must_use]
+    pub fn new(prim: PrimEdit, instance: &str) -> Self {
         Self {
-            prim: PrimEdit::new(path),
+            prim,
             instance: alloc::sync::Arc::from(instance),
         }
     }
@@ -662,7 +691,10 @@ impl InstanceEdit {
         &self.instance
     }
 
-    pub(crate) fn write_value(
+    /// [`PrimEdit::write_value`] of the instance's attribute `template`:
+    /// a multiple-apply schema's property name, whose `__INSTANCE_NAME__`
+    /// segment is the instance name (see [`InstanceView::read_value`]).
+    pub fn write_value(
         &self,
         edit: &mut SchemaEdit<'_>,
         template: &str,
@@ -673,12 +705,9 @@ impl InstanceEdit {
             .write_value(edit, &instance_name(template, &self.instance), time, value);
     }
 
-    pub(crate) fn write_targets(
-        &self,
-        edit: &mut SchemaEdit<'_>,
-        template: &str,
-        targets: &[TargetPath],
-    ) {
+    /// [`PrimEdit::write_targets`] of the instance's relationship
+    /// `template` (see [`Self::write_value`]).
+    pub fn write_targets(&self, edit: &mut SchemaEdit<'_>, template: &str, targets: &[TargetPath]) {
         self.prim
             .write_targets(edit, &instance_name(template, &self.instance), targets);
     }
@@ -702,156 +731,6 @@ pub(crate) fn instance_name(template: &str, instance: &str) -> String {
         }
     }
     out
-}
-
-/// A typed or single-apply view's getters for one attribute: the value at
-/// the default time and at a time code.
-macro_rules! attribute {
-    ($(#[$doc:meta])* $get:ident, $get_at:ident, $name:literal, $ty:ty, $read:expr) => {
-        $(#[$doc])*
-        #[must_use]
-        pub fn $get(&self) -> Option<$ty> {
-            self.read_value($name, $read)
-        }
-
-        #[doc = concat!(
-            "[`Self::", stringify!($get), "`] at the time code `time`, ",
-            "interpolated with `interp`."
-        )]
-        #[must_use]
-        pub fn $get_at(&self, time: f64, interp: ::layerstack::InterpolationType) -> Option<$ty> {
-            self.read_value_at($name, time, interp, $read)
-        }
-    };
-}
-
-/// A view's getter for one relationship: its composed targets.
-macro_rules! relationship {
-    ($(#[$doc:meta])* $get:ident, $name:literal) => {
-        $(#[$doc])*
-        #[must_use]
-        pub fn $get(&self) -> ::alloc::vec::Vec<::layerstack::TargetPath> {
-            self.read_targets($name)
-        }
-    };
-}
-
-/// An edit handle's setters for one attribute: its default and a time
-/// sample.
-macro_rules! set_attribute {
-    ($(#[$doc:meta])* $set:ident, $set_at:ident, $name:literal, $ty:ty, $write:expr) => {
-        $(#[$doc])*
-        pub fn $set(&self, edit: &mut $crate::SchemaEdit<'_>, value: $ty) -> &Self {
-            let value = ($write)(value, edit.tokens());
-            self.write_value(edit, $name, None, value);
-            self
-        }
-
-        #[doc = concat!(
-            "[`Self::", stringify!($set), "`] as a time sample at the time code `time`."
-        )]
-        pub fn $set_at(&self, edit: &mut $crate::SchemaEdit<'_>, time: f64, value: $ty) -> &Self {
-            let value = ($write)(value, edit.tokens());
-            self.write_value(edit, $name, Some(time), value);
-            self
-        }
-    };
-}
-
-/// An edit handle's setter for one relationship: its explicit targets.
-macro_rules! set_relationship {
-    ($(#[$doc:meta])* $set:ident, $name:literal) => {
-        $(#[$doc])*
-        pub fn $set(
-            &self,
-            edit: &mut $crate::SchemaEdit<'_>,
-            targets: &[::layerstack::TargetPath],
-        ) -> &Self {
-            self.write_targets(edit, $name, targets);
-            self
-        }
-    };
-}
-
-/// An enum of a token property's `allowedTokens`, with `Other` for any
-/// token the schema does not list.
-macro_rules! token_enum {
-    (
-        $(#[$doc:meta])* $name:ident {
-            $($(#[$vdoc:meta])* $variant:ident = $token:literal,)*
-        }
-    ) => {
-        $(#[$doc])*
-        #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-        pub enum $name {
-            $($(#[$vdoc])* $variant,)*
-            /// A token the schema does not list: OpenUSD does not enforce
-            /// `allowedTokens`, so an authored value may be anything.
-            Other(::alloc::sync::Arc<str>),
-        }
-
-        impl $name {
-            /// The tokens the schema allows, in its order.
-            pub const TOKENS: &'static [&'static str] = &[$($token),*];
-
-            /// The value `token` names, `Other` when the schema does not
-            /// list it.
-            #[must_use]
-            pub fn from_token(token: &str) -> Self {
-                match token {
-                    $($token => Self::$variant,)*
-                    other => Self::Other(::alloc::sync::Arc::from(other)),
-                }
-            }
-
-            /// The token this value is.
-            #[must_use]
-            pub fn as_str(&self) -> &str {
-                match self {
-                    $(Self::$variant => $token,)*
-                    Self::Other(token) => token,
-                }
-            }
-
-            pub(crate) fn read(
-                value: &::layerstack::Value,
-                tokens: &::layerstack::TokenInterner,
-            ) -> Option<Self> {
-                $crate::value::read_token(value, tokens).map(Self::from_token)
-            }
-
-            pub(crate) fn write(
-                self,
-                tokens: &mut ::layerstack::TokenInterner,
-            ) -> ::layerstack::Value {
-                $crate::value::write_token(self.as_str(), tokens)
-            }
-        }
-    };
-}
-
-/// A typed or single-apply view's getter for one `uniform` attribute, which
-/// has no time samples to read.
-macro_rules! uniform_attribute {
-    ($(#[$doc:meta])* $get:ident, $name:literal, $ty:ty, $read:expr) => {
-        $(#[$doc])*
-        #[must_use]
-        pub fn $get(&self) -> Option<$ty> {
-            self.read_value($name, $read)
-        }
-    };
-}
-
-/// An edit handle's setter for one `uniform` attribute: its default.
-macro_rules! set_uniform_attribute {
-    ($(#[$doc:meta])* $set:ident, $name:literal, $ty:ty, $write:expr) => {
-        $(#[$doc])*
-        pub fn $set(&self, edit: &mut $crate::SchemaEdit<'_>, value: $ty) -> &Self {
-            let value = ($write)(value, edit.tokens());
-            self.write_value(edit, $name, None, value);
-            self
-        }
-    };
 }
 
 /// Whether an authored declaration or schema defines a relationship on an existing prim.

@@ -25,7 +25,7 @@ use layerstack::{CannotApply, PathId};
 use crate::{PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "This API extends and configures the core UsdProcGenerativeProcedural schema defined within usdProc for use with hydra generative procedurals as defined within hdGp."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `HydraGenerativeProceduralAPI`. Get it with [`HydraGenerativeProceduralApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `HydraGenerativeProceduralAPI`. Get it with [`HydraGenerativeProceduralApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdHydraGenerativeProceduralAPI`."]
 #[doc(alias = "UsdHydraGenerativeProceduralAPI")]
 #[doc(alias = "HydraGenerativeProceduralAPI")]
@@ -54,17 +54,22 @@ impl<'a> HydraGenerativeProceduralApi<'a> {
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of the schema on `prim`, without checking that the prim
+    /// has it applied (`HasAPI`), as [`Self::get`] does: a getter reads
+    /// what the prim authors, and the schema's fallbacks only for a
+    /// prim with the schema applied. For a built-in's view.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self { base: prim }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> HydraGenerativeProceduralApiEdit {
-        HydraGenerativeProceduralApiEdit::from_path(self.path())
+        HydraGenerativeProceduralApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
@@ -81,33 +86,61 @@ impl<'a> HydraGenerativeProceduralApi<'a> {
         edit: &mut SchemaEdit<'_>,
         path: PathId,
     ) -> Result<HydraGenerativeProceduralApiEdit, CannotApply> {
-        edit.apply(path, Self::SCHEMA, None)?;
-        Ok(HydraGenerativeProceduralApiEdit::from_path(path))
+        edit.apply_api(path, Self::SCHEMA, None)
+            .map(HydraGenerativeProceduralApiEdit::from_prim)
     }
 
     /// The USD name of [`Self::procedural_type`].
     pub const PROCEDURAL_TYPE: &'static str = "primvars:hdGp:proceduralType";
 
-    attribute! {
-        #[doc = "The registered name of a HdGpGenerativeProceduralPlugin to be executed."]
-        #[doc = ""]
-        #[doc = "USD attribute `primvars:hdGp:proceduralType` (`token`)."]
-        #[doc = "C++ read: `UsdHydraGenerativeProceduralAPI::GetProceduralTypeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdHydraGenerativeProceduralAPI::GetProceduralTypeAttr")]
-        #[doc(alias = "GetProceduralTypeAttr")]
-        procedural_type, procedural_type_at, "primvars:hdGp:proceduralType", &'a str, crate::value::read_token
+    #[doc = "The registered name of a HdGpGenerativeProceduralPlugin to be executed."]
+    #[doc = ""]
+    #[doc = "USD attribute `primvars:hdGp:proceduralType` (`token`)."]
+    #[doc = "C++ read: `UsdHydraGenerativeProceduralAPI::GetProceduralTypeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdHydraGenerativeProceduralAPI::GetProceduralTypeAttr")]
+    #[doc(alias = "GetProceduralTypeAttr")]
+    #[must_use]
+    pub fn procedural_type(&self) -> Option<&'a str> {
+        self.read_value("primvars:hdGp:proceduralType", crate::value::read_token)
     }
+
+    #[doc = "[`Self::procedural_type`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn procedural_type_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<&'a str> {
+        self.read_value_at(
+            "primvars:hdGp:proceduralType",
+            time,
+            interp,
+            crate::value::read_token,
+        )
+    }
+
     /// The USD name of [`Self::procedural_system`].
     pub const PROCEDURAL_SYSTEM: &'static str = "proceduralSystem";
 
-    attribute! {
-        #[doc = "This value should correspond to a configured instance of HdGpGenerativeProceduralResolvingSceneIndex which will evaluate the procedural."]
-        #[doc = ""]
-        #[doc = "USD attribute `proceduralSystem` (`token`; fallback `\"hydraGenerativeProcedural\"`)."]
-        #[doc = "C++ read: `UsdHydraGenerativeProceduralAPI::GetProceduralSystemAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdHydraGenerativeProceduralAPI::GetProceduralSystemAttr")]
-        #[doc(alias = "GetProceduralSystemAttr")]
-        procedural_system, procedural_system_at, "proceduralSystem", &'a str, crate::value::read_token
+    #[doc = "This value should correspond to a configured instance of HdGpGenerativeProceduralResolvingSceneIndex which will evaluate the procedural."]
+    #[doc = ""]
+    #[doc = "USD attribute `proceduralSystem` (`token`; fallback `\"hydraGenerativeProcedural\"`)."]
+    #[doc = "C++ read: `UsdHydraGenerativeProceduralAPI::GetProceduralSystemAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdHydraGenerativeProceduralAPI::GetProceduralSystemAttr")]
+    #[doc(alias = "GetProceduralSystemAttr")]
+    #[must_use]
+    pub fn procedural_system(&self) -> Option<&'a str> {
+        self.read_value("proceduralSystem", crate::value::read_token)
+    }
+
+    #[doc = "[`Self::procedural_system`] at the time code `time`, interpolated with `interp`."]
+    #[must_use]
+    pub fn procedural_system_at(
+        &self,
+        time: f64,
+        interp: ::layerstack::InterpolationType,
+    ) -> Option<&'a str> {
+        self.read_value_at("proceduralSystem", time, interp, crate::value::read_token)
     }
 }
 
@@ -131,38 +164,68 @@ impl HydraGenerativeProceduralApiEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
-        Self {
-            base: PrimEdit::new(path),
-        }
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whether or not it has the schema applied.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
+        Self { base: prim }
     }
 
-    set_attribute! {
-        #[doc = "The registered name of a HdGpGenerativeProceduralPlugin to be executed."]
-        #[doc = ""]
-        #[doc = "USD attribute `primvars:hdGp:proceduralType` (`token`)."]
-        #[doc = "C++ authoring: `UsdHydraGenerativeProceduralAPI::CreateProceduralTypeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdHydraGenerativeProceduralAPI::CreateProceduralTypeAttr")]
-        #[doc(alias = "CreateProceduralTypeAttr")]
-        set_procedural_type, set_procedural_type_at, "primvars:hdGp:proceduralType", &str, crate::value::write_token
+    #[doc = "The registered name of a HdGpGenerativeProceduralPlugin to be executed."]
+    #[doc = ""]
+    #[doc = "USD attribute `primvars:hdGp:proceduralType` (`token`)."]
+    #[doc = "C++ authoring: `UsdHydraGenerativeProceduralAPI::CreateProceduralTypeAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdHydraGenerativeProceduralAPI::CreateProceduralTypeAttr")]
+    #[doc(alias = "CreateProceduralTypeAttr")]
+    pub fn set_procedural_type(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
+        let value = crate::value::write_token(value, edit.tokens());
+        self.write_value(edit, "primvars:hdGp:proceduralType", None, value);
+        self
     }
-    set_attribute! {
-        #[doc = "This value should correspond to a configured instance of HdGpGenerativeProceduralResolvingSceneIndex which will evaluate the procedural."]
-        #[doc = ""]
-        #[doc = "USD attribute `proceduralSystem` (`token`; fallback `\"hydraGenerativeProcedural\"`)."]
-        #[doc = "C++ authoring: `UsdHydraGenerativeProceduralAPI::CreateProceduralSystemAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdHydraGenerativeProceduralAPI::CreateProceduralSystemAttr")]
-        #[doc(alias = "CreateProceduralSystemAttr")]
-        set_procedural_system, set_procedural_system_at, "proceduralSystem", &str, crate::value::write_token
+
+    #[doc = "[`Self::set_procedural_type`] as a time sample at the time code `time`."]
+    pub fn set_procedural_type_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: &str,
+    ) -> &Self {
+        let value = crate::value::write_token(value, edit.tokens());
+        self.write_value(edit, "primvars:hdGp:proceduralType", Some(time), value);
+        self
+    }
+
+    #[doc = "This value should correspond to a configured instance of HdGpGenerativeProceduralResolvingSceneIndex which will evaluate the procedural."]
+    #[doc = ""]
+    #[doc = "USD attribute `proceduralSystem` (`token`; fallback `\"hydraGenerativeProcedural\"`)."]
+    #[doc = "C++ authoring: `UsdHydraGenerativeProceduralAPI::CreateProceduralSystemAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdHydraGenerativeProceduralAPI::CreateProceduralSystemAttr")]
+    #[doc(alias = "CreateProceduralSystemAttr")]
+    pub fn set_procedural_system(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
+        let value = crate::value::write_token(value, edit.tokens());
+        self.write_value(edit, "proceduralSystem", None, value);
+        self
+    }
+
+    #[doc = "[`Self::set_procedural_system`] as a time sample at the time code `time`."]
+    pub fn set_procedural_system_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: &str,
+    ) -> &Self {
+        let value = crate::value::write_token(value, edit.tokens());
+        self.write_value(edit, "proceduralSystem", Some(time), value);
+        self
     }
 }
 
 #[doc = "Provides Hydra-specific properties for UsdRenderPass."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `HydraRenderPassAPI`. Get it with [`HydraRenderPassApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `HydraRenderPassAPI`. Get it with [`HydraRenderPassApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdHydraRenderPassAPI`."]
 #[doc(alias = "UsdHydraRenderPassAPI")]
 #[doc(alias = "HydraRenderPassAPI")]
@@ -191,17 +254,22 @@ impl<'a> HydraRenderPassApi<'a> {
     pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
         scene
             .has_api(path, Self::SCHEMA, None)
-            .then(|| Self::from_view(PrimView::new(*scene, path)))
+            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
     }
 
-    pub(crate) fn from_view(prim: PrimView<'a>) -> Self {
+    /// A view of the schema on `prim`, without checking that the prim
+    /// has it applied (`HasAPI`), as [`Self::get`] does: a getter reads
+    /// what the prim authors, and the schema's fallbacks only for a
+    /// prim with the schema applied. For a built-in's view.
+    #[must_use]
+    pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self { base: prim }
     }
 
     /// An edit handle for this prim.
     #[must_use]
     pub fn edit(&self) -> HydraRenderPassApiEdit {
-        HydraRenderPassApiEdit::from_path(self.path())
+        HydraRenderPassApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
@@ -218,21 +286,22 @@ impl<'a> HydraRenderPassApi<'a> {
         edit: &mut SchemaEdit<'_>,
         path: PathId,
     ) -> Result<HydraRenderPassApiEdit, CannotApply> {
-        edit.apply(path, Self::SCHEMA, None)?;
-        Ok(HydraRenderPassApiEdit::from_path(path))
+        edit.apply_api(path, Self::SCHEMA, None)
+            .map(HydraRenderPassApiEdit::from_prim)
     }
 
     /// The USD name of [`Self::hydra_renderer_name`].
     pub const HYDRA_RENDERER_NAME: &'static str = "hydra:rendererName";
 
-    uniform_attribute! {
-        #[doc = "The name of the Hydra renderer to use if the user does not otherwise specify one to the application."]
-        #[doc = ""]
-        #[doc = "USD attribute `hydra:rendererName` (`token`, uniform)."]
-        #[doc = "C++ read: `UsdHydraRenderPassAPI::GetHydraRendererNameAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
-        #[doc(alias = "UsdHydraRenderPassAPI::GetHydraRendererNameAttr")]
-        #[doc(alias = "GetHydraRendererNameAttr")]
-        hydra_renderer_name, "hydra:rendererName", &'a str, crate::value::read_token
+    #[doc = "The name of the Hydra renderer to use if the user does not otherwise specify one to the application."]
+    #[doc = ""]
+    #[doc = "USD attribute `hydra:rendererName` (`token`, uniform)."]
+    #[doc = "C++ read: `UsdHydraRenderPassAPI::GetHydraRendererNameAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
+    #[doc(alias = "UsdHydraRenderPassAPI::GetHydraRendererNameAttr")]
+    #[doc(alias = "GetHydraRendererNameAttr")]
+    #[must_use]
+    pub fn hydra_renderer_name(&self) -> Option<&'a str> {
+        self.read_value("hydra:rendererName", crate::value::read_token)
     }
 }
 
@@ -256,22 +325,25 @@ impl HydraRenderPassApiEdit {
     /// never create a prim that does not.
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        edit.exists(path).then(|| Self::from_path(path))
+        PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
-    pub(crate) fn from_path(path: PathId) -> Self {
-        Self {
-            base: PrimEdit::new(path),
-        }
+    /// A handle authoring the schema's properties on the prim `prim`
+    /// authors, whether or not it has the schema applied.
+    #[must_use]
+    pub fn from_prim(prim: PrimEdit) -> Self {
+        Self { base: prim }
     }
 
-    set_uniform_attribute! {
-        #[doc = "The name of the Hydra renderer to use if the user does not otherwise specify one to the application."]
-        #[doc = ""]
-        #[doc = "USD attribute `hydra:rendererName` (`token`, uniform)."]
-        #[doc = "C++ authoring: `UsdHydraRenderPassAPI::CreateHydraRendererNameAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
-        #[doc(alias = "UsdHydraRenderPassAPI::CreateHydraRendererNameAttr")]
-        #[doc(alias = "CreateHydraRendererNameAttr")]
-        set_hydra_renderer_name, "hydra:rendererName", &str, crate::value::write_token
+    #[doc = "The name of the Hydra renderer to use if the user does not otherwise specify one to the application."]
+    #[doc = ""]
+    #[doc = "USD attribute `hydra:rendererName` (`token`, uniform)."]
+    #[doc = "C++ authoring: `UsdHydraRenderPassAPI::CreateHydraRendererNameAttr().Set()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    #[doc(alias = "UsdHydraRenderPassAPI::CreateHydraRendererNameAttr")]
+    #[doc(alias = "CreateHydraRendererNameAttr")]
+    pub fn set_hydra_renderer_name(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
+        let value = crate::value::write_token(value, edit.tokens());
+        self.write_value(edit, "hydra:rendererName", None, value);
+        self
     }
 }

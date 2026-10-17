@@ -34,18 +34,34 @@ impl core::fmt::Debug for Prim<'_> {
     }
 }
 /// Borrowed attribute view. Creation checks its composed property kind.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 #[doc(alias = "UsdAttribute")]
 pub struct Attribute<'a> {
     stage: &'a Stage,
+    store: &'a dyn LayerStore,
     path: PropertyPath,
 }
+impl core::fmt::Debug for Attribute<'_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Attribute")
+            .field("path", &self.path)
+            .finish_non_exhaustive()
+    }
+}
 /// Borrowed relationship view. Creation checks its composed property kind.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 #[doc(alias = "UsdRelationship")]
 pub struct Relationship<'a> {
     stage: &'a Stage,
+    store: &'a dyn LayerStore,
     path: PropertyPath,
+}
+impl core::fmt::Debug for Relationship<'_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Relationship")
+            .field("path", &self.path)
+            .finish_non_exhaustive()
+    }
 }
 impl Stage {
     /// Captured token/path domain affinity. Public composition always supplies
@@ -70,10 +86,16 @@ impl Stage {
         match path {
             TargetPath::Prim(path) => self.prim(path, store).map(Object::Prim),
             TargetPath::Property(path) => match self.property_kind(path)? {
-                PropertyKind::Attribute => Some(Object::Attribute(Attribute { stage: self, path })),
-                PropertyKind::Relationship => {
-                    Some(Object::Relationship(Relationship { stage: self, path }))
-                }
+                PropertyKind::Attribute => Some(Object::Attribute(Attribute {
+                    stage: self,
+                    store,
+                    path,
+                })),
+                PropertyKind::Relationship => Some(Object::Relationship(Relationship {
+                    stage: self,
+                    store,
+                    path,
+                })),
             },
         }
     }
@@ -115,6 +137,7 @@ impl<'a> Prim<'a> {
         let path = PropertyPath::new(self.path, self.store.tokens().lookup(name)?);
         (self.stage.property_kind(path) == Some(PropertyKind::Attribute)).then_some(Attribute {
             stage: self.stage,
+            store: self.store,
             path,
         })
     }
@@ -126,6 +149,7 @@ impl<'a> Prim<'a> {
         (self.stage.property_kind(path) == Some(PropertyKind::Relationship)).then_some(
             Relationship {
                 stage: self.stage,
+                store: self.store,
                 path,
             },
         )
@@ -178,6 +202,12 @@ impl Attribute<'_> {
             .map(|r| r.value)
             .unwrap_or_default()
     }
+    /// Why the connections are what they are: each opinion's paths, and
+    /// those composition dropped, with why (see
+    /// [`Stage::explain_targets`]).
+    pub fn explain_connections(self) -> Option<TargetsExplanation> {
+        self.stage.explain_targets(self.path, self.store)
+    }
     /// Composed property metadata, including schema fallbacks.
     #[doc(alias = "UsdAttribute::GetMetadata")]
     #[doc(alias = "GetMetadata")]
@@ -229,6 +259,11 @@ impl Relationship<'_> {
             .resolve_target_list_path(self.path)
             .map(|r| r.value)
             .unwrap_or_default()
+    }
+    /// Why the targets are what they are: each opinion's paths, and those
+    /// composition dropped, with why (see [`Stage::explain_targets`]).
+    pub fn explain_targets(self) -> Option<TargetsExplanation> {
+        self.stage.explain_targets(self.path, self.store)
     }
     /// Ordered terminal targets after recursively forwarding relationships.
     #[doc(alias = "UsdRelationship::GetForwardedTargets")]

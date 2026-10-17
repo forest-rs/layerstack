@@ -1,0 +1,20 @@
+#usda 1.0
+
+def "Lib"
+{
+    def "Item"
+    {
+        rel r = [</Lib/Item/Part>, </Lib/Other>]
+        double x
+        double x.connect = </Lib/Other.y>
+
+        def "Part"
+        {
+        }
+    }
+
+    def "Other"
+    {
+        double y = 1
+    }
+}

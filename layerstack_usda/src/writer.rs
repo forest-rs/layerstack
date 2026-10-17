@@ -1887,6 +1887,8 @@ enum Elem {
     Matrix,
     Dictionary,
     ListOp,
+    /// `opaque` and `group`: types that hold no value, only a declaration.
+    Valueless,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1901,9 +1903,10 @@ struct Shape {
 /// The accepted names are a subset of the OpenUSD `Sdf` value type registry
 /// (`pxr/usd/sdf/schema.cpp`, `_RegisterStandardTypes`; `pxr/usd/sdf/types.h`,
 /// `SDF_VALUE_TYPES` plus the role aliases), each optionally with `[]`.
-/// Deliberately excluded: `dictionary` (metadata only, never an attribute
-/// type), `opaque`/`group`, and the legacy capitalized
-/// aliases (`Vec3f`, `PointFloat`, ...).
+/// `opaque` and `group` hold no value (`SdfOpaqueValue`), so they are
+/// declarations only and have no array form. Deliberately excluded:
+/// `dictionary` (metadata only, never an attribute type) and the legacy
+/// capitalized aliases (`Vec3f`, `PointFloat`, ...).
 ///
 /// Spec: AOUSD Core §6.2 (scalar types), §6.3 (dimensioned types), §6.5
 /// (semantic aliases).
@@ -1948,6 +1951,7 @@ fn parse_type_name(type_name: &str) -> Option<Shape> {
         "matrix2d" => (Elem::Matrix, 2),
         "matrix3d" => (Elem::Matrix, 3),
         "matrix4d" | "frame4d" => (Elem::Matrix, 4),
+        "opaque" | "group" if !array => (Elem::Valueless, 1),
         _ => return None,
     };
     Some(Shape { elem, arity, array })
@@ -3405,7 +3409,7 @@ over "P" (
         );
         // Legacy capitalized aliases and non-attribute registry entries are
         // not admitted either.
-        for type_name in ["Vec3f", "PointFloat", "opaque", "dictionary[]"] {
+        for type_name in ["Vec3f", "PointFloat", "opaque[]", "dictionary[]"] {
             let declaration = Attribute {
                 value: None,
                 ..Attribute::new("x", type_name, Value::Int(0))

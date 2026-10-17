@@ -7,14 +7,17 @@
 //!
 //! ```text
 //! cargo run -p layerstack_schemagen -- --pxr <site-packages>/pxr --source <OpenUSD> [--check]
-//! cargo run -p layerstack_schemagen -- compile <schema.usda> --out <dir> \
+//! cargo run -p layerstack_schemagen -- compile <schema.usda> (--out <dir> | --install <dir>) \
 //!     [--search <dir>]... [--openusd-source <OpenUSD>] [--plugin-root <dir>] [--check]
 //! ```
 //!
 //! `compile` writes the `generatedSchema.usda` and `plugInfo.json` that
 //! `usdGenSchema` writes for a `schema.usda`, so its schemas load in OpenUSD
 //! and in layerstack alike; `plugInfo.json` is built on the one already in
-//! `<dir>`, keeping its edits. Sublayers such as `@usdGeom/schema.usda@`
+//! `<dir>`, keeping its edits. `--out` writes them as usdGenSchema does,
+//! `plugInfo.json` as OpenUSD's template, which its build installs;
+//! `--install <dir>` writes both into `<dir>/resources` installed, ready to
+//! register (`PXR_PLUGINPATH_NAME=<dir>/resources`). Sublayers such as `@usdGeom/schema.usda@`
 //! resolve next to the layer naming them, then in each `--search`
 //! directory, an OpenUSD checkout's `pxr/usd` (`--openusd-source`) and each
 //! `<plugin>/resources` of a plugin directory (`--plugin-root`, such as the

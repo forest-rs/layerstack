@@ -86,6 +86,54 @@ pub(crate) fn generate(
     Ok(out)
 }
 
+/// The installed form of `plug_info` (as [`generate`] writes it), for a
+/// plugin directory holding it and `generatedSchema.usda` in `resources/`:
+/// the template's placeholders filled in as OpenUSD's build fills them for
+/// that layout (`Root` `..`, `ResourcePath` `resources`, and for a codeless
+/// library an empty `LibraryPath`), and no comment lines, so it is strict
+/// JSON. Values that are not placeholders are kept.
+pub(crate) fn install(plug_info: &str, codeless: bool) -> Result<String, CompileError> {
+    let error = |message: String| CompileError::PlugInfo { message };
+    let json: String = plug_info
+        .lines()
+        .filter(|line| !line.trim_start().starts_with('#'))
+        .flat_map(|line| [line, "\n"])
+        .collect();
+    let mut info: Json = serde_json::from_str(&json).map_err(|e| error(e.to_string()))?;
+    let plugins = info
+        .get_mut("Plugins")
+        .and_then(Json::as_array_mut)
+        .ok_or_else(|| error("Plugins is not a list".into()))?;
+    for plugin in plugins {
+        let plugin = plugin
+            .as_object_mut()
+            .ok_or_else(|| error("a plugin is not an object".into()))?;
+        for (key, placeholder, installed) in [
+            ("Root", "@PLUG_INFO_ROOT@", ".."),
+            ("ResourcePath", "@PLUG_INFO_RESOURCE_PATH@", "resources"),
+            ("LibraryPath", "@PLUG_INFO_LIBRARY_PATH@", ""),
+        ] {
+            let Some(value) = plugin.get_mut(key) else {
+                continue;
+            };
+            if value.as_str() != Some(placeholder) {
+                continue;
+            }
+            if key == "LibraryPath" && !codeless {
+                return Err(error(
+                    "a library with code is installed by its build, which knows its LibraryPath"
+                        .into(),
+                ));
+            }
+            *value = Json::String(installed.into());
+        }
+    }
+    let mut out = String::new();
+    write_json(&info, 0, &mut out);
+    out.push('\n');
+    Ok(out)
+}
+
 /// `codegenTemplates/plugInfo.json`, with `libraryName` filled in. The
 /// `@PLUG_INFO_...@` placeholders are what OpenUSD's build configures.
 fn template(library: &str) -> Json {

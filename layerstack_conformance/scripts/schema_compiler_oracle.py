@@ -7,8 +7,11 @@ Usage: schema_compiler_oracle.py [--check]
 
 `fixtures/schema_compiler/lab` and `fixtures/schema_compiler/bench` each
 hold a `schema.usda` and the `generatedSchema.usda` and `plugInfo.json`
-`layerstack_schemagen compile` writes for it. This registers both plugins
-with usd-core and records, for each schema they declare, its kind, family
+`layerstack_schemagen compile` writes for it, and
+`fixtures/schema_compiler/installed/<plugin>/resources` what
+`layerstack_schemagen compile --install` writes, from OpenUSD's template.
+This registers the installed plugins with usd-core, reading their
+`plugInfo.json` as strict JSON, and records, for each schema they declare, its kind, family
 and version, the typed schemas it `IsA`, its prim definitions (a typed
 schema's own; a typeless prim applying an applied schema, for a
 multiple-apply schema once per recorded instance name), each with its
@@ -68,12 +71,13 @@ def definition(prim_definition):
     }
 
 
+def resources(plugin):
+    return FIXTURE / "installed" / plugin / "resources"
+
+
 def plug_info_types(plugin):
-    text = "\n".join(
-        line for line in (FIXTURE / plugin / "plugInfo.json").read_text().splitlines()
-        if not line.lstrip().startswith("#"))
     types = {}
-    for entry in json.loads(text)["Plugins"]:
+    for entry in json.loads((resources(plugin) / "plugInfo.json").read_text())["Plugins"]:
         types.update(entry["Info"].get("Types", {}))
     return types
 
@@ -140,7 +144,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
-    registered = Plug.Registry().RegisterPlugins([str(FIXTURE / p) for p in PLUGINS])
+    registered = Plug.Registry().RegisterPlugins([str(resources(p)) for p in PLUGINS])
     names = sorted(p.name for p in registered)
     if names != ["labBenches", "labInstruments"]:
         raise SystemExit(f"registered {names}")

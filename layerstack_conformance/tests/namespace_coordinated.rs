@@ -64,7 +64,7 @@ fn stage_snapshot(stage: &Stage, store: &InMemoryStore) -> Json {
 fn layer_snapshot(store: &InMemoryStore, layer: LayerId) -> Json {
     let layer = &store.layers[&layer];
     let mut specs: Vec<_> = layer
-        .prims
+        .prims()
         .keys()
         .map(|p| store.paths.display(*p, &store.tokens))
         .collect();
@@ -72,7 +72,7 @@ fn layer_snapshot(store: &InMemoryStore, layer: LayerId) -> Json {
     specs.sort();
     specs.dedup();
     let relocates: Vec<_> = layer
-        .relocates
+        .relocates()
         .iter()
         .map(|r| {
             vec![

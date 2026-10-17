@@ -47,9 +47,9 @@ pub fn load_usdz(data: &[u8], directory: &Path) -> Result<LoadedStage, layerstac
         .chain([result.layer]);
     for layer in layers {
         assert!(
-            store.layer(layer.id).is_none(),
+            store.layer(layer.id()).is_none(),
             "two layers share {:?}",
-            layer.id
+            layer.id()
         );
         store.insert_layer(layer);
     }

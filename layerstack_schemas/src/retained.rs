@@ -226,7 +226,7 @@ impl RetainedQueries {
     /// Synchronizes source changes and borrows a scene for a batch of polls.
     ///
     /// Source edits may come from `Layer` methods, direct transactions or another
-    /// live stage sharing the store. Raw importer writes must call `Layer::touch`.
+    /// live stage sharing the store; every mutating `Layer` method records its edit.
     /// The stage must have provenance enabled for winning-layer explanations.
     /// A different stage is rejected; create new queries for a different scene.
     /// History loss conservatively resets caches and reports `HistoryLost`.

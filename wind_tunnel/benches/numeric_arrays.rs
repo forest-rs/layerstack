@@ -93,7 +93,9 @@ fn arrays(c: &mut Criterion) {
             });
             let point_type = PropertyType::new("point3f", true, Value::Vec3f([0.0; 3]));
             let mut stronger = Layer::new(LayerId(2));
-            stronger.sublayers.push(SublayerEntry::new(LayerId(1)));
+            stronger
+                .sublayers_mut()
+                .push(SublayerEntry::new(LayerId(1)));
             stronger.insert_prim(
                 prim,
                 PrimSpec::over().with_property(

@@ -90,7 +90,7 @@ fn external_authoring_reload_and_recompose_publish_reports() {
     live.recompose(&mut store);
     assert_eq!(live.changes_since(&mut cursor).unwrap().count(), 1);
     let mut replacement = store.layers[&LayerId(1)].clone();
-    replacement.prims.clear(); // Identical counters must not hide this reload.
+    replacement.prims_mut().clear(); // Identical counters must not hide this reload.
     store.insert_layer(replacement);
     live.synchronize(&mut store);
     let changes = live.changes_since(&mut cursor).unwrap().next().unwrap();

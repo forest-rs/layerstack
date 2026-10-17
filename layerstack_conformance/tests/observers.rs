@@ -204,13 +204,18 @@ fn history_loss_is_explicit_and_refreshes_slow_queries() {
 #[test]
 fn replacement_and_recompose_paths_publish_without_manual_delivery() {
     let (mut store, layer, mut live, size) = fixture();
+    let mut replacement = store.layers[&layer].clone();
+    replacement.prims_mut().clear();
+    // Moving the stored layer's counters as clearing moved the replacement's
+    // gives the replacement exactly the counters the stage last saw;
+    // insert_layer must detect reload.
+    store.layers.get_mut(&layer).unwrap().touch();
+    live.synchronize(&mut store);
+    assert_eq!(store.layers[&layer].generation(), replacement.generation());
     let mut cursor = live.change_cursor();
     let mut a = queries();
     let q = a.observe(Query::WorldBound(size.prim_path()));
     a.view(&mut live, &mut store).unwrap().poll(q).unwrap();
-    let mut replacement = store.layers[&layer].clone();
-    replacement.prims.clear();
-    // Replacement has exactly the old counters; insert_layer must detect reload.
     store.insert_layer(replacement);
     live.synchronize(&mut store);
     assert_eq!(live.changes_since(&mut cursor).unwrap().count(), 1);

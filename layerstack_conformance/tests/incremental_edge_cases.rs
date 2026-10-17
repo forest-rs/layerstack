@@ -191,7 +191,7 @@ fn a_new_sublayer_join_revalidates_existing_relocates() {
             model,
             PrimSpec::def().with_reference(Reference::with_asset(LayerId(5), model, "base.usda")),
         );
-        layer.relocates.push(Relocate {
+        layer.relocates_mut().push(Relocate {
             source,
             target: Some(target),
         });
@@ -209,7 +209,7 @@ fn a_new_sublayer_join_revalidates_existing_relocates() {
     assert_matches_fresh(&mut store, &live);
 
     let mut join = Layer::new(LayerId(4));
-    join.sublayers = vec![
+    *join.sublayers_mut() = vec![
         SublayerEntry::new(LayerId(2)),
         SublayerEntry::new(LayerId(3)),
     ];
@@ -223,7 +223,7 @@ fn a_new_sublayer_join_revalidates_existing_relocates() {
     assert_matches_fresh(&mut store, &live);
 
     let mut join = Layer::new(LayerId(4));
-    join.sublayers = vec![SublayerEntry::new(LayerId(2))];
+    *join.sublayers_mut() = vec![SublayerEntry::new(LayerId(2))];
     store.insert_layer(join);
     live.synchronize(&mut store);
     assert_matches_fresh(&mut store, &live);
@@ -262,7 +262,7 @@ fn a_stronger_selection_masks_a_weaker_expression_error_after_edits() {
     store.insert_layer(weak);
     let root = |selected: bool| {
         let mut root = Layer::new(LayerId(1));
-        root.sublayers.push(SublayerEntry::new(LayerId(2)));
+        root.sublayers_mut().push(SublayerEntry::new(LayerId(2)));
         let mut spec = PrimSpec::over();
         if selected {
             spec.variant_selections.insert(v, a);

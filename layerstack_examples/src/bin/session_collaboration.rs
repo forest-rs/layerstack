@@ -40,7 +40,7 @@ fn main() {
     store.insert_layer(shared);
     for id in [LayerId(3), LayerId(4)] {
         let mut session = Layer::new(id);
-        session.sublayers.push(SublayerEntry::new(LayerId(2)));
+        session.sublayers_mut().push(SublayerEntry::new(LayerId(2)));
         store.insert_layer(session);
     }
     let options = |session| StageOptions {

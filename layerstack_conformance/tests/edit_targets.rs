@@ -63,9 +63,9 @@ fn check_file(label: &str, entry: &std::path::Path, tally: &mut Tally) {
     let specs = || {
         store.layers.values().flat_map(|layer| {
             layer
-                .prims
+                .prims()
                 .values()
-                .chain(layer.variant_prims.values().flatten())
+                .chain(layer.variant_prims().values().flatten())
         })
     };
     let properties: BTreeSet<TokenId> = specs()

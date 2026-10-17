@@ -134,9 +134,9 @@ pub(super) fn validate(
                             .root_layer()
                             .and_then(|id| scene.store().layer(id))
                             .is_some_and(|layer| {
-                                tokens
-                                    .lookup(name)
-                                    .is_some_and(|key| layer.metadata.iter().any(|f| f.name == key))
+                                tokens.lookup(name).is_some_and(|key| {
+                                    layer.metadata_fields().iter().any(|f| f.name == key)
+                                })
                             });
                         if !authored {
                             push(
@@ -207,13 +207,13 @@ fn valid_default_prim(scene: &Scene<'_>) -> bool {
     else {
         return false;
     };
-    let Some(name) = layer.default_prim else {
+    let Some(name) = layer.default_prim() else {
         return false;
     };
     // Reuse canonical Sdf defaultPrim grammar without mutating the scene's interner.
     let mut scratch = layerstack::TokenInterner::default();
-    let mut probe = layerstack::Layer::new(layer.id);
-    probe.default_prim = Some(scratch.intern(scene.store().tokens().resolve(name)));
+    let mut probe = layerstack::Layer::new(layer.id());
+    probe.set_default_prim(Some(scratch.intern(scene.store().tokens().resolve(name))));
     let Some(path) = probe.default_prim_path(&mut scratch) else {
         return false;
     };

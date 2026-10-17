@@ -69,7 +69,7 @@ fn layered_with_schemas(
 ) -> Stage {
     let tree = store.path("/Tree");
     let mut root = Layer::new(LayerId(1));
-    root.sublayers = (0..specs.len())
+    *root.sublayers_mut() = (0..specs.len())
         .map(|i| SublayerEntry::new(LayerId(i as u64 + 2)))
         .collect();
     root.insert_prim(tree, PrimSpec::def());
@@ -346,7 +346,7 @@ fn time_samples_are_explained_in_stage_time_through_a_layer_offset() {
     // 10 sit at stage times 10 and 20. The stronger sublayer authors only a
     // default, which a time query reads after every weaker sample.
     let mut root = Layer::new(LayerId(1));
-    root.sublayers = vec![
+    *root.sublayers_mut() = vec![
         SublayerEntry::with_offset(
             LayerId(2),
             LayerOffset {
@@ -434,7 +434,7 @@ fn offset_time_samples_report_stage_times() {
     // The weaker layer is offset by 10: its samples at layer times 0 and 10
     // sit at stage times 10 and 20. The stronger layer edits every sample.
     let mut root = Layer::new(LayerId(1));
-    root.sublayers = vec![
+    *root.sublayers_mut() = vec![
         SublayerEntry::new(LayerId(2)),
         SublayerEntry::with_offset(
             LayerId(3),

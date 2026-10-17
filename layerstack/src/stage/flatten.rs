@@ -174,7 +174,7 @@ impl Stage {
     /// let flat = stage
     ///     .flatten(&mut store, LayerId(1), LayerId(2), &FlattenRequirements::default())
     ///     .expect("nothing is lost");
-    /// assert!(flat.layer.prims[&tree].references.explicit.is_none());
+    /// assert!(flat.layer.prim(tree).unwrap().references.explicit.is_none());
     /// assert!(flat.report.is_lossless());
     /// assert_eq!(flat.report.preserved.prims, 3, "the pseudo-root, /Tree and /Asset");
     /// ```

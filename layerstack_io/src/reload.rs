@@ -227,7 +227,10 @@ impl<B: Storage> StageDocument<B> {
         )?;
         if root_closure
             && policy == ReloadPolicy::PreserveDirty
-            && reader.pending.iter().any(|layer| dirty.contains(&layer.id))
+            && reader
+                .pending
+                .iter()
+                .any(|layer| dirty.contains(&layer.id()))
         {
             return Err(IoError::new(
                 IoErrorKind::DirtyReload,

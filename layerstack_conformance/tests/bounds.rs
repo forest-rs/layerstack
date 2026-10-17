@@ -359,8 +359,7 @@ fn excluded_children_track_visibility_type_and_deletion_changes() {
     store
         .layer_mut(LayerId(1))
         .unwrap()
-        .prims
-        .get_mut(&branch)
+        .prim_mut(branch)
         .unwrap()
         .property_mut(visibility)
         .unwrap()
@@ -371,24 +370,21 @@ fn excluded_children_track_visibility_type_and_deletion_changes() {
     store
         .layer_mut(LayerId(1))
         .unwrap()
-        .prims
-        .get_mut(&branch)
+        .prim_mut(branch)
         .unwrap()
         .type_name = Some(material);
     check(&mut store, &mut cache, true, true);
     store
         .layer_mut(LayerId(1))
         .unwrap()
-        .prims
-        .get_mut(&branch)
+        .prim_mut(branch)
         .unwrap()
         .type_name = Some(xform);
     check(&mut store, &mut cache, false, true);
     store
         .layer_mut(LayerId(1))
         .unwrap()
-        .prims
-        .get_mut(&branch)
+        .prim_mut(branch)
         .unwrap()
         .property_mut(visibility)
         .unwrap()
@@ -397,8 +393,7 @@ fn excluded_children_track_visibility_type_and_deletion_changes() {
     let removed = store
         .layer_mut(LayerId(1))
         .unwrap()
-        .prims
-        .remove(&branch)
+        .remove_prim(branch)
         .unwrap();
     check(&mut store, &mut cache, true, true);
     let mut restored = removed;
@@ -423,8 +418,7 @@ fn excluded_children_track_visibility_type_and_deletion_changes() {
         store
             .layer_mut(LayerId(1))
             .unwrap()
-            .prims
-            .get_mut(&root)
+            .prim_mut(root)
             .unwrap()
             .specifier = Some(specifier);
         let stage = Stage::compose(&mut store, LayerId(1), options.clone());

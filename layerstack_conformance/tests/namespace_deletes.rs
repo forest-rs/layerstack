@@ -107,10 +107,10 @@ fn layer_specs(loaded: &LoadedStage, layer: &Layer) -> Vec<String> {
         }
         variant_paths(store, &text, &spec.variant_sets, &mut out);
     };
-    for (path, spec) in &layer.prims {
+    for (path, spec) in layer.prims() {
         add(*path, spec);
     }
-    for (path, branches) in &layer.variant_prims {
+    for (path, branches) in layer.variant_prims() {
         for spec in branches {
             add(*path, spec);
         }
@@ -158,7 +158,7 @@ fn snapshot(loaded: &LoadedStage, stage: &Stage) -> Json {
         .paths
         .lookup(&Path::parse_absolute("/Watch", &store.tokens).unwrap())
         .unwrap();
-    let spec = &root_layer.prims[&watch_path];
+    let spec = &root_layer.prims()[&watch_path];
     let property = |name: &str| spec.property(store.tokens.lookup(name).unwrap()).unwrap();
     let arc = |r: &Reference| {
         json!({
@@ -189,8 +189,8 @@ fn snapshot(loaded: &LoadedStage, stage: &Stage) -> Json {
             "scene.usda": layer_specs(loaded, root_layer),
             "sub.usda": layer_specs(loaded, sub),
         },
-        "relocates": root_layer.relocates.iter().map(|r| json!([path(r.source), r.target.map(path).unwrap_or_default()])).collect::<Vec<_>>(),
-        "defaultPrim": root_layer.default_prim.map(|t| store.tokens.resolve(t).to_string()).unwrap_or_default(),
+        "relocates": root_layer.relocates().iter().map(|r| json!([path(r.source), r.target.map(path).unwrap_or_default()])).collect::<Vec<_>>(),
+        "defaultPrim": root_layer.default_prim().map(|t| store.tokens.resolve(t).to_string()).unwrap_or_default(),
         "watch": normalized(watch),
         "prims": stage.traverse_all(root).filter(|p| *p != root).map(path).collect::<Vec<_>>(),
     })
@@ -293,13 +293,15 @@ fn deletes_agree_with_openusd_namespace_editor() {
             live.apply(&mut loaded.store, &inverse).unwrap();
             for (id, layer) in &original {
                 let now = &loaded.store.layers[id];
-                assert_eq!(now.prims, layer.prims, "{name}: undo restores {id:?}");
+                assert_eq!(now.prims(), layer.prims(), "{name}: undo restores {id:?}");
                 assert_eq!(
-                    now.relocates, layer.relocates,
+                    now.relocates(),
+                    layer.relocates(),
                     "{name}: undo restores {id:?}"
                 );
                 assert_eq!(
-                    now.default_prim, layer.default_prim,
+                    now.default_prim(),
+                    layer.default_prim(),
                     "{name}: undo restores {id:?}"
                 );
             }

@@ -32,8 +32,8 @@ of an inventory means unknown, not unchanged.
 through Layer methods, direct transactions or another stage using the store. These
 external edits produce conservative resyncs. Unlike OpenUSD's synchronous source-
 layer dispatch, their notifications arrive at this explicit synchronization point.
-A scan costs O(participating layers). Raw writes to public importer fields must call
-Layer::touch. InMemoryStore::insert_layer advances generations on replacement;
+A scan costs O(participating layers). Every mutating Layer method records its edit,
+so no write goes unseen. InMemoryStore::insert_layer advances generations on replacement;
 custom stores must preserve generation monotonicity or explicitly notify the stage.
 External asset-resolution changes require explicit stage notification too.
 

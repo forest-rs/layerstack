@@ -75,7 +75,7 @@
 //! assert!(result.parse_diagnostics.is_empty());
 //! assert!(result.lower_diagnostics.is_empty());
 //! assert!(result.emitted.diagnostics.is_empty());
-//! assert!(!result.emitted.layer.prims.is_empty());
+//! assert!(!result.emitted.layer.prims().is_empty());
 //! ```
 //!
 //! # `no_std` support

@@ -101,8 +101,8 @@ fn numeric_writeback_matches_native_parent_conversion_and_undo() {
     assert_eq!(old, Some(35.), "other numeric samples remain");
     live.apply(&mut store, &report.inverse).unwrap();
     assert_eq!(
-        store.layers[&LayerId(1)].prims,
-        before[&LayerId(1)].prims,
+        store.layers[&LayerId(1)].prims(),
+        before[&LayerId(1)].prims(),
         "undo restores all declarations and reset order"
     );
 }
@@ -151,8 +151,7 @@ fn stronger_last_field_and_untyped_declarations_reject_without_partial_edits() {
                 .with_type_name(ty)
                 .with_property(field, prop),
         );
-        root.sublayers.push(SublayerEntry::new(LayerId(2)));
-        root.touch();
+        root.sublayers_mut().push(SublayerEntry::new(LayerId(2)));
         store.insert_layer(Layer::new(LayerId(2)));
         live.synchronize(&mut store);
         let before = store.layers.clone();
@@ -194,13 +193,11 @@ fn singular_parent_and_invalid_time_leave_batch_unchanged() {
         .layers
         .get_mut(&LayerId(1))
         .unwrap()
-        .prims
-        .get_mut(&parent)
+        .prim_mut(parent)
         .unwrap()
         .property_mut(scale)
         .unwrap()
         .default = Some(Value::Vec3d([0., 1., 1.]));
-    store.layers.get_mut(&LayerId(1)).unwrap().touch();
     live.synchronize(&mut store);
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
     let dest = CameraEdit::new(&edit, path).unwrap();
@@ -235,9 +232,8 @@ fn stronger_transform_order_rejects_the_entire_camera_group() {
         .layers
         .get_mut(&LayerId(1))
         .unwrap()
-        .sublayers
+        .sublayers_mut()
         .push(SublayerEntry::new(LayerId(2)));
-    store.layers.get_mut(&LayerId(1)).unwrap().touch();
     store.insert_layer(Layer::new(LayerId(2)));
     live.synchronize(&mut store);
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(2)));
@@ -307,7 +303,7 @@ fn reference_target_maps_all_camera_samples_and_matrix_together() {
         "clippingPlanes",
     ] {
         let name = store.tokens.lookup(name).unwrap();
-        let property = store.layers[&LayerId(2)].prims[&asset]
+        let property = store.layers[&LayerId(2)].prims()[&asset]
             .property(name)
             .unwrap();
         assert_eq!(
@@ -324,7 +320,7 @@ fn reference_target_maps_all_camera_samples_and_matrix_together() {
     close(actual.camera_to_world(), camera.camera_to_world());
     live.apply(&mut store, &applied.inverse).unwrap();
     assert!(
-        store.layers[&LayerId(2)].prims[&asset]
+        store.layers[&LayerId(2)].prims()[&asset]
             .properties
             .is_empty(),
         "undo removes the whole mapped camera replacement"
@@ -360,13 +356,11 @@ fn nonfinite_extra_planes_and_unreadable_parent_ops_reject_without_edits() {
         .layers
         .get_mut(&LayerId(1))
         .unwrap()
-        .prims
-        .get_mut(&parent)
+        .prim_mut(parent)
         .unwrap()
         .property_mut(order)
         .unwrap()
         .default = Some(Value::Array(vec![Value::Token(op)]));
-    store.layers.get_mut(&LayerId(1)).unwrap().touch();
     live.synchronize(&mut store);
     let (mut valid_store, valid_live) =
         support::scene(include_str!("../fixtures/camera_writeback.usda"));

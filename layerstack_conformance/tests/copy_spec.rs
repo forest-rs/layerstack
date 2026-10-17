@@ -137,9 +137,9 @@ fn dump(loaded: &LoadedStage, layer: &Layer) -> Json {
             record.insert("properties".into(), Json::Object(props));
         }
     };
-    let specs = layer.prims.iter().chain(
+    let specs = layer.prims().iter().chain(
         layer
-            .variant_prims
+            .variant_prims()
             .iter()
             .flat_map(|(p, specs)| specs.iter().map(move |s| (p, s))),
     );
@@ -272,8 +272,12 @@ fn copies_agree_with_openusd_copy_spec() {
         if let Ok(inverse) = result {
             inverse.apply(&mut loaded.store).unwrap();
             let after = &loaded.store.layers[&dst];
-            assert_eq!(after.prims, before.prims, "{name}: undo");
-            assert_eq!(after.variant_prims, before.variant_prims, "{name}: undo");
+            assert_eq!(after.prims(), before.prims(), "{name}: undo");
+            assert_eq!(
+                after.variant_prims(),
+                before.variant_prims(),
+                "{name}: undo"
+            );
         }
     }
 }

@@ -69,7 +69,7 @@ impl ParsedUsdc {
         let path = layerstack::path::Path::parse_absolute(prim_path, &self.store.tokens)
             .expect("invalid path");
         let path_id = self.store.paths.lookup(&path).expect("path interned");
-        self.store.layers[&self.layer_id].prims[&path_id].clone()
+        self.store.layers[&self.layer_id].prims()[&path_id].clone()
     }
 
     /// Returns the authored property spec at a given prim path and name.
@@ -79,7 +79,7 @@ impl ParsedUsdc {
         let path_id = self.store.paths.lookup(&path)?;
         let name_tok = self.store.tokens.intern(name);
         let layer = self.store.layers.get(&self.layer_id)?;
-        layer.prims.get(&path_id)?.property(name_tok).cloned()
+        layer.prim(path_id)?.property(name_tok).cloned()
     }
 
     /// Returns the property spec at a given prim path and name, panicking on
@@ -106,7 +106,7 @@ impl ParsedUsdc {
         let Some(layer) = self.store.layers.get(&self.layer_id) else {
             return false;
         };
-        layer.prims.contains_key(&path_id)
+        layer.prims().contains_key(&path_id)
     }
 }
 
@@ -385,7 +385,7 @@ fn gen_relocates_reads_layer_relocates() {
     let source = parsed.path_id("/Egg/Foo");
     let target = parsed.path_id("/Egg/Bar");
     assert_eq!(
-        parsed.store.layers[&parsed.layer_id].relocates,
+        parsed.store.layers[&parsed.layer_id].relocates(),
         [layerstack::Relocate {
             source,
             target: Some(target),
@@ -448,7 +448,10 @@ fn ball_maya_usdc_parses() {
 
     // The file should have a populated layer with prims.
     let layer = parsed.store.layers.get(&parsed.layer_id).expect("layer");
-    assert!(!layer.prims.is_empty(), "expected prims in ball.maya.usdc");
+    assert!(
+        !layer.prims().is_empty(),
+        "expected prims in ball.maya.usdc"
+    );
 }
 
 #[test]
@@ -460,9 +463,9 @@ fn fender_stratocaster_usdc_parses() {
     // The Python reference expects 432 specs (prims + attributes + etc.).
     // Only Prim specs become entries in layer.prims, so the count is lower.
     assert!(
-        layer.prims.len() > 50,
+        layer.prims().len() > 50,
         "expected many prims in fender_stratocaster.usdc, got {}",
-        layer.prims.len()
+        layer.prims().len()
     );
 }
 
@@ -473,9 +476,9 @@ fn toy_biplane_idle_usdc_parses() {
 
     let layer = parsed.store.layers.get(&parsed.layer_id).expect("layer");
     assert!(
-        layer.prims.len() > 30,
+        layer.prims().len() > 30,
         "expected many prims in toy_biplane_idle.usdc, got {}",
-        layer.prims.len()
+        layer.prims().len()
     );
 }
 
@@ -578,7 +581,9 @@ fn openusd_optional_encodings_decode() {
     let prim_id = parsed.store.paths.lookup(&path).unwrap();
     let name = parsed.store.tokens.intern("ints");
     let layer = &parsed.store.layers[&parsed.layer_id];
-    let spec = layer.prims[&prim_id].property(name).expect("ints property");
+    let spec = layer.prims()[&prim_id]
+        .property(name)
+        .expect("ints property");
     let declared = spec.type_name.as_ref().expect("declared type");
     assert_eq!(&*declared.type_name, "int", "element type name");
     assert!(declared.is_array, "array flag");

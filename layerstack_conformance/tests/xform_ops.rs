@@ -337,7 +337,7 @@ fn authored_ops(store: &InMemoryStore, path: PathId) -> Json {
     let tokens = &store.tokens;
     let mut order = Json::Null;
     let mut attributes = serde_json::Map::new();
-    if let Some(prim) = store.layers[&LayerId(1)].prims.get(&path) {
+    if let Some(prim) = store.layers[&LayerId(1)].prim(path) {
         for entry in &prim.properties {
             let name = tokens.resolve(entry.name);
             let spec: &PropertySpec = &entry.spec;
@@ -549,8 +549,8 @@ fn authored_ops_read_and_add_as_in_openusd() {
         }
         live.apply(&mut store, &applied.inverse).expect("undoes");
         assert_eq!(
-            store.layers[&LayerId(1)].prims,
-            before.prims,
+            store.layers[&LayerId(1)].prims(),
+            before.prims(),
             "{context}: undone"
         );
     }

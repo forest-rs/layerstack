@@ -1935,15 +1935,20 @@ pub fn remove_field(fields: &mut Vec<FieldEntry>, name: TokenId) -> Option<Field
 
 /// A document layer.
 ///
+/// Its content is read through accessors such as [`Layer::prims`] and
+/// changed only through methods, each recording its change (see
+/// [`Layer::generation`]), so a live stage drawing on the layer sees every
+/// edit.
+///
 /// Two layers are equal when their content is: the [`Layer::generation`]
 /// and [`Layer::structural_generation`] counters are not compared.
 #[derive(Clone, Debug)]
 #[doc(alias = "SdfLayer")]
 pub struct Layer {
     /// Stable identifier for this layer.
-    pub id: LayerId,
+    pub(crate) id: LayerId,
     /// Ordered sublayer includes. The layer itself is always stronger than its sublayers.
-    pub sublayers: Vec<SublayerEntry>,
+    pub(crate) sublayers: Vec<SublayerEntry>,
     /// The authored `defaultPrim` token: the prim that references and
     /// payloads with no authored prim path target in this layer.
     ///
@@ -1951,7 +1956,7 @@ pub struct Layer {
     /// still visible; [`Layer::default_prim_path`] converts it.
     ///
     /// Spec: AOUSD Core §7.6.1.2.3 (`defaultPrim`), §10.3.2.1 (references).
-    pub default_prim: Option<TokenId>,
+    pub(crate) default_prim: Option<TokenId>,
     /// All other authored layer metadata, in authored order: for example
     /// `upAxis`, `metersPerUnit`, `timeCodesPerSecond`, `framesPerSecond`,
     /// `startTimeCode`, `endTimeCode`, `customLayerData`, `documentation`
@@ -1959,19 +1964,19 @@ pub struct Layer {
     ///
     /// Spec: AOUSD Core §7.6.1 (layer spec fields), §12.2.7 (layer metadata
     /// is read from the root layer, not composed).
-    pub metadata: Vec<FieldEntry>,
+    pub(crate) metadata: Vec<FieldEntry>,
     /// The authored `layerRelocates` entries, in authored order.
     ///
     /// Spec: AOUSD Core §7.6.1.2.4 (`layerRelocates`), §10.3.2.6
     /// (relocates are computed per layer stack from every layer's entries).
-    pub relocates: Vec<Relocate>,
+    pub(crate) relocates: Vec<Relocate>,
     /// Prim specs keyed by prim path.
     ///
     /// Each path holds one spec here: the spec authored outside any variant
     /// branch if there is one, otherwise the first spec ingested for it.
     /// Specs authored for the same path inside other variant branches are
     /// kept in [`Layer::variant_prims`]; see [`Layer::prim_specs`].
-    pub prims: HashMap<PathId, PrimSpec>,
+    pub(crate) prims: HashMap<PathId, PrimSpec>,
     /// Further prim specs at a path already in [`Layer::prims`], each
     /// authored inside a different variant branch and identified by its
     /// [`PrimSpec::outer_variant_sites`].
@@ -1982,7 +1987,7 @@ pub struct Layer {
     ///
     /// Spec: AOUSD Core §7.3.6 (variant specs contain their own prim specs),
     /// §10.5 (only the selected variant contributes).
-    pub variant_prims: HashMap<PathId, Vec<PrimSpec>>,
+    pub(crate) variant_prims: HashMap<PathId, Vec<PrimSpec>>,
     /// Counts the edits made to this layer (see [`Layer::generation`]).
     pub(crate) generation: u64,
     /// Counts the edits that may change namespace or arcs (see
@@ -2051,7 +2056,7 @@ impl Layer {
     /// A reader that numbers layers in another order than it reads them
     /// renumbers them with this; mapping a layer to
     /// [`LayerId::UNRESOLVED`] makes its arcs unresolved, keeping their
-    /// asset paths. Records no change: the layer is not yet in a store.
+    /// asset paths. Records a structural change of the whole layer.
     pub fn map_layer_ids(&mut self, map: impl Fn(LayerId) -> LayerId) {
         fn arcs(op: &mut ListOp<Reference>, map: &dyn Fn(LayerId) -> LayerId) {
             for arc in op.lists_mut().flatten() {
@@ -2068,6 +2073,7 @@ impl Layer {
                 variant_sets(&mut variant.variant_sets, map);
             }
         }
+        self.touch_structure();
         self.id = map(self.id);
         for sublayer in &mut self.sublayers {
             sublayer.layer = map(sublayer.layer);
@@ -2097,6 +2103,180 @@ impl Layer {
             structure: 0,
             change_history: crate::change_history::History::default(),
         }
+    }
+
+    /// Returns this layer's stable identifier in its store.
+    #[must_use]
+    pub fn id(&self) -> LayerId {
+        self.id
+    }
+
+    /// Returns the ordered sublayer includes, strongest first. The layer
+    /// itself is always stronger than its sublayers.
+    ///
+    /// Spec: AOUSD Core §7.6.1.2.1 (`subLayers`), §7.6.1.2.2
+    /// (`subLayerOffsets`), §10.3.1 (sublayers).
+    /// OpenUSD: `SdfLayer::GetSubLayerPaths` and `GetSubLayerOffsets`.
+    #[must_use]
+    pub fn sublayers(&self) -> &[SublayerEntry] {
+        &self.sublayers
+    }
+
+    /// Returns the sublayer includes for editing.
+    ///
+    /// Records a structural change of the whole layer (see
+    /// [`Layer::structural_generation`]): sublayers change the layer stack.
+    pub fn sublayers_mut(&mut self) -> &mut Vec<SublayerEntry> {
+        self.touch_structure();
+        &mut self.sublayers
+    }
+
+    /// Returns the authored `defaultPrim` token: the prim that references
+    /// and payloads with no authored prim path target in this layer.
+    ///
+    /// The token is kept as authored, so a value that names no prim path is
+    /// still visible; [`Layer::default_prim_path`] converts it.
+    ///
+    /// Spec: AOUSD Core §7.6.1.2.3 (`defaultPrim`), §10.3.2.1 (references).
+    /// OpenUSD: `SdfLayer::GetDefaultPrim`.
+    #[must_use]
+    pub fn default_prim(&self) -> Option<TokenId> {
+        self.default_prim
+    }
+
+    /// Authors (`Some`) or clears (`None`) the `defaultPrim` token.
+    ///
+    /// Records a structural change of the whole layer: arcs into this layer
+    /// may target a different prim.
+    ///
+    /// Spec: AOUSD Core §7.6.1.2.3 (`defaultPrim`). OpenUSD:
+    /// `SdfLayer::SetDefaultPrim` and `ClearDefaultPrim`.
+    pub fn set_default_prim(&mut self, default_prim: Option<TokenId>) {
+        self.touch_structure();
+        self.default_prim = default_prim;
+    }
+
+    /// Returns every other authored layer metadata field, in authored
+    /// order: for example `upAxis`, `metersPerUnit`, `timeCodesPerSecond`,
+    /// `framesPerSecond`, `startTimeCode`, `endTimeCode`,
+    /// `customLayerData`, `documentation` and `comment`.
+    /// [`Layer::metadata`] looks one field up.
+    ///
+    /// Spec: AOUSD Core §7.6.1 (layer spec fields), §12.2.7 (layer metadata
+    /// is read from the root layer, not composed).
+    #[must_use]
+    pub fn metadata_fields(&self) -> &[FieldEntry] {
+        &self.metadata
+    }
+
+    /// Returns the layer metadata fields for editing.
+    ///
+    /// Records a structural change of the whole layer, as
+    /// [`Layer::set_metadata`] does.
+    pub fn metadata_fields_mut(&mut self) -> &mut Vec<FieldEntry> {
+        self.touch_structure();
+        &mut self.metadata
+    }
+
+    /// Returns the authored `layerRelocates` entries, in authored order.
+    ///
+    /// Spec: AOUSD Core §7.6.1.2.4 (`layerRelocates`), §10.3.2.6
+    /// (relocates are computed per layer stack from every layer's entries).
+    /// OpenUSD: `SdfLayer::GetRelocates`.
+    #[must_use]
+    pub fn relocates(&self) -> &[Relocate] {
+        &self.relocates
+    }
+
+    /// Returns the `layerRelocates` entries for editing.
+    ///
+    /// Records a structural change of the whole layer: relocates move
+    /// namespace across the layer stack.
+    pub fn relocates_mut(&mut self) -> &mut Vec<Relocate> {
+        self.touch_structure();
+        &mut self.relocates
+    }
+
+    /// Returns the prim specs keyed by prim path.
+    ///
+    /// Each path holds one spec here: the spec authored outside any variant
+    /// branch if there is one, otherwise the first spec ingested for it.
+    /// Specs authored for the same path inside other variant branches are
+    /// in [`Layer::variant_prims`]; [`Layer::prim_specs`] visits both.
+    #[must_use]
+    pub fn prims(&self) -> &HashMap<PathId, PrimSpec> {
+        &self.prims
+    }
+
+    /// Returns the [`Layer::prims`] spec at `path`, if this layer authors
+    /// one.
+    ///
+    /// OpenUSD: `SdfLayer::GetPrimAtPath` for a path without variant
+    /// selections.
+    #[must_use]
+    pub fn prim(&self, path: PathId) -> Option<&PrimSpec> {
+        self.prims.get(&path)
+    }
+
+    /// Returns the [`Layer::prims`] spec at `path` for editing, if this
+    /// layer authors one.
+    ///
+    /// Records a structural change confined to `path` when the spec exists:
+    /// the caller may change its children, arcs or variant sets as well as
+    /// its opinions.
+    pub fn prim_mut(&mut self, path: PathId) -> Option<&mut PrimSpec> {
+        if self.prims.contains_key(&path) {
+            self.record_change(true, Some(alloc::vec![path]));
+        }
+        self.prims.get_mut(&path)
+    }
+
+    /// Removes the [`Layer::prims`] spec at `path` and returns it; specs of
+    /// other variant branches at `path` ([`Layer::variant_prims`]) stay.
+    ///
+    /// Records a structural change confined to `path` when a spec was
+    /// removed. This removes one spec only: its parent's child list and
+    /// the specs beneath it are left as they are.
+    pub fn remove_prim(&mut self, path: PathId) -> Option<PrimSpec> {
+        let removed = self.prims.remove(&path)?;
+        self.record_change(true, Some(alloc::vec![path]));
+        Some(removed)
+    }
+
+    /// Returns the prim specs for bulk editing, as a reader building a
+    /// layer does.
+    ///
+    /// Records a structural change of the whole layer, which composes a
+    /// live stage drawing on it anew; [`Layer::prim_mut`],
+    /// [`Layer::insert_prim`] and [`Layer::remove_prim`] record changes
+    /// confined to one path.
+    pub fn prims_mut(&mut self) -> &mut HashMap<PathId, PrimSpec> {
+        self.touch_structure();
+        &mut self.prims
+    }
+
+    /// Returns the further prim specs at paths already in [`Layer::prims`],
+    /// each authored inside a different variant branch and identified by
+    /// its [`PrimSpec::outer_variant_sites`].
+    ///
+    /// Branches of one variant set may author the same descendant
+    /// (`/Model{lod=high}Geom` and `/Model{lod=low}Geom`); each branch keeps
+    /// its own spec so composition can use the selected one.
+    ///
+    /// Spec: AOUSD Core §7.3.6 (variant specs contain their own prim specs),
+    /// §10.5 (only the selected variant contributes).
+    #[must_use]
+    pub fn variant_prims(&self) -> &HashMap<PathId, Vec<PrimSpec>> {
+        &self.variant_prims
+    }
+
+    /// Returns the variant branch prim specs for bulk editing.
+    ///
+    /// Records a structural change of the whole layer, as
+    /// [`Layer::prims_mut`] does.
+    pub fn variant_prims_mut(&mut self) -> &mut HashMap<PathId, Vec<PrimSpec>> {
+        self.touch_structure();
+        &mut self.variant_prims
     }
 
     /// The layer's time rate: authored `timeCodesPerSecond`, otherwise
@@ -2134,12 +2314,14 @@ impl Layer {
     /// The count only moves forward and is not part of the layer's content:
     /// it is not saved, and [`PartialEq`] ignores it.
     ///
-    /// Writes straight into the public fields ([`Layer::prims`] and the
-    /// others) bypass the counter: they are the importers' building API,
-    /// not an authoring API. Hosts that write a field after composition
-    /// call [`Layer::touch`]. The default budget retains up to 64 method/transaction batches and 1 MiB
-    /// retain changed prim paths for independently synchronized live stages;
-    /// unknown writes and expired history conservatively invalidate the stage.
+    /// Every mutating method records its change, so no edit can bypass the
+    /// counter: the `_mut` accessors record theirs before handing out the
+    /// reference. Changes confined to known prim paths
+    /// ([`Layer::prim_mut`], [`Layer::insert_prim`], [`Layer::property_mut`]
+    /// and the like) keep those paths for independently synchronized live
+    /// stages; the default budget retains up to 64 such batches and 1 MiB.
+    /// Unscoped changes ([`Layer::prims_mut`], [`Layer::touch`]) and expired
+    /// history conservatively invalidate the stage.
     ///
     /// OpenUSD reports the same edits as `SdfNotice::LayersDidChange`.
     #[must_use]
@@ -2181,7 +2363,11 @@ impl Layer {
     }
 
     /// Moves [`Layer::generation`] and [`Layer::structural_generation`]
-    /// forward, for an edit of unknown kind made through the public fields.
+    /// forward, recording an edit of unknown kind.
+    ///
+    /// The layer's mutating methods record their own changes; this is for
+    /// a host that wants every stage drawing on the layer to compose it
+    /// anew, as if all of it had changed.
     pub fn touch(&mut self) {
         self.touch_structure();
     }
@@ -2311,11 +2497,11 @@ impl Layer {
     ///
     /// let mut tokens = TokenInterner::default();
     /// let mut layer = Layer::new(LayerId(1));
-    /// layer.default_prim = Some(tokens.intern("Model/Geo"));
+    /// layer.set_default_prim(Some(tokens.intern("Model/Geo")));
     /// let path = layer.default_prim_path(&mut tokens).unwrap();
     /// assert_eq!(path.display(&tokens), "/Model/Geo");
     ///
-    /// layer.default_prim = Some(tokens.intern("Model.attr"));
+    /// layer.set_default_prim(Some(tokens.intern("Model.attr")));
     /// assert!(layer.default_prim_path(&mut tokens).is_none());
     /// ```
     pub fn default_prim_path(&self, tokens: &mut TokenInterner) -> Option<Path> {
@@ -2932,6 +3118,32 @@ mod tests {
         step(&layer, "property_mut", false);
         layer.set_metadata(size, Value::Double(1.0));
         step(&layer, "set_metadata", true);
+        let _ = layer.prim_mut(rock);
+        step(&layer, "prim_mut", true);
+        let _ = layer.prims_mut();
+        step(&layer, "prims_mut", true);
+        let _ = layer.variant_prims_mut();
+        step(&layer, "variant_prims_mut", true);
+        let _ = layer.sublayers_mut();
+        step(&layer, "sublayers_mut", true);
+        let _ = layer.relocates_mut();
+        step(&layer, "relocates_mut", true);
+        let _ = layer.metadata_fields_mut();
+        step(&layer, "metadata_fields_mut", true);
+        layer.set_default_prim(Some(size));
+        step(&layer, "set_default_prim", true);
+        layer.map_layer_ids(|id| id);
+        step(&layer, "map_layer_ids", true);
+        assert!(layer.remove_prim(pebble).is_some());
+        step(&layer, "remove_prim", true);
+        let unchanged = layer.generation();
+        assert!(layer.prim_mut(pebble).is_none());
+        assert!(layer.remove_prim(pebble).is_none());
+        assert_eq!(
+            layer.generation(),
+            unchanged,
+            "a missing prim records nothing"
+        );
         layer.touch();
         step(&layer, "touch", true);
 
@@ -2939,6 +3151,25 @@ mod tests {
         same.touch();
         assert_eq!(same, pristine, "equality compares content, not generations");
         assert_ne!(layer, pristine);
+    }
+
+    #[test]
+    fn prim_edits_record_their_path() {
+        let mut store = InMemoryStore::default();
+        let rock = store.path("/Rock");
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(rock, PrimSpec::def());
+        let seen = layer.generation();
+        let _ = layer.prim_mut(rock);
+        assert_eq!(layer.changed_paths_since(seen), Some(vec![rock]));
+        assert!(layer.remove_prim(rock).is_some());
+        assert_eq!(layer.changed_paths_since(seen), Some(vec![rock]));
+        let _ = layer.prims_mut();
+        assert_eq!(
+            layer.changed_paths_since(seen),
+            None,
+            "bulk edits are unscoped"
+        );
     }
 
     #[test]

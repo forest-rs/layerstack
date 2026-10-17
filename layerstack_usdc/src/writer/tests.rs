@@ -1024,7 +1024,7 @@ fn full_reader_assembles_the_layer() {
     .unwrap();
     let path = layerstack::path::Path::parse_absolute("/Root", &store.tokens).unwrap();
     let id = store.paths.lookup(&path).unwrap();
-    let prim = &result.layer.prims[&id];
+    let prim = &result.layer.prims()[&id];
     let name = store.tokens.intern("points");
     assert_eq!(
         prim.property(name).and_then(|spec| spec.default.as_ref()),
@@ -1282,7 +1282,7 @@ fn variant_specs_round_trip() {
         ["season", "winter", "age", "old", "Snow"].map(|name| store.tokens.intern(name));
     let root_path = layerstack::path::Path::parse_absolute("/Root", &store.tokens).unwrap();
     let root_id = store.paths.lookup(&root_path).unwrap();
-    let prim = &layer.prims[&root_id];
+    let prim = &layer.prims()[&root_id];
     assert_eq!(prim.variant_set_order, [season], "set order");
     assert_eq!(prim.variant_selections.get(&season), Some(&winter));
     assert_eq!(prim.variant_selections.get(&age), Some(&old));

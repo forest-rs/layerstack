@@ -23,7 +23,7 @@ fn fallback_types_select_concrete_schemas_without_changing_authored_type() {
     let mut layer = Layer::new(LayerId(1));
     layer.insert_prim(prim, PrimSpec::def().with_type_name(future));
     layer.insert_prim(known, PrimSpec::def().with_type_name(mesh));
-    layer.metadata.push(FieldEntry {
+    layer.metadata_fields_mut().push(FieldEntry {
         name: fallback,
         value: FieldValue::Value(Value::Dictionary(vec![
             (

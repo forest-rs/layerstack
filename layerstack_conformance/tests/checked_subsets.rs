@@ -261,11 +261,10 @@ fn topology_reads_skip_incompatible_defaults_but_keep_numeric_source_selection()
         let path = store.path("/M");
         let property = store.property_path("/M.faceVertexCounts");
         let mut weak = store.layers.remove(&LayerId(1)).unwrap();
-        weak.id = LayerId(2);
+        weak.map_layer_ids(|id| if id == LayerId(1) { LayerId(2) } else { id });
         let error = ArrayReadError::InvalidData("failed weaker topology".into());
         if decode_failure {
-            weak.prims
-                .get_mut(&path)
+            weak.prim_mut(path)
                 .unwrap()
                 .property_mut(property.property())
                 .unwrap()
@@ -273,7 +272,7 @@ fn topology_reads_skip_incompatible_defaults_but_keep_numeric_source_selection()
         }
         store.insert_layer(weak);
         let mut root = layerstack::Layer::new(LayerId(1));
-        root.sublayers
+        root.sublayers_mut()
             .push(layerstack::SublayerEntry::new(LayerId(2)));
         root.insert_prim(
             path,

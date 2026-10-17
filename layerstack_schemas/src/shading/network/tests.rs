@@ -41,7 +41,7 @@ fn port(
             store.property_path(source),
         )]));
     }
-    layer.prims.get_mut(&p).unwrap().set_property(n, spec);
+    layer.prim_mut(p).unwrap().set_property(n, spec);
 }
 fn fixture() -> (InMemoryStore, LiveStage, PathId) {
     let mut store = InMemoryStore::default();

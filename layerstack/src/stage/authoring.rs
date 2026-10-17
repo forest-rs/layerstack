@@ -142,7 +142,7 @@ impl Stage {
     /// let property = store.property_path("/Settings.gain");
     /// let mut root = Layer::new(LayerId(1));
     /// root.insert_prim(prim, PrimSpec::def());
-    /// root.sublayers.push(SublayerEntry::new(LayerId(2)));
+    /// root.sublayers_mut().push(SublayerEntry::new(LayerId(2)));
     /// store.insert_layer(root);
     /// store.insert_layer(Layer::new(LayerId(2)));
     /// let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());

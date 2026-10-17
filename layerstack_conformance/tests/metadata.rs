@@ -67,10 +67,9 @@ fn composed_metadata_and_layer_defaults_match_cpp() {
     let meters = store.tokens.intern("metersPerUnit");
     let registry = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
     let mut root = Layer::new(LayerId(1));
-    root.sublayers.push(SublayerEntry::new(LayerId(2)));
+    root.sublayers_mut().push(SublayerEntry::new(LayerId(2)));
     root.insert_prim(mesh, PrimSpec::def().with_type_name(mesh_type));
-    root.prims
-        .get_mut(&mesh)
+    root.prim_mut(mesh)
         .unwrap()
         .properties
         .push(entry(normals, PropertySpec::attribute()));
@@ -142,7 +141,7 @@ fn composed_metadata_and_layer_defaults_match_cpp() {
         .insert_prim(mesh, weak);
     let root = store.layers.get_mut(&LayerId(1)).unwrap();
     root.set_metadata(meters, Value::Double(0.5));
-    let spec = root.prims.get_mut(&mesh).unwrap();
+    let spec = root.prim_mut(mesh).unwrap();
     spec.set_field(
         inactive,
         FieldValue::Int64ListOp(ListOp::appended(vec![3]).with_deleted(vec![1])),

@@ -360,10 +360,10 @@ fn read_usdc(store: &mut InMemoryStore, id: LayerId, bytes: &[u8]) -> Result<(),
 /// references of instances to their prototypes.
 fn leftover_arcs(layer: &Layer, store: &InMemoryStore) -> Vec<String> {
     let mut found = Vec::new();
-    if !layer.sublayers.is_empty() || !layer.relocates.is_empty() {
+    if !layer.sublayers().is_empty() || !layer.relocates().is_empty() {
         found.push("/ (sublayers or relocates)".into());
     }
-    for (&path, spec) in &layer.prims {
+    for (&path, spec) in layer.prims() {
         let references = spec
             .references
             .explicit
@@ -373,7 +373,7 @@ fn leftover_arcs(layer: &Layer, store: &InMemoryStore) -> Vec<String> {
             .chain(&spec.references.append);
         let internal = references
             .clone()
-            .all(|r| r.asset.is_none() && r.layer == layer.id);
+            .all(|r| r.asset.is_none() && r.layer == layer.id());
         let prototype = references.count() <= 1
             && spec.instanceable == Some(true)
             && internal
@@ -390,7 +390,7 @@ fn leftover_arcs(layer: &Layer, store: &InMemoryStore) -> Vec<String> {
     }
     found.extend(
         layer
-            .variant_prims
+            .variant_prims()
             .keys()
             .map(|&path| store.paths.display(path, &store.tokens)),
     );
@@ -464,9 +464,9 @@ fn flattened_layers_compose_the_flattened_stage() {
         {
             failures.push(format!("{name}: cannot save: {error}"));
         }
-        let base = flat.layer.id.0;
+        let base = flat.layer.id().0;
         flat.store.insert_layer(flat.layer.clone());
-        let mut reads = vec![("layer", flat.layer.id, Ok(()))];
+        let mut reads = vec![("layer", flat.layer.id(), Ok(()))];
         if let Ok(text) = &usda {
             let id = LayerId(base + 1);
             reads.push(("usda", id, read_usda(&mut flat.store, id, text)));
@@ -579,7 +579,7 @@ fn known_losses_are_reported_exactly() {
             .collect();
         assert_eq!(lost, want_lost, "{name}");
 
-        let id = flat.layer.id;
+        let id = flat.layer.id();
         flat.store.insert_layer(flat.layer.clone());
         let verification = verify(&mut flat, id).expect("composes");
         assert!(

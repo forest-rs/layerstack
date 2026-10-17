@@ -408,7 +408,7 @@ fn set_int(loaded: &mut LoadedStage, layer: &str, prim: &str, attr: &str, value:
         .store
         .layers
         .get_mut(&layer)
-        .and_then(|layer| layer.prims.get_mut(&prim))
+        .and_then(|layer| layer.prim_mut(prim))
         .expect("prim spec");
     let property = get_property_mut(&mut spec.properties, name).expect("property");
     property.default = Some(Value::Int(value));
@@ -545,7 +545,7 @@ fn relocates_edits_rebuild_the_stage() {
         .layers
         .get_mut(&root_layer)
         .expect("root layer")
-        .relocates
+        .relocates_mut()
         .retain(|relocate| relocate.source != wrist);
     live.notify_relocates_edit(root_layer);
     let updated = live.recompose(&mut loaded.store);
@@ -559,12 +559,12 @@ fn relocates_edits_rebuild_the_stage() {
         loaded.store.path("/Kit/Parts/Gear"),
         loaded.store.path("/Kit/Cog"),
     );
-    loaded
+    *loaded
         .store
         .layers
         .get_mut(&kit)
         .expect("kit layer")
-        .relocates = vec![Relocate {
+        .relocates_mut() = vec![Relocate {
         source,
         target: Some(target),
     }];
@@ -585,9 +585,12 @@ fn the_store_keeps_relocates_as_authored() {
     let oracle = oracle();
     let loaded = load(&oracle);
     let root = loaded.store.layer(loaded.root_layer).expect("root layer");
-    assert_eq!(root.relocates.len(), 12);
+    assert_eq!(root.relocates().len(), 12);
     assert_eq!(
-        root.relocates.iter().filter(|r| r.target.is_none()).count(),
+        root.relocates()
+            .iter()
+            .filter(|r| r.target.is_none())
+            .count(),
         1
     );
 }
@@ -615,7 +618,7 @@ fn switching_variants_applies_only_the_selected_branch_relocates() {
             .store
             .layers
             .get_mut(&root_layer)
-            .and_then(|layer| layer.prims.get_mut(&pebble))
+            .and_then(|layer| layer.prim_mut(pebble))
             .expect("/Pebble spec")
             .variant_selections
             .insert(cut, selection);

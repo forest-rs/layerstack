@@ -57,7 +57,7 @@ fn weak_layer_and_retimed_assets_keep_their_actual_anchor() {
     store
         .layer_mut(LayerId(1))
         .unwrap()
-        .sublayers
+        .sublayers_mut()
         .push(SublayerEntry::with_offset(
             LayerId(2),
             LayerOffset {
@@ -112,8 +112,7 @@ fn weak_layer_and_retimed_assets_keep_their_actual_anchor() {
     store
         .layer_mut(LayerId(1))
         .unwrap()
-        .prims
-        .get_mut(&path)
+        .prim_mut(path)
         .unwrap()
         .set_property(
             name,
@@ -256,7 +255,7 @@ fn source_only_asset_edits_change_anchors_and_parameter_upload_revisions() {
     store
         .layer_mut(LayerId(1))
         .unwrap()
-        .sublayers
+        .sublayers_mut()
         .push(SublayerEntry::new(LayerId(2)));
     let schemas = std::sync::Arc::new(layerstack_schemas::openusd(&mut store.tokens));
     let mut live = LiveStage::compose(

@@ -159,8 +159,7 @@ fn bench_arc_edits(c: &mut Criterion) {
                     .layers
                     .get_mut(&LayerId(3))
                     .unwrap()
-                    .prims
-                    .get_mut(&bark)
+                    .prim_mut(bark)
                     .unwrap()
                     .set_field(roughness, Value::Double(value));
                 live.notify_layer_prim_edits(LayerId(3), &[bark]);
@@ -189,8 +188,7 @@ fn bench_arc_payloads(c: &mut Criterion) {
                                 .layers
                                 .get_mut(&LayerId(2))
                                 .unwrap()
-                                .prims
-                                .get_mut(&tree)
+                                .prim_mut(tree)
                                 .unwrap();
                             spec.variant_sets.get_mut(&season).unwrap().variants.insert(
                                 winter,

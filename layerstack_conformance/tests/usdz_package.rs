@@ -221,8 +221,7 @@ fn expect_value(
         .get(&layer_id)
         .unwrap_or_else(|| panic!("layer not found: {layer_id:?}"));
     let prim = layer
-        .prims
-        .get(&path_id)
+        .prim(path_id)
         .unwrap_or_else(|| panic!("prim not found: {prim_path}"));
     let field_tok = store.tokens.intern(field_name);
     prim.property(field_tok)
@@ -239,7 +238,7 @@ fn has_prim(store: &mut InMemoryStore, layer_id: LayerId, prim_path: &str) -> bo
     let Some(layer) = store.layers.get(&layer_id) else {
         return false;
     };
-    layer.prims.contains_key(&path_id)
+    layer.prims().contains_key(&path_id)
 }
 
 // ── Happy path tests ────────────────────────────────────────────────────

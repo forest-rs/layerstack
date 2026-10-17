@@ -16,8 +16,8 @@ Each observer reads independently. History loss clears domain caches and reports
 
 Synchronization scans participating layer generations once per view, at
 O(participating layers), not once per poll. Layer methods and direct transactions
-are detected without a query-specific authoring wrapper. Raw importer-field writes
-still require Layer::touch. See the notification contract for custom stores,
+are detected without a query-specific authoring wrapper; every mutating Layer method
+records its edit. See the notification contract for custom stores,
 layer replacement, asset-resolution changes and callback behavior.
 
 Queries are addressed by monotonically allocated, observer-local handles. Removing

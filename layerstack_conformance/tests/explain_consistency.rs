@@ -78,9 +78,9 @@ impl Tally {
 /// Every prim spec of a layer, including those inside variant branches.
 fn prim_specs(layer: &Layer) -> impl Iterator<Item = &PrimSpec> {
     layer
-        .prims
+        .prims()
         .values()
-        .chain(layer.variant_prims.values().flatten())
+        .chain(layer.variant_prims().values().flatten())
 }
 
 /// Property and metadata names authored anywhere in `store`, with whether

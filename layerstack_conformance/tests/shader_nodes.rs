@@ -168,7 +168,7 @@ fn defining_a_node_overrides_a_weaker_source_asset_implementation() {
     let source_asset = store.tokens.intern("sourceAsset");
     let mut weak = Layer::new(LayerId(2));
     weak.insert_prim(path, layerstack::PrimSpec::def().with_type_name(shader));
-    weak.prims.get_mut(&path).unwrap().set_property(
+    weak.prim_mut(path).unwrap().set_property(
         implementation,
         layerstack::PropertySpec::attribute().with_default(Value::Token(source_asset)),
     );
@@ -177,7 +177,7 @@ fn defining_a_node_overrides_a_weaker_source_asset_implementation() {
         .layers
         .get_mut(&LayerId(1))
         .unwrap()
-        .sublayers
+        .sublayers_mut()
         .push(layerstack::SublayerEntry::new(LayerId(2)));
     let schemas = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
     let mut live = LiveStage::compose(

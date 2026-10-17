@@ -123,7 +123,7 @@ fn edit_target(store: &mut InMemoryStore, stage: &Stage, prim: PathId, arc: &str
 /// The explicit targets authored on the property spec at `path`, which is
 /// on a prim or directly inside one variant of it.
 fn authored_targets(store: &InMemoryStore, layer: LayerId, path: &SpecPath) -> Option<Vec<String>> {
-    let prim = &store.layers[&layer].prims[&path.prim_path()];
+    let prim = &store.layers[&layer].prims()[&path.prim_path()];
     let properties = match path.variant_chain().last() {
         Some((set, variant)) => &prim.variant_sets[set].variants[variant].properties,
         _ => &prim.properties,

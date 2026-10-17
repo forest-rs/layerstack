@@ -614,7 +614,7 @@ mod tests {
     fn stronger_ui_authoring_does_not_freeze_weaker_hints() {
         let (mut store, _, path, attr) = setup();
         let mut root = Layer::new(LayerId(2));
-        root.sublayers
+        root.sublayers_mut()
             .push(layerstack::SublayerEntry::new(LayerId(1)));
         store.insert_layer(root);
         let schemas = crate::openusd(&mut store.tokens);
@@ -641,7 +641,7 @@ mod tests {
             Some(Value::Int(17))
         );
         let key = store.tokens.lookup("uiHints").unwrap();
-        let local = store.layers[&LayerId(2)].prims[&path].field(key).unwrap();
+        let local = store.layers[&LayerId(2)].prims()[&path].field(key).unwrap();
         let layerstack::FieldValue::Value(local) = local else {
             panic!("dictionary")
         };
@@ -689,7 +689,7 @@ mod tests {
             .layers
             .get_mut(&LayerId(1))
             .unwrap()
-            .sublayers
+            .sublayers_mut()
             .push(layerstack::SublayerEntry::new(LayerId(3)));
         store.insert_layer(weak);
         let mut root = Layer::new(LayerId(2));
@@ -726,15 +726,16 @@ mod tests {
         assert_eq!(hints.hint(&["weak"]), Some(Value::Int(4)));
         assert_eq!(hints.display_name(), "Reference");
         assert!(hints.hidden());
-        let layerstack::FieldValue::Value(local) =
-            store.layers[&LayerId(1)].prims[&source].field(ui).unwrap()
+        let layerstack::FieldValue::Value(local) = store.layers[&LayerId(1)].prims()[&source]
+            .field(ui)
+            .unwrap()
         else {
             panic!("dictionary")
         };
         assert!(entry(local, &["weak"]).is_none());
         assert!(entry(local, &["unrelated"]).is_some());
         assert!(
-            store.layers[&LayerId(2)].prims[&instance]
+            store.layers[&LayerId(2)].prims()[&instance]
                 .field(ui)
                 .is_none()
         );

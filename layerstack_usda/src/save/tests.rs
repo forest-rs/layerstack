@@ -267,7 +267,7 @@ fn arcs_need_authored_asset_paths() {
     let mut imported = Imported::new(source);
     imported
         .layer
-        .sublayers
+        .sublayers_mut()
         .push(SublayerEntry::new(LayerId(9)));
     assert_eq!(
         imported.save(),
@@ -277,7 +277,7 @@ fn arcs_need_authored_asset_paths() {
         }),
         "a sublayer by layer id"
     );
-    imported.layer.sublayers = vec![SublayerEntry::with_asset(
+    *imported.layer.sublayers_mut() = vec![SublayerEntry::with_asset(
         LayerId(9),
         "./base.usda",
         layerstack::LayerOffset {
@@ -287,7 +287,7 @@ fn arcs_need_authored_asset_paths() {
     )];
     let prim = Path::parse_absolute("/A", &imported.tokens).unwrap();
     let prim = imported.paths.intern(prim);
-    let spec = imported.layer.prims.get_mut(&prim).unwrap();
+    let spec = imported.layer.prim_mut(prim).unwrap();
     spec.add_reference(Reference::with_asset(LayerId(9), prim, "./x.usda"));
     // An internal reference: into the layer itself, without an asset path.
     spec.add_reference(Reference::to_default_prim(LayerId(1)));
@@ -301,7 +301,7 @@ fn arcs_need_authored_asset_paths() {
         "{text}"
     );
 
-    let spec = imported.layer.prims.get_mut(&prim).unwrap();
+    let spec = imported.layer.prim_mut(prim).unwrap();
     spec.add_reference(Reference::new(LayerId(9), prim));
     assert_eq!(
         imported.save(),
@@ -346,7 +346,7 @@ fn rejects_repeated_arcs_within_one_operation() {
     ];
     for (key, edit) in cases {
         let mut layer = imported.layer.clone();
-        edit(layer.prims.get_mut(&a).unwrap(), c, &arc);
+        edit(layer.prim_mut(a).unwrap(), c, &arc);
         assert_eq!(
             save_usda(&layer, &imported.tokens, &imported.paths),
             Err(SaveError::Document(WriteError::InvalidListOp {
@@ -356,7 +356,7 @@ fn rejects_repeated_arcs_within_one_operation() {
         );
     }
 
-    let spec = imported.layer.prims.get_mut(&a).unwrap();
+    let spec = imported.layer.prim_mut(a).unwrap();
     spec.inherits.delete = vec![c];
     spec.inherits.prepend = vec![c];
     let text = imported.save().unwrap();
@@ -489,7 +489,7 @@ fn saves_unresolved_arcs_as_authored() {
         let result = crate::emit::emit(&parsed.layer, LayerId(1), &tokens, &paths, &mut NoAsset);
         let arcs = result
             .layer
-            .prims
+            .prims()
             .values()
             .flat_map(|p| {
                 p.references
@@ -502,7 +502,7 @@ fn saves_unresolved_arcs_as_authored() {
             .count()
             + result
                 .layer
-                .sublayers
+                .sublayers()
                 .iter()
                 .filter(|s| s.is_unresolved())
                 .count();
@@ -535,7 +535,7 @@ fn rejects_invalid_layers() {
     let a = Path::parse_absolute("/A", &imported.tokens).unwrap();
     let a = imported.paths.intern(a);
     let name = imported.tokens.intern("Missing");
-    let spec = imported.layer.prims.get_mut(&a).unwrap();
+    let spec = imported.layer.prim_mut(a).unwrap();
     spec.authored_children.push(name);
     assert_eq!(
         imported.save(),
@@ -547,7 +547,7 @@ fn rejects_invalid_layers() {
     );
 
     let mut imported = Imported::new(source);
-    imported.layer.prims.get_mut(&a).unwrap().specifier = None;
+    imported.layer.prim_mut(a).unwrap().specifier = None;
     assert_eq!(
         imported.save(),
         Err(SaveError::Invalid {
@@ -584,8 +584,7 @@ fn rejects_invalid_layers() {
     let key = imported.tokens.intern("hidden");
     imported
         .layer
-        .prims
-        .get_mut(&a)
+        .prim_mut(a)
         .unwrap()
         .set_field(key, LayerValue::Blocked);
     assert_eq!(
@@ -726,7 +725,7 @@ def "A" (
     let a = imported.paths.intern(a);
     let key = imported.tokens.intern("exedraTargets");
     let target = TargetPath::parse("/A", &imported.tokens, &imported.paths).unwrap();
-    imported.layer.prims.get_mut(&a).unwrap().set_field(
+    imported.layer.prim_mut(a).unwrap().set_field(
         key,
         FieldValue::PathListOp(LayerListOp {
             explicit: Some(vec![target]),
@@ -786,7 +785,7 @@ def "A"
     let imported = Imported::new(source);
     let a = imported.paths.intern(a);
     let height = imported.tokens.intern("height");
-    let spline = imported.layer.prims[&a]
+    let spline = imported.layer.prims()[&a]
         .property(height)
         .unwrap()
         .spline
@@ -1003,7 +1002,7 @@ fn keeps_interleaved_property_order() {
     let a = imported.paths.intern(a);
     let y = imported.tokens.intern("y");
     let target = TargetPath::parse("/A.x", &imported.tokens, &imported.paths).unwrap();
-    let spec = imported.layer.prims.get_mut(&a).unwrap();
+    let spec = imported.layer.prim_mut(a).unwrap();
     spec.properties.insert(
         1,
         PropertyEntry {
@@ -1165,8 +1164,7 @@ fn rejects_misplaced_variant_specs() {
         let x = imported.tokens.intern("x");
         imported
             .layer
-            .prims
-            .get_mut(&a)
+            .prim_mut(a)
             .unwrap()
             .variant_sets
             .get_mut(&v)

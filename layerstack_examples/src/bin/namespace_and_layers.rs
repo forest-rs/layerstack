@@ -34,7 +34,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     store.insert_layer(geometry);
     let mut model_layer = Layer::new(LayerId(1));
-    model_layer.sublayers.push(SublayerEntry::new(LayerId(2)));
+    model_layer
+        .sublayers_mut()
+        .push(SublayerEntry::new(LayerId(2)));
     model_layer.insert_prim(
         model,
         PrimSpec::def().with_reference(Reference::with_asset(LayerId(5), asset, "geometry.usda")),
@@ -124,11 +126,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     assert!(
-        !consolidated.layer.prims[&model].references.is_empty(),
+        !consolidated.layer.prims()[&model].references.is_empty(),
         "external geometry remains referenced"
     );
     assert_eq!(
-        consolidated.layer.relocates.len(),
+        consolidated.layer.relocates().len(),
         1,
         "the namespace relocation remains authored"
     );

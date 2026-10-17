@@ -58,7 +58,7 @@ fn default_value(imported: &mut Imported, path: &str) -> Value {
     let prim = layerstack::path::Path::parse_absolute(prim_path, &imported.tokens).unwrap();
     let prim = imported.paths.lookup(&prim).unwrap();
     let name = imported.tokens.intern(name);
-    let spec = imported.layer.prims[&prim]
+    let spec = imported.layer.prims()[&prim]
         .property(name)
         .expect("property");
     spec.default.clone().expect("default value")
@@ -229,7 +229,7 @@ fn values_openusd_rejects_are_reported() {
             &mut layerstack_conformance::save_corpus::AnyAsset::default(),
         );
         assert!(!result.diagnostics.is_empty(), "{statement}: not reported");
-        for prim in result.layer.prims.values() {
+        for prim in result.layer.prims().values() {
             for entry in &prim.properties {
                 assert!(
                     entry.spec.default.is_none()
@@ -311,7 +311,7 @@ fn unresolved_sublayers_are_reported_by_both_readers() {
             (read.layer, read.resolved_layers)
         };
         assert_eq!(
-            layer.sublayers,
+            layer.sublayers(),
             [
                 SublayerEntry::unresolved(
                     "./missing.usda",

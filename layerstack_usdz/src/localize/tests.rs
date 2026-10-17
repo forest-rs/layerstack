@@ -14,7 +14,7 @@ fn fixture() -> (InMemoryStore, layerstack::PathId, layerstack::TokenId) {
     let root_name = store.tokens.intern("Model");
     let pseudo_root = store.path("/");
     let mut root = Layer::new(LayerId(1));
-    root.default_prim = Some(root_name);
+    root.set_default_prim(Some(root_name));
     root.insert_prim(
         model,
         PrimSpec::def().with_reference(Reference::with_asset_default_prim(
@@ -23,7 +23,7 @@ fn fixture() -> (InMemoryStore, layerstack::PathId, layerstack::TokenId) {
         )),
     );
     let mut child = Layer::new(LayerId(2));
-    child.default_prim = Some(root_name);
+    child.set_default_prim(Some(root_name));
     child.insert_prim(
         model,
         PrimSpec::def().with_property(
@@ -82,7 +82,7 @@ fn localized_package_round_trips_layers_and_rewrites_paths_from_each_authoring_l
     assert_eq!(plan.resolved_uses, 2);
     assert_eq!(plan.layers[0].member.as_ref(), "scene.usdc");
     assert_eq!(
-        plan.layers[1].layer.prims[&model]
+        plan.layers[1].layer.prims()[&model]
             .property(file)
             .unwrap()
             .default,
@@ -129,8 +129,7 @@ fn unnamed_layer_links_are_named_and_host_expanded_udims_keep_templates() {
     store
         .layer_mut(LayerId(1))
         .unwrap()
-        .prims
-        .get_mut(&model)
+        .prim_mut(model)
         .unwrap()
         .references
         .append[0]
@@ -139,8 +138,7 @@ fn unnamed_layer_links_are_named_and_host_expanded_udims_keep_templates() {
         &mut store
             .layer_mut(LayerId(2))
             .unwrap()
-            .prims
-            .get_mut(&model)
+            .prim_mut(model)
             .unwrap()
             .properties[0]
             .spec,
@@ -168,7 +166,7 @@ fn unnamed_layer_links_are_named_and_host_expanded_udims_keep_templates() {
     .unwrap();
     assert_eq!(plan.assets.len(), 2);
     assert_eq!(
-        plan.layers[1].layer.prims[&model]
+        plan.layers[1].layer.prims()[&model]
             .property(file)
             .unwrap()
             .default,

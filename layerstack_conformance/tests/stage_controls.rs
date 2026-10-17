@@ -269,7 +269,7 @@ fn inactive_roots_remain_inspectable_and_stage_inventories_ignore_host_residency
     layer.insert_prim(class, layerstack::PrimSpec::class());
     layer.insert_prim(undef_child, layerstack::PrimSpec::def());
     layer.insert_prim(abstract_child, layerstack::PrimSpec::def());
-    layer.default_prim = Some(default);
+    layer.set_default_prim(Some(default));
     store.insert_layer(layer);
     store.insert_layer(layerstack::Layer::new(LayerId(99)));
     let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
@@ -372,8 +372,7 @@ print(json.dumps([[str(p.GetPath()),p.IsActive(),p.IsLoaded(),p.IsDefined(),p.Is
         .layers
         .get_mut(&LayerId(1))
         .unwrap()
-        .prims
-        .get_mut(&a)
+        .prim_mut(a)
         .unwrap()
         .active = Some(true);
     live.notify_structural_change();
@@ -447,8 +446,7 @@ fn all_children_never_restore_removed_relocation_sources() {
         .layers
         .get_mut(&loaded.root_layer)
         .unwrap()
-        .prims
-        .get_mut(&plot)
+        .prim_mut(plot)
         .unwrap()
         .active = Some(false);
     let stage = Stage::compose(&mut store, loaded.root_layer, StageOptions::default());

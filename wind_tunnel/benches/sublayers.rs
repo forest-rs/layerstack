@@ -42,7 +42,7 @@ fn build_and_compose(n_layers: usize, n_prims: usize) -> Stage {
         .collect();
 
     let mut root_layer = Layer::new(LayerId(1));
-    root_layer.sublayers = sublayer_ids;
+    *root_layer.sublayers_mut() = sublayer_ids;
 
     // Root prim with children, plus strongest opinions.
     root_layer.insert_prim(root, PrimSpec::def().with_children(child_tokens.clone()));

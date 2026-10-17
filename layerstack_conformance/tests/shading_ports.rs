@@ -22,7 +22,7 @@ fn layered_connections_match_cpp_and_undo_authored_absence() {
     let mut store = InMemoryStore::default();
     let mut strong = Layer::new(LayerId(1));
     strong
-        .sublayers
+        .sublayers_mut()
         .push(layerstack::SublayerEntry::new(LayerId(2)));
     store.insert_layer(strong);
     store.insert_layer(Layer::new(LayerId(2)));

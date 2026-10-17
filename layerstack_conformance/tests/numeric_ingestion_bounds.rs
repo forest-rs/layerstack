@@ -65,14 +65,17 @@ fn numeric_import_preserves_integer_minimum_and_rejects_rounded_overflow() {
         );
         let path = store.path("/P");
         assert_eq!(
-            result.emitted.layer.prims[&path].properties[0].spec.default, expected,
+            result.emitted.layer.prims()[&path].properties[0]
+                .spec
+                .default,
+            expected,
             "{ty} {literal}"
         );
         assert_eq!(
             result.stats.numeric_arrays, 2,
             "both array defaults and samples use compact conversion"
         );
-        let prim = &result.emitted.layer.prims[&path];
+        let prim = &result.emitted.layer.prims()[&path];
         for (name, sample) in [("array", false), ("samples", true)] {
             let property = prim
                 .properties

@@ -354,7 +354,7 @@ pub(crate) fn read(pxr: &Path, source: &Path) -> Result<Model, String> {
             let spec = store
                 .paths
                 .lookup(&layerstack::Path::root().join(&[definition.name]))
-                .and_then(|path| emitted.layer.prims.get(&path))
+                .and_then(|path| emitted.layer.prim(path))
                 .ok_or_else(|| format!("{name}: no prim spec"))?;
             let class_doc = doc_of(spec.field(custom_data));
             let schema_name = name.clone();
@@ -592,7 +592,7 @@ fn source_api_names(
     let custom_data = store.tokens.intern("customData");
     let placeholder = layerstack::schema::INSTANCE_NAME_PLACEHOLDER;
     let mut names = BTreeMap::new();
-    for (path, spec) in &emitted.layer.prims {
+    for (path, spec) in emitted.layer.prims() {
         let schema_path = store.paths.resolve(*path);
         if schema_path.depth() != 1 {
             continue;

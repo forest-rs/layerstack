@@ -134,13 +134,16 @@ fn raw_consolidation_matches_native_and_keeps_composed_stage_values() {
         &mut NoAssets,
     )
     .layer;
-    fields(&mut consolidated.layer.metadata);
-    fields(&mut expected.metadata);
-    assert_eq!(consolidated.layer.metadata, expected.metadata);
+    fields(consolidated.layer.metadata_fields_mut());
+    fields(expected.metadata_fields_mut());
+    assert_eq!(
+        consolidated.layer.metadata_fields(),
+        expected.metadata_fields()
+    );
     let mut paths: Vec<_> = expected
-        .prims
+        .prims()
         .keys()
-        .chain(expected.variant_prims.keys())
+        .chain(expected.variant_prims().keys())
         .copied()
         .collect();
     paths.sort();

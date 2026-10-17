@@ -150,7 +150,7 @@ fn declared_type(store: &mut InMemoryStore, prim: &str, name: &str) -> String {
     let prim_id = store.path(prim);
     let field = store.tokens.intern(name);
     let layer = store.layers.get(&LayerId(1)).expect("root layer");
-    let entry = layer.prims[&prim_id]
+    let entry = layer.prims()[&prim_id]
         .property(field)
         .unwrap_or_else(|| panic!("{prim}.{name} authored"));
     let ty = entry
@@ -167,7 +167,7 @@ fn assert_stage_matches_scene(store: &mut InMemoryStore) {
 
     let root_token = store.tokens.intern("Root");
     assert_eq!(
-        store.layers[&LayerId(1)].default_prim,
+        store.layers[&LayerId(1)].default_prim(),
         Some(root_token),
         "defaultPrim"
     );
@@ -686,7 +686,7 @@ fn authored_assets(layer: &layerstack::Layer) -> Vec<String> {
         }
     }
     let mut out = Vec::new();
-    for spec in layer.prims.values() {
+    for spec in layer.prims().values() {
         for field in &spec.fields {
             if let FieldValue::Value(value) = &field.value {
                 visit(value, &mut out);

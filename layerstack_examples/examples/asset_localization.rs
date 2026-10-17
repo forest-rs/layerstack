@@ -19,7 +19,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let model_name = store.tokens.intern("Model");
     let image = store.tokens.intern("image");
     let mut scene = Layer::new(LayerId(1));
-    scene.default_prim = Some(model_name);
+    scene.set_default_prim(Some(model_name));
     scene.insert_prim(root, PrimSpec::default().with_children(vec![model_name]));
     scene.insert_prim(
         model,
@@ -29,7 +29,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         )),
     );
     let mut asset = Layer::new(LayerId(2));
-    asset.default_prim = Some(model_name);
+    asset.set_default_prim(Some(model_name));
     asset.insert_prim(root, PrimSpec::default().with_children(vec![model_name]));
     asset.insert_prim(
         model,

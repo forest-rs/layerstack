@@ -404,5 +404,79 @@ pub fn compile(source: &Path, options: &CompileOptions) -> Result<CompiledSchema
     })
 }
 
+/// The `compile` subcommand: `compile <schema.usda> --out <dir>
+/// [--search <dir>]... [--openusd-source <dir>]... [--plugin-root <dir>]...
+/// [--check]`.
+///
+/// Writes `generatedSchema.usda` and `plugInfo.json` into `<dir>`, building
+/// `plugInfo.json` on the one already there, as usdGenSchema does. With
+/// `--check` it writes nothing and fails when either file differs.
+pub(crate) fn run(mut args: impl Iterator<Item = String>) -> Result<String, String> {
+    let mut source = None;
+    let mut out = None;
+    let mut check = false;
+    let mut options = CompileOptions::new();
+    while let Some(arg) = args.next() {
+        let mut value = |flag: &str| {
+            args.next()
+                .ok_or_else(|| format!("{flag} requires a directory"))
+        };
+        match arg.as_str() {
+            "--out" => out = Some(PathBuf::from(value("--out")?)),
+            "--search" => options = options.with_search_path(value("--search")?),
+            "--openusd-source" => options = options.with_openusd_source(value("--openusd-source")?),
+            "--plugin-root" => options = options.with_plugin_root(value("--plugin-root")?),
+            "--check" => check = true,
+            other if other.starts_with("--") => {
+                return Err(format!("unknown argument {other}; see the crate docs"));
+            }
+            other if source.is_none() => source = Some(PathBuf::from(other)),
+            other => return Err(format!("unexpected argument {other}")),
+        }
+    }
+    let source = source.ok_or("compile requires a schema.usda")?;
+    let out = out.ok_or("compile requires --out <directory>")?;
+    let plug_info_path = out.join("plugInfo.json");
+    if let Ok(existing) = std::fs::read_to_string(&plug_info_path) {
+        options = options.with_existing_plug_info(existing);
+    }
+    let compiled = compile(&source, &options).map_err(|e| e.to_string())?;
+    let mut files = vec![(
+        out.join("generatedSchema.usda"),
+        compiled.generated_schema_usda(),
+    )];
+    if let Some(plug_info) = compiled.plug_info_json() {
+        files.push((plug_info_path, plug_info));
+    }
+    if check {
+        let stale: Vec<String> = files
+            .iter()
+            .filter(|(path, text)| std::fs::read_to_string(path).ok().as_deref() != Some(*text))
+            .map(|(path, _)| path.display().to_string())
+            .collect();
+        if !stale.is_empty() {
+            return Err(format!(
+                "stale against {}: {}; compile without --check",
+                source.display(),
+                stale.join(", ")
+            ));
+        }
+        return Ok(format!(
+            "{} {} schemas are up to date",
+            compiled.classes().len(),
+            compiled.library().name
+        ));
+    }
+    for (path, text) in &files {
+        crate::output::write_if_changed(path, text)?;
+    }
+    Ok(format!(
+        "compiled {} {} schemas into {}",
+        compiled.classes().len(),
+        compiled.library().name,
+        out.display()
+    ))
+}
+
 #[cfg(test)]
 mod tests;

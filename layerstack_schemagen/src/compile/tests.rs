@@ -444,3 +444,42 @@ fn messages_are_usd_gen_schema_messages() {
          information."
     );
 }
+
+#[test]
+fn the_command_writes_checks_and_keeps_plug_info_edits() {
+    let directory = Directory::new();
+    let source = directory.0.join("schema.usda");
+    std::fs::write(
+        &source,
+        format!("{CODELESS}class Thing \"Thing\" (inherits = </Typed>) {{}}\n"),
+    )
+    .unwrap();
+    let out = directory.0.join("out");
+    let run = |check: bool| {
+        let mut args = vec![
+            source.display().to_string(),
+            "--out".into(),
+            out.display().to_string(),
+            "--search".into(),
+            directory.0.display().to_string(),
+        ];
+        if check {
+            args.push("--check".into());
+        }
+        super::run(args.into_iter())
+    };
+    assert!(run(true).is_err(), "nothing written yet");
+    run(false).unwrap();
+    run(true).expect("up to date");
+    let plug_info = out.join("plugInfo.json");
+    let edited = std::fs::read_to_string(&plug_info)
+        .unwrap()
+        .replace("@PLUG_INFO_ROOT@", ".");
+    std::fs::write(&plug_info, &edited).unwrap();
+    run(true).expect("an edit outside the generated types is kept");
+    std::fs::write(out.join("generatedSchema.usda"), "#usda 1.0\n").unwrap();
+    let stale = run(true).unwrap_err();
+    assert!(stale.contains("generatedSchema.usda"), "{stale}");
+    run(false).unwrap();
+    assert_eq!(std::fs::read_to_string(&plug_info).unwrap(), edited);
+}

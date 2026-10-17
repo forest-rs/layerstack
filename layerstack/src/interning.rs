@@ -32,10 +32,7 @@ use core::{
 
 use hashbrown::{DefaultHashBuilder, HashTable};
 
-#[cfg(not(feature = "std"))]
-use core::cell::{OnceCell as Once, RefCell};
-#[cfg(feature = "std")]
-use std::sync::{Mutex, OnceLock as Once};
+use crate::sync::{Lock, Slots};
 
 /// The number of separately locked tables; a power of two.
 const SHARDS: usize = 64;
@@ -44,17 +41,10 @@ const SHARDS: usize = 64;
 /// buckets with, below those they tag entries with.
 const SHARD_SHIFT: u32 = 40;
 
-/// The number of values in the first storage chunk, as a power of two; each
-/// later chunk is twice the size of the one before.
-const FIRST_CHUNK_BITS: u32 = 10;
-
-/// The number of storage chunks, enough for every `u32` id.
-const CHUNKS: usize = 33 - FIRST_CHUNK_BITS as usize;
-
 /// Under `--cfg layerstack_reverse_ids`, ids are reversed within each run
 /// of this many, so they stay dense.
 #[cfg(layerstack_reverse_ids)]
-const REVERSED_RUN: u32 = 1 << FIRST_CHUNK_BITS;
+const REVERSED_RUN: u32 = 1 << crate::sync::FIRST_CHUNK_BITS;
 
 /// The id of the `n`th value interned.
 fn id_of(n: u32) -> u32 {
@@ -70,43 +60,12 @@ fn position_of(id: u32) -> u32 {
     id_of(id)
 }
 
-/// A value behind a lock: a `Mutex` with the `std` feature, a `RefCell`
-/// without.
-struct Lock<T>(
-    #[cfg(feature = "std")] Mutex<T>,
-    #[cfg(not(feature = "std"))] RefCell<T>,
-);
-
-impl<T> Lock<T> {
-    fn new(value: T) -> Self {
-        #[cfg(feature = "std")]
-        let lock = Mutex::new(value);
-        #[cfg(not(feature = "std"))]
-        let lock = RefCell::new(value);
-        Self(lock)
-    }
-
-    /// Runs `f` on the value while holding the lock.
-    fn with<R>(&self, f: impl FnOnce(&mut T) -> R) -> R {
-        #[cfg(feature = "std")]
-        let mut value = self
-            .0
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        #[cfg(not(feature = "std"))]
-        let mut value = self.0.borrow_mut();
-        f(&mut value)
-    }
-}
-
 /// Values interned by id, from any number of threads.
 pub(crate) struct Interned<T> {
     hasher: DefaultHashBuilder,
     shards: Box<[Lock<HashTable<u32>>]>,
-    /// Chunk `k` holds the values interned `(2^k - 1) << FIRST_CHUNK_BITS`th
-    /// up to the next chunk's first. A chunk, once allocated, never moves,
-    /// and a value, once set, never changes.
-    chunks: [Once<Box<[Once<T>]>>; CHUNKS],
+    /// The values, in interning order.
+    values: Slots<T>,
     len: AtomicU32,
 }
 
@@ -115,19 +74,10 @@ impl<T> Default for Interned<T> {
         Self {
             hasher: DefaultHashBuilder::default(),
             shards: (0..SHARDS).map(|_| Lock::new(HashTable::new())).collect(),
-            chunks: core::array::from_fn(|_| Once::new()),
+            values: Slots::default(),
             len: AtomicU32::new(0),
         }
     }
-}
-
-/// Returns the chunk holding the `n`th value interned and its place in
-/// that chunk.
-fn chunk_of(n: u32) -> (usize, usize) {
-    let biased = (n >> FIRST_CHUNK_BITS) + 1;
-    let chunk = 31 - biased.leading_zeros();
-    let first = ((1_u32 << chunk) - 1) << FIRST_CHUNK_BITS;
-    (chunk as usize, (n - first) as usize)
 }
 
 impl<T: Hash + Eq> Interned<T> {
@@ -139,8 +89,7 @@ impl<T: Hash + Eq> Interned<T> {
     /// Returns the value of `id`, or `None` for an id this table has not
     /// handed out.
     pub(crate) fn get(&self, id: u32) -> Option<&T> {
-        let (chunk, slot) = chunk_of(position_of(id));
-        self.chunks[chunk].get()?[slot].get()
+        self.values.get(position_of(id))
     }
 
     fn shard(&self, hash: u64) -> &Lock<HashTable<u32>> {
@@ -182,24 +131,10 @@ impl<T: Hash + Eq> Interned<T> {
             let n = self.len.fetch_add(1, Ordering::AcqRel);
             assert!(n != u32::MAX, "interner overflow");
             let id = id_of(n);
-            self.store(n, make());
+            self.values.set(n, make());
             table.insert_unique(hash, id, self.rehash());
             (id, true)
         })
-    }
-
-    /// Sets the `n`th value interned.
-    fn store(&self, n: u32, value: T) {
-        let (chunk, slot) = chunk_of(n);
-        let chunk = self.chunks[chunk].get_or_init(|| {
-            // The last chunks hold more values than 32-bit memory can.
-            let len = usize::try_from(1_u64 << (FIRST_CHUNK_BITS as usize + chunk))
-                .expect("interner capacity");
-            (0..len).map(|_| Once::new()).collect()
-        });
-        if chunk[slot].set(value).is_err() {
-            unreachable!("each id is handed out once");
-        }
     }
 }
 
@@ -217,7 +152,7 @@ impl<T: Hash + Eq + Clone> Interned<T> {
             let id = id_of(n);
             let value = self.get(id).expect("interned id").clone();
             let hash = copy.hasher.hash_one(&value);
-            copy.store(n, value);
+            copy.values.set(n, value);
             copy.shard(hash).with(|table| {
                 table.insert_unique(hash, id, copy.rehash());
             });
@@ -239,18 +174,6 @@ impl<T> core::fmt::Debug for Interned<T> {
 mod tests {
     use super::*;
     use alloc::{string::String, vec::Vec};
-
-    #[test]
-    fn chunks_cover_ids_without_gaps() {
-        assert_eq!(chunk_of(0), (0, 0));
-        assert_eq!(chunk_of(1023), (0, 1023));
-        assert_eq!(chunk_of(1024), (1, 0));
-        assert_eq!(chunk_of(3071), (1, 2047));
-        assert_eq!(chunk_of(3072), (2, 0));
-        let (last, slot) = chunk_of(u32::MAX);
-        assert_eq!(last, CHUNKS - 1);
-        assert!((slot as u64) < 1_u64 << (FIRST_CHUNK_BITS as usize + last));
-    }
 
     #[test]
     fn ids_number_values_in_first_interned_order() {

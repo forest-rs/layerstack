@@ -22,7 +22,7 @@ pub(crate) mod map_function;
 pub(crate) mod site;
 pub(crate) mod site_paths;
 
-use alloc::{rc::Rc, vec::Vec};
+use alloc::{sync::Arc, vec::Vec};
 
 use hashbrown::{HashMap, HashSet};
 
@@ -39,11 +39,12 @@ use crate::{
     prim_index_graph::{NodeArc, NodeId, PrimIndexGraph},
     spec_path::SpecPath,
     stage::StageOptions,
+    sync::Lock,
 };
 
 use self::{
     graph::{Graph, NONE, NodeIndex, Site, is_class_based},
-    indexer::{Ctx, Outputs, build_prim_index, is_instanceable},
+    indexer::{Ctx, Outputs, Recorded, build_prim_index, is_instanceable},
     layer_stacks::{LayerStacks, StackId},
     site::ChildIndex,
 };
@@ -68,6 +69,8 @@ pub(crate) struct Composition {
     pub(crate) reads: VariableReads,
     /// What each composed prim depends on, applied to `deps` at the end.
     records: HashMap<PathId, PrimRecord>,
+    /// The layer stacks whose errors a prim has reported.
+    reported_stacks: HashSet<StackId>,
 }
 
 /// The dependencies one prim index records (see [`DependencyBuilder`]).
@@ -166,7 +169,7 @@ pub(crate) fn compose(
         fallbacks: &options.variant_fallbacks,
         include_payload: &include_payload,
         stage_stack: StackId(0),
-        cache: HashMap::new(),
+        cache: Lock::default(),
         root_path,
     };
     let identifier = LayerStackIdentifier {
@@ -218,8 +221,13 @@ pub(crate) fn compose(
             }
         }
     }
-    out.errors.extend(core::mem::take(&mut ctx.stacks.errors));
-    out.reads.extend(core::mem::take(&mut ctx.stacks.reads));
+    // The stage's own layer stack, and any no arc reached, report last.
+    for (at, stack) in (0..).zip(ctx.stacks.iter()) {
+        if !out.reported_stacks.contains(&StackId(at)) {
+            out.errors.extend(stack.errors.iter().cloned());
+        }
+        out.reads.extend(stack.reads.clone());
+    }
     if let Some(deps) = out.deps.as_mut() {
         let layers: Vec<LayerId> = ctx
             .stacks
@@ -348,7 +356,7 @@ fn walk(
             if keep {
                 out.inactive.insert(path);
             }
-            ctx.cache.insert(path, Rc::new(graph));
+            ctx.cache.with(|cache| cache.insert(path, Arc::new(graph)));
             continue;
         }
         if !deferred {
@@ -359,7 +367,7 @@ fn walk(
         if keep && !children.is_empty() {
             out.children.insert(path, children);
         }
-        ctx.cache.insert(path, Rc::new(graph));
+        ctx.cache.with(|cache| cache.insert(path, Arc::new(graph)));
     }
 }
 
@@ -505,7 +513,7 @@ fn reroot_opinion_paths(store: &dyn LayerStore, index: &mut PrimIndex, from: Pat
         }
         match &mut opinion.value {
             OpinionValue::Property(spec) => {
-                let spec = alloc::sync::Arc::make_mut(spec);
+                let spec = Arc::make_mut(spec);
                 if let Some(targets) = spec.targets.as_mut() {
                     for list in targets.lists_mut() {
                         for target in list.iter_mut() {
@@ -733,7 +741,7 @@ fn child_names(ctx: &mut Ctx<'_>, graph: &Graph) -> Vec<TokenId> {
             ctx.store,
             stack,
             &entry.site.path,
-            &mut ctx.child_index,
+            &ctx.child_index,
             &mut order,
             &mut names,
             &mut unlisted,
@@ -1009,7 +1017,7 @@ pub(crate) fn order_children(store: &dyn LayerStore, index: &PrimIndex, children
     let mut order: Vec<TokenId> = Vec::new();
     let mut names: HashSet<TokenId> = HashSet::new();
     let mut unlisted: Vec<TokenId> = Vec::new();
-    let mut child_index = ChildIndex::default();
+    let child_index = ChildIndex::default();
     for id in graph.strength_order().into_iter().rev() {
         if !contributing.contains(&id) {
             continue;
@@ -1022,7 +1030,7 @@ pub(crate) fn order_children(store: &dyn LayerStore, index: &PrimIndex, children
             store,
             &layers,
             node.site(),
-            &mut child_index,
+            &child_index,
             &mut order,
             &mut names,
             &mut unlisted,
@@ -1103,7 +1111,7 @@ fn map_path_expressions(
             anchor_value_with(v, &anchor, &mut map);
         }
         crate::prim_index::OpinionValue::Property(spec) => {
-            let spec = alloc::sync::Arc::make_mut(spec);
+            let spec = Arc::make_mut(spec);
             if default_changes && let Some(v) = spec.default.as_mut() {
                 anchor_value_with(v, &anchor, &mut map);
             }
@@ -1128,7 +1136,21 @@ fn record(
     index: &PrimIndex,
     outputs: Outputs,
 ) {
-    out.errors.extend(outputs.errors);
+    for recorded in outputs.errors {
+        match recorded {
+            Recorded::Error(error) => out.errors.push(error),
+            Recorded::StackErrors { stack, prim } => {
+                if out.reported_stacks.insert(stack) {
+                    for mut error in ctx.stacks.get(stack).errors.iter().cloned() {
+                        if let CompositionError::VariableExpressionError(error) = &mut error {
+                            error.prim = Some(prim);
+                        }
+                        out.errors.push(error);
+                    }
+                }
+            }
+        }
+    }
     out.asset_requests.extend(outputs.asset_requests);
     out.reads.extend(outputs.reads);
     // A layer stack's use belongs to the prim whose index first adds a

@@ -179,6 +179,7 @@ pub mod interner;
 mod interning;
 pub mod layer_stack;
 pub mod layer_stack_flatten;
+mod sync;
 pub use layer_stack_flatten::{
     FlattenedLayerStack, LayerStackFlattenAssetPath, LayerStackFlattenError,
     LayerStackFlattenReport, flatten_layer_stack,

@@ -16,7 +16,7 @@
 //! OpenUSD: `Pcp_BuildPrimIndex` and the tasks of `Pcp_PrimIndexer`
 //! (`pxr/usd/pcp/primIndex.cpp`).
 
-use alloc::{string::String, vec::Vec};
+use alloc::{string::String, sync::Arc, vec::Vec};
 
 use hashbrown::{HashMap, HashSet};
 
@@ -33,6 +33,7 @@ use crate::{
     path::PathId,
     prim_index::ArcKind,
     spec_path::SpecPath,
+    sync::Lock,
     variant_fallbacks::VariantFallbacks,
 };
 
@@ -55,7 +56,7 @@ pub(crate) struct Ctx<'s> {
     /// The stage's own layer stack.
     pub(crate) stage_stack: StackId,
     /// Finalized indexes of stage prims, for their children to start from.
-    pub(crate) cache: HashMap<PathId, alloc::rc::Rc<Graph>>,
+    pub(crate) cache: Lock<HashMap<PathId, Arc<Graph>>>,
     pub(crate) root_path: PathId,
 }
 
@@ -68,11 +69,24 @@ pub(crate) enum PayloadState {
     Excluded,
 }
 
+/// An error building a prim index found, in the order found.
+pub(crate) enum Recorded {
+    Error(CompositionError),
+    /// An arc of `prim` reached `stack`: the errors gathering the stack
+    /// found belong to the first prim, in traversal order, whose arc
+    /// reaches it (OpenUSD appends them to that prim index's errors in
+    /// `_EvalRefOrPayloadArcs`), whichever thread gathered it.
+    StackErrors {
+        stack: StackId,
+        prim: PathId,
+    },
+}
+
 /// What building a prim index found.
 #[derive(Default)]
 pub(crate) struct Outputs {
     pub(crate) graph: Graph,
-    pub(crate) errors: Vec<CompositionError>,
+    pub(crate) errors: Vec<Recorded>,
     pub(crate) payload_state: PayloadState,
     pub(crate) asset_requests: Vec<AssetRequest>,
     /// Layers whose `defaultPrim` an arc consulted.
@@ -358,7 +372,7 @@ impl Indexer<'_, '_, '_> {
     }
 
     fn record_error(&mut self, error: CompositionError) {
-        self.outputs.errors.push(error);
+        self.outputs.errors.push(Recorded::Error(error));
     }
 
     // ── Tasks ──────────────────────────────────────────────────────────
@@ -707,7 +721,10 @@ impl Indexer<'_, '_, '_> {
         let cached = (self.previous_frame.is_none()
             && self.evaluate_implied_specializes
             && site.stack == self.ctx.stage_stack)
-            .then(|| self.ctx.cache.get(&parent_path.prim_path()).cloned())
+            .then(|| {
+                let parent = parent_path.prim_path();
+                self.ctx.cache.with(|cache| cache.get(&parent).cloned())
+            })
             .flatten();
         if let Some(parent) = cached.filter(|_| !parent_path.has_variant_selections()) {
             self.outputs.graph = (*parent).clone();
@@ -1263,21 +1280,14 @@ impl Indexer<'_, '_, '_> {
                 root: reference.layer,
                 session: None,
             };
-            let reported = self.ctx.stacks.errors.len();
             stack_id =
                 self.ctx
                     .stacks
                     .find_or_compute(self.ctx.store, identifier, Some(entry.site.stack));
-            // A referenced layer stack's errors belong to the prim whose arc
-            // first gathers it (OpenUSD appends them to that prim index's
-            // errors in `_EvalRefOrPayloadArcs`).
-            let found: Vec<CompositionError> = self.ctx.stacks.errors.drain(reported..).collect();
-            for mut error in found {
-                if let CompositionError::VariableExpressionError(error) = &mut error {
-                    error.prim = Some(prim);
-                }
-                self.record_error(error);
-            }
+            self.outputs.errors.push(Recorded::StackErrors {
+                stack: stack_id,
+                prim,
+            });
             let tokens = self.ctx.store.tokens();
             let source_rate = self
                 .ctx
@@ -1462,15 +1472,13 @@ impl Indexer<'_, '_, '_> {
         let findings = scope.into_findings();
         self.outputs.reads.extend(findings.reads);
         for (context, layer, expression, error) in findings.errors {
-            self.outputs
-                .errors
-                .push(crate::expression_variables::expression_error(
-                    context,
-                    layer,
-                    Some(prim),
-                    &expression,
-                    error,
-                ));
+            self.record_error(crate::expression_variables::expression_error(
+                context,
+                layer,
+                Some(prim),
+                &expression,
+                error,
+            ));
         }
     }
 

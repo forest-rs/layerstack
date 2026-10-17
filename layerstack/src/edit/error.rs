@@ -69,6 +69,10 @@ pub enum Slot {
     VariantSelection(TokenId),
     /// A prim spec field kept in a dedicated member.
     Prim(super::PrimField),
+    /// A layer's sublayers and their offsets.
+    Sublayers,
+    /// A layer's `layerRelocates`.
+    Relocates,
 }
 
 /// Why one edit of a transaction cannot be applied.
@@ -124,6 +128,40 @@ pub enum Rejection {
     ///
     /// Spec: AOUSD Core §7.6.7 (variant specs).
     NotOnVariant(super::PrimField),
+    /// No sublayer is at this index of the layer's sublayers (for an
+    /// insertion, the index is past the end).
+    NoSuchSublayer(usize),
+    /// The sublayer at this index has an empty asset path.
+    ///
+    /// OpenUSD: `SdfSubLayerTypePolicy` rejects it.
+    EmptySublayerAsset(usize),
+    /// The sublayer at this index repeats an earlier one, by layer or by
+    /// authored asset path.
+    ///
+    /// OpenUSD: `SdfSubLayerTypePolicy` rejects it.
+    DuplicateSublayer(usize),
+    /// Sublayering this layer makes a cycle: it is the edited layer, or its
+    /// own sublayers reach it. OpenUSD accepts the edit and composes it as
+    /// `PcpErrorSublayerCycle`.
+    ///
+    /// Spec: AOUSD Core §10.3.1 (layer stacks).
+    SublayerCycle(LayerId),
+    /// A relocate composition would ignore on its own. OpenUSD accepts it
+    /// and composes it as `PcpErrorInvalidAuthoredRelocation`.
+    ///
+    /// Spec: AOUSD Core §10.3.2.6 (relocates restrictions).
+    InvalidRelocate {
+        /// The relocate's source.
+        source: crate::PathId,
+        /// Why composition would ignore it.
+        reason: crate::InvalidRelocationReason,
+    },
+    /// Two relocates of the list move this source. OpenUSD accepts them and
+    /// composes them as `PcpErrorInvalidConflictingRelocation`, ignoring
+    /// both.
+    ///
+    /// Spec: AOUSD Core §10.3.2.6 (each source has one target).
+    DuplicateRelocateSource(crate::PathId),
     /// A step of an inverse no longer matches the layer: the layer was
     /// changed in a way the inverse cannot undo.
     Diverged(SpecPath),
@@ -176,6 +214,20 @@ impl fmt::Display for Rejection {
             Self::PseudoRoot => f.write_str("the pseudo-root holds no prim fields"),
             Self::PseudoRootArc => f.write_str("an arc cannot target the pseudo-root"),
             Self::NotOnVariant(field) => write!(f, "a variant spec holds no {field:?} field"),
+            Self::NoSuchSublayer(index) => write!(f, "no sublayer at index {index}"),
+            Self::EmptySublayerAsset(index) => {
+                write!(f, "the sublayer at index {index} has an empty asset path")
+            }
+            Self::DuplicateSublayer(index) => {
+                write!(f, "the sublayer at index {index} repeats an earlier one")
+            }
+            Self::SublayerCycle(layer) => {
+                write!(f, "sublayering layer {} makes a cycle", layer.0)
+            }
+            Self::InvalidRelocate { reason, .. } => {
+                write!(f, "composition would ignore the relocate: {reason:?}")
+            }
+            Self::DuplicateRelocateSource(_) => f.write_str("two relocates move the same source"),
             Self::Diverged(_) => f.write_str("the layer no longer matches the inverse"),
         }
     }

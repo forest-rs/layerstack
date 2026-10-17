@@ -1,0 +1,416 @@
+{
+ "cases": [
+  {
+   "accepted": [
+    true,
+    true,
+    true
+   ],
+   "name": "sublayer_insert_and_remove",
+   "offsets": [
+    [
+     0.0,
+     1.0
+    ],
+    [
+     0.0,
+     1.0
+    ]
+   ],
+   "prims": [
+    "/Lib",
+    "/A",
+    "/A/FromS3",
+    "/A/FromS2",
+    "/A/B",
+    "/A/B/C",
+    "/A/D",
+    "/Holder2",
+    "/Holder3"
+   ],
+   "relocates": [],
+   "steps": [
+    {
+     "asset": "s2.usda",
+     "call": "insert_sublayer",
+     "index": 0
+    },
+    {
+     "asset": "s3.usda",
+     "call": "insert_sublayer",
+     "index": 2
+    },
+    {
+     "call": "remove_sublayer",
+     "index": 1
+    }
+   ],
+   "sublayers": [
+    "s2.usda",
+    "s3.usda"
+   ]
+  },
+  {
+   "accepted": [
+    true,
+    true,
+    true,
+    true
+   ],
+   "name": "sublayer_offsets",
+   "offsets": [
+    [
+     10.0,
+     2.0
+    ]
+   ],
+   "prims": [
+    "/Lib",
+    "/A",
+    "/A/FromS2",
+    "/A/B",
+    "/A/B/C",
+    "/A/D",
+    "/Holder2",
+    "/Holder3"
+   ],
+   "relocates": [],
+   "steps": [
+    {
+     "asset": "s2.usda",
+     "call": "insert_sublayer",
+     "index": 1
+    },
+    {
+     "call": "set_sublayer_offset",
+     "index": 1,
+     "offset": 10.0,
+     "scale": 2.0
+    },
+    {
+     "call": "set_sublayer_offset",
+     "index": 0,
+     "offset": -3.0,
+     "scale": 1.0
+    },
+    {
+     "call": "remove_sublayer",
+     "index": 0
+    }
+   ],
+   "sublayers": [
+    "s2.usda"
+   ]
+  },
+  {
+   "accepted": [
+    false,
+    false,
+    false,
+    false,
+    false
+   ],
+   "name": "sublayer_rejections",
+   "offsets": [
+    [
+     0.0,
+     1.0
+    ]
+   ],
+   "prims": [
+    "/A",
+    "/A/FromS1",
+    "/A/B",
+    "/A/B/C",
+    "/A/D",
+    "/Holder2",
+    "/Holder3"
+   ],
+   "relocates": [],
+   "steps": [
+    {
+     "asset": "s1.usda",
+     "call": "insert_sublayer",
+     "index": 0
+    },
+    {
+     "asset": "",
+     "call": "insert_sublayer",
+     "index": 0
+    },
+    {
+     "call": "remove_sublayer",
+     "index": 4
+    },
+    {
+     "call": "set_sublayer_offset",
+     "index": 3,
+     "offset": 1.0,
+     "scale": 1.0
+    },
+    {
+     "call": "set_sublayers",
+     "value": [
+      "s2.usda",
+      "s2.usda"
+     ]
+    }
+   ],
+   "sublayers": [
+    "s1.usda"
+   ]
+  },
+  {
+   "accepted": [
+    true,
+    true
+   ],
+   "name": "sublayer_replace",
+   "offsets": [],
+   "prims": [
+    "/Holder2",
+    "/Holder3",
+    "/A",
+    "/A/B",
+    "/A/B/C",
+    "/A/D"
+   ],
+   "relocates": [],
+   "steps": [
+    {
+     "call": "set_sublayers",
+     "value": [
+      "s3.usda",
+      "s2.usda"
+     ]
+    },
+    {
+     "call": "set_sublayers",
+     "value": []
+    }
+   ],
+   "sublayers": []
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "sublayer_self_cycle",
+   "offsets": [
+    [
+     0.0,
+     1.0
+    ],
+    [
+     0.0,
+     1.0
+    ]
+   ],
+   "prims": [
+    "/A",
+    "/A/FromS1",
+    "/A/B",
+    "/A/B/C",
+    "/A/D",
+    "/Holder2",
+    "/Holder3"
+   ],
+   "relocates": [],
+   "steps": [
+    {
+     "asset": "scene.usda",
+     "call": "insert_sublayer",
+     "index": 0
+    }
+   ],
+   "sublayers": [
+    "scene.usda",
+    "s1.usda"
+   ]
+  },
+  {
+   "accepted": [
+    true,
+    true
+   ],
+   "name": "relocates_move_and_remove",
+   "offsets": [
+    [
+     0.0,
+     1.0
+    ]
+   ],
+   "prims": [
+    "/A",
+    "/A/FromS1",
+    "/Holder2",
+    "/Holder3"
+   ],
+   "relocates": [
+    [
+     "/A/B",
+     "/A/Moved"
+    ],
+    [
+     "/A/D",
+     ""
+    ]
+   ],
+   "steps": [
+    {
+     "call": "set_relocates",
+     "value": [
+      [
+       "/A/B",
+       "/A/Moved"
+      ]
+     ]
+    },
+    {
+     "call": "set_relocates",
+     "value": [
+      [
+       "/A/B",
+       "/A/Moved"
+      ],
+      [
+       "/A/D",
+       ""
+      ]
+     ]
+    }
+   ],
+   "sublayers": [
+    "s1.usda"
+   ]
+  },
+  {
+   "accepted": [
+    true,
+    true
+   ],
+   "name": "relocates_clear",
+   "offsets": [
+    [
+     0.0,
+     1.0
+    ]
+   ],
+   "prims": [
+    "/A",
+    "/A/FromS1",
+    "/A/B",
+    "/A/B/C",
+    "/A/D",
+    "/Holder2",
+    "/Holder3"
+   ],
+   "relocates": [],
+   "steps": [
+    {
+     "call": "set_relocates",
+     "value": [
+      [
+       "/A/B",
+       "/A/Moved"
+      ]
+     ]
+    },
+    {
+     "call": "clear_relocates"
+    }
+   ],
+   "sublayers": [
+    "s1.usda"
+   ]
+  },
+  {
+   "accepted": [
+    true,
+    true,
+    true,
+    true,
+    true
+   ],
+   "name": "relocates_invalid_entries",
+   "offsets": [
+    [
+     0.0,
+     1.0
+    ]
+   ],
+   "prims": [
+    "/A",
+    "/A/FromS1",
+    "/A/D",
+    "/Holder2",
+    "/Holder3"
+   ],
+   "relocates": [
+    [
+     "/A/B",
+     "/A/X"
+    ],
+    [
+     "/A/B",
+     "/A/Y"
+    ]
+   ],
+   "steps": [
+    {
+     "call": "set_relocates",
+     "value": [
+      [
+       "/A",
+       "/X"
+      ]
+     ]
+    },
+    {
+     "call": "set_relocates",
+     "value": [
+      [
+       "/A/B",
+       "/A/B"
+      ]
+     ]
+    },
+    {
+     "call": "set_relocates",
+     "value": [
+      [
+       "/A/B",
+       "/A/B/C/E"
+      ]
+     ]
+    },
+    {
+     "call": "set_relocates",
+     "value": [
+      [
+       "/A/B/C",
+       "/A/B"
+      ]
+     ]
+    },
+    {
+     "call": "set_relocates",
+     "value": [
+      [
+       "/A/B",
+       "/A/X"
+      ],
+      [
+       "/A/B",
+       "/A/Y"
+      ]
+     ]
+    }
+   ],
+   "sublayers": [
+    "s1.usda"
+   ]
+  }
+ ],
+ "openusd_version": "26.8"
+}

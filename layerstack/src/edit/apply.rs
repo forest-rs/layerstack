@@ -15,6 +15,7 @@ use alloc::{boxed::Box, sync::Arc, vec::Vec};
 
 use super::{
     error::{EditError, Rejection, Slot},
+    layer_fields,
     prim_fields::{self, PrimValue},
     same::Same,
     spec::{Loc, SpecRef, conforms, spec_at, spec_at_mut},
@@ -60,6 +61,11 @@ pub(crate) enum Raw {
     LayerRelocates {
         layer: LayerId,
         relocates: Vec<crate::Relocate>,
+    },
+    /// Replaces a layer's sublayers, with their offsets, as one slot.
+    Sublayers {
+        layer: LayerId,
+        sublayers: Vec<crate::SublayerEntry>,
     },
     LayerFields {
         layer: LayerId,
@@ -170,6 +176,7 @@ impl Raw {
     pub(crate) fn layer(&self) -> LayerId {
         match self {
             Self::LayerRelocates { layer, .. }
+            | Self::Sublayers { layer, .. }
             | Self::LayerFields { layer, .. }
             | Self::LayerMetadata { layer, .. }
             | Self::PrimSlots { layer, .. }
@@ -189,9 +196,10 @@ impl Raw {
     /// Structural scopes preserve child edits without widening to all siblings.
     fn change_path(&self, store: &dyn LayerStore) -> Option<PathId> {
         match self {
-            Self::LayerRelocates { .. } | Self::LayerFields { .. } | Self::LayerMetadata { .. } => {
-                None
-            }
+            Self::LayerRelocates { .. }
+            | Self::Sublayers { .. }
+            | Self::LayerFields { .. }
+            | Self::LayerMetadata { .. } => None,
             Self::PrimSlots { path, .. } => Some(*path),
             Self::Child { parent, name, .. } => {
                 let path = store.paths().resolve(parent.prim_path()).join(&[*name]);
@@ -214,6 +222,7 @@ impl Raw {
     fn opinion_site(&self) -> Option<PathId> {
         match self {
             Self::LayerRelocates { .. }
+            | Self::Sublayers { .. }
             | Self::LayerFields { .. }
             | Self::LayerMetadata { .. }
             | Self::PrimSlots { .. }
@@ -255,6 +264,13 @@ impl Raw {
                     relocates: r,
                 },
             ) => layer == l && relocates == r,
+            (
+                Self::Sublayers { layer, sublayers },
+                Self::Sublayers {
+                    layer: l,
+                    sublayers: s,
+                },
+            ) => layer == l && sublayers == s,
             (
                 Self::LayerFields {
                     layer,
@@ -442,7 +458,19 @@ impl Raw {
                 ),
                 Slot::Metadata(*key),
             ),
-            Self::LayerRelocates { .. } | Self::LayerFields { .. } => (
+            Self::LayerRelocates { .. } => (
+                SpecPath::from_prim_path(
+                    paths.lookup(&crate::Path::root()).expect("interned root"),
+                ),
+                Slot::Relocates,
+            ),
+            Self::Sublayers { .. } => (
+                SpecPath::from_prim_path(
+                    paths.lookup(&crate::Path::root()).expect("interned root"),
+                ),
+                Slot::Sublayers,
+            ),
+            Self::LayerFields { .. } => (
                 SpecPath::from_prim_path(
                     paths.lookup(&crate::Path::root()).expect("interned root"),
                 ),
@@ -792,6 +820,7 @@ pub(crate) fn apply(
                 }
             }
             Raw::LayerRelocates { .. }
+            | Raw::Sublayers { .. }
             | Raw::LayerFields { .. }
             | Raw::LayerMetadata { .. }
             | Raw::Variant { .. }
@@ -1131,6 +1160,12 @@ fn apply_op(
             prim_fields::remove_applied_schema(store, at, *name, journal)
         }
         Op::SetPrimField { at, value } => prim_fields::set_field(store, at, value.clone(), journal),
+        Op::EditSublayers { layer, edit } => {
+            layer_fields::edit_sublayers(store, *layer, edit, journal)
+        }
+        Op::SetRelocates { layer, relocates } => {
+            layer_fields::set_relocates(store, *layer, relocates, journal)
+        }
         Op::EditArc { at, edit } => prim_fields::edit_arc(store, at, edit, journal),
         Op::SetTimeSample { at, time, value } => {
             set_value(store, at, Some(at.layer_time(*time)), value, stage, journal)
@@ -1851,6 +1886,13 @@ fn apply_raw(store: &mut dyn LayerStore, step: &Raw) -> Result<Raw, Rejection> {
             Ok(Raw::LayerRelocates {
                 layer: id,
                 relocates: core::mem::replace(&mut found.relocates, relocates.clone()),
+            })
+        }
+        Raw::Sublayers { sublayers, .. } => {
+            let found = store.layer_mut(id).ok_or(Rejection::NoSuchLayer(id))?;
+            Ok(Raw::Sublayers {
+                layer: id,
+                sublayers: core::mem::replace(&mut found.sublayers, sublayers.clone()),
             })
         }
         Raw::LayerFields {

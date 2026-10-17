@@ -2358,3 +2358,81 @@ fn writing_what_a_prim_field_holds_changes_nothing() {
     assert_eq!(undo.len(), 1);
     assert_eq!(store.layers[&SCENE].generation(), generation + 1);
 }
+
+#[test]
+fn sublayer_edits_reject_lists_composition_could_not_use() {
+    let mut store = rocks();
+    let reason = |store: &mut InMemoryStore, txn: &Transaction| match txn.apply(store) {
+        Err(EditError::Rejected { reason, .. }) => reason,
+        other => panic!("expected a rejection, got {other:?}"),
+    };
+    let mut txn = Transaction::new();
+    txn.insert_sublayer(SCENE, 1, SublayerEntry::new(LayerId(99)));
+    assert_eq!(
+        reason(&mut store, &txn),
+        Rejection::NoSuchLayer(LayerId(99))
+    );
+
+    let mut txn = Transaction::new();
+    txn.insert_sublayer(SCENE, 0, SublayerEntry::new(SCENE_SUB));
+    assert_eq!(reason(&mut store, &txn), Rejection::DuplicateSublayer(1));
+
+    let mut txn = Transaction::new();
+    txn.insert_sublayer(SCENE, 3, SublayerEntry::new(ROCK));
+    assert_eq!(reason(&mut store, &txn), Rejection::NoSuchSublayer(3));
+
+    // The sublayer reaches the edited layer through its own sublayers.
+    let mut txn = Transaction::new();
+    txn.insert_sublayer(ROCK, 0, SublayerEntry::new(SCENE));
+    txn.apply(&mut store).unwrap();
+    let mut txn = Transaction::new();
+    txn.insert_sublayer(SCENE, 1, SublayerEntry::new(ROCK));
+    assert_eq!(reason(&mut store, &txn), Rejection::SublayerCycle(ROCK));
+}
+
+#[test]
+fn relocate_edits_reject_entries_composition_would_ignore() {
+    use crate::{InvalidRelocationReason as R, Relocate};
+    let mut store = rocks();
+    let (rock, world, rock_a, rock_b) = (
+        store.path("/Rock"),
+        store.path("/World"),
+        store.path("/World/RockA"),
+        store.path("/World/RockB"),
+    );
+    let deep = store.path("/World/RockA/Deep");
+    let reason = |store: &mut InMemoryStore, relocates: Vec<Relocate>| {
+        let mut txn = Transaction::new();
+        txn.set_layer_relocates(SCENE, relocates);
+        match txn.apply(store) {
+            Err(EditError::Rejected { reason, .. }) => reason,
+            other => panic!("expected a rejection, got {other:?}"),
+        }
+    };
+    let relocate = |source, target| Relocate {
+        source,
+        target: Some(target),
+    };
+    for (entry, why) in [
+        (relocate(rock, rock_a), R::RootPrimSource),
+        (relocate(rock_a, rock_a), R::TargetIsSource),
+        (relocate(rock_a, world), R::TargetIsAncestor),
+        (relocate(rock_a, deep), R::TargetIsDescendant),
+    ] {
+        assert_eq!(
+            reason(&mut store, vec![entry]),
+            Rejection::InvalidRelocate {
+                source: entry.source,
+                reason: why,
+            }
+        );
+    }
+    let moved = store.path("/World/Moved");
+    assert_eq!(
+        reason(
+            &mut store,
+            vec![relocate(rock_a, moved), relocate(rock_a, rock_b)]
+        ),
+        Rejection::DuplicateRelocateSource(rock_a)
+    );
+}

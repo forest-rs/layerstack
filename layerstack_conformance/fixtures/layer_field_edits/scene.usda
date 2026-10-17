@@ -1,0 +1,32 @@
+#usda 1.0
+(
+    subLayers = [
+        @s1.usda@
+    ]
+)
+
+def "Holder2" (
+    prepend references = @s2.usda@</Lib>
+)
+{
+}
+
+def "Holder3" (
+    prepend references = @s3.usda@</Lib>
+)
+{
+}
+
+def "A"
+{
+    def "B"
+    {
+        def "C"
+        {
+        }
+    }
+
+    def "D"
+    {
+    }
+}

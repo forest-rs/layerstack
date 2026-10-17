@@ -8,13 +8,17 @@ use alloc::{boxed::Box, vec::Vec};
 use super::{
     apply::{self, AnimationState, Guarded},
     error::{EditError, Slot},
+    layer_fields::SublayerEdit,
     prim_fields::{ArcEdit, ArcItem, ListPosition, PrimValue},
     same::Same,
     spec::{Loc, spec_at},
     target::Address,
 };
 use crate::{
-    doc::{FieldValue, LayerId, LayerStore, Reference, Specifier, Value},
+    doc::{
+        FieldValue, LayerId, LayerOffset, LayerStore, Reference, Relocate, Specifier,
+        SublayerEntry, Value,
+    },
     interner::TokenId,
     listop::ListOp,
     path::{PathId, TargetPath},
@@ -143,6 +147,14 @@ pub(crate) enum Op {
         at: Address,
         edit: Box<ArcEdit>,
     },
+    EditSublayers {
+        layer: LayerId,
+        edit: Box<SublayerEdit>,
+    },
+    SetRelocates {
+        layer: LayerId,
+        relocates: Vec<Relocate>,
+    },
     /// A storage-level step of an inverse, guarded by the step it undoes.
     Raw(Box<Guarded>),
 }
@@ -199,7 +211,8 @@ impl Same for Authored {
 impl Transaction {
     /// Sets authored layer metadata, independently of prim metadata.
     /// `defaultPrim` accepts a token; fields stored in other dedicated layer
-    /// members (sublayers and relocates) are rejected. Inverses guard this field
+    /// members are rejected: sublayers have [`Transaction::set_sublayers`]
+    /// and its siblings, relocates [`Transaction::set_layer_relocates`]. Inverses guard this field
     /// alone. AOUSD Core §7.6.1; OpenUSD `SdfLayer::SetField`.
     pub fn set_layer_metadata(
         &mut self,
@@ -212,6 +225,98 @@ impl Transaction {
             key,
             value: Some(value),
         })
+    }
+
+    /// Replaces the sublayers of `layer`, with their offsets.
+    ///
+    /// The list is checked first: a layer named twice (by layer or by
+    /// authored asset path) or an empty asset path is rejected, as OpenUSD
+    /// rejects it, and so is a layer the store does not hold and a cycle (a
+    /// sublayer that is `layer`, or whose own sublayers reach it), which
+    /// OpenUSD accepts and reports only when composing. An entry whose
+    /// asset did not resolve ([`SublayerEntry::unresolved`]) keeps its
+    /// place.
+    ///
+    /// A [`LiveStage`](crate::LiveStage) recomposes from its new layer
+    /// stacks.
+    ///
+    /// OpenUSD: `SdfLayer::SetSubLayerPaths` and `subLayerOffsets`.
+    ///
+    /// Spec: AOUSD Core §7.6.1 (`subLayers`), §10.3.1 (layer stacks),
+    /// §12.3.2.1 (layer offsets).
+    pub fn set_sublayers(&mut self, layer: LayerId, sublayers: Vec<SublayerEntry>) -> &mut Self {
+        self.edit_sublayers(layer, SublayerEdit::Set(sublayers))
+    }
+
+    /// Inserts `sublayer` at `index` of the sublayers of `layer` (`index`
+    /// equal to their number appends it), checking the list as
+    /// [`Transaction::set_sublayers`] does. Earlier entries are stronger.
+    ///
+    /// OpenUSD: `SdfLayer::InsertSubLayerPath`.
+    pub fn insert_sublayer(
+        &mut self,
+        layer: LayerId,
+        index: usize,
+        sublayer: SublayerEntry,
+    ) -> &mut Self {
+        self.edit_sublayers(layer, SublayerEdit::Insert(index, sublayer))
+    }
+
+    /// Removes the sublayer at `index` of `layer`'s sublayers, with its
+    /// offset.
+    ///
+    /// OpenUSD: `SdfLayer::RemoveSubLayerPath`.
+    pub fn remove_sublayer(&mut self, layer: LayerId, index: usize) -> &mut Self {
+        self.edit_sublayers(layer, SublayerEdit::Remove(index))
+    }
+
+    /// Sets the time offset of the sublayer at `index` of `layer`'s
+    /// sublayers.
+    ///
+    /// OpenUSD: `SdfLayer::SetSubLayerOffset`.
+    ///
+    /// Spec: AOUSD Core §12.3.2.1 (layer offsets).
+    pub fn set_sublayer_offset(
+        &mut self,
+        layer: LayerId,
+        index: usize,
+        offset: LayerOffset,
+    ) -> &mut Self {
+        self.edit_sublayers(layer, SublayerEdit::Offset(index, offset))
+    }
+
+    fn edit_sublayers(&mut self, layer: LayerId, edit: SublayerEdit) -> &mut Self {
+        self.push(Op::EditSublayers {
+            layer,
+            edit: Box::new(edit),
+        })
+    }
+
+    /// Replaces the `layerRelocates` of `layer`.
+    ///
+    /// An entry composition would ignore is rejected, where OpenUSD accepts
+    /// it and reports it when composing: one whose source is a root prim,
+    /// or whose target is the source, an ancestor or a descendant of it
+    /// ([`Rejection::InvalidRelocate`]), and a second entry for one source
+    /// ([`Rejection::DuplicateRelocateSource`]). Whether an entry is valid
+    /// against the rest of its layer stack is left to composition, which
+    /// reports it.
+    ///
+    /// OpenUSD: `SdfLayer::SetRelocates`.
+    ///
+    /// Spec: AOUSD Core §10.3.2.6 (relocates).
+    ///
+    /// [`Rejection::InvalidRelocate`]: super::Rejection::InvalidRelocate
+    /// [`Rejection::DuplicateRelocateSource`]: super::Rejection::DuplicateRelocateSource
+    pub fn set_layer_relocates(&mut self, layer: LayerId, relocates: Vec<Relocate>) -> &mut Self {
+        self.push(Op::SetRelocates { layer, relocates })
+    }
+
+    /// Clears the `layerRelocates` of `layer`.
+    ///
+    /// OpenUSD: `SdfLayer::ClearRelocates`.
+    pub fn clear_layer_relocates(&mut self, layer: LayerId) -> &mut Self {
+        self.set_layer_relocates(layer, Vec::new())
     }
 
     /// Clears one authored layer field without erasing weaker stage opinions.
@@ -935,7 +1040,10 @@ impl Op {
             }
             Self::SetPrimField { at, value } => (at, Slot::Prim(value.field())),
             Self::EditArc { at, edit } => (at, Slot::Prim(edit.item.field())),
-            Self::Raw(_) | Self::LayerMetadata { .. } => return None,
+            Self::Raw(_)
+            | Self::LayerMetadata { .. }
+            | Self::EditSublayers { .. }
+            | Self::SetRelocates { .. } => return None,
         })
     }
 }
@@ -991,6 +1099,8 @@ pub(crate) fn authored(
         Slot::Targets => property
             .and_then(|p| p.targets.clone())
             .map(|targets| Authored::Field(FieldValue::PathListOp(targets))),
+        // Layer slots name no spec; preconditions guard them by generation.
+        Slot::Sublayers | Slot::Relocates => return None,
         Slot::Prim(field) => super::prim_fields::read(&*store, spec, *field)
             .filter(|value| !value.is_clear())
             .map(|value| Authored::Prim(Box::new(value))),

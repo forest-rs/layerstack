@@ -113,7 +113,8 @@ pub struct Applied {
     /// value edits may refresh opinions without rebuilding prim graphs;
     /// eligible local structural edits replace only their subtrees and
     /// boundary child lists. Use [`Self::changes`] to invalidate consumers;
-    /// this list includes unchanged survivors after a full rebuild.
+    /// this list includes unchanged survivors after a full rebuild. In
+    /// namespace order ([`crate::PathInterner::cmp_paths`]).
     pub recomposed: Vec<PathId>,
 }
 
@@ -130,7 +131,9 @@ pub struct Applied {
 /// reports can include complete property-field inventories in `property_changes`.
 /// External opinion notifications lack edit details and conservatively resync
 /// their affected prims, including other prims updated in the same batch.
-/// Every list is sorted by [`PathId`] and contains no duplicates.
+/// Every list is in namespace order ([`crate::PathInterner::cmp_paths`]) and
+/// contains no duplicates; `property_changes` follows the order of its
+/// prims.
 ///
 /// ```
 /// use layerstack::{EditTarget, InMemoryStore, Layer, LayerId, LiveStage,
@@ -200,11 +203,26 @@ pub struct PropertyChange {
     pub field: PropertyField,
 }
 
+impl PropertyChange {
+    /// Compares by property name, then field, names compared as strings.
+    fn cmp_names(&self, other: &Self, tokens: &crate::TokenInterner) -> core::cmp::Ordering {
+        let names = tokens.resolve(self.name).cmp(tokens.resolve(other.name));
+        names.then_with(|| match (self.field, other.field) {
+            (PropertyField::Metadata(a), PropertyField::Metadata(b)) => {
+                tokens.resolve(a).cmp(tokens.resolve(b))
+            }
+            (a, b) => a.cmp(&b),
+        })
+    }
+}
+
 /// A complete inventory of changed fields for one info-only composed prim.
 ///
 /// Consumers may ignore fields outside their dependencies only when this entry
-/// is present. Inventories are sorted and deduplicated; source edits are mapped
-/// through the stage's contributing source sites, including references.
+/// is present. Inventories hold no duplicates and are ordered by property
+/// name, then field ([`PropertyField`] declaration order, metadata fields by
+/// name); source edits are mapped through the stage's contributing source
+/// sites, including references.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PrimPropertyChanges {
     /// The composed prim whose properties changed.
@@ -237,8 +255,30 @@ impl Changes {
     #[must_use]
     pub fn properties_for(&self, prim: PathId) -> Option<&[PropertyChange]> {
         self.property_changes
-            .binary_search_by_key(&prim, |p| p.prim)
-            .ok()
-            .map(|i| self.property_changes[i].fields.as_slice())
+            .iter()
+            .find(|p| p.prim == prim)
+            .map(|p| p.fields.as_slice())
+    }
+
+    /// Puts every list in the order [`Changes`] documents, and removes
+    /// duplicates.
+    ///
+    /// OpenUSD reports changed paths in `SdfPath` order
+    /// (`UsdNotice::ObjectsChanged`, a map keyed by `SdfPath`).
+    pub(crate) fn sort(&mut self, paths: &crate::PathInterner, tokens: &crate::TokenInterner) {
+        for list in [
+            &mut self.created,
+            &mut self.removed,
+            &mut self.resynced,
+            &mut self.changed_info_only,
+        ] {
+            paths.sort_paths(list, tokens);
+        }
+        self.property_changes
+            .sort_by(|a, b| paths.cmp_paths(a.prim, b.prim, tokens));
+        for prim in &mut self.property_changes {
+            prim.fields.sort_unstable_by(|a, b| a.cmp_names(b, tokens));
+            prim.fields.dedup();
+        }
     }
 }

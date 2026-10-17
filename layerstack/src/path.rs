@@ -20,6 +20,11 @@ use smallvec::SmallVec;
 pub(crate) type Segments = SmallVec<[TokenId; 16]>;
 
 /// A stable identifier for an interned path.
+///
+/// Ids compare in interning order, which threads interning at once make
+/// vary from run to run: an order for maps and sets, not for reporting
+/// paths ([`PathInterner::cmp_paths`] is namespace order). OpenUSD:
+/// `SdfPath::FastLessThan`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PathId(u32);
 
@@ -485,6 +490,26 @@ impl PathInterner {
     pub fn parent(&self, id: PathId) -> Option<PathId> {
         let (_, parent) = self.resolve(id).segments().split_last()?;
         self.lookup_segments(parent)
+    }
+
+    /// Compares the paths `a` and `b` in namespace order
+    /// ([`Path::cmp_with_tokens`]): the order to report paths in, as their
+    /// ids follow interning order.
+    ///
+    /// OpenUSD: `SdfPath::operator<`.
+    #[must_use]
+    pub fn cmp_paths(&self, a: PathId, b: PathId, tokens: &TokenInterner) -> Ordering {
+        if a == b {
+            return Ordering::Equal;
+        }
+        self.resolve(a).cmp_with_tokens(self.resolve(b), tokens)
+    }
+
+    /// Sorts `ids` in namespace order ([`Self::cmp_paths`]) and removes
+    /// duplicates.
+    pub fn sort_paths(&self, ids: &mut Vec<PathId>, tokens: &TokenInterner) {
+        ids.sort_unstable_by(|a, b| self.cmp_paths(*a, *b, tokens));
+        ids.dedup();
     }
 
     /// Formats a [`PathId`] as a string (e.g. `/Robot/Arm`).

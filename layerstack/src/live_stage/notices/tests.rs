@@ -13,7 +13,7 @@ fn budgets_account_for_reports_and_make_gaps_explicit_without_losing_callbacks()
     store.insert_layer(Layer::new(root));
     let stage = Stage::compose(&mut store, root, StageOptions::default());
     let path = store.path("/Changed");
-    let changes = Changes {
+    let mut changes = Changes {
         changed_info_only: vec![path],
         ..Default::default()
     };
@@ -24,14 +24,14 @@ fn budgets_account_for_reports_and_make_gaps_explicit_without_losing_callbacks()
         counter.fetch_add(1, Ordering::Relaxed);
     });
     let mut cursor = journal.cursor();
-    journal.publish(&changes, &stage, &store);
+    journal.publish(&mut changes, &stage, &store);
     let bytes = journal.stats().retained_bytes;
     assert!(bytes > size_of::<Changes>());
     journal.set_budget(ChangeHistoryBudget {
         max_batches: 2,
         max_retained_bytes: bytes,
     });
-    journal.publish(&changes, &stage, &store);
+    journal.publish(&mut changes, &stage, &store);
     assert_eq!(journal.stats().retained_batches, 1);
     assert_eq!(journal.stats().retained_bytes, bytes);
     assert!(matches!(
@@ -40,11 +40,13 @@ fn budgets_account_for_reports_and_make_gaps_explicit_without_losing_callbacks()
     ));
     assert_eq!(cursor.revision(), 2);
     assert_eq!(journal.read(&mut cursor).unwrap().count(), 0);
-    let oversized = Changes {
-        changed_info_only: vec![path; 100],
+    let mut oversized = Changes {
+        changed_info_only: (0..100)
+            .map(|i| store.path(&alloc::format!("/Changed{i}")))
+            .collect(),
         ..Default::default()
     };
-    journal.publish(&oversized, &stage, &store);
+    journal.publish(&mut oversized, &stage, &store);
     let stats = journal.stats();
     assert_eq!(stats.retained_batches, 0);
     assert_eq!(stats.retained_bytes, 0);
@@ -57,13 +59,13 @@ fn budgets_account_for_reports_and_make_gaps_explicit_without_losing_callbacks()
         journal.read(&mut cursor),
         Err(ChangeHistoryError::Expired)
     ));
-    journal.publish(&changes, &stage, &store);
+    journal.publish(&mut changes, &stage, &store);
     assert_eq!(journal.read(&mut cursor).unwrap().count(), 1);
     journal.set_budget(ChangeHistoryBudget {
         max_batches: 0,
         max_retained_bytes: 0,
     });
-    journal.publish(&changes, &stage, &store);
+    journal.publish(&mut changes, &stage, &store);
     assert!(matches!(
         journal.read(&mut cursor),
         Err(ChangeHistoryError::Expired)
@@ -79,15 +81,15 @@ fn batch_budget_shrink_invalidates_only_observers_that_lost_evidence() {
     store.insert_layer(Layer::new(root));
     let stage = Stage::compose(&mut store, root, StageOptions::default());
     let path = store.path("/Changed");
-    let changes = Changes {
+    let mut changes = Changes {
         resynced: vec![path],
         ..Default::default()
     };
     let mut journal = Journal::default();
     let mut slow = journal.cursor();
-    journal.publish(&changes, &stage, &store);
+    journal.publish(&mut changes, &stage, &store);
     let mut fast = journal.cursor();
-    journal.publish(&changes, &stage, &store);
+    journal.publish(&mut changes, &stage, &store);
     journal.set_budget(ChangeHistoryBudget {
         max_batches: 1,
         max_retained_bytes: usize::MAX,

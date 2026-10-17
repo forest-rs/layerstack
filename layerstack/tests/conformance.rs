@@ -1365,8 +1365,16 @@ fn dependency_map_records_local_layer_opinions() {
     assert!(layers.contains(&LayerId(2)));
 
     // P should appear in prims affected by both layers.
-    assert!(stage.prims_affected_by_layer(LayerId(1)).contains(&p));
-    assert!(stage.prims_affected_by_layer(LayerId(2)).contains(&p));
+    assert!(
+        stage
+            .prims_affected_by_layer(LayerId(1), &store)
+            .contains(&p)
+    );
+    assert!(
+        stage
+            .prims_affected_by_layer(LayerId(2), &store)
+            .contains(&p)
+    );
 
     // No arc dependencies for local-only composition.
     assert!(stage.arc_dependencies().is_empty());

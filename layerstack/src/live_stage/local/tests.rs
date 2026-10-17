@@ -22,7 +22,7 @@ fn first_prim_and_last_prim_removal_match_empty_population() {
         .prim_paths()
         .filter(|p| !before.contains(p))
         .collect();
-    created.sort_unstable();
+    store.paths.sort_paths(&mut created, &store.tokens);
     assert_eq!(added.changes.created, created);
     let removed = live.apply(&mut store, &added.inverse).unwrap();
     matches_clean(&mut store, &live);

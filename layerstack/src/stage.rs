@@ -1797,14 +1797,18 @@ impl Stage {
 
     /// Returns prims affected by the given layer: those that receive
     /// opinions from it, and those that a reference or payload it authors
-    /// reaches, which its layer offset retimes.
+    /// reaches, which its layer offset retimes. In namespace order
+    /// ([`crate::PathInterner::cmp_paths`]).
     #[must_use]
-    pub fn prims_affected_by_layer(&self, layer: LayerId) -> Vec<PathId> {
-        self.deps
+    pub fn prims_affected_by_layer(&self, layer: LayerId, store: &dyn LayerStore) -> Vec<PathId> {
+        let mut prims: Vec<PathId> = self
+            .deps
             .as_ref()
             .and_then(|d| d.layer_to_prims.get(&layer))
             .map(|set| set.iter().copied().collect())
-            .unwrap_or_default()
+            .unwrap_or_default();
+        store.paths().sort_paths(&mut prims, store.tokens());
+        prims
     }
 
     /// Returns layers that affect the given prim: those that contribute

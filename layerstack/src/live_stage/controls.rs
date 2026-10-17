@@ -62,7 +62,7 @@ impl LiveStage {
             let mut mapped = false;
             while let Some(path) = ancestor {
                 if let Some(id) = store.paths().lookup(&path) {
-                    let dests = self.composed_prims_for_source(layer, id);
+                    let dests: Vec<PathId> = self.prims_for_source(layer, id).collect();
                     if !dests.is_empty() {
                         let suffix = source_path.strip_prefix(&path).expect("ancestor");
                         for dest in dests {
@@ -88,8 +88,8 @@ impl LiveStage {
                     return;
                 };
                 for (author, site) in hosts {
-                    self.structural_roots
-                        .extend(self.composed_prims_for_source(author, site));
+                    let prims: Vec<PathId> = self.prims_for_source(author, site).collect();
+                    self.structural_roots.extend(prims);
                 }
                 if let Some(hosts) = self.layer_to_prims.get(&layer) {
                     self.structural_roots.extend(hosts.iter().copied());
@@ -128,7 +128,7 @@ impl LiveStage {
         let previous = self.stage.options();
         let mut roots: Vec<_> = self
             .stage
-            .loadable_paths(store.paths(), store.paths().lookup(&crate::Path::root())?)
+            .loadable_paths(store.paths().lookup(&crate::Path::root())?, store)
             .into_iter()
             .filter(|p| {
                 previous.load_rules.is_loaded(store.paths().resolve(*p))
@@ -155,7 +155,7 @@ impl LiveStage {
                 .collect();
             for layer in changed {
                 for (author, site) in self.layer_discovery.hosts_reaching(store, &stacks, layer)? {
-                    roots.extend(self.composed_prims_for_source(author, site));
+                    roots.extend(self.prims_for_source(author, site));
                 }
             }
         }
@@ -388,8 +388,6 @@ impl LiveStage {
         if let Some(changes) = changes {
             changes.created = new.difference(&old).copied().collect();
             changes.removed = old.difference(&new).copied().collect();
-            changes.created.sort_unstable();
-            changes.removed.sort_unstable();
             changes.changed_info_only = refreshed;
             changes.resynced = roots;
         }

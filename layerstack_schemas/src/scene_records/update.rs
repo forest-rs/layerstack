@@ -107,7 +107,8 @@ impl SceneObserver {
     pub fn material(&self, path: PathId) -> Option<&MaterialNetworkSample> {
         self.materials.get(&path)
     }
-    /// Referenced immutable upstream material graph handoffs.
+    /// Referenced immutable upstream material graph handoffs, ordered by
+    /// store-local path IDs, not lexical path spelling.
     pub fn materials(&self) -> impl Iterator<Item = (PathId, &MaterialNetworkSample)> {
         self.materials.iter().map(|(&path, sample)| (path, sample))
     }

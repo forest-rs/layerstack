@@ -55,7 +55,8 @@ impl PayloadLoadRules {
         }
     }
 
-    /// Authored literal rules, ordered by interned path components.
+    /// Authored literal rules, ordered by [`Path`]'s order for maps (its
+    /// segments' token ids), not namespace order.
     pub fn rules(&self) -> impl Iterator<Item = (&Path, PayloadRule)> {
         self.rules.iter().map(|(p, r)| (p, *r))
     }
@@ -294,9 +295,11 @@ impl super::Stage {
     /// Active prims with payloads admitted by their composed variant/arc contexts,
     /// whether currently loaded or not. Descendants behind an unloaded payload
     /// cannot be discovered until its host loads that payload.
+    /// In namespace order ([`PathInterner::cmp_paths`]).
     /// OpenUSD: `UsdStage::FindLoadable`.
     #[must_use]
-    pub fn loadable_paths(&self, paths: &PathInterner, root: PathId) -> Vec<PathId> {
+    pub fn loadable_paths(&self, root: PathId, store: &dyn LayerStore) -> Vec<PathId> {
+        let paths = store.paths();
         let root = paths.resolve(root);
         let mut out: Vec<_> = self
             .loadable
@@ -304,7 +307,7 @@ impl super::Stage {
             .copied()
             .filter(|p| self.is_active(*p) && paths.resolve(*p).strip_prefix(root).is_some())
             .collect();
-        out.sort_by(|a, b| paths.resolve(*a).cmp(paths.resolve(*b)));
+        paths.sort_paths(&mut out, store.tokens());
         out
     }
 
@@ -313,16 +316,18 @@ impl super::Stage {
     /// inspect composition errors for unresolved targets.
     /// Corresponds to the visible part of `UsdStage::GetLoadSet`. OpenUSD can
     /// also retain cached included payload paths outside a changed population
-    /// mask; this snapshot query omits those unpopulated paths.
+    /// mask; this snapshot query omits those unpopulated paths. In namespace
+    /// order ([`PathInterner::cmp_paths`]).
     #[must_use]
-    pub fn loaded_payload_paths(&self, paths: &PathInterner) -> Vec<PathId> {
+    pub fn loaded_payload_paths(&self, store: &dyn LayerStore) -> Vec<PathId> {
+        let paths = store.paths();
         let mut out: Vec<_> = self
             .loadable
             .iter()
             .copied()
             .filter(|p| self.has_prim(*p) && self.options.load_rules.is_loaded(paths.resolve(*p)))
             .collect();
-        out.sort_by(|a, b| paths.resolve(*a).cmp(paths.resolve(*b)));
+        paths.sort_paths(&mut out, store.tokens());
         out
     }
 }

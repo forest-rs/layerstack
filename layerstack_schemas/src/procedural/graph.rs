@@ -441,10 +441,10 @@ impl<E: ProceduralEvaluator> ProceduralGraph<E> {
         if self.nodes.contains_key(&spec.recipe) {
             return Err(GraphError::AlreadyRegistered(spec.recipe));
         }
-        spec.outputs.sort_unstable();
-        spec.outputs.dedup();
-        spec.inputs.sort_unstable();
-        spec.inputs.dedup();
+        // Namespace order, so a build visits inputs in the same order however
+        // their paths were interned.
+        store.paths().sort_paths(&mut spec.outputs, store.tokens());
+        store.paths().sort_paths(&mut spec.inputs, store.tokens());
         spec.resources.sort();
         spec.resources.dedup();
         if spec.outputs.is_empty() {

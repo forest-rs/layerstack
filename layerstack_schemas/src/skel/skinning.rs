@@ -438,8 +438,8 @@ impl<'a> SkinningQuery<'a> {
         if let Some(shapes) = &blend_shapes {
             dependencies.extend(shapes.targets());
         }
-        dependencies.sort_unstable();
-        dependencies.dedup();
+        let store = scene.store();
+        store.paths().sort_paths(&mut dependencies, store.tokens());
         Ok(Some(Self {
             scene: *scene,
             skeleton,
@@ -468,7 +468,8 @@ impl<'a> SkinningQuery<'a> {
     pub fn skeleton_query(&self) -> &SkeletonQuery<'a> {
         &self.skeleton
     }
-    /// Prim inputs consulted by this snapshot, including external animation.
+    /// Prim inputs consulted by this snapshot, including external animation,
+    /// in namespace order.
     /// Rebuild if their properties or binding ancestry change.
     #[must_use]
     pub fn dependencies(&self) -> &[PathId] {

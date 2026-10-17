@@ -85,13 +85,13 @@ fn assert_full(store: &mut InMemoryStore, live: &LiveStage) {
         "used layer inventory"
     );
     assert_eq!(
-        live.stage().loadable_paths(&store.paths, root),
-        full.loadable_paths(&store.paths, root),
+        live.stage().loadable_paths(root, store),
+        full.loadable_paths(root, store),
         "loadable host inventory"
     );
     assert_eq!(
-        live.stage().loaded_payload_paths(&store.paths),
-        full.loaded_payload_paths(&store.paths),
+        live.stage().loaded_payload_paths(store),
+        full.loaded_payload_paths(store),
         "loaded payload inventory"
     );
     assert_eq!(

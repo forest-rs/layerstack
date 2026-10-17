@@ -18,7 +18,8 @@ pub struct CollectionIdentity {
 /// Evidence used to invalidate a retained collection capture.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MembershipDependencies {
-    /// Own collection plus included, referenced and failed collection identities.
+    /// Own collection plus included, referenced and failed collection
+    /// identities, ordered by owner in namespace order, then name.
     pub collections: Vec<CollectionIdentity>,
     /// Missing expression references require watching every collection.
     pub all_collections: bool,
@@ -356,7 +357,13 @@ fn dependencies(
             });
         }
     }
-    collections.sort();
+    let store = scene.store();
+    collections.sort_by(|a, b| {
+        store
+            .paths()
+            .cmp_paths(a.owner, b.owner, store.tokens())
+            .then_with(|| a.name.cmp(&b.name))
+    });
     collections.dedup();
     MembershipDependencies {
         collections,

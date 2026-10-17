@@ -12,7 +12,7 @@
 //! site across a layer stack's layers), §12.4 (list ops). OpenUSD:
 //! `pxr/usd/pcp/composeSite.cpp`.
 
-use alloc::vec::Vec;
+use alloc::{sync::Arc, vec::Vec};
 
 use hashbrown::{HashMap, HashSet};
 
@@ -23,6 +23,7 @@ use crate::{
     listop::ListOp,
     path::{PathId, PathInterner},
     spec_path::SpecPath,
+    sync::Lock,
 };
 
 use super::layer_stacks::ComputedStack;
@@ -404,7 +405,7 @@ pub(crate) fn compose_child_names(
     store: &dyn LayerStore,
     stack: &ComputedStack,
     site: &SpecPath,
-    children: &mut ChildIndex,
+    children: &ChildIndex,
     order: &mut Vec<TokenId>,
     names: &mut HashSet<TokenId>,
     unlisted: &mut Vec<TokenId>,
@@ -417,7 +418,7 @@ pub(crate) fn compose_child_names_in(
     store: &dyn LayerStore,
     layers: &[LayerId],
     site: &SpecPath,
-    children: &mut ChildIndex,
+    children: &ChildIndex,
     order: &mut Vec<TokenId>,
     names: &mut HashSet<TokenId>,
     unlisted: &mut Vec<TokenId>,
@@ -437,19 +438,21 @@ pub(crate) fn compose_child_names_in(
                 }
                 // Child specs a list leaves out still exist; they follow
                 // every named child.
-                for &name in children.children(store, layer, site) {
-                    if !authored.contains(&name) {
-                        unlisted.push(name);
+                children.with_children(store, layer, site, |children| {
+                    for &name in children {
+                        if !authored.contains(&name) {
+                            unlisted.push(name);
+                        }
                     }
-                }
+                });
             }
-            _ => {
-                for &name in children.children(store, layer, site) {
+            _ => children.with_children(store, layer, site, |children| {
+                for &name in children {
                     if names.insert(name) {
                         order.push(name);
                     }
                 }
-            }
+            }),
         }
         if let Some(reorder) = spec.and_then(SpecRef::prim_order) {
             opinionated::apply_list_order_by_key(order, reorder, |name| *name);
@@ -479,11 +482,12 @@ fn has_child_spec(store: &dyn LayerStore, layer: &Layer, site: &SpecPath, name: 
 }
 
 /// The child prim specs of each prim spec of a layer, for specs that list
-/// no children of their own (layers built through `Layer::insert_prim`).
+/// no children of their own (layers built through `Layer::insert_prim`),
+/// shared by the threads composing a stage.
 #[derive(Default)]
 pub(crate) struct ChildIndex {
     /// Per layer, its generation and the children under each parent site.
-    layers: HashMap<LayerId, (u64, LayerChildren)>,
+    layers: Lock<HashMap<LayerId, Arc<(u64, LayerChildren)>>>,
 }
 
 /// The children of a layer's parent sites, keyed by the parent's prim
@@ -494,18 +498,32 @@ type LayerChildren =
     HashMap<Vec<TokenId>, Vec<(Vec<crate::spec_path::VariantSelectionSite>, Vec<TokenId>)>>;
 
 impl ChildIndex {
-    fn children(&mut self, store: &dyn LayerStore, layer: &Layer, site: &SpecPath) -> &[TokenId] {
+    /// Calls `f` with the names of the child specs `layer` authors beneath
+    /// `site`.
+    fn with_children<R>(
+        &self,
+        store: &dyn LayerStore,
+        layer: &Layer,
+        site: &SpecPath,
+        f: impl FnOnce(&[TokenId]) -> R,
+    ) -> R {
         let generation = layer.generation();
-        let entry = self
-            .layers
-            .entry(layer.id)
-            .or_insert_with(|| (u64::MAX, HashMap::new()));
-        if entry.0 != generation {
-            entry.0 = generation;
-            entry.1 = index_layer(store, layer);
-        }
+        let current = self.layers.with(|layers| {
+            layers
+                .get(&layer.id)
+                .filter(|entry| entry.0 == generation)
+                .cloned()
+        });
+        // Indexed without the lock; threads indexing one layer at once each
+        // keep their own.
+        let entry = current.unwrap_or_else(|| {
+            let entry = Arc::new((generation, index_layer(store, layer)));
+            self.layers
+                .with(|layers| layers.insert(layer.id, entry.clone()));
+            entry
+        });
         let segments = store.paths().resolve(site.prim_path()).segments();
-        entry
+        let names = entry
             .1
             .get(segments)
             .and_then(|branches| {
@@ -513,7 +531,8 @@ impl ChildIndex {
                     .iter()
                     .find(|(sites, _)| sites.iter().copied().eq(site.variant_selection_sites()))
             })
-            .map_or(&[], |(_, names)| names.as_slice())
+            .map_or(&[][..], |(_, names)| names.as_slice());
+        f(names)
     }
 }
 

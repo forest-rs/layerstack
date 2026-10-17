@@ -399,6 +399,10 @@ jobs:
             pxr/usd/*/plugInfo.json
             pxr/usd/*/userDoc/schemaUserDoc.usda
             pxr/usd/usd/testenv/testUsdGenSchema/**
+            pxr/usd/pcp/testenv/testPcpDynamicFileFormatPlugin.testenv/**
+            pxr/usd/pcp/testenv/testPcpDynamicFileFormatPlugin.py
+            pxr/usd/pcp/testenv/TestPcpDynamicFileFormatPlugin.cpp
+            pxr/usd/pcp/testenv/TestPcpDynamicFileFormatPlugin_plugInfo.json
 
       - name: install stable toolchain
         uses: dtolnay/rust-toolchain@master
@@ -442,6 +446,13 @@ jobs:
       # The compiled fixture plugins must be what OpenUSD's registry reads.
       - name: check schema compiler oracle
         run: python layerstack_conformance/scripts/schema_compiler_oracle.py --check
+
+      # The dynamic file format port must pass OpenUSD's own test cases on
+      # its fixtures.
+      - name: test dynamic payloads against OpenUSD's fixtures
+        env:
+          LAYERSTACK_OPENUSD_SOURCE: ${{ github.workspace }}/openusd
+        run: cargo test --locked -p layerstack_io dynamic_payloads
 
       # The schema views oracle must be what OpenUSD reads from its scene.
       - name: check schema views oracle

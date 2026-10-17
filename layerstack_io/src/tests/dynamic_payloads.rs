@@ -7,8 +7,9 @@
 //! [`TestDynamic`] ports OpenUSD's `Test_PcpDynamicFileFormatPlugin_FileFormat`
 //! (`pxr/usd/pcp/testenv/TestPcpDynamicFileFormatPlugin.cpp`), metadata
 //! fields and attribute defaults as its inputs (the
-//! `TEST_PCP_DYNAMIC_FILE_FORMAT_TOKENS_USE_ATTRIBUTE_INPUTS` setting), and
-//! runs it on small fixtures of its own.
+//! `TEST_PCP_DYNAMIC_FILE_FORMAT_TOKENS_USE_ATTRIBUTE_INPUTS` setting). The
+//! tests here run it on small fixtures of their own; [`openusd`] runs it on
+//! OpenUSD's own fixtures, with its test's assertions.
 
 use super::*;
 use core::f64::consts::PI;
@@ -21,6 +22,8 @@ use std::sync::{
     Mutex,
     atomic::{AtomicU64, Ordering},
 };
+
+mod openusd;
 
 const DEPTH: &str = "TestPcp_depth";
 const NUM: &str = "TestPcp_num";

@@ -399,6 +399,14 @@ pub struct PathInterner {
     paths: Interned<PathEntry>,
 }
 
+#[cfg(test)]
+impl PathInterner {
+    /// How many paths are interned.
+    pub(crate) fn len(&self) -> u32 {
+        self.paths.len()
+    }
+}
+
 /// An interned path and its parent's id, `None` for the root: interning a
 /// path interns its ancestors first, so a parent is read, not looked up.
 /// Found by its segments.

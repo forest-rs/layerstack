@@ -57,6 +57,14 @@ pub struct TokenInterner {
     expressions: AtomicBool,
 }
 
+#[cfg(test)]
+impl TokenInterner {
+    /// How many strings are interned.
+    pub(crate) fn len(&self) -> u32 {
+        self.strings.len()
+    }
+}
+
 impl TokenInterner {
     pub(crate) fn snapshot(&self) -> Self {
         Self {

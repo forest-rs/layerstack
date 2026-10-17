@@ -1361,6 +1361,13 @@ impl LiveStage {
         &self.stage
     }
 
+    /// The composed stage bound to `store`, which holds the layers it was
+    /// composed from (see [`crate::StageView`]).
+    #[must_use]
+    pub fn view<'a>(&'a self, store: &'a dyn LayerStore) -> crate::StageView<'a> {
+        self.stage.view(store)
+    }
+
     /// Replaces dependency data for the affected batch, leaving other
     /// dependents intact. Scan global metadata once, not once per prim.
     fn update_prim_edges(&mut self, affected: &[PathId], partial: &CompositionDeps) {

@@ -353,15 +353,66 @@ pub(crate) enum DecodedField<'a> {
     Value(CrateValue),
     MathArray(MathArray<'a>),
     FloatArray(FloatArray),
+    /// A `token[]` value as token-table indices ([`decode_text_indices`]),
+    /// which assembly maps to token ids without copying their text.
+    TokenArray(Vec<u32>),
 }
 
 impl DecodedField<'_> {
     pub(crate) fn value(&self) -> Option<&CrateValue> {
         match self {
             Self::Value(value) => Some(value),
-            Self::MathArray(_) | Self::FloatArray(_) => None,
+            Self::MathArray(_) | Self::FloatArray(_) | Self::TokenArray(_) => None,
         }
     }
+}
+
+/// The token-table indices of a `token[]` value, or of the text of a
+/// `string[]` value, charged as [`decode_value_within`] charges decoding
+/// it: the value, its elements, and each element's text.
+///
+/// An index outside the tables, which [`decode_value`] reads as the empty
+/// string, is `u32::MAX`.
+pub(crate) fn decode_text_indices(
+    rep: &RawValueRep,
+    data: &[u8],
+    sections: &CrateSections,
+    budget: &mut DecodeBudget,
+) -> Result<Vec<u32>, UsdcError> {
+    within_value_budget(budget, |budget| {
+        let strings = match rep.value_type()? {
+            ValueType::Token => false,
+            ValueType::String => true,
+            _ => {
+                return Err(UsdcError::Inconsistent {
+                    message: "text indices of a value that is not text",
+                });
+            }
+        };
+        let mut indices = read_integer_array_as(rep, data, 4, budget, |index| {
+            u32::try_from(index).unwrap_or(u32::MAX)
+        })?;
+        if strings {
+            for index in &mut indices {
+                *index = sections
+                    .strings
+                    .get(*index as usize)
+                    .copied()
+                    .unwrap_or(u32::MAX);
+            }
+        }
+        // Each element's text is charged as copying it would be charged,
+        // all at once; an index outside the table names the empty text.
+        let mut text_units = 0_usize;
+        for index in &mut indices {
+            match sections.tokens.get(*index as usize) {
+                Some(text) => text_units = text_units.saturating_add(text.len() / 16),
+                None => *index = u32::MAX,
+            }
+        }
+        budget.charge_elements(text_units)?;
+        Ok(indices)
+    })
 }
 
 /// Decodes one field with the same validation and budget as the public decoder,
@@ -554,6 +605,9 @@ fn decode_nested(
             }
             DecodedField::MathArray(array) => {
                 CrateValue::TypedArray(crate::numeric_array::math_array(&array))
+            }
+            DecodedField::TokenArray(_) => {
+                unreachable!("token indices are decoded only for top-level fields")
             }
         });
     }
@@ -887,11 +941,32 @@ fn read_integer_array_as<T>(
         Ok(values)
     } else {
         let count = element_count(data, arr_start, count, element_size)?;
-        (0..count)
-            .map(|i| {
-                read_signed_le_n(data, arr_start + i * element_size, element_size).map(&mut convert)
-            })
-            .collect()
+        let bytes = bytes_at(data, arr_start, count * element_size)?;
+        // Dispatched once per array, so each width reads its elements with
+        // a fixed size; the vector is sized up front, where a collected
+        // `Result` iterator would grow it by reallocating.
+        let mut values = Vec::with_capacity(count);
+        match element_size {
+            1 => values.extend(bytes.iter().map(|&b| convert(i64::from(b.cast_signed())))),
+            2 => values.extend(
+                (bytes.as_chunks::<2>().0.iter())
+                    .map(|b| convert(i64::from(i16::from_le_bytes(*b)))),
+            ),
+            4 => values.extend(
+                (bytes.as_chunks::<4>().0.iter())
+                    .map(|b| convert(i64::from(i32::from_le_bytes(*b)))),
+            ),
+            _ => {
+                for i in 0..count {
+                    values.push(convert(read_signed_le_n(
+                        bytes,
+                        i * element_size,
+                        element_size,
+                    )?));
+                }
+            }
+        }
+        Ok(values)
     }
 }
 

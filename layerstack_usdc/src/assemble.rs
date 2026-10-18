@@ -41,7 +41,7 @@ use crate::numeric_array::*;
 use crate::section::CrateSections;
 use crate::value_rep::{
     CrateArrayEdit, CrateArrayEditOp, CrateListOp, CrateValue, DecodeBudget, DecodedField,
-    FloatArray, RawValueRep, decode_field_within,
+    FloatArray, RawValueRep, decode_field_within, decode_text_indices,
 };
 use crate::value_type::{SpecForm, ValueType};
 
@@ -91,10 +91,12 @@ pub fn assemble(
     resolver: &mut dyn AssetResolver,
     budget: &mut DecodeBudget,
 ) -> Result<AssembleResult, UsdcError> {
+    let token_ids = TokenIds::for_read(sections);
     let mut ctx = AssembleCtx {
         data,
         sections,
         tokens,
+        token_ids,
         paths,
         defer_variant_arcs: resolver.defers_variant_arcs(),
         in_branch: false,
@@ -123,6 +125,8 @@ struct AssembleCtx<'a> {
     data: &'a [u8],
     sections: &'a CrateSections,
     tokens: &'a TokenInterner,
+    /// The token ids of the file's token table, by index.
+    token_ids: TokenIds,
     paths: &'a PathInterner,
     resolver: &'a mut dyn AssetResolver,
     /// Whether arcs inside variant branches are left for composition to
@@ -142,6 +146,19 @@ struct AssembleCtx<'a> {
 
 /// A spec's fields: names borrowed from the token table, and their values.
 type Fields<'a> = Vec<(&'a str, DecodedField<'a>)>;
+
+/// The token id of each entry of a file's token table, so that a `token[]`
+/// value converts by index, without copying or hashing its elements' text.
+enum TokenIds {
+    /// Each entry interned when a value first uses it.
+    OnUse(Vec<Option<TokenId>>),
+}
+
+impl TokenIds {
+    fn for_read(sections: &CrateSections) -> Self {
+        Self::OnUse(alloc::vec![None; sections.tokens.len()])
+    }
+}
 
 impl<'a> AssembleCtx<'a> {
     /// Records content that could not be represented.
@@ -475,7 +492,16 @@ impl<'a> AssembleCtx<'a> {
                 let field_name = self.lookup_token(field_def.token_index);
                 self.budget.charge_text(field_name.len())?;
                 let rep = RawValueRep::new(field_def.value_rep);
-                let value = decode_field_within(&rep, self.data, self.sections, self.budget)?;
+                let value = if is_token_array(&rep) {
+                    DecodedField::TokenArray(decode_text_indices(
+                        &rep,
+                        self.data,
+                        self.sections,
+                        self.budget,
+                    )?)
+                } else {
+                    decode_field_within(&rep, self.data, self.sections, self.budget)?
+                };
                 // This is the ownership boundary: assembly subsequently borrows
                 // fields, so retain decoded numeric allocations before that borrow.
                 // Raw math arrays already borrow the file bytes and are converted
@@ -1030,6 +1056,27 @@ impl<'a> AssembleCtx<'a> {
                 }
             }),
             DecodedField::MathArray(array) => convert_math_array(array),
+            // What `Value::array` packs tokens into, without its copy.
+            DecodedField::TokenArray(indices) => Value::Array(
+                indices
+                    .iter()
+                    .map(|&index| Value::Token(self.token_id(index)))
+                    .collect(),
+            ),
+        }
+    }
+
+    /// The token id of entry `index` of the token table, interning it on
+    /// first use; the empty token outside the table, as the generic decoder
+    /// reads it.
+    fn token_id(&mut self, index: u32) -> TokenId {
+        let Some(text) = self.sections.tokens.get(index as usize) else {
+            return TokenId::EMPTY;
+        };
+        match &mut self.token_ids {
+            TokenIds::OnUse(ids) => {
+                *ids[index as usize].get_or_insert_with(|| self.tokens.intern(text))
+            }
         }
     }
 
@@ -1341,6 +1388,13 @@ impl<'a> AssembleCtx<'a> {
         if let Some(property_type) = spec.type_name.as_ref() {
             let compact = |value: &mut Value| {
                 if let Value::Array(items) = value {
+                    // Text arrays keep their representation; skip the copy.
+                    if matches!(
+                        items.first(),
+                        Some(Value::Token(_) | Value::String(_) | Value::Asset(_))
+                    ) {
+                        return;
+                    }
                     let items = core::mem::take(items);
                     *value = Value::array_with_element(items, Some(property_type.default_scalar()));
                 }
@@ -1772,6 +1826,9 @@ impl<'a> AssembleCtx<'a> {
         match field.value() {
             Some(CrateValue::ListOp(listop)) => self.convert_token_listop(listop),
             Some(_) => ListOp::explicit(self.extract_token_names(field)),
+            None if matches!(field, DecodedField::TokenArray(_)) => {
+                ListOp::explicit(self.extract_token_names(field))
+            }
             None => ListOp::default(),
         }
     }
@@ -1779,6 +1836,9 @@ impl<'a> AssembleCtx<'a> {
     /// Extracts token names from a [`CrateValue`] (typically a `TokenVector`
     /// or `Array` of tokens).
     fn extract_token_names(&mut self, field: &DecodedField<'_>) -> Vec<TokenId> {
+        if let DecodedField::TokenArray(indices) = field {
+            return indices.iter().map(|&index| self.token_id(index)).collect();
+        }
         let Some(value) = field.value() else {
             return Vec::new();
         };
@@ -1991,6 +2051,12 @@ fn sort_by_children(properties: &mut [PropertyEntry], children: &[TokenId]) {
         position.entry(*child).or_insert(i);
     }
     properties.sort_by_key(|entry| position.get(&entry.name).copied().unwrap_or(usize::MAX));
+}
+
+/// Whether `rep` is a `token[]` value, which assembly decodes to token-table
+/// indices ([`decode_text_indices`]).
+fn is_token_array(rep: &RawValueRep) -> bool {
+    rep.is_array() && !rep.is_array_edit() && rep.value_type().ok() == Some(ValueType::Token)
 }
 
 fn crate_value_is_array(value: &CrateValue) -> bool {

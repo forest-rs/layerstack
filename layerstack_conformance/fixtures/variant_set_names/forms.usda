@@ -1,0 +1,72 @@
+#usda 1.0
+
+def "Explicit" (
+    variantSets = ["a", "b"]
+)
+{
+}
+
+def "Prepended" (
+    prepend variantSets = ["a", "b"]
+)
+{
+}
+
+def "Appended" (
+    append variantSets = "a"
+)
+{
+}
+
+def "Deleted" (
+    delete variantSets = ["a"]
+)
+{
+}
+
+def "Added" (
+    add variantSets = ["a", "b"]
+)
+{
+}
+
+def "Reordered" (
+    reorder variantSets = ["b", "a"]
+)
+{
+}
+
+def "Edits" (
+    delete variantSets = "c"
+    prepend variantSets = "a"
+    append variantSets = "b"
+    reorder variantSets = ["b", "a"]
+)
+{
+}
+
+def "Unlisted"
+{
+    variantSet "look" = {
+        "wet" {
+            double shine = 1
+        }
+    }
+}
+
+def "Branch" (
+    prepend variantSets = "shape"
+)
+{
+    variantSet "shape" = {
+        "round" (
+            append variantSets = "size"
+        ) {
+            variantSet "size" = {
+                "big" {
+                    double height = 1
+                }
+            }
+        }
+    }
+}

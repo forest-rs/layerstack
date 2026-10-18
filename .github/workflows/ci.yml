@@ -382,6 +382,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The oracles read crate fixtures, which live in Git LFS.
+          lfs: true
 
       - name: check out OpenUSD's schema sources
         uses: actions/checkout@v7
@@ -506,6 +509,17 @@ jobs:
           python layerstack_conformance/scripts/copy_spec_oracle.py \
             layerstack_conformance/fixtures/copy_spec "$RUNNER_TEMP/copy_spec.json"
           diff -u layerstack_conformance/fixtures/copy_spec/oracle.json "$RUNNER_TEMP/copy_spec.json"
+
+      # The variant set names oracle must be how OpenUSD reads, writes,
+      # composes and authors `variantSetNames`; OpenUSD must also read the
+      # files layerstack saves as it reads the fixtures.
+      - name: check variant set names oracle
+        run: python layerstack_conformance/scripts/variant_set_names_oracle.py --check
+
+      - name: test saved variant set names against OpenUSD
+        env:
+          LAYERSTACK_USD_PYTHON: python
+        run: cargo test --locked -p layerstack_conformance --test variant_set_names
 
       # The transform oracle must be what OpenUSD computes, to within the
       # rounding of the platform's trigonometry.

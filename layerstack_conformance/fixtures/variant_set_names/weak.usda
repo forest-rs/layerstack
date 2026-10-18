@@ -1,0 +1,233 @@
+#usda 1.0
+
+over "Prepends" (
+    prepend variantSets = ["a", "b"]
+)
+{
+    variantSet "a" = {
+        "on" {
+            double weight = 1
+            bool from_a = 1
+        }
+    }
+    variantSet "b" = {
+        "on" {
+            double weight = 2
+            bool from_b = 1
+        }
+    }
+    variantSet "c" = {
+        "on" {
+            double weight = 3
+            bool from_c = 1
+        }
+    }
+    variantSet "d" = {
+        "on" {
+            double weight = 4
+            bool from_d = 1
+        }
+    }
+}
+
+over "Explicit" (
+    prepend variantSets = "a"
+)
+{
+    variantSet "a" = {
+        "on" {
+            double weight = 1
+            bool from_a = 1
+        }
+    }
+    variantSet "b" = {
+        "on" {
+            double weight = 2
+            bool from_b = 1
+        }
+    }
+    variantSet "c" = {
+        "on" {
+            double weight = 3
+            bool from_c = 1
+        }
+    }
+    variantSet "d" = {
+        "on" {
+            double weight = 4
+            bool from_d = 1
+        }
+    }
+}
+
+over "Deletes" (
+    prepend variantSets = ["a", "b"]
+)
+{
+    variantSet "a" = {
+        "on" {
+            double weight = 1
+            bool from_a = 1
+        }
+    }
+    variantSet "b" = {
+        "on" {
+            double weight = 2
+            bool from_b = 1
+        }
+    }
+    variantSet "c" = {
+        "on" {
+            double weight = 3
+            bool from_c = 1
+        }
+    }
+    variantSet "d" = {
+        "on" {
+            double weight = 4
+            bool from_d = 1
+        }
+    }
+}
+
+over "Reorders" (
+    prepend variantSets = ["a", "b", "c"]
+)
+{
+    variantSet "a" = {
+        "on" {
+            double weight = 1
+            bool from_a = 1
+        }
+    }
+    variantSet "b" = {
+        "on" {
+            double weight = 2
+            bool from_b = 1
+        }
+    }
+    variantSet "c" = {
+        "on" {
+            double weight = 3
+            bool from_c = 1
+        }
+    }
+    variantSet "d" = {
+        "on" {
+            double weight = 4
+            bool from_d = 1
+        }
+    }
+}
+
+over "Adds" (
+    prepend variantSets = "a"
+)
+{
+    variantSet "a" = {
+        "on" {
+            double weight = 1
+            bool from_a = 1
+        }
+    }
+    variantSet "b" = {
+        "on" {
+            double weight = 2
+            bool from_b = 1
+        }
+    }
+    variantSet "c" = {
+        "on" {
+            double weight = 3
+            bool from_c = 1
+        }
+    }
+    variantSet "d" = {
+        "on" {
+            double weight = 4
+            bool from_d = 1
+        }
+    }
+}
+
+over "DeleteThenAppend" (
+    prepend variantSets = "a"
+)
+{
+    variantSet "a" = {
+        "on" {
+            double weight = 1
+            bool from_a = 1
+        }
+    }
+    variantSet "b" = {
+        "on" {
+            double weight = 2
+            bool from_b = 1
+        }
+    }
+    variantSet "c" = {
+        "on" {
+            double weight = 3
+            bool from_c = 1
+        }
+    }
+    variantSet "d" = {
+        "on" {
+            double weight = 4
+            bool from_d = 1
+        }
+    }
+}
+
+over "AppendsAndPrepends" (
+    append variantSets = ["a", "b"]
+)
+{
+    variantSet "a" = {
+        "on" {
+            double weight = 1
+            bool from_a = 1
+        }
+    }
+    variantSet "b" = {
+        "on" {
+            double weight = 2
+            bool from_b = 1
+        }
+    }
+    variantSet "c" = {
+        "on" {
+            double weight = 3
+            bool from_c = 1
+        }
+    }
+    variantSet "d" = {
+        "on" {
+            double weight = 4
+            bool from_d = 1
+        }
+    }
+}
+
+over "NestedStack" (
+    prepend variantSets = "shape"
+)
+{
+    variantSet "shape" = {
+        "round" (
+            prepend variantSets = ["size", "finish"]
+        ) {
+            variantSet "finish" = {
+                "matte" {
+                    double gloss = 0.25
+                }
+            }
+            variantSet "size" = {
+                "big" {
+                    double height = 3
+                }
+            }
+        }
+    }
+}

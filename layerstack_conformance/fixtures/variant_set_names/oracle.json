@@ -1,0 +1,1983 @@
+{
+ "compose": {
+  "/Adds": {
+   "names": [
+    "a",
+    "b"
+   ],
+   "selections": {
+    "a": "on",
+    "b": "on"
+   },
+   "values": {
+    "from_a": true,
+    "from_b": true,
+    "weight": 1.0
+   }
+  },
+  "/AppendsAndPrepends": {
+   "names": [
+    "b",
+    "c",
+    "a"
+   ],
+   "selections": {
+    "a": "on",
+    "b": "on",
+    "c": "on"
+   },
+   "values": {
+    "from_a": true,
+    "from_b": true,
+    "from_c": true,
+    "weight": 2.0
+   }
+  },
+  "/DeleteThenAppend": {
+   "names": [
+    "a"
+   ],
+   "selections": {
+    "a": "on"
+   },
+   "values": {
+    "from_a": true,
+    "weight": 1.0
+   }
+  },
+  "/Deletes": {
+   "names": [
+    "b"
+   ],
+   "selections": {
+    "b": "on"
+   },
+   "values": {
+    "from_b": true,
+    "weight": 2.0
+   }
+  },
+  "/Explicit": {
+   "names": [
+    "d",
+    "b",
+    "c"
+   ],
+   "selections": {
+    "b": "on",
+    "c": "on",
+    "d": "on"
+   },
+   "values": {
+    "from_b": true,
+    "from_c": true,
+    "from_d": true,
+    "weight": 4.0
+   }
+  },
+  "/ListedWithoutSpec": {
+   "names": [
+    "size"
+   ],
+   "selections": {
+    "size": "big"
+   },
+   "values": {}
+  },
+  "/Nested": {
+   "names": [
+    "shape",
+    "size"
+   ],
+   "selections": {
+    "shape": "round",
+    "size": "big"
+   },
+   "values": {
+    "height": 2.0,
+    "radius": 1.0
+   }
+  },
+  "/NestedStack": {
+   "names": [
+    "shape",
+    "size"
+   ],
+   "selections": {
+    "shape": "round",
+    "size": "big"
+   },
+   "values": {
+    "height": 3.0
+   }
+  },
+  "/Prepends": {
+   "names": [
+    "c",
+    "b",
+    "a"
+   ],
+   "selections": {
+    "a": "on",
+    "b": "on",
+    "c": "on"
+   },
+   "values": {
+    "from_a": true,
+    "from_b": true,
+    "from_c": true,
+    "weight": 3.0
+   }
+  },
+  "/Referencing": {
+   "names": [
+    "look"
+   ],
+   "selections": {
+    "look": "dry"
+   },
+   "values": {
+    "shine": 0.5
+   }
+  },
+  "/ReferencingUnlisted": {
+   "names": [
+    "look"
+   ],
+   "selections": {
+    "look": "wet"
+   },
+   "values": {}
+  },
+  "/Reorders": {
+   "names": [
+    "c",
+    "a",
+    "b"
+   ],
+   "selections": {
+    "a": "on",
+    "b": "on",
+    "c": "on"
+   },
+   "values": {
+    "from_a": true,
+    "from_b": true,
+    "from_c": true,
+    "weight": 3.0
+   }
+  },
+  "/Unlisted": {
+   "names": [],
+   "selections": {},
+   "values": {}
+  }
+ },
+ "edits": [
+  {
+   "accepted": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true
+   ],
+   "after": [
+    {
+     "names": {
+      "add": [],
+      "append": [],
+      "delete": [],
+      "explicit": null,
+      "prepend": [
+       "a"
+      ],
+      "reorder": []
+     },
+     "sets": {
+      "a": []
+     }
+    },
+    {
+     "names": {
+      "add": [],
+      "append": [],
+      "delete": [],
+      "explicit": null,
+      "prepend": [
+       "b",
+       "a"
+      ],
+      "reorder": []
+     },
+     "sets": {
+      "a": [],
+      "b": []
+     }
+    },
+    {
+     "names": {
+      "add": [],
+      "append": [
+       "c"
+      ],
+      "delete": [],
+      "explicit": null,
+      "prepend": [
+       "b",
+       "a"
+      ],
+      "reorder": []
+     },
+     "sets": {
+      "a": [],
+      "b": [],
+      "c": []
+     }
+    },
+    {
+     "names": {
+      "add": [],
+      "append": [
+       "c",
+       "a"
+      ],
+      "delete": [],
+      "explicit": null,
+      "prepend": [
+       "b",
+       "a"
+      ],
+      "reorder": []
+     },
+     "sets": {
+      "a": [],
+      "b": [],
+      "c": []
+     }
+    },
+    {
+     "names": {
+      "add": [],
+      "append": [
+       "c",
+       "a"
+      ],
+      "delete": [],
+      "explicit": null,
+      "prepend": [
+       "a",
+       "b"
+      ],
+      "reorder": []
+     },
+     "sets": {
+      "a": [],
+      "b": [],
+      "c": []
+     }
+    },
+    {
+     "names": {
+      "add": [],
+      "append": [
+       "d",
+       "c",
+       "a"
+      ],
+      "delete": [],
+      "explicit": null,
+      "prepend": [
+       "a",
+       "b"
+      ],
+      "reorder": []
+     },
+     "sets": {
+      "a": [],
+      "b": [],
+      "c": [],
+      "d": []
+     }
+    }
+   ],
+   "name": "add_positions",
+   "prim": "/Light",
+   "probes": {},
+   "spec_path": "/Light",
+   "steps": [
+    {
+     "call": "add_variant_set",
+     "name": "a",
+     "position": "back_of_prepend"
+    },
+    {
+     "call": "add_variant_set",
+     "name": "b",
+     "position": "front_of_prepend"
+    },
+    {
+     "call": "add_variant_set",
+     "name": "c",
+     "position": "back_of_append"
+    },
+    {
+     "call": "add_variant_set",
+     "name": "a",
+     "position": "back_of_append"
+    },
+    {
+     "call": "add_variant_set",
+     "name": "b",
+     "position": "back_of_prepend"
+    },
+    {
+     "call": "add_variant_set",
+     "name": "d",
+     "position": "front_of_append"
+    }
+   ],
+   "target": {
+    "kind": "root"
+   }
+  },
+  {
+   "accepted": [
+    true,
+    true,
+    true
+   ],
+   "after": [
+    {
+     "names": {
+      "add": [],
+      "append": [
+       "size"
+      ],
+      "delete": [
+       "gone"
+      ],
+      "explicit": null,
+      "prepend": [
+       "size"
+      ],
+      "reorder": []
+     },
+     "sets": {
+      "size": [
+       "big",
+       "small"
+      ]
+     }
+    },
+    {
+     "names": {
+      "add": [],
+      "append": [
+       "size"
+      ],
+      "delete": [
+       "gone"
+      ],
+      "explicit": null,
+      "prepend": [
+       "size",
+       "gone"
+      ],
+      "reorder": []
+     },
+     "sets": {
+      "gone": [],
+      "size": [
+       "big",
+       "small"
+      ]
+     }
+    },
+    {
+     "names": {
+      "add": [],
+      "append": [
+       "size"
+      ],
+      "delete": [
+       "gone"
+      ],
+      "explicit": null,
+      "prepend": [
+       "size",
+       "gone"
+      ],
+      "reorder": []
+     },
+     "sets": {
+      "gone": [],
+      "size": [
+       "big",
+       "small"
+      ]
+     }
+    }
+   ],
+   "name": "add_listed_and_deleted",
+   "prim": "/Rock",
+   "probes": {
+    "/Rock{size=big}": true,
+    "/Rock{size=big}Pebble": true
+   },
+   "spec_path": "/Rock",
+   "steps": [
+    {
+     "call": "add_variant_set",
+     "name": "size",
+     "position": "front_of_append"
+    },
+    {
+     "call": "add_variant_set",
+     "name": "gone",
+     "position": "back_of_prepend"
+    },
+    {
+     "call": "add_variant_set",
+     "name": "size",
+     "position": "front_of_prepend"
+    }
+   ],
+   "target": {
+    "kind": "root"
+   }
+  },
+  {
+   "accepted": [
+    true,
+    true,
+    true
+   ],
+   "after": [
+    {
+     "names": {
+      "add": [],
+      "append": [],
+      "delete": [],
+      "explicit": [
+       "stem",
+       "leaf"
+      ],
+      "prepend": [],
+      "reorder": []
+     },
+     "sets": {
+      "leaf": [],
+      "stem": []
+     }
+    },
+    {
+     "names": {
+      "add": [],
+      "append": [],
+      "delete": [],
+      "explicit": [
+       "stem",
+       "leaf"
+      ],
+      "prepend": [],
+      "reorder": []
+     },
+     "sets": {
+      "leaf": [],
+      "stem": []
+     }
+    },
+    {
+     "names": {
+      "add": [],
+      "append": [],
+      "delete": [],
+      "explicit": [
+       "leaf",
+       "stem"
+      ],
+      "prepend": [],
+      "reorder": []
+     },
+     "sets": {
+      "leaf": [],
+      "stem": []
+     }
+    }
+   ],
+   "name": "add_explicit",
+   "prim": "/Plant",
+   "probes": {},
+   "spec_path": "/Plant",
+   "steps": [
+    {
+     "call": "add_variant_set",
+     "name": "stem",
+     "position": "front_of_append"
+    },
+    {
+     "call": "add_variant_set",
+     "name": "leaf",
+     "position": "back_of_append"
+    },
+    {
+     "call": "add_variant_set",
+     "name": "stem",
+     "position": "back_of_prepend"
+    }
+   ],
+   "target": {
+    "kind": "root"
+   }
+  },
+  {
+   "accepted": [
+    false,
+    false,
+    false,
+    false
+   ],
+   "after": [
+    {
+     "names": {
+      "add": [],
+      "append": [],
+      "delete": [
+       "gone"
+      ],
+      "explicit": null,
+      "prepend": [
+       "size"
+      ],
+      "reorder": []
+     },
+     "sets": {
+      "size": [
+       "big",
+       "small"
+      ]
+     }
+    },
+    {
+     "names": {
+      "add": [],
+      "append": [],
+      "delete": [
+       "gone"
+      ],
+      "explicit": null,
+      "prepend": [
+       "size"
+      ],
+      "reorder": []
+     },
+     "sets": {
+      "size": [
+       "big",
+       "small"
+      ]
+     }
+    },
+    {
+     "names": {
+      "add": [],
+      "append": [],
+      "delete": [
+       "gone"
+      ],
+      "explicit": null,
+      "prepend": [
+       "size"
+      ],
+      "reorder": []
+     },
+     "sets": {
+      "size": [
+       "big",
+       "small"
+      ]
+     }
+    },
+    {
+     "names": {
+      "add": [],
+      "append": [],
+      "delete": [
+       "gone"
+      ],
+      "explicit": null,
+      "prepend": [
+       "size"
+      ],
+      "reorder": []
+     },
+     "sets": {
+      "size": [
+       "big",
+       "small"
+      ]
+     }
+    }
+   ],
+   "name": "add_invalid_names",
+   "prim": "/Rock",
+   "probes": {},
+   "spec_path": "/Rock",
+   "steps": [
+    {
+     "call": "add_variant_set",
+     "name": "1bad"
+    },
+    {
+     "call": "add_variant_set",
+     "name": ""
+    },
+    {
+     "call": "add_variant_set",
+     "name": "a b"
+    },
+    {
+     "call": "add_variant_set",
+     "name": "ns:x"
+    }
+   ],
+   "target": {
+    "kind": "root"
+   }
+  },
+  {
+   "accepted": [
+    false
+   ],
+   "after": [
+    null
+   ],
+   "name": "add_pseudo_root",
+   "prim": "/",
+   "probes": {},
+   "spec_path": "/",
+   "steps": [
+    {
+     "call": "add_variant_set",
+     "name": "x"
+    }
+   ],
+   "target": {
+    "kind": "root"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "after": [
+    {
+     "names": {
+      "add": [],
+      "append": [],
+      "delete": [],
+      "explicit": null,
+      "prepend": [
+       "size"
+      ],
+      "reorder": []
+     },
+     "sets": {
+      "size": []
+     }
+    }
+   ],
+   "name": "add_creates_over",
+   "prim": "/Rock",
+   "probes": {},
+   "spec_path": "/Rock",
+   "steps": [
+    {
+     "call": "add_variant_set",
+     "name": "size"
+    }
+   ],
+   "target": {
+    "kind": "sublayer"
+   }
+  },
+  {
+   "accepted": [
+    true,
+    true
+   ],
+   "after": [
+    {
+     "names": {
+      "add": [],
+      "append": [],
+      "delete": [],
+      "explicit": null,
+      "prepend": [
+       "color"
+      ],
+      "reorder": []
+     },
+     "sets": {
+      "color": []
+     }
+    },
+    {
+     "names": {
+      "add": [],
+      "append": [
+       "finish"
+      ],
+      "delete": [],
+      "explicit": null,
+      "prepend": [
+       "color"
+      ],
+      "reorder": []
+     },
+     "sets": {
+      "color": [],
+      "finish": []
+     }
+    }
+   ],
+   "name": "add_in_variant",
+   "prim": "/Rock",
+   "probes": {},
+   "spec_path": "/Rock{size=big}",
+   "steps": [
+    {
+     "call": "add_variant_set",
+     "name": "color"
+    },
+    {
+     "call": "add_variant_set",
+     "name": "finish",
+     "position": "back_of_append"
+    }
+   ],
+   "target": {
+    "kind": "variant",
+    "prim": "/Rock"
+   }
+  },
+  {
+   "accepted": [
+    true,
+    true
+   ],
+   "after": [
+    {
+     "names": {
+      "add": [],
+      "append": [],
+      "delete": [],
+      "explicit": null,
+      "prepend": [
+       "look",
+       "trim"
+      ],
+      "reorder": []
+     },
+     "sets": {
+      "look": [
+       "dry",
+       "wet"
+      ],
+      "trim": []
+     }
+    },
+    {
+     "names": {
+      "add": [],
+      "append": [
+       "look"
+      ],
+      "delete": [],
+      "explicit": null,
+      "prepend": [
+       "look",
+       "trim"
+      ],
+      "reorder": []
+     },
+     "sets": {
+      "look": [
+       "dry",
+       "wet"
+      ],
+      "trim": []
+     }
+    }
+   ],
+   "name": "add_through_reference",
+   "prim": "/Vehicle",
+   "probes": {},
+   "spec_path": "/Model",
+   "steps": [
+    {
+     "call": "add_variant_set",
+     "name": "trim"
+    },
+    {
+     "call": "add_variant_set",
+     "name": "look",
+     "position": "back_of_append"
+    }
+   ],
+   "target": {
+    "kind": "reference",
+    "prim": "/Vehicle"
+   }
+  },
+  {
+   "accepted": [
+    true,
+    true,
+    true,
+    true,
+    true
+   ],
+   "after": [
+    {
+     "names": {
+      "add": [],
+      "append": [
+       "c"
+      ],
+      "delete": [
+       "d"
+      ],
+      "explicit": null,
+      "prepend": [
+       "a",
+       "b"
+      ],
+      "reorder": []
+     },
+     "sets": {}
+    },
+    {
+     "names": {
+      "add": [],
+      "append": [],
+      "delete": [],
+      "explicit": [],
+      "prepend": [],
+      "reorder": []
+     },
+     "sets": {}
+    },
+    {
+     "names": {
+      "add": [],
+      "append": [
+       "c",
+       "b"
+      ],
+      "delete": [
+       "d"
+      ],
+      "explicit": null,
+      "prepend": [
+       "a",
+       "b"
+      ],
+      "reorder": []
+     },
+     "sets": {}
+    },
+    {
+     "names": {
+      "add": [],
+      "append": [],
+      "delete": [],
+      "explicit": [
+       "c",
+       "a"
+      ],
+      "prepend": [],
+      "reorder": []
+     },
+     "sets": {}
+    },
+    {
+     "names": {
+      "add": [
+       "z",
+       "z"
+      ],
+      "append": [],
+      "delete": [],
+      "explicit": null,
+      "prepend": [],
+      "reorder": [
+       "b",
+       "a"
+      ]
+     },
+     "sets": {}
+    }
+   ],
+   "name": "set_names",
+   "prim": "/Light",
+   "probes": {},
+   "spec_path": "/Light",
+   "steps": [
+    {
+     "call": "set_variant_set_names",
+     "value": {
+      "append": [
+       "c"
+      ],
+      "delete": [
+       "d"
+      ],
+      "prepend": [
+       "a",
+       "b"
+      ]
+     }
+    },
+    {
+     "call": "set_variant_set_names",
+     "value": {
+      "explicit": []
+     }
+    },
+    {
+     "call": "set_variant_set_names",
+     "value": {
+      "append": [
+       "b",
+       "c",
+       "b"
+      ],
+      "delete": [
+       "d",
+       "d"
+      ],
+      "prepend": [
+       "a",
+       "b",
+       "a"
+      ]
+     }
+    },
+    {
+     "call": "set_variant_set_names",
+     "value": {
+      "explicit": [
+       "c",
+       "a",
+       "c"
+      ]
+     }
+    },
+    {
+     "call": "set_variant_set_names",
+     "value": {
+      "add": [
+       "z",
+       "z"
+      ],
+      "reorder": [
+       "b",
+       "a"
+      ]
+     }
+    }
+   ],
+   "target": {
+    "kind": "root"
+   }
+  },
+  {
+   "accepted": [
+    true,
+    true
+   ],
+   "after": [
+    {
+     "names": null,
+     "sets": {
+      "size": [
+       "big",
+       "small"
+      ]
+     }
+    },
+    {
+     "names": null,
+     "sets": {
+      "size": [
+       "big",
+       "small"
+      ]
+     }
+    }
+   ],
+   "name": "set_names_cleared",
+   "prim": "/Rock",
+   "probes": {
+    "/Rock{size=big}": true
+   },
+   "spec_path": "/Rock",
+   "steps": [
+    {
+     "call": "set_variant_set_names",
+     "value": null
+    },
+    {
+     "call": "set_variant_set_names",
+     "value": null
+    }
+   ],
+   "target": {
+    "kind": "root"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "after": [
+    {
+     "names": {
+      "add": [],
+      "append": [],
+      "delete": [],
+      "explicit": null,
+      "prepend": [
+       "1bad"
+      ],
+      "reorder": []
+     },
+     "sets": {}
+    }
+   ],
+   "name": "set_names_not_identifiers",
+   "prim": "/Light",
+   "probes": {},
+   "spec_path": "/Light",
+   "steps": [
+    {
+     "call": "set_variant_set_names",
+     "value": {
+      "prepend": [
+       "1bad"
+      ]
+     }
+    }
+   ],
+   "target": {
+    "kind": "root"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "after": [
+    {
+     "names": {
+      "add": [],
+      "append": [
+       "leaf"
+      ],
+      "delete": [],
+      "explicit": null,
+      "prepend": [],
+      "reorder": []
+     },
+     "sets": {}
+    }
+   ],
+   "name": "set_names_creates_over",
+   "prim": "/Plant",
+   "probes": {},
+   "spec_path": "/Plant",
+   "steps": [
+    {
+     "call": "set_variant_set_names",
+     "value": {
+      "append": [
+       "leaf"
+      ]
+     }
+    }
+   ],
+   "target": {
+    "kind": "sublayer"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "after": [
+    {
+     "names": {
+      "add": [],
+      "append": [],
+      "delete": [],
+      "explicit": null,
+      "prepend": [
+       "color"
+      ],
+      "reorder": []
+     },
+     "sets": {}
+    }
+   ],
+   "name": "set_names_in_variant",
+   "prim": "/Rock",
+   "probes": {},
+   "spec_path": "/Rock{size=big}",
+   "steps": [
+    {
+     "call": "set_variant_set_names",
+     "value": {
+      "prepend": [
+       "color"
+      ]
+     }
+    }
+   ],
+   "target": {
+    "kind": "variant",
+    "prim": "/Rock"
+   }
+  },
+  {
+   "accepted": [
+    true,
+    true,
+    true
+   ],
+   "after": [
+    {
+     "names": {
+      "add": [],
+      "append": [],
+      "delete": [
+       "gone"
+      ],
+      "explicit": null,
+      "prepend": [
+       "size"
+      ],
+      "reorder": []
+     },
+     "sets": {}
+    },
+    {
+     "names": {
+      "add": [],
+      "append": [],
+      "delete": [
+       "gone"
+      ],
+      "explicit": null,
+      "prepend": [
+       "size"
+      ],
+      "reorder": []
+     },
+     "sets": {}
+    },
+    {
+     "names": {
+      "add": [],
+      "append": [],
+      "delete": [
+       "gone"
+      ],
+      "explicit": null,
+      "prepend": [
+       "size"
+      ],
+      "reorder": []
+     },
+     "sets": {}
+    }
+   ],
+   "name": "remove_set",
+   "prim": "/Rock",
+   "probes": {
+    "/Rock{size=big}": false,
+    "/Rock{size=big}.height": false,
+    "/Rock{size=big}Pebble": false,
+    "/Rock{size=big}Pebble.radius": false,
+    "/Rock{size=small}": false
+   },
+   "spec_path": "/Rock",
+   "steps": [
+    {
+     "call": "remove_variant_set",
+     "name": "size"
+    },
+    {
+     "call": "remove_variant_set",
+     "name": "size"
+    },
+    {
+     "call": "remove_variant_set",
+     "name": "missing"
+    }
+   ],
+   "target": {
+    "kind": "root"
+   }
+  },
+  {
+   "accepted": [
+    true,
+    true
+   ],
+   "after": [
+    {
+     "names": {
+      "add": [],
+      "append": [],
+      "delete": [],
+      "explicit": null,
+      "prepend": [
+       "color"
+      ],
+      "reorder": []
+     },
+     "sets": {
+      "color": [
+       "red"
+      ]
+     }
+    },
+    {
+     "names": {
+      "add": [],
+      "append": [],
+      "delete": [],
+      "explicit": null,
+      "prepend": [
+       "color"
+      ],
+      "reorder": []
+     },
+     "sets": {}
+    }
+   ],
+   "name": "remove_nested_set",
+   "prim": "/Rock",
+   "probes": {
+    "/Rock{size=big}": true,
+    "/Rock{size=big}{color=red}": false,
+    "/Rock{size=big}{color=red}Chip": false
+   },
+   "spec_path": "/Rock{size=big}",
+   "steps": [
+    {
+     "call": "create_prim_in_layer",
+     "path": "/Rock{size=big}{color=red}Chip"
+    },
+    {
+     "call": "remove_variant_set",
+     "name": "color"
+    }
+   ],
+   "target": {
+    "kind": "variant",
+    "prim": "/Rock"
+   }
+  },
+  {
+   "accepted": [
+    true,
+    true
+   ],
+   "after": [
+    {
+     "names": {
+      "add": [],
+      "append": [],
+      "delete": [],
+      "explicit": null,
+      "prepend": [
+       "shape"
+      ],
+      "reorder": []
+     },
+     "sets": {
+      "shape": []
+     }
+    },
+    {
+     "names": {
+      "add": [],
+      "append": [],
+      "delete": [],
+      "explicit": null,
+      "prepend": [
+       "shape"
+      ],
+      "reorder": []
+     },
+     "sets": {}
+    }
+   ],
+   "name": "remove_added_set",
+   "prim": "/Light",
+   "probes": {},
+   "spec_path": "/Light",
+   "steps": [
+    {
+     "call": "add_variant_set",
+     "name": "shape"
+    },
+    {
+     "call": "remove_variant_set",
+     "name": "shape"
+    }
+   ],
+   "target": {
+    "kind": "root"
+   }
+  },
+  {
+   "accepted": [
+    true,
+    true,
+    true,
+    true
+   ],
+   "after": [
+    {
+     "names": {
+      "add": [],
+      "append": [],
+      "delete": [],
+      "explicit": null,
+      "prepend": [
+       "shape"
+      ],
+      "reorder": []
+     },
+     "sets": {
+      "shape": [
+       "smooth"
+      ]
+     }
+    },
+    {
+     "names": {
+      "add": [],
+      "append": [],
+      "delete": [],
+      "explicit": null,
+      "prepend": [
+       "shape"
+      ],
+      "reorder": []
+     },
+     "sets": {
+      "shape": [
+       "rough",
+       "smooth"
+      ]
+     }
+    },
+    {
+     "names": {
+      "add": [],
+      "append": [],
+      "delete": [],
+      "explicit": null,
+      "prepend": [
+       "size",
+       "shape"
+      ],
+      "reorder": []
+     },
+     "sets": {
+      "shape": [
+       "rough",
+       "smooth"
+      ],
+      "size": [
+       "big"
+      ]
+     }
+    },
+    {
+     "names": {
+      "add": [],
+      "append": [],
+      "delete": [],
+      "explicit": null,
+      "prepend": [
+       "size",
+       "shape"
+      ],
+      "reorder": []
+     },
+     "sets": {
+      "shape": [
+       "rough",
+       "smooth"
+      ],
+      "size": [
+       "big"
+      ]
+     }
+    }
+   ],
+   "name": "create_variant",
+   "prim": "/Light",
+   "probes": {
+    "/Light{shape=rough}": true,
+    "/Light{shape=smooth}": true,
+    "/Light{shape=smooth}{color=red}": true,
+    "/Light{size=big}": true
+   },
+   "spec_path": "/Light",
+   "steps": [
+    {
+     "call": "create_prim_in_layer",
+     "path": "/Light{shape=smooth}"
+    },
+    {
+     "call": "create_prim_in_layer",
+     "path": "/Light{shape=rough}"
+    },
+    {
+     "call": "create_prim_in_layer",
+     "path": "/Light{size=big}"
+    },
+    {
+     "call": "create_prim_in_layer",
+     "path": "/Light{shape=smooth}{color=red}"
+    }
+   ],
+   "target": {
+    "kind": "root"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "after": [
+    {
+     "names": {
+      "add": [],
+      "append": [],
+      "delete": [],
+      "explicit": [
+       "trunk",
+       "leaf"
+      ],
+      "prepend": [],
+      "reorder": []
+     },
+     "sets": {
+      "leaf": [],
+      "trunk": [
+       "tall"
+      ]
+     }
+    }
+   ],
+   "name": "create_variant_explicit",
+   "prim": "/Plant",
+   "probes": {
+    "/Plant{trunk=tall}": true
+   },
+   "spec_path": "/Plant",
+   "steps": [
+    {
+     "call": "create_prim_in_layer",
+     "path": "/Plant{trunk=tall}"
+    }
+   ],
+   "target": {
+    "kind": "root"
+   }
+  },
+  {
+   "accepted": [
+    true,
+    true
+   ],
+   "after": [
+    {
+     "names": {
+      "add": [],
+      "append": [],
+      "delete": [],
+      "explicit": null,
+      "prepend": [
+       "gone",
+       "size"
+      ],
+      "reorder": []
+     },
+     "sets": {
+      "gone": [
+       "x"
+      ],
+      "size": [
+       "big",
+       "small"
+      ]
+     }
+    },
+    {
+     "names": {
+      "add": [],
+      "append": [],
+      "delete": [],
+      "explicit": null,
+      "prepend": [
+       "gone",
+       "size"
+      ],
+      "reorder": []
+     },
+     "sets": {
+      "gone": [
+       "x"
+      ],
+      "size": [
+       "big",
+       "medium",
+       "small"
+      ]
+     }
+    }
+   ],
+   "name": "create_variant_deleted",
+   "prim": "/Rock",
+   "probes": {
+    "/Rock{gone=x}": true,
+    "/Rock{size=medium}": true
+   },
+   "spec_path": "/Rock",
+   "steps": [
+    {
+     "call": "create_prim_in_layer",
+     "path": "/Rock{gone=x}"
+    },
+    {
+     "call": "create_prim_in_layer",
+     "path": "/Rock{size=medium}"
+    }
+   ],
+   "target": {
+    "kind": "root"
+   }
+  }
+ ],
+ "flatten": {
+  "/Deletes": {
+   "names": {
+    "add": [],
+    "append": [],
+    "delete": [
+     "a"
+    ],
+    "explicit": null,
+    "prepend": [
+     "b"
+    ],
+    "reorder": []
+   },
+   "sets": {}
+  },
+  "/Explicit": {
+   "names": {
+    "add": [],
+    "append": [],
+    "delete": [],
+    "explicit": [
+     "d",
+     "b",
+     "c"
+    ],
+    "prepend": [],
+    "reorder": []
+   },
+   "sets": {
+    "b": [],
+    "c": []
+   }
+  },
+  "/Prepends": {
+   "names": {
+    "add": [],
+    "append": [
+     "a"
+    ],
+    "delete": [],
+    "explicit": null,
+    "prepend": [
+     "c",
+     "b"
+    ],
+    "reorder": []
+   },
+   "sets": {}
+  },
+  "/StrongOnly": {
+   "names": {
+    "add": [],
+    "append": [
+     "b"
+    ],
+    "delete": [],
+    "explicit": null,
+    "prepend": [],
+    "reorder": []
+   },
+   "sets": {}
+  },
+  "/WeakExplicit": {
+   "names": {
+    "add": [],
+    "append": [],
+    "delete": [],
+    "explicit": [
+     "a",
+     "c"
+    ],
+    "prepend": [],
+    "reorder": []
+   },
+   "sets": {
+    "a": [],
+    "b": []
+   }
+  },
+  "/WeakOnly": {
+   "names": {
+    "add": [],
+    "append": [],
+    "delete": [
+     "a"
+    ],
+    "explicit": null,
+    "prepend": [
+     "b"
+    ],
+    "reorder": []
+   },
+   "sets": {}
+  }
+ },
+ "forms": {
+  "/Added": {
+   "names": {
+    "add": [
+     "a",
+     "b"
+    ],
+    "append": [],
+    "delete": [],
+    "explicit": null,
+    "prepend": [],
+    "reorder": []
+   },
+   "sets": {
+    "a": [],
+    "b": []
+   }
+  },
+  "/Appended": {
+   "names": {
+    "add": [],
+    "append": [
+     "a"
+    ],
+    "delete": [],
+    "explicit": null,
+    "prepend": [],
+    "reorder": []
+   },
+   "sets": {}
+  },
+  "/Branch": {
+   "names": {
+    "add": [],
+    "append": [],
+    "delete": [],
+    "explicit": null,
+    "prepend": [
+     "shape"
+    ],
+    "reorder": []
+   },
+   "sets": {
+    "shape": [
+     "round"
+    ]
+   }
+  },
+  "/Branch{shape=round}": {
+   "names": {
+    "add": [],
+    "append": [
+     "size"
+    ],
+    "delete": [],
+    "explicit": null,
+    "prepend": [],
+    "reorder": []
+   },
+   "sets": {
+    "size": [
+     "big"
+    ]
+   }
+  },
+  "/Deleted": {
+   "names": {
+    "add": [],
+    "append": [],
+    "delete": [
+     "a"
+    ],
+    "explicit": null,
+    "prepend": [],
+    "reorder": []
+   },
+   "sets": {}
+  },
+  "/Edits": {
+   "names": {
+    "add": [],
+    "append": [
+     "b"
+    ],
+    "delete": [
+     "c"
+    ],
+    "explicit": null,
+    "prepend": [
+     "a"
+    ],
+    "reorder": [
+     "b",
+     "a"
+    ]
+   },
+   "sets": {}
+  },
+  "/Explicit": {
+   "names": {
+    "add": [],
+    "append": [],
+    "delete": [],
+    "explicit": [
+     "a",
+     "b"
+    ],
+    "prepend": [],
+    "reorder": []
+   },
+   "sets": {
+    "a": [],
+    "b": []
+   }
+  },
+  "/Prepended": {
+   "names": {
+    "add": [],
+    "append": [],
+    "delete": [],
+    "explicit": null,
+    "prepend": [
+     "a",
+     "b"
+    ],
+    "reorder": []
+   },
+   "sets": {}
+  },
+  "/Reordered": {
+   "names": {
+    "add": [],
+    "append": [],
+    "delete": [],
+    "explicit": null,
+    "prepend": [],
+    "reorder": [
+     "b",
+     "a"
+    ]
+   },
+   "sets": {}
+  },
+  "/Unlisted": {
+   "names": null,
+   "sets": {
+    "look": [
+     "wet"
+    ]
+   }
+  }
+ },
+ "forms_usdc": {
+  "/Added": {
+   "names": {
+    "add": [
+     "a",
+     "b"
+    ],
+    "append": [],
+    "delete": [],
+    "explicit": null,
+    "prepend": [],
+    "reorder": []
+   },
+   "sets": {
+    "a": [],
+    "b": []
+   }
+  },
+  "/Appended": {
+   "names": {
+    "add": [],
+    "append": [
+     "a"
+    ],
+    "delete": [],
+    "explicit": null,
+    "prepend": [],
+    "reorder": []
+   },
+   "sets": {}
+  },
+  "/Branch": {
+   "names": {
+    "add": [],
+    "append": [],
+    "delete": [],
+    "explicit": null,
+    "prepend": [
+     "shape"
+    ],
+    "reorder": []
+   },
+   "sets": {
+    "shape": [
+     "round"
+    ]
+   }
+  },
+  "/Branch{shape=round}": {
+   "names": {
+    "add": [],
+    "append": [
+     "size"
+    ],
+    "delete": [],
+    "explicit": null,
+    "prepend": [],
+    "reorder": []
+   },
+   "sets": {
+    "size": [
+     "big"
+    ]
+   }
+  },
+  "/Deleted": {
+   "names": {
+    "add": [],
+    "append": [],
+    "delete": [
+     "a"
+    ],
+    "explicit": null,
+    "prepend": [],
+    "reorder": []
+   },
+   "sets": {}
+  },
+  "/Edits": {
+   "names": {
+    "add": [],
+    "append": [
+     "b"
+    ],
+    "delete": [
+     "c"
+    ],
+    "explicit": null,
+    "prepend": [
+     "a"
+    ],
+    "reorder": [
+     "b",
+     "a"
+    ]
+   },
+   "sets": {}
+  },
+  "/Explicit": {
+   "names": {
+    "add": [],
+    "append": [],
+    "delete": [],
+    "explicit": [
+     "a",
+     "b"
+    ],
+    "prepend": [],
+    "reorder": []
+   },
+   "sets": {
+    "a": [],
+    "b": []
+   }
+  },
+  "/Prepended": {
+   "names": {
+    "add": [],
+    "append": [],
+    "delete": [],
+    "explicit": null,
+    "prepend": [
+     "a",
+     "b"
+    ],
+    "reorder": []
+   },
+   "sets": {}
+  },
+  "/Reordered": {
+   "names": {
+    "add": [],
+    "append": [],
+    "delete": [],
+    "explicit": null,
+    "prepend": [],
+    "reorder": [
+     "b",
+     "a"
+    ]
+   },
+   "sets": {}
+  },
+  "/Unlisted": {
+   "names": null,
+   "sets": {
+    "look": [
+     "wet"
+    ]
+   }
+  }
+ },
+ "openusd_version": "26.8"
+}

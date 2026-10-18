@@ -1,0 +1,189 @@
+#usda 1.0
+(
+    subLayers = [
+        @strong.usda@,
+        @weak.usda@
+    ]
+)
+
+# A variant set spec no list names: `look` is not evaluated, so `shine`
+# has no opinion.
+def "Unlisted" (
+    variants = {
+        string look = "wet"
+    }
+)
+{
+    variantSet "look" = {
+        "wet" {
+            double shine = 1
+        }
+    }
+}
+
+# A listed set without a spec: `size` is evaluated, and contributes no
+# opinions.
+def "ListedWithoutSpec" (
+    prepend variantSets = "size"
+    variants = {
+        string size = "big"
+    }
+)
+{
+}
+
+# The root deletes `look` in its own layer stack only: the referenced
+# node lists it, and the root's selection is the strongest.
+def "Referencing" (
+    delete variantSets = "look"
+    prepend references = @asset.usda@</Model>
+    variants = {
+        string look = "dry"
+    }
+)
+{
+}
+
+# The root lists `look` and has no spec for it; the referenced node has a
+# spec and no listing. Neither composes the branch.
+def "ReferencingUnlisted" (
+    prepend variantSets = "look"
+    prepend references = @asset.usda@</Bare>
+    variants = {
+        string look = "wet"
+    }
+)
+{
+}
+
+# A nested set composes where its branch lists it: `size` is listed in
+# the `round` branch, `color` is not.
+def "Nested" (
+    prepend variantSets = "shape"
+    variants = {
+        string color = "red"
+        string shape = "round"
+        string size = "big"
+    }
+)
+{
+    variantSet "shape" = {
+        "round" (
+            prepend variantSets = "size"
+        ) {
+            double radius = 1
+            variantSet "color" = {
+                "red" {
+                    double hue = 1
+                }
+            }
+            variantSet "size" = {
+                "big" {
+                    double height = 2
+                }
+            }
+        }
+    }
+}
+
+# A branch's list ops compose across the layer stack: `weak.usda` lists
+# `size` and `finish` in the `round` branch, and the root deletes
+# `finish` there.
+def "NestedStack" (
+    variants = {
+        string finish = "matte"
+        string shape = "round"
+        string size = "big"
+    }
+)
+{
+    variantSet "shape" = {
+        "round" (
+            delete variantSets = "finish"
+        ) {
+        }
+    }
+}
+
+def "Prepends" (
+    append variantSets = "a"
+    variants = {
+        string a = "on"
+        string b = "on"
+        string c = "on"
+        string d = "on"
+    }
+)
+{
+}
+
+def "Explicit" (
+    prepend variantSets = "d"
+    variants = {
+        string a = "on"
+        string b = "on"
+        string c = "on"
+        string d = "on"
+    }
+)
+{
+}
+
+def "Deletes" (
+    delete variantSets = "a"
+    variants = {
+        string a = "on"
+        string b = "on"
+        string c = "on"
+        string d = "on"
+    }
+)
+{
+}
+
+def "Reorders" (
+    reorder variantSets = ["c", "a"]
+    variants = {
+        string a = "on"
+        string b = "on"
+        string c = "on"
+        string d = "on"
+    }
+)
+{
+}
+
+def "Adds" (
+    variants = {
+        string a = "on"
+        string b = "on"
+        string c = "on"
+        string d = "on"
+    }
+)
+{
+}
+
+def "DeleteThenAppend" (
+    append variantSets = "a"
+    variants = {
+        string a = "on"
+        string b = "on"
+        string c = "on"
+        string d = "on"
+    }
+)
+{
+}
+
+def "AppendsAndPrepends" (
+    append variantSets = ["c", "a"]
+    variants = {
+        string a = "on"
+        string b = "on"
+        string c = "on"
+        string d = "on"
+    }
+)
+{
+}

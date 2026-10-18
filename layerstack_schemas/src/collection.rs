@@ -19,7 +19,9 @@
 //! `mode` and path expressions are OpenUSD's, as of 26.08.
 
 mod cache;
+mod index;
 pub use cache::*;
+pub use index::*;
 
 use alloc::{
     format,
@@ -565,32 +567,57 @@ impl MembershipQuery {
         {
             return Membership::Excluded;
         }
-        let property = matches!(path, TargetPath::Property(_));
         let mut at = Some(path);
         while let Some(current) = at {
-            if let Some(entry) = self.rules.get(&current) {
-                match *entry {
-                    MembershipRule::Exclude => return Membership::Excluded,
-                    MembershipRule::Include(rule) => {
-                        let decides = if property {
-                            matches!(current, TargetPath::Property(_))
-                                || rule == ExpansionRule::ExpandPrimsAndProperties
-                                || (rule == ExpansionRule::ExplicitOnly && current == path)
-                        } else {
-                            rule != ExpansionRule::ExplicitOnly || current == path
-                        };
-                        if decides {
-                            return Membership::Included(rule);
-                        }
-                    }
-                }
+            if let Some(decided) = self
+                .rules
+                .get(&current)
+                .and_then(|entry| decide(*entry, current, path))
+            {
+                return decided;
             }
-            at = match current {
-                TargetPath::Property(p) => Some(TargetPath::Prim(p.prim_path())),
-                TargetPath::Prim(prim) => scene.parent(prim).map(TargetPath::Prim),
-            };
+            at = rule_parent(scene, current);
         }
         Membership::Excluded
+    }
+}
+
+/// How the rule-map entry `entry` at `current`, `path` or an ancestor of
+/// it, decides whether `path` is included: `None` when it does not, and
+/// the next entry above decides.
+///
+/// An exclude excludes. An include includes a prim unless it is
+/// `explicitOnly` of an ancestor, and a property only when the entry is the
+/// property itself, `expandPrimsAndProperties`, or `explicitOnly` of the
+/// property.
+///
+/// OpenUSD: `UsdCollectionMembershipQuery::_IsPathIncludedByRuleMap`.
+pub(crate) fn decide(
+    entry: MembershipRule,
+    current: TargetPath,
+    path: TargetPath,
+) -> Option<Membership> {
+    match entry {
+        MembershipRule::Exclude => Some(Membership::Excluded),
+        MembershipRule::Include(rule) => {
+            let decides = if matches!(path, TargetPath::Property(_)) {
+                matches!(current, TargetPath::Property(_))
+                    || rule == ExpansionRule::ExpandPrimsAndProperties
+                    || (rule == ExpansionRule::ExplicitOnly && current == path)
+            } else {
+                rule != ExpansionRule::ExplicitOnly || current == path
+            };
+            decides.then_some(Membership::Included(rule))
+        }
+    }
+}
+
+/// The next path a rule-map search tries after `path`: a property's prim,
+/// a prim's parent; `None` above the pseudo-root.
+pub(crate) fn rule_parent(scene: &Scene<'_>, path: TargetPath) -> Option<TargetPath> {
+    match path {
+        TargetPath::Property(p) => Some(TargetPath::Prim(p.prim_path())),
+        TargetPath::Prim(prim) => scene.parent(prim).map(TargetPath::Prim),
     }
 }
 
@@ -849,7 +876,9 @@ fn search_from(
 }
 
 impl<'a> CollectionApi<'a> {
-    /// The collection's membership ([`MembershipQuery::compute`]).
+    /// The collection's membership ([`MembershipQuery::compute`]). For the
+    /// reverse question, which collections include a path, see
+    /// [`MembershipIndex`].
     ///
     /// OpenUSD: `UsdCollectionAPI::ComputeMembershipQuery`.
     #[must_use]

@@ -1,0 +1,542 @@
+{
+ "bindings": {
+  "/Garden": {
+   "all@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "all@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "full@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "full@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@strict": {
+    "material": null,
+    "relationship": null
+   }
+  },
+  "/Garden/Bed": {
+   "all@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "all@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "full@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "full@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@strict": {
+    "material": null,
+    "relationship": null
+   }
+  },
+  "/Looks": {
+   "all@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "all@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "full@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "full@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@strict": {
+    "material": null,
+    "relationship": null
+   }
+  },
+  "/Looks/Moss": {
+   "all@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "all@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "full@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "full@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@strict": {
+    "material": null,
+    "relationship": null
+   }
+  },
+  "/Looks/Stone": {
+   "all@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "all@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "full@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "full@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@strict": {
+    "material": null,
+    "relationship": null
+   }
+  },
+  "/Parts": {
+   "all@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "all@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "full@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "full@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@strict": {
+    "material": null,
+    "relationship": null
+   }
+  },
+  "/Parts/Seeds": {
+   "all@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "all@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "full@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "full@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@strict": {
+    "material": null,
+    "relationship": null
+   }
+  },
+  "/Parts/Seeds/Acorn": {
+   "all@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "all@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "full@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "full@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@strict": {
+    "material": null,
+    "relationship": null
+   }
+  },
+  "/Parts/Seeds/Pine": {
+   "all@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "all@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "full@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "full@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@strict": {
+    "material": null,
+    "relationship": null
+   }
+  },
+  "/Parts/Stones": {
+   "all@legacy": {
+    "material": "/Looks/Moss",
+    "relationship": "/Parts.material:binding:collection:stones"
+   },
+   "all@strict": {
+    "material": "/Looks/Moss",
+    "relationship": "/Parts.material:binding:collection:stones"
+   },
+   "full@legacy": {
+    "material": "/Looks/Moss",
+    "relationship": "/Parts.material:binding:collection:stones"
+   },
+   "full@strict": {
+    "material": "/Looks/Moss",
+    "relationship": "/Parts.material:binding:collection:stones"
+   },
+   "preview@legacy": {
+    "material": "/Looks/Moss",
+    "relationship": "/Parts.material:binding:collection:stones"
+   },
+   "preview@strict": {
+    "material": "/Looks/Moss",
+    "relationship": "/Parts.material:binding:collection:stones"
+   }
+  },
+  "/Parts/Stones/Granite": {
+   "all@legacy": {
+    "material": "/Looks/Stone",
+    "relationship": "/Parts.material:binding:collection:heavy"
+   },
+   "all@strict": {
+    "material": "/Looks/Stone",
+    "relationship": "/Parts.material:binding:collection:heavy"
+   },
+   "full@legacy": {
+    "material": "/Looks/Stone",
+    "relationship": "/Parts.material:binding:collection:heavy"
+   },
+   "full@strict": {
+    "material": "/Looks/Stone",
+    "relationship": "/Parts.material:binding:collection:heavy"
+   },
+   "preview@legacy": {
+    "material": "/Looks/Stone",
+    "relationship": "/Parts.material:binding:collection:heavy"
+   },
+   "preview@strict": {
+    "material": "/Looks/Stone",
+    "relationship": "/Parts.material:binding:collection:heavy"
+   }
+  },
+  "/Parts/Stones/Granite/Boulder": {
+   "all@legacy": {
+    "material": "/Looks/Stone",
+    "relationship": "/Parts.material:binding:collection:heavy"
+   },
+   "all@strict": {
+    "material": "/Looks/Stone",
+    "relationship": "/Parts.material:binding:collection:heavy"
+   },
+   "full@legacy": {
+    "material": "/Looks/Stone",
+    "relationship": "/Parts.material:binding:collection:heavy"
+   },
+   "full@strict": {
+    "material": "/Looks/Stone",
+    "relationship": "/Parts.material:binding:collection:heavy"
+   },
+   "preview@legacy": {
+    "material": "/Looks/Stone",
+    "relationship": "/Parts.material:binding:collection:heavy"
+   },
+   "preview@strict": {
+    "material": "/Looks/Stone",
+    "relationship": "/Parts.material:binding:collection:heavy"
+   }
+  },
+  "/Parts/Stones/Granite/Pebble": {
+   "all@legacy": {
+    "material": "/Looks/Stone",
+    "relationship": "/Parts.material:binding:collection:heavy"
+   },
+   "all@strict": {
+    "material": "/Looks/Stone",
+    "relationship": "/Parts.material:binding:collection:heavy"
+   },
+   "full@legacy": {
+    "material": "/Looks/Stone",
+    "relationship": "/Parts.material:binding:collection:heavy"
+   },
+   "full@strict": {
+    "material": "/Looks/Stone",
+    "relationship": "/Parts.material:binding:collection:heavy"
+   },
+   "preview@legacy": {
+    "material": "/Looks/Stone",
+    "relationship": "/Parts.material:binding:collection:heavy"
+   },
+   "preview@strict": {
+    "material": "/Looks/Stone",
+    "relationship": "/Parts.material:binding:collection:heavy"
+   }
+  },
+  "/Parts/Stones/Slate": {
+   "all@legacy": {
+    "material": "/Looks/Moss",
+    "relationship": "/Parts.material:binding:collection:stones"
+   },
+   "all@strict": {
+    "material": "/Looks/Moss",
+    "relationship": "/Parts.material:binding:collection:stones"
+   },
+   "full@legacy": {
+    "material": "/Looks/Moss",
+    "relationship": "/Parts.material:binding:collection:stones"
+   },
+   "full@strict": {
+    "material": "/Looks/Moss",
+    "relationship": "/Parts.material:binding:collection:stones"
+   },
+   "preview@legacy": {
+    "material": "/Looks/Moss",
+    "relationship": "/Parts.material:binding:collection:stones"
+   },
+   "preview@strict": {
+    "material": "/Looks/Moss",
+    "relationship": "/Parts.material:binding:collection:stones"
+   }
+  },
+  "/Parts/Stones/Slate/Shard": {
+   "all@legacy": {
+    "material": "/Looks/Moss",
+    "relationship": "/Parts.material:binding:collection:stones"
+   },
+   "all@strict": {
+    "material": "/Looks/Moss",
+    "relationship": "/Parts.material:binding:collection:stones"
+   },
+   "full@legacy": {
+    "material": "/Looks/Moss",
+    "relationship": "/Parts.material:binding:collection:stones"
+   },
+   "full@strict": {
+    "material": "/Looks/Moss",
+    "relationship": "/Parts.material:binding:collection:stones"
+   },
+   "preview@legacy": {
+    "material": "/Looks/Moss",
+    "relationship": "/Parts.material:binding:collection:stones"
+   },
+   "preview@strict": {
+    "material": "/Looks/Moss",
+    "relationship": "/Parts.material:binding:collection:stones"
+   }
+  },
+  "/Sets": {
+   "all@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "all@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "full@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "full@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@strict": {
+    "material": null,
+    "relationship": null
+   }
+  },
+  "/Terrain": {
+   "all@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "all@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "full@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "full@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@strict": {
+    "material": null,
+    "relationship": null
+   }
+  }
+ },
+ "collections": {
+  "/Garden.collection:nested": {
+   "included": [
+    "/Parts/Stones/Granite/Pebble",
+    "/Parts/Stones/Slate",
+    "/Parts/Seeds/Pine",
+    "/Garden/Bed"
+   ],
+   "mode": "automatic",
+   "uses_rule_map": true
+  },
+  "/Garden.collection:path": {
+   "included": [
+    "/Parts/Stones/Granite/Boulder"
+   ],
+   "mode": "automatic",
+   "uses_rule_map": true
+  },
+  "/Garden.collection:props": {
+   "included": [
+    "/Parts/Stones/Granite",
+    "/Parts/Stones/Granite.proxyPrim",
+    "/Parts/Stones/Granite.purpose",
+    "/Parts/Stones/Granite.visibility",
+    "/Parts/Stones/Granite/Pebble",
+    "/Parts/Stones/Granite/Pebble.proxyPrim",
+    "/Parts/Stones/Granite/Pebble.purpose",
+    "/Parts/Stones/Granite/Pebble.tags",
+    "/Parts/Stones/Granite/Pebble.visibility",
+    "/Parts/Stones/Granite/Pebble.xformOpOrder",
+    "/Parts/Stones/Granite/Boulder",
+    "/Parts/Stones/Granite/Boulder.proxyPrim",
+    "/Parts/Stones/Granite/Boulder.purpose",
+    "/Parts/Stones/Granite/Boulder.visibility",
+    "/Parts/Stones/Granite/Boulder.xformOpOrder"
+   ],
+   "mode": "automatic",
+   "uses_rule_map": true
+  },
+  "/Parts.collection:heavy": {
+   "included": [
+    "/Parts/Stones/Granite",
+    "/Parts/Stones/Granite/Pebble",
+    "/Parts/Stones/Granite/Boulder"
+   ],
+   "mode": "automatic",
+   "uses_rule_map": true
+  },
+  "/Parts.collection:smooth": {
+   "included": [
+    "/Parts/Stones/Granite/Pebble",
+    "/Parts/Stones/Slate",
+    "/Parts/Seeds/Pine"
+   ],
+   "mode": "automatic",
+   "uses_rule_map": true
+  },
+  "/Sets.collection:everything": {
+   "included": [
+    "/Parts",
+    "/Parts/Stones",
+    "/Parts/Stones/Granite",
+    "/Parts/Stones/Granite/Pebble",
+    "/Parts/Stones/Granite/Boulder",
+    "/Parts/Stones/Slate",
+    "/Parts/Stones/Slate/Shard",
+    "/Sets",
+    "/Garden",
+    "/Garden/Bed",
+    "/Terrain"
+   ],
+   "mode": "automatic",
+   "uses_rule_map": true
+  },
+  "/Sets.collection:stones": {
+   "included": [
+    "/Parts/Stones",
+    "/Parts/Stones/Granite",
+    "/Parts/Stones/Granite/Pebble",
+    "/Parts/Stones/Granite/Boulder",
+    "/Parts/Stones/Slate",
+    "/Parts/Stones/Slate/Shard"
+   ],
+   "mode": "automatic",
+   "uses_rule_map": true
+  },
+  "/Terrain.collection:rocky": {
+   "included": [
+    "/Parts/Stones/Granite/Pebble",
+    "/Parts/Seeds/Acorn"
+   ],
+   "mode": "automatic",
+   "uses_rule_map": false
+  }
+ },
+ "openusd_version": "26.8"
+}

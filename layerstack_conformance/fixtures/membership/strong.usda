@@ -1,0 +1,15 @@
+#usda 1.0
+(
+    doc = "The stronger sublayer: an exclude and a deleted include."
+)
+
+over "Garden"
+{
+    rel collection:path:excludes = </Parts/Stones/Granite/Pebble>
+}
+
+over "Parts"
+{
+    delete rel collection:heavy:includes = </Parts/Seeds/Acorn>
+    append rel collection:smooth:includes = </Parts/Seeds/Pine>
+}

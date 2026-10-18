@@ -1456,6 +1456,8 @@ impl Indexer<'_, '_, '_> {
                             prim,
                             arc: kind,
                             asset: identifier,
+                            introducing_layer: arc.source_layer,
+                            introducing_spec: path_at_intro.clone(),
                         }));
                         return;
                     }
@@ -1480,10 +1482,15 @@ impl Indexer<'_, '_, '_> {
                     return;
                 }
                 if reference.is_unresolved() {
+                    // The arc contributes nothing; an asset that is not
+                    // found does not fail the stage (AOUSD Core §10.3.2.1,
+                    // §10.6; OpenUSD `PcpErrorInvalidAssetPath`).
                     self.record_error(CompositionError::UnresolvedAsset(UnresolvedAsset {
                         prim,
                         arc: kind,
                         asset: reference.asset.clone().unwrap_or_default(),
+                        introducing_layer: arc.source_layer,
+                        introducing_spec: path_at_intro.clone(),
                     }));
                     return;
                 }

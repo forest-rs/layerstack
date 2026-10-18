@@ -1323,6 +1323,8 @@ mod default_prim_tests {
                 prim,
                 arc,
                 asset: "./absent.usda".into(),
+                introducing_layer: ROOT,
+                introducing_spec: crate::SpecPath::from_prim_path(prim),
             }));
         }
         let errors = stage.composition_errors();
@@ -1679,6 +1681,8 @@ mod deferred_arc_tests {
                 prim: missing,
                 arc: ArcKind::References,
                 asset: "./missing.usda".into(),
+                introducing_layer: ROOT,
+                introducing_spec: crate::SpecPath::from_prim_path(missing),
             })]
         );
         let pending = store.path("/Pending");

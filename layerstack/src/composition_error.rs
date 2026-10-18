@@ -303,13 +303,15 @@ pub struct SublayerCycle {
 /// Importers keep such an arc as a [`Reference::unresolved`] instead of
 /// dropping it; it targets no layer stack and contributes no opinions, and
 /// the rest of the prim is composed as normal. It never falls back to the
-/// authoring layer, whatever its target.
+/// authoring layer, whatever its target. An asset that is not found and
+/// one that is found but cannot be read are both reported this way.
 ///
 /// Spec: AOUSD Core §10.3.2.1 ("If a layer stack cannot be computed for a
 /// reference's layer asset path, it is a composition error and that
-/// reference is ignored"), §10.6. OpenUSD reports it as
-/// `PcpErrorInvalidAssetPath` (`_EvalRefOrPayloadArcs` in
-/// `pxr/usd/pcp/primIndex.cpp`).
+/// reference is ignored"), §10.3.2.2 (payloads), §10.6. OpenUSD reports it
+/// as `PcpErrorInvalidAssetPath` (`_EvalRefOrPayloadArcs` in
+/// `pxr/usd/pcp/primIndex.cpp`), whose `sourceLayer` and `site` are
+/// `introducing_layer` and `introducing_spec` here.
 ///
 /// [`Reference::unresolved`]: crate::Reference::unresolved
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -320,8 +322,16 @@ pub struct UnresolvedAsset {
     pub arc: ArcKind,
     /// The asset path as authored, or as a variable expression evaluates
     /// it, normalized as list editing compares it (`./a/../b.usd` reads
-    /// `./b.usd`).
+    /// `./b.usd`). A relative path is relative to `introducing_layer`.
     pub asset: String,
+    /// The layer whose list edit adds the arc, which `asset` is anchored
+    /// to. For an arc reached through another arc it is a layer of that
+    /// arc's target, not of the stage's layer stack.
+    pub introducing_layer: LayerId,
+    /// The spec in `introducing_layer` that authors the arc, including any
+    /// enclosing variant selections (`/Rock{look=mossy}`). This remains in
+    /// its authored namespace when `prim` is a referenced copy.
+    pub introducing_spec: SpecPath,
 }
 
 /// A sublayer whose asset path could not be resolved, found when gathering

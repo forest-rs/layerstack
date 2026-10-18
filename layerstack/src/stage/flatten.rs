@@ -883,7 +883,7 @@ impl Flattener<'_, '_> {
                 .time_samples()
                 .is_some_and(|samples| !samples.is_empty())
                 || opinion.value.spline().is_some()
-                || opinion.value.default_value().is_some()
+                || opinion.value.has_default_value()
         });
         if let Some(position) = value_source {
             let source = &opinions[position];

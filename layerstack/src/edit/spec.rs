@@ -311,6 +311,13 @@ pub(crate) fn conforms(ty: &PropertyType, value: &Value) -> bool {
         }
         Value::Array(items) if ty.is_array() => items.iter().all(|v| scalar_conforms(ty, v)),
         Value::TypedArray(items) if ty.is_array() => scalar_conforms(ty, &items.element_kind()),
+        // Checked without decoding when the source knows its element kind.
+        Value::Deferred(deferred) => match deferred.element_kind() {
+            Some(kind) => ty.is_array() && scalar_conforms(ty, &kind),
+            None => deferred
+                .try_materialize()
+                .is_ok_and(|value| conforms(ty, value)),
+        },
         _ if ty.is_array() => false,
         _ => scalar_conforms(ty, value),
     }

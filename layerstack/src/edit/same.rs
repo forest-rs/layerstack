@@ -91,6 +91,18 @@ impl<K: Eq + core::hash::Hash, V: Same> Same for HashMap<K, V> {
 
 impl Same for Value {
     fn same(&self, other: &Self) -> bool {
+        if matches!(self, Self::Deferred(_)) || matches!(other, Self::Deferred(_)) {
+            // One source is one representation, decoded or not.
+            if let (Self::Deferred(a), Self::Deferred(b)) = (self, other)
+                && a.shares_source(b)
+            {
+                return true;
+            }
+            return match (self.try_materialize(), other.try_materialize()) {
+                (Ok(a), Ok(b)) => a.same(b),
+                _ => false,
+            };
+        }
         if let (Self::TypedArray(a), Self::TypedArray(b)) = (self, other) {
             return a.same(b);
         }

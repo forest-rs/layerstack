@@ -504,12 +504,8 @@ impl AttributeQuery {
 fn materialize(
     mut value: Option<Resolved<Value>>,
 ) -> Result<Option<Resolved<Value>>, crate::ArrayReadError> {
-    if let Some(Resolved {
-        value: Value::TypedArray(array),
-        ..
-    }) = &mut value
-    {
-        *array = array.try_materialize().map_err(Clone::clone)?.clone();
+    if let Some(Resolved { value, .. }) = &mut value {
+        materialize_selected(value)?;
     }
     Ok(value)
 }

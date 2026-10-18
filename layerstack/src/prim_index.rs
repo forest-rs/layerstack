@@ -132,9 +132,26 @@ impl OpinionValue {
     /// metadata [`FieldValue::Value`], or a property's authored
     /// [`PropertySpec::default`].
     ///
+    /// A [`Value::Deferred`] value is decoded, once, and the decoded value
+    /// returned ([`Value::materialized`]); one that fails to decode is
+    /// returned as it is. [`Self::has_default_value`] answers whether there
+    /// is one without decoding it.
+    ///
     /// Spec: AOUSD Core §12.3.1 (default values ignore time samples).
     #[must_use]
     pub fn default_value(&self) -> Option<&Value> {
+        self.authored_default().map(Value::materialized)
+    }
+
+    /// Whether [`Self::default_value`] returns a value, without decoding a
+    /// deferred one.
+    #[must_use]
+    pub fn has_default_value(&self) -> bool {
+        self.authored_default().is_some()
+    }
+
+    /// The default value as authored, a deferred one undecoded.
+    fn authored_default(&self) -> Option<&Value> {
         match self {
             Self::Field(FieldValue::Value(value)) => Some(value),
             Self::Field(_) => None,

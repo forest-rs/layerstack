@@ -515,7 +515,7 @@ impl Stage {
         fallback: Option<&Value>,
     ) -> ValueExplanation<'s, ResolvedValue> {
         let mut roles = Roles::new(index, opinions);
-        let reads = |opinion: &Opinion| opinion.value.default_value().is_some();
+        let reads = |opinion: &Opinion| opinion.value.has_default_value();
 
         if let Some(fold) = crate::path_expression::fold_default(opinions, fallback) {
             let seeded = roles.apply_expression_fold(&fold, reads);
@@ -706,7 +706,7 @@ impl Stage {
                 .time_samples()
                 .is_some_and(|samples| !samples.is_empty())
                 || opinion.value.spline().is_some()
-                || opinion.value.default_value().is_some()
+                || opinion.value.has_default_value()
         };
 
         if let Some(fold) = crate::path_expression::fold_at_time(opinions, time, interp, fallback) {
@@ -1221,7 +1221,7 @@ impl<'s> Roles<'s> {
     /// cuts off weaker opinions, other values are incompatible.
     fn apply_strongest_wins_dictionary(&mut self) {
         let members: Vec<usize> = (0..self.opinions.len())
-            .filter(|&i| self.opinions[i].value.default_value().is_some())
+            .filter(|&i| self.opinions[i].value.has_default_value())
             .collect();
         let ops: Vec<OpinionOp<(), (), ()>> = members
             .iter()

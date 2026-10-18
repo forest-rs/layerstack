@@ -160,7 +160,8 @@ impl<'a> State<'_, 'a> {
                     .properties()
                     .iter()
                     .find(|property| property.name == name)
-                    .and_then(|property| property.spec.default.clone()),
+                    .and_then(|property| property.spec.default.as_ref())
+                    .map(|value| value.materialized().clone()),
                 Key::Field(None) | Key::Default(None) => None,
             };
             if let Some(value) = value {

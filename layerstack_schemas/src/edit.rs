@@ -478,7 +478,7 @@ impl<'s> SchemaEdit<'s> {
                 .filter_map(|op| op.value.as_property()?.default.as_ref())
                 .next()
             {
-                return Some(value.clone());
+                return Some(value.materialized().clone());
             }
             return self.definition(path, token).and_then(|d| d.fallback);
         }

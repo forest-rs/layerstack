@@ -258,10 +258,11 @@ impl<'a> AssembleCtx<'a> {
         let mut fields = Vec::new();
 
         // Build a path-to-spec-index map grouped by prim path for child lookup.
-        // Sized up front: growing it would move every prim spec it holds.
+        // Each spec is boxed, so the map and the passes below move a
+        // pointer rather than the spec, and is moved once, into the layer.
         let prims = self.sections.specs.iter();
         let prims = prims.filter(|spec| spec.form == SpecForm::Prim).count();
-        let mut prim_specs_map: HashMap<&str, PrimSpec> = HashMap::with_capacity(prims);
+        let mut prim_specs_map: HashMap<&str, Box<PrimSpec>> = HashMap::with_capacity(prims);
         // Authored property order (`propertyChildren`) per prim path.
         let mut property_children: HashMap<&str, Vec<TokenId>> = HashMap::new();
 
@@ -288,7 +289,7 @@ impl<'a> AssembleCtx<'a> {
                 if let Some(children) = children {
                     property_children.insert(path_str, children);
                 }
-                prim_specs_map.insert(path_str, prim);
+                prim_specs_map.insert(path_str, Box::new(prim));
             }
         }
 
@@ -429,11 +430,11 @@ impl<'a> AssembleCtx<'a> {
                 plain.push((self.paths.intern(path), prim));
             }
         }
-        layer.insert_prims(plain);
+        layer.insert_prims(plain.into_iter().map(|(path, prim)| (path, *prim)));
         branched.sort_unstable();
         branched.dedup();
         for path_str in branched {
-            let mut prim = prim_specs_map.remove(path_str).expect("a key of the map");
+            let mut prim = *prim_specs_map.remove(path_str).expect("a key of the map");
             let namespace = match split_branch_path(path_str) {
                 Some((namespace, sites)) => {
                     prim.outer_variant_sites = self.branch_sites(&namespace, &sites)?;
@@ -868,7 +869,7 @@ impl<'a> AssembleCtx<'a> {
         &mut self,
         decoded: &mut [bool],
         fields: &mut Fields<'a>,
-        prim_specs: &mut HashMap<&str, PrimSpec>,
+        prim_specs: &mut HashMap<&str, Box<PrimSpec>>,
     ) -> Result<(), UsdcError> {
         // Properties directly on a variant (`/P{v=x}.b`), by variant path.
         let mut variant_properties: HashMap<&str, Vec<PropertyEntry>> = HashMap::new();
@@ -1056,7 +1057,7 @@ impl<'a> AssembleCtx<'a> {
     }
 
     /// Builds parent-child relationships by examining prim paths.
-    fn build_child_relationships(&mut self, prim_specs: &mut HashMap<&str, PrimSpec>) {
+    fn build_child_relationships(&mut self, prim_specs: &mut HashMap<&str, Box<PrimSpec>>) {
         // Each parent's child specs, parents and children in the file's
         // spec order, so names intern in the same order on every read.
         let mut parents: Vec<&str> = Vec::new();

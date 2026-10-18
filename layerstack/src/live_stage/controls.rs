@@ -405,6 +405,7 @@ impl LiveStage {
         let hierarchy = affected.clone();
         // Structural authoring also changes source provenance/child-order at
         // boundary parents. Refresh their indexes while preserving full lists.
+        let mut lists_changed = Vec::new();
         for &root in &roots {
             if let Some(parent) = store
                 .paths()
@@ -415,6 +416,10 @@ impl LiveStage {
                 && !is_beneath(store, parent, &roots)
             {
                 affected.push(parent);
+                // A child that came or went changed the parent's child list.
+                if self.stage.has_prim(root) != partial.has_prim(root) {
+                    lists_changed.push(parent);
+                }
             }
         }
         affected.extend(refreshed.iter().copied());
@@ -445,7 +450,10 @@ impl LiveStage {
         if let Some(changes) = changes {
             changes.created = new.difference(&old).copied().collect();
             changes.removed = old.difference(&new).copied().collect();
-            changes.changed_info_only = refreshed;
+            lists_changed.extend(refreshed);
+            lists_changed.sort_unstable();
+            lists_changed.dedup();
+            changes.changed_info_only = lists_changed;
             changes.resynced = roots;
         }
         affected

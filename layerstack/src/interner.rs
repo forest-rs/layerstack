@@ -24,6 +24,13 @@ use crate::interning::Interned;
 pub struct TokenId(u32);
 
 impl TokenId {
+    /// The empty token, `""`, which every [`TokenInterner`] interns first.
+    /// A value that needs a token before any is interned, such as the zero
+    /// value of the `token` value type, uses it.
+    ///
+    /// OpenUSD: a default-constructed `TfToken`, which is empty.
+    pub const EMPTY: Self = Self(crate::interning::id_of(0));
+
     /// Returns the underlying numeric identifier.
     #[must_use]
     pub const fn get(self) -> u32 {
@@ -37,7 +44,8 @@ impl TokenId {
 /// interner at once (with the `std` feature, which makes it [`Sync`]). Ids
 /// number strings in the order they are first interned; strings interned by
 /// several threads at once take ids in whichever order the threads get
-/// there, so an id's value says nothing about its string.
+/// there, so an id's value says nothing about its string. Every interner
+/// starts out holding the empty token, [`TokenId::EMPTY`].
 ///
 /// ```
 /// use layerstack::TokenInterner;
@@ -48,13 +56,27 @@ impl TokenId {
 /// assert_eq!(id_a, id_b);
 /// assert_eq!(interner.resolve(id_a), "hello");
 /// ```
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct TokenInterner {
     pub(crate) affinity: Arc<()>,
     strings: Interned<Box<str>>,
     /// Whether some interned string is a variable expression, so a variant
     /// selection may be one ([`crate::variable_expression::is_expression`]).
     expressions: AtomicBool,
+}
+
+impl Default for TokenInterner {
+    /// An interner holding the empty token ([`TokenId::EMPTY`]).
+    fn default() -> Self {
+        let interner = Self {
+            affinity: Arc::default(),
+            strings: Interned::default(),
+            expressions: AtomicBool::new(false),
+        };
+        let empty = interner.intern("");
+        debug_assert_eq!(empty, TokenId::EMPTY, "the empty token is interned first");
+        interner
+    }
 }
 
 #[cfg(test)]
@@ -102,5 +124,19 @@ impl TokenInterner {
     /// selection token may then be.
     pub(crate) fn has_expressions(&self) -> bool {
         self.expressions.load(Ordering::Acquire)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_interner_starts_with_the_empty_token() {
+        let tokens = TokenInterner::default();
+        assert_eq!(tokens.lookup(""), Some(TokenId::EMPTY));
+        assert_eq!(tokens.intern(""), TokenId::EMPTY);
+        assert_eq!(tokens.resolve(TokenId::EMPTY), "");
+        assert_ne!(tokens.intern("rock"), TokenId::EMPTY);
     }
 }

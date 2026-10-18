@@ -47,7 +47,7 @@ const SHARD_SHIFT: u32 = 40;
 const REVERSED_RUN: u32 = 1 << crate::sync::FIRST_CHUNK_BITS;
 
 /// The id of the `n`th value interned.
-fn id_of(n: u32) -> u32 {
+pub(crate) const fn id_of(n: u32) -> u32 {
     #[cfg(layerstack_reverse_ids)]
     let id = n ^ (REVERSED_RUN - 1);
     #[cfg(not(layerstack_reverse_ids))]

@@ -354,8 +354,13 @@ pub(crate) enum DecodedField<'a> {
     MathArray(MathArray<'a>),
     FloatArray(FloatArray),
     /// A `token[]` value as token-table indices ([`decode_text_indices`]),
-    /// which assembly maps to token ids without copying their text.
+    /// or a token vector's ([`decode_token_vector_indices`]), which assembly
+    /// maps to token ids without copying their text.
     TokenArray(Vec<u32>),
+    /// A path list op as path table indices
+    /// ([`decode_path_list_op_indices`]), which assembly maps to paths
+    /// through the path tree without copying their text.
+    PathListOp(ListOpParts<u32>),
     /// A value left encoded, for a retained read to decode on demand.
     #[cfg(feature = "std")]
     Retained(RawValueRep),
@@ -365,7 +370,10 @@ impl DecodedField<'_> {
     pub(crate) fn value(&self) -> Option<&CrateValue> {
         match self {
             Self::Value(value) => Some(value),
-            Self::MathArray(_) | Self::FloatArray(_) | Self::TokenArray(_) => None,
+            Self::MathArray(_)
+            | Self::FloatArray(_)
+            | Self::TokenArray(_)
+            | Self::PathListOp(_) => None,
             #[cfg(feature = "std")]
             Self::Retained(_) => None,
         }
@@ -622,8 +630,8 @@ fn decode_nested(
             DecodedField::MathArray(array) => {
                 CrateValue::TypedArray(crate::numeric_array::math_array(&array))
             }
-            DecodedField::TokenArray(_) => {
-                unreachable!("token indices are decoded only for top-level fields")
+            DecodedField::TokenArray(_) | DecodedField::PathListOp(_) => {
+                unreachable!("indices are decoded only for top-level fields")
             }
             #[cfg(feature = "std")]
             DecodedField::Retained(_) => unreachable!("only top-level fields are retained"),
@@ -1639,18 +1647,51 @@ fn decode_list_op(
     budget: &mut DecodeBudget,
 ) -> Result<CrateValue, UsdcError> {
     let vtype = rep.value_type()?;
-    let off = payload_offset_usize(rep, data)?;
+    let parts = decode_list_op_parts(rep, data, budget, |data, pos, budget| {
+        read_list_op_items(vtype, data, pos, sections, budget)
+    })?;
+    Ok(CrateValue::ListOp(CrateListOp {
+        op_type: vtype,
+        explicit_items: parts.explicit,
+        prepended_items: parts.prepended,
+        appended_items: parts.appended,
+        deleted_items: parts.deleted,
+        added_items: parts.added,
+        ordered_items: parts.ordered,
+    }))
+}
 
+/// The components of a list op, whatever its items are read as.
+#[derive(Clone, Debug)]
+pub(crate) struct ListOpParts<T> {
+    pub(crate) explicit: Option<Vec<T>>,
+    pub(crate) prepended: Vec<T>,
+    pub(crate) appended: Vec<T>,
+    pub(crate) deleted: Vec<T>,
+    pub(crate) added: Vec<T>,
+    pub(crate) ordered: Vec<T>,
+}
+
+/// Reads a list op's header and the components it flags, each with
+/// `read_items` from its position, which returns the items and the bytes
+/// they took (`Read<SdfListOp>`, `pxr/usd/sdf/crateFile.cpp`).
+fn decode_list_op_parts<T>(
+    rep: &RawValueRep,
+    data: &[u8],
+    budget: &mut DecodeBudget,
+    mut read_items: impl FnMut(&[u8], usize, &mut DecodeBudget) -> Result<(Vec<T>, usize), UsdcError>,
+) -> Result<ListOpParts<T>, UsdcError> {
+    let off = payload_offset_usize(rep, data)?;
+    let mut parts = ListOpParts {
+        explicit: None,
+        prepended: vec![],
+        appended: vec![],
+        deleted: vec![],
+        added: vec![],
+        ordered: vec![],
+    };
     if off == 0 {
-        return Ok(CrateValue::ListOp(CrateListOp {
-            op_type: vtype,
-            explicit_items: None,
-            prepended_items: vec![],
-            appended_items: vec![],
-            deleted_items: vec![],
-            added_items: vec![],
-            ordered_items: vec![],
-        }));
+        return Ok(parts);
     }
 
     // First byte: header flags.
@@ -1666,59 +1707,98 @@ fn decode_list_op(
     let prepend_flag = header & (1 << 5) != 0;
     let append_flag = header & (1 << 6) != 0;
 
-    let mut explicit_items = None;
-    let mut added_items = vec![];
-    let mut prepended_items = vec![];
-    let mut appended_items = vec![];
-    let mut deleted_items = vec![];
-    let mut ordered_items = vec![];
-
     if add_explicit {
-        let (items, consumed) = read_list_op_items(vtype, data, pos, sections, budget)?;
-        explicit_items = Some(items);
+        let (items, consumed) = read_items(data, pos, budget)?;
+        parts.explicit = Some(items);
         pos += consumed;
     } else if make_explicit {
-        explicit_items = Some(vec![]);
+        parts.explicit = Some(vec![]);
     }
 
     if add_items_flag {
-        let (items, consumed) = read_list_op_items(vtype, data, pos, sections, budget)?;
-        added_items = items;
+        let (items, consumed) = read_items(data, pos, budget)?;
+        parts.added = items;
         pos += consumed;
     }
 
     if prepend_flag {
-        let (items, consumed) = read_list_op_items(vtype, data, pos, sections, budget)?;
-        prepended_items = items;
+        let (items, consumed) = read_items(data, pos, budget)?;
+        parts.prepended = items;
         pos += consumed;
     }
 
     if append_flag {
-        let (items, consumed) = read_list_op_items(vtype, data, pos, sections, budget)?;
-        appended_items = items;
+        let (items, consumed) = read_items(data, pos, budget)?;
+        parts.appended = items;
         pos += consumed;
     }
 
     if delete_flag {
-        let (items, consumed) = read_list_op_items(vtype, data, pos, sections, budget)?;
-        deleted_items = items;
+        let (items, consumed) = read_items(data, pos, budget)?;
+        parts.deleted = items;
         pos += consumed;
     }
 
     if reorder_flag {
-        let (items, _consumed) = read_list_op_items(vtype, data, pos, sections, budget)?;
-        ordered_items = items;
+        let (items, _consumed) = read_items(data, pos, budget)?;
+        parts.ordered = items;
     }
 
-    Ok(CrateValue::ListOp(CrateListOp {
-        op_type: vtype,
-        explicit_items,
-        prepended_items,
-        appended_items,
-        deleted_items,
-        added_items,
-        ordered_items,
-    }))
+    Ok(parts)
+}
+
+/// The path table indices of a `SdfPathListOp` value's items, charged as
+/// [`decode_value_within`] charges decoding the value with each item's
+/// text; an index outside the table, which decoding reads as the empty
+/// path, is `u32::MAX`.
+pub(crate) fn decode_path_list_op_indices(
+    rep: &RawValueRep,
+    data: &[u8],
+    sections: &CrateSections,
+    budget: &mut DecodeBudget,
+) -> Result<ListOpParts<u32>, UsdcError> {
+    within_value_budget(budget, |budget| {
+        if rep.value_type()? != ValueType::PathListOp || rep.is_array_edit() {
+            return Err(UsdcError::Inconsistent {
+                message: "path indices of a value that is not a path list op",
+            });
+        }
+        decode_list_op_parts(rep, data, budget, |data, pos, budget| {
+            let (num, mut cursor) = list_op_item_count(data, pos, budget)?;
+            let mut items = Vec::with_capacity(num);
+            for _ in 0..num {
+                let idx = read_u32_le(data, &mut cursor)?;
+                let text = sections.paths.get(idx as usize);
+                budget.charge_text(text.map_or(0, String::len))?;
+                items.push(if text.is_some() { idx } else { u32::MAX });
+            }
+            Ok((items, cursor - pos))
+        })
+    })
+}
+
+/// The item count of a list op component at `pos`, checked against the
+/// data left and charged, and where its first item starts.
+fn list_op_item_count(
+    data: &[u8],
+    pos: usize,
+    budget: &mut DecodeBudget,
+) -> Result<(usize, usize), UsdcError> {
+    let num = read_u64_at(data, pos)?;
+    let cursor = pos + 8;
+
+    // Every item occupies at least four bytes, so a count the remaining data
+    // cannot hold is malformed. Checking first bounds the allocation.
+    if num > (data.len().saturating_sub(cursor) / 4) as u64 {
+        return Err(UsdcError::UnexpectedEof {
+            section: "list op items",
+            offset: cursor as u64,
+            expected: num.saturating_mul(4),
+        });
+    }
+    let num = num as usize;
+    budget.charge_elements(num)?;
+    Ok((num, cursor))
 }
 
 /// Reads one list op component: a `u64` item count, then the items one
@@ -1738,20 +1818,7 @@ fn read_list_op_items(
     sections: &CrateSections,
     budget: &mut DecodeBudget,
 ) -> Result<(Vec<CrateValue>, usize), UsdcError> {
-    let num = read_u64_at(data, pos)?;
-    let mut cursor = pos + 8;
-
-    // Every item occupies at least four bytes, so a count the remaining data
-    // cannot hold is malformed. Checking first bounds the allocation.
-    if num > (data.len().saturating_sub(cursor) / 4) as u64 {
-        return Err(UsdcError::UnexpectedEof {
-            section: "list op items",
-            offset: cursor as u64,
-            expected: num.saturating_mul(4),
-        });
-    }
-    let num = num as usize;
-    budget.charge_elements(num)?;
+    let (num, mut cursor) = list_op_item_count(data, pos, budget)?;
 
     let mut items = Vec::with_capacity(num);
     for _ in 0..num {
@@ -2004,6 +2071,33 @@ fn decode_path_vector(
         .map(|mut pos| lookup_path(sections, read_u32_le(data, &mut pos)? as usize, budget))
         .collect::<Result<_, UsdcError>>()?;
     Ok(CrateValue::PathVector(paths))
+}
+
+/// The token-table indices of a token vector value, charged as
+/// [`decode_value_within`] charges decoding it with each element's text; an
+/// index outside the table, which decoding reads as the empty token, is
+/// `u32::MAX`.
+pub(crate) fn decode_token_vector_indices(
+    rep: &RawValueRep,
+    data: &[u8],
+    sections: &CrateSections,
+    budget: &mut DecodeBudget,
+) -> Result<Vec<u32>, UsdcError> {
+    within_value_budget(budget, |budget| {
+        if rep.value_type()? != ValueType::TokenVector || rep.is_array_edit() {
+            return Err(UsdcError::Inconsistent {
+                message: "token indices of a value that is not a token vector",
+            });
+        }
+        read_index_vector(rep, data, 4, budget)?
+            .map(|mut pos| {
+                let idx = read_u32_le(data, &mut pos)?;
+                let text = sections.tokens.get(idx as usize);
+                budget.charge_text(text.map_or(0, String::len))?;
+                Ok(if text.is_some() { idx } else { u32::MAX })
+            })
+            .collect()
+    })
 }
 
 fn decode_token_vector(

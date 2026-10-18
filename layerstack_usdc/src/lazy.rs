@@ -350,6 +350,7 @@ impl DeferredArraySource for LazyArray {
                     DecodedField::Value(crate::value_rep::CrateValue::TypedArray(array)) => array,
                     DecodedField::Value(_)
                     | DecodedField::TokenArray(_)
+                    | DecodedField::PathListOp(_)
                     | DecodedField::Retained(_) => {
                         return Err(ArrayReadError::InvalidData(Arc::from(
                             "numeric array decoder returned a scalar",

@@ -41,7 +41,8 @@ use crate::numeric_array::*;
 use crate::section::{CrateSections, PathNode};
 use crate::value_rep::{
     CrateArrayEdit, CrateArrayEditOp, CrateListOp, CrateValue, DecodeBudget, DecodedField,
-    FloatArray, RawValueRep, decode_field_within, decode_text_indices,
+    FloatArray, ListOpParts, RawValueRep, decode_field_within, decode_path_list_op_indices,
+    decode_text_indices, decode_token_vector_indices,
 };
 use crate::value_type::{SpecForm, ValueType};
 
@@ -101,6 +102,7 @@ pub fn assemble(
         target_paths: HashMap::new(),
         prim_paths: Vec::new(),
         owners: Vec::new(),
+        targets: Vec::new(),
         defer_variant_arcs: resolver.defers_variant_arcs(),
         in_branch: false,
         in_payloads: false,
@@ -142,6 +144,9 @@ struct AssembleCtx<'a> {
     /// property path, is one [`PropertyPath::split`] and
     /// [`Path::parse_absolute`] accept: `0` unknown, `1` yes, `2` no.
     owners: Vec<u8>,
+    /// The target path each entry of the path table names, found when
+    /// first asked ([`Self::target_path_at`]).
+    targets: Vec<TargetAt>,
     resolver: &'a mut dyn AssetResolver,
     /// Whether arcs inside variant branches are left for composition to
     /// resolve ([`AssetResolver::defers_variant_arcs`]).
@@ -166,6 +171,13 @@ enum PropertyOwner {
     Invalid,
     /// On the prim spec at path table entry `owner`, named `name`.
     Prim { owner: u32, name: TokenId },
+}
+
+/// What one entry of the path table names as a target path.
+#[derive(Clone, Copy)]
+enum TargetAt {
+    Unknown,
+    Found(Option<TargetPath>),
 }
 
 /// What one entry of the path table names as a prim path outside variant
@@ -677,6 +689,24 @@ impl<'a> AssembleCtx<'a> {
                 let _ = retain_default;
                 let value = if is_token_array(&rep) {
                     DecodedField::TokenArray(decode_text_indices(
+                        &rep,
+                        self.data,
+                        self.sections,
+                        self.budget,
+                    )?)
+                } else if is_token_vector(&rep) {
+                    DecodedField::TokenArray(decode_token_vector_indices(
+                        &rep,
+                        self.data,
+                        self.sections,
+                        self.budget,
+                    )?)
+                } else if matches!(field_name, "targetPaths" | "connectionPaths")
+                    && is_path_list_op(&rep)
+                {
+                    // Targets are named through the path tree
+                    // (`Self::target_path_at`), not their text.
+                    DecodedField::PathListOp(decode_path_list_op_indices(
                         &rep,
                         self.data,
                         self.sections,
@@ -1258,6 +1288,8 @@ impl<'a> AssembleCtx<'a> {
                 }
             }),
             DecodedField::MathArray(array) => convert_math_array(array),
+            // List ops are not plain values.
+            DecodedField::PathListOp(_) => Value::Null,
             // What `Value::array` packs tokens into, without its copy.
             DecodedField::TokenArray(indices) => Value::Array(
                 indices
@@ -1465,6 +1497,9 @@ impl<'a> AssembleCtx<'a> {
         field: &str,
         field_value: &DecodedField<'_>,
     ) -> Result<Option<FieldValue>, UsdcError> {
+        if let DecodedField::PathListOp(parts) = field_value {
+            return Ok(Some(FieldValue::PathListOp(self.target_list_op_at(parts))));
+        }
         let Some(cv) = field_value.value() else {
             return Ok(Some(FieldValue::Value(
                 self.convert_field_value(field_value),
@@ -1812,6 +1847,9 @@ impl<'a> AssembleCtx<'a> {
         &mut self,
         field: &DecodedField<'_>,
     ) -> Result<ListOp<TargetPath>, UsdcError> {
+        if let DecodedField::PathListOp(parts) = field {
+            return Ok(self.target_list_op_at(parts));
+        }
         let Some(value) = field.value() else {
             return Ok(ListOp::default());
         };
@@ -1855,6 +1893,69 @@ impl<'a> AssembleCtx<'a> {
         result.reorder = convert_items(&listop.ordered_items);
 
         Ok(result)
+    }
+
+    /// [`Self::convert_target_listop`] for a list op of path table indices.
+    fn target_list_op_at(&mut self, parts: &ListOpParts<u32>) -> ListOp<TargetPath> {
+        let mut convert = |items: &[u32]| -> Vec<TargetPath> {
+            items
+                .iter()
+                .filter_map(|&index| self.target_path_at(index))
+                .collect()
+        };
+        let mut result = ListOp::default();
+        if let Some(items) = &parts.explicit {
+            result.explicit = Some(convert(items));
+        }
+        result.prepend = convert(&parts.prepended);
+        result.append = convert(&parts.appended);
+        result.delete = convert(&parts.deleted);
+        result.add = convert(&parts.added);
+        result.reorder = convert(&parts.ordered);
+        result
+    }
+
+    /// The target path path table entry `index` names, as its text parses
+    /// ([`TargetPath::parse`]), found once per entry from the path tree:
+    /// a prim path's id ([`Self::prim_path_at`]), or a property's prim and
+    /// name ([`Self::property_owner`]). An entry the tree cannot answer for
+    /// certain (a text holding `{`, or a `.` in a prim name) is parsed.
+    fn target_path_at(&mut self, index: u32) -> Option<TargetPath> {
+        let sections = self.sections;
+        let at = index as usize;
+        let Some(text) = sections.paths.get(at) else {
+            return self.target_path("");
+        };
+        if sections.path_nodes.len() != sections.paths.len() {
+            return self.target_path(text);
+        }
+        if self.targets.is_empty() {
+            self.targets = alloc::vec![TargetAt::Unknown; sections.paths.len()];
+        }
+        if let TargetAt::Found(found) = self.targets[at] {
+            return found;
+        }
+        let found = match sections.path_nodes[at] {
+            PathNode::Child { property: true, .. } => match self.property_owner(index) {
+                Some(PropertyOwner::Prim { owner, name }) => {
+                    // A prim inside a variant branch is no target's prim.
+                    if sections.paths[owner as usize].contains('{') {
+                        None
+                    } else {
+                        self.prim_path_at(owner)
+                            .map(|prim| TargetPath::Property(PropertyPath::new(prim, name)))
+                    }
+                }
+                Some(PropertyOwner::Variant | PropertyOwner::Invalid) => None,
+                None => self.target_path(text),
+            },
+            PathNode::Root | PathNode::Child { .. } if !text.contains(['.', '{']) => {
+                self.prim_path_at(index).map(TargetPath::Prim)
+            }
+            PathNode::Root | PathNode::Child { .. } | PathNode::Unused => self.target_path(text),
+        };
+        self.targets[at] = TargetAt::Found(found);
+        found
     }
 
     /// Parses a target path's text ([`TargetPath::parse`]) once per read.
@@ -2391,6 +2492,18 @@ fn is_token_array(rep: &RawValueRep) -> bool {
     rep.is_array() && !rep.is_array_edit() && rep.value_type().ok() == Some(ValueType::Token)
 }
 
+/// Whether `rep` is a token vector, which decodes as one whatever its
+/// array flag says.
+fn is_token_vector(rep: &RawValueRep) -> bool {
+    !rep.is_array_edit() && rep.value_type().ok() == Some(ValueType::TokenVector)
+}
+
+/// Whether `rep` is a path list op, which decodes as one whatever its array
+/// flag says.
+fn is_path_list_op(rep: &RawValueRep) -> bool {
+    !rep.is_array_edit() && rep.value_type().ok() == Some(ValueType::PathListOp)
+}
+
 fn crate_value_is_array(value: &CrateValue) -> bool {
     match value {
         CrateValue::Array(_) | CrateValue::TypedArray(_) | CrateValue::ArrayEdit(_) => true,
@@ -2537,7 +2650,9 @@ mod tests {
 
     /// Naming paths from the path tree assembles the layer naming them from
     /// their text does: prims in and out of variant branches, properties of
-    /// each, a variant's own property, and relationship targets.
+    /// each, a variant's own property, relationship targets and
+    /// connections in every list op part, and children listed by name; and
+    /// both assemble the layer that was written.
     #[test]
     fn the_path_tree_names_what_the_text_does() {
         let source = r#"#usda 1.0
@@ -2548,6 +2663,9 @@ def "World" {
     ) {
         int count = 1
         rel target = </World/B.size>
+        prepend rel others = [</World/A/Child>, </Other>]
+        delete rel others = </World/B>
+        double linked.connect = </World/B.size>
         variantSet "look" = {
             "x" {
                 double shade = 0.5

@@ -18,6 +18,7 @@ use std::path::PathBuf;
 pub mod authored;
 pub mod export_fixtures;
 pub mod instancer_fixtures;
+pub mod library_scene;
 pub mod listop_vectors;
 pub mod matrices;
 pub mod pcp;

@@ -247,30 +247,43 @@ The `usdc_open` target includes `usdc_integer_import`: signed and unsigned
 measurement, and complete layer import is timed separately from destruction.
 
 The `library_membership` benchmark opens the generated parts library
-(`layerstack_conformance::library_scene`, full shape) and asks which collections
-include each prim. The scene is written once into Cargo's benchmark temporary
-directory and removed afterwards; the schema registry is built outside the
-open timer. `library_forward_query` asks each of the 40 compiled
-`MembershipQuery`s, the cost without the index.
+(`layerstack_conformance::library_scene`, full shape, with 150 of the 15,000
+slot relationships and two paths of each rule-map collection naming nothing)
+and asks which collections include each prim, and which targets dangle. The
+scene is written once into Cargo's benchmark temporary directory and removed
+afterwards; the schema registry is built outside the open timer.
+`library_forward_query` asks each of the 40 compiled `MembershipQuery`s, the
+cost without the index. `library_dangling` runs `DanglingReport::compute` with
+eight examples per name and collection, and `Stage::dangling_targets` alone,
+and checks that it finds exactly the injected paths.
 
 ```sh
 cargo bench -p wind_tunnel --bench library_membership -- --warm-up-time 2 --measurement-time 5
 ```
 
 Measured on macOS 27.0.1 arm64 with Rust 1.99.0, release profile, 2026-10-18
-(10,133 prims, 40 collections, 801,606 `token[]` cells; 10.1 MB USDA, 3.6 MB USDC):
+(10,133 prims, 40 collections, 801,606 `token[]` cells; 10.1 MB USDA, 3.7 MB USDC):
 
 | Phase | USDA | USDC |
 |---|---:|---:|
-| Open and compose | 125 ms | 109 ms |
-| `MembershipIndex::build` | 611 µs | 608 µs |
-| Reverse query, per prim (all 10,133) | 235 ns | 233 ns |
-| Reverse query, per leaf (4,000) | 272 ns | 275 ns |
-| Forward query (40 collections), per prim | 1.00 µs | 1.04 µs |
-| `apply_changes`, one appended include | 6.4 µs | 6.4 µs |
+| Open and compose | 123 ms | 111 ms |
+| `DanglingReport::compute` | 2.87 ms | 2.95 ms |
+| `Stage::dangling_targets` alone | 2.47 ms | 2.51 ms |
+| `MembershipIndex::build` | 613 µs | 616 µs |
+| Reverse query, per prim (all 10,133) | 229 ns | 232 ns |
+| Reverse query, per leaf (4,000) | 274 ns | 279 ns |
+| Forward query (40 collections), per prim | 957 ns | 936 ns |
+| `apply_changes`, one appended include | 6.6 µs | 6.6 µs |
+
+The dangling report checks 19,638 composed targets on 15,180 properties of
+10,134 prims (the pseudo-root included) and costs about 2.5% of opening the
+library, so it can run after every import; most of it is the walk of the
+target lists, about 250 ns a prim, and the collection part adds 0.4 ms. It
+finds 151 paths with no prim (75 slot targets and the 76 collection paths,
+which it also counts by relationship name) and 75 with no property.
 
 The two expression-decided collections are matched on every query and take
-about 170 ns of the 235 ns; the 38 rule-map collections alone cost about 61 ns
+about 170 ns of the 229 ns; the 38 rule-map collections alone cost about 61 ns
 per prim. USDC retains no arrays here: retained loading covers numeric arrays,
 and `token[]` values decode during import. Without the `tags` arrays, both
 forms open in about 55 ms.

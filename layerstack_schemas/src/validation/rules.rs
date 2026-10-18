@@ -289,8 +289,12 @@ fn push(
 }
 fn type_name(t: Option<&PropertyType>) -> Option<AttributeTypeName> {
     t.map(|t| AttributeTypeName {
-        name: t.type_name.clone(),
-        is_array: t.is_array,
+        name: t
+            .type_name()
+            .strip_suffix("[]")
+            .unwrap_or(t.type_name())
+            .into(),
+        is_array: t.is_array(),
     })
 }
 fn properties(scene: &Scene<'_>, prim: PathId) -> Vec<TokenId> {

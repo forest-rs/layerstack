@@ -79,12 +79,8 @@ fn stronger_order_rejects_without_collecting_any_part_of_the_replacement() {
 
 #[test]
 fn sample_only_matrix_masks_numeric_replacement_but_not_default_replacement() {
-    let sampled = PropertySpec::typed_attribute(PropertyType::new(
-        "matrix4d",
-        false,
-        Value::Matrix4d(Box::new([0.; 16])),
-    ))
-    .with_time_samples(vec![(0., Value::Matrix4d(Box::new([0.; 16])))]);
+    let sampled = PropertySpec::typed_attribute(PropertyType::parse("matrix4d").unwrap())
+        .with_time_samples(vec![(0., Value::Matrix4d(Box::new([0.; 16])))]);
     let (mut store, mut live, path) = fixture(None, Some(sampled));
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(2)));
     let xform = XformableEdit::new(&edit, path).unwrap();

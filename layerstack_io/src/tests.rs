@@ -1472,12 +1472,8 @@ fn save_tracks_successful_generations_and_excludes_sessions() {
         prim,
         PrimSpec::over().with_property(
             property,
-            PropertySpec::typed_attribute(layerstack::PropertyType::new(
-                "int",
-                false,
-                Value::Int(0),
-            ))
-            .with_default(Value::Int(8)),
+            PropertySpec::typed_attribute(layerstack::PropertyType::parse("int").unwrap())
+                .with_default(Value::Int(8)),
         ),
     );
     let pseudo = store.path("/");

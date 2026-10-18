@@ -295,29 +295,22 @@ fn native_fixture() -> (
     );
     let mesh = triangle();
     let mut spec = PrimSpec::def().with_type_name(mesh_type);
-    for (name, value, ty, scalar) in [
-        (
-            "points",
-            TypedArray::Vec3f(mesh.points),
-            "point3f",
-            Value::Vec3f([0.; 3]),
-        ),
+    for (name, value, ty) in [
+        ("points", TypedArray::Vec3f(mesh.points), "point3f"),
         (
             "faceVertexCounts",
             TypedArray::Int(mesh.face_vertex_counts),
             "int",
-            Value::Int(0),
         ),
         (
             "faceVertexIndices",
             TypedArray::Int(mesh.face_vertex_indices),
             "int",
-            Value::Int(0),
         ),
     ] {
         spec.set_property(
             store.tokens.intern(name),
-            PropertySpec::typed_attribute(PropertyType::new(ty, true, scalar))
+            PropertySpec::typed_attribute(PropertyType::parse(&alloc::format!("{ty}[]")).unwrap())
                 .with_default(Value::TypedArray(value)),
         );
     }
@@ -330,12 +323,8 @@ fn native_fixture() -> (
             .with_instanceable(true)
             .with_property(
                 tint,
-                PropertySpec::typed_attribute(PropertyType::new(
-                    "color3f",
-                    false,
-                    Value::Vec3f([0.; 3]),
-                ))
-                .with_default(Value::Vec3f(color)),
+                PropertySpec::typed_attribute(PropertyType::parse("color3f").unwrap())
+                    .with_default(Value::Vec3f(color)),
             );
         layer.insert_prim(path, spec);
     }
@@ -537,7 +526,7 @@ fn changed_point_count_revalidates_primvars_atomically_before_retry() {
         .create_primvar(
             &mut edit,
             "weight",
-            layerstack::PropertyType::new("float", true, Value::Float(0.)),
+            layerstack::PropertyType::parse("float[]").unwrap(),
         )
         .unwrap();
     primvar
@@ -831,7 +820,7 @@ fn indexed_primvars_keep_source_mapping_and_reject_bad_indices_atomically() {
     let values = Arc::new(vec![[0., 0.], [1., 0.], [0., 1.]]);
     mesh.primvars.push(crate::MeshPrimvar {
         name: "primvars:st".into(),
-        type_name: layerstack::PropertyType::new("texCoord2f", true, Value::Vec2f([0.; 2])),
+        type_name: layerstack::PropertyType::parse("texCoord2f[]").unwrap(),
         value: Value::TypedArray(TypedArray::Vec2f(values.clone())),
         interpolation: "faceVarying".into(),
         element_size: 1,
@@ -922,11 +911,9 @@ fn face_subsets_refresh_material_components_and_invalid_family_is_atomic() {
     let mut transaction = Transaction::new();
     transaction.create_property(
         target.property(family),
-        layerstack::PropertySpec::typed_attribute(layerstack::PropertyType::new(
-            "token",
-            false,
-            Value::Token(non_overlapping),
-        ))
+        layerstack::PropertySpec::typed_attribute(
+            layerstack::PropertyType::parse("token").unwrap(),
+        )
         .with_default(Value::Token(non_overlapping)),
     );
     transaction.set_targets(
@@ -1080,7 +1067,7 @@ fn external_primvar_id_forwarding_refreshes_when_empty_or_missing_targets_change
         .create_primvar(
             &mut edit,
             "id",
-            layerstack::PropertyType::new("string", false, Value::string("")),
+            layerstack::PropertyType::parse("string").unwrap(),
         )
         .unwrap();
     id.set(&mut edit, Value::string("local"))

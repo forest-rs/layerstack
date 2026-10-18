@@ -152,12 +152,8 @@ fn recursive_inventory_visits_unselected_variants_and_reports_partial_resolution
     variant.properties.push(PropertyEntry {
         name: file,
         spec: Arc::new(
-            PropertySpec::typed_attribute(PropertyType::new(
-                "asset",
-                false,
-                Value::Asset("".into()),
-            ))
-            .with_default(Value::Asset("missing.png".into())),
+            PropertySpec::typed_attribute(PropertyType::parse("asset").unwrap())
+                .with_default(Value::Asset("missing.png".into())),
         ),
     });
     let mut prim = PrimSpec::def();

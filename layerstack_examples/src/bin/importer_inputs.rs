@@ -56,7 +56,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     mesh.create_indexed_primvar(
         &mut edit,
         "st",
-        PropertyType::new("texCoord2f", true, Value::Vec2f([0.; 2])),
+        PropertyType::parse("texCoord2f[]").expect("a registered value type"),
         Value::from(vec![[0_f32, 0.], [1., 0.], [1., 1.], [0., 1.]]),
         &[0, 1, 2, 0, 2, 3],
         "faceVarying",
@@ -83,11 +83,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
     let family = store.tokens.intern("subsetFamily:materialBind:familyType");
-    let mut spec = PropertySpec::typed_attribute(PropertyType::new(
-        "token",
-        false,
-        Value::Token(store.tokens.intern("")),
-    ));
+    let mut spec = PropertySpec::typed_attribute(
+        PropertyType::parse("token").expect("a registered value type"),
+    );
     spec.variability = Variability::Uniform;
     spec.default = Some(Value::Token(store.tokens.intern("nonOverlapping")));
     transaction.create_property(target.property(PropertyPath::new(mesh_path, family)), spec);

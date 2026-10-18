@@ -305,12 +305,8 @@ fn material_publication_uses_owned_opinions_and_rejects_partial_updates() {
     conflict.remove_spec(EditTarget::for_layer(support::ASSET).property(file));
     conflict.create_property(
         EditTarget::for_layer(support::ASSET).property(file),
-        layerstack::PropertySpec::typed_attribute(layerstack::PropertyType::new(
-            "int",
-            false,
-            Value::Int(0),
-        ))
-        .with_default(Value::Int(17)),
+        layerstack::PropertySpec::typed_attribute(layerstack::PropertyType::parse("int").unwrap())
+            .with_default(Value::Int(17)),
     );
     let conflicting = generated
         .live

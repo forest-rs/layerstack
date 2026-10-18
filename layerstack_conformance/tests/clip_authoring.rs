@@ -43,20 +43,16 @@ fn fixture() -> (InMemoryStore, Layer, Layer, ClipBundleOptions) {
                 .with_type_name(store.tokens.intern("Xform"))
                 .with_property(
                     animated,
-                    PropertySpec::typed_attribute(PropertyType::new(
-                        "float",
-                        false,
-                        Value::Float(0.),
-                    ))
-                    .with_default(Value::Float(default))
-                    .with_time_samples(vec![
-                        (begin, Value::Float(initial)),
-                        (finish, Value::Float(final_value)),
-                    ]),
+                    PropertySpec::typed_attribute(PropertyType::parse("float").unwrap())
+                        .with_default(Value::Float(default))
+                        .with_time_samples(vec![
+                            (begin, Value::Float(initial)),
+                            (finish, Value::Float(final_value)),
+                        ]),
                 )
                 .with_property(
                     static_name,
-                    PropertySpec::typed_attribute(PropertyType::new("int", false, Value::Int(0)))
+                    PropertySpec::typed_attribute(PropertyType::parse("int").unwrap())
                         .with_default(Value::Int(static_value)),
                 ),
         );

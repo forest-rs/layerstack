@@ -1313,7 +1313,7 @@ fn composed_samples(
             let ty = sample.array_edit_type().or(property_type);
             *sample = Value::array_with_element(
                 crate::array_edit::apply_to_array(edit, &[], ty),
-                ty.map(|ty| &ty.default_scalar),
+                ty.map(|ty| ty.default_scalar()),
             );
             baked = true;
         }

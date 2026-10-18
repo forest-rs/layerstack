@@ -232,19 +232,12 @@ impl FileFormat for TestDynamic {
                 ];
                 for (name, type_name, value) in inputs {
                     spec = if self.attributes {
-                        let fallback = if type_name == "int" {
-                            Value::Int(0)
-                        } else {
-                            Value::Double(0.0)
-                        };
                         spec.with_property(
                             token(name),
-                            PropertySpec::typed_attribute(PropertyType::new(
-                                type_name, false, fallback,
-                            ))
-                            .custom()
-                            .uniform()
-                            .with_default(value),
+                            PropertySpec::typed_attribute(PropertyType::parse(type_name).unwrap())
+                                .custom()
+                                .uniform()
+                                .with_default(value),
                         )
                     } else {
                         spec.with_field(token(name), value)
@@ -253,25 +246,19 @@ impl FileFormat for TestDynamic {
                 spec = spec
                     .with_property(
                         token("xformOp:translate"),
-                        PropertySpec::typed_attribute(PropertyType::new(
-                            "double3",
-                            false,
-                            Value::Vec3d([0.0; 3]),
-                        ))
-                        .with_default(Value::Vec3d([
-                            radius * angle.cos(),
-                            radius * angle.sin(),
-                            height,
-                        ])),
+                        PropertySpec::typed_attribute(PropertyType::parse("double3").unwrap())
+                            .with_default(Value::Vec3d([
+                                radius * angle.cos(),
+                                radius * angle.sin(),
+                                height,
+                            ])),
                     )
                     .with_property(
                         token("xformOpOrder"),
-                        PropertySpec::typed_attribute(PropertyType::new(
-                            "token",
-                            true,
-                            Value::Token(token("")),
-                        ))
-                        .with_default(Value::Array(vec![Value::Token(token("xformOp:translate"))])),
+                        PropertySpec::typed_attribute(PropertyType::parse("token[]").unwrap())
+                            .with_default(Value::Array(vec![Value::Token(token(
+                                "xformOp:translate",
+                            ))])),
                     );
                 let asset = if payload_id.is_empty() {
                     String::from(path)
@@ -842,10 +829,9 @@ pub(super) fn author<B: Storage>(
                 Value::Double(_) => "double",
                 _ => "string",
             };
-            let fallback = value.clone();
             txn.create_property(
                 at,
-                PropertySpec::typed_attribute(PropertyType::new(type_name, false, fallback))
+                PropertySpec::typed_attribute(PropertyType::parse(type_name).unwrap())
                     .custom()
                     .with_default(value),
             );

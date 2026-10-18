@@ -77,7 +77,7 @@ fn local_stack_matches_general_population_with_sessions_offsets_ordering_and_act
         paths[1],
         PrimSpec::def().with_children(vec![b, a]).with_property(
             field,
-            PropertySpec::typed_attribute(PropertyType::new("double", false, Value::Double(0.0)))
+            PropertySpec::typed_attribute(PropertyType::parse("double").unwrap())
                 .with_time_samples(vec![(0.0, Value::Double(0.0)), (10.0, Value::Double(10.0))]),
         ),
     );

@@ -482,8 +482,8 @@ impl<'a> ConstraintTarget<'a> {
                     .property_definition_ref(property.prim_path(), property.property())
                     .and_then(|d| d.type_name.clone())
             });
-        let matrix = ty
-            .is_some_and(|t| matches!(t.type_name.as_ref(), "matrix4d" | "frame4d") && !t.is_array);
+        let matrix =
+            ty.is_some_and(|t| matches!(t.type_name(), "matrix4d" | "frame4d") && !t.is_array());
         (scene.is_model(property.prim_path())
             && name.split(':').next() == Some("constraintTargets")
             && prim.has_attribute(name)
@@ -731,12 +731,8 @@ mod tests {
                 .with_field(kind, Value::Token(group))
                 .with_property(
                     draw,
-                    PropertySpec::typed_attribute(PropertyType::new(
-                        "token",
-                        false,
-                        Value::Token(cards),
-                    ))
-                    .with_default(Value::Token(cards)),
+                    PropertySpec::typed_attribute(PropertyType::parse("token").unwrap())
+                        .with_default(Value::Token(cards)),
                 ),
         );
         layer.insert_prim(
@@ -746,51 +742,31 @@ mod tests {
                 .with_field(kind, Value::Token(component))
                 .with_property(
                     translate,
-                    PropertySpec::typed_attribute(PropertyType::new(
-                        "double3",
-                        false,
-                        Value::Vec3d([0.; 3]),
-                    ))
-                    .with_default(Value::Vec3d([10., 20., 30.])),
+                    PropertySpec::typed_attribute(PropertyType::parse("double3").unwrap())
+                        .with_default(Value::Vec3d([10., 20., 30.])),
                 )
                 .with_property(
                     order,
-                    PropertySpec::typed_attribute(PropertyType::new(
-                        "token",
-                        true,
-                        Value::Token(translate),
-                    ))
-                    .with_default(Value::array(vec![Value::Token(translate)])),
+                    PropertySpec::typed_attribute(PropertyType::parse("token[]").unwrap())
+                        .with_default(Value::array(vec![Value::Token(translate)])),
                 )
                 .with_property(
                     frame,
-                    PropertySpec::typed_attribute(PropertyType::new(
-                        "frame4d",
-                        false,
-                        matrix.clone(),
-                    ))
-                    .with_default(matrix.clone()),
+                    PropertySpec::typed_attribute(PropertyType::parse("frame4d").unwrap())
+                        .with_default(matrix.clone()),
                 )
                 .with_property(
                     target,
-                    PropertySpec::typed_attribute(PropertyType::new(
-                        "matrix4d",
-                        false,
-                        matrix.clone(),
-                    ))
-                    .with_default(matrix),
+                    PropertySpec::typed_attribute(PropertyType::parse("matrix4d").unwrap())
+                        .with_default(matrix),
                 ),
         );
         layer.insert_prim(
             child,
             PrimSpec::def().with_type_name(xform_type).with_property(
                 draw,
-                PropertySpec::typed_attribute(PropertyType::new(
-                    "token",
-                    false,
-                    Value::Token(cards),
-                ))
-                .with_default(Value::Token(store.tokens.intern("bounds"))),
+                PropertySpec::typed_attribute(PropertyType::parse("token").unwrap())
+                    .with_default(Value::Token(store.tokens.intern("bounds"))),
             ),
         );
         store.insert_layer(layer);

@@ -372,7 +372,7 @@ mod tests {
         let samples: Vec<(f64, Value)> = (0..10_000)
             .map(|i| (f64::from(i), Value::Double(0.5)))
             .collect();
-        let doubles = PropertyType::new("double", false, Value::Double(0.0));
+        let doubles = PropertyType::parse("double").unwrap();
         let typed = [opinion(
             PropertySpec::typed_attribute(doubles.clone()).with_time_samples(samples.clone()),
         )];
@@ -383,7 +383,7 @@ mod tests {
         )];
         assert!(matches!(opinions_in_stage_time(&untyped), Cow::Borrowed(_)));
         // A `timecode` attribute is mapped.
-        let timecode = PropertyType::new("timecode", false, Value::TimeCode(0.0));
+        let timecode = PropertyType::parse("timecode").unwrap();
         let timecodes = [opinion(
             PropertySpec::typed_attribute(timecode).with_default(Value::TimeCode(1.0)),
         )];
@@ -395,7 +395,7 @@ mod tests {
 
     #[test]
     fn sparse_timecode_offsets_map_literals_without_changing_implicit_fills() {
-        let ty = crate::PropertyType::new("timecode", true, Value::TimeCode(0.0));
+        let ty = crate::PropertyType::parse("timecode[]").unwrap();
         let resize = Value::typed_array_edit(
             ArrayEdit {
                 ops: vec![ArrayEditOp::Resize { len: 2 }],

@@ -124,19 +124,9 @@ fn fixture() -> (LoadedStage, Stage, LayerId) {
         spec.default = Some(default);
         spec.time_samples = samples.map(Into::into);
     }
-    for (layer, path, name, prototype) in [
-        (
-            loaded.root_layer,
-            "/SparseMisdeclaredEdit.value",
-            "double",
-            Value::Double(0.0),
-        ),
-        (
-            weak,
-            "/SparseMisdeclaredWeakEdit.value",
-            "float",
-            Value::Float(0.0),
-        ),
+    for (layer, path, name) in [
+        (loaded.root_layer, "/SparseMisdeclaredEdit.value", "double"),
+        (weak, "/SparseMisdeclaredWeakEdit.value", "float"),
     ] {
         let path = loaded.store.property_path(path);
         loaded
@@ -146,7 +136,7 @@ fn fixture() -> (LoadedStage, Stage, LayerId) {
             .unwrap()
             .property_mut(path)
             .unwrap()
-            .type_name = Some(layerstack::PropertyType::new(name, true, prototype));
+            .type_name = Some(layerstack::PropertyType::parse(&format!("{name}[]")).unwrap());
     }
     let mixed = loaded.store.property_path("/SparseMixedEdits.value");
     let wrong = loaded.store.layers[&weak]

@@ -9,15 +9,16 @@
 )]
 use crate::ast;
 use alloc::{boxed::Box, string::String};
-use layerstack::Value;
+use layerstack::{Value, ValueType};
 
 pub(crate) fn dimensioned_value(
     items: &[ast::Value<'_>],
     type_hint: &str,
     elem_hint: &str,
 ) -> Result<Option<Value>, String> {
-    // Strip array suffix for matching: "float3[]" → "float3".
-    let base = type_hint.strip_suffix("[]").unwrap_or(type_hint);
+    // Strip array suffix for matching: "float3[]" → "float3"; a role
+    // matches as its storage type (`color3f` as `float3`, AOUSD Core §6.5).
+    let base = storage_name(type_hint.strip_suffix("[]").unwrap_or(type_hint));
     if let Some(component) = component_type(base)
         && let Err(message) = check_components(items, component)
     {
@@ -43,8 +44,7 @@ pub(crate) fn dimensioned_value(
         // Matrices — f64
         "matrix2d" => Some(Value::Matrix2d(Box::new(extract_matrix_f64::<4>(items)))),
         "matrix3d" => Some(Value::Matrix3d(Box::new(extract_matrix_f64::<9>(items)))),
-        // `frame4d` is the frame role of `matrix4d` (AOUSD Core §6.5).
-        "matrix4d" | "frame4d" => Some(Value::Matrix4d(Box::new(extract_matrix_f64::<16>(items)))),
+        "matrix4d" => Some(Value::Matrix4d(Box::new(extract_matrix_f64::<16>(items)))),
         // Quaternions — stored as (i, j, k, r) but authored as (r, i, j, k)
         // in USDA text per §16.3.10.22.
         "quatd" => {
@@ -58,34 +58,6 @@ pub(crate) fn dimensioned_value(
         "quath" => {
             let v = extract_halves::<4>(items);
             Some(Value::Quath([v[1], v[2], v[3], v[0]]))
-        }
-        // Semantic aliases (§6.5) — same element layout, different type name.
-        _ if is_semantic_vec_alias(base, 'f') => {
-            let n = semantic_component_count(base);
-            match n {
-                2 => Some(Value::Vec2f(extract_f32s::<2>(items))),
-                3 => Some(Value::Vec3f(extract_f32s::<3>(items))),
-                4 => Some(Value::Vec4f(extract_f32s::<4>(items))),
-                _ => None,
-            }
-        }
-        _ if is_semantic_vec_alias(base, 'd') => {
-            let n = semantic_component_count(base);
-            match n {
-                2 => Some(Value::Vec2d(extract_f64s::<2>(items))),
-                3 => Some(Value::Vec3d(extract_f64s::<3>(items))),
-                4 => Some(Value::Vec4d(extract_f64s::<4>(items))),
-                _ => None,
-            }
-        }
-        _ if is_semantic_vec_alias(base, 'h') => {
-            let n = semantic_component_count(base);
-            match n {
-                2 => Some(Value::Vec2h(extract_halves::<2>(items))),
-                3 => Some(Value::Vec3h(extract_halves::<3>(items))),
-                4 => Some(Value::Vec4h(extract_halves::<4>(items))),
-                _ => None,
-            }
         }
         _ => {
             // Not a recognized dimensioned type — fall through to
@@ -319,17 +291,22 @@ fn bool_from_string(s: &str) -> Option<bool> {
 /// The scalar type of each component of the vector, matrix or quaternion
 /// type `base`, or `None` for other types.
 fn component_type(base: &str) -> Option<&'static str> {
-    match base {
+    match storage_name(base) {
         "int2" | "int3" | "int4" => Some("int"),
-        "double2" | "double3" | "double4" | "matrix2d" | "matrix3d" | "matrix4d" | "frame4d"
-        | "quatd" => Some("double"),
+        "double2" | "double3" | "double4" | "matrix2d" | "matrix3d" | "matrix4d" | "quatd" => {
+            Some("double")
+        }
         "float2" | "float3" | "float4" | "quatf" => Some("float"),
         "half2" | "half3" | "half4" | "quath" => Some("half"),
-        _ if is_semantic_vec_alias(base, 'd') => Some("double"),
-        _ if is_semantic_vec_alias(base, 'f') => Some("float"),
-        _ if is_semantic_vec_alias(base, 'h') => Some("half"),
         _ => None,
     }
+}
+
+/// The name of the storage type of the registered value type `name`
+/// (`float3` for `color3f`, [`ValueType::storage`]); `name` itself when no
+/// registered type has it.
+pub(crate) fn storage_name(name: &str) -> &str {
+    ValueType::from_name(name).map_or(name, |ty| ty.storage().name())
 }
 
 /// Checks that every component of a vector, matrix or quaternion (rows
@@ -440,34 +417,6 @@ fn ast_to_i32(v: &ast::Value<'_>) -> i32 {
         ast::Value::Number(n) => *n as i32,
         _ => 0,
     }
-}
-
-/// Returns `true` if `name` is a semantic type alias (§6.5) ending with
-/// precision suffix `p` ('f', 'd', or 'h').
-///
-/// Semantic aliases: `color3f`, `color4f`, `normal3f`, `point3f`,
-/// `vector3f`, `texCoord2f`, `texCoord3f`, etc. (`frame4d` is a matrix.)
-pub(crate) fn is_semantic_vec_alias(name: &str, precision: char) -> bool {
-    if !name.ends_with(precision) {
-        return false;
-    }
-    name.starts_with("color")
-        || name.starts_with("normal")
-        || name.starts_with("point")
-        || name.starts_with("vector")
-        || name.starts_with("texCoord")
-}
-
-/// Extracts the component count from a semantic alias name.
-///
-/// E.g., `"color3f"` → 3, `"texCoord2f"` → 2.
-pub(crate) fn semantic_component_count(name: &str) -> usize {
-    // The digit is always the second-to-last character.
-    name.chars()
-        .rev()
-        .nth(1)
-        .and_then(|c| c.to_digit(10))
-        .unwrap_or(0) as usize
 }
 
 pub(crate) fn element(

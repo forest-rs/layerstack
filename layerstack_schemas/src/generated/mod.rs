@@ -194,10 +194,6 @@
 
 //! The generated tables.
 
-use alloc::sync::Arc;
-
-use layerstack::Value;
-
 use crate::table::{SchemaTables, ValueType};
 
 mod metadata;
@@ -485,11 +481,7 @@ impl Domain {
     feature = "usd-ui",
     feature = "usd-vol"
 ))]
-pub(crate) static ASSET: ValueType = ValueType {
-    name: "asset",
-    is_array: false,
-    zero: |_| Value::Asset(Arc::from("")),
-};
+pub(crate) static ASSET: ValueType = ValueType { name: "asset" };
 
 #[cfg(any(
     feature = "usd",
@@ -499,60 +491,28 @@ pub(crate) static ASSET: ValueType = ValueType {
     feature = "usd-render",
     feature = "usd-vol"
 ))]
-pub(crate) static BOOL: ValueType = ValueType {
-    name: "bool",
-    is_array: false,
-    zero: |_| Value::Bool(false),
-};
+pub(crate) static BOOL: ValueType = ValueType { name: "bool" };
 
 #[cfg(any(feature = "usd-lux", feature = "usd-ui"))]
-pub(crate) static COLOR3F: ValueType = ValueType {
-    name: "color3f",
-    is_array: false,
-    zero: |_| Value::Vec3f([0.0, 0.0, 0.0]),
-};
+pub(crate) static COLOR3F: ValueType = ValueType { name: "color3f" };
 
 #[cfg(any(feature = "usd-geom", feature = "usd-vol"))]
-pub(crate) static COLOR3F_ARRAY: ValueType = ValueType {
-    name: "color3f",
-    is_array: true,
-    zero: |_| Value::Vec3f([0.0, 0.0, 0.0]),
-};
+pub(crate) static COLOR3F_ARRAY: ValueType = ValueType { name: "color3f[]" };
 
 #[cfg(any(feature = "usd-geom", feature = "usd-media"))]
-pub(crate) static DOUBLE: ValueType = ValueType {
-    name: "double",
-    is_array: false,
-    zero: |_| Value::Double(0.0),
-};
+pub(crate) static DOUBLE: ValueType = ValueType { name: "double" };
 
 #[cfg(feature = "usd-geom")]
-pub(crate) static DOUBLE2: ValueType = ValueType {
-    name: "double2",
-    is_array: false,
-    zero: |_| Value::Vec2d([0.0, 0.0]),
-};
+pub(crate) static DOUBLE2: ValueType = ValueType { name: "double2" };
 
 #[cfg(feature = "usd-geom")]
-pub(crate) static DOUBLE2_ARRAY: ValueType = ValueType {
-    name: "double2",
-    is_array: true,
-    zero: |_| Value::Vec2d([0.0, 0.0]),
-};
+pub(crate) static DOUBLE2_ARRAY: ValueType = ValueType { name: "double2[]" };
 
 #[cfg(feature = "usd-geom")]
-pub(crate) static DOUBLE3_ARRAY: ValueType = ValueType {
-    name: "double3",
-    is_array: true,
-    zero: |_| Value::Vec3d([0.0, 0.0, 0.0]),
-};
+pub(crate) static DOUBLE3_ARRAY: ValueType = ValueType { name: "double3[]" };
 
 #[cfg(feature = "usd-geom")]
-pub(crate) static DOUBLE_ARRAY: ValueType = ValueType {
-    name: "double",
-    is_array: true,
-    zero: |_| Value::Double(0.0),
-};
+pub(crate) static DOUBLE_ARRAY: ValueType = ValueType { name: "double[]" };
 
 #[cfg(any(
     feature = "usd",
@@ -562,25 +522,13 @@ pub(crate) static DOUBLE_ARRAY: ValueType = ValueType {
     feature = "usd-physics",
     feature = "usd-render"
 ))]
-pub(crate) static FLOAT: ValueType = ValueType {
-    name: "float",
-    is_array: false,
-    zero: |_| Value::Float(0.0),
-};
+pub(crate) static FLOAT: ValueType = ValueType { name: "float" };
 
 #[cfg(any(feature = "usd", feature = "usd-geom", feature = "usd-ui"))]
-pub(crate) static FLOAT2: ValueType = ValueType {
-    name: "float2",
-    is_array: false,
-    zero: |_| Value::Vec2f([0.0, 0.0]),
-};
+pub(crate) static FLOAT2: ValueType = ValueType { name: "float2" };
 
 #[cfg(any(feature = "usd-geom", feature = "usd-physics"))]
-pub(crate) static FLOAT3: ValueType = ValueType {
-    name: "float3",
-    is_array: false,
-    zero: |_| Value::Vec3f([0.0, 0.0, 0.0]),
-};
+pub(crate) static FLOAT3: ValueType = ValueType { name: "float3" };
 
 #[cfg(any(
     feature = "usd-geom",
@@ -590,25 +538,13 @@ pub(crate) static FLOAT3: ValueType = ValueType {
     feature = "usd-skel",
     feature = "usd-vol"
 ))]
-pub(crate) static FLOAT3_ARRAY: ValueType = ValueType {
-    name: "float3",
-    is_array: true,
-    zero: |_| Value::Vec3f([0.0, 0.0, 0.0]),
-};
+pub(crate) static FLOAT3_ARRAY: ValueType = ValueType { name: "float3[]" };
 
 #[cfg(feature = "usd-render")]
-pub(crate) static FLOAT4: ValueType = ValueType {
-    name: "float4",
-    is_array: false,
-    zero: |_| Value::Vec4f([0.0, 0.0, 0.0, 0.0]),
-};
+pub(crate) static FLOAT4: ValueType = ValueType { name: "float4" };
 
 #[cfg(feature = "usd-geom")]
-pub(crate) static FLOAT4_ARRAY: ValueType = ValueType {
-    name: "float4",
-    is_array: true,
-    zero: |_| Value::Vec4f([0.0, 0.0, 0.0, 0.0]),
-};
+pub(crate) static FLOAT4_ARRAY: ValueType = ValueType { name: "float4[]" };
 
 #[cfg(any(
     feature = "usd-geom",
@@ -616,25 +552,13 @@ pub(crate) static FLOAT4_ARRAY: ValueType = ValueType {
     feature = "usd-skel",
     feature = "usd-vol"
 ))]
-pub(crate) static FLOAT_ARRAY: ValueType = ValueType {
-    name: "float",
-    is_array: true,
-    zero: |_| Value::Float(0.0),
-};
+pub(crate) static FLOAT_ARRAY: ValueType = ValueType { name: "float[]" };
 
 #[cfg(any(feature = "usd-skel", feature = "usd-vol"))]
-pub(crate) static HALF3_ARRAY: ValueType = ValueType {
-    name: "half3",
-    is_array: true,
-    zero: |_| Value::Vec3h([0x0000, 0x0000, 0x0000]),
-};
+pub(crate) static HALF3_ARRAY: ValueType = ValueType { name: "half3[]" };
 
 #[cfg(feature = "usd-vol")]
-pub(crate) static HALF_ARRAY: ValueType = ValueType {
-    name: "half",
-    is_array: true,
-    zero: |_| Value::Half(0x0000),
-};
+pub(crate) static HALF_ARRAY: ValueType = ValueType { name: "half[]" };
 
 #[cfg(any(
     feature = "usd-geom",
@@ -642,131 +566,57 @@ pub(crate) static HALF_ARRAY: ValueType = ValueType {
     feature = "usd-ui",
     feature = "usd-vol"
 ))]
-pub(crate) static INT: ValueType = ValueType {
-    name: "int",
-    is_array: false,
-    zero: |_| Value::Int(0),
-};
+pub(crate) static INT: ValueType = ValueType { name: "int" };
 
 #[cfg(feature = "usd-render")]
-pub(crate) static INT2: ValueType = ValueType {
-    name: "int2",
-    is_array: false,
-    zero: |_| Value::Vec2i([0, 0]),
-};
+pub(crate) static INT2: ValueType = ValueType { name: "int2" };
 
 #[cfg(feature = "usd-geom")]
-pub(crate) static INT3_ARRAY: ValueType = ValueType {
-    name: "int3",
-    is_array: true,
-    zero: |_| Value::Vec3i([0, 0, 0]),
-};
+pub(crate) static INT3_ARRAY: ValueType = ValueType { name: "int3[]" };
 
 #[cfg(feature = "usd-geom")]
-pub(crate) static INT4_ARRAY: ValueType = ValueType {
-    name: "int4",
-    is_array: true,
-    zero: |_| Value::Vec4i([0, 0, 0, 0]),
-};
+pub(crate) static INT4_ARRAY: ValueType = ValueType { name: "int4[]" };
 
 #[cfg(feature = "usd-geom")]
-pub(crate) static INT64_ARRAY: ValueType = ValueType {
-    name: "int64",
-    is_array: true,
-    zero: |_| Value::Int64(0),
-};
+pub(crate) static INT64_ARRAY: ValueType = ValueType { name: "int64[]" };
 
 #[cfg(any(feature = "usd-geom", feature = "usd-skel"))]
-pub(crate) static INT_ARRAY: ValueType = ValueType {
-    name: "int",
-    is_array: true,
-    zero: |_| Value::Int(0),
-};
+pub(crate) static INT_ARRAY: ValueType = ValueType { name: "int[]" };
 
 #[cfg(feature = "usd-skel")]
-pub(crate) static MATRIX4D: ValueType = ValueType {
-    name: "matrix4d",
-    is_array: false,
-    zero: |_| {
-        Value::Matrix4d(alloc::boxed::Box::new([
-            0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-        ]))
-    },
-};
+pub(crate) static MATRIX4D: ValueType = ValueType { name: "matrix4d" };
 
 #[cfg(feature = "usd-skel")]
-pub(crate) static MATRIX4D_ARRAY: ValueType = ValueType {
-    name: "matrix4d",
-    is_array: true,
-    zero: |_| {
-        Value::Matrix4d(alloc::boxed::Box::new([
-            0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-        ]))
-    },
-};
+pub(crate) static MATRIX4D_ARRAY: ValueType = ValueType { name: "matrix4d[]" };
 
 #[cfg(feature = "usd-geom")]
-pub(crate) static NORMAL3F_ARRAY: ValueType = ValueType {
-    name: "normal3f",
-    is_array: true,
-    zero: |_| Value::Vec3f([0.0, 0.0, 0.0]),
-};
+pub(crate) static NORMAL3F_ARRAY: ValueType = ValueType { name: "normal3f[]" };
 
 #[cfg(feature = "usd")]
-pub(crate) static OPAQUE: ValueType = ValueType {
-    name: "opaque",
-    is_array: false,
-    zero: |_| Value::Null,
-};
+pub(crate) static OPAQUE: ValueType = ValueType { name: "opaque" };
 
 #[cfg(feature = "usd")]
 pub(crate) static PATHEXPRESSION: ValueType = ValueType {
     name: "pathExpression",
-    is_array: false,
-    zero: |_| Value::PathExpression(Arc::from("")),
 };
 
 #[cfg(any(feature = "usd-lod", feature = "usd-physics"))]
-pub(crate) static POINT3F: ValueType = ValueType {
-    name: "point3f",
-    is_array: false,
-    zero: |_| Value::Vec3f([0.0, 0.0, 0.0]),
-};
+pub(crate) static POINT3F: ValueType = ValueType { name: "point3f" };
 
 #[cfg(any(feature = "usd-geom", feature = "usd-vol"))]
-pub(crate) static POINT3F_ARRAY: ValueType = ValueType {
-    name: "point3f",
-    is_array: true,
-    zero: |_| Value::Vec3f([0.0, 0.0, 0.0]),
-};
+pub(crate) static POINT3F_ARRAY: ValueType = ValueType { name: "point3f[]" };
 
 #[cfg(feature = "usd-vol")]
-pub(crate) static POINT3H_ARRAY: ValueType = ValueType {
-    name: "point3h",
-    is_array: true,
-    zero: |_| Value::Vec3h([0x0000, 0x0000, 0x0000]),
-};
+pub(crate) static POINT3H_ARRAY: ValueType = ValueType { name: "point3h[]" };
 
 #[cfg(feature = "usd-physics")]
-pub(crate) static QUATF: ValueType = ValueType {
-    name: "quatf",
-    is_array: false,
-    zero: |_| Value::Quatf([0.0, 0.0, 0.0, 0.0]),
-};
+pub(crate) static QUATF: ValueType = ValueType { name: "quatf" };
 
 #[cfg(any(feature = "usd-geom", feature = "usd-skel", feature = "usd-vol"))]
-pub(crate) static QUATF_ARRAY: ValueType = ValueType {
-    name: "quatf",
-    is_array: true,
-    zero: |_| Value::Quatf([0.0, 0.0, 0.0, 0.0]),
-};
+pub(crate) static QUATF_ARRAY: ValueType = ValueType { name: "quatf[]" };
 
 #[cfg(any(feature = "usd-geom", feature = "usd-vol"))]
-pub(crate) static QUATH_ARRAY: ValueType = ValueType {
-    name: "quath",
-    is_array: true,
-    zero: |_| Value::Quath([0x0000, 0x0000, 0x0000, 0x0000]),
-};
+pub(crate) static QUATH_ARRAY: ValueType = ValueType { name: "quath[]" };
 
 #[cfg(any(
     feature = "usd-mtlx",
@@ -774,25 +624,13 @@ pub(crate) static QUATH_ARRAY: ValueType = ValueType {
     feature = "usd-render",
     feature = "usd-ui"
 ))]
-pub(crate) static STRING: ValueType = ValueType {
-    name: "string",
-    is_array: false,
-    zero: |_| Value::String(Arc::from("")),
-};
+pub(crate) static STRING: ValueType = ValueType { name: "string" };
 
 #[cfg(feature = "usd-render")]
-pub(crate) static STRING_ARRAY: ValueType = ValueType {
-    name: "string",
-    is_array: true,
-    zero: |_| Value::String(Arc::from("")),
-};
+pub(crate) static STRING_ARRAY: ValueType = ValueType { name: "string[]" };
 
 #[cfg(feature = "usd-media")]
-pub(crate) static TIMECODE: ValueType = ValueType {
-    name: "timecode",
-    is_array: false,
-    zero: |_| Value::TimeCode(0.0),
-};
+pub(crate) static TIMECODE: ValueType = ValueType { name: "timecode" };
 
 #[cfg(any(
     feature = "usd",
@@ -810,11 +648,7 @@ pub(crate) static TIMECODE: ValueType = ValueType {
     feature = "usd-ui",
     feature = "usd-vol"
 ))]
-pub(crate) static TOKEN: ValueType = ValueType {
-    name: "token",
-    is_array: false,
-    zero: |t| Value::Token(t.intern("")),
-};
+pub(crate) static TOKEN: ValueType = ValueType { name: "token" };
 
 #[cfg(any(
     feature = "usd-geom",
@@ -826,22 +660,10 @@ pub(crate) static TOKEN: ValueType = ValueType {
     feature = "usd-skel",
     feature = "usd-vol"
 ))]
-pub(crate) static TOKEN_ARRAY: ValueType = ValueType {
-    name: "token",
-    is_array: true,
-    zero: |t| Value::Token(t.intern("")),
-};
+pub(crate) static TOKEN_ARRAY: ValueType = ValueType { name: "token[]" };
 
 #[cfg(feature = "usd-physics")]
-pub(crate) static VECTOR3F: ValueType = ValueType {
-    name: "vector3f",
-    is_array: false,
-    zero: |_| Value::Vec3f([0.0, 0.0, 0.0]),
-};
+pub(crate) static VECTOR3F: ValueType = ValueType { name: "vector3f" };
 
 #[cfg(any(feature = "usd-geom", feature = "usd-skel"))]
-pub(crate) static VECTOR3F_ARRAY: ValueType = ValueType {
-    name: "vector3f",
-    is_array: true,
-    zero: |_| Value::Vec3f([0.0, 0.0, 0.0]),
-};
+pub(crate) static VECTOR3F_ARRAY: ValueType = ValueType { name: "vector3f[]" };

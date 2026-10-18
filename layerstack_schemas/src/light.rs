@@ -238,7 +238,7 @@ impl LightListApiEdit {
                 .is_some_and(|k| k != PropertyKind::Attribute)
             || edit
                 .attribute_type(self.path(), "lightList:cacheBehavior")
-                .is_some_and(|ty| ty.is_array || ty.type_name.as_ref() != "token")
+                .is_some_and(|ty| ty.is_array() || ty.type_name() != "token")
         {
             return Err(LightListError::WrongPropertyType);
         }
@@ -249,11 +249,10 @@ impl LightListApiEdit {
             .attribute_type(self.path(), "lightList:cacheBehavior")
             .is_none()
         {
-            let empty = edit.tokens().intern("");
             edit.create_attribute(
                 self.path(),
                 "lightList:cacheBehavior",
-                PropertyType::new("token", false, Value::Token(empty)),
+                PropertyType::parse("token").expect("a registered value type"),
             );
         }
         self.set_light_list_cache_behavior(edit, value);

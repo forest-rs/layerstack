@@ -23,9 +23,9 @@
 //!     StageOptions { schemas: Some(schemas), ..Default::default() });
 //! let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(layer));
 //! Xform::define(&mut edit, world).create_primvar(&mut edit, "tint",
-//!     PropertyType::new("float", false, Value::Float(0.)))?.set(&mut edit, Value::Float(0.7))?;
+//!     PropertyType::parse("float").unwrap())?.set(&mut edit, Value::Float(0.7))?;
 //! Mesh::define(&mut edit, path).create_indexed_primvar(&mut edit, "weight",
-//!     PropertyType::new("float", true, Value::Float(0.)),
+//!     PropertyType::parse("float[]").unwrap(),
 //!     Value::array(vec![Value::Float(0.25), Value::Float(0.75)]), &[1, 0], "vertex", 1)?;
 //! let transaction = edit.finish();
 //! live.apply(&mut store, &transaction).expect("valid authored transaction");
@@ -286,7 +286,7 @@ impl<'a> Primvar<'a> {
                     .property_definition_ref(self.prim.path(), self.property().property())
                     .and_then(|p| p.type_name.clone())
             })?;
-        matches!(ty.default_scalar, Value::String(_)).then_some(ty.is_array)
+        matches!(ty.default_scalar(), Value::String(_)).then_some(ty.is_array())
     }
     /// Whether a string or string-array primvar has an `:idFrom` relationship.
     /// A defined relationship overrides the attribute even when it has no targets.
@@ -730,7 +730,7 @@ impl PrimEdit {
             pv.set_interpolation(edit, interpolation)?;
             pv.set_element_size(edit, element_size)?;
             pv.set(edit, value)?;
-            if pv.validate(edit)?.is_array {
+            if pv.validate(edit)?.is_array() {
                 pv.block_indices(edit)?;
             }
             Ok(pv)
@@ -753,9 +753,9 @@ impl PrimEdit {
         }
         if let Some(kind) = edit.property_kind(self.path(), &name) {
             if kind != layerstack::PropertyKind::Attribute
-                || edit
-                    .attribute_type(self.path(), &name)
-                    .is_none_or(|old| old.type_name != ty.type_name || old.is_array != ty.is_array)
+                || edit.attribute_type(self.path(), &name).is_none_or(|old| {
+                    old.type_name() != ty.type_name() || old.is_array() != ty.is_array()
+                })
             {
                 return Err(PrimvarError::TypeMismatch(name));
             }
@@ -776,7 +776,7 @@ impl PrimvarEdit {
     /// OpenUSD: `UsdGeomPrimvarsAPI::BlockPrimvar`; AOUSD Core §12.3.6.
     pub fn block(&self, edit: &mut SchemaEdit<'_>) -> Result<&Self, PrimvarError> {
         let ty = self.validate(edit)?;
-        if ty.is_array {
+        if ty.is_array() {
             self.block_indices(edit)?;
         }
         edit.block_attribute(self.prim, &self.name);
@@ -786,7 +786,7 @@ impl PrimvarEdit {
     /// sidecar if needed to mask future weaker indexing. Local animation is
     /// cleared. Scalar primvars and relationship sidecars append no edits.
     pub fn block_indices(&self, edit: &mut SchemaEdit<'_>) -> Result<&Self, PrimvarError> {
-        if !self.validate(edit)?.is_array {
+        if !self.validate(edit)?.is_array() {
             return Err(PrimvarError::TypeMismatch(self.name.clone()));
         }
         let indices = format!("{}:indices", self.name);
@@ -796,7 +796,7 @@ impl PrimvarEdit {
             None => edit.create_attribute(
                 self.prim,
                 &indices,
-                PropertyType::new("int", true, Value::Int(0)),
+                PropertyType::parse("int[]").expect("a registered value type"),
             ),
         }
         edit.block_attribute(self.prim, &indices);
@@ -824,7 +824,7 @@ impl PrimvarEdit {
         target: Option<TargetPath>,
     ) -> Result<&Self, PrimvarError> {
         let ty = self.validate(edit)?;
-        if !matches!(ty.default_scalar, Value::String(_)) {
+        if !matches!(ty.default_scalar(), Value::String(_)) {
             return Err(PrimvarError::TypeMismatch(self.name.clone()));
         }
         let name = format!("{}:idFrom", self.name);
@@ -920,11 +920,11 @@ impl PrimvarEdit {
         indices: Arc<Vec<i32>>,
         time: Option<f64>,
     ) -> Result<&Self, PrimvarError> {
-        if !self.validate(edit)?.is_array {
+        if !self.validate(edit)?.is_array() {
             return Err(PrimvarError::TypeMismatch(self.name.clone()));
         }
         let name = format!("{}:indices", self.name);
-        let ty = PropertyType::new("int", true, Value::Int(0));
+        let ty = PropertyType::parse("int[]").expect("a registered value type");
         if let Some(old) = edit.attribute_type(self.prim, &name) {
             if old != ty {
                 return Err(PrimvarError::TypeMismatch(name));

@@ -1117,9 +1117,9 @@ impl<'a> AssembleCtx<'a> {
                 // OpenUSD crateFile::_ValueHandler::PackArrayEdit keeps T in the
                 // value representation even for an identity edit. The Sdf
                 // attribute declaration is independent of that actual kind.
-                let name = array_edit_element_name(edit.element_type);
+                let name = alloc::format!("{}[]", array_edit_element_name(edit.element_type));
                 let value_type =
-                    PropertyType::new(name, true, default_scalar_for_type(name, self.tokens));
+                    PropertyType::parse(&name).unwrap_or_else(PropertyType::unregistered);
                 Value::typed_array_edit(self.convert_array_edit(edit), value_type)
             }
         }
@@ -1342,7 +1342,7 @@ impl<'a> AssembleCtx<'a> {
             let compact = |value: &mut Value| {
                 if let Value::Array(items) = value {
                     let items = core::mem::take(items);
-                    *value = Value::array_with_element(items, Some(&property_type.default_scalar));
+                    *value = Value::array_with_element(items, Some(property_type.default_scalar()));
                 }
             };
             if let Some(value) = spec.default.as_mut() {
@@ -1431,16 +1431,13 @@ impl<'a> AssembleCtx<'a> {
                 && value.value().is_none_or(crate_value_is_array)
         });
 
-        // `typeName` spells arrays with `[]` (`point3f[]`); the declared type
-        // keeps the element type name and the array flag apart, as USDA
-        // ingestion does.
-        let is_array = type_name.ends_with("[]") || inferred_array;
-        let base_name = type_name.strip_suffix("[]").unwrap_or(type_name.as_str());
-        PropertyType::new(
-            base_name,
-            is_array,
-            default_scalar_for_type(base_name, self.tokens),
-        )
+        // `typeName` spells arrays with `[]` (`point3f[]`); an array value
+        // makes the declaration an array too, as USDA ingestion does. A name
+        // the value type table lacks is kept, as OpenUSD keeps it.
+        if inferred_array && !type_name.ends_with("[]") {
+            type_name.push_str("[]");
+        }
+        PropertyType::parse(&type_name).unwrap_or_else(PropertyType::unregistered)
     }
 
     // ── List op conversion ──────────────────────────────────────────
@@ -2045,95 +2042,6 @@ fn array_edit_element_name(value_type: ValueType) -> &'static str {
     }
 }
 
-fn default_scalar_for_type(type_hint: &str, tokens: &TokenInterner) -> Value {
-    match type_hint {
-        "bool" => Value::Bool(false),
-        "uchar" => Value::UChar(0),
-        "int" => Value::Int(0),
-        "uint" => Value::UInt(0),
-        "int64" => Value::Int64(0),
-        "uint64" => Value::UInt64(0),
-        "half" => Value::Half(0),
-        "float" => Value::Float(0.0),
-        "double" => Value::Double(0.0),
-        "string" => Value::String(Arc::from("")),
-        "token" => Value::Token(tokens.intern("")),
-        "asset" => Value::Asset(Arc::from("")),
-        "pathExpression" => Value::PathExpression(Arc::from("")),
-        "timecode" => Value::TimeCode(0.0),
-        "double2" => Value::Vec2d([0.0; 2]),
-        "double3" => Value::Vec3d([0.0; 3]),
-        "double4" => Value::Vec4d([0.0; 4]),
-        "float2" => Value::Vec2f([0.0; 2]),
-        "float3" => Value::Vec3f([0.0; 3]),
-        "float4" => Value::Vec4f([0.0; 4]),
-        "half2" => Value::Vec2h([0; 2]),
-        "half3" => Value::Vec3h([0; 3]),
-        "half4" => Value::Vec4h([0; 4]),
-        "int2" => Value::Vec2i([0; 2]),
-        "int3" => Value::Vec3i([0; 3]),
-        "int4" => Value::Vec4i([0; 4]),
-        "matrix2d" => Value::Matrix2d(Box::new([0.0; 4])),
-        "matrix3d" => Value::Matrix3d(Box::new([0.0; 9])),
-        "matrix4d" => Value::Matrix4d(Box::new([0.0; 16])),
-        "quatd" => Value::Quatd([0.0; 4]),
-        "quatf" => Value::Quatf([0.0; 4]),
-        "quath" => Value::Quath([0; 4]),
-        type_name
-            if type_name.ends_with('f')
-                && (type_name.starts_with("color")
-                    || type_name.starts_with("normal")
-                    || type_name.starts_with("point")
-                    || type_name.starts_with("vector")
-                    || type_name.starts_with("texCoord")) =>
-        {
-            match semantic_component_count(type_name) {
-                2 => Value::Vec2f([0.0; 2]),
-                3 => Value::Vec3f([0.0; 3]),
-                _ => Value::Vec4f([0.0; 4]),
-            }
-        }
-        type_name
-            if type_name.ends_with('d')
-                && (type_name.starts_with("color")
-                    || type_name.starts_with("normal")
-                    || type_name.starts_with("point")
-                    || type_name.starts_with("vector")
-                    || type_name.starts_with("texCoord")) =>
-        {
-            match semantic_component_count(type_name) {
-                2 => Value::Vec2d([0.0; 2]),
-                3 => Value::Vec3d([0.0; 3]),
-                _ => Value::Vec4d([0.0; 4]),
-            }
-        }
-        type_name
-            if type_name.ends_with('h')
-                && (type_name.starts_with("color")
-                    || type_name.starts_with("normal")
-                    || type_name.starts_with("point")
-                    || type_name.starts_with("vector")
-                    || type_name.starts_with("texCoord")) =>
-        {
-            match semantic_component_count(type_name) {
-                2 => Value::Vec2h([0; 2]),
-                3 => Value::Vec3h([0; 3]),
-                _ => Value::Vec4h([0; 4]),
-            }
-        }
-        "dictionary" => Value::Dictionary(Vec::new()),
-        _ => Value::Null,
-    }
-}
-
-fn semantic_component_count(name: &str) -> usize {
-    name.chars()
-        .rev()
-        .nth(1)
-        .and_then(|c| c.to_digit(10))
-        .unwrap_or(0) as usize
-}
-
 /// Returns the parent prim path for a path like `/A/B` → `/A`, `/A` → `/`.
 fn parent_prim_path(path: &str) -> Option<&str> {
     if path == "/" {
@@ -2281,18 +2189,16 @@ mod tests {
             )
             .unwrap();
             let property = &read.layer.prims().values().next().unwrap().properties[0].spec;
-            assert_eq!(
-                property.type_name.as_ref().unwrap().type_name.as_ref(),
-                "double"
-            );
+            assert_eq!(property.type_name.as_ref().unwrap().type_name(), "double[]");
             let value = property.default.as_ref().unwrap();
             assert!(value.array_edit_ref().unwrap().ops.is_empty());
             let actual = value.array_edit_type().unwrap();
-            assert_eq!(actual.type_name.as_ref(), array_edit_element_name(kind));
-            assert!(actual.is_array);
+            let element = array_edit_element_name(kind);
+            assert_eq!(actual.type_name(), alloc::format!("{element}[]"));
+            assert!(actual.is_array());
             assert_eq!(
-                actual.default_scalar,
-                default_scalar_for_type(array_edit_element_name(kind), &tokens)
+                actual.default_scalar(),
+                &layerstack::ValueType::from_name(element).unwrap().zero()
             );
         }
     }
@@ -2490,7 +2396,7 @@ mod tests {
             };
             let property = prim.property(tokens.intern("a")).unwrap();
             assert_eq!(property.default, Some(expected.clone()));
-            assert!(property.type_name.as_ref().unwrap().is_array);
+            assert!(property.type_name.as_ref().unwrap().is_array());
             assert_eq!(
                 prim.field(tokens.intern("customArray")),
                 Some(&FieldValue::Value(expected.clone()))

@@ -22,7 +22,7 @@ fn stage(store: &mut InMemoryStore) -> Stage {
     )
 }
 fn attr(name: &str, value: Value) -> PropertySpec {
-    PropertySpec::typed_attribute(PropertyType::new(name, false, Value::Null)).with_default(value)
+    PropertySpec::typed_attribute(PropertyType::parse(name).unwrap()).with_default(value)
 }
 #[test]
 fn core_type_conflicts_include_weaker_source_and_requests_are_deterministic() {
@@ -156,7 +156,7 @@ fn mesh(store: &mut InMemoryStore) -> PrimSpec {
     ] {
         mesh.set_property(
             store.tokens.intern(name),
-            PropertySpec::typed_attribute(PropertyType::new(ty, true, Value::Null))
+            PropertySpec::typed_attribute(PropertyType::parse(&alloc::format!("{ty}[]")).unwrap())
                 .with_default(value),
         );
     }
@@ -178,7 +178,7 @@ fn mesh_checks_use_exact_requested_times_and_subtree_scope() {
     let indices = store.tokens.intern("faceVertexIndices");
     good.set_property(
         indices,
-        PropertySpec::typed_attribute(PropertyType::new("int", true, Value::Int(0)))
+        PropertySpec::typed_attribute(PropertyType::parse("int[]").unwrap())
             .with_default(Value::Array(vec![
                 Value::Int(0),
                 Value::Int(1),
@@ -487,7 +487,7 @@ fn schema_attribute_type_wins_over_an_incompatible_authored_declaration() {
     let points = store.tokens.intern("points");
     m.set_property(
         points,
-        PropertySpec::typed_attribute(PropertyType::new("double", true, Value::Double(0.))),
+        PropertySpec::typed_attribute(PropertyType::parse("double[]").unwrap()),
     );
     layer.insert_prim(p, m);
     store.insert_layer(layer);

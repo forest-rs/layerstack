@@ -224,35 +224,12 @@ pub(crate) fn render(model: &Model, external: bool) -> Result<Vec<(String, Strin
     } else {
         ""
     };
-    let uses_box = external
-        && model.nodes.iter().flat_map(|node| &node.ports).any(|port| {
-            matches!(
-                port.ty.default_scalar,
-                Value::Matrix2d(_) | Value::Matrix3d(_) | Value::Matrix4d(_)
-            )
-        });
-    let box_import = if uses_box {
-        "use alloc::boxed::Box;\n"
-    } else {
-        ""
-    };
-    let uses_arc = model.nodes.iter().flat_map(|node| &node.ports).any(|port| {
-        matches!(
-            port.ty.default_scalar,
-            Value::String(_) | Value::Asset(_) | Value::PathExpression(_)
-        )
-    });
-    let arc_import = if uses_arc {
-        "use alloc::sync::Arc;\n"
-    } else {
-        ""
-    };
     let uses_vec = external
         && model
             .nodes
             .iter()
             .flat_map(|node| &node.ports)
-            .any(|port| port.ty.is_array && port.name.starts_with("inputs:"));
+            .any(|port| port.ty.is_array() && port.name.starts_with("inputs:"));
     let vec_import = if uses_vec {
         "use alloc::vec::Vec;\n"
     } else {
@@ -263,7 +240,7 @@ pub(crate) fn render(model: &Model, external: bool) -> Result<Vec<(String, Strin
     } else {
         crate::emit::header(model)
     };
-    out.push_str(&format!("\n//! {library} shader nodes, keyed by `info:id`.\n//! Inputs read authored values at the requested time; definition defaults are\n//! explicit associated functions. These views do not evaluate shaders or follow\n//! input connections. Port creation uses ordinary shading transactions.\n//! Spec: AOUSD Core §7.6.4.1 (typed attributes), §12.3 (value resolution),\n//! §12.4 (connections). Node identifiers and defaults are OpenUSD usdShaders definitions.\n#![allow(clippy::doc_markdown, clippy::too_long_first_doc_paragraph, reason = \"documentation is copied verbatim from OpenUSD\")]\n\n{alloc_decl}use core::ops::Deref;\nuse layerstack::{{PathId, PropertyType, Value}};\n{box_import}{arc_import}{vec_import}use {schema_crate}::{{Scene, SchemaEdit}};\nuse {schema_crate}::shading::{{Port, PortEdit, PortError}};\nuse {schema_crate}::usd_shade::{{Shader, ShaderEdit, NodeDefApiImplementationSource}};\n"));
+    out.push_str(&format!("\n//! {library} shader nodes, keyed by `info:id`.\n//! Inputs read authored values at the requested time; definition defaults are\n//! explicit associated functions. These views do not evaluate shaders or follow\n//! input connections. Port creation uses ordinary shading transactions.\n//! Spec: AOUSD Core §7.6.4.1 (typed attributes), §12.3 (value resolution),\n//! §12.4 (connections). Node identifiers and defaults are OpenUSD usdShaders definitions.\n#![allow(clippy::doc_markdown, clippy::too_long_first_doc_paragraph, reason = \"documentation is copied verbatim from OpenUSD\")]\n\n{alloc_decl}use core::ops::Deref;\n@LAYERSTACK_IMPORTS@\n{vec_import}use {schema_crate}::{{Scene, SchemaEdit}};\nuse {schema_crate}::shading::{{Port, PortEdit, PortError}};\nuse {schema_crate}::usd_shade::{{Shader, ShaderEdit, NodeDefApiImplementationSource}};\n"));
     // Include implementation imports and referenced prelude types in the same
     // namespace as node structs and their authoring handles.
     let mut node_names: std::collections::BTreeSet<String> = [
@@ -343,14 +320,14 @@ pub(crate) fn render(model: &Model, external: bool) -> Result<Vec<(String, Strin
                     return Err(format!("{id}: generated method collision `{symbol}`"));
                 }
             }
-            let mut ty = crate::views::rust_type(&port.ty.default_scalar, port.ty.is_array)?
+            let mut ty = crate::views::rust_type(port.ty.default_scalar(), port.ty.is_array())?
                 .ok_or("opaque shader port")?;
             // Only the standard primvar reader name has this legacy consumer
             // compatibility. General string ports remain strict, including
             // pipeline-owned libraries whose identifiers do not match.
             if full_name_is_legacy_primvar_name(id, &port.name)
-                && port.ty.type_name.as_ref() == "string"
-                && !port.ty.is_array
+                && port.ty.type_name() == "string"
+                && !port.ty.is_array()
             {
                 ty.read_fn = "crate::value::read_primvar_name".into();
             }
@@ -408,7 +385,7 @@ pub(crate) fn render(model: &Model, external: bool) -> Result<Vec<(String, Strin
                 }
                 if let Some(value) = &port.default {
                     let mut literal = default_literal(value, &model.tokens, external)?;
-                    if port.ty.is_array && crate::views::shared_array(&port.ty.default_scalar) {
+                    if port.ty.is_array() && crate::views::shared_array(port.ty.default_scalar()) {
                         literal.push_str(".into()");
                     }
                     let _ = writeln!(
@@ -418,21 +395,10 @@ pub(crate) fn render(model: &Model, external: bool) -> Result<Vec<(String, Strin
                     );
                 }
             }
-            let mut zero = crate::emit::expr(&port.ty.default_scalar, &model.tokens)?;
-            if external {
-                // Matrix ports import Box explicitly, including in no_std.
-                // Type zeros contain no library literals to rewrite.
-                zero = zero.replace("alloc::boxed::Box::", "Box::");
-            }
-            let interner = if zero.contains("t.intern(") {
-                "let t = edit.tokens();"
-            } else {
-                ""
-            };
             let _ = writeln!(
                 setters,
-                "    /// Creates `{full}` with its node-defined USD type for values or connections.\n    /// Rejects existing ports of a different type before appending edits.\n    pub fn create_{m}_{kind}(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {{\n        {interner}\n        let zero = {zero};\n        self.shader.create_{kind}(edit, {base:?}, PropertyType::new({:?}, {}, zero))\n    }}",
-                port.ty.type_name, port.ty.is_array
+                "    /// Creates `{full}` with its node-defined USD type for values or connections.\n    /// Rejects existing ports of a different type before appending edits.\n    pub fn create_{m}_{kind}(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {{\n        let ty = PropertyType::parse({:?}).expect(\"a registered value type\");\n        self.shader.create_{kind}(edit, {base:?}, ty)\n    }}",
+                port.ty.type_name()
             );
             if input {
                 let _ = writeln!(
@@ -454,10 +420,41 @@ pub(crate) fn render(model: &Model, external: bool) -> Result<Vec<(String, Strin
             "}}\n\n/// Authors `{id}` inputs and typed ports through an explicit edit target.\n#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]\npub struct {name}Edit {{ shader: ShaderEdit }}\nimpl Deref for {name}Edit {{ type Target = ShaderEdit; fn deref(&self) -> &Self::Target {{ &self.shader }} }}\nimpl {name}Edit {{\n{setters}}}"
         );
     }
+    let imports = imports(&out, external);
+    let out = out.replace("@LAYERSTACK_IMPORTS@\n", &imports);
     Ok(vec![
         ("shader_nodes.rs".into(), out),
         ("shader_node_test_table".into(), test_table(model)),
     ])
+}
+
+/// The `use` items the generated views need: `PathId` and `PropertyType`,
+/// and `Value`, `Arc` and (outside the schema crate) `Box` where the views
+/// name them unqualified.
+fn imports(out: &str, external: bool) -> String {
+    let body = out
+        .split_once("@LAYERSTACK_IMPORTS@")
+        .map_or("", |(_, body)| body);
+    let named = |word: &str| {
+        body.match_indices(word).any(|(i, _)| {
+            let before = body[..i].chars().next_back();
+            let after = body[i + word.len()..].chars().next();
+            let ident = |c: char| c.is_alphanumeric() || c == '_' || c == ':';
+            !before.is_some_and(ident) && !after.is_some_and(|c| c.is_alphanumeric() || c == '_')
+        })
+    };
+    let mut layerstack = vec!["PathId", "PropertyType"];
+    if named("Value") {
+        layerstack.push("Value");
+    }
+    let mut imports = format!("use layerstack::{{{}}};\n", layerstack.join(", "));
+    if external && named("Box") {
+        imports.push_str("use alloc::boxed::Box;\n");
+    }
+    if named("Arc") {
+        imports.push_str("use alloc::sync::Arc;\n");
+    }
+    imports
 }
 
 /// Exercises every generated port against the composed OpenUSD definition.
@@ -494,20 +491,20 @@ fn test_table(model: &Model) -> String {
                 if port.default.is_some() {
                     let default = format!("{name}::{m}_default()");
                     let argument =
-                        if matches!(port.ty.default_scalar, Value::String(_) | Value::Asset(_)) {
+                        if matches!(port.ty.default_scalar(), Value::String(_) | Value::Asset(_)) {
                             format!("&{default}")
                         } else {
                             default.clone()
                         };
                     let _ = writeln!(out, "    node.set_{m}(edit, {argument}).unwrap();");
                     let resolved =
-                        if matches!(port.ty.default_scalar, Value::String(_) | Value::Asset(_)) {
+                        if matches!(port.ty.default_scalar(), Value::String(_) | Value::Asset(_)) {
                             format!("node.{m}().map(|value| value.to_string())")
                         } else {
                             format!("node.{m}()")
                         };
                     let default =
-                        if matches!(port.ty.default_scalar, Value::String(_) | Value::Asset(_)) {
+                        if matches!(port.ty.default_scalar(), Value::String(_) | Value::Asset(_)) {
                             format!("{default}.to_string()")
                         } else {
                             default
@@ -528,7 +525,7 @@ fn test_table(model: &Model) -> String {
             }
             let _ = writeln!(
                 comparisons,
-                "    let port = node.{m}_{kind}().unwrap();\n    assert_eq!(port.property_type().unwrap().type_name.as_ref(), expected[{id:?}][{full:?}][\"type\"].as_str().unwrap(), \"{id}.{full}: port type\");"
+                "    let port = node.{m}_{kind}().unwrap();\n    assert_eq!(port.property_type().unwrap().type_name(), expected[{id:?}][{full:?}][\"type\"].as_str().unwrap(), \"{id}.{full}: port type\");"
             );
         }
     }
@@ -608,7 +605,7 @@ mod tests {
                 id: "Text".into(),
                 ports: vec![NodePort {
                     name: "inputs:label".into(),
-                    ty: PropertyType::new("string", false, Value::String("".into())),
+                    ty: PropertyType::parse("string").unwrap(),
                     variability: Variability::Varying,
                     default: None,
                     doc: doc.into(),

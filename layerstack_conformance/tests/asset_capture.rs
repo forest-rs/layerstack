@@ -45,7 +45,7 @@ fn weak_layer_and_retimed_assets_keep_their_actual_anchor() {
         PrimSpec::over().with_property(
             name,
             PropertySpec::attribute()
-                .with_type(PropertyType::new("asset", false, Value::Asset("".into())))
+                .with_type(PropertyType::parse("asset").unwrap())
                 .with_default(Value::Asset("./default.exr".into()))
                 .with_time_samples(vec![
                     (0., Value::Asset("./early.exr".into())),
@@ -117,7 +117,7 @@ fn weak_layer_and_retimed_assets_keep_their_actual_anchor() {
         .set_property(
             name,
             PropertySpec::attribute()
-                .with_type(PropertyType::new("float", false, Value::Float(0.)))
+                .with_type(PropertyType::parse("float").unwrap())
                 .with_default(Value::Float(2.)),
         );
     let schemas = std::sync::Arc::new(layerstack_schemas::openusd(&mut store.tokens));
@@ -247,7 +247,7 @@ fn source_only_asset_edits_change_anchors_and_parameter_upload_revisions() {
         PrimSpec::over().with_property(
             name,
             PropertySpec::attribute()
-                .with_type(PropertyType::new("asset", false, Value::Asset("".into())))
+                .with_type(PropertyType::parse("asset").unwrap())
                 .with_default(Value::Asset("./sky.exr".into())),
         ),
     );

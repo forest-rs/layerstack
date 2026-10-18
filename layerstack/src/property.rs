@@ -31,6 +31,7 @@ use crate::{
     listop::ListOp,
     path::TargetPath,
     spline::SplineData,
+    value_type::{UnknownValueType, ValueType},
 };
 
 /// When a composed property or scene computation is read: the default time, or a time code
@@ -75,33 +76,110 @@ impl Time {
     }
 }
 
-/// Declared type information for an authored attribute.
+/// The value type an attribute declares (`typeName`): a registered
+/// [`ValueType`], scalar or array (`color3f`, `color3f[]`).
 ///
-/// `type_name` preserves the authored USD type name. `default_scalar` is the
-/// zero/default value for the non-array form of the property type; sparse
-/// array edits use it to synthesize appended elements for `minsize` /
-/// `resize`.
+/// [`PropertyType::parse`] takes a type name through the value type
+/// table, so the name, its array form and the default scalar always agree.
+/// A layer may author a name the table lacks, which OpenUSD's readers keep;
+/// a reader keeps it as [`PropertyType::unregistered`], and edits reject
+/// such a type
+/// ([`Rejection::UnknownValueType`](crate::edit::Rejection::UnknownValueType)).
 ///
-/// Spec: AOUSD Core §7.6.4.1.1 (`typeName`).
+/// ```
+/// use layerstack::{PropertyType, Value, ValueType};
+///
+/// let colors = PropertyType::parse("color3f[]").unwrap();
+/// assert_eq!(colors.type_name(), "color3f[]");
+/// assert_eq!(colors.value_type(), Some(ValueType::Color3f));
+/// assert!(colors.is_array());
+/// assert_eq!(colors.default_scalar(), &Value::Vec3f([0.0; 3]));
+/// assert!(PropertyType::parse("float5").is_err());
+/// ```
+///
+/// OpenUSD: `SdfValueTypeName`, which `SdfSchema::FindType` looks up.
+///
+/// Spec: AOUSD Core §6.2 (value types), §7.6.4.1.1 (`typeName`).
 #[derive(Clone, Debug, PartialEq)]
 pub struct PropertyType {
-    /// Authored USD type name, such as `int`, `point3f`, or `token`.
-    pub type_name: Arc<str>,
-    /// Whether the declared property is array-valued.
-    pub is_array: bool,
-    /// Default scalar value for one element of this type.
-    pub default_scalar: Value,
+    type_name: Arc<str>,
+    value_type: Option<ValueType>,
+    is_array: bool,
+    default_scalar: Value,
 }
 
 impl PropertyType {
-    /// Creates property type metadata from an authored USD type name.
+    /// The type named `type_name`: a registered value type's name, or the
+    /// name of its array form (`color3f[]`).
+    ///
+    /// # Errors
+    ///
+    /// [`UnknownValueType`] when no registered type has the name, including
+    /// `opaque[]` and `group[]`, which have no array form.
+    pub fn parse(type_name: &str) -> Result<Self, UnknownValueType> {
+        let (value_type, is_array) =
+            ValueType::parse(type_name).ok_or_else(|| UnknownValueType::new(type_name))?;
+        Ok(Self::registered(value_type, is_array))
+    }
+
+    /// The type of a type name a layer authors that no registered type has,
+    /// as a reader keeps it: its name is the unknown one, it is an array
+    /// when the name ends in `[]`, and its default scalar is
+    /// [`Value::Null`], which any value conforms to. Edits reject it.
+    ///
+    /// OpenUSD's readers keep a type name they do not know, and its
+    /// authoring calls reject one (`SdfAttributeSpec::New`).
     #[must_use]
-    pub fn new(type_name: impl Into<Arc<str>>, is_array: bool, default_scalar: Value) -> Self {
+    pub fn unregistered(unknown: UnknownValueType) -> Self {
+        let type_name = unknown.into_type_name();
         Self {
-            type_name: type_name.into(),
-            is_array,
-            default_scalar,
+            is_array: type_name.ends_with("[]"),
+            type_name,
+            value_type: None,
+            default_scalar: Value::Null,
         }
+    }
+
+    /// The registered type `value_type`, its array form when `is_array`
+    /// (which the caller checks it has).
+    pub(crate) fn registered(value_type: ValueType, is_array: bool) -> Self {
+        let name = match value_type.array_name() {
+            Some(array) if is_array => array,
+            _ => value_type.name(),
+        };
+        Self {
+            type_name: Arc::from(name),
+            value_type: Some(value_type),
+            is_array,
+            default_scalar: value_type.zero(),
+        }
+    }
+
+    /// The type name, as a layer writes it: `color3f[]` for an array.
+    #[must_use]
+    pub fn type_name(&self) -> &str {
+        &self.type_name
+    }
+
+    /// The registered value type, of one element for an array; `None` for
+    /// an [unregistered](Self::unregistered) type.
+    #[must_use]
+    pub fn value_type(&self) -> Option<ValueType> {
+        self.value_type
+    }
+
+    /// Whether the type is an array type.
+    #[must_use]
+    pub fn is_array(&self) -> bool {
+        self.is_array
+    }
+
+    /// The zero value of one element ([`ValueType::zero`]), which sparse
+    /// array edits append when they grow an array (`minsize`, `resize`);
+    /// [`Value::Null`] for an unregistered type.
+    #[must_use]
+    pub fn default_scalar(&self) -> &Value {
+        &self.default_scalar
     }
 
     /// Returns the declared default value for the whole property.
@@ -118,6 +196,15 @@ impl PropertyType {
     #[must_use]
     pub fn default_array_element(&self) -> Option<Value> {
         self.is_array.then(|| self.default_scalar.clone())
+    }
+}
+
+impl core::str::FromStr for PropertyType {
+    type Err = UnknownValueType;
+
+    /// See [`PropertyType::parse`].
+    fn from_str(type_name: &str) -> Result<Self, Self::Err> {
+        Self::parse(type_name)
     }
 }
 
@@ -459,6 +546,40 @@ pub fn remove_property(properties: &mut Vec<PropertyEntry>, name: TokenId) -> Op
 mod tests {
     use super::*;
     use alloc::vec;
+
+    #[test]
+    fn types_parse_through_the_value_type_table() {
+        let colors = PropertyType::parse("color3f[]").unwrap();
+        assert_eq!(colors.type_name(), "color3f[]");
+        assert_eq!(colors.value_type(), Some(ValueType::Color3f));
+        assert!(colors.is_array());
+        assert_eq!(colors.default_scalar(), &Value::Vec3f([0.0; 3]));
+        let float = PropertyType::parse("float").unwrap();
+        assert!(!float.is_array());
+        assert_eq!(float.default_scalar(), &Value::Float(0.0));
+        assert_eq!(
+            "token".parse::<PropertyType>().unwrap().type_name(),
+            "token"
+        );
+        for name in ["float5", "opaque[]", "color3f[][]", "Vec3f", ""] {
+            let unknown = PropertyType::parse(name).unwrap_err();
+            assert_eq!(unknown.type_name(), name);
+        }
+    }
+
+    #[test]
+    fn an_unregistered_type_keeps_its_name() {
+        let unknown = PropertyType::parse("notatype[]").unwrap_err();
+        assert_eq!(
+            alloc::string::ToString::to_string(&unknown),
+            "`notatype[]` is not a registered value type"
+        );
+        let kept = PropertyType::unregistered(unknown);
+        assert_eq!(kept.type_name(), "notatype[]");
+        assert_eq!(kept.value_type(), None);
+        assert!(kept.is_array());
+        assert_eq!(kept.default_scalar(), &Value::Null);
+    }
 
     #[test]
     fn slots_are_independent() {

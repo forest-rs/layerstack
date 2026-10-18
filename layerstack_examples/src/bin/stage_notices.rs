@@ -15,8 +15,10 @@ fn main() {
         path.prim_path(),
         PrimSpec::def().with_property(
             path.property(),
-            PropertySpec::typed_attribute(PropertyType::new("double", false, Value::Double(0.0)))
-                .with_default(Value::Double(1.0)),
+            PropertySpec::typed_attribute(
+                PropertyType::parse("double").expect("a registered value type"),
+            )
+            .with_default(Value::Double(1.0)),
         ),
     );
     store.insert_layer(layer);

@@ -73,7 +73,7 @@ fn entire_discovered_catalogue_matches_cpp_names_usd_types_defaults_and_metadata
                     PortKind::Output
                 }
             );
-            assert_eq!(port.property_type.type_name.as_ref(), expected.usd_type);
+            assert_eq!(port.property_type.type_name(), expected.usd_type);
             assert_eq!(
                 json(port.default.as_ref(), &tokens),
                 expected.default,

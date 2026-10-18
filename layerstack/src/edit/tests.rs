@@ -15,7 +15,7 @@ const ROCK: LayerId = LayerId(2);
 const SCENE_SUB: LayerId = LayerId(3);
 
 fn double() -> PropertyType {
-    PropertyType::new("double", false, Value::Double(0.0))
+    PropertyType::parse("double").unwrap()
 }
 
 fn attr(value: f64) -> PropertySpec {
@@ -365,7 +365,7 @@ fn values_must_conform_to_the_declared_type() {
     block.set_default(roughness, Value::Blocked);
     block.apply(&mut store).expect("a block fits any type");
 
-    let color3f = PropertyType::new("color3f", true, Value::Vec3f([0.0; 3]));
+    let color3f = PropertyType::parse("color3f[]").unwrap();
     let color = Address::spec(ROCK, spec(&mut store, "/Rock.primvars:color"));
     let mut create = Transaction::new();
     create.create_property(
@@ -391,7 +391,7 @@ fn values_must_conform_to_the_declared_type() {
     let mut tuple = Transaction::new();
     tuple.create_property(
         tint.clone(),
-        PropertySpec::typed_attribute(PropertyType::new("color3f", false, Value::Vec3f([0.0; 3])))
+        PropertySpec::typed_attribute(PropertyType::parse("color3f").unwrap())
             .with_default(Value::array(vec![Value::Float(0.1); 3])),
     );
     tuple
@@ -416,7 +416,7 @@ fn values_must_conform_to_the_declared_type() {
         color.clone(),
         Value::typed_array_edit(
             crate::ArrayEdit::default(),
-            PropertyType::new("float", true, Value::Float(0.0)),
+            PropertyType::parse("float[]").unwrap(),
         ),
     );
     assert!(matches!(
@@ -436,7 +436,7 @@ fn values_must_conform_to_the_declared_type() {
                     fill: Value::Int(7),
                 }],
             },
-            PropertyType::new("point3f", true, Value::Vec3f([0.0; 3])),
+            PropertyType::parse("point3f[]").unwrap(),
         ),
     );
     assert!(matches!(
@@ -451,7 +451,7 @@ fn values_must_conform_to_the_declared_type() {
         color.clone(),
         Value::typed_array_edit(
             crate::ArrayEdit::default(),
-            PropertyType::new("point3f", true, Value::Vec3f([0.0; 3])),
+            PropertyType::parse("point3f[]").unwrap(),
         ),
     );
     alias_edit
@@ -1259,7 +1259,7 @@ fn guards_compare_floats_by_bits() {
 fn nested_nans_are_guarded_by_bits() {
     let mut store = rocks();
     let color = Address::spec(ROCK, spec(&mut store, "/Rock.primvars:color"));
-    let color3f = PropertyType::new("color3f", true, Value::Vec3f([0.0; 3]));
+    let color3f = PropertyType::parse("color3f[]").unwrap();
     let colors = |x: f32| Value::Array(vec![Value::Vec3f([0.5, x, 0.5])]);
     let limits = store.tokens.intern("limits");
     let rock = Address::spec(ROCK, spec(&mut store, "/Rock"));
@@ -2050,12 +2050,8 @@ fn live_value_slots_preserve_mapping_and_undo() {
     let mut setup = Transaction::new();
     setup.create_property(
         at.clone(),
-        PropertySpec::typed_attribute(PropertyType::new(
-            "pathExpression",
-            false,
-            Value::PathExpression("".into()),
-        ))
-        .with_default(Value::PathExpression("./Old".into())),
+        PropertySpec::typed_attribute(PropertyType::parse("pathExpression").unwrap())
+            .with_default(Value::PathExpression("./Old".into())),
     );
     setup.apply(&mut store).unwrap();
     let mut live = crate::LiveStage::compose(&mut store, SCENE, StageOptions::default());
@@ -2382,6 +2378,48 @@ fn prepared_prim_field_edits_expect_their_authored_values() {
             ..
         })
     ));
+}
+
+#[test]
+fn attributes_need_a_registered_value_type() {
+    let mut store = rocks();
+    let layer = EditTarget::for_layer(SCENE);
+    let reason = |store: &mut InMemoryStore, txn: &Transaction| match txn.apply(store) {
+        Err(EditError::Rejected { reason, .. }) => reason,
+        other => panic!("expected a rejection, got {other:?}"),
+    };
+    let moss = store.property_path("/World/RockA.moss");
+    let float5 = PropertyType::unregistered(PropertyType::parse("float5").unwrap_err());
+    let unknown = Rejection::UnknownValueType {
+        path: SpecPath::from_property_path(moss),
+        type_name: "float5".into(),
+    };
+    let mut txn = Transaction::new();
+    txn.create_property(
+        layer.property(moss),
+        PropertySpec::typed_attribute(float5.clone()),
+    );
+    assert_eq!(reason(&mut store, &txn), unknown);
+
+    // An attribute a layer authors with the unknown type takes no value.
+    let spec = PropertySpec::typed_attribute(float5);
+    let rock_a = store.path("/World/RockA");
+    let name = store.tokens.intern("moss");
+    store
+        .layers
+        .get_mut(&SCENE)
+        .unwrap()
+        .prims
+        .get_mut(&rock_a)
+        .unwrap()
+        .set_property(name, spec);
+    let mut txn = Transaction::new();
+    txn.set_default(layer.property(moss), Value::Float(1.0));
+    assert_eq!(reason(&mut store, &txn), unknown);
+    assert_eq!(
+        alloc::string::ToString::to_string(&unknown),
+        "`float5` is not a registered value type"
+    );
 }
 
 #[test]

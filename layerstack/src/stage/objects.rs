@@ -197,7 +197,7 @@ impl Attribute<'_> {
     /// # use layerstack::{InMemoryStore, Layer, LayerId, PrimSpec, PropertySpec, PropertyType, Stage, StageOptions, Time, Value};
     /// # let mut store = InMemoryStore::default();
     /// # let (world, radius) = (store.path("/World"), store.tokens.intern("radius"));
-    /// # let double = PropertyType::new("double", false, Value::Double(0.0));
+    /// # let double = PropertyType::parse("double").unwrap();
     /// # let mut layer = Layer::new(LayerId(1));
     /// # layer.insert_prim(world, PrimSpec::def().with_property(radius,
     /// #     PropertySpec::typed_attribute(double).with_default(Value::Double(2.5))));

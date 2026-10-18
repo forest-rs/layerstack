@@ -473,7 +473,7 @@ mod tests {
         let p = store.path("/P");
         let a = store.tokens.intern("a");
         let data = store.tokens.intern("customData");
-        let ty = PropertyType::new("double", false, Value::Double(0.));
+        let ty = PropertyType::parse("double").unwrap();
         let mut strong = Layer::new(LayerId(1));
         let mut weak = Layer::new(LayerId(2));
         strong.insert_prim(

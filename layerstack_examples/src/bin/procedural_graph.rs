@@ -222,14 +222,18 @@ fn main() -> Result<(), Failure> {
         layer.insert_prim(recipe, prim);
         layer.set_property(
             PropertyPath::new(recipe, system_name),
-            PropertySpec::typed_attribute(PropertyType::new("token", false, Value::Token(system)))
-                .with_default(Value::Token(system)),
+            PropertySpec::typed_attribute(
+                PropertyType::parse("token").expect("a registered value type"),
+            )
+            .with_default(Value::Token(system)),
         );
     }
     layer.set_property(
         height,
-        PropertySpec::typed_attribute(PropertyType::new("float", false, Value::Float(0.)))
-            .with_default(Value::Float(1.)),
+        PropertySpec::typed_attribute(
+            PropertyType::parse("float").expect("a registered value type"),
+        )
+        .with_default(Value::Float(1.)),
     );
     store.insert_layer(layer);
     let options = StageOptions {

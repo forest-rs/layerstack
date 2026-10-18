@@ -242,16 +242,15 @@ fn author_shader(
     if kind.is_some_and(|kind| kind != PropertyKind::Attribute)
         || ty
             .as_ref()
-            .is_some_and(|ty| ty.is_array || ty.type_name.as_ref() != "token")
+            .is_some_and(|ty| ty.is_array() || ty.type_name() != "token")
     {
         return Err(LightHelperError::WrongPropertyType { prim, property });
     }
     if ty.is_none() {
-        let empty = edit.tokens().intern("");
         edit.create_uniform_attribute(
             prim,
             &property,
-            PropertyType::new("token", false, Value::Token(empty)),
+            PropertyType::parse("token").expect("a registered value type"),
         );
     }
     let id = edit.tokens().intern(id);
@@ -329,7 +328,7 @@ impl DomeLightEdit {
             .property_kind(self.path(), NAME)
             .is_some_and(|kind| kind != PropertyKind::Attribute)
             || edit.attribute_type(self.path(), NAME).is_some_and(|ty| {
-                ty.is_array || !matches!(ty.type_name.as_ref(), "half" | "float" | "double")
+                ty.is_array() || !matches!(ty.type_name(), "half" | "float" | "double")
             })
         {
             return Err(LightHelperError::InvalidOrientationOp(self.path()));

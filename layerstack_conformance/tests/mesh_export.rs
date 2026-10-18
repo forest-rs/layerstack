@@ -157,7 +157,7 @@ fn declared_type(store: &mut InMemoryStore, prim: &str, name: &str) -> String {
         .type_name
         .as_ref()
         .expect("attribute has a declared type");
-    format!("{}{}", ty.type_name, if ty.is_array { "[]" } else { "" })
+    ty.type_name().to_owned()
 }
 
 /// Composes the stage from an already-loaded store and checks every value

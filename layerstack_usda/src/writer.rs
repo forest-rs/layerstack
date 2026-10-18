@@ -80,6 +80,7 @@ use core::fmt::{self, Write as _};
 
 use layerstack::array_edit::{ArrayIndex, Instruction, Operand};
 use layerstack::spline::SplineData;
+use layerstack::value_type::ValueType;
 
 pub use crate::ast::Specifier;
 
@@ -1926,60 +1927,51 @@ struct Shape {
     array: bool,
 }
 
-/// Maps a USD attribute value type name to its storage shape.
-///
-/// The accepted names are a subset of the OpenUSD `Sdf` value type registry
-/// (`pxr/usd/sdf/schema.cpp`, `_RegisterStandardTypes`; `pxr/usd/sdf/types.h`,
-/// `SDF_VALUE_TYPES` plus the role aliases), each optionally with `[]`.
-/// `opaque` and `group` hold no value (`SdfOpaqueValue`), so they are
-/// declarations only and have no array form. Deliberately excluded:
-/// `dictionary` (metadata only, never an attribute type) and the legacy
-/// capitalized aliases (`Vec3f`, `PointFloat`, ...).
+/// Maps a USD attribute value type name to its storage shape, through the
+/// value type table ([`ValueType::parse`]): a registered type, optionally
+/// with `[]`. A role shares its storage type's shape (`color3f` is a
+/// `float3`). `opaque` and `group` hold no value (`SdfOpaqueValue`), so they
+/// are declarations only and have no array form. `dictionary` is metadata
+/// only, never an attribute type.
 ///
 /// Spec: AOUSD Core §6.2 (scalar types), §6.3 (dimensioned types), §6.5
-/// (semantic aliases).
+/// (semantic roles).
 fn parse_type_name(type_name: &str) -> Option<Shape> {
-    let (base, array) = match type_name.strip_suffix("[]") {
-        Some(base) => (base, true),
-        None => (type_name, false),
-    };
-    let (elem, arity) = match base {
-        "bool" => (Elem::Bool, 1),
-        "uchar" => (Elem::UChar, 1),
-        "int" => (Elem::Int, 1),
-        "uint" => (Elem::UInt, 1),
-        "int64" => (Elem::Int64, 1),
-        "uint64" => (Elem::UInt64, 1),
-        "half" => (Elem::Half, 1),
-        "float" => (Elem::Float, 1),
-        "double" | "timecode" => (Elem::Double, 1),
-        "string" => (Elem::String, 1),
-        "token" => (Elem::Token, 1),
-        "asset" => (Elem::Asset, 1),
-        "pathExpression" => (Elem::PathExpression, 1),
-        "int2" => (Elem::Int, 2),
-        "int3" => (Elem::Int, 3),
-        "int4" => (Elem::Int, 4),
-        "float2" | "texCoord2f" => (Elem::Float, 2),
-        "float3" | "point3f" | "normal3f" | "vector3f" | "color3f" | "texCoord3f" => {
-            (Elem::Float, 3)
-        }
-        "float4" | "color4f" => (Elem::Float, 4),
-        "double2" | "texCoord2d" => (Elem::Double, 2),
-        "double3" | "point3d" | "normal3d" | "vector3d" | "color3d" | "texCoord3d" => {
-            (Elem::Double, 3)
-        }
-        "double4" | "color4d" => (Elem::Double, 4),
-        "half2" | "texCoord2h" => (Elem::Half, 2),
-        "half3" | "point3h" | "normal3h" | "vector3h" | "color3h" | "texCoord3h" => (Elem::Half, 3),
-        "half4" | "color4h" => (Elem::Half, 4),
-        "quath" => (Elem::Quath, 1),
-        "quatf" => (Elem::Quatf, 1),
-        "quatd" => (Elem::Quatd, 1),
-        "matrix2d" => (Elem::Matrix, 2),
-        "matrix3d" => (Elem::Matrix, 3),
-        "matrix4d" | "frame4d" => (Elem::Matrix, 4),
-        "opaque" | "group" if !array => (Elem::Valueless, 1),
+    let (ty, array) = ValueType::parse(type_name)?;
+    let (elem, arity) = match ty.storage() {
+        ValueType::Bool => (Elem::Bool, 1),
+        ValueType::UChar => (Elem::UChar, 1),
+        ValueType::Int => (Elem::Int, 1),
+        ValueType::UInt => (Elem::UInt, 1),
+        ValueType::Int64 => (Elem::Int64, 1),
+        ValueType::UInt64 => (Elem::UInt64, 1),
+        ValueType::Half => (Elem::Half, 1),
+        ValueType::Float => (Elem::Float, 1),
+        ValueType::Double | ValueType::TimeCode => (Elem::Double, 1),
+        ValueType::String => (Elem::String, 1),
+        ValueType::Token => (Elem::Token, 1),
+        ValueType::Asset => (Elem::Asset, 1),
+        ValueType::PathExpression => (Elem::PathExpression, 1),
+        ValueType::Int2 => (Elem::Int, 2),
+        ValueType::Int3 => (Elem::Int, 3),
+        ValueType::Int4 => (Elem::Int, 4),
+        ValueType::Half2 => (Elem::Half, 2),
+        ValueType::Half3 => (Elem::Half, 3),
+        ValueType::Half4 => (Elem::Half, 4),
+        ValueType::Float2 => (Elem::Float, 2),
+        ValueType::Float3 => (Elem::Float, 3),
+        ValueType::Float4 => (Elem::Float, 4),
+        ValueType::Double2 => (Elem::Double, 2),
+        ValueType::Double3 => (Elem::Double, 3),
+        ValueType::Double4 => (Elem::Double, 4),
+        ValueType::Quath => (Elem::Quath, 1),
+        ValueType::Quatf => (Elem::Quatf, 1),
+        ValueType::Quatd => (Elem::Quatd, 1),
+        ValueType::Matrix2d => (Elem::Matrix, 2),
+        ValueType::Matrix3d => (Elem::Matrix, 3),
+        ValueType::Matrix4d => (Elem::Matrix, 4),
+        ValueType::Opaque => (Elem::Valueless, 1),
+        // `storage` is a type without a role.
         _ => return None,
     };
     Some(Shape { elem, arity, array })

@@ -376,7 +376,7 @@ fn clip_inspection_uses_manifest_metadata_without_decoding_payloads() {
     let clip_path = store.path("/C");
     let x = store.tokens.intern("x");
     let clips = store.tokens.intern("clips");
-    let ty = || crate::PropertyType::new("float", true, Value::Float(0.));
+    let ty = || crate::PropertyType::parse("float[]").unwrap();
     let mut root = Layer::new(LayerId(1));
     root.sublayers.push(SublayerEntry::new(LayerId(2)));
     root.insert_prim(

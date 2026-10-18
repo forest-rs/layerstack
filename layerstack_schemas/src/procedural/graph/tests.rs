@@ -120,12 +120,12 @@ fn fixture() -> Fixture {
         layer.insert_prim(recipe, prim);
         layer.set_property(
             PropertyPath::new(recipe, system_name),
-            PropertySpec::typed_attribute(PropertyType::new("token", false, Value::Token(system)))
+            PropertySpec::typed_attribute(PropertyType::parse("token").unwrap())
                 .with_default(Value::Token(system)),
         );
         layer.set_property(
             PropertyPath::new(recipe, seed_name),
-            PropertySpec::typed_attribute(PropertyType::new("int", false, Value::Int(0)))
+            PropertySpec::typed_attribute(PropertyType::parse("int").unwrap())
                 .with_default(Value::Int(i32::try_from(i).unwrap() + 1)),
         );
     }
@@ -133,7 +133,7 @@ fn fixture() -> Fixture {
         layer.insert_prim(site, PrimSpec::def());
         layer.set_property(
             PropertyPath::new(site, value),
-            PropertySpec::typed_attribute(PropertyType::new("int", false, Value::Int(0)))
+            PropertySpec::typed_attribute(PropertyType::parse("int").unwrap())
                 .with_default(Value::Int(0)),
         );
     }

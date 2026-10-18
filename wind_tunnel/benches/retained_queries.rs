@@ -24,7 +24,7 @@ fn bench(c: &mut Criterion) {
         let unused = store.tokens.intern("inputs:unused");
         let mut layer = Layer::new(LayerId(1));
         let mut paths = Vec::new();
-        let ty = PropertyType::new("float", false, Value::Float(0.0));
+        let ty = PropertyType::parse("float").unwrap();
         for i in 0..count {
             let path = store.path(&format!("/M{i}"));
             paths.push(path);

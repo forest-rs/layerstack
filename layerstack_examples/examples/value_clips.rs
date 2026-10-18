@@ -26,7 +26,7 @@ fn main() {
     spec.set_property(
         height,
         PropertySpec {
-            type_name: Some(PropertyType::new("double", false, Value::Double(0.))),
+            type_name: Some(PropertyType::parse("double").expect("a registered value type")),
             time_samples: Some(vec![(0., Value::Double(0.)), (10., Value::Double(100.))].into()),
             ..PropertySpec::attribute()
         },

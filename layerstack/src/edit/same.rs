@@ -176,9 +176,9 @@ impl Same for FieldEntry {
 
 impl Same for PropertyType {
     fn same(&self, other: &Self) -> bool {
-        self.type_name == other.type_name
-            && self.is_array == other.is_array
-            && self.default_scalar.same(&other.default_scalar)
+        self.type_name() == other.type_name()
+            && self.is_array() == other.is_array()
+            && self.default_scalar().same(other.default_scalar())
     }
 }
 
@@ -367,7 +367,7 @@ mod tests {
                         fill: Value::Double(f64::from_bits(bits)),
                     }],
                 },
-                PropertyType::new("double", true, Value::Double(0.0)),
+                PropertyType::parse("double[]").unwrap(),
             )
         };
         assert!(edit(0x7ff8_0000_0000_0123).same(&edit(0x7ff8_0000_0000_0123)));

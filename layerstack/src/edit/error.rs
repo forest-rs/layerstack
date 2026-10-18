@@ -100,6 +100,22 @@ pub enum Rejection {
     /// or a spec created: author one with
     /// [`Transaction::create_property`](super::Transaction::create_property).
     UndeclaredType(SpecPath),
+    /// The attribute's type is not a registered value type: a type a
+    /// layer authors that no registered type has
+    /// ([`PropertyType::unregistered`](crate::PropertyType::unregistered)).
+    /// An attribute with it cannot be created or given a value.
+    ///
+    /// OpenUSD: `SdfAttributeSpec::New` rejects an invalid
+    /// `SdfValueTypeName`, and `UsdAttribute::Set` an attribute whose
+    /// type name the registry does not know.
+    ///
+    /// Spec: AOUSD Core §6.2 (value types), §7.6.4.1.1 (`typeName`).
+    UnknownValueType {
+        /// The attribute.
+        path: SpecPath,
+        /// Its type name.
+        type_name: Arc<str>,
+    },
     /// The value does not conform to the attribute's declared type.
     TypeMismatch {
         /// The attribute.
@@ -235,6 +251,9 @@ impl fmt::Display for Rejection {
             Self::SpecExists(_) => f.write_str("a spec exists at the path"),
             Self::NotAnAttribute(_) => f.write_str("the property is not an attribute"),
             Self::UndeclaredType(_) => f.write_str("the attribute declares no type"),
+            Self::UnknownValueType { type_name, .. } => {
+                write!(f, "`{type_name}` is not a registered value type")
+            }
             Self::TypeMismatch { declared, .. } => {
                 write!(f, "the value is not a `{declared}`")
             }

@@ -66,7 +66,7 @@ fn build(layers: u64, points_len: usize, instructions: usize) -> Scene {
     let custom_data = store.tokens.intern("customData");
     let api_schemas = store.tokens.intern("apiSchemas");
     let prim = store.path("/P");
-    let float_array_type = PropertyType::new("float", true, Value::Float(0.0));
+    let float_array_type = PropertyType::parse("float[]").unwrap();
 
     let mut root = Layer::new(LayerId(1));
     *root.sublayers_mut() = (2..=layers)
@@ -116,7 +116,7 @@ fn build(layers: u64, points_len: usize, instructions: usize) -> Scene {
             .with_property(
                 size,
                 PropertySpec::attribute()
-                    .with_type(PropertyType::new("double", false, Value::Double(0.0)))
+                    .with_type(PropertyType::parse("double").unwrap())
                     .with_default(Value::Double(id as f64)),
             )
             .with_field(custom_data, entry)

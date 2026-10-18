@@ -28,12 +28,8 @@ fn fixture() -> (InMemoryStore, layerstack::PathId, layerstack::TokenId) {
         model,
         PrimSpec::def().with_property(
             file,
-            PropertySpec::typed_attribute(PropertyType::new(
-                "asset",
-                false,
-                layerstack::Value::Asset("".into()),
-            ))
-            .with_default(layerstack::Value::Asset("original/albedo.png".into())),
+            PropertySpec::typed_attribute(PropertyType::parse("asset").unwrap())
+                .with_default(layerstack::Value::Asset("original/albedo.png".into())),
         ),
     );
     root.insert_prim(

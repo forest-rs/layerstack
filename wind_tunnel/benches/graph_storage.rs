@@ -115,11 +115,7 @@ fn layer_dependencies(c: &mut Criterion) {
                             spec = spec.with_property(
                                 field,
                                 layerstack::PropertySpec::typed_attribute(
-                                    layerstack::PropertyType::new(
-                                        "float3",
-                                        false,
-                                        layerstack::Value::Vec3f([0.0; 3]),
-                                    ),
+                                    layerstack::PropertyType::parse("float3").unwrap(),
                                 )
                                 .with_default(layerstack::Value::Vec3f([0.0; 3])),
                             );

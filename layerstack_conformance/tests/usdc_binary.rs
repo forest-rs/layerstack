@@ -585,8 +585,8 @@ fn openusd_optional_encodings_decode() {
         .property(name)
         .expect("ints property");
     let declared = spec.type_name.as_ref().expect("declared type");
-    assert_eq!(&*declared.type_name, "int", "element type name");
-    assert!(declared.is_array, "array flag");
+    assert_eq!(declared.type_name(), "int[]", "type name");
+    assert!(declared.is_array(), "array flag");
 }
 
 // ---------------------------------------------------------------------------

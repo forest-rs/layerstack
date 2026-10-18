@@ -297,13 +297,13 @@ impl OpinionFamily<Opinion> for ArrayFamily<'_> {
             Some(value @ (Value::Array(_) | Value::TypedArray(_))) => value.clone(),
             Some(Value::TypedArrayEdit(edit)) => Value::array_with_element(
                 apply_to_array(edit.edit(), &[], Some(edit.value_type())),
-                Some(&edit.value_type().default_scalar),
+                Some(edit.value_type().default_scalar()),
             ),
             Some(Value::ArrayEdit(edit)) => Value::array_with_element(
                 apply_to_array(edit, &[], self.property_type),
-                self.property_type.map(|p| &p.default_scalar),
+                self.property_type.map(|p| p.default_scalar()),
             ),
-            _ => self.property_type.filter(|p| p.is_array).map_or_else(
+            _ => self.property_type.filter(|p| p.is_array()).map_or_else(
                 || Value::Array(Vec::new()),
                 PropertyType::default_property_value,
             ),
@@ -402,7 +402,7 @@ fn resolve_sparse_default_matching_impl(
             if let (Some(strong), Some(weak)) = (
                 edits.iter().find_map(|(_, value)| value.array_edit_type()),
                 value.array_edit_type(),
-            ) && !same_element_kind(&strong.default_scalar, &weak.default_scalar)
+            ) && !same_element_kind(strong.default_scalar(), weak.default_scalar())
             {
                 for (position, _) in &edits {
                     trace(DefaultTrace::Ignored(*position));
@@ -483,7 +483,7 @@ fn resolve_sparse_default_matching_impl(
         .iter()
         .find_map(|(_, value)| value.array_edit_type())
         .or(property_type);
-    let empty = seed_type.filter(|ty| ty.is_array).map_or_else(
+    let empty = seed_type.filter(|ty| ty.is_array()).map_or_else(
         || Value::Array(Vec::new()),
         PropertyType::default_property_value,
     );
@@ -520,20 +520,20 @@ pub(crate) fn edit_matches_value(edit: &Value, base: &Value) -> bool {
         return matches!(base, Value::TypedArray(_)) || base.array_ref().is_some();
     };
     if let Some(other) = base.array_edit_type() {
-        return same_element_kind(&ty.default_scalar, &other.default_scalar);
+        return same_element_kind(ty.default_scalar(), other.default_scalar());
     }
     if let Value::TypedArray(array) = base {
-        return same_element_kind(&ty.default_scalar, &array.element_kind());
+        return same_element_kind(ty.default_scalar(), &array.element_kind());
     }
     let Some(array) = base.array_ref() else {
         return false;
     };
     if let Some(native) = array.typed() {
-        return same_element_kind(&ty.default_scalar, &native.element_kind());
+        return same_element_kind(ty.default_scalar(), &native.element_kind());
     }
     array
         .iter()
-        .all(|element| same_element_kind(&ty.default_scalar, &element))
+        .all(|element| same_element_kind(ty.default_scalar(), &element))
 }
 
 fn compose_edits(
@@ -1810,7 +1810,6 @@ mod tests {
         path::{Path, PathId, PathInterner},
         prim_index::Opinion,
     };
-    use alloc::sync::Arc;
     use alloc::vec;
 
     fn array_value(values: &[i32]) -> Value {
@@ -1818,7 +1817,7 @@ mod tests {
     }
 
     fn int_array_type() -> PropertyType {
-        PropertyType::new(Arc::<str>::from("int"), true, Value::Int(0))
+        PropertyType::parse("int[]").unwrap()
     }
 
     fn test_key(layer: LayerId, lookup_path: PathId) -> OpinionKey {
@@ -2104,7 +2103,7 @@ mod tests {
                 }],
             })
         };
-        let ty = PropertyType::new(Arc::<str>::from("double"), true, Value::Double(0.));
+        let ty = PropertyType::parse("double[]").unwrap();
         let opinions = vec![
             array_opinion(
                 path,
@@ -2482,7 +2481,7 @@ mod tests {
     }
 
     fn float_array_type() -> PropertyType {
-        PropertyType::new(Arc::<str>::from("float"), true, Value::Float(0.0))
+        PropertyType::parse("float[]").unwrap()
     }
 
     #[test]
@@ -2799,8 +2798,7 @@ mod tests {
     fn time_sampled_edits_compose_over_the_fallback_seed() {
         let (spec_path, field) = test_ids();
         let fallback = float3_array(&[[-1.0; 3], [1.0; 3]]);
-        let float3_type =
-            PropertyType::new(Arc::<str>::from("float3"), true, Value::Vec3f([0.0; 3]));
+        let float3_type = PropertyType::parse("float3[]").unwrap();
         let resolve = |opinions: &[Opinion], time: f64, interp| {
             resolve_sparse_value(
                 opinions,

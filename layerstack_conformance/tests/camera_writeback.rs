@@ -141,7 +141,7 @@ fn stronger_last_field_and_untyped_declarations_reject_without_partial_edits() {
         let prop = if bad_type {
             PropertySpec::attribute().with_default(Value::Double(3.))
         } else {
-            PropertySpec::typed_attribute(PropertyType::new("double", false, Value::Double(0.)))
+            PropertySpec::typed_attribute(PropertyType::parse("double").unwrap())
                 .with_default(Value::Double(3.))
         };
         let root = store.layers.get_mut(&LayerId(1)).unwrap();

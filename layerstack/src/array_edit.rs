@@ -18,7 +18,11 @@ use alloc::vec::Vec;
 
 use opinionated::ArrayFill;
 
-use crate::{doc::Value, property::PropertyType};
+use crate::{
+    doc::Value,
+    property::PropertyType,
+    value_type::{UnknownValueType, ValueType},
+};
 
 pub use opinionated::ArrayIndex;
 // Portable instruction types for format adapters with their own literal model.
@@ -49,31 +53,20 @@ impl TypedArrayEdit {
     /// the attribute declaration, as with native `VtArrayEdit<T>`. The
     /// descriptor's scalar default supplies growth fills.
     #[must_use]
-    pub fn new(edit: ArrayEdit, mut value_type: PropertyType) -> Self {
-        value_type.is_array = true;
+    pub fn new(edit: ArrayEdit, value_type: PropertyType) -> Self {
         // A Vt edit's native element tag has no role aliases. USDA and USDC
         // must agree on this descriptor while preserving the property role.
         // OpenUSD: SDF_VALUE_TYPES, `_ValueHandler::PackArrayEdit`.
-        let authored = value_type
-            .type_name
-            .strip_suffix("[]")
-            .unwrap_or(&value_type.type_name);
-        let canonical = match authored {
-            "texCoord2f" => "float2",
-            "texCoord2d" => "double2",
-            "texCoord2h" => "half2",
-            "point3f" | "normal3f" | "vector3f" | "color3f" | "texCoord3f" => "float3",
-            "point3d" | "normal3d" | "vector3d" | "color3d" | "texCoord3d" => "double3",
-            "point3h" | "normal3h" | "vector3h" | "color3h" | "texCoord3h" => "half3",
-            "color4f" => "float4",
-            "color4d" => "double4",
-            "color4h" => "half4",
-            "frame4d" => "matrix4d",
-            name => name,
+        let value_type = match value_type.value_type().map(ValueType::storage) {
+            Some(storage) if storage.array_name().is_some() => {
+                PropertyType::registered(storage, true)
+            }
+            _ if value_type.is_array() => value_type,
+            _ => {
+                let name = alloc::format!("{}[]", value_type.type_name());
+                PropertyType::unregistered(UnknownValueType::new(&name))
+            }
         };
-        if canonical != &*value_type.type_name {
-            value_type.type_name = alloc::sync::Arc::from(canonical);
-        }
         Self { edit, value_type }
     }
 
@@ -168,7 +161,6 @@ pub fn apply_in_place(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alloc::sync::Arc;
     use alloc::vec;
 
     fn int_array(values: &[i32]) -> Vec<Value> {
@@ -176,7 +168,7 @@ mod tests {
     }
 
     fn int_array_type() -> PropertyType {
-        PropertyType::new(Arc::<str>::from("int"), true, Value::Int(0))
+        PropertyType::parse("int[]").unwrap()
     }
 
     #[test]
@@ -194,12 +186,12 @@ mod tests {
         let edit = ArrayEdit {
             ops: vec![ArrayEditOp::MinSize { len: 3 }],
         };
-        let float_array = PropertyType::new(Arc::<str>::from("float"), true, Value::Float(0.5));
+        let float_array = PropertyType::parse("float[]").unwrap();
 
         let result = apply_to_array(&edit, &[Value::Float(2.0)], Some(&float_array));
         assert_eq!(
             result,
-            [Value::Float(2.0), Value::Float(0.5), Value::Float(0.5)]
+            [Value::Float(2.0), Value::Float(0.0), Value::Float(0.0)]
         );
     }
 
@@ -211,7 +203,7 @@ mod tests {
                 ArrayEditOp::Resize { len: 3 },
             ],
         };
-        let scalar_int = PropertyType::new(Arc::<str>::from("int"), false, Value::Int(0));
+        let scalar_int = PropertyType::parse("int").unwrap();
 
         assert_eq!(
             apply_to_array(&edit, &int_array(&[1]), None),

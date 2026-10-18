@@ -287,10 +287,13 @@ impl GeneratedMesh {
             let array = array
                 .try_materialize()
                 .map_err(|_| MeshPublicationError::PrimvarType(primvar.name.clone()))?;
-            if !primvar.type_name.is_array
-                || !numeric_type_matches(&primvar.type_name.type_name, array)
+            if !primvar.type_name.is_array()
+                || !primvar
+                    .type_name
+                    .value_type()
+                    .is_some_and(|ty| numeric_type_matches(ty.name(), array))
                 || core::mem::discriminant(&array.element_kind())
-                    != core::mem::discriminant(&primvar.type_name.default_scalar)
+                    != core::mem::discriminant(primvar.type_name.default_scalar())
             {
                 return Err(MeshPublicationError::PrimvarType(primvar.name.clone()));
             }
@@ -382,48 +385,36 @@ impl GeneratedMesh {
         }
         let mut attributes = Vec::new();
         let attribute = |ty, value| PropertySpec::typed_attribute(ty).with_default(value);
-        let typed = |name, zero, array| {
+        let typed = |name, array| {
             attribute(
-                PropertyType::new(name, true, zero),
+                PropertyType::parse(name).expect("a registered value type"),
                 Value::TypedArray(array),
             )
         };
         attributes.push((
             String::from("points"),
-            typed(
-                "point3f",
-                Value::Vec3f([0.; 3]),
-                TypedArray::Vec3f(self.points.clone()),
-            ),
+            typed("point3f[]", TypedArray::Vec3f(self.points.clone())),
         ));
         attributes.push((
             String::from("faceVertexCounts"),
-            typed(
-                "int",
-                Value::Int(0),
-                TypedArray::Int(self.face_vertex_counts.clone()),
-            ),
+            typed("int[]", TypedArray::Int(self.face_vertex_counts.clone())),
         ));
         attributes.push((
             String::from("faceVertexIndices"),
-            typed(
-                "int",
-                Value::Int(0),
-                TypedArray::Int(self.face_vertex_indices.clone()),
-            ),
+            typed("int[]", TypedArray::Int(self.face_vertex_indices.clone())),
         ));
         let extent = retained_extent
             .cloned()
             .unwrap_or_else(|| derive_extent(&self.points));
         attributes.push((
             String::from("extent"),
-            typed("float3", Value::Vec3f([0.; 3]), TypedArray::Vec3f(extent)),
+            typed("float3[]", TypedArray::Vec3f(extent)),
         ));
         let subdivision = store.tokens_mut().intern("none");
         attributes.push((
             String::from("subdivisionScheme"),
             attribute(
-                PropertyType::new("token", false, Value::Token(subdivision)),
+                PropertyType::parse("token").expect("a registered value type"),
                 Value::Token(subdivision),
             ),
         ));
@@ -443,7 +434,7 @@ impl GeneratedMesh {
             if let Some(indices) = &primvar.indices {
                 attributes.push((
                     format!("{}:indices", primvar.name),
-                    typed("int", Value::Int(0), TypedArray::Int(indices.clone())),
+                    typed("int[]", TypedArray::Int(indices.clone())),
                 ));
             }
         }
@@ -466,11 +457,8 @@ impl GeneratedMesh {
                 .and_then(|l| l.property_at(&site));
             if let Some(local) = local {
                 if local.kind != desired.kind
-                    || local.type_name.as_ref().map(|t| (&t.type_name, t.is_array))
-                        != desired
-                            .type_name
-                            .as_ref()
-                            .map(|t| (&t.type_name, t.is_array))
+                    || local.type_name.as_ref().map(PropertyType::type_name)
+                        != desired.type_name.as_ref().map(PropertyType::type_name)
                 {
                     return Err(MeshPublicationError::PropertyConflict(name));
                 }
@@ -654,7 +642,7 @@ mod tests {
     fn uv() -> MeshPrimvar {
         MeshPrimvar {
             name: "primvars:st".into(),
-            type_name: PropertyType::new("texCoord2f", true, Value::Vec2f([0.; 2])),
+            type_name: PropertyType::parse("texCoord2f[]").unwrap(),
             value: Value::TypedArray(TypedArray::Vec2f(Arc::new(vec![[0.; 2]; 3]))),
             interpolation: "faceVarying".into(),
             element_size: 1,
@@ -763,7 +751,7 @@ mod tests {
         let mut user_edit = Transaction::new();
         user_edit.create_property(
             target.property(custom),
-            PropertySpec::typed_attribute(PropertyType::new("int", false, Value::Int(0)))
+            PropertySpec::typed_attribute(PropertyType::parse("int").unwrap())
                 .with_default(Value::Int(17)),
         );
         live.apply(&mut store, &user_edit).unwrap();

@@ -169,7 +169,7 @@ impl crate::usd_geom::ImageableEdit {
             let name = format!("subsetFamily:{family}:familyType");
             let declared = edit.property_kind(self.path(), &name).is_some();
             match edit.attribute_type(self.path(), &name) {
-                Some(ty) if ty.is_array || !matches!(ty.default_scalar, Value::Token(_)) => {
+                Some(ty) if ty.is_array() || !matches!(ty.default_scalar(), Value::Token(_)) => {
                     return Err(SubsetAuthoringError::IncompatibleFamilyDeclaration);
                 }
                 Some(_) => {}
@@ -177,11 +177,10 @@ impl crate::usd_geom::ImageableEdit {
                     return Err(SubsetAuthoringError::IncompatibleFamilyDeclaration);
                 }
                 None => {
-                    let fallback = Value::Token(edit.tokens().intern(""));
                     edit.create_uniform_attribute(
                         self.path(),
                         &name,
-                        layerstack::PropertyType::new("token", false, fallback),
+                        layerstack::PropertyType::parse("token").expect("a registered value type"),
                     );
                 }
             }

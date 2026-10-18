@@ -334,12 +334,8 @@ mod tests {
                     source,
                     PrimSpec::def().with_property(
                         size,
-                        PropertySpec::typed_attribute(PropertyType::new(
-                            "double",
-                            false,
-                            Value::Double(0.),
-                        ))
-                        .with_default(Value::Double(2.)),
+                        PropertySpec::typed_attribute(PropertyType::parse("double").unwrap())
+                            .with_default(Value::Double(2.)),
                     ),
                 );
             }
@@ -471,7 +467,7 @@ mod tests {
         create.create_prim(target.prim(f.source), layerstack::Specifier::Def, None);
         create.create_property(
             target.property(size),
-            PropertySpec::typed_attribute(PropertyType::new("double", false, Value::Double(0.)))
+            PropertySpec::typed_attribute(PropertyType::parse("double").unwrap())
                 .with_default(Value::Double(3.)),
         );
         f.edit(&mut cache, &create);
@@ -702,10 +698,11 @@ mod tests {
         let mut corrupt = Transaction::new();
         corrupt.create_property(
             target.property(points),
-            PropertySpec::typed_attribute(PropertyType::new("float3", true, Value::Vec3f([0.; 3])))
-                .with_default(Value::TypedArray(layerstack::TypedArray::Deferred(
-                    Arc::new(CorruptArray(error.clone())),
-                ))),
+            PropertySpec::typed_attribute(PropertyType::parse("float3[]").unwrap()).with_default(
+                Value::TypedArray(layerstack::TypedArray::Deferred(Arc::new(CorruptArray(
+                    error.clone(),
+                )))),
+            ),
         );
         f.edit(&mut cache, &corrupt);
         let expected = BoundsError::ExtentProvider {

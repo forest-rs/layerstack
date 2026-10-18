@@ -576,14 +576,14 @@ fn sparse_edit_descriptors_and_preflight_errors() {
         panic!("typed native edit");
     };
     assert_eq!(edit.edit(), &program);
-    assert_eq!(&*edit.value_type().type_name, "int");
+    assert_eq!(edit.value_type().type_name(), "int[]");
     assert_eq!(source.save_usda().unwrap(), imported.save_usda().unwrap());
 
     // Writing another actual element kind under this declaration is rejected
     // before a file is produced, including a program with no literals.
     source.property("/A.ids").default = Some(Value::typed_array_edit(
         program,
-        layerstack::property::PropertyType::new("float", true, Value::Float(0.0)),
+        layerstack::property::PropertyType::parse("float[]").unwrap(),
     ));
     assert!(matches!(
         source.save_usda(),
@@ -623,17 +623,11 @@ fn sparse_end_index_survives_signed_text_and_binary() {
 fn text_refuses_sparse_edit_kind_changes_while_binary_preserves_retiming() {
     use layerstack::{InterpolationType, LayerOffset, PropertyType, Value};
     use layerstack_usda::{save::SaveError, writer::WriteError};
-    for (kind, declaration, descriptor, expected) in [
-        (
-            "double",
-            "timecode",
-            Value::TimeCode(0.),
-            Value::from(vec![5_f64]),
-        ),
+    for (kind, declaration, expected) in [
+        ("double", "timecode", Value::from(vec![5_f64])),
         (
             "timecode",
             "double",
-            Value::Double(0.),
             Value::array_with_element(vec![Value::TimeCode(18.)], Some(&Value::TimeCode(0.))),
         ),
     ] {
@@ -647,7 +641,7 @@ fn text_refuses_sparse_edit_kind_changes_while_binary_preserves_retiming() {
                 "#usda 1.0\ndef \"P\" {{\n {kind}[] {opinion}\n}}\n"
             ));
             authored.property("/P.x").type_name =
-                Some(PropertyType::new(declaration, true, descriptor.clone()));
+                Some(PropertyType::parse(&format!("{declaration}[]")).unwrap());
             assert!(matches!(
                 authored.save_usda(),
                 Err(SaveError::Document(WriteError::TypeMismatch { .. }))

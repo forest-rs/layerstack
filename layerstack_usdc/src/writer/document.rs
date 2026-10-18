@@ -1800,7 +1800,7 @@ def Xform "A" (
         let a = layerstack::PropertyPath::parse("/A.a", &tokens, &paths).unwrap();
         let spec = read.layer.property(a).expect("the attribute reads back");
         assert_eq!(
-            spec.type_name.as_ref().map(|t| &*t.type_name),
+            spec.type_name.as_ref().map(|t| t.type_name()),
             Some("opaque")
         );
         assert_eq!(spec.default, None, "no value");

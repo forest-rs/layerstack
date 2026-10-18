@@ -48,11 +48,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }),
                     Some(&Value::Float(0.)),
                 );
-                let mut property = PropertySpec::typed_attribute(PropertyType::new(
-                    "float",
-                    true,
-                    Value::Float(0.),
-                ));
+                let mut property = PropertySpec::typed_attribute(
+                    PropertyType::parse("float[]").expect("a registered value type"),
+                );
                 if shape == "animated" {
                     property.time_samples =
                         Some(vec![(0., values.clone()), (10., values.clone())].into());

@@ -3963,12 +3963,8 @@ mod tests {
         let mut txn = Transaction::new();
         txn.create_property(
             target.property(PropertyPath::new(world, value)),
-            PropertySpec::typed_attribute(crate::PropertyType::new(
-                "double",
-                false,
-                Value::Double(0.0),
-            ))
-            .with_default(Value::Double(1.0)),
+            PropertySpec::typed_attribute(crate::PropertyType::parse("double").unwrap())
+                .with_default(Value::Double(1.0)),
         );
         live.apply(&mut store, &txn).unwrap();
         assert_eq!(index_work(&live), (0, 0), "a value edit re-indexes nothing");
@@ -4670,7 +4666,7 @@ mod tests {
             SchemaDefinition::typed(rock)
                 .with_property(
                     PropertyDefinition::attribute(width)
-                        .with_type(PropertyType::new("float", false, Value::Float(0.0)))
+                        .with_type(PropertyType::parse("float").unwrap())
                         .with_fallback(Value::Float(1.0))
                         .uniform(),
                 )
@@ -4727,7 +4723,7 @@ mod tests {
             .spec;
         assert_eq!(spec.kind, PropertyKind::Attribute);
         assert_eq!(
-            spec.type_name.as_ref().map(|t| &*t.type_name),
+            spec.type_name.as_ref().map(|t| t.type_name()),
             Some("float")
         );
         assert_eq!(spec.variability, Variability::Uniform);

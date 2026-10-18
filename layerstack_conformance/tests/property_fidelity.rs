@@ -367,7 +367,7 @@ fn unknown_schemas_and_uniform_namespaced_properties_survive() {
         .expect("inputs");
     assert_eq!(inputs.variability, Variability::Uniform);
     assert!(inputs.custom);
-    assert_eq!(inputs.type_name.map(|t| t.is_array), Some(true));
+    assert_eq!(inputs.type_name.map(|t| t.is_array()), Some(true));
 
     assert_eq!(
         stage.resolve_property_order(prim, &store),

@@ -40,7 +40,7 @@
 //! let mut store = InMemoryStore::default();
 //! let spin = store.tokens.intern("spin");
 //! let (asset_rock, rock) = (store.path("/Rock"), store.path("/World/Rock"));
-//! let double = PropertyType::new("double", false, Value::Double(0.0));
+//! let double = PropertyType::parse("double").unwrap();
 //! let mut asset = Layer::new(LayerId(2));
 //! asset.insert_prim(
 //!     asset_rock,

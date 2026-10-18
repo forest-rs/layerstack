@@ -37,7 +37,7 @@ fn layered_connections_match_cpp_and_undo_authored_absence() {
             ..StageOptions::default()
         },
     );
-    let ty = PropertyType::new("float", false, Value::Float(0.));
+    let ty = PropertyType::parse("float").unwrap();
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(2)));
     let m = Material::define(&mut edit, material);
     let s = Shader::define(&mut edit, shader);
@@ -158,7 +158,7 @@ fn port_preflight_rejects_invalid_names_relationships_and_types_without_edits() 
     );
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
     let shader = Shader::define(&mut edit, path);
-    let ty = PropertyType::new("float", false, Value::Float(0.));
+    let ty = PropertyType::parse("float").unwrap();
     let input = shader.create_input(&mut edit, "value", ty.clone()).unwrap();
     for name in ["", ":bad", "bad:", "bad::name", "a/b"] {
         let before = edit.transaction().clone();
@@ -176,11 +176,7 @@ fn port_preflight_rejects_invalid_names_relationships_and_types_without_edits() 
     assert_eq!(edit.transaction(), &before);
     assert!(PortEdit::get(&mut edit, PropertyPath::new(path, relationship)).is_none());
     assert!(matches!(
-        shader.create_input(
-            &mut edit,
-            "value",
-            PropertyType::new("double", false, Value::Double(0.))
-        ),
+        shader.create_input(&mut edit, "value", PropertyType::parse("double").unwrap()),
         Err(PortError::TypeMismatch { .. })
     ));
     assert_eq!(edit.transaction(), &before);

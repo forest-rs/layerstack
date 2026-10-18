@@ -220,11 +220,7 @@ fn failures_never_select_weaker_defaults_or_hold_a_good_endpoint() {
     weak.set_property(
         a,
         PropertySpec::attribute()
-            .with_type(layerstack::PropertyType::new(
-                "float",
-                true,
-                Value::Float(0.),
-            ))
+            .with_type(layerstack::PropertyType::parse("float[]").unwrap())
             .with_default(Value::from(vec![99_f32])),
     );
     let mut strong = Layer::new(LayerId(1));
@@ -233,21 +229,13 @@ fn failures_never_select_weaker_defaults_or_hold_a_good_endpoint() {
     strong.set_property(
         a,
         PropertySpec::attribute()
-            .with_type(layerstack::PropertyType::new(
-                "float",
-                true,
-                Value::Float(0.),
-            ))
+            .with_type(layerstack::PropertyType::parse("float[]").unwrap())
             .with_default(failed()),
     );
     strong.set_property(
         anim,
         PropertySpec::attribute()
-            .with_type(layerstack::PropertyType::new(
-                "float",
-                true,
-                Value::Float(0.),
-            ))
+            .with_type(layerstack::PropertyType::parse("float[]").unwrap())
             .with_time_samples(vec![(0., Value::from(vec![0_f32])), (10., failed())]),
     );
     store.insert_layer(weak);
@@ -293,11 +281,7 @@ fn failures_never_select_weaker_defaults_or_hold_a_good_endpoint() {
     edits.set_property(
         a,
         PropertySpec::attribute()
-            .with_type(layerstack::PropertyType::new(
-                "float",
-                true,
-                Value::Float(0.),
-            ))
+            .with_type(layerstack::PropertyType::parse("float[]").unwrap())
             .with_default(Value::ArrayEdit(ArrayEdit {
                 ops: vec![ArrayEditOp::Resize { len: 2 }],
             })),
@@ -340,7 +324,7 @@ fn every_native_numeric_kind_and_empty_kind_survives_lazy_save() {
             .find(|entry| entry.name == name)
             .unwrap();
         let spec = Arc::make_mut(&mut spec.spec);
-        let kind = &spec.type_name.as_ref().unwrap().default_scalar;
+        let kind = spec.type_name.as_ref().unwrap().default_scalar();
         spec.default = Some(Value::array_with_element(vec![kind.clone()], Some(kind)));
     }
     let expected = imported.save_usda().unwrap();
@@ -569,7 +553,7 @@ fn mixed_array_storage_holds_without_demanding_unselected_endpoints() {
         layer.set_property(
             x,
             PropertySpec::attribute()
-                .with_type(PropertyType::new(name, true, lower))
+                .with_type(PropertyType::parse(&format!("{name}[]")).unwrap())
                 .with_time_samples(vec![
                     (0., expected.clone()),
                     (10., Value::TypedArray(TypedArray::Deferred(source.clone()))),

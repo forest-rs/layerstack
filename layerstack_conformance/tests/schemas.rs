@@ -338,8 +338,8 @@ fn kind(kind: PropertyKind) -> &'static str {
 /// A declared type name as OpenUSD spells it, `[]` included for arrays.
 fn type_name(declared: Option<&layerstack::PropertyType>) -> Option<String> {
     let declared = declared?;
-    let name = declared.type_name.to_string();
-    Some(if declared.is_array && !name.ends_with("[]") {
+    let name = declared.type_name().to_string();
+    Some(if declared.is_array() && !name.ends_with("[]") {
         format!("{name}[]")
     } else {
         name

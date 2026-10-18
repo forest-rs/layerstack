@@ -12,7 +12,7 @@ use layerstack::{
 };
 
 fn size(value: f64) -> PropertySpec {
-    PropertySpec::typed_attribute(PropertyType::new("double", false, Value::Double(0.)))
+    PropertySpec::typed_attribute(PropertyType::parse("double").expect("a registered value type"))
         .with_default(Value::Double(value))
 }
 fn main() -> Result<(), Box<dyn std::error::Error>> {

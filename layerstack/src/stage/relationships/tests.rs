@@ -34,7 +34,7 @@ fn forwarded_queries_retain_absence_and_refresh_when_a_terminal_becomes_a_relati
     );
     layer.set_property(
         unrelated,
-        PropertySpec::typed_attribute(PropertyType::new("int", false, Value::Int(0)))
+        PropertySpec::typed_attribute(PropertyType::parse("int").unwrap())
             .with_default(Value::Int(1)),
     );
     store.insert_layer(layer);

@@ -424,12 +424,16 @@ impl Transaction {
     }
 
     /// Creates the property spec `spec` at `at`, creating its prim spec if
-    /// needed. A default or time samples in `spec` must conform to its
-    /// declared type.
+    /// needed. An attribute's declared type must be a registered value type
+    /// ([`PropertyType::parse`](crate::PropertyType::parse)), and a default
+    /// or time samples in `spec` must conform to it.
     ///
-    /// Rejected if the property spec exists.
+    /// Rejected if the property spec exists, and for an unregistered type
+    /// ([`Rejection::UnknownValueType`](super::Rejection::UnknownValueType)).
     ///
     /// OpenUSD: `SdfAttributeSpec::New`, `SdfRelationshipSpec::New`.
+    ///
+    /// Spec: AOUSD Core §6.2 (value types), §7.6.4.1.1 (`typeName`).
     pub fn create_property(&mut self, at: Address, spec: PropertySpec) -> &mut Self {
         self.push(Op::CreateProperty {
             at,

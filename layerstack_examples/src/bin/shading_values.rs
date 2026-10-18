@@ -29,7 +29,7 @@ fn main() {
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
     let material = Material::define(&mut edit, material);
     let shader_handle = Shader::define(&mut edit, shader);
-    let ty = PropertyType::new("float", false, Value::Float(0.));
+    let ty = PropertyType::parse("float").expect("a registered value type");
     let interface = material
         .create_input(&mut edit, "roughness", ty.clone())
         .unwrap();

@@ -36,7 +36,6 @@
 //! [`Layer`]: layerstack::Layer
 //! [`PrimSpec`]: layerstack::PrimSpec
 
-use alloc::boxed::Box;
 use alloc::format;
 use alloc::string::String;
 use alloc::sync::Arc;
@@ -62,10 +61,8 @@ use layerstack::{
 use crate::Span;
 use crate::ast;
 use crate::diagnostic::Diagnostic;
-use crate::numeric::{
-    convert_scalar, dimensioned_value, element_type_hint, is_semantic_vec_alias,
-    semantic_component_count,
-};
+use crate::numeric::{convert_scalar, dimensioned_value, element_type_hint};
+use layerstack::value_type::ValueType;
 
 /// Result of emitting a single USDA layer.
 #[derive(Debug)]
@@ -614,9 +611,9 @@ impl EmitCtx<'_> {
             }
             return;
         }
-        let expected = declared.as_deref().map(|name| {
-            default_scalar_for_type(name.strip_suffix("[]").unwrap_or(name), self.tokens)
-        });
+        let expected = declared
+            .as_deref()
+            .map(|name| default_scalar_for_type(name.strip_suffix("[]").unwrap_or(name)));
         if let Some(expected) = &expected
             && (matches!(expected, Value::Null)
                 || !metadata_literal_shape(&entry.value, field_type.type_hint(), expected))
@@ -765,7 +762,7 @@ impl EmitCtx<'_> {
         anchor: &str,
     ) {
         let name_tok = self.tokens.intern(attr.name);
-        let property_type = self.declared_property_type(attr.type_name, attr.is_array);
+        let property_type = Self::declared_property_type(attr.type_name, attr.is_array);
         let connection = attr
             .connection
             .as_ref()
@@ -1469,13 +1466,17 @@ impl EmitCtx<'_> {
             .collect()
     }
 
-    fn declared_property_type(&mut self, type_hint: &str, is_array: bool) -> PropertyType {
+    /// The type an attribute declares, `type_hint` its element type name;
+    /// a name the value type table lacks is kept, as OpenUSD's text reader
+    /// keeps it.
+    fn declared_property_type(type_hint: &str, is_array: bool) -> PropertyType {
         let base = type_hint.strip_suffix("[]").unwrap_or(type_hint);
-        PropertyType::new(
-            type_hint,
-            is_array,
-            default_scalar_for_type(base, self.tokens),
-        )
+        let parsed = if is_array {
+            PropertyType::parse(&format!("{base}[]"))
+        } else {
+            PropertyType::parse(base)
+        };
+        parsed.unwrap_or_else(PropertyType::unregistered)
     }
 
     // ── Value conversion ────────────────────────────────────────────
@@ -1589,15 +1590,13 @@ impl EmitCtx<'_> {
                 // For array types like "float3[]", pass "float3" (not "float")
                 // so inner tuples are recognized as dimensioned types.
                 let arr_elem_hint = type_hint.strip_suffix("[]").unwrap_or(type_hint);
-                let prototype = self
-                    .declared_property_type(arr_elem_hint, true)
-                    .default_scalar;
+                let prototype = default_scalar_for_type(arr_elem_hint);
                 let elements = items.iter().map(|v| self.convert_value(v, arr_elem_hint));
                 Value::array_from_iter(elements, Some(&prototype))
             }
             ast::Value::ArrayEdit(edit) => {
                 let element_hint = type_hint.strip_suffix("[]").unwrap_or(type_hint);
-                let value_type = self.declared_property_type(element_hint, true);
+                let value_type = Self::declared_property_type(element_hint, true);
                 Value::typed_array_edit(self.convert_array_edit(edit, element_hint), value_type)
             }
         }
@@ -1820,63 +1819,7 @@ fn registered_metadata_type(name: &str) -> Option<MetadataFieldType<'_>> {
 /// inference. Empty arrays must not validate a fabricated semantic alias.
 /// AOUSD Core §6.3–6.5 (scalar, compound and role value types).
 fn registered_scalar_type(name: &str) -> bool {
-    matches!(
-        name,
-        "bool"
-            | "uchar"
-            | "int"
-            | "uint"
-            | "int64"
-            | "uint64"
-            | "half"
-            | "float"
-            | "double"
-            | "string"
-            | "token"
-            | "asset"
-            | "pathExpression"
-            | "timecode"
-            | "int2"
-            | "int3"
-            | "int4"
-            | "half2"
-            | "half3"
-            | "half4"
-            | "float2"
-            | "float3"
-            | "float4"
-            | "double2"
-            | "double3"
-            | "double4"
-            | "matrix2d"
-            | "matrix3d"
-            | "matrix4d"
-            | "frame4d"
-            | "quath"
-            | "quatf"
-            | "quatd"
-            | "color3h"
-            | "color3f"
-            | "color3d"
-            | "color4h"
-            | "color4f"
-            | "color4d"
-            | "point3h"
-            | "point3f"
-            | "point3d"
-            | "normal3h"
-            | "normal3f"
-            | "normal3d"
-            | "vector3h"
-            | "vector3f"
-            | "vector3d"
-            | "texCoord2h"
-            | "texCoord2f"
-            | "texCoord2d"
-            | "texCoord3h"
-            | "texCoord3f"
-            | "texCoord3d"
-    )
+    ValueType::from_name(name).is_some_and(|ty| ty.storage() != ValueType::Opaque)
 }
 
 /// Check shape before conversion, which otherwise deliberately preserves
@@ -2028,58 +1971,11 @@ fn convert_specifier(spec: ast::Specifier) -> Specifier {
     }
 }
 
-fn default_scalar_for_type(type_hint: &str, tokens: &TokenInterner) -> Value {
-    match type_hint {
-        "bool" => Value::Bool(false),
-        "uchar" => Value::UChar(0),
-        "int" => Value::Int(0),
-        "uint" => Value::UInt(0),
-        "int64" => Value::Int64(0),
-        "uint64" => Value::UInt64(0),
-        "half" => Value::Half(0),
-        "float" => Value::Float(0.0),
-        "double" => Value::Double(0.0),
-        "string" => Value::String(Arc::from("")),
-        "token" => Value::Token(tokens.intern("")),
-        "asset" => Value::Asset(Arc::from("")),
-        "pathExpression" => Value::PathExpression(Arc::from("")),
-        "timecode" => Value::TimeCode(0.0),
-        "double2" => Value::Vec2d([0.0; 2]),
-        "double3" => Value::Vec3d([0.0; 3]),
-        "double4" => Value::Vec4d([0.0; 4]),
-        "float2" => Value::Vec2f([0.0; 2]),
-        "float3" => Value::Vec3f([0.0; 3]),
-        "float4" => Value::Vec4f([0.0; 4]),
-        "half2" => Value::Vec2h([0; 2]),
-        "half3" => Value::Vec3h([0; 3]),
-        "half4" => Value::Vec4h([0; 4]),
-        "int2" => Value::Vec2i([0; 2]),
-        "int3" => Value::Vec3i([0; 3]),
-        "int4" => Value::Vec4i([0; 4]),
-        "matrix2d" => Value::Matrix2d(Box::new([0.0; 4])),
-        "matrix3d" => Value::Matrix3d(Box::new([0.0; 9])),
-        "matrix4d" | "frame4d" => Value::Matrix4d(Box::new([0.0; 16])),
-        "quatd" => Value::Quatd([0.0; 4]),
-        "quatf" => Value::Quatf([0.0; 4]),
-        "quath" => Value::Quath([0; 4]),
-        "dictionary" => Value::Dictionary(Vec::new()),
-        base if is_semantic_vec_alias(base, 'f') => match semantic_component_count(base) {
-            2 => Value::Vec2f([0.0; 2]),
-            3 => Value::Vec3f([0.0; 3]),
-            _ => Value::Vec4f([0.0; 4]),
-        },
-        base if is_semantic_vec_alias(base, 'd') => match semantic_component_count(base) {
-            2 => Value::Vec2d([0.0; 2]),
-            3 => Value::Vec3d([0.0; 3]),
-            _ => Value::Vec4d([0.0; 4]),
-        },
-        base if is_semantic_vec_alias(base, 'h') => match semantic_component_count(base) {
-            2 => Value::Vec2h([0; 2]),
-            3 => Value::Vec3h([0; 3]),
-            _ => Value::Vec4h([0; 4]),
-        },
-        _ => Value::Null,
+fn default_scalar_for_type(type_hint: &str) -> Value {
+    if type_hint == "dictionary" {
+        return Value::Dictionary(Vec::new());
     }
+    ValueType::from_name(type_hint).map_or(Value::Null, ValueType::zero)
 }
 
 // ── ListOp merge helpers ────────────────────────────────────────────────
@@ -3322,7 +3218,7 @@ def \"A\" {
         expected[15] = 1.0;
         assert_eq!(
             *field,
-            FieldValue::Value(Value::Matrix4d(Box::new(expected)))
+            FieldValue::Value(Value::Matrix4d(alloc::boxed::Box::new(expected)))
         );
     }
 
@@ -3392,8 +3288,8 @@ def \"A\" {
         }
 
         let property_type = entry.type_name.as_ref().expect("property type");
-        assert!(property_type.is_array);
-        assert_eq!(property_type.default_scalar, Value::Int(0));
+        assert!(property_type.is_array());
+        assert_eq!(property_type.default_scalar(), &Value::Int(0));
         assert_eq!(
             entry.default.as_ref().unwrap().array_edit_type(),
             Some(property_type)
@@ -3410,9 +3306,9 @@ def \"A\" {
         let (result, tokens, paths) = emit_source(src);
         let a = prim(&result, &tokens, &paths, "/A");
         for (name, expected, storage, prototype) in [
-            ("points", "point3f", "float3", Value::Vec3f([0.0; 3])),
-            ("clock", "timecode", "timecode", Value::TimeCode(0.0)),
-            ("scalar", "float", "float", Value::Float(0.0)),
+            ("points", "point3f[]", "float3[]", Value::Vec3f([0.0; 3])),
+            ("clock", "timecode[]", "timecode[]", Value::TimeCode(0.0)),
+            ("scalar", "float[]", "float[]", Value::Float(0.0)),
         ] {
             let property = prop(&a.properties, &tokens.intern(name));
             let value = property
@@ -3426,13 +3322,10 @@ def \"A\" {
                 })
                 .unwrap();
             let actual = value.array_edit_type().unwrap();
-            assert_eq!(actual.type_name.as_ref(), storage);
-            assert_eq!(
-                property.type_name.as_ref().unwrap().type_name.as_ref(),
-                expected
-            );
-            assert_eq!(actual.default_scalar, prototype);
-            assert!(actual.is_array);
+            assert_eq!(actual.type_name(), storage);
+            assert_eq!(property.type_name.as_ref().unwrap().type_name(), expected);
+            assert_eq!(actual.default_scalar(), &prototype);
+            assert!(actual.is_array());
             assert!(value.array_edit_ref().is_some());
         }
     }

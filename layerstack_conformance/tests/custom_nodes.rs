@@ -98,10 +98,7 @@ fn selected_materialx_interfaces_author_usd_without_loading_implementations() {
         .unwrap()
         .out_output()
         .unwrap();
-    assert_eq!(
-        output.property_type().unwrap().type_name.as_ref(),
-        "color4f"
-    );
+    assert_eq!(output.property_type().unwrap().type_name(), "color4f");
 }
 
 #[test]

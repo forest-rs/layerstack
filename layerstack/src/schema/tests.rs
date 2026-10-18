@@ -129,7 +129,7 @@ fn overrides_replace_fallbacks_but_not_variability() {
     let mut t = TokenInterner::default();
     let (outer, inner) = (t.intern("OuterAPI"), t.intern("InnerAPI"));
     let size = t.intern("size");
-    let int = PropertyType::new("int", false, Value::Int(0));
+    let int = PropertyType::parse("int").unwrap();
     let mut builder = SchemaRegistry::builder();
     builder
         .register(
@@ -336,16 +336,12 @@ fn a_weaker_definition_of_another_type_is_ignored() {
     let mut builder = SchemaRegistry::builder();
     builder
         .register(SchemaDefinition::api(strong).with_property(
-            PropertyDefinition::attribute(rank).with_type(PropertyType::new(
-                "int",
-                false,
-                Value::Int(0),
-            )),
+            PropertyDefinition::attribute(rank).with_type(PropertyType::parse("int").unwrap()),
         ))
         .register(
             SchemaDefinition::api(weak).with_property(
                 PropertyDefinition::attribute(rank)
-                    .with_type(PropertyType::new("float", false, Value::Float(0.0)))
+                    .with_type(PropertyType::parse("float").unwrap())
                     .with_fallback(2.0_f32),
             ),
         );
@@ -484,7 +480,7 @@ fn generated_schema_layers_read_as_definitions() {
         t.intern("slot:__INSTANCE_NAME__:index"),
     );
     let (api_schemas, custom_data) = (t.intern("apiSchemas"), t.intern("customData"));
-    let float = PropertyType::new("float", false, Value::Float(0.0));
+    let float = PropertyType::parse("float").unwrap();
 
     let mut layer = Layer::new(LayerId(1));
     let slot_path = paths.intern(Path::root().join(&[slot]));
@@ -510,7 +506,7 @@ fn generated_schema_layers_read_as_definitions() {
             )
             .with_property(
                 index,
-                PropertySpec::typed_attribute(PropertyType::new("int", false, Value::Int(0)))
+                PropertySpec::typed_attribute(PropertyType::parse("int").unwrap())
                     .with_default(Value::Int(0)),
             ),
     );
@@ -707,7 +703,7 @@ fn property_metadata_composes_strong_to_weak_only_for_matching_types() {
     let docs = tokens.intern("documentation");
     let dict = tokens.intern("settings");
     let only_wrong = tokens.intern("wrongTypeOnly");
-    let float = PropertyType::new("float", false, Value::Float(0.0));
+    let float = PropertyType::parse("float").unwrap();
     let dictionary = |items: &[(&str, i32)]| {
         Value::Dictionary(vec![(
             "nested".into(),
@@ -741,7 +737,7 @@ fn property_metadata_composes_strong_to_weak_only_for_matching_types() {
     builder.register(
         SchemaDefinition::new(wrong, SchemaKind::SingleApplyApi).with_property(
             PropertyDefinition::attribute(name)
-                .with_type(PropertyType::new("int", false, Value::Int(0)))
+                .with_type(PropertyType::parse("int").unwrap())
                 .with_metadata(only_wrong, Value::Bool(true)),
         ),
     );
@@ -783,7 +779,7 @@ fn property_metadata_override_replaces_dictionary_and_preserves_variability() {
     let name = tokens.intern("size");
     let dict = tokens.intern("settings");
     let dictionary = |key: &str| Value::Dictionary(vec![(key.into(), Value::Int(1))]);
-    let float = PropertyType::new("float", false, Value::Float(0.0));
+    let float = PropertyType::parse("float").unwrap();
     let mut builder = SchemaRegistry::builder();
     builder.register(
         SchemaDefinition::new(weak, SchemaKind::SingleApplyApi).with_property(

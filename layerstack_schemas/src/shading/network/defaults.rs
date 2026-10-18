@@ -6,18 +6,8 @@
 use super::*;
 use crate::shading::nodes::*;
 fn input(name: &'static str, ty: &str, value: Value) -> (&'static str, PropertyType, Value) {
-    let zero = match &value {
-        Value::Float(_) => Value::Float(0.),
-        Value::Vec2f(_) => Value::Vec2f([0.; 2]),
-        Value::Vec3f(_) => Value::Vec3f([0.; 3]),
-        Value::Vec4f(_) => Value::Vec4f([0.; 4]),
-        Value::Int(_) => Value::Int(0),
-        Value::String(_) => Value::String("".into()),
-        Value::Asset(_) => Value::Asset("".into()),
-        Value::Matrix4d(_) => Value::Matrix4d(alloc::boxed::Box::new([0.; 16])),
-        _ => value.clone(),
-    };
-    (name, PropertyType::new(ty, false, zero), value)
+    let ty = PropertyType::parse(ty).expect("a registered value type");
+    (name, ty, value)
 }
 pub(super) fn inputs(id: &str) -> Vec<(&'static str, PropertyType, Value)> {
     let f = |name, value| input(name, "float", Value::Float(value));

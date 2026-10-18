@@ -116,7 +116,7 @@ fn primvar_authoring_and_rejections_preserve_undo() {
         .create_primvar(
             &mut edit,
             "custom:uv",
-            PropertyType::new("float", true, Value::Float(0.)),
+            PropertyType::parse("float[]").unwrap(),
         )
         .unwrap();
     var.set(
@@ -134,7 +134,7 @@ fn primvar_authoring_and_rejections_preserve_undo() {
         mesh.create_primvar(
             &mut edit,
             "custom:uv",
-            PropertyType::new("int", true, Value::Int(0))
+            PropertyType::parse("int[]").unwrap()
         )
         .is_err()
     );
@@ -142,7 +142,7 @@ fn primvar_authoring_and_rejections_preserve_undo() {
         mesh.create_primvar(
             &mut edit,
             "x:indices",
-            PropertyType::new("int", true, Value::Int(0))
+            PropertyType::parse("int[]").unwrap()
         )
         .is_err()
     );
@@ -238,29 +238,17 @@ fn id_target_authoring_is_atomic_and_undoable() {
         .edit();
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
     let pv = handle
-        .create_primvar(
-            &mut edit,
-            "newId",
-            PropertyType::new("string", false, Value::string("")),
-        )
+        .create_primvar(&mut edit, "newId", PropertyType::parse("string").unwrap())
         .unwrap();
     pv.set_id_target(&mut edit, None).unwrap();
     pv.set_id_target(&mut edit, None).unwrap(); // Reuse the queued relationship declaration.
     let bad = handle
-        .create_primvar(
-            &mut edit,
-            "newFloat",
-            PropertyType::new("float", false, Value::Float(0.)),
-        )
+        .create_primvar(&mut edit, "newFloat", PropertyType::parse("float").unwrap())
         .unwrap();
     let checkpoint = edit.transaction().clone();
     assert!(bad.set_id_target(&mut edit, None).is_err());
     let existing = handle
-        .create_primvar(
-            &mut edit,
-            "notRel",
-            PropertyType::new("string", false, Value::string("")),
-        )
+        .create_primvar(&mut edit, "notRel", PropertyType::parse("string").unwrap())
         .unwrap();
     assert!(existing.set_id_target(&mut edit, None).is_err());
     assert_eq!(edit.transaction(), &checkpoint);
@@ -394,7 +382,7 @@ fn primvar_groups_discard_failures_and_nonindexed_authoring_masks_weaker_indices
     let handle = Mesh::new(&Scene::new(live.stage(), &store), path)
         .unwrap()
         .edit();
-    let ty = PropertyType::new("float", true, Value::Float(0.));
+    let ty = PropertyType::parse("float[]").unwrap();
     let values = || Value::array(vec![Value::Float(7.), Value::Float(8.)]);
     let before = store.layers[&LayerId(1)].clone();
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
@@ -445,11 +433,7 @@ fn primvar_groups_discard_failures_and_nonindexed_authoring_masks_weaker_indices
     assert_eq!(edit.transaction(), &checkpoint);
     // Overlay declarations from failed groups are discarded too.
     handle
-        .create_primvar(
-            &mut edit,
-            "rolledBack",
-            PropertyType::new("int", false, Value::Int(0)),
-        )
+        .create_primvar(&mut edit, "rolledBack", PropertyType::parse("int").unwrap())
         .unwrap();
     let pv = handle
         .create_nonindexed_primvar(&mut edit, "indexOnly", ty, values(), "vertex", 1)
@@ -629,11 +613,7 @@ fn removed_primvars_can_be_recreated_in_the_same_edit() {
             Value::Float(4.)
         };
         let recreated = handle
-            .create_primvar(
-                &mut edit,
-                "x",
-                PropertyType::new(new_type, false, value.clone()),
-            )
+            .create_primvar(&mut edit, "x", PropertyType::parse(new_type).unwrap())
             .unwrap();
         recreated.set(&mut edit, value.clone()).unwrap();
         recreated.set_element_size(&mut edit, 2).unwrap();
@@ -696,7 +676,7 @@ fn removed_primvar_declarations_reveal_weaker_sources_and_group_rollback() {
         path,
         PrimSpec::over().with_property(
             name,
-            PropertySpec::typed_attribute(PropertyType::new("int", false, Value::Int(0)))
+            PropertySpec::typed_attribute(PropertyType::parse("int").unwrap())
                 .with_default(Value::Int(9)),
         ),
     );
@@ -719,11 +699,7 @@ fn removed_primvar_declarations_reveal_weaker_sources_and_group_rollback() {
     let failed: Result<(), &str> = edit.group(|child| {
         pv.remove(child).unwrap();
         handle
-            .create_primvar(
-                child,
-                "x",
-                PropertyType::new("float", false, Value::Float(0.)),
-            )
+            .create_primvar(child, "x", PropertyType::parse("float").unwrap())
             .unwrap();
         Err("rollback")
     });
@@ -732,30 +708,18 @@ fn removed_primvar_declarations_reveal_weaker_sources_and_group_rollback() {
     // The rolled-back removal must not hide the original int declaration.
     assert!(
         handle
-            .create_primvar(
-                &mut edit,
-                "x",
-                PropertyType::new("float", false, Value::Float(0.))
-            )
+            .create_primvar(&mut edit, "x", PropertyType::parse("float").unwrap())
             .is_err()
     );
     pv.remove(&mut edit).unwrap();
     // Removing only the strong spec exposes the weak float declaration.
     assert!(
         handle
-            .create_primvar(
-                &mut edit,
-                "x",
-                PropertyType::new("int", false, Value::Int(0))
-            )
+            .create_primvar(&mut edit, "x", PropertyType::parse("int").unwrap())
             .is_err()
     );
     let recreated = handle
-        .create_primvar(
-            &mut edit,
-            "x",
-            PropertyType::new("float", false, Value::Float(0.)),
-        )
+        .create_primvar(&mut edit, "x", PropertyType::parse("float").unwrap())
         .unwrap();
     recreated.set(&mut edit, Value::Float(3.)).unwrap();
     recreated.set_interpolation(&mut edit, "vertex").unwrap();
@@ -822,11 +786,7 @@ fn removed_primvar_ui_labels_do_not_leak_into_recreated_properties() {
         let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
         pv.remove(&mut edit).unwrap();
         handle
-            .create_primvar(
-                &mut edit,
-                "x",
-                PropertyType::new("float", false, Value::Float(0.)),
-            )
+            .create_primvar(&mut edit, "x", PropertyType::parse("float").unwrap())
             .unwrap();
         let ui = UiHintsEdit::property(&mut edit, property).unwrap();
         let checkpoint = edit.transaction().clone();

@@ -91,13 +91,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     author.create_prim(target.prim(shape), Specifier::Def, Some(custom));
     author.create_property(
         target.property(size),
-        PropertySpec::typed_attribute(PropertyType::new("double", false, Value::Double(0.0)))
-            .with_default(Value::Double(2.0)),
+        PropertySpec::typed_attribute(
+            PropertyType::parse("double").expect("a registered value type"),
+        )
+        .with_default(Value::Double(2.0)),
     );
     author.create_property(
         target.property(label),
-        PropertySpec::typed_attribute(PropertyType::new("string", false, Value::String("".into())))
-            .with_default(Value::String("initial".into())),
+        PropertySpec::typed_attribute(
+            PropertyType::parse("string").expect("a registered value type"),
+        )
+        .with_default(Value::String("initial".into())),
     );
     live.apply(&mut store, &author)?;
     let mut bounds =
@@ -159,8 +163,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut override_extent = Transaction::new();
     override_extent.create_property(
         target.property(extent),
-        PropertySpec::typed_attribute(PropertyType::new("float3", true, Value::Vec3f([0.0; 3])))
-            .with_default(Value::from(vec![[-8.0_f32; 3], [8.0; 3]])),
+        PropertySpec::typed_attribute(
+            PropertyType::parse("float3[]").expect("a registered value type"),
+        )
+        .with_default(Value::from(vec![[-8.0_f32; 3], [8.0; 3]])),
     );
     let change = live.apply(&mut store, &override_extent)?;
     let scene = Scene::new(live.stage(), &store);

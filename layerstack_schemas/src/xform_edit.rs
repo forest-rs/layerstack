@@ -57,24 +57,21 @@ impl XformOpPrecision {
 fn value_type(op_type: XformOpType, precision: XformOpPrecision) -> PropertyType {
     use XformOpPrecision as P;
     use XformOpType as T;
-    let (name, zero) = match (op_type, precision) {
-        (T::Transform, _) => (
-            "matrix4d",
-            Value::Matrix4d(alloc::boxed::Box::new([0.0; 16])),
-        ),
-        (T::Orient, P::Double) => ("quatd", Value::Quatd([0.0; 4])),
-        (T::Orient, P::Float) => ("quatf", Value::Quatf([0.0; 4])),
-        (T::Orient, P::Half) => ("quath", Value::Quath([0; 4])),
+    let name = match (op_type, precision) {
+        (T::Transform, _) => "matrix4d",
+        (T::Orient, P::Double) => "quatd",
+        (T::Orient, P::Float) => "quatf",
+        (T::Orient, P::Half) => "quath",
         (op, precision) if op.is_scalar() => match precision {
-            P::Double => ("double", Value::Double(0.0)),
-            P::Float => ("float", Value::Float(0.0)),
-            P::Half => ("half", Value::Half(0)),
+            P::Double => "double",
+            P::Float => "float",
+            P::Half => "half",
         },
-        (_, P::Double) => ("double3", Value::Vec3d([0.0; 3])),
-        (_, P::Float) => ("float3", Value::Vec3f([0.0; 3])),
-        (_, P::Half) => ("half3", Value::Vec3h([0; 3])),
+        (_, P::Double) => "double3",
+        (_, P::Float) => "float3",
+        (_, P::Half) => "half3",
     };
-    PropertyType::new(name, false, zero)
+    PropertyType::parse(name).expect("a registered value type")
 }
 
 impl XformOpType {
@@ -447,14 +444,9 @@ impl XformableEdit {
         }
         const TRANSFORM: &str = "xformOp:transform";
         edit.group(|edit| {
-            for (attribute, query, expected, array) in [
-                (Xformable::XFORM_OP_ORDER, Time::Default, "token", true),
-                (
-                    TRANSFORM,
-                    time.map_or(Time::Default, Time::at),
-                    "matrix4d",
-                    false,
-                ),
+            for (attribute, query, expected) in [
+                (Xformable::XFORM_OP_ORDER, Time::Default, "token[]"),
+                (TRANSFORM, time.map_or(Time::Default, Time::at), "matrix4d"),
             ] {
                 let inspection = edit
                     .inspect_authoring(self.path(), attribute, query)
@@ -466,10 +458,10 @@ impl XformableEdit {
                     return Err(MatrixXformError::StrongerSource { attribute, source });
                 }
                 match edit.attribute_type(self.path(), attribute) {
-                    Some(ty) if ty.type_name.as_ref() != expected || ty.is_array != array => {
+                    Some(ty) if ty.type_name() != expected => {
                         return Err(MatrixXformError::IncompatibleType {
                             attribute,
-                            type_name: ty.type_name.to_string(),
+                            type_name: ty.type_name().to_string(),
                         });
                     }
                     None if edit.property_kind(self.path(), attribute).is_some() => {
@@ -555,10 +547,10 @@ impl XformableEdit {
             return Err(XformOpError::AlreadyInOrder { op: name });
         }
         let precision = match edit.attribute_type(self.path(), &attribute) {
-            Some(existing) => XformOpPrecision::of_type(&existing.type_name).unwrap_or(precision),
+            Some(existing) => XformOpPrecision::of_type(existing.type_name()).unwrap_or(precision),
             None => {
                 let ty = value_type(op_type, precision);
-                let precision = XformOpPrecision::of_type(&ty.type_name).unwrap_or(precision);
+                let precision = XformOpPrecision::of_type(ty.type_name()).unwrap_or(precision);
                 edit.create_attribute(self.path(), &attribute, ty);
                 precision
             }
@@ -598,7 +590,7 @@ impl XformableEdit {
             return None;
         }
         let precision =
-            XformOpPrecision::of_type(&edit.attribute_type(self.path(), &attribute)?.type_name)?;
+            XformOpPrecision::of_type(edit.attribute_type(self.path(), &attribute)?.type_name())?;
         Some(XformOpEdit {
             path: self.path(),
             attribute: Arc::from(attribute),

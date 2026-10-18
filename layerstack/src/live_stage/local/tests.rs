@@ -38,7 +38,7 @@ fn scene() -> (InMemoryStore, LiveStage) {
         let mut spec = PrimSpec::def();
         spec.set_property(
             value,
-            PropertySpec::typed_attribute(PropertyType::new("double", false, Value::Double(0.0)))
+            PropertySpec::typed_attribute(PropertyType::parse("double").unwrap())
                 .with_default(Value::Double(1.0)),
         );
         layer.insert_prim(path, spec);
@@ -210,7 +210,7 @@ fn property_declaration_changes_resync_the_owner_in_both_directions() {
     let mut create = Transaction::new();
     create.create_property(
         address(&mut store, "/World/B.newValue"),
-        PropertySpec::typed_attribute(PropertyType::new("double", false, Value::Double(0.0))),
+        PropertySpec::typed_attribute(PropertyType::parse("double").unwrap()),
     );
     let created = live.apply(&mut store, &create).unwrap();
     assert_eq!(created.changes.resynced, [owner]);
@@ -364,13 +364,9 @@ fn scoped_variant_change_resyncs_even_when_unqualified_source_sites_are_equal() 
             crate::VariantSpec {
                 properties: alloc::vec![crate::PropertyEntry {
                     name: value,
-                    spec: PropertySpec::typed_attribute(PropertyType::new(
-                        "double",
-                        false,
-                        Value::Double(0.0)
-                    ))
-                    .with_default(Value::Double(number))
-                    .into()
+                    spec: PropertySpec::typed_attribute(PropertyType::parse("double").unwrap())
+                        .with_default(Value::Double(number))
+                        .into()
                 }],
                 ..crate::VariantSpec::default()
             },

@@ -228,7 +228,7 @@ mod tests {
         layer.insert_prim(property.prim_path(), PrimSpec::def());
         layer.set_property(
             property,
-            PropertySpec::typed_attribute(PropertyType::new("float", false, Value::Float(0.))),
+            PropertySpec::typed_attribute(PropertyType::parse("float").unwrap()),
         );
         store.insert_layer(layer);
         let writer = SparseAttributeWriter::new(

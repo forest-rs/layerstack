@@ -202,6 +202,7 @@ pub mod spline;
 pub mod stage;
 pub mod stitch;
 mod value_resolution;
+pub mod value_type;
 pub mod variable_expression;
 pub mod variant_fallbacks;
 
@@ -273,6 +274,7 @@ pub use stage::{
     DropReason, DroppedTarget, FromValue, PrimPathArg, PropertyPathArg, StageView, TargetOpinion,
     TargetsExplanation,
 };
+pub use value_type::{UnknownValueType, ValueRole, ValueType};
 pub use variant_fallbacks::VariantFallbacks;
 
 pub use live_stage::{

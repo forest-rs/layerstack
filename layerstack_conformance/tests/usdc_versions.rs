@@ -402,12 +402,12 @@ fn authored_edit(prim: &str, attribute: &str) -> ArrayEdit {
         .unwrap();
     let actual = value.array_edit_type().expect("actual array edit type");
     assert_eq!(
-        actual.default_scalar,
-        Value::Int(0),
+        actual.default_scalar(),
+        &Value::Int(0),
         "{prim}.{attribute}: int array edit"
     );
     assert!(
-        actual.is_array,
+        actual.is_array(),
         "{prim}.{attribute}: actual type is an array"
     );
     value.array_edit_ref().expect("array edit").clone()
@@ -536,7 +536,7 @@ fn array_edits_decode_to_the_authored_instructions() {
                 samples
                     .iter()
                     .all(|(_, value)| value.array_edit_ref().is_some()
-                        && value.array_edit_type().unwrap().default_scalar == Value::Int(0))
+                        && value.array_edit_type().unwrap().default_scalar() == &Value::Int(0))
             );
         }
         other => panic!("expected time samples, got {other:?}"),

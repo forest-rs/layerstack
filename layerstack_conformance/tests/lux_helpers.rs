@@ -132,7 +132,7 @@ fn contextual_authoring_is_uniform_noncustom_and_reversible() {
         .unwrap();
     assert_eq!(declaration.variability, Variability::Uniform);
     assert!(!declaration.custom);
-    assert_eq!(declaration.type_name.unwrap().type_name.as_ref(), "token");
+    assert_eq!(declaration.type_name.unwrap().type_name(), "token");
     assert_eq!(
         LightApi::get(&Scene::new(live.stage(), &store), path)
             .unwrap()

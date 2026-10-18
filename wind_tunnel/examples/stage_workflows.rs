@@ -100,7 +100,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .stage()
                 .stage()
                 .resolve_property_declaration(property.prim_path(), property.property())
-                .is_some_and(|d| d.type_name.is_some_and(|t| t.is_array))
+                .is_some_and(|d| d.type_name.is_some_and(|t| t.is_array()))
         })
         .collect();
     report(

@@ -169,7 +169,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.clearcoat_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPreviewSurface"]["inputs:clearcoat"]["type"]
             .as_str()
             .unwrap(),
@@ -187,7 +187,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.clearcoat_roughness_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPreviewSurface"]["inputs:clearcoatRoughness"]["type"]
             .as_str()
             .unwrap(),
@@ -205,7 +205,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.diffuse_color_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPreviewSurface"]["inputs:diffuseColor"]["type"]
             .as_str()
             .unwrap(),
@@ -223,7 +223,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.displacement_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPreviewSurface"]["inputs:displacement"]["type"]
             .as_str()
             .unwrap(),
@@ -241,7 +241,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.emissive_color_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPreviewSurface"]["inputs:emissiveColor"]["type"]
             .as_str()
             .unwrap(),
@@ -259,7 +259,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.ior_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPreviewSurface"]["inputs:ior"]["type"]
             .as_str()
             .unwrap(),
@@ -277,7 +277,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.metallic_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPreviewSurface"]["inputs:metallic"]["type"]
             .as_str()
             .unwrap(),
@@ -295,7 +295,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.normal_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPreviewSurface"]["inputs:normal"]["type"]
             .as_str()
             .unwrap(),
@@ -313,7 +313,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.occlusion_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPreviewSurface"]["inputs:occlusion"]["type"]
             .as_str()
             .unwrap(),
@@ -331,7 +331,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.opacity_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPreviewSurface"]["inputs:opacity"]["type"]
             .as_str()
             .unwrap(),
@@ -349,7 +349,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.opacity_mode_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPreviewSurface"]["inputs:opacityMode"]["type"]
             .as_str()
             .unwrap(),
@@ -367,7 +367,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.opacity_threshold_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPreviewSurface"]["inputs:opacityThreshold"]["type"]
             .as_str()
             .unwrap(),
@@ -385,7 +385,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.roughness_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPreviewSurface"]["inputs:roughness"]["type"]
             .as_str()
             .unwrap(),
@@ -403,7 +403,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.specular_color_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPreviewSurface"]["inputs:specularColor"]["type"]
             .as_str()
             .unwrap(),
@@ -421,7 +421,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.use_specular_workflow_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPreviewSurface"]["inputs:useSpecularWorkflow"]["type"]
             .as_str()
             .unwrap(),
@@ -436,7 +436,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.displacement_output().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPreviewSurface"]["outputs:displacement"]["type"]
             .as_str()
             .unwrap(),
@@ -451,7 +451,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.surface_output().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPreviewSurface"]["outputs:surface"]["type"]
             .as_str()
             .unwrap(),
@@ -478,7 +478,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.fallback_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPrimvarReader_float"]["inputs:fallback"]["type"]
             .as_str()
             .unwrap(),
@@ -496,7 +496,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.varname_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPrimvarReader_float"]["inputs:varname"]["type"]
             .as_str()
             .unwrap(),
@@ -508,7 +508,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.result_output().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPrimvarReader_float"]["outputs:result"]["type"]
             .as_str()
             .unwrap(),
@@ -535,7 +535,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.fallback_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPrimvarReader_float2"]["inputs:fallback"]["type"]
             .as_str()
             .unwrap(),
@@ -553,7 +553,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.varname_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPrimvarReader_float2"]["inputs:varname"]["type"]
             .as_str()
             .unwrap(),
@@ -565,7 +565,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.result_output().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPrimvarReader_float2"]["outputs:result"]["type"]
             .as_str()
             .unwrap(),
@@ -592,7 +592,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.fallback_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPrimvarReader_float3"]["inputs:fallback"]["type"]
             .as_str()
             .unwrap(),
@@ -610,7 +610,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.varname_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPrimvarReader_float3"]["inputs:varname"]["type"]
             .as_str()
             .unwrap(),
@@ -622,7 +622,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.result_output().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPrimvarReader_float3"]["outputs:result"]["type"]
             .as_str()
             .unwrap(),
@@ -649,7 +649,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.fallback_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPrimvarReader_float4"]["inputs:fallback"]["type"]
             .as_str()
             .unwrap(),
@@ -667,7 +667,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.varname_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPrimvarReader_float4"]["inputs:varname"]["type"]
             .as_str()
             .unwrap(),
@@ -679,7 +679,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.result_output().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPrimvarReader_float4"]["outputs:result"]["type"]
             .as_str()
             .unwrap(),
@@ -703,7 +703,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.fallback_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPrimvarReader_int"]["inputs:fallback"]["type"]
             .as_str()
             .unwrap(),
@@ -721,7 +721,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.varname_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPrimvarReader_int"]["inputs:varname"]["type"]
             .as_str()
             .unwrap(),
@@ -733,7 +733,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.result_output().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPrimvarReader_int"]["outputs:result"]["type"]
             .as_str()
             .unwrap(),
@@ -760,7 +760,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.fallback_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPrimvarReader_matrix"]["inputs:fallback"]["type"]
             .as_str()
             .unwrap(),
@@ -778,7 +778,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.varname_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPrimvarReader_matrix"]["inputs:varname"]["type"]
             .as_str()
             .unwrap(),
@@ -790,7 +790,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.result_output().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPrimvarReader_matrix"]["outputs:result"]["type"]
             .as_str()
             .unwrap(),
@@ -817,7 +817,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.fallback_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPrimvarReader_normal"]["inputs:fallback"]["type"]
             .as_str()
             .unwrap(),
@@ -835,7 +835,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.varname_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPrimvarReader_normal"]["inputs:varname"]["type"]
             .as_str()
             .unwrap(),
@@ -847,7 +847,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.result_output().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPrimvarReader_normal"]["outputs:result"]["type"]
             .as_str()
             .unwrap(),
@@ -874,7 +874,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.fallback_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPrimvarReader_point"]["inputs:fallback"]["type"]
             .as_str()
             .unwrap(),
@@ -892,7 +892,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.varname_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPrimvarReader_point"]["inputs:varname"]["type"]
             .as_str()
             .unwrap(),
@@ -904,7 +904,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.result_output().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPrimvarReader_point"]["outputs:result"]["type"]
             .as_str()
             .unwrap(),
@@ -931,7 +931,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.fallback_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPrimvarReader_string"]["inputs:fallback"]["type"]
             .as_str()
             .unwrap(),
@@ -949,7 +949,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.varname_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPrimvarReader_string"]["inputs:varname"]["type"]
             .as_str()
             .unwrap(),
@@ -961,7 +961,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.result_output().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPrimvarReader_string"]["outputs:result"]["type"]
             .as_str()
             .unwrap(),
@@ -988,7 +988,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.fallback_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPrimvarReader_vector"]["inputs:fallback"]["type"]
             .as_str()
             .unwrap(),
@@ -1006,7 +1006,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.varname_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPrimvarReader_vector"]["inputs:varname"]["type"]
             .as_str()
             .unwrap(),
@@ -1018,7 +1018,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.result_output().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdPrimvarReader_vector"]["outputs:result"]["type"]
             .as_str()
             .unwrap(),
@@ -1042,7 +1042,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.in_value_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdTransform2d"]["inputs:in"]["type"]
             .as_str()
             .unwrap(),
@@ -1060,7 +1060,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.rotation_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdTransform2d"]["inputs:rotation"]["type"]
             .as_str()
             .unwrap(),
@@ -1078,7 +1078,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.scale_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdTransform2d"]["inputs:scale"]["type"]
             .as_str()
             .unwrap(),
@@ -1096,7 +1096,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.translation_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdTransform2d"]["inputs:translation"]["type"]
             .as_str()
             .unwrap(),
@@ -1108,7 +1108,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.result_output().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdTransform2d"]["outputs:result"]["type"]
             .as_str()
             .unwrap(),
@@ -1132,7 +1132,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.bias_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdUVTexture"]["inputs:bias"]["type"]
             .as_str()
             .unwrap(),
@@ -1150,7 +1150,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.fallback_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdUVTexture"]["inputs:fallback"]["type"]
             .as_str()
             .unwrap(),
@@ -1168,7 +1168,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.file_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdUVTexture"]["inputs:file"]["type"]
             .as_str()
             .unwrap(),
@@ -1186,7 +1186,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.scale_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdUVTexture"]["inputs:scale"]["type"]
             .as_str()
             .unwrap(),
@@ -1204,7 +1204,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.source_color_space_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdUVTexture"]["inputs:sourceColorSpace"]["type"]
             .as_str()
             .unwrap(),
@@ -1222,7 +1222,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.st_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdUVTexture"]["inputs:st"]["type"]
             .as_str()
             .unwrap(),
@@ -1240,7 +1240,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.wrap_s_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdUVTexture"]["inputs:wrapS"]["type"]
             .as_str()
             .unwrap(),
@@ -1258,7 +1258,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.wrap_t_input().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdUVTexture"]["inputs:wrapT"]["type"]
             .as_str()
             .unwrap(),
@@ -1270,7 +1270,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.a_output().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdUVTexture"]["outputs:a"]["type"]
             .as_str()
             .unwrap(),
@@ -1282,7 +1282,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.b_output().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdUVTexture"]["outputs:b"]["type"]
             .as_str()
             .unwrap(),
@@ -1294,7 +1294,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.g_output().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdUVTexture"]["outputs:g"]["type"]
             .as_str()
             .unwrap(),
@@ -1306,7 +1306,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.r_output().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdUVTexture"]["outputs:r"]["type"]
             .as_str()
             .unwrap(),
@@ -1318,7 +1318,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
     );
     let port = node.rgb_output().unwrap();
     assert_eq!(
-        port.property_type().unwrap().type_name.as_ref(),
+        port.property_type().unwrap().type_name(),
         expected["UsdUVTexture"]["outputs:rgb"]["type"]
             .as_str()
             .unwrap(),

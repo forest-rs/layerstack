@@ -110,7 +110,9 @@ impl LocalNamespace {
                 {
                     return false;
                 }
-            } else {
+            } else if parent.is_some() {
+                // A removed spec's children went with it. The pseudo-root's
+                // are root prims, whose specs remain when its own goes.
                 self.children.remove(&path);
             }
             let Some((parent, _)) = parent else {

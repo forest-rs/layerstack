@@ -1,7 +1,7 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! Retained in-memory numeric sources. Structural assembly remains eager.
+//! Retained in-memory value sources. Structural assembly remains eager.
 //! AOUSD Core §16.3.9–§16.3.10: identical `ValueReps` name identical data.
 
 use crate::{
@@ -20,12 +20,18 @@ use core::{
 };
 use layerstack::encoded_bytes::EncodedBytes;
 use layerstack::{
-    ArrayReadError, AssetResolver, DeferredArraySource, HashMap, LayerId, PathInterner,
-    TokenInterner, TypedArray, Value,
+    ArrayReadError, AssetResolver, DeferredArraySource, DeferredValue, DeferredValueSource,
+    HashMap, LayerId, PathInterner, TokenId, TokenInterner, TypedArray, Value,
 };
 use std::sync::{Mutex, OnceLock};
 
-/// A fully assembled layer whose numeric payloads remain retained in memory.
+/// Text arrays shorter than this many elements decode during the read: one
+/// costs less to decode than to retain. The crate format stores arrays this
+/// short uncompressed for the same reason (`MinCompressedArraySize`,
+/// `pxr/usd/sdf/crateFile.cpp`).
+pub const MIN_RETAINED_TEXT_ARRAY: u64 = 16;
+
+/// A fully assembled layer whose large payloads remain retained in memory.
 #[derive(Debug)]
 pub struct LazyReadResult {
     /// Authored layer, resolved dependencies and assembly diagnostics.
@@ -56,7 +62,17 @@ pub struct RetainedValueStats {
     pub failed_arrays: usize,
     /// Initialized native element bytes in successful cached buffers.
     pub element_bytes: usize,
-    /// Materialization attempts, including failures; each source attempts once.
+    /// Deferred value sources (`token[]` and `string[]` defaults) still
+    /// owned by layers or query results.
+    pub live_values: usize,
+    /// Deferred value sources with a cached decoded value.
+    pub materialized_values: usize,
+    /// Deferred value sources with a cached failure.
+    pub failed_values: usize,
+    /// Elements of the cached decoded values.
+    pub value_elements: usize,
+    /// Materialization attempts of numeric and value sources, including
+    /// failures; each source attempts once.
     pub decode_attempts: usize,
     /// Remaining units in the file's shared decode budget.
     pub remaining_units: u64,
@@ -97,6 +113,23 @@ impl RetainedValues {
                 None => {}
             }
         }
+        drop(registry);
+        let values = self
+            .pool
+            .values
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for value in values.values().filter_map(Weak::upgrade) {
+            stats.live_values += 1;
+            match value.cached.get() {
+                Some(Ok(decoded)) => {
+                    stats.materialized_values += 1;
+                    stats.value_elements += decoded.array_ref().map_or(0, |a| a.len());
+                }
+                Some(Err(_)) => stats.failed_values += 1,
+                None => {}
+            }
+        }
         stats
     }
 }
@@ -104,9 +137,14 @@ impl RetainedValues {
 pub(crate) struct LazyPool {
     bytes: EncodedBytes,
     sections: Arc<CrateSections>,
+    /// The token id of each token-table entry, interned when the read first
+    /// retains a `token[]` value, so that deferred values decode without the
+    /// store's interner.
+    token_ids: OnceLock<alloc::boxed::Box<[TokenId]>>,
     budget: Mutex<DecodeBudget>,
-    // Weak registry avoids a source -> pool -> source ownership cycle.
+    // Weak registries avoid a source -> pool -> source ownership cycle.
     arrays: Mutex<HashMap<[u8; 8], Weak<LazyArray>>>,
+    values: Mutex<HashMap<[u8; 8], Weak<LazyValue>>>,
     attempts: AtomicUsize,
 }
 impl fmt::Debug for LazyPool {
@@ -136,6 +174,122 @@ impl LazyPool {
             source
         };
         TypedArray::Deferred(source)
+    }
+
+    /// Retains a `token[]` or `string[]` value ([`retains_text_array`]);
+    /// fields sharing one representation share one source. The first
+    /// `token[]` value interns the whole token table into `tokens`.
+    pub(crate) fn register_value(
+        self: &Arc<Self>,
+        rep: RawValueRep,
+        tokens: &TokenInterner,
+    ) -> DeferredValue {
+        if matches!(rep.value_type(), Ok(ValueType::Token)) {
+            self.token_ids.get_or_init(|| {
+                self.sections
+                    .tokens
+                    .iter()
+                    .map(|t| tokens.intern(t))
+                    .collect()
+            });
+        }
+        let mut values = self
+            .values
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let source = if let Some(source) = values.get(&rep.bytes).and_then(Weak::upgrade) {
+            source
+        } else {
+            let source = Arc::new(LazyValue {
+                pool: Arc::clone(self),
+                rep,
+                cached: OnceLock::new(),
+            });
+            values.insert(rep.bytes, Arc::downgrade(&source));
+            source
+        };
+        DeferredValue::new(source)
+    }
+}
+
+/// Whether a retained read leaves the attribute default `rep` encoded: a
+/// `token[]` or `string[]` array of at least [`MIN_RETAINED_TEXT_ARRAY`]
+/// elements. A payload whose length cannot be read decodes now, so the read
+/// reports it.
+pub(crate) fn retains_text_array(rep: &RawValueRep, data: &[u8]) -> bool {
+    rep.is_array()
+        && !rep.is_array_edit()
+        && matches!(rep.value_type(), Ok(ValueType::Token | ValueType::String))
+        && crate::value_rep::array_len(rep, data).is_some_and(|len| len >= MIN_RETAINED_TEXT_ARRAY)
+}
+
+/// A retained `token[]` or `string[]` attribute default.
+struct LazyValue {
+    pool: Arc<LazyPool>,
+    rep: RawValueRep,
+    cached: OnceLock<Result<Value, ArrayReadError>>,
+}
+impl fmt::Debug for LazyValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("LazyValue")
+            .field("type", &self.rep.value_type())
+            .field("cached", &self.cached.get().is_some())
+            .finish_non_exhaustive()
+    }
+}
+impl DeferredValueSource for LazyValue {
+    fn element_kind(&self) -> Option<Value> {
+        match self.rep.value_type() {
+            Ok(ValueType::Token) => Some(Value::Token(TokenId::EMPTY)),
+            Ok(ValueType::String) => Some(Value::string("")),
+            _ => None,
+        }
+    }
+    /// Decodes to the value an eager read assembles: a `Value::Array` of
+    /// tokens or strings, an index outside the tables reading as empty text.
+    fn materialize(&self) -> Result<&Value, &ArrayReadError> {
+        self.cached
+            .get_or_init(|| {
+                self.pool.attempts.fetch_add(1, Ordering::Relaxed);
+                let pool = &self.pool;
+                let mut budget = pool
+                    .budget
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let indices = crate::value_rep::decode_text_indices(
+                    &self.rep,
+                    &pool.bytes,
+                    &pool.sections,
+                    &mut budget,
+                )
+                .map_err(|e| match e {
+                    UsdcError::DecodeBudgetExceeded { limit } => {
+                        ArrayReadError::BudgetExceeded { limit }
+                    }
+                    e => ArrayReadError::InvalidData(Arc::from(format!(
+                        "USDC value at {}: {e}",
+                        self.rep.payload_offset()
+                    ))),
+                })?;
+                drop(budget);
+                let tokens = matches!(self.rep.value_type(), Ok(ValueType::Token));
+                let items = indices.into_iter().map(|index| {
+                    let index = index as usize;
+                    if tokens {
+                        let ids = pool.token_ids.get().map_or(&[][..], |ids| &ids[..]);
+                        Value::Token(ids.get(index).copied().unwrap_or(TokenId::EMPTY))
+                    } else {
+                        Value::String(Arc::from(
+                            pool.sections
+                                .tokens
+                                .get(index)
+                                .map_or("", |text| text.as_str()),
+                        ))
+                    }
+                });
+                Ok(Value::Array(items.collect()))
+            })
+            .as_ref()
     }
 }
 struct LazyArray {
@@ -194,7 +348,9 @@ impl DeferredArraySource for LazyArray {
                     DecodedField::FloatArray(array) => crate::numeric_array::float_array(array),
                     DecodedField::MathArray(array) => crate::numeric_array::math_array(&array),
                     DecodedField::Value(crate::value_rep::CrateValue::TypedArray(array)) => array,
-                    DecodedField::Value(_) | DecodedField::TokenArray(_) => {
+                    DecodedField::Value(_)
+                    | DecodedField::TokenArray(_)
+                    | DecodedField::Retained(_) => {
                         return Err(ArrayReadError::InvalidData(Arc::from(
                             "numeric array decoder returned a scalar",
                         )));
@@ -242,14 +398,36 @@ impl DeferredArraySource for RetimedArray {
     }
 }
 
-/// Assembles structure and retains numeric defaults and samples for demand reads.
+/// Assembles structure and retains large values for demand reads.
+///
+/// Two kinds of field value stay encoded, each decoded once, on its first
+/// read, into a cache its sources share across layer clones, opinions and
+/// threads:
+///
+/// - numeric arrays, anywhere a value appears (defaults, time samples,
+///   dictionaries), as [`TypedArray::Deferred`];
+/// - attribute defaults that are `token[]` or `string[]` arrays of at least
+///   [`MIN_RETAINED_TEXT_ARRAY`] elements, as [`Value::Deferred`].
+///
+/// Everything composition reads stays eager: specifiers, type names,
+/// children and property order, arcs and their list ops, variant sets and
+/// selections, relocates, `active`, `instanceable`, `kind`, `apiSchemas`
+/// and other metadata, relationship targets and connections. So does every
+/// value composition or dependency analysis looks inside: path expressions,
+/// asset paths, time codes and dictionaries (`customData` among them), which
+/// instancing keys, layer-offset retiming, namespace edits and asset
+/// dependency scans walk. Scalars stay eager too: most are inlined in their
+/// field's representation, and decoding one costs less than retaining it.
 ///
 /// Input bytes are immutable caller-owned memory. No file I/O, eviction or
-/// background work occurs. Each distinct numeric `ValueRep` decodes once,
+/// background work occurs. Each distinct retained `ValueRep` decodes once,
 /// caching success or failure across layer clones, samples and threads.
 /// All later decodes share the remaining structural assembly budget.
-/// Structural errors fail now; malformed array payloads fail on demand.
-/// Use `TypedArray::try_materialize` or the stage's fallible property queries.
+/// Structural errors fail now; malformed retained payloads fail on demand.
+/// Use `TypedArray::try_materialize`, `Value::try_materialize` or the
+/// stage's fallible property queries. A read that retains a `token[]`
+/// value interns the file's whole token table into `tokens`, so deferred
+/// values decode without it.
 pub fn read_usdc_lazy(
     bytes: Arc<[u8]>,
     id: LayerId,
@@ -295,8 +473,10 @@ pub fn read_usdc_lazy_range_within(
     let pool = Arc::new(LazyPool {
         bytes,
         sections,
+        token_ids: OnceLock::new(),
         budget: Mutex::new(DecodeBudget::with_limit(0)),
         arrays: Mutex::new(HashMap::new()),
+        values: Mutex::new(HashMap::new()),
         attempts: AtomicUsize::new(0),
     });
     budget.lazy = Some(Arc::clone(&pool));

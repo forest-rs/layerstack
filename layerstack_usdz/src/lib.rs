@@ -65,15 +65,22 @@ pub use diagnostic::{ImportDiagnostic, MemberDiagnostic};
 pub use error::{LayerReadError, UsdzError};
 pub use writer::{PackageFile, UsdzWriteError, write_usdz};
 
-/// How USDC numeric values are loaded within a package or stage document.
+/// How USDC field values are loaded within a package or stage document.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum UsdcArrayLoading {
-    /// Decode numeric arrays during import.
+    /// Decode every value during import: the read pays for all of them, and
+    /// keeps no encoded bytes.
     #[default]
     Eager,
-    /// Retain immutable encoded bytes and decode numeric arrays on demand.
-    /// Structural validation occurs during import; payload failures occur during
-    /// checked reads. Members share encoded storage with separate per-file caches.
+    /// Retain immutable encoded bytes and decode large values on their first
+    /// read: numeric arrays, and `token[]` and `string[]` attribute defaults
+    /// of at least [`layerstack_usdc::MIN_RETAINED_TEXT_ARRAY`] elements (see
+    /// `layerstack_usdc::read_usdc_lazy` for what stays eager). Each decodes
+    /// once, into a cache shared across threads; later reads cost what an
+    /// eager value's do. Structural validation occurs during import; payload
+    /// failures occur during checked reads. Members share encoded storage
+    /// with separate per-file caches, whose work
+    /// [`layerstack_usdc::RetainedValues::stats`] reports.
     #[cfg(feature = "std")]
     Retained,
 }

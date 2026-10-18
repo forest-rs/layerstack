@@ -468,7 +468,9 @@ impl<'a> AssembleCtx<'a> {
     ) -> Result<(), UsdcError> {
         debug_assert!(!decoded[index], "spec decoded twice");
         decoded[index] = true;
-        self.collect_fields(self.sections.specs[index].fieldset_index, fields)
+        let spec = &self.sections.specs[index];
+        let retain_default = spec.form == SpecForm::Attribute;
+        self.collect_fields(spec.fieldset_index, retain_default, fields)
     }
 
     /// Collects decoded fields for a spec from the fieldsets/fields tables.
@@ -479,6 +481,7 @@ impl<'a> AssembleCtx<'a> {
     fn collect_fields(
         &mut self,
         fieldset_index: u32,
+        retain_default: bool,
         result: &mut Fields<'a>,
     ) -> Result<(), UsdcError> {
         result.clear();
@@ -502,6 +505,17 @@ impl<'a> AssembleCtx<'a> {
                 let field_name = self.lookup_token(field_def.token_index);
                 self.budget.charge_text(field_name.len())?;
                 let rep = RawValueRep::new(field_def.value_rep);
+                #[cfg(feature = "std")]
+                if retain_default
+                    && field_name == "default"
+                    && self.budget.lazy.is_some()
+                    && crate::lazy::retains_text_array(&rep, self.data)
+                {
+                    result.push((field_name, DecodedField::Retained(rep)));
+                    idx += 1;
+                    continue;
+                }
+                let _ = retain_default;
                 let value = if is_token_array(&rep) {
                     DecodedField::TokenArray(decode_text_indices(
                         &rep,
@@ -1073,6 +1087,15 @@ impl<'a> AssembleCtx<'a> {
                     .map(|&index| Value::Token(self.token_id(index)))
                     .collect(),
             ),
+            #[cfg(feature = "std")]
+            DecodedField::Retained(rep) => {
+                let pool = self
+                    .budget
+                    .lazy
+                    .as_ref()
+                    .expect("retained by a retained read");
+                Value::Deferred(pool.register_value(*rep, self.tokens))
+            }
         }
     }
 

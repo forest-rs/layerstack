@@ -631,3 +631,41 @@ fn the_command_writes_and_checks_a_rust_module() {
     std::fs::write(&module, text.replace("size", "extent")).unwrap();
     assert!(run(true).unwrap_err().contains("schemas.rs"));
 }
+
+#[test]
+fn the_cli_names_the_flags_that_resolve_a_missing_sublayer() {
+    let directory = Directory::new();
+    std::fs::create_dir(directory.0.join("lib")).unwrap();
+    let source = directory.0.join("lib/schema.usda");
+    std::fs::write(&source, CODELESS).unwrap();
+    let rust = directory.0.join("schemas.rs");
+    let (source, rust) = (source.to_str().unwrap(), rust.to_str().unwrap());
+    let cli = |extra: &[&str]| {
+        let args = ["compile", source, "--rust", rust]
+            .into_iter()
+            .chain(extra.iter().copied());
+        crate::run_with(args.map(str::to_owned)).unwrap_err()
+    };
+    let error = cli(&[]);
+    assert!(error.contains("@usd/schema.usda@"), "{error}");
+    assert!(error.contains("(none was given)"), "{error}");
+    for flag in ["--search", "--openusd-source", "--plugin-root"] {
+        assert!(error.contains(flag), "{flag}: {error}");
+    }
+    let lib = directory.0.join("lib");
+    let error = cli(&["--search", lib.to_str().unwrap()]);
+    assert!(!error.contains("(none was given)"), "{error}");
+    assert!(error.contains("--search"), "{error}");
+    // A plugin root that is not a directory is named by its flag.
+    let absent = directory.0.join("absent");
+    let error = cli(&["--plugin-root", absent.to_str().unwrap()]);
+    assert!(error.starts_with("--plugin-root "), "{error}");
+    // With the right search path it compiles.
+    let found = crate::run_with(
+        ["compile", source, "--rust", rust, "--search"]
+            .iter()
+            .map(|arg| (*arg).to_owned())
+            .chain([directory.0.to_str().unwrap().to_owned()]),
+    );
+    assert!(found.is_ok(), "{found:?}");
+}

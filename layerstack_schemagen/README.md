@@ -7,6 +7,9 @@ authoring until transaction application (`Create*Attr().Set()`). Codeless schema
 get their native schema spelling without invented C++ declarations. Regeneration
 preserves the aliases and their semantic notes.
 
+`cargo run -p layerstack_schemagen -- --help` lists its commands and flags, and
+`compile --help` the compiler's.
+
 Regenerate the bundled OpenUSD schemas with the matching wheel and source:
 
 ```sh

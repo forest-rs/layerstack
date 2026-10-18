@@ -6,6 +6,7 @@
 //! `usdGenSchema` does ([`compile`]).
 //!
 //! ```text
+//! cargo run -p layerstack_schemagen -- --help
 //! cargo run -p layerstack_schemagen -- --pxr <site-packages>/pxr --source <OpenUSD> [--check]
 //! cargo run -p layerstack_schemagen -- compile <schema.usda> [--out <dir> | --install <dir>] \
 //!     [--rust <file.rs>] [--search <dir>]... [--openusd-source <OpenUSD>] [--plugin-root <dir>] \
@@ -88,8 +89,114 @@ const GENERATED_DIRS: &[&str] = &[
 const FEATURES_BEGIN: &str = "# BEGIN GENERATED FEATURES (layerstack_schemagen)";
 const FEATURES_END: &str = "# END GENERATED FEATURES";
 
+/// What `layerstack_schemagen --help` prints: each mode and its flags.
+pub const USAGE: &str = "\
+layerstack_schemagen: generates layerstack_schemas from OpenUSD's schema definitions,
+and compiles schema.usda files as OpenUSD's usdGenSchema does.
+
+Usage:
+  layerstack_schemagen --pxr <site-packages>/pxr --source <OpenUSD> [--check]
+  layerstack_schemagen compile <schema.usda> [options]
+  layerstack_schemagen --shader-defs <shaderDefs.usda> --out <file.rs> [--check]
+  layerstack_schemagen --materialx <file.mtlx> --node <NodeDef>... --out <file.rs> [--check]
+  layerstack_schemagen --kind-plugin <plugInfo.json>... --out <file.rs> [--check]
+  layerstack_schemagen --help
+
+Commands:
+  (none)     Regenerate layerstack_schemas' tables and views from a usd-core wheel's
+             pxr package (--pxr) and the OpenUSD sources at its tag (--source).
+  compile    Compile a schema library: generatedSchema.usda, plugInfo.json and
+             Rust views. See `layerstack_schemagen compile --help`.
+
+Generators:
+  --shader-defs  Typed shader node APIs from a shaderDefs.usda.
+  --materialx    Typed APIs for the selected MaterialX NodeDefs (--node, repeatable).
+  --kind-plugin  Kind registrations from plugInfo.json files (repeatable).
+
+Options:
+  --check        Write nothing; fail when a checked-in file differs.
+  -h, --help     Print this help.
+";
+
+/// What `layerstack_schemagen compile --help` prints.
+pub const COMPILE_USAGE: &str = "\
+layerstack_schemagen compile: compiles a schema.usda as OpenUSD's usdGenSchema does.
+
+Usage:
+  layerstack_schemagen compile <schema.usda> [--out <dir> | --install <dir>]
+      [--rust <file.rs>] [--search <dir>]... [--openusd-source <OpenUSD>]
+      [--plugin-root <dir>]... [--check]
+
+Outputs (at least one):
+  --out <dir>        Write generatedSchema.usda and plugInfo.json into <dir>, as
+                     usdGenSchema does, building on a plugInfo.json already there.
+  --install <dir>    Write both into <dir>/resources, installed, ready to register
+                     (PXR_PLUGINPATH_NAME=<dir>/resources).
+  --rust <file.rs>   Write the library's Rust views and registration, formatted.
+
+Where sublayers such as @usdGeom/schema.usda@ resolve, after the directory of the
+layer naming them, in order:
+  --search <dir>               A directory (repeatable).
+  --openusd-source <OpenUSD>   An OpenUSD checkout's pxr/usd.
+  --plugin-root <dir>          Each <plugin>/resources under <dir>, such as the
+                               usd-core wheel's pxr/pluginfo (repeatable).
+
+Options:
+  --check        Write nothing; fail when any file differs.
+  -h, --help     Print this help.
+";
+
+/// Whether `arg` asks for help.
+fn is_help(arg: &str) -> bool {
+    matches!(arg, "-h" | "--help")
+}
+
 /// Runs the generation CLI with the process arguments.
+///
+/// # Errors
+///
+/// What failed, as the CLI prints it.
 pub fn run() -> Result<String, String> {
+    run_with(std::env::args().skip(1))
+}
+
+/// Runs the generation CLI with `args`, the arguments after the program
+/// name: [`USAGE`] for `help`, `--help`, `-h` or no arguments (the latter
+/// as an error), [`COMPILE_USAGE`] for `compile --help`.
+///
+/// # Errors
+///
+/// What failed, as the CLI prints it.
+pub fn run_with(args: impl IntoIterator<Item = String>) -> Result<String, String> {
+    let mut args = args.into_iter().peekable();
+    match args.peek().map(String::as_str) {
+        None => return Err(format!("no command or flags given\n\n{}", USAGE.trim_end())),
+        Some("help") => return Ok(USAGE.trim_end().into()),
+        Some("compile") => {
+            let mut args = args.skip(1).peekable();
+            if args.peek().is_none() {
+                return Err(format!(
+                    "compile requires a schema.usda\n\n{}",
+                    COMPILE_USAGE.trim_end()
+                ));
+            }
+            let args: Vec<String> = args.collect();
+            if args.iter().any(|arg| is_help(arg)) {
+                return Ok(COMPILE_USAGE.trim_end().into());
+            }
+            return compile::run(args.into_iter());
+        }
+        Some(_) => {}
+    }
+    let args: Vec<String> = args.collect();
+    if args.iter().any(|arg| is_help(arg)) {
+        return Ok(USAGE.trim_end().into());
+    }
+    generate(args.into_iter())
+}
+
+/// The generation modes other than `compile`.
+fn generate(args: impl Iterator<Item = String>) -> Result<String, String> {
     let mut pxr = None;
     let mut source = None;
     let mut check = false;
@@ -99,10 +206,7 @@ pub fn run() -> Result<String, String> {
     let mut kind_plugins = Vec::new();
     let mut selected = Vec::new();
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
-    let mut args = std::env::args().skip(1).peekable();
-    if args.peek().map(String::as_str) == Some("compile") {
-        return compile::run(args.skip(1));
-    }
+    let mut args = args;
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--pxr" => pxr = args.next().map(PathBuf::from),
@@ -116,7 +220,7 @@ pub fn run() -> Result<String, String> {
                     .ok_or("--kind-plugin requires a plugInfo.json path")?,
             )),
             "--node" => selected.push(args.next().ok_or("--node requires a NodeDef name")?),
-            other => return Err(format!("unknown argument {other}; see the crate docs")),
+            other => return Err(format!("unknown argument {other}; see `--help`")),
         }
     }
     if !kind_plugins.is_empty() {
@@ -178,7 +282,7 @@ pub fn run() -> Result<String, String> {
     if output.is_some() {
         return Err("--out requires --shader-defs or --materialx".into());
     }
-    let pxr = pxr.ok_or("--pxr <site-packages>/pxr is required")?;
+    let pxr = pxr.ok_or("--pxr <site-packages>/pxr is required; see `--help`")?;
     let source = source.ok_or("--source <OpenUSD checkout at the wheel's tag> is required")?;
     let model = model::read(&pxr, &source)?;
 
@@ -411,6 +515,45 @@ pub fn generate_materialx_library(
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn cli(args: &[&str]) -> Result<String, String> {
+        run_with(args.iter().map(|arg| (*arg).to_owned()))
+    }
+    #[test]
+    fn help_lists_the_commands_and_a_bare_run_prints_it() {
+        for help in [&["--help"][..], &["-h"], &["help"], &["--check", "-h"]] {
+            let text = cli(help).unwrap();
+            assert_eq!(text, USAGE.trim_end(), "{help:?}");
+        }
+        for mode in [
+            "--pxr <site-packages>/pxr --source <OpenUSD>",
+            "compile <schema.usda>",
+            "--shader-defs",
+            "--materialx",
+            "--kind-plugin",
+            "Commands:",
+        ] {
+            assert!(USAGE.contains(mode), "{mode}");
+        }
+        // A bare run fails with the usage, not with a missing `--pxr`.
+        let bare = cli(&[]).unwrap_err();
+        assert!(bare.ends_with(USAGE.trim_end()), "{bare}");
+        assert!(!bare.contains("is required"), "{bare}");
+        for help in [
+            &["compile", "--help"][..],
+            &["compile", "schema.usda", "-h"],
+        ] {
+            assert_eq!(cli(help).unwrap(), COMPILE_USAGE.trim_end(), "{help:?}");
+        }
+        for flag in ["--search", "--openusd-source", "--plugin-root", "--rust"] {
+            assert!(COMPILE_USAGE.contains(flag), "{flag}");
+        }
+        assert!(
+            cli(&["compile"])
+                .unwrap_err()
+                .ends_with(COMPILE_USAGE.trim_end())
+        );
+        assert!(cli(&["--frobnicate"]).unwrap_err().contains("--help"));
+    }
     #[test]
     fn rejects_colliding_and_invalid_generated_names() {
         for ports in [

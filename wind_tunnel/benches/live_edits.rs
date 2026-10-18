@@ -445,6 +445,46 @@ fn bench_root_renames(c: &mut Criterion) {
     group.finish();
 }
 
+/// The preparation of the renames [`bench_root_renames`] applies: each
+/// rename is prepared against the live stage the previous one left, and
+/// only preparing it is timed. Preparing should cost about what the edit
+/// touches, as applying it does, not compose or scan the stage.
+fn bench_root_rename_prepares(c: &mut Criterion) {
+    const RENAMES: usize = 64;
+    let mut group = c.benchmark_group("live_root_rename_prepares");
+    group.sample_size(10);
+    group.sampling_mode(SamplingMode::Flat);
+    for n in [1_000, 2_000, 4_000, 8_000] {
+        for (case, listed) in [("unlisted", false), ("listed", true)] {
+            group.bench_with_input(BenchmarkId::new(case, n), &n, |b, &n| {
+                b.iter_custom(|iterations| {
+                    let mut total = core::time::Duration::ZERO;
+                    for _ in 0..iterations {
+                        let (mut store, mut live, _) = many_root_creates(n, listed, 0);
+                        for i in 0..RENAMES {
+                            let from = TargetPath::Prim(store.path(&format!("/Rock{i}")));
+                            let to = TargetPath::Prim(store.path(&format!("/Stone{i}")));
+                            let start = std::time::Instant::now();
+                            let edit = NamespaceEdit::prepare(
+                                live.stage(),
+                                &mut store,
+                                &EditTarget::for_layer(LayerId(1)),
+                                from,
+                                to,
+                            )
+                            .unwrap();
+                            total += start.elapsed();
+                            black_box(live.apply(&mut store, edit.transaction()).unwrap());
+                        }
+                    }
+                    total
+                });
+            });
+        }
+    }
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_live_edits,
@@ -453,6 +493,7 @@ criterion_group!(
     bench_bulk_create,
     bench_many_creates,
     bench_many_root_creates,
-    bench_root_renames
+    bench_root_renames,
+    bench_root_rename_prepares
 );
 criterion_main!(benches);

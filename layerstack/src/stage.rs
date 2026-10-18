@@ -431,6 +431,24 @@ pub struct Stage {
     /// The schemas the stage was composed with ([`StageOptions::schemas`]).
     schemas: Option<Arc<SchemaRegistry>>,
     type_infos: HashMap<SchemaIdentity, Weak<PrimTypeInfo>>,
+    /// For a partial composition a live stage merges, the whole child
+    /// list of each boundary parent it was asked for and composed, in
+    /// composition order with inactive children still in place.
+    /// [`Self::merge_local_subtrees`] consumes it; every other composition
+    /// leaves it empty, so a stage never keeps a stale list.
+    boundary_children: HashMap<PathId, Vec<PathId>>,
+}
+
+/// How [`Stage::merge_local_subtrees`] ordered the boundary parents'
+/// child lists.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct BoundaryOrders {
+    /// Lists taken whole from the partial composition, which composed the
+    /// parent's child names once.
+    pub(crate) composed: usize,
+    /// Lists the partial composition did not index the parent for, ordered
+    /// by composing the parent's child names again.
+    pub(crate) reordered: usize,
 }
 
 // Independent sets may share a metadata authoring site and compose sparsely.
@@ -497,17 +515,26 @@ impl Stage {
         exact_mask: bool,
     ) -> Self {
         let child_index = crate::prim_indexing::ChildIndex::default();
-        Self::compose_retained(store, root, options, exact_mask, &child_index)
+        Self::compose_retained(
+            store,
+            root,
+            options,
+            exact_mask,
+            &HashSet::new(),
+            &child_index,
+        )
     }
 
     /// Composes as [`Self::compose`] does, reading the child specs of layers
     /// that do not list them from `child_index`, which a live stage keeps
-    /// across compositions.
+    /// across compositions, and keeping the whole child list of each of
+    /// `boundaries` it composes ([`Self::boundary_children`]).
     pub(crate) fn compose_retained(
         store: &mut dyn LayerStore,
         root: LayerId,
         mut options: StageOptions,
         exact_mask: bool,
+        boundaries: &HashSet<PathId>,
         child_index: &crate::prim_indexing::ChildIndex,
     ) -> Self {
         options.muted_layers.remove(&root);
@@ -525,6 +552,7 @@ impl Stage {
             options,
             None,
             exact_mask,
+            boundaries,
             child_index,
         );
         stage.options = captured.clone();
@@ -537,11 +565,15 @@ impl Stage {
         stage
     }
 
+    /// Composes exactly the prims `paths` (see
+    /// [`crate::compose::compose_stage_with_paths`]), keeping the whole child
+    /// list of each of `boundaries` it composes.
     pub(crate) fn compose_local_paths(
         store: &mut dyn LayerStore,
         root: LayerId,
         options: StageOptions,
         paths: alloc::collections::BTreeSet<PathId>,
+        boundaries: &HashSet<PathId>,
         child_index: &crate::prim_indexing::ChildIndex,
     ) -> Self {
         let captured = options.clone();
@@ -551,6 +583,7 @@ impl Stage {
             root,
             options,
             Some(paths),
+            boundaries,
             child_index,
         );
         stage.options = captured;
@@ -563,9 +596,21 @@ impl Stage {
         stage
     }
 
+    /// Whether this partial composition composed the whole child list of
+    /// the boundary parent `parent`.
+    pub(crate) fn has_boundary_children(&self, parent: PathId) -> bool {
+        self.boundary_children.contains_key(&parent)
+    }
+
     /// Replaces only complete local subtrees and their boundary child lists.
-    /// Supporting ancestors are not merged. Boundary children reuse the
-    /// retained indexes and the shared child-order fold.
+    /// Supporting ancestors are not merged.
+    ///
+    /// A boundary parent's children are the whole child list `partial`
+    /// composed for it, as a full composition lists them, less the prims
+    /// this stage does not hold. For a parent `partial` did not index, the
+    /// list `boundary_children` gives is ordered by composing the parent's
+    /// child names again against its retained index; a caller gives no
+    /// list for a parent [`Self::has_boundary_children`] reports.
     pub(crate) fn merge_local_subtrees(
         &mut self,
         store: &dyn LayerStore,
@@ -575,7 +620,7 @@ impl Stage {
         boundary_children: Vec<(PathId, Vec<PathId>)>,
         composed_roots: &[PathId],
         child_index: &crate::prim_indexing::ChildIndex,
-    ) {
+    ) -> BoundaryOrders {
         for path in affected {
             if let Some(old) = self.prims.remove(path) {
                 self.forget_type_info(old.type_info);
@@ -599,17 +644,38 @@ impl Stage {
                 }
             }
         }
+        let mut composed = core::mem::take(&mut partial.boundary_children);
         self.merge_prims_from(store, partial, affected, composed_roots);
-        for (parent, mut children) in boundary_children {
+        let mut orders = BoundaryOrders::default();
+        for (parent, given) in boundary_children {
             let Some(index) = self.prims.get(&parent) else {
                 self.children.remove(&parent);
                 continue;
             };
+            let mut children = match composed.remove(&parent) {
+                Some(children) => {
+                    orders.composed += 1;
+                    children
+                }
+                None => {
+                    let mut children = given;
+                    if !children.is_empty() {
+                        orders.reordered += 1;
+                        crate::prim_indexing::order_children(
+                            store,
+                            index,
+                            child_index,
+                            &mut children,
+                        );
+                    }
+                    children
+                }
+            };
             if children.is_empty() {
                 self.children.remove(&parent);
+                self.inactive_children.remove(&parent);
                 continue;
             }
-            crate::prim_indexing::order_children(store, index, child_index, &mut children);
             // Ordinary composition orders before pruning inactive children:
             // invisible names can delimit reorder groups of visible names.
             children.retain(|child| self.prims.contains_key(child));
@@ -627,6 +693,7 @@ impl Stage {
         }
         self.order_errors(store);
         self.prepare_prototypes(store);
+        orders
     }
 
     /// Resolve schema identity once with the composed snapshot. Ordinary value
@@ -1315,7 +1382,18 @@ impl Stage {
             variant_fallbacks: VariantFallbacks::default(),
             schemas: None,
             type_infos: HashMap::new(),
+            boundary_children: HashMap::new(),
         }
+    }
+
+    /// Keeps the whole child lists a partial composition composed for the
+    /// boundary parents it was asked for.
+    pub(crate) fn with_boundary_children(
+        mut self,
+        boundary_children: HashMap<PathId, Vec<PathId>>,
+    ) -> Self {
+        self.boundary_children = boundary_children;
+        self
     }
 
     pub(crate) fn with_layer_inventory(

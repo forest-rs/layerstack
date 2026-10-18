@@ -288,7 +288,8 @@ impl LiveStage {
             ..options.clone()
         };
         let child_index = crate::prim_indexing::ChildIndex::default();
-        let mut stage = Stage::compose_retained(store, root, opts, false, &child_index);
+        let mut stage =
+            Stage::compose_retained(store, root, opts, false, &HashSet::new(), &child_index);
         let deps = stage.take_deps().unwrap_or_default();
         let tracker =
             InvalidationTracker::from_graph_with_cycle_handling(deps.graph, CycleHandling::Ignore);
@@ -769,13 +770,11 @@ impl LiveStage {
             .collect();
         parents.sort_unstable();
         parents.dedup();
-        // Supporting ancestors supply activation context. Boundary children
-        // are ordered separately against the retained stage; their indexes
-        // do not change merely because a sibling was added or removed.
-        let boundary_children: Vec<_> = parents
-            .iter()
-            .map(|parent| (*parent, index.children(*parent).to_vec()))
-            .collect();
+        // Supporting ancestors supply activation context. A boundary parent
+        // keeps its retained index, which a sibling added or removed does
+        // not change; the partial composition composes its child names
+        // once, for its whole child list.
+        let boundaries: HashSet<PathId> = parents.iter().copied().collect();
         let mut seed: BTreeSet<PathId> = affected.iter().copied().collect();
         for &path in &affected {
             let mut current = store.paths().resolve(path).parent();
@@ -803,8 +802,30 @@ impl LiveStage {
             with_dependencies: true,
             ..self.options.clone()
         };
-        let mut partial =
-            Stage::compose_local_paths(store, self.root, options, seed, &self.child_index);
+        let mut partial = Stage::compose_local_paths(
+            store,
+            self.root,
+            options,
+            seed,
+            &boundaries,
+            &self.child_index,
+        );
+        self.work.composed_prim_indexes += partial.composition_work().composed_prim_indexes;
+        // A parent the partial composition did not index keeps the source
+        // children it holds, ordered against its retained index.
+        let boundary_children: Vec<_> = parents
+            .iter()
+            .map(|&parent| {
+                let given = if partial.has_boundary_children(parent) {
+                    Vec::new()
+                } else {
+                    self.local_namespace
+                        .as_ref()
+                        .map_or_else(Vec::new, |index| index.children(parent).to_vec())
+                };
+                (parent, given)
+            })
+            .collect();
         let deps = partial.take_deps().unwrap_or_default();
         let mut changes = Changes::default();
         for path in &affected {
@@ -827,7 +848,8 @@ impl LiveStage {
             .collect();
         let mut affected: Vec<_> = affected.into_iter().collect();
         affected.sort_unstable();
-        self.stage.merge_local_subtrees(
+        self.work.replaced_prim_indexes = affected.len();
+        let orders = self.stage.merge_local_subtrees(
             store,
             partial,
             &affected,
@@ -836,6 +858,7 @@ impl LiveStage {
             &affected,
             &self.child_index,
         );
+        self.record_boundary_orders(orders);
         self.update_prim_edges(&affected, &deps);
         for &path in &affected {
             if !self.stage.has_prim(path) {
@@ -1670,7 +1693,14 @@ impl LiveStage {
             threads: self.options.threads,
             dynamic_formats: self.options.dynamic_formats.clone(),
         };
-        Stage::compose_retained(store, self.root, scoped_opts, true, &self.child_index)
+        Stage::compose_retained(
+            store,
+            self.root,
+            scoped_opts,
+            true,
+            &HashSet::new(),
+            &self.child_index,
+        )
     }
 
     /// Recomposes the whole stage and returns every path in the new stage
@@ -1694,7 +1724,14 @@ impl LiveStage {
             with_dependencies: true,
             ..self.options.clone()
         };
-        let mut stage = Stage::compose_retained(store, self.root, opts, false, &self.child_index);
+        let mut stage = Stage::compose_retained(
+            store,
+            self.root,
+            opts,
+            false,
+            &HashSet::new(),
+            &self.child_index,
+        );
         let deps = stage.take_deps().unwrap_or_default();
 
         self.work.full_rebuild = true;
@@ -3981,6 +4018,180 @@ mod tests {
         live.recompose(&mut store);
         assert_eq!(index_work(&live), (0, 1));
         assert_fresh(&live, &mut store, value);
+    }
+
+    /// Asserts that `live` composes what a fresh composition of `store`
+    /// does ([`assert_matches_fresh`]), inactive children included.
+    fn assert_lists_match_fresh(live: &LiveStage, store: &mut InMemoryStore) {
+        assert_matches_fresh(live, store, &[]);
+        let fresh = Stage::compose(store, live.root, live.options.clone());
+        for prim in fresh.prim_paths() {
+            assert_eq!(
+                live.stage().all_children_of(prim),
+                fresh.all_children_of(prim),
+                "children with inactive ones differ for {prim:?}"
+            );
+        }
+    }
+
+    /// Creating, removing and undoing children of a parent that lists and
+    /// reorders them and holds an inactive child, and editing the parent's
+    /// specs in the same transaction, compose what a fresh composition
+    /// does. The partial composition composes the boundary parent's child
+    /// names once, with its index, and the merge takes its whole child
+    /// list: no boundary list is ordered by composing them again.
+    ///
+    /// Spec: AOUSD Core §11.3.1 (child order from `primChildren` and
+    /// `primOrder`). OpenUSD: `PcpComposeSiteChildNames`,
+    /// `PcpPrimIndex::ComputePrimChildNames`.
+    #[test]
+    fn local_child_edits_compose_boundary_child_names_once() {
+        use crate::{EditTarget, Specifier, edit::Transaction};
+        let mut store = InMemoryStore::default();
+        let world = p(&mut store, "/World");
+        let [a, b, c, d, e] = ["A", "B", "C", "D", "E"].map(|name| store.tokens.intern(name));
+        let path =
+            |store: &mut InMemoryStore, name: &str| p(store, &alloc::format!("/World/{name}"));
+        let mut layer = Layer::new(LayerId(1));
+        let mut parent = PrimSpec::def();
+        parent.authored_children = vec![a, b, c];
+        parent.prim_order = Some(vec![c, a]);
+        layer.insert_prim(world, parent);
+        layer.insert_prim(path(&mut store, "A"), PrimSpec::def());
+        layer.insert_prim(path(&mut store, "B"), PrimSpec::def().with_active(false));
+        layer.insert_prim(path(&mut store, "C"), PrimSpec::def());
+        layer.insert_prim(p(&mut store, "/Other"), PrimSpec::def());
+        store.insert_layer(layer);
+        let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+        assert_lists_match_fresh(&live, &mut store);
+        let target = EditTarget::for_layer(LayerId(1));
+        let composed_once = |live: &LiveStage| {
+            let work = live.recomposition_work();
+            assert!(!work.full_rebuild, "{work:?}");
+            assert_eq!(
+                (work.boundary_lists_composed, work.boundary_lists_reordered),
+                (1, 0),
+                "{work:?}"
+            );
+        };
+
+        let mut undo = Vec::new();
+        let mut txn = Transaction::new();
+        txn.create_prim(target.prim(path(&mut store, "D")), Specifier::Def, None);
+        undo.push(live.apply(&mut store, &txn).unwrap().inverse);
+        composed_once(&live);
+        assert_lists_match_fresh(&live, &mut store);
+
+        // The parent's reorder changes with the child it is created for.
+        let mut txn = Transaction::new();
+        txn.create_prim(target.prim(path(&mut store, "E")), Specifier::Def, None);
+        txn.set_prim_order(target.prim(world), vec![e, b, d]);
+        undo.push(live.apply(&mut store, &txn).unwrap().inverse);
+        composed_once(&live);
+        assert_lists_match_fresh(&live, &mut store);
+
+        // The inactive child goes last: its parent then lists no children,
+        // inactive ones included.
+        for name in ["A", "C", "D", "E", "B"] {
+            let mut txn = Transaction::new();
+            txn.remove_spec(target.prim(path(&mut store, name)));
+            undo.push(live.apply(&mut store, &txn).unwrap().inverse);
+            composed_once(&live);
+            assert_lists_match_fresh(&live, &mut store);
+        }
+        assert_eq!(live.stage().all_children_of(world), None);
+        while let Some(inverse) = undo.pop() {
+            live.apply(&mut store, &inverse).unwrap();
+            assert_lists_match_fresh(&live, &mut store);
+        }
+        assert_eq!(
+            live.stage().children_of(world),
+            Some(&[path(&mut store, "C"), path(&mut store, "A")][..])
+        );
+    }
+
+    /// Creating and removing children of a prim whose selected variant
+    /// branch authors children too recomposes the prim's namespace through
+    /// a masked composition, which composes the boundary parent's child
+    /// names once for its whole list, and matches a fresh composition.
+    ///
+    /// Spec: AOUSD Core §11.3.1 (child order), §10.5 (variant branches
+    /// contribute children). OpenUSD: `PcpComposeSiteChildNames`.
+    #[test]
+    fn variant_branch_child_edits_compose_boundary_child_names_once() {
+        use crate::{
+            EditTarget, Specifier, VariantSetSpec, VariantSpec,
+            edit::Transaction,
+            spec_path::{SpecPath, VariantSelectionSite},
+        };
+        let mut store = InMemoryStore::default();
+        let rock = p(&mut store, "/Rock");
+        let [shape, smooth, moss, stone] =
+            ["shape", "smooth", "Moss", "Stone"].map(|name| store.tokens.intern(name));
+        let mut layer = Layer::new(LayerId(1));
+        let mut spec = PrimSpec::def();
+        let mut set = VariantSetSpec::default();
+        set.variants.insert(
+            smooth,
+            VariantSpec {
+                authored_children: vec![moss],
+                ..VariantSpec::default()
+            },
+        );
+        spec.variant_sets.insert(shape, set);
+        spec.variant_set_names.prepend.push(shape);
+        spec.variant_selections.insert(shape, smooth);
+        spec.authored_children = vec![stone];
+        spec.prim_order = Some(vec![moss, stone]);
+        layer.insert_prim(rock, spec);
+        layer.insert_prim(
+            p(&mut store, "/Rock/Moss"),
+            PrimSpec {
+                outer_variant_sites: vec![VariantSelectionSite {
+                    host_path: rock,
+                    set: shape,
+                    variant: smooth,
+                }],
+                ..PrimSpec::def()
+            },
+        );
+        layer.insert_prim(p(&mut store, "/Rock/Stone"), PrimSpec::def());
+        store.insert_layer(layer);
+        let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+        assert_lists_match_fresh(&live, &mut store);
+        let target = EditTarget::for_layer(LayerId(1));
+        let branch = |store: &mut InMemoryStore, text: &str| {
+            crate::edit::Address::spec(
+                LayerId(1),
+                SpecPath::parse(text, &store.tokens, &store.paths).expect("spec path"),
+            )
+        };
+
+        let mut edits = [Transaction::new(), Transaction::new(), Transaction::new()];
+        edits[0].create_prim(
+            target.prim(p(&mut store, "/Rock/Pebble")),
+            Specifier::Def,
+            None,
+        );
+        edits[1].create_prim(
+            branch(&mut store, "/Rock{shape=smooth}Lichen"),
+            Specifier::Def,
+            None,
+        );
+        edits[2].remove_spec(target.prim(p(&mut store, "/Rock/Stone")));
+        let mut undo = Vec::new();
+        for txn in edits {
+            undo.push(live.apply(&mut store, &txn).unwrap().inverse);
+            let work = live.recomposition_work();
+            assert!(!work.full_rebuild, "{work:?}");
+            assert_eq!(work.boundary_lists_reordered, 0, "{work:?}");
+            assert!(work.boundary_lists_composed >= 1, "{work:?}");
+            assert_lists_match_fresh(&live, &mut store);
+        }
+        while let Some(inverse) = undo.pop() {
+            live.apply(&mut store, &inverse).unwrap();
+            assert_lists_match_fresh(&live, &mut store);
+        }
     }
 
     /// Child order folds layer by layer: each layer appends its children,

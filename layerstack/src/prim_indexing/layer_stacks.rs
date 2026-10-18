@@ -14,7 +14,7 @@
 //! per layer stack). OpenUSD: `PcpLayerStack`, `PcpLayerStackRegistry`
 //! (`pxr/usd/pcp/layerStack.cpp`).
 
-use alloc::{sync::Arc, vec::Vec};
+use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use core::sync::atomic::{AtomicU32, Ordering};
 
 use hashbrown::HashMap;
@@ -25,6 +25,7 @@ use crate::{
     expression_variables::{EXPRESSION_VARIABLES, VariableReads},
     layer_stack::{LayerStack, LayerStackIdentifier},
     path::PathId,
+    prim_indexing::site::ChildListing,
     relocates::RelocationTable,
     sync::{ReadLock, Slots},
 };
@@ -46,6 +47,9 @@ pub(crate) struct ComputedStack {
     /// `layers` with their offsets, shared by the stage's nodes of this
     /// layer stack ([`crate::prim_index_graph::PrimNode::stack_layers`]).
     pub(crate) layer_offsets: Arc<[(LayerId, LayerOffset)]>,
+    /// The child listing of each of `layers`, as this composition reads it
+    /// ([`super::site::compose_child_names`]).
+    pub(crate) children: Box<[ChildListing]>,
     /// Valid relocations, source to target and back.
     pub(crate) relocations: RelocationTable,
     /// Relocation sources mapped to their targets, each source traced back
@@ -179,9 +183,11 @@ fn compute(
         .copied()
         .zip(offsets.iter().copied())
         .collect();
+    let children = layers.iter().map(|_| ChildListing::default()).collect();
     ComputedStack {
         identifier,
         chain,
+        children,
         layers,
         offsets,
         layer_offsets,

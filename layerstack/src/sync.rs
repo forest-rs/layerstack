@@ -3,9 +3,9 @@
 
 //! Shared-state building blocks for tables several threads fill at once.
 //!
-//! With the `std` feature a [`ReadLock`] is a `RwLock` and [`Slots`] are
-//! `OnceLock`s, so the tables built from them are [`Sync`]; without it they
-//! are a `RefCell` and `OnceCell`s, for one thread.
+//! With the `std` feature a [`ReadLock`] is a `RwLock`, and a [`Memo`] and
+//! [`Slots`] are `OnceLock`s, so the tables built from them are [`Sync`];
+//! without it they are a `RefCell` and `OnceCell`s, for one thread.
 
 use alloc::boxed::Box;
 
@@ -58,6 +58,25 @@ impl<T> ReadLock<T> {
 impl<T: Default> Default for ReadLock<T> {
     fn default() -> Self {
         Self::new(T::default())
+    }
+}
+
+/// A value computed once, by whichever thread asks first, then read
+/// through a shared reference without locking: a `OnceLock` with the `std`
+/// feature, a `OnceCell` without.
+pub(crate) struct Memo<T>(Once<T>);
+
+impl<T> Memo<T> {
+    /// Returns the value, computing it with `f` if no one has yet. Threads
+    /// asking while it is computed wait for it.
+    pub(crate) fn get_or_init(&self, f: impl FnOnce() -> T) -> &T {
+        self.0.get_or_init(f)
+    }
+}
+
+impl<T> Default for Memo<T> {
+    fn default() -> Self {
+        Self(Once::new())
     }
 }
 

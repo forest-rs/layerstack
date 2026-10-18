@@ -26,7 +26,7 @@ use crate::{
     listop::ListOp,
     path::{PathId, PathInterner},
     spec_path::SpecPath,
-    sync::ReadLock,
+    sync::{Memo, ReadLock},
 };
 
 use super::layer_stacks::ComputedStack;
@@ -422,6 +422,10 @@ pub(crate) fn authored_selections(
 /// its `reorder nameChildren`. A spec that lists no children names the
 /// child prim specs its layer holds, by name. OpenUSD:
 /// `PcpComposeSiteChildNames`.
+///
+/// Each layer's listing is looked up in `children` once per composition,
+/// in the stack's [`ComputedStack::children`], so the threads composing
+/// read it without taking the index's lock.
 pub(crate) fn compose_child_names(
     store: &dyn LayerStore,
     stack: &ComputedStack,
@@ -431,7 +435,12 @@ pub(crate) fn compose_child_names(
     names: &mut HashSet<TokenId>,
     unlisted: &mut Vec<TokenId>,
 ) {
-    compose_child_names_in(store, &stack.layers, site, children, order, names, unlisted);
+    let layers = stack
+        .layers
+        .iter()
+        .zip(stack.children.iter())
+        .map(|(&id, memo)| (id, Some(memo)));
+    compose_child_names_of(store, layers, site, children, order, names, unlisted);
 }
 
 /// [`compose_child_names`] over `layers`, strongest first.
@@ -444,7 +453,22 @@ pub(crate) fn compose_child_names_in(
     names: &mut HashSet<TokenId>,
     unlisted: &mut Vec<TokenId>,
 ) {
-    for &id in layers.iter().rev() {
+    let layers = layers.iter().map(|&id| (id, None));
+    compose_child_names_of(store, layers, site, children, order, names, unlisted);
+}
+
+/// [`compose_child_names`] over `layers`, strongest first, each with the
+/// memo of its listing if it has one.
+fn compose_child_names_of<'m>(
+    store: &dyn LayerStore,
+    layers: impl DoubleEndedIterator<Item = (LayerId, Option<&'m ChildListing>)>,
+    site: &SpecPath,
+    children: &ChildIndex,
+    order: &mut Vec<TokenId>,
+    names: &mut HashSet<TokenId>,
+    unlisted: &mut Vec<TokenId>,
+) {
+    for (id, memo) in layers.rev() {
         let Some(layer) = store.layer(id) else {
             continue;
         };
@@ -463,7 +487,7 @@ pub(crate) fn compose_child_names_in(
                 }
                 // Child specs a list leaves out still exist; they follow
                 // every named child.
-                children.with_children(store, layer, site, |children| {
+                children.with_children(store, layer, site, memo, |children| {
                     // A set, so a prim listing many children stays linear.
                     let listed: HashSet<TokenId> = authored.iter().copied().collect();
                     for &name in children {
@@ -473,7 +497,7 @@ pub(crate) fn compose_child_names_in(
                     }
                 });
             }
-            _ => children.with_children(store, layer, site, |children| {
+            _ => children.with_children(store, layer, site, memo, |children| {
                 names.reserve(children.len());
                 order.reserve(children.len());
                 for &name in children {
@@ -545,6 +569,19 @@ struct IndexedLayer {
     children: Arc<LayerChildren>,
 }
 
+/// One layer's entry in a [`ChildIndex`], as one composition reads it:
+/// brought up to date by the first thread to read it, then shared by the
+/// rest without locking. The entry is the index's as of that read, which
+/// stays current while the composition reads an unchanging store.
+#[derive(Default)]
+pub(crate) struct ChildListing(Memo<Arc<LayerChildren>>);
+
+impl core::fmt::Debug for ChildListing {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("ChildListing").finish_non_exhaustive()
+    }
+}
+
 /// The layers a [`ChildIndex`] has indexed, counted since it was made.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct ChildIndexWork {
@@ -603,12 +640,13 @@ impl ChildIndex {
     }
 
     /// Calls `f` with the names of the child specs `layer` authors beneath
-    /// `site`.
+    /// `site`, reading the layer's listing from `memo` once it holds one.
     fn with_children<R>(
         &self,
         store: &dyn LayerStore,
         layer: &Layer,
         site: &SpecPath,
+        memo: Option<&ChildListing>,
         f: impl FnOnce(&[TokenId]) -> R,
     ) -> R {
         let segments = store.paths().resolve(site.prim_path()).segments();
@@ -623,7 +661,14 @@ impl ChildIndex {
                 .map_or(&[][..], |(_, names)| names.as_slice());
             return f(names);
         }
-        let entry = self.layer_children(store, layer);
+        let owned;
+        let entry: &LayerChildren = match memo {
+            Some(memo) => memo.0.get_or_init(|| self.layer_children(store, layer)),
+            None => {
+                owned = self.layer_children(store, layer);
+                &owned
+            }
+        };
         let names = entry
             .get(segments)
             .and_then(|branches| {

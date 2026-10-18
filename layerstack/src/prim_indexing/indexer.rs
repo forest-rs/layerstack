@@ -20,7 +20,7 @@
 
 use alloc::{string::String, sync::Arc, vec::Vec};
 
-use hashbrown::{HashMap, HashSet};
+use hashbrown::HashSet;
 
 use crate::{
     asset::{AssetRequest, FormatArgs},
@@ -36,7 +36,6 @@ use crate::{
     path::PathId,
     prim_index::ArcKind,
     spec_path::SpecPath,
-    sync::ReadLock,
     variant_fallbacks::VariantFallbacks,
 };
 
@@ -59,8 +58,6 @@ pub(crate) struct Ctx<'s> {
     pub(crate) include_payload: &'s (dyn Fn(&crate::path::PathInterner, PathId) -> bool + Sync),
     /// The stage's own layer stack.
     pub(crate) stage_stack: StackId,
-    /// Finalized indexes of stage prims, for their children to start from.
-    pub(crate) cache: ReadLock<HashMap<PathId, Arc<Graph>>>,
     pub(crate) root_path: PathId,
     /// The dynamic file formats payloads compose arguments for.
     pub(crate) dynamic_formats: &'s DynamicFormats,
@@ -323,6 +320,9 @@ struct Indexer<'c, 's, 'f> {
     previous_frame: Option<&'f Frame<'f>>,
     evaluate_implied_specializes: bool,
     evaluate_variants: bool,
+    /// The finalized index of the namespace parent of a stage prim, for
+    /// the prim's index to start from.
+    parent: Option<&'c Graph>,
     outputs: &'c mut Outputs,
     tasks: Vec<Task>,
     unique: HashSet<Task>,
@@ -341,6 +341,7 @@ pub(crate) fn build_prim_index(
     evaluate_variants: bool,
     root_contributes: bool,
     previous_frame: Option<&Frame<'_>>,
+    parent: Option<&Graph>,
     outputs: &mut Outputs,
 ) {
     let paths = ctx.store.paths();
@@ -358,6 +359,7 @@ pub(crate) fn build_prim_index(
         previous_frame,
         evaluate_implied_specializes,
         evaluate_variants,
+        parent,
         outputs,
         tasks: Vec::new(),
         unique: HashSet::new(),
@@ -772,13 +774,14 @@ impl Indexer<'_, '_, '_> {
         let cached = (self.previous_frame.is_none()
             && self.evaluate_implied_specializes
             && site.stack == self.ctx.stage_stack)
-            .then(|| {
-                let parent = parent_path.prim_path();
-                self.ctx.cache.read(|cache| cache.get(&parent).cloned())
-            })
+            .then_some(self.parent)
             .flatten();
         if let Some(parent) = cached.filter(|_| !parent_path.has_variant_selections()) {
-            self.outputs.graph = (*parent).clone();
+            debug_assert!(
+                parent.node(0).site.path.prim_path() == parent_path.prim_path(),
+                "the parent's index"
+            );
+            self.outputs.graph = parent.clone();
             for node in &mut self.outputs.graph.nodes {
                 node.from_parent_prim = true;
             }
@@ -797,6 +800,7 @@ impl Indexer<'_, '_, '_> {
                 self.evaluate_variants,
                 true,
                 self.previous_frame,
+                None,
                 self.outputs,
             );
             ancestor_instanceable = self.prim_index_is_instanceable();
@@ -1035,6 +1039,7 @@ impl Indexer<'_, '_, '_> {
                     false,
                     opts.direct_node_contributes,
                     Some(&frame),
+                    None,
                     &mut child_outputs,
                 );
             }

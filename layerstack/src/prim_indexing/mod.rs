@@ -199,7 +199,6 @@ pub(crate) fn compose(
         fallbacks: &options.variant_fallbacks,
         include_payload: &include_payload,
         stage_stack: StackId(0),
-        cache: ReadLock::default(),
         root_path,
         dynamic_formats: &options.dynamic_formats,
         schemas: options.schemas.as_deref(),
@@ -227,8 +226,8 @@ pub(crate) fn compose(
         share,
         keys: ReadLock::default(),
     };
-    let work = |path: PathId, added: &mut Vec<PathId>| {
-        index_prim(&ctx, &scope, boundaries, &claims, path, added)
+    let work = |prim: Pending, added: &mut Vec<Pending>| {
+        index_prim(&ctx, &scope, boundaries, &claims, prim, added)
     };
     crate::parallel::with_pool(options.threads, &work, |pool| {
         let mut walk = Walk {
@@ -239,7 +238,7 @@ pub(crate) fn compose(
             checks,
             instances: &mut instances,
         };
-        walk.walk(alloc::vec![root_path]);
+        walk.walk(alloc::vec![root_path], None);
         walk.share_prototypes();
     });
 
@@ -286,8 +285,9 @@ pub(crate) fn compose(
 struct Instances {
     /// The first instance composed with each key.
     representatives: HashMap<InstanceKey, PathId>,
-    /// Instances whose descendants wait for their representative's.
-    deferred: Vec<(PathId, PathId)>,
+    /// Instances whose descendants wait for their representative's, with
+    /// the instance's index when it was indexed rather than copied.
+    deferred: Vec<(PathId, PathId, Option<Arc<Graph>>)>,
 }
 
 /// What an instance's descendants are composed from: its instanceable
@@ -331,6 +331,10 @@ struct Claims {
     keys: ReadLock<HashSet<InstanceKey>>,
 }
 
+/// A prim to index, with its namespace parent's finalized index, which its
+/// own starts from, when the parent was indexed in this composition.
+type Pending = (PathId, Option<Arc<Graph>>);
+
 /// What indexing one prim found, before it joins the composition.
 struct Indexed {
     path: PathId,
@@ -355,8 +359,8 @@ struct Indexed {
 /// active instance whose key another instance has claimed: one instance's
 /// descendants are indexed for each key, and the rest copy them.
 ///
-/// Any number of threads index prims at once; the cached parent of a
-/// child is in place before the child is added. Which instance claims a
+/// Any number of threads index prims at once; each child is added with
+/// its parent's index, which no thread changes. Which instance claims a
 /// key is whichever gets there first, so [`Walk::join`] still decides
 /// which composes them.
 fn index_prim(
@@ -364,15 +368,26 @@ fn index_prim(
     scope: &Scope<'_>,
     boundaries: &HashSet<PathId>,
     claims: &Claims,
-    path: PathId,
-    added: &mut Vec<PathId>,
+    (path, parent): Pending,
+    added: &mut Vec<Pending>,
 ) -> Indexed {
     let site = Site {
         stack: ctx.stage_stack,
         path: SpecPath::from_prim_path(path),
     };
     let mut outputs = Outputs::default();
-    build_prim_index(ctx, &site, &site, true, true, true, None, &mut outputs);
+    build_prim_index(
+        ctx,
+        &site,
+        &site,
+        true,
+        true,
+        true,
+        None,
+        parent.as_deref(),
+        &mut outputs,
+    );
+    drop(parent);
     let mut graph = core::mem::take(&mut outputs.graph);
     cull(&mut graph, ctx.store.paths(), ctx.stage_stack);
     graph.instanceable = path != ctx.root_path && is_instanceable(ctx.store, &ctx.stacks, &graph);
@@ -408,13 +423,16 @@ fn index_prim(
     }
     let key = (claims.share && active && graph.instanceable).then(|| instance_key(&graph));
     let graph = Arc::new(graph);
-    ctx.cache.write(|cache| cache.insert(path, graph.clone()));
     let descended = active
         && key
             .as_ref()
             .is_none_or(|key| claims.keys.write(|keys| keys.insert(key.clone())));
     if descended {
-        added.extend(composed_children.iter().copied());
+        added.extend(
+            composed_children
+                .iter()
+                .map(|&child| (child, Some(Arc::clone(&graph)))),
+        );
     }
     Indexed {
         path,
@@ -437,7 +455,7 @@ fn index_prim(
 /// whatever the number of threads.
 struct Walk<'a, 'c, 'p> {
     ctx: &'a Ctx<'c>,
-    pool: &'a crate::parallel::Pool<'p, PathId, Indexed>,
+    pool: &'a crate::parallel::Pool<'p, Pending, Indexed>,
     out: &'a mut Composition,
     scope: &'a Scope<'a>,
     checks: &'a mut crate::composition_checks::Findings,
@@ -445,10 +463,13 @@ struct Walk<'a, 'c, 'p> {
 }
 
 impl Walk<'_, '_, '_> {
-    /// Indexes the prims of `roots` and their descendants, each from its
-    /// parent's index, and joins them depth first, `roots` in order.
-    fn walk(&mut self, roots: Vec<PathId>) {
-        let indexed = self.pool.run(roots.clone());
+    /// Indexes the prims of `roots`, children of the prim `parent` indexes
+    /// (`None` when it was not indexed here), and their descendants, each
+    /// from its parent's index, and joins them depth first, `roots` in
+    /// order.
+    fn walk(&mut self, roots: Vec<PathId>, parent: Option<&Arc<Graph>>) {
+        let tasks = roots.iter().map(|&root| (root, parent.cloned())).collect();
+        let indexed = self.pool.run(tasks);
         // One thread indexes prims in the order they join: a prim, then
         // the children it adds, depth first.
         if self.pool.in_order() {
@@ -505,7 +526,9 @@ impl Walk<'_, '_, '_> {
         if let Some(key) = key {
             match self.instances.representatives.get(&key) {
                 Some(&representative) => {
-                    self.instances.deferred.push((path, representative));
+                    self.instances
+                        .deferred
+                        .push((path, representative, Some(Arc::clone(&graph))));
                     deferred = true;
                 }
                 None => {
@@ -532,7 +555,7 @@ impl Walk<'_, '_, '_> {
         // Another instance of the key claimed its descendants first: index
         // this one's now, as its own subtree.
         if !descended {
-            self.walk(composed_children);
+            self.walk(composed_children, Some(&graph));
             return None;
         }
         Some(composed_children)
@@ -551,7 +574,7 @@ impl Walk<'_, '_, '_> {
         let mut shareable: HashMap<PathId, bool> = HashMap::new();
         // Composing an instance's descendants can defer the instances nested
         // in them in turn.
-        while let Some((instance, representative)) = self.instances.deferred.pop() {
+        while let Some((instance, representative, graph)) = self.instances.deferred.pop() {
             let can_share = *shareable
                 .entry(representative)
                 .or_insert_with(|| prototype_is_shareable(self.ctx, self.out, representative));
@@ -567,7 +590,7 @@ impl Walk<'_, '_, '_> {
                     .into_iter()
                     .filter(|child| self.scope.includes(paths, *child))
                     .collect();
-                self.walk(roots);
+                self.walk(roots, graph.as_ref());
                 continue;
             }
             copy_prototype(self.ctx, self.out, self.instances, representative, instance);
@@ -748,8 +771,14 @@ fn copy_prototype(
         out.reused_prim_indexes += 1;
         // A nested instance still waiting for its own representative's
         // descendants waits beneath the copy too.
-        if let Some(&(_, nested)) = instances.deferred.iter().find(|(path, _)| *path == source) {
-            instances.deferred.push((target, nested));
+        if let Some(&(_, nested, _)) = instances
+            .deferred
+            .iter()
+            .find(|(path, _, _)| *path == source)
+        {
+            // The copy's index is not kept apart: its descendants, if
+            // composed, start from indexes of their ancestors built anew.
+            instances.deferred.push((target, nested, None));
         }
         let map = |path: PathId, paths: &crate::path::PathInterner| {
             paths.intern_reparented(path, from, to).unwrap_or(path)

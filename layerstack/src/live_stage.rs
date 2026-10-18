@@ -10,7 +10,7 @@
 //! Callers mark roots, and propagation to transitive dependents happens at
 //! drain time during [`LiveStage::recompose`].
 
-use alloc::{collections::BTreeSet, vec::Vec};
+use alloc::{collections::BTreeSet, sync::Arc, vec::Vec};
 
 mod controls;
 mod mask;
@@ -272,7 +272,7 @@ pub struct LiveStage {
     layer_discovery: discovery::LayerDiscovery,
     /// The child specs of layers that do not list them, kept across
     /// compositions so an edit re-indexes only the specs it adds.
-    child_index: crate::prim_indexing::ChildIndex,
+    child_index: Arc<crate::prim_indexing::ChildIndex>,
     work: RecompositionWork,
     /// [`Self::child_index`]'s work when [`Self::work`] was last reset.
     child_index_mark: crate::prim_indexing::ChildIndexWork,
@@ -287,7 +287,14 @@ impl LiveStage {
             with_dependencies: true,
             ..options.clone()
         };
-        let child_index = crate::prim_indexing::ChildIndex::default();
+        #[cfg_attr(
+            not(feature = "std"),
+            allow(
+                clippy::arc_with_non_send_sync,
+                reason = "without `std` a stage and its child index stay on one thread"
+            )
+        )]
+        let child_index = Arc::new(crate::prim_indexing::ChildIndex::default());
         let mut stage =
             Stage::compose_retained(store, root, opts, false, &HashSet::new(), &child_index);
         let deps = stage.take_deps().unwrap_or_default();
@@ -1861,7 +1868,8 @@ impl LiveStage {
         for prim in prims {
             self.reindex_source_sites(prim);
         }
-        self.stage.retain_preparation(paths);
+        self.stage
+            .retain_preparation(Arc::clone(&self.child_index), paths);
     }
 
     /// Replaces the source-site index entries and the stage's preparation

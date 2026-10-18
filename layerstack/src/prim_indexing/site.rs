@@ -619,6 +619,28 @@ impl ChildIndex {
         f(names)
     }
 
+    /// The names of the child specs `layer` authors beneath the prim path
+    /// `parent`, in any variant branches, each once, in no particular
+    /// order. An ancestor of a deeper spec counts as a child spec here.
+    pub(crate) fn child_names(
+        &self,
+        store: &dyn LayerStore,
+        layer: &Layer,
+        parent: PathId,
+    ) -> Vec<TokenId> {
+        let entry = self.layer_children(store, layer);
+        let segments = store.paths().resolve(parent).segments();
+        let mut names: Vec<TokenId> = entry
+            .get(segments)
+            .into_iter()
+            .flatten()
+            .flat_map(|(_, names)| names.iter().copied())
+            .collect();
+        names.sort_unstable();
+        names.dedup();
+        names
+    }
+
     /// The children of `layer`'s parent sites, brought up to date.
     fn layer_children(&self, store: &dyn LayerStore, layer: &Layer) -> Arc<LayerChildren> {
         let (generation, structure) = (layer.generation(), layer.structural_generation());

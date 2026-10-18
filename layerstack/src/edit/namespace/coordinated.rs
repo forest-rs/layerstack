@@ -7,7 +7,7 @@
 //! `UsdNamespaceEditor::_ProcessPrimEdit` / `PcpGatherDependentNamespaceEdits`.
 
 use super::*;
-use crate::{ArcKind, HashMap, NodeId, Relocate, stage::preparation::PreparationIndex};
+use crate::{ArcKind, HashMap, HashSet, NodeId, Relocate, stage::preparation::PreparationIndex};
 
 pub(super) fn prepare(
     primary: &Stage,
@@ -95,6 +95,7 @@ fn prepare_with(
     }
     inspected.sort_unstable();
     inspected.dedup();
+    let mut links = HashMap::new();
     for id in &inspected {
         let layer = store.layer(*id).ok_or(NamespaceError::NoSuchObject)?;
         if retained.is_some() {
@@ -116,6 +117,7 @@ fn prepare_with(
             for spec in slots.iter().filter_map(|path| layer.prims.get(path)) {
                 validate_arcs(store, spec)?;
             }
+            links.insert(*id, slots);
             continue;
         }
         if !layer.variant_prims.is_empty()
@@ -211,10 +213,22 @@ fn prepare_with(
         }
         stage_moves.push(mappings);
     }
+    // With retained evidence, each layer is edited as a working copy of
+    // the slots the edit can change: those at and beneath the paths it
+    // moves, their ancestors, and those that author paths.
+    let mut copied: HashMap<LayerId, Vec<PathId>> = HashMap::new();
     let mut edited = HashMap::new();
     for id in &inspected {
         let original = store.layer(*id).ok_or(NamespaceError::NoSuchObject)?;
-        let mut layer = original.clone();
+        let mut layer = match (indexes.first(), links.get(id)) {
+            (Some(index), Some(slots)) => {
+                let slots = working_slots(store, index, original, slots, local_moves.get(id));
+                let copy = retained::working_copy(original, &slots);
+                copied.insert(*id, slots);
+                copy
+            }
+            _ => original.clone(),
+        };
         if let Some(moves) = local_moves.get(id) {
             for mapping in moves {
                 validate_authored(&layer, store, mapping)?;
@@ -278,7 +292,23 @@ fn prepare_with(
             }
         }
     }
-    validate_projection(store, &edited, &stages, &stage_moves)?;
+    // The slots each working copy may differ from its layer at.
+    let delta: HashMap<LayerId, Vec<PathId>> = copied
+        .iter()
+        .map(|(id, slots)| (*id, retained::copy_slots(slots, &edited[id])))
+        .collect();
+    if retained.is_some() {
+        let mut projected = HashMap::new();
+        for (id, paths) in &delta {
+            let original = store.layer(*id).ok_or(NamespaceError::NoSuchObject)?;
+            if let Some(layer) = retained::project(original, &edited[id], paths) {
+                projected.insert(*id, layer);
+            }
+        }
+        validate_projection(store, &projected, &stages, &stage_moves)?;
+    } else {
+        validate_projection(store, &edited, &stages, &stage_moves)?;
+    }
     let mut transaction = Transaction::new();
     let mut layers = Vec::new();
     let mut specs = Vec::new();
@@ -288,7 +318,12 @@ fn prepare_with(
         let layer = &edited[&id];
         transaction.expect_generation(id, original.generation());
         let previous = transaction.len();
-        append_delta(original, layer, &mut transaction, &mut specs);
+        match delta.get(&id) {
+            Some(paths) => {
+                retained::append_delta_at(original, layer, paths, &mut transaction, &mut specs);
+            }
+            None => append_delta(original, layer, &mut transaction, &mut specs),
+        }
         if original.default_prim != layer.default_prim || !original.metadata.same(&layer.metadata) {
             push(
                 &mut transaction,
@@ -360,6 +395,40 @@ fn validate_arcs(store: &dyn LayerStore, spec: &PrimSpec) -> Result<(), Namespac
         ));
     }
     Ok(())
+}
+
+/// The slots of `layer` a namespace edit making `moves` in it can change
+/// or must inspect: the slots that author paths (`links`), and for each
+/// move, the slots at and beneath its source and destination and their
+/// ancestors.
+fn working_slots(
+    store: &dyn LayerStore,
+    index: &PreparationIndex,
+    layer: &Layer,
+    links: &HashSet<PathId>,
+    moves: Option<&Vec<PathMove>>,
+) -> Vec<PathId> {
+    let mut slots: HashSet<PathId> = links.clone();
+    for mapping in moves.into_iter().flatten() {
+        let (from, to) = (mapping.from.prim_path(), mapping.to.prim_path());
+        slots.extend(retained::slots_beneath(
+            store,
+            index.children(),
+            layer,
+            from,
+        ));
+        if mapping.to.property_path().is_none() {
+            slots.extend(retained::slots_beneath(store, index.children(), layer, to));
+        }
+        slots.extend(retained::at_or_above(store, from));
+        slots.extend(retained::at_or_above(store, to));
+    }
+    let mut slots: Vec<PathId> = slots
+        .into_iter()
+        .filter(|path| layer.prims.contains_key(path) || layer.variant_prims.contains_key(path))
+        .collect();
+    slots.sort_unstable();
+    slots
 }
 
 /// Rejects a snapshot that does not reflect `store`, or whose composition
@@ -815,6 +884,9 @@ impl LayerStore for Overlay<'_> {
         self.store.asset_availability(anchor, path)
     }
 }
+/// Composes each stage over the edited `layers` and rejects an edit that
+/// would make its composition invalid or not map its namespace as
+/// planned.
 fn validate_projection(
     store: &mut dyn LayerStore,
     layers: &HashMap<LayerId, Layer>,

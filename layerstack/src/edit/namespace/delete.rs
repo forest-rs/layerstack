@@ -18,10 +18,23 @@
 
 use super::coordinated::Overlay;
 use super::*;
-use crate::{HashMap, Relocate};
+use crate::{
+    HashMap, HashSet, Relocate,
+    stage::preparation::{PreparationIndex, layer_links},
+};
 
-/// [`prepare`], which composes the whole projected stage: the oracle the
-/// retained proofs are tested against.
+pub(super) fn prepare(
+    stage: &Stage,
+    store: &mut dyn LayerStore,
+    target: &EditTarget,
+    object: TargetPath,
+) -> Result<NamespaceEdit, NamespaceError> {
+    prepare_with(stage, store, target, object, true)
+}
+
+/// [`prepare`] by copying every layer whole, as before stages retained
+/// preparation evidence: the oracle the retained proofs are tested
+/// against.
 #[cfg(test)]
 pub(super) fn prepare_by_composition(
     stage: &Stage,
@@ -29,14 +42,19 @@ pub(super) fn prepare_by_composition(
     target: &EditTarget,
     object: TargetPath,
 ) -> Result<NamespaceEdit, NamespaceError> {
-    prepare(stage, store, target, object)
+    prepare_with(stage, store, target, object, false)
 }
 
-pub(super) fn prepare(
+/// [`prepare`], editing working copies of the slots the delete can change
+/// when `use_retained` and the stage retains preparation evidence;
+/// otherwise copying every layer whole. Both find the same edit, or the
+/// same error.
+fn prepare_with(
     stage: &Stage,
     store: &mut dyn LayerStore,
     target: &EditTarget,
     object: TargetPath,
+    use_retained: bool,
 ) -> Result<NamespaceEdit, NamespaceError> {
     let path = store.paths().resolve(object.prim_path()).clone();
     if path.segments().is_empty() {
@@ -68,36 +86,47 @@ pub(super) fn prepare(
     }
     let root = stage.root_layer().ok_or(NamespaceError::NoSuchObject)?;
     let stack = stage.layer_stack().to_vec();
+    let index = if use_retained {
+        stage.preparation()
+    } else {
+        None
+    };
+    // With retained evidence, each layer is edited as a working copy of
+    // the slots the delete can change: those at and beneath the object,
+    // its ancestors, and those that author paths.
+    let mut copied = HashMap::new();
     let mut edited = HashMap::new();
     for id in &stack {
-        let mut layer = store
-            .layer(*id)
-            .ok_or(NamespaceError::NoSuchObject)?
-            .clone();
+        let original = store.layer(*id).ok_or(NamespaceError::NoSuchObject)?;
+        let mut layer = match index {
+            Some(index) => {
+                let slots = working_slots(store, index, original, object);
+                let copy = retained::working_copy(original, &slots);
+                copied.insert(*id, slots);
+                copy
+            }
+            None => original.clone(),
+        };
         remove_specs(store, &mut layer, object);
         edited.insert(*id, layer);
     }
-    let still_composed = {
-        let mut overlay = Overlay {
-            store: &mut *store,
-            layers: &edited,
-        };
-        exists(&Stage::compose(&mut overlay, root, stage.options().clone()))
-    };
+    let still_composed = composes(store, stage, root, &edited, &copied, index, object)?;
     if still_composed {
         relocate_away(store, &mut edited, &stack, target.layer(), object)?;
     }
-    for layer in edited.values_mut() {
-        repair(store, layer, object)?;
+    // In layer stack order, so the first spec that cannot be repaired is
+    // always the one reported; once for a layer the stack repeats.
+    let mut repaired = HashSet::new();
+    for id in &stack {
+        if repaired.insert(*id) {
+            repair(
+                store,
+                edited.get_mut(id).expect("edited stack layer"),
+                object,
+            )?;
+        }
     }
-    let projected = {
-        let mut overlay = Overlay {
-            store: &mut *store,
-            layers: &edited,
-        };
-        Stage::compose(&mut overlay, root, stage.options().clone())
-    };
-    if exists(&projected) {
+    if composes(store, stage, root, &edited, &copied, index, object)? {
         return Err(NamespaceError::UnsupportedComposition(
             "the delete does not remove the object from the composed stage",
         ));
@@ -112,7 +141,13 @@ pub(super) fn prepare(
         let layer = &edited[&id];
         transaction.expect_generation(id, original.generation());
         let previous = transaction.len();
-        append_delta(original, layer, &mut transaction, &mut specs);
+        match copied.get(&id) {
+            Some(slots) => {
+                let paths = retained::copy_slots(slots, layer);
+                retained::append_delta_at(original, layer, &paths, &mut transaction, &mut specs);
+            }
+            None => append_delta(original, layer, &mut transaction, &mut specs),
+        }
         if original.default_prim != layer.default_prim || !original.metadata.same(&layer.metadata) {
             push(
                 &mut transaction,
@@ -156,6 +191,72 @@ pub(super) fn prepare(
         namespace_moves: Vec::new(),
         relocates,
     })
+}
+
+/// The slots of `layer` the delete of `object` can change or must
+/// inspect: those at and beneath its prim and their ancestors, and those
+/// that author paths.
+fn working_slots(
+    store: &dyn LayerStore,
+    index: &PreparationIndex,
+    layer: &Layer,
+    object: TargetPath,
+) -> Vec<PathId> {
+    let prim = object.prim_path();
+    let mut slots: HashSet<PathId> = layer_links(Some(index), layer).into_owned();
+    slots.extend(retained::slots_beneath(
+        store,
+        index.children(),
+        layer,
+        prim,
+    ));
+    slots.extend(retained::at_or_above(store, prim));
+    let mut slots: Vec<PathId> = slots
+        .into_iter()
+        .filter(|path| layer.prims.contains_key(path) || layer.variant_prims.contains_key(path))
+        .collect();
+    slots.sort_unstable();
+    slots
+}
+
+/// Whether `object` composes in the stage the `edited` layers project:
+/// the whole edited layers, or for working copies (`copied`), their
+/// layers with the copies' slots in place.
+fn composes(
+    store: &mut dyn LayerStore,
+    stage: &Stage,
+    root: LayerId,
+    edited: &HashMap<LayerId, Layer>,
+    copied: &HashMap<LayerId, Vec<PathId>>,
+    index: Option<&PreparationIndex>,
+    object: TargetPath,
+) -> Result<bool, NamespaceError> {
+    let exists = |stage: &Stage| match object {
+        TargetPath::Prim(prim) => stage.has_prim(prim),
+        TargetPath::Property(property) => stage.has_property_path(property),
+    };
+    let projected;
+    let layers = match index {
+        None => edited,
+        Some(_) => {
+            let mut layers = HashMap::new();
+            for (id, slots) in copied {
+                let original = store.layer(*id).ok_or(NamespaceError::NoSuchObject)?;
+                let paths = retained::copy_slots(slots, &edited[id]);
+                if let Some(layer) = retained::project(original, &edited[id], &paths) {
+                    layers.insert(*id, layer);
+                }
+            }
+            projected = layers;
+            &projected
+        }
+    };
+    let mut overlay = Overlay { store, layers };
+    Ok(exists(&Stage::compose(
+        &mut overlay,
+        root,
+        stage.options().clone(),
+    )))
 }
 
 /// Removes `object`'s specs from `layer`: for a prim, every spec at or
@@ -295,12 +396,22 @@ fn repair(
     object: TargetPath,
 ) -> Result<(), NamespaceError> {
     let author = layer.id;
-    for (path, spec) in &mut layer.prims {
-        repair_prim(store, spec, *path, author, object)?;
-    }
-    for (path, branches) in &mut layer.variant_prims {
-        for spec in branches {
-            repair_prim(store, spec, *path, author, object)?;
+    // In path order, so the first spec that cannot be repaired is always
+    // the one reported.
+    let mut paths: Vec<PathId> = layer
+        .prims
+        .keys()
+        .chain(layer.variant_prims.keys())
+        .copied()
+        .collect();
+    paths.sort_unstable();
+    paths.dedup();
+    for path in paths {
+        if let Some(spec) = layer.prims.get_mut(&path) {
+            repair_prim(store, spec, path, author, object)?;
+        }
+        for spec in layer.variant_prims.get_mut(&path).into_iter().flatten() {
+            repair_prim(store, spec, path, author, object)?;
         }
     }
     let root = store_root_path(store);

@@ -8,7 +8,7 @@ use alloc::{collections::BTreeMap, string::String, vec, vec::Vec};
 use layerstack::{Changes, PathId, PropertyPath, TargetPath};
 
 /// A collection instance, scoped to its originating store.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CollectionIdentity {
     /// Prim that owns the collection.
     pub owner: PathId,

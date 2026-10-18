@@ -21,6 +21,10 @@ writes `oracle.json` beside it:
   `IsPathIncluded` includes.
 
 `tests/binding.rs` compares everything.
+
+`binding_oracle.py fixtures/membership` records the same for the
+sublayered collection fixture of `tests/membership_index.rs`, whose reverse
+membership index must agree with these forward memberships.
 """
 import json
 import os

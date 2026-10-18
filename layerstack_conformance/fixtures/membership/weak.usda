@@ -1,0 +1,79 @@
+#usda 1.0
+(
+    doc = "The weaker sublayer: the parts and most collection opinions."
+)
+
+def Scope "Parts" (
+    prepend apiSchemas = ["CollectionAPI:smooth", "CollectionAPI:heavy"]
+)
+{
+    uniform token collection:smooth:expansionRule = "explicitOnly"
+    append rel collection:smooth:includes = [</Parts/Stones/Granite/Pebble>, </Parts/Stones/Slate>]
+    append rel collection:heavy:includes = [</Parts/Stones/Granite>, </Parts/Seeds/Acorn>]
+
+    def Scope "Stones"
+    {
+        def Scope "Granite"
+        {
+            def Xform "Pebble"
+            {
+                token[] tags = ["round", "smooth"]
+            }
+
+            def Xform "Boulder"
+            {
+                float mass = 3
+            }
+        }
+
+        def Scope "Slate"
+        {
+            def Xform "Shard"
+            {
+            }
+        }
+    }
+
+    def Scope "Seeds"
+    {
+        def Xform "Acorn"
+        {
+        }
+
+        def Xform "Pine"
+        {
+        }
+    }
+}
+
+def Scope "Sets" (
+    prepend apiSchemas = ["CollectionAPI:stones", "CollectionAPI:everything"]
+)
+{
+    rel collection:stones:includes = </Parts/Stones>
+    uniform bool collection:everything:includeRoot = true
+    rel collection:everything:excludes = [</Parts/Seeds>, </Looks>]
+}
+
+def Scope "Garden" (
+    prepend apiSchemas = ["CollectionAPI:path", "CollectionAPI:props", "CollectionAPI:nested"]
+)
+{
+    append rel collection:path:includes = [</Parts/Stones/Granite/Pebble>, </Parts/Stones/Granite/Boulder>]
+    uniform token collection:props:expansionRule = "expandPrimsAndProperties"
+    rel collection:props:includes = </Parts/Stones/Granite>
+    rel collection:props:excludes = </Parts/Stones/Granite/Boulder.mass>
+    rel collection:nested:includes = [</Parts.collection:smooth>, </Garden/Bed>]
+
+    def Xform "Bed"
+    {
+        rel slot = </Parts/Stones/Granite/Pebble>
+    }
+}
+
+def Scope "Terrain" (
+    prepend apiSchemas = ["CollectionAPI:rocky"]
+)
+{
+    pathExpression collection:rocky:membershipExpression = "/Parts/Stones/*/Pebble + /Parts/Seeds/A*"
+}

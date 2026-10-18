@@ -310,6 +310,9 @@
 //! `variant`, `specifier`, `abstract`, `defined`), with kinds from the
 //! scene's [`KindRegistry`]. [`MembershipQuery::included_paths`] lists every
 //! member, and [`ExpressionEvaluator`] matches any expression.
+//! [`MembershipIndex`] answers the reverse question, which collections on
+//! the stage include a prim or property, from every collection compiled
+//! once, and follows edits through `apply_changes`.
 //! [`MembershipCache`] retains compiled queries and ordered candidate decisions.
 //! Pass complete edit reports to `apply_changes`; separate query and decision
 //! revisions, dependency scopes and work counters make reuse inspectable.
@@ -493,10 +496,10 @@ pub use binding::{
 };
 #[cfg(feature = "usd")]
 pub use collection::{
-    CollectionIdentity, ExpansionRule, ExpressionEvaluator, ExpressionSearch, Membership,
-    MembershipCache, MembershipCacheError, MembershipCacheMemory, MembershipCacheStats,
-    MembershipDependencies, MembershipProblem, MembershipQuery, MembershipRevisions,
-    MembershipRule, MembershipSample,
+    CollectionIdentity, ExpansionRule, ExpressionEvaluator, ExpressionSearch, Inclusion,
+    Membership, MembershipCache, MembershipCacheError, MembershipCacheMemory, MembershipCacheStats,
+    MembershipDependencies, MembershipIndex, MembershipIndexStats, MembershipIndexUpdate,
+    MembershipProblem, MembershipQuery, MembershipRevisions, MembershipRule, MembershipSample,
 };
 pub use edit::SchemaEdit;
 pub use generated::views::*;

@@ -194,11 +194,9 @@ fn control_recomposition_never_acknowledges_unincorporated_source_edits() {
     let property = store.property_path("/Unrelated.weight");
     store.layers.get_mut(&LayerId(1)).unwrap().set_property(
         property,
-        layerstack::PropertySpec::typed_attribute(layerstack::PropertyType::new(
-            "double",
-            false,
-            layerstack::Value::Double(0.0),
-        ))
+        layerstack::PropertySpec::typed_attribute(
+            layerstack::PropertyType::parse("double").unwrap(),
+        )
         .with_default(layerstack::Value::Double(7.0)),
     );
     let host = store.path("/Host");
@@ -220,11 +218,9 @@ fn value_transactions_consume_pending_payload_controls() {
     let property = store.property_path("/Host.exposure");
     store.layers.get_mut(&LayerId(1)).unwrap().set_property(
         property,
-        layerstack::PropertySpec::typed_attribute(layerstack::PropertyType::new(
-            "double",
-            false,
-            layerstack::Value::Double(0.0),
-        ))
+        layerstack::PropertySpec::typed_attribute(
+            layerstack::PropertyType::parse("double").unwrap(),
+        )
         .with_default(layerstack::Value::Double(1.0)),
     );
     let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());

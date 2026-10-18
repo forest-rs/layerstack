@@ -12,7 +12,7 @@ use crate::{
 use alloc::{string::ToString, vec};
 
 fn double() -> PropertyType {
-    PropertyType::new("double", false, Value::Double(0.0))
+    PropertyType::parse("double").unwrap()
 }
 
 /// Layer 1 references `/Asset` of layer 2 from `/World/Tree` through
@@ -424,7 +424,7 @@ fn sparse_array_edit_samples_are_baked() {
     let mut store = InMemoryStore::default();
     referenced_scene(&mut store, LayerOffset::IDENTITY);
     let ids = store.tokens.intern("ids");
-    let ints = PropertyType::new("int", true, Value::Int(0));
+    let ints = PropertyType::parse("int[]").unwrap();
     let array = |items: &[i32]| Value::Array(items.iter().map(|&i| Value::Int(i)).collect());
     let asset = store.path("/Asset");
     let asset_spec = store
@@ -487,12 +487,8 @@ fn asset_paths_are_external_and_anchoring_is_required_when_declared() {
         let name = store.tokens.intern("texture");
         spec.set_property(
             name,
-            PropertySpec::typed_attribute(PropertyType::new(
-                "asset",
-                false,
-                Value::Asset("".into()),
-            ))
-            .with_default(Value::Asset("./bark.png".into())),
+            PropertySpec::typed_attribute(PropertyType::parse("asset").unwrap())
+                .with_default(Value::Asset("./bark.png".into())),
         );
     };
     let flat = flatten_edited(

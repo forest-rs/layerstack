@@ -184,7 +184,7 @@ fn mod_file(model: &Model, types: &ValueTypes) -> String {
     }
     out.push_str("        }\n    }\n}\n");
 
-    for (ident, (name, is_array, zero, users)) in &types.statics {
+    for (ident, (name, users)) in &types.statics {
         let features: Vec<String> = users
             .iter()
             .map(|plugin| format!("feature = {:?}", crate::views::feature(plugin)))
@@ -196,9 +196,7 @@ fn mod_file(model: &Model, types: &ValueTypes) -> String {
         };
         let _ = write!(
             out,
-            "\n#[cfg({condition})]\npub(crate) static {ident}: ValueType = ValueType {{\n    \
-             name: {name:?},\n    is_array: {is_array},\n    zero: {},\n}};\n",
-            closure(zero)
+            "\n#[cfg({condition})]\npub(crate) static {ident}: ValueType = ValueType {{ name: {name:?} }};\n",
         );
     }
     let arc = if out.contains("Arc::from(") {
@@ -206,20 +204,23 @@ fn mod_file(model: &Model, types: &ValueTypes) -> String {
     } else {
         ""
     };
+    let value = if out.contains("Value::") {
+        "use layerstack::Value;\n\n"
+    } else {
+        ""
+    };
     out.replace(
         "@IMPORTS@\n",
-        &format!(
-            "{arc}use layerstack::Value;\n\nuse crate::table::{{SchemaTables, ValueType}};\n\n"
-        ),
+        &format!("{arc}{value}use crate::table::{{SchemaTables, ValueType}};\n\n"),
     )
 }
 
 /// The value types the domains declare, each emitted once in `mod.rs`.
 #[derive(Default)]
 pub(crate) struct ValueTypes {
-    /// Static name → (type name, is array, the zero value's expression, the
-    /// plugins using it).
-    statics: BTreeMap<String, (String, bool, String, BTreeSet<&'static str>)>,
+    /// Static name → (type name, with `[]` for an array, the plugins using
+    /// it).
+    statics: BTreeMap<String, (String, BTreeSet<&'static str>)>,
 }
 
 /// The `#[cfg]` of a domain's feature.
@@ -235,28 +236,29 @@ impl ValueTypes {
     /// (`static`), for a library's module.
     pub(crate) fn statics(&self, declaration: &str) -> String {
         let mut out = String::new();
-        for (ident, (name, is_array, zero, _)) in &self.statics {
+        for (ident, (name, _)) in &self.statics {
             let _ = write!(
                 out,
-                "\n{declaration} {ident}: ValueType = ValueType {{\n    \
-                 name: {name:?},\n    is_array: {is_array},\n    zero: {},\n}};\n",
-                closure(zero)
+                "\n{declaration} {ident}: ValueType = ValueType {{ name: {name:?} }};\n",
             );
         }
         out
     }
 
-    /// The static naming `(name, is_array)`, which `plugin` uses.
-    fn get(&mut self, name: &str, is_array: bool, zero: String, plugin: &'static str) -> String {
+    /// The static naming the element type `name`, or its array form when
+    /// `is_array`, which `plugin` uses.
+    fn get(&mut self, name: &str, is_array: bool, plugin: &'static str) -> String {
         let base = name.strip_suffix("[]").unwrap_or(name);
         let mut ident: String = base.to_ascii_uppercase();
+        let mut full = String::from(base);
         if is_array {
             ident.push_str("_ARRAY");
+            full.push_str("[]");
         }
         self.statics
             .entry(ident.clone())
-            .or_insert((name.into(), is_array, zero, BTreeSet::new()))
-            .3
+            .or_insert((full, BTreeSet::new()))
+            .1
             .insert(plugin);
         ident
     }
@@ -456,16 +458,16 @@ fn property_entry(
     };
     let value_type = match &property.value_type {
         None => "None".to_string(),
-        Some((name, is_array, zero)) => match expr(zero, tokens) {
-            Ok(zero) => format!(
-                "Some(&{prefix}{})",
-                types.get(name, *is_array, zero, plugin)
-            ),
-            Err(why) => {
-                failures.push(format!("{schema}.{}: type {name}: {why}", property.name));
-                "None".into()
-            }
-        },
+        Some((name, is_array, _)) if layerstack::ValueType::from_name(name).is_some() => {
+            format!("Some(&{prefix}{})", types.get(name, *is_array, plugin))
+        }
+        Some((name, ..)) => {
+            failures.push(format!(
+                "{schema}.{}: type {name}: not a registered value type",
+                property.name
+            ));
+            "None".into()
+        }
     };
     let fallback = match &property.fallback {
         None => "None".to_string(),

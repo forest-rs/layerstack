@@ -774,11 +774,7 @@ mod instancing_tests {
             prim,
             PrimSpec::over().with_property(
                 x,
-                PropertySpec::typed_attribute(PropertyType::new(
-                    "double",
-                    false,
-                    Value::Double(0.0),
-                )),
+                PropertySpec::typed_attribute(PropertyType::parse("double").unwrap()),
             ),
         );
         let mut weak = Layer::new(LayerId(3));
@@ -786,7 +782,7 @@ mod instancing_tests {
             prim,
             PrimSpec::def().with_property(
                 x,
-                PropertySpec::typed_attribute(PropertyType::new("int", false, Value::Int(0)))
+                PropertySpec::typed_attribute(PropertyType::parse("int").unwrap())
                     .with_default(Value::Int(7)),
             ),
         );
@@ -800,8 +796,7 @@ mod instancing_tests {
                 .unwrap()
                 .type_name
                 .unwrap()
-                .type_name
-                .as_ref(),
+                .type_name(),
             "double"
         );
         assert!(
@@ -824,10 +819,7 @@ mod instancing_tests {
         live.notify_layer_prim_edits(LayerId(2), &[prim]);
         live.recompose(&mut store);
         let declaration = live.stage().resolve_property_declaration(prim, x).unwrap();
-        assert_eq!(
-            declaration.type_name.as_ref().unwrap().type_name.as_ref(),
-            "int"
-        );
+        assert_eq!(declaration.type_name.as_ref().unwrap().type_name(), "int");
         assert!(
             live.stage()
                 .resolve_property_path(PropertyPath::new(prim, x))
@@ -891,7 +883,7 @@ mod instancing_tests {
         );
         let over_c = PrimSpec::over().with_property(
             x,
-            PropertySpec::typed_attribute(PropertyType::new("int", true, Value::Int(0)))
+            PropertySpec::typed_attribute(PropertyType::parse("int[]").unwrap())
                 .with_default(Value::Array(vec![Value::Int(99)])),
         );
         group_layer.insert_prim(group_c, over_c);
@@ -909,10 +901,11 @@ mod instancing_tests {
         );
         let def_c = PrimSpec::def().with_property(
             x,
-            PropertySpec::typed_attribute(PropertyType::new("double", true, Value::Double(0.0)))
-                .with_default(Value::ArrayEdit(ArrayEdit {
+            PropertySpec::typed_attribute(PropertyType::parse("double[]").unwrap()).with_default(
+                Value::ArrayEdit(ArrayEdit {
                     ops: vec![ArrayEditOp::Resize { len: 2 }],
-                })),
+                }),
+            ),
         );
         asset_layer.insert_prim(asset_c, def_c);
         store.insert_layer(asset_layer);
@@ -1357,7 +1350,7 @@ mod property_snapshot_tests {
             source,
             PrimSpec::def().with_property(
                 name,
-                PropertySpec::typed_attribute(PropertyType::new("int64", false, Value::Int64(0)))
+                PropertySpec::typed_attribute(PropertyType::parse("int64").unwrap())
                     .with_default(1_i64)
                     .with_time_samples(vec![(0.0, Value::Int64(2)), (1.0, Value::Int64(3))])
                     .with_metadata(doc, Value::string("Shared authored data")),
@@ -1465,7 +1458,7 @@ mod property_snapshot_tests {
         let first = store.tokens.intern("first");
         let second = store.tokens.intern("second");
         let shared = Arc::new(
-            PropertySpec::typed_attribute(PropertyType::new("int64", false, Value::Int64(0)))
+            PropertySpec::typed_attribute(PropertyType::parse("int64").unwrap())
                 .with_default(1_i64),
         );
         let mut spec = PrimSpec::def();

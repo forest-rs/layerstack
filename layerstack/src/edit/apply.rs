@@ -1293,6 +1293,7 @@ fn apply_op(
                 .ok_or(Rejection::NotAProperty(path.clone()))?;
             let id = at.layer();
             if let Some(ty) = &spec.type_name {
+                check_registered(&path, ty)?;
                 let values = spec
                     .default
                     .iter()
@@ -1597,13 +1598,26 @@ fn properties_at<'a>(
         .unwrap_or_default())
 }
 
+/// Rejects an unregistered type, which an attribute cannot be created
+/// with or given a value of (AOUSD Core §6.2, §7.6.4.1.1).
+fn check_registered(path: &SpecPath, ty: &PropertyType) -> Result<(), Rejection> {
+    if ty.value_type().is_some() {
+        return Ok(());
+    }
+    Err(Rejection::UnknownValueType {
+        path: path.clone(),
+        type_name: Arc::from(ty.type_name()),
+    })
+}
+
 fn check_type(path: &SpecPath, ty: &PropertyType, value: &Value) -> Result<(), Rejection> {
+    check_registered(path, ty)?;
     if conforms(ty, value) {
         Ok(())
     } else {
         Err(Rejection::TypeMismatch {
             path: path.clone(),
-            declared: ty.type_name.clone(),
+            declared: Arc::from(ty.type_name()),
         })
     }
 }
@@ -1796,6 +1810,7 @@ fn set_targets(
                     let ty = defined
                         .type_name
                         .ok_or(Rejection::UndeclaredType(path.clone()))?;
+                    check_registered(&path, &ty)?;
                     let mut spec = PropertySpec::typed_attribute(ty);
                     spec.variability = defined.variability;
                     spec
@@ -1804,6 +1819,7 @@ fn set_targets(
                     let ty = declared
                         .type_name
                         .ok_or(Rejection::UndeclaredType(path.clone()))?;
+                    check_registered(&path, &ty)?;
                     let mut spec = PropertySpec::typed_attribute(ty);
                     spec.variability = declared.variability;
                     spec

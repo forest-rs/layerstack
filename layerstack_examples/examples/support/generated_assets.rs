@@ -69,9 +69,9 @@ pub(crate) fn import(store: &mut InMemoryStore, text: &str, id: LayerId) {
 
 /// A two-triangle asset with equal-valued but separately indexed normal and UV seams.
 pub(crate) fn mesh() -> GeneratedMesh {
-    let primvar = |name: &str, ty, zero, value| MeshPrimvar {
+    let primvar = |name: &str, ty: &str, value| MeshPrimvar {
         name: name.into(),
-        type_name: PropertyType::new(ty, true, zero),
+        type_name: PropertyType::parse(ty).expect("a registered value type"),
         value,
         interpolation: "faceVarying".into(),
         element_size: 1,
@@ -84,8 +84,7 @@ pub(crate) fn mesh() -> GeneratedMesh {
         primvars: vec![
             primvar(
                 "primvars:st",
-                "texCoord2f",
-                Value::Vec2f([0.; 2]),
+                "texCoord2f[]",
                 Value::TypedArray(TypedArray::Vec2f(Arc::new(vec![
                     [0., 0.],
                     [1., 0.],
@@ -97,8 +96,7 @@ pub(crate) fn mesh() -> GeneratedMesh {
             ),
             primvar(
                 "primvars:normals",
-                "normal3f",
-                Value::Vec3f([0.; 3]),
+                "normal3f[]",
                 Value::TypedArray(TypedArray::Vec3f(Arc::new(vec![[0., 0., 1.]; 6]))),
             ),
         ],
@@ -319,8 +317,10 @@ impl GeneratedScene {
         let mut edit = Transaction::new();
         edit.create_property(
             EditTarget::for_layer(ROOT).property(unrelated),
-            PropertySpec::typed_attribute(PropertyType::new("int", false, Value::Int(0)))
-                .with_default(Value::Int(1)),
+            PropertySpec::typed_attribute(
+                PropertyType::parse("int").expect("a registered value type"),
+            )
+            .with_default(Value::Int(1)),
         );
         self.live.apply(&mut self.store, &edit).unwrap();
         assert_eq!(
@@ -371,11 +371,9 @@ impl GeneratedScene {
         let mut replacement = self.store.layers[&TERRAIN].clone();
         replacement.set_property(
             terrain_points,
-            PropertySpec::typed_attribute(PropertyType::new(
-                "point3f",
-                true,
-                Value::Vec3f([0.; 3]),
-            ))
+            PropertySpec::typed_attribute(
+                PropertyType::parse("point3f[]").expect("a registered value type"),
+            )
             .with_default(Value::TypedArray(TypedArray::Vec3f(Arc::new(
                 original.iter().map(|p| [p[0], p[1] * 2., p[2]]).collect(),
             )))),
@@ -626,7 +624,7 @@ def Scope "Recipes" {
             .create_primvar(
                 &mut edit,
                 "displayColor",
-                PropertyType::new("color3f", true, Value::Vec3f([0.; 3])),
+                PropertyType::parse("color3f[]").expect("a registered value type"),
             )
             .unwrap();
         colors.set_interpolation(&mut edit, "vertex").unwrap();
@@ -711,7 +709,7 @@ def Scope "Recipes" {
                 || local
                     .type_name
                     .as_ref()
-                    .is_none_or(|t| t.type_name.as_ref() != "asset" || t.is_array)
+                    .is_none_or(|t| t.type_name() != "asset" || t.is_array())
             {
                 return Err(RecipeError::Publication(
                     layerstack_schemas::MeshPublicationError::PropertyConflict(
@@ -735,11 +733,9 @@ def Scope "Recipes" {
         } else {
             update.transaction.create_property(
                 target.property(file),
-                PropertySpec::typed_attribute(PropertyType::new(
-                    "asset",
-                    false,
-                    Value::Asset("".into()),
-                ))
+                PropertySpec::typed_attribute(
+                    PropertyType::parse("asset").expect("a registered value type"),
+                )
                 .with_default(desired),
             );
         }

@@ -35,11 +35,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         model,
         PrimSpec::def().with_property(
             image,
-            PropertySpec::typed_attribute(PropertyType::new(
-                "asset",
-                false,
-                Value::Asset("".into()),
-            ))
+            PropertySpec::typed_attribute(
+                PropertyType::parse("asset").expect("a registered value type"),
+            )
             .with_default(Value::Asset("source/albedo.png".into())),
         ),
     );

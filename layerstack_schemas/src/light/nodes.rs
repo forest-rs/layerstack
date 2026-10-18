@@ -104,11 +104,12 @@ fn definition(
                     name,
                     property: property.name,
                     kind,
-                    property_type: PropertyType::new(ty.name, ty.is_array, (ty.zero)(tokens)),
+                    property_type: ty.property_type(),
                     variability: property.variability,
                     default: property.fallback.map(|fallback| fallback(tokens)),
                     source_schema: source.name,
-                    asset_identifier: ty.name == "asset",
+                    asset_identifier: ty.property_type().value_type()
+                        == Some(layerstack::ValueType::Asset),
                 },
             );
         }

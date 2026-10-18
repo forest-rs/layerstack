@@ -28,14 +28,14 @@ fn roles(opinions: &[ExplainedOpinion<'_>]) -> Vec<(LayerId, OpinionRole)> {
         .collect()
 }
 
-fn attribute(type_name: &str, is_array: bool, scalar: Value, value: Value) -> PropertySpec {
+fn attribute(type_name: &str, value: Value) -> PropertySpec {
     PropertySpec::attribute()
-        .with_type(PropertyType::new(type_name, is_array, scalar))
+        .with_type(PropertyType::parse(type_name).unwrap())
         .with_default(value)
 }
 
 fn double(value: f64) -> PropertySpec {
-    attribute("double", false, Value::Double(0.0), value.into())
+    attribute("double", value.into())
 }
 
 fn ints(values: &[i32]) -> Value {
@@ -43,7 +43,7 @@ fn ints(values: &[i32]) -> Value {
 }
 
 fn int_array(value: Value) -> PropertySpec {
-    attribute("int", true, Value::Int(0), value)
+    attribute("int[]", value)
 }
 
 fn write(value: i32, index: i64) -> Value {
@@ -146,10 +146,7 @@ fn block_cuts_off_weaker_opinions() {
                 .with_property(height, double(4.0))
                 .with_property(points, int_array(write(9, 0))),
             PrimSpec::over()
-                .with_property(
-                    height,
-                    attribute("double", false, Value::Double(0.0), Value::Blocked),
-                )
+                .with_property(height, attribute("double", Value::Blocked))
                 .with_property(points, int_array(Value::Blocked)),
             PrimSpec::over()
                 .with_property(height, double(2.0))
@@ -199,10 +196,7 @@ fn strongest_block_resolves_no_value() {
     let stage = layered(
         &mut store,
         vec![
-            PrimSpec::over().with_property(
-                height,
-                attribute("double", false, Value::Double(0.0), Value::Blocked),
-            ),
+            PrimSpec::over().with_property(height, attribute("double", Value::Blocked)),
             PrimSpec::over().with_property(height, double(2.0)),
         ],
     );
@@ -455,7 +449,7 @@ fn offset_time_samples_report_stage_times() {
     });
     strong.insert_prim(
         tree,
-        PrimSpec::over().with_property(points, attribute("float", true, Value::Float(0.0), edit)),
+        PrimSpec::over().with_property(points, attribute("float[]", edit)),
     );
     store.insert_layer(strong);
     let mut weak = Layer::new(LayerId(3));
@@ -464,7 +458,7 @@ fn offset_time_samples_report_stage_times() {
         PrimSpec::def().with_property(
             points,
             PropertySpec::attribute()
-                .with_type(PropertyType::new("float", true, Value::Float(0.0)))
+                .with_type(PropertyType::parse("float[]").unwrap())
                 .with_time_samples(vec![
                     (
                         0.0,
@@ -563,10 +557,7 @@ fn grove(store: &mut InMemoryStore) -> (Stage, TokenId, TokenId) {
     );
     asset.insert_prim(
         class,
-        PrimSpec::class().with_property(
-            bark,
-            attribute("string", false, Value::string(""), Value::string("rough")),
-        ),
+        PrimSpec::class().with_property(bark, attribute("string", Value::string("rough"))),
     );
     store.insert_layer(asset);
     (
@@ -680,10 +671,9 @@ fn a_block_resolves_the_schema_fallback() {
     let stage = layered_with_schemas(
         &mut store,
         vec![
-            PrimSpec::def().with_type_name(tree_type).with_property(
-                height,
-                attribute("double", false, Value::Double(0.0), Value::Blocked),
-            ),
+            PrimSpec::def()
+                .with_type_name(tree_type)
+                .with_property(height, attribute("double", Value::Blocked)),
             PrimSpec::over().with_property(height, double(2.0)),
         ],
         vec![SchemaDefinition::typed(tree_type).with_property(defined(height, 1.0))],
@@ -855,7 +845,7 @@ fn check_mixed_samples(samples: Vec<(f64, Value)>, lower_seeded: bool) {
         vec![(
             "points",
             PropertySpec::attribute()
-                .with_type(PropertyType::new("float", true, Value::Float(0.0)))
+                .with_type(PropertyType::parse("float[]").unwrap())
                 .with_time_samples(samples),
         )],
     );

@@ -105,7 +105,7 @@ impl SchemaKind {
 ///
 /// let mut tokens = TokenInterner::default();
 /// let width = PropertyDefinition::attribute(tokens.intern("width"))
-///     .with_type(PropertyType::new("float", false, Value::Float(0.0)))
+///     .with_type(PropertyType::parse("float").unwrap())
 ///     .with_fallback(Value::Float(1.0));
 /// assert_eq!(width.fallback, Some(Value::Float(1.0)));
 /// ```
@@ -209,11 +209,9 @@ impl PropertyDefinition {
     /// OpenUSD: `UsdPrimDefinition::_PropertyTypesMatch`.
     #[must_use]
     pub fn has_type_of(&self, other: &Self) -> bool {
-        let declared = |p: &Self| {
-            p.type_name
-                .as_ref()
-                .map(|t| (t.type_name.clone(), t.is_array))
-        };
+        fn declared(p: &PropertyDefinition) -> Option<&str> {
+            p.type_name.as_ref().map(PropertyType::type_name)
+        }
         self.kind == other.kind
             && (self.kind == PropertyKind::Relationship || declared(self) == declared(other))
     }

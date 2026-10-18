@@ -54,12 +54,8 @@ fn arrays(c: &mut Criterion) {
                 prim,
                 PrimSpec::def().with_type_name(mesh).with_property(
                     name,
-                    PropertySpec::typed_attribute(PropertyType::new(
-                        "point3f",
-                        true,
-                        Value::Vec3f([0.0; 3]),
-                    ))
-                    .with_default(points.clone()),
+                    PropertySpec::typed_attribute(PropertyType::parse("point3f[]").unwrap())
+                        .with_default(points.clone()),
                 ),
             );
             store.insert_layer(layer);
@@ -91,7 +87,7 @@ fn arrays(c: &mut Criterion) {
             group.bench_function(BenchmarkId::new("schema_points", len), |b| {
                 b.iter(|| black_box(mesh.points().unwrap()));
             });
-            let point_type = PropertyType::new("point3f", true, Value::Vec3f([0.0; 3]));
+            let point_type = PropertyType::parse("point3f[]").unwrap();
             let mut stronger = Layer::new(LayerId(2));
             stronger
                 .sublayers_mut()

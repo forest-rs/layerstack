@@ -225,7 +225,7 @@ fn collect_manifest_properties(
             .is_some_and(|samples| !samples.is_empty());
         if let Some(existing) = declarations.get_mut(&spec_path) {
             let previous = existing.type_name.as_ref().expect("manifest type");
-            if previous.type_name != ty.type_name || previous.is_array != ty.is_array {
+            if previous.type_name() != ty.type_name() || previous.is_array() != ty.is_array() {
                 return Err(ClipAuthoringError::ConflictingDeclaration(at));
             }
             if has_samples {
@@ -633,17 +633,13 @@ mod tests {
                 .with_type_name(mesh)
                 .with_property(
                     animated,
-                    PropertySpec::typed_attribute(PropertyType::new(
-                        "float",
-                        false,
-                        Value::Float(0.),
-                    ))
-                    .with_default(Value::Float(7.))
-                    .with_time_samples(vec![(1., Value::Float(1.)), (2., Value::Float(2.))]),
+                    PropertySpec::typed_attribute(PropertyType::parse("float").unwrap())
+                        .with_default(Value::Float(7.))
+                        .with_time_samples(vec![(1., Value::Float(1.)), (2., Value::Float(2.))]),
                 )
                 .with_property(
                     static_name,
-                    PropertySpec::typed_attribute(PropertyType::new("int", false, Value::Int(0)))
+                    PropertySpec::typed_attribute(PropertyType::parse("int").unwrap())
                         .with_default(Value::Int(42)),
                 ),
         );
@@ -896,7 +892,7 @@ mod tests {
         let child_name = store.tokens.intern("Child");
         let child = store.path("/Model/Child");
         let animated = || {
-            PropertySpec::typed_attribute(PropertyType::new("float", false, Value::Float(0.)))
+            PropertySpec::typed_attribute(PropertyType::parse("float").unwrap())
                 .with_default(Value::Float(21.))
                 .with_time_samples(vec![(1., Value::Float(2.))])
         };
@@ -917,13 +913,9 @@ mod tests {
             crate::VariantSpec {
                 properties: vec![crate::PropertyEntry {
                     name: x,
-                    spec: PropertySpec::typed_attribute(PropertyType::new(
-                        "float",
-                        false,
-                        Value::Float(0.),
-                    ))
-                    .with_default(Value::Float(8.))
-                    .into(),
+                    spec: PropertySpec::typed_attribute(PropertyType::parse("float").unwrap())
+                        .with_default(Value::Float(8.))
+                        .into(),
                 }],
                 ..crate::VariantSpec::default()
             },
@@ -1007,8 +999,7 @@ mod tests {
         let (mut store, _, mut a, _, options) = fixture();
         let outside = store.path("/Outside");
         let attribute = store.tokens.intern("value");
-        let mut property =
-            PropertySpec::typed_attribute(PropertyType::new("float", false, Value::Float(0.)));
+        let mut property = PropertySpec::typed_attribute(PropertyType::parse("float").unwrap());
         property.time_samples = Some(vec![(f64::NAN, Value::Float(1.))].into());
         a.insert_prim(outside, PrimSpec::def().with_property(attribute, property));
         let source = ClipSource {

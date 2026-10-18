@@ -274,10 +274,11 @@ fn layer_typed_property_helper_preserves_sparse_array_defaults() {
     let mut layer = Layer::new(LayerId(1));
     layer.set_property(
         property,
-        PropertySpec::typed_attribute(PropertyType::new("int[]", true, Value::Int(0)))
-            .with_default(Value::ArrayEdit(ArrayEdit {
+        PropertySpec::typed_attribute(PropertyType::parse("int[]").unwrap()).with_default(
+            Value::ArrayEdit(ArrayEdit {
                 ops: vec![ArrayEditOp::Resize { len: 3 }],
-            })),
+            }),
+        ),
     );
     store.insert_layer(layer);
 
@@ -1185,11 +1186,8 @@ fn blocked_time_samples_resolve_to_no_value() {
     // Spec: AOUSD Core §12.3.6 — individual time samples can be blocked, and
     // a block in effect resolves to no value, never to a `Blocked` value.
     let cases = [
-        ("int[]", PropertyType::new("int[]", true, Value::Int(0))),
-        (
-            "double",
-            PropertyType::new("double", false, Value::Double(0.0)),
-        ),
+        ("int[]", PropertyType::parse("int[]").unwrap()),
+        ("double", PropertyType::parse("double").unwrap()),
     ];
     for (name, property_type) in cases {
         for (time, what) in [(0.0, "exact"), (1.0, "held"), (-1.0, "before first")] {
@@ -1209,7 +1207,7 @@ fn blocked_time_samples_resolve_to_no_value() {
 
 #[test]
 fn blocked_time_sample_applies_only_where_it_is_in_effect() {
-    let property_type = PropertyType::new("double", false, Value::Double(0.0));
+    let property_type = PropertyType::parse("double").unwrap();
     let samples = vec![
         (0.0, Value::Double(1.0)),
         (2.0, Value::Blocked),

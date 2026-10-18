@@ -35,12 +35,22 @@ pub const fn fallback(construct: Construct) -> Option<Construct> {
 /// A declared value type.
 #[derive(Debug)]
 pub struct ValueType {
-    /// The type name as OpenUSD writes it (`float3[]`).
+    /// The type name as OpenUSD writes it (`float3[]`): a registered value
+    /// type ([`layerstack::ValueType`]) or its array form.
     pub name: &'static str,
-    /// Whether it is an array type.
-    pub is_array: bool,
-    /// One element of the type's zero value.
-    pub zero: Construct,
+}
+
+impl ValueType {
+    /// The property type the name parses as.
+    ///
+    /// # Panics
+    ///
+    /// If the name is not a registered value type, which the generated
+    /// tables never hold.
+    #[must_use]
+    pub fn property_type(&self) -> PropertyType {
+        PropertyType::parse(self.name).expect("generated tables name registered value types")
+    }
 }
 
 /// A property a schema defines or overrides.
@@ -158,9 +168,7 @@ impl Property {
         PropertyDefinition {
             name: tokens.intern(self.name),
             kind: self.kind,
-            type_name: self
-                .value_type
-                .map(|t| PropertyType::new(t.name, t.is_array, (t.zero)(tokens))),
+            type_name: self.value_type.map(ValueType::property_type),
             variability: self.variability,
             fallback: self.fallback.map(|construct| construct(tokens)),
             metadata: self

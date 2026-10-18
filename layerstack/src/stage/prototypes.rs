@@ -31,7 +31,7 @@ impl Hash for RecordBucket<'_> {
                     // expressions. Skip their buffers and sample histories too.
                     if spec.type_name.as_ref().is_none_or(|ty| {
                         matches!(
-                            ty.default_scalar,
+                            ty.default_scalar(),
                             Value::PathExpression(_) | Value::Dictionary(_)
                         )
                     }) {
@@ -695,7 +695,7 @@ mod early_reuse_tests {
             b,
             PrimSpec::def().with_property(
                 field,
-                PropertySpec::typed_attribute(PropertyType::new("int", false, Value::Int(0)))
+                PropertySpec::typed_attribute(PropertyType::parse("int").unwrap())
                     .with_default(Value::Int(7)),
             ),
         );
@@ -723,7 +723,7 @@ mod early_reuse_tests {
                 local,
                 PrimSpec::over().with_property(
                     field,
-                    PropertySpec::typed_attribute(PropertyType::new("int", false, Value::Int(0)))
+                    PropertySpec::typed_attribute(PropertyType::parse("int").unwrap())
                         .with_default(Value::Int(99)),
                 ),
             );
@@ -847,12 +847,8 @@ mod early_reuse_tests {
             source,
             PrimSpec::def().with_property(
                 field,
-                PropertySpec::typed_attribute(PropertyType::new(
-                    "pathExpression",
-                    false,
-                    Value::PathExpression(Arc::from("")),
-                ))
-                .with_default(Value::PathExpression(Arc::from("../C"))),
+                PropertySpec::typed_attribute(PropertyType::parse("pathExpression").unwrap())
+                    .with_default(Value::PathExpression(Arc::from("../C"))),
             ),
         );
         let stage = assert_matches_full(&mut store, 4);
@@ -877,7 +873,7 @@ mod early_reuse_tests {
             source,
             PrimSpec::def().with_property(
                 field,
-                PropertySpec::typed_attribute(PropertyType::new("int", false, Value::Int(0)))
+                PropertySpec::typed_attribute(PropertyType::parse("int").unwrap())
                     .with_default(Value::Int(23)),
             ),
         );
@@ -947,7 +943,7 @@ mod early_reuse_tests {
             source,
             PrimSpec::def().with_property(
                 field,
-                PropertySpec::typed_attribute(PropertyType::new("int", false, Value::Int(0)))
+                PropertySpec::typed_attribute(PropertyType::parse("int").unwrap())
                     .with_default(Value::Int(31)),
             ),
         );

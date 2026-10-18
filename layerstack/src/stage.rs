@@ -4090,7 +4090,7 @@ mod tests {
         create_value.create_property(
             at.property(PropertyPath::new(a, value)),
             PropertySpec::attribute()
-                .with_type(PropertyType::new("int", false, Value::Int(0)))
+                .with_type(PropertyType::parse("int").unwrap())
                 .with_default(Value::Int(1)),
         );
         live.apply(&mut store, &create_value).unwrap();
@@ -4310,7 +4310,7 @@ mod tests {
     }
 
     fn int_array_type() -> PropertyType {
-        PropertyType::new(Arc::<str>::from("int"), true, Value::Int(0))
+        PropertyType::parse("int[]").unwrap()
     }
 
     fn test_key(layer: LayerId, lookup_path: PathId) -> OpinionKey {
@@ -4596,7 +4596,7 @@ mod tests {
                     Value::Dictionary(vec![("b".into(), Value::Int(2))]),
                 ],
                 Value::Dictionary(vec![("c".into(), Value::Int(3))]),
-                PropertyType::new("dictionary", false, Value::Dictionary(Vec::new())),
+                PropertyType::parse("dictionary").unwrap_or_else(PropertyType::unregistered),
                 Value::Dictionary(vec![
                     ("a".into(), Value::Int(1)),
                     ("b".into(), Value::Int(2)),
@@ -4606,7 +4606,7 @@ mod tests {
             (
                 vec![expression("/Strong %_")],
                 expression("/Fallback"),
-                PropertyType::new("pathExpression", false, expression("")),
+                PropertyType::parse("pathExpression").unwrap(),
                 expression("/Strong /Fallback"),
             ),
         ];
@@ -4641,7 +4641,7 @@ mod tests {
                 FieldValue::Value(expression("%_ /Weak")),
             ],
             expression("/Fallback"),
-            PropertyType::new(Arc::<str>::from("pathExpression"), false, expression("")),
+            PropertyType::parse("pathExpression").unwrap(),
         );
         let property = PropertyPath::new(prim, field);
         let authored = Some(expression("/Strong /Weak"));
@@ -4859,8 +4859,8 @@ mod tests {
         };
         root.insert_prim(tree, PrimSpec::def().with_reference(reference));
         store.insert_layer(root);
-        let timecode = PropertyType::new("timecode", false, Value::TimeCode(0.0));
-        let timecodes = PropertyType::new("timecode", true, Value::TimeCode(0.0));
+        let timecode = PropertyType::parse("timecode").unwrap();
+        let timecodes = PropertyType::parse("timecode[]").unwrap();
         let mut layer = Layer::new(LayerId(2));
         layer.insert_prim(
             asset,

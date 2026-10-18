@@ -49,24 +49,16 @@ impl FileFormat for Grid {
             grid,
             PrimSpec::def().with_property(
                 source.token("label"),
-                PropertySpec::typed_attribute(PropertyType::new(
-                    "string",
-                    false,
-                    Value::String(label.into()),
-                ))
-                .with_default(Value::String(label.into())),
+                PropertySpec::typed_attribute(PropertyType::parse("string").unwrap())
+                    .with_default(Value::String(label.into())),
             ),
             source.paths,
         );
         for row in 0..rows {
             let mut spec = PrimSpec::def().with_property(
                 source.token("height"),
-                PropertySpec::typed_attribute(PropertyType::new(
-                    "double",
-                    false,
-                    Value::Double(0.0),
-                ))
-                .with_default(Value::Double(row as f64)),
+                PropertySpec::typed_attribute(PropertyType::parse("double").unwrap())
+                    .with_default(Value::Double(row as f64)),
             );
             if row == 0 {
                 spec = spec.with_reference(Reference::deferred(
@@ -108,7 +100,7 @@ impl FileFormat for Noise {
             source.path("/Noise")?,
             PrimSpec::def().with_property(
                 source.token("seed"),
-                PropertySpec::typed_attribute(PropertyType::new("int", false, Value::Int(0)))
+                PropertySpec::typed_attribute(PropertyType::parse("int").unwrap())
                     .with_default(Value::Int(seed)),
             ),
             source.paths,

@@ -130,7 +130,7 @@ fn transaction(loaded: &mut LoadedStage, edit: &Json) -> Transaction {
         token(loaded, "season"),
         token(loaded, "CollectionAPI:plants"),
     );
-    let double = PropertyType::new("double", false, Value::Double(0.0));
+    let double = PropertyType::parse("double").unwrap();
     let internal = Reference::new(loaded.root_layer, rock);
     let mut txn = Transaction::new();
     match edit["op"].as_str().unwrap() {

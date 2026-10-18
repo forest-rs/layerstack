@@ -356,7 +356,7 @@ fn authored_ops(store: &InMemoryStore, path: PathId) -> Json {
                 attributes.insert(
                     name.into(),
                     json!({
-                        "type": spec.type_name.as_ref().map(|t| t.type_name.to_string()),
+                        "type": spec.type_name.as_ref().map(|t| t.type_name().to_string()),
                         "default": spec.default.as_ref().map(|v| canon(v, tokens)),
                         "samples": samples,
                     }),
@@ -444,7 +444,7 @@ fn authored_ops_read_and_add_as_in_openusd() {
                         name: op.name.into(),
                         op_type: op.op_type.expect("known").as_str().into(),
                         precision: precision_name(
-                            layerstack_schemas::XformOpPrecision::of_type(&ty.type_name)
+                            layerstack_schemas::XformOpPrecision::of_type(ty.type_name())
                                 .expect("an op type"),
                         )
                         .into(),

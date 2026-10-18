@@ -35,11 +35,7 @@ fn build(
     for (i, name) in names.iter().enumerate() {
         let path = store.path(name);
         leaf = path;
-        let mut rotation = PropertySpec::typed_attribute(PropertyType::new(
-            "float3",
-            false,
-            Value::Vec3f([0.0; 3]),
-        ));
+        let mut rotation = PropertySpec::typed_attribute(PropertyType::parse("float3").unwrap());
         if i % 97 == 0 {
             rotation.time_samples = Some(
                 vec![
@@ -57,22 +53,14 @@ fn build(
                 .with_type_name(xform)
                 .with_property(
                     translate,
-                    PropertySpec::typed_attribute(PropertyType::new(
-                        "double3",
-                        false,
-                        Value::Vec3d([0.0; 3]),
-                    ))
-                    .with_default(Value::Vec3d([0.0; 3])),
+                    PropertySpec::typed_attribute(PropertyType::parse("double3").unwrap())
+                        .with_default(Value::Vec3d([0.0; 3])),
                 )
                 .with_property(rotate, rotation)
                 .with_property(
                     scale,
-                    PropertySpec::typed_attribute(PropertyType::new(
-                        "float3",
-                        false,
-                        Value::Vec3f([1.0; 3]),
-                    ))
-                    .with_default(Value::Vec3f([1.0; 3])),
+                    PropertySpec::typed_attribute(PropertyType::parse("float3").unwrap())
+                        .with_default(Value::Vec3f([1.0; 3])),
                 ),
         );
     }
@@ -240,12 +228,8 @@ fn bench_bulk_create(c: &mut Criterion) {
             for (at, &property) in names.iter().enumerate() {
                 create.create_property(
                     target.property(PropertyPath::new(path, property)),
-                    PropertySpec::typed_attribute(PropertyType::new(
-                        "double",
-                        false,
-                        Value::Double(0.0),
-                    ))
-                    .with_default(Value::Double(at as f64)),
+                    PropertySpec::typed_attribute(PropertyType::parse("double").unwrap())
+                        .with_default(Value::Double(at as f64)),
                 );
             }
         }

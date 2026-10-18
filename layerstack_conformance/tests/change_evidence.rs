@@ -20,12 +20,8 @@ fn referenced_values_and_undo_report_composed_properties() {
         source,
         PrimSpec::def().with_property(
             value,
-            PropertySpec::typed_attribute(layerstack::PropertyType::new(
-                "double",
-                false,
-                Value::Double(0.0),
-            ))
-            .with_default(Value::Double(1.0)),
+            PropertySpec::typed_attribute(layerstack::PropertyType::parse("double").unwrap())
+                .with_default(Value::Double(1.0)),
         ),
     );
     store.insert_layer(asset);
@@ -60,12 +56,8 @@ fn referenced_values_and_undo_report_composed_properties() {
     );
     store.layers.get_mut(&LayerId(2)).unwrap().set_property(
         PropertyPath::new(source, value),
-        PropertySpec::typed_attribute(layerstack::PropertyType::new(
-            "double",
-            false,
-            Value::Double(0.0),
-        ))
-        .with_default(Value::Double(3.0)),
+        PropertySpec::typed_attribute(layerstack::PropertyType::parse("double").unwrap())
+            .with_default(Value::Double(3.0)),
     );
     live.notify_changed_layers(&store);
     let external = live.recompose_changes(&mut store);
@@ -94,12 +86,8 @@ fn precise_unrelated_edits_preserve_geometry_caches() {
     let size = store.tokens.intern("size");
     let color = store.tokens.intern("inputs:roughness");
     let attr = |v| {
-        PropertySpec::typed_attribute(layerstack::PropertyType::new(
-            "double",
-            false,
-            Value::Double(0.0),
-        ))
-        .with_default(Value::Double(v))
+        PropertySpec::typed_attribute(layerstack::PropertyType::parse("double").unwrap())
+            .with_default(Value::Double(v))
     };
     let mut layer = Layer::new(LayerId(1));
     layer.insert_prim(root, PrimSpec::def().with_property(color, attr(0.5)));

@@ -472,7 +472,7 @@ mod tests {
                 ArrayEditOp::MaxSize { len: 5 },
             ],
         };
-        let ty = PropertyType::new("int", true, Value::Int(4));
+        let ty = PropertyType::parse("int[]").unwrap();
         let expected = crate::array_edit::apply_to_value(&edit, &generic, Some(&ty));
         let actual = crate::array_edit::apply_to_value(&edit, &native, Some(&ty));
         assert_eq!(actual, expected);
@@ -508,7 +508,7 @@ mod tests {
         let edit = ArrayEdit {
             ops: vec![ArrayEditOp::Resize { len: 2 }],
         };
-        let wrong_type = PropertyType::new("float", true, Value::Float(0.0));
+        let wrong_type = PropertyType::parse("float[]").unwrap();
         let expected = crate::array_edit::apply_to_value(&edit, &legacy, Some(&wrong_type));
         let actual = crate::array_edit::apply_to_value(&edit, &native, Some(&wrong_type));
         assert_eq!(actual, expected);

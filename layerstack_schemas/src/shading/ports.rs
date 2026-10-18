@@ -336,7 +336,7 @@ impl PrimEdit {
         }
         let name = format!("{}{name}", kind.prefix());
         if let Some(existing) = edit.attribute_type(self.path(), &name) {
-            if existing.type_name != ty.type_name || existing.is_array != ty.is_array {
+            if existing.type_name() != ty.type_name() || existing.is_array() != ty.is_array() {
                 return Err(PortError::TypeMismatch { name });
             }
         } else if edit.property_kind(self.path(), &name).is_some() {

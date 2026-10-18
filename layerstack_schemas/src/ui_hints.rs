@@ -469,9 +469,9 @@ impl UiHintsEdit {
 
 fn compatible(value: &Value, ty: &layerstack::PropertyType) -> bool {
     let same = |value: &Value| {
-        core::mem::discriminant(value) == core::mem::discriminant(&ty.default_scalar)
+        core::mem::discriminant(value) == core::mem::discriminant(ty.default_scalar())
     };
-    if ty.is_array {
+    if ty.is_array() {
         value.array_ref().is_some_and(|array| {
             array
                 .typed()
@@ -507,12 +507,8 @@ mod tests {
                 )
                 .with_property(
                     attr,
-                    PropertySpec::typed_attribute(PropertyType::new(
-                        "float",
-                        false,
-                        Value::Float(0.),
-                    ))
-                    .with_default(Value::Float(1.)),
+                    PropertySpec::typed_attribute(PropertyType::parse("float").unwrap())
+                        .with_default(Value::Float(1.)),
                 ),
         );
         store.insert_layer(layer);
@@ -776,7 +772,7 @@ mod tests {
     }
     #[test]
     fn labeled_empty_arrays_keep_their_element_type() {
-        let ty = PropertyType::new("float", true, Value::Float(0.));
+        let ty = PropertyType::parse("float[]").unwrap();
         let mut tokens = layerstack::TokenInterner::default();
         assert!(compatible(
             &crate::value::write_float_array(&[], &mut tokens),

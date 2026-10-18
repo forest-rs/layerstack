@@ -682,16 +682,8 @@ impl Lowering<'_> {
                 let Some(declared) = &spec.type_name else {
                     return invalid(path, Invalid::MissingTypeName);
                 };
-                let base = declared
-                    .type_name
-                    .strip_suffix("[]")
-                    .unwrap_or(&declared.type_name);
-                let type_name = if declared.is_array {
-                    format!("{base}[]")
-                } else {
-                    String::from(base)
-                };
-                let site = Site::Value(&type_name, &declared.default_scalar);
+                let type_name = String::from(declared.type_name());
+                let site = Site::Value(&type_name, declared.default_scalar());
                 let value = match &spec.default {
                     Some(value) => Some(self.value(value, site, &path)?),
                     None => None,
@@ -960,7 +952,7 @@ impl Lowering<'_> {
             L::ArrayEdit(edit) => self.array_edit(edit, None, site, path)?,
             L::TypedArrayEdit(edit) => self.array_edit(
                 edit.edit(),
-                Some(&edit.value_type().default_scalar),
+                Some(edit.value_type().default_scalar()),
                 site,
                 path,
             )?,

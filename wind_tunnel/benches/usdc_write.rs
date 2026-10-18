@@ -158,11 +158,8 @@ fn bench_layer_save(c: &mut Criterion) {
                 let values = layerstack::Value::TypedArray(TypedArray::Float(Arc::new(
                     (0..len).map(|i| (i % 256 + field) as f32).collect(),
                 )));
-                let property = PropertySpec::typed_attribute(PropertyType::new(
-                    "float",
-                    true,
-                    layerstack::Value::Float(0.),
-                ));
+                let property =
+                    PropertySpec::typed_attribute(PropertyType::parse("float[]").unwrap());
                 let property = if animated {
                     property.with_time_samples(vec![(0., values.clone()), (10., values)])
                 } else {

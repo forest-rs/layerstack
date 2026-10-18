@@ -454,13 +454,7 @@ fn upstream_schema(class: &Upstream, upstream: &BTreeMap<&str, &Upstream>) -> Sc
                 properties.push(Property {
                     name: property.name.clone(),
                     kind: property.kind,
-                    value_type: property.type_name.as_ref().map(|t| {
-                        (
-                            t.type_name.to_string(),
-                            t.is_array,
-                            t.default_scalar.clone(),
-                        )
-                    }),
+                    value_type: property.type_name.as_ref().map(model::value_type_of),
                     variability: property.variability,
                     fallback: None,
                     metadata: Vec::new(),

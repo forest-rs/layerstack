@@ -32,14 +32,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let tint = world.create_primvar(
         &mut edit,
         "tint",
-        PropertyType::new("float", false, Value::Float(0.)),
+        PropertyType::parse("float").expect("a registered value type"),
     )?;
     tint.set(&mut edit, Value::Float(0.7))?; // Unauthored interpolation is constant.
     let mesh = Mesh::define(&mut edit, mesh_path);
     let weights = mesh.create_indexed_primvar(
         &mut edit,
         "weight",
-        PropertyType::new("float", true, Value::Float(0.)),
+        PropertyType::parse("float[]").expect("a registered value type"),
         Value::array(vec![Value::Float(0.25), Value::Float(0.75)]),
         &[0, 1],
         "vertex",
@@ -50,7 +50,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let id = mesh.create_primvar(
         &mut edit,
         "id",
-        PropertyType::new("string", false, Value::string("")),
+        PropertyType::parse("string").expect("a registered value type"),
     )?;
     id.set_id_target(&mut edit, None)?; // This prim's composed path.
     let transaction = edit.finish();

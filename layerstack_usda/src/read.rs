@@ -131,17 +131,12 @@ pub(crate) struct PreparedArray {
 }
 
 pub(crate) fn numeric_width(name: &str) -> Option<usize> {
-    match name {
+    match crate::numeric::storage_name(name) {
         "bool" | "uchar" | "int" | "uint" | "int64" | "uint64" | "half" | "float" | "double"
         | "timecode" => Some(0),
-        "int2" | "half2" | "float2" | "double2" | "texCoord2h" | "texCoord2f" | "texCoord2d" => {
-            Some(2)
-        }
-        "int3" | "half3" | "float3" | "double3" | "color3h" | "color3f" | "color3d" | "point3h"
-        | "point3f" | "point3d" | "normal3h" | "normal3f" | "normal3d" | "vector3h"
-        | "vector3f" | "vector3d" | "texCoord3h" | "texCoord3f" | "texCoord3d" => Some(3),
-        "int4" | "half4" | "float4" | "double4" | "color4h" | "color4f" | "color4d" | "quath"
-        | "quatf" | "quatd" => Some(4),
+        "int2" | "half2" | "float2" | "double2" => Some(2),
+        "int3" | "half3" | "float3" | "double3" => Some(3),
+        "int4" | "half4" | "float4" | "double4" | "quath" | "quatf" | "quatd" => Some(4),
         _ => None,
     }
 }

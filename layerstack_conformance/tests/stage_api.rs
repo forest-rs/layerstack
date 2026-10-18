@@ -540,10 +540,9 @@ fn checked_object_queries_preserve_deferred_decode_failures_and_cache_them() {
     let mut layer = Layer::new(LayerId(1));
     layer.set_property(
         property,
-        PropertySpec::typed_attribute(PropertyType::new("float", true, Value::Float(0.0)))
-            .with_default(Value::TypedArray(TypedArray::Deferred(Arc::new(Failed(
-                error.clone(),
-            ))))),
+        PropertySpec::typed_attribute(PropertyType::parse("float[]").unwrap()).with_default(
+            Value::TypedArray(TypedArray::Deferred(Arc::new(Failed(error.clone())))),
+        ),
     );
     store.insert_layer(layer);
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
@@ -602,7 +601,7 @@ fn checked_numeric_queries_decode_only_the_selected_interpolation_endpoints() {
     let mut layer = Layer::new(LayerId(1));
     layer.set_property(
         property,
-        PropertySpec::typed_attribute(PropertyType::new("float", true, Value::Float(0.0)))
+        PropertySpec::typed_attribute(PropertyType::parse("float[]").unwrap())
             .with_time_samples(vec![(0.0, good), (1.0, bad)]),
     );
     store.insert_layer(layer);

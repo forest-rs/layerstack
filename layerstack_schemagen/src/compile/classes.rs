@@ -755,8 +755,12 @@ impl<'s> Parser<'s> {
             let type_name = spec
                 .type_name
                 .as_ref()
-                .map_or_else(String::new, |t| t.type_name.to_string());
-            if !is_value_type_name(&type_name) {
+                .map_or_else(String::new, |t| t.type_name().to_string());
+            if !spec
+                .type_name
+                .as_ref()
+                .is_some_and(|t| t.value_type().is_some())
+            {
                 return Err(CompileError::Schema {
                     path: property_path.to_owned(),
                     rule: Rule::UnknownType { type_name },
@@ -959,67 +963,6 @@ fn is_disallowed_field(key: &str) -> bool {
             | "mapperArgChildren"
             | "expressionChildren"
     )
-}
-
-/// Whether `name` is one of `Sdf.ValueTypeNames` (`AttrInfo`).
-fn is_value_type_name(name: &str) -> bool {
-    const SCALARS: &[&str] = &[
-        "asset",
-        "bool",
-        "color3d",
-        "color3f",
-        "color3h",
-        "color4d",
-        "color4f",
-        "color4h",
-        "double",
-        "double2",
-        "double3",
-        "double4",
-        "float",
-        "float2",
-        "float3",
-        "float4",
-        "frame4d",
-        "half",
-        "half2",
-        "half3",
-        "half4",
-        "int",
-        "int2",
-        "int3",
-        "int4",
-        "int64",
-        "matrix2d",
-        "matrix3d",
-        "matrix4d",
-        "normal3d",
-        "normal3f",
-        "normal3h",
-        "pathExpression",
-        "point3d",
-        "point3f",
-        "point3h",
-        "quatd",
-        "quatf",
-        "quath",
-        "string",
-        "texCoord2d",
-        "texCoord2f",
-        "texCoord2h",
-        "texCoord3d",
-        "texCoord3f",
-        "texCoord3h",
-        "timecode",
-        "token",
-        "uchar",
-        "uint",
-        "uint64",
-        "vector3d",
-        "vector3f",
-        "vector3h",
-    ];
-    matches!(name, "opaque" | "group") || SCALARS.contains(&name.strip_suffix("[]").unwrap_or(name))
 }
 
 /// Whether a list op authors anything.

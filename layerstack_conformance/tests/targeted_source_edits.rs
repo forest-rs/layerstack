@@ -229,11 +229,9 @@ fn precise_value_notifications_do_not_rediscover_the_wide_scene() {
     let prop = store.property_path("/Asset.exposure");
     store.layers.get_mut(&LayerId(1)).unwrap().set_property(
         prop,
-        layerstack::PropertySpec::typed_attribute(layerstack::PropertyType::new(
-            "double",
-            false,
-            layerstack::Value::Double(0.0),
-        ))
+        layerstack::PropertySpec::typed_attribute(
+            layerstack::PropertyType::parse("double").unwrap(),
+        )
         .with_default(layerstack::Value::Double(1.0)),
     );
     let mut live = LiveStage::compose(
@@ -338,11 +336,9 @@ fn value_transactions_consume_pending_source_deltas() {
     );
     root.set_property(
         property,
-        layerstack::PropertySpec::typed_attribute(layerstack::PropertyType::new(
-            "double",
-            false,
-            layerstack::Value::Double(0.0),
-        ))
+        layerstack::PropertySpec::typed_attribute(
+            layerstack::PropertyType::parse("double").unwrap(),
+        )
         .with_default(layerstack::Value::Double(1.0)),
     );
     store.insert_layer(root);

@@ -42,12 +42,8 @@ pub(crate) fn scene(
         }
         let mut prim = PrimSpec::def().with_type_name(xform).with_property(
             order,
-            PropertySpec::typed_attribute(PropertyType::new(
-                "token",
-                true,
-                Value::Token(tokens[0]),
-            ))
-            .with_default(Value::Array(ops.into_iter().map(Value::Token).collect())),
+            PropertySpec::typed_attribute(PropertyType::parse("token[]").unwrap())
+                .with_default(Value::Array(ops.into_iter().map(Value::Token).collect())),
         );
         for (op, token) in tokens
             .into_iter()
@@ -60,12 +56,8 @@ pub(crate) fn scene(
                 2 => [1.0, 1.2, 0.8],
                 _ => [2.0, 3.0, 4.0],
             };
-            let mut spec = PropertySpec::typed_attribute(PropertyType::new(
-                "double3",
-                false,
-                Value::Vec3d([0.0; 3]),
-            ))
-            .with_default(Value::Vec3d(v));
+            let mut spec = PropertySpec::typed_attribute(PropertyType::parse("double3").unwrap())
+                .with_default(Value::Vec3d(v));
             if op == 0 && animated_every != 0 && i % animated_every == 0 {
                 spec = spec.with_time_samples(vec![
                     (0.0, Value::Vec3d(v)),

@@ -12,7 +12,7 @@ use alloc::{sync::Arc, vec, vec::Vec};
 const ROOT: LayerId = LayerId(1);
 const ASSET: LayerId = LayerId(2);
 fn attribute(value: f64) -> PropertySpec {
-    PropertySpec::typed_attribute(PropertyType::new("double", false, Value::Double(0.0)))
+    PropertySpec::typed_attribute(PropertyType::parse("double").unwrap())
         .with_default(Value::Double(value))
 }
 fn base() -> InMemoryStore {
@@ -78,11 +78,7 @@ fn move_subtree_repairs_dependent_targets_expressions_and_arcs_then_undoes() {
     let conn = store.tokens.intern("inputs:value");
     let expr = store.tokens.intern("expression");
     let relative = store.tokens.intern("relative");
-    let expression_type = PropertyType::new(
-        "pathExpression",
-        false,
-        Value::PathExpression(Arc::from("")),
-    );
+    let expression_type = PropertyType::parse("pathExpression").unwrap();
     let layer = store.layers.get_mut(&ROOT).unwrap();
     let watcher = layer.prims.get_mut(&watch).unwrap();
     watcher.properties.push(crate::PropertyEntry {
@@ -260,12 +256,8 @@ fn property_move_repairs_every_list_bucket_and_preserves_authored_property_order
 fn property_reparent_anchors_relative_expression_at_its_previous_owner() {
     let mut store = base();
     let source = store.property_path("/A.expression");
-    let property = PropertySpec::typed_attribute(PropertyType::new(
-        "pathExpression",
-        false,
-        Value::PathExpression(Arc::from("")),
-    ))
-    .with_default(Value::PathExpression(Arc::from("Child//")));
+    let property = PropertySpec::typed_attribute(PropertyType::parse("pathExpression").unwrap())
+        .with_default(Value::PathExpression(Arc::from("Child//")));
     store
         .layers
         .get_mut(&ROOT)
@@ -652,12 +644,8 @@ fn root_stack_referenced_child_uses_relocates_and_coordinated_dependent_override
             )
             .with_property(
                 expression,
-                PropertySpec::typed_attribute(PropertyType::new(
-                    "pathExpression",
-                    false,
-                    Value::PathExpression(Arc::from("")),
-                ))
-                .with_default(Value::PathExpression(Arc::from("/Use/Child//"))),
+                PropertySpec::typed_attribute(PropertyType::parse("pathExpression").unwrap())
+                    .with_default(Value::PathExpression(Arc::from("/Use/Child//"))),
             ),
     );
     store.insert_layer(dependent);
@@ -900,12 +888,8 @@ fn relocated_expression_arcs_keep_root_local_values_and_refresh_source_values() 
     let local = store.path("/Model/Local");
     let name = store.tokens.intern("expression");
     let expression = |text: &str| {
-        PropertySpec::typed_attribute(PropertyType::new(
-            "pathExpression",
-            false,
-            Value::PathExpression(Arc::from("")),
-        ))
-        .with_default(Value::PathExpression(Arc::from(text)))
+        PropertySpec::typed_attribute(PropertyType::parse("pathExpression").unwrap())
+            .with_default(Value::PathExpression(Arc::from(text)))
     };
     let mut layer = Layer::new(ASSET);
     layer.insert_prim(asset, PrimSpec::def());

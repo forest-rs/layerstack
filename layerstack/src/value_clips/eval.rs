@@ -348,7 +348,7 @@ impl PreparedClipProperty {
             if property
                 .type_name
                 .as_ref()
-                .is_some_and(|t| &*t.type_name == "timecode")
+                .is_some_and(|t| t.type_name() == "timecode")
             {
                 let external = self.times.first().map_or(time, |a| time.max(a.external));
                 let external = self

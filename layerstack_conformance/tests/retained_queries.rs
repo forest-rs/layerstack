@@ -537,11 +537,9 @@ fn prepared_transform_evidence_excludes_unused_animation_and_handles_root() {
         let unused = store.tokens.intern("xformOp:translate:unused");
         store.layers.get_mut(&layer).unwrap().set_property(
             PropertyPath::new(child, unused),
-            layerstack::PropertySpec::typed_attribute(layerstack::PropertyType::new(
-                "double3",
-                false,
-                Value::Vec3d([0.0; 3]),
-            ))
+            layerstack::PropertySpec::typed_attribute(
+                layerstack::PropertyType::parse("double3").unwrap(),
+            )
             .with_time_samples(vec![
                 (0.0, Value::Vec3d([0.0; 3])),
                 (2.0, Value::Vec3d([2.0; 3])),

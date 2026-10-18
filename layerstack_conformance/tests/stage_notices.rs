@@ -22,7 +22,7 @@ fn fixture() -> (InMemoryStore, LiveStage, PropertyPath) {
     (store, live, path)
 }
 fn spec(value: f64) -> PropertySpec {
-    PropertySpec::typed_attribute(PropertyType::new("double", false, Value::Double(0.0)))
+    PropertySpec::typed_attribute(PropertyType::parse("double").unwrap())
         .with_default(Value::Double(value))
 }
 fn set(path: PropertyPath, value: f64) -> Transaction {

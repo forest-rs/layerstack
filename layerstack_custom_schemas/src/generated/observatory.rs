@@ -426,23 +426,11 @@ pub fn registry(
     Ok(builder.build(tokens))
 }
 
-static FLOAT: ValueType = ValueType {
-    name: "float",
-    is_array: false,
-    zero: |_| Value::Float(0.0),
-};
+static FLOAT: ValueType = ValueType { name: "float" };
 
-static TOKEN: ValueType = ValueType {
-    name: "token",
-    is_array: false,
-    zero: |t| Value::Token(t.intern("")),
-};
+static TOKEN: ValueType = ValueType { name: "token" };
 
-static TOKEN_ARRAY: ValueType = ValueType {
-    name: "token",
-    is_array: true,
-    zero: |t| Value::Token(t.intern("")),
-};
+static TOKEN_ARRAY: ValueType = ValueType { name: "token[]" };
 
 #[allow(
     clippy::unreadable_literal,

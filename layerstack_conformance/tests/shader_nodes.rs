@@ -146,7 +146,7 @@ fn incompatible_existing_port_is_rejected_without_appending_edits() {
     node.create_input(
         &mut edit,
         "roughness",
-        PropertyType::new("string", false, Value::string("")),
+        PropertyType::parse("string").unwrap(),
     )
     .unwrap();
     let transaction = edit.finish();
@@ -274,8 +274,7 @@ def NodeGraph "Graph" {
             .unwrap()
             .property_type()
             .unwrap()
-            .type_name
-            .as_ref(),
+            .type_name(),
         "token"
     );
     let modern = PrimvarReaderString::new(&scene, modern).unwrap();

@@ -145,11 +145,9 @@ fn direct_source_edits_and_other_stages_need_no_query_session() {
             .answer,
         after
     );
-    let spec = layerstack::PropertySpec::typed_attribute(layerstack::PropertyType::new(
-        "double",
-        false,
-        Value::Double(0.0),
-    ))
+    let spec = layerstack::PropertySpec::typed_attribute(
+        layerstack::PropertyType::parse("double").unwrap(),
+    )
     .with_default(Value::Double(2.0));
     store
         .layers

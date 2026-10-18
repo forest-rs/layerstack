@@ -42,9 +42,8 @@ fn fixture(properties: u32, samples: u32, references: u32) -> InMemoryStore {
     for field in 0..properties {
         let name = store.tokens.intern(format!("parameter{field}"));
         let value = f64::from(field);
-        let mut property =
-            PropertySpec::typed_attribute(PropertyType::new("double", false, Value::Double(0.0)))
-                .with_default(Value::Double(value));
+        let mut property = PropertySpec::typed_attribute(PropertyType::parse("double").unwrap())
+            .with_default(Value::Double(value));
         if samples != 0 {
             property = property.with_time_samples(
                 (0..samples)

@@ -581,19 +581,19 @@ impl crate::usd_geom::CameraEdit {
     ) -> Result<(), CameraWriteError> {
         edit.group(|edit| {
             let query = time.map_or(Time::Default, Time::at);
-            for (attribute, expected, array) in [
-                ("projection", "token", false),
-                ("horizontalAperture", "float", false),
-                ("verticalAperture", "float", false),
-                ("horizontalApertureOffset", "float", false),
-                ("verticalApertureOffset", "float", false),
-                ("focalLength", "float", false),
-                ("clippingRange", "float2", false),
-                ("clippingPlanes", "float4", true),
-                ("fStop", "float", false),
-                ("focusDistance", "float", false),
-                ("shutter:open", "double", false),
-                ("shutter:close", "double", false),
+            for (attribute, expected) in [
+                ("projection", "token"),
+                ("horizontalAperture", "float"),
+                ("verticalAperture", "float"),
+                ("horizontalApertureOffset", "float"),
+                ("verticalApertureOffset", "float"),
+                ("focalLength", "float"),
+                ("clippingRange", "float2"),
+                ("clippingPlanes", "float4[]"),
+                ("fStop", "float"),
+                ("focusDistance", "float"),
+                ("shutter:open", "double"),
+                ("shutter:close", "double"),
             ] {
                 let inspection = edit
                     .inspect_authoring(self.path(), attribute, query)
@@ -606,7 +606,7 @@ impl crate::usd_geom::CameraEdit {
                 }
                 if !edit
                     .attribute_type(self.path(), attribute)
-                    .is_some_and(|ty| ty.type_name.as_ref() == expected && ty.is_array == array)
+                    .is_some_and(|ty| ty.type_name() == expected)
                 {
                     return Err(CameraWriteError::IncompatibleType { attribute });
                 }

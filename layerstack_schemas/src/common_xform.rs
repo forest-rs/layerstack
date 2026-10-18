@@ -207,7 +207,7 @@ impl XformableEdit {
         for (i, name) in names.iter().enumerate() {
             let attribute = name.strip_prefix(INVERT_PREFIX).unwrap_or(name);
             if let Some(ty) = edit.attribute_type(self.path(), attribute) {
-                if ty.is_array || !matches!(ty.type_name.as_ref(), "float3" | "double3" | "half3") {
+                if ty.is_array() || !matches!(ty.type_name(), "float3" | "double3" | "half3") {
                     return Err(CommonTransformError::IncompatibleAttribute {
                         name: attribute.into(),
                     });
@@ -323,7 +323,7 @@ mod tests {
                     edit.create_attribute(
                         path,
                         "xformOp:scale",
-                        PropertyType::new("float3", true, Value::Vec3f([0.0; 3])),
+                        PropertyType::parse("float3[]").unwrap(),
                     );
                     xform.set_xform_op_order(&mut edit, &["xformOp:scale"]);
                 }

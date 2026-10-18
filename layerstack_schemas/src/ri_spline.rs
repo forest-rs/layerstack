@@ -20,8 +20,8 @@ pub enum RiSplineValueType {
 impl RiSplineValueType {
     fn type_name(self) -> &'static str {
         match self {
-            Self::Float => "float",
-            Self::Color => "color3f",
+            Self::Float => "float[]",
+            Self::Color => "color3f[]",
         }
     }
 }
@@ -147,13 +147,7 @@ impl<'a> RiSpline<'a> {
     pub fn property_name(&self, field: &str) -> String {
         format!("{}:spline:{field}", self.name)
     }
-    fn check_type(
-        &self,
-        name: &str,
-        ty: &str,
-        array: bool,
-        expected: &'static str,
-    ) -> Result<(), RiSplineError> {
+    fn check_type(&self, name: &str, expected: &'static str) -> Result<(), RiSplineError> {
         let scene = self.prim.scene();
         let token = scene
             .store()
@@ -176,7 +170,7 @@ impl<'a> RiSpline<'a> {
         let declared = declaration
             .and_then(|d| d.type_name)
             .or_else(|| definition.and_then(|d| d.type_name.clone()));
-        if !declared.is_some_and(|d| d.type_name.as_ref() == ty && d.is_array == array) {
+        if !declared.is_some_and(|d| d.type_name() == expected) {
             return Err(RiSplineError::WrongAttributeType {
                 attribute: name.into(),
                 expected,
@@ -190,17 +184,9 @@ impl<'a> RiSpline<'a> {
         let interpolation = self.property_name("interpolation");
         let positions = self.property_name("positions");
         let values = self.property_name("values");
-        self.check_type(&interpolation, "token", false, "token")?;
-        self.check_type(&positions, "float", true, "float[]")?;
-        self.check_type(
-            &values,
-            self.value_type.type_name(),
-            true,
-            match self.value_type {
-                RiSplineValueType::Float => "float[]",
-                RiSplineValueType::Color => "color3f[]",
-            },
-        )?;
+        self.check_type(&interpolation, "token")?;
+        self.check_type(&positions, "float[]")?;
+        self.check_type(&values, self.value_type.type_name())?;
         let missing = |name: &str| RiSplineError::MissingAttribute(name.into());
         Ok(RiSplineData {
             interpolation: self
@@ -283,36 +269,24 @@ mod tests {
             PrimSpec::def()
                 .with_property(
                     interpolation,
-                    PropertySpec::typed_attribute(PropertyType::new(
-                        "token",
-                        false,
-                        Value::Token(linear),
-                    ))
-                    .with_default(Value::Token(linear)),
+                    PropertySpec::typed_attribute(PropertyType::parse("token").unwrap())
+                        .with_default(Value::Token(linear)),
                 )
                 .with_property(
                     positions,
-                    PropertySpec::typed_attribute(PropertyType::new(
-                        "float",
-                        true,
-                        Value::Float(0.),
-                    ))
-                    .with_default(crate::value::write_float_array(
-                        &[0., 0., 1.],
-                        &mut store.tokens,
-                    )),
+                    PropertySpec::typed_attribute(PropertyType::parse("float[]").unwrap())
+                        .with_default(crate::value::write_float_array(
+                            &[0., 0., 1.],
+                            &mut store.tokens,
+                        )),
                 )
                 .with_property(
                     values,
-                    PropertySpec::typed_attribute(PropertyType::new(
-                        "float",
-                        true,
-                        Value::Float(0.),
-                    ))
-                    .with_default(crate::value::write_float_array(
-                        &[0., 1., 2.],
-                        &mut store.tokens,
-                    )),
+                    PropertySpec::typed_attribute(PropertyType::parse("float[]").unwrap())
+                        .with_default(crate::value::write_float_array(
+                            &[0., 1., 2.],
+                            &mut store.tokens,
+                        )),
                 ),
         );
         store.insert_layer(layer);

@@ -24,12 +24,8 @@ fn bench(c: &mut Criterion) {
                 path,
                 PrimSpec::def().with_property(
                     value,
-                    PropertySpec::typed_attribute(PropertyType::new(
-                        "float",
-                        false,
-                        Value::Float(0.0),
-                    ))
-                    .with_default(Value::Float(0.0)),
+                    PropertySpec::typed_attribute(PropertyType::parse("float").unwrap())
+                        .with_default(Value::Float(0.0)),
                 ),
             );
         }

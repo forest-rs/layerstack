@@ -859,7 +859,7 @@ mod tests {
         ]
         .map(|name| store.tokens.intern(name));
         let rock = store.path("/Rock");
-        let double = PropertyType::new("double", false, Value::Double(0.0));
+        let double = PropertyType::parse("double").unwrap();
         let branch = |name, value| VariantSpec {
             properties: PrimSpec::def()
                 .with_property(
@@ -980,7 +980,7 @@ mod tests {
 
         let x = store.tokens.intern("x");
         let layer = store.layers.get_mut(&LayerId(1)).unwrap();
-        let double = PropertyType::new("double", false, Value::Double(0.0));
+        let double = PropertyType::parse("double").unwrap();
         layer.set_property(
             crate::PropertyPath::new(rock, x),
             PropertySpec::typed_attribute(double).with_default(Value::Double(1.0)),

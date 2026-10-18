@@ -284,11 +284,11 @@ pub(crate) fn prim_spec_mut<'a>(
 pub(crate) fn conforms(ty: &PropertyType, value: &Value) -> bool {
     match value {
         Value::Blocked => true,
-        Value::ArrayEdit(_) => ty.is_array,
+        Value::ArrayEdit(_) => ty.is_array(),
         Value::TypedArrayEdit(edit) => {
-            ty.is_array
-                && core::mem::discriminant(&ty.default_scalar)
-                    == core::mem::discriminant(&edit.value_type().default_scalar)
+            ty.is_array()
+                && core::mem::discriminant(ty.default_scalar())
+                    == core::mem::discriminant(edit.value_type().default_scalar())
                 && edit.edit().ops.iter().all(|op| match op {
                     crate::ArrayEditOp::Write {
                         src: crate::ArrayEditOperand::Literal(value),
@@ -303,21 +303,21 @@ pub(crate) fn conforms(ty: &PropertyType, value: &Value) -> bool {
                         // Tagged USD operands already have canonical element storage.
                         // Accepting tuple spellings here would retain nested arrays
                         // that cannot satisfy a typed array read.
-                        core::mem::discriminant(&edit.value_type().default_scalar)
+                        core::mem::discriminant(edit.value_type().default_scalar())
                             == core::mem::discriminant(value)
                     }
                     _ => true,
                 })
         }
-        Value::Array(items) if ty.is_array => items.iter().all(|v| scalar_conforms(ty, v)),
-        Value::TypedArray(items) if ty.is_array => scalar_conforms(ty, &items.element_kind()),
-        _ if ty.is_array => false,
+        Value::Array(items) if ty.is_array() => items.iter().all(|v| scalar_conforms(ty, v)),
+        Value::TypedArray(items) if ty.is_array() => scalar_conforms(ty, &items.element_kind()),
+        _ if ty.is_array() => false,
         _ => scalar_conforms(ty, value),
     }
 }
 
 fn scalar_conforms(ty: &PropertyType, value: &Value) -> bool {
-    let expected = &ty.default_scalar;
+    let expected = ty.default_scalar();
     if matches!(expected, Value::Null) {
         return true;
     }
@@ -428,7 +428,7 @@ mod tests {
 
     #[test]
     fn tagged_tuple_literals_require_canonical_storage() {
-        let ty = PropertyType::new("point3f", true, Value::Vec3f([0.0; 3]));
+        let ty = PropertyType::parse("point3f[]").unwrap();
         let components = Value::array(vec![
             Value::Float(1.0),
             Value::Float(2.0),
@@ -471,8 +471,8 @@ mod tests {
 
     #[test]
     fn tagged_edits_require_the_declared_storage_kind() {
-        let float = PropertyType::new("float", true, Value::Float(0.0));
-        let int = PropertyType::new("int", true, Value::Int(0));
+        let float = PropertyType::parse("float[]").unwrap();
+        let int = PropertyType::parse("int[]").unwrap();
         let edit = Value::typed_array_edit(
             ArrayEdit {
                 ops: vec![ArrayEditOp::Resize { len: 3 }],
@@ -481,8 +481,8 @@ mod tests {
         );
         assert!(conforms(&float, &edit));
         assert!(!conforms(&int, &edit));
-        let color = PropertyType::new("color3f", true, Value::Vec3f([0.0; 3]));
-        let point = PropertyType::new("point3f", true, Value::Vec3f([0.0; 3]));
+        let color = PropertyType::parse("color3f[]").unwrap();
+        let point = PropertyType::parse("point3f[]").unwrap();
         assert!(conforms(
             &point,
             &Value::typed_array_edit(ArrayEdit::default(), color)

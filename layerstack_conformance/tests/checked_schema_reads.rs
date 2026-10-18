@@ -189,7 +189,7 @@ fn checked_typed_reads_preserve_deferred_schema_fallback_failure() {
     registry.register(
         SchemaDefinition::typed(ty).with_property(
             PropertyDefinition::attribute(name)
-                .with_type(PropertyType::new("point3f", true, Value::Vec3f([0.; 3])))
+                .with_type(PropertyType::parse("point3f[]").unwrap())
                 .with_fallback(fallback),
         ),
     );
@@ -231,7 +231,7 @@ fn checked_default_retry_preserves_weaker_decode_error_before_schema_fallback() 
         registry.register(
             SchemaDefinition::typed(ty).with_property(
                 PropertyDefinition::attribute(points)
-                    .with_type(PropertyType::new("point3f", true, Value::Vec3f([0.; 3])))
+                    .with_type(PropertyType::parse("point3f[]").unwrap())
                     .with_fallback(Value::from(vec![[99_f32; 3]])),
             ),
         );

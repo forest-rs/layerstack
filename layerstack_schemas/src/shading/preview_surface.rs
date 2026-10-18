@@ -332,19 +332,19 @@ fn declaration_matches(port: &MaterialPort, ty: PreviewType) -> bool {
     let Some(declaration) = &port.property_type else {
         return false;
     };
-    if declaration.is_array {
+    if declaration.is_array() {
         return false;
     }
     match ty {
-        PreviewType::Float => declaration.type_name.as_ref() == "float",
-        PreviewType::Float2 => matches!(declaration.type_name.as_ref(), "float2" | "texCoord2f"),
+        PreviewType::Float => declaration.type_name() == "float",
+        PreviewType::Float2 => matches!(declaration.type_name(), "float2" | "texCoord2f"),
         PreviewType::Float3 => matches!(
-            declaration.type_name.as_ref(),
+            declaration.type_name(),
             "float3" | "color3f" | "point3f" | "normal3f" | "vector3f" | "texCoord3f"
         ),
-        PreviewType::Float4 => matches!(declaration.type_name.as_ref(), "float4" | "color4f"),
-        PreviewType::Int => declaration.type_name.as_ref() == "int",
-        PreviewType::Text => matches!(declaration.type_name.as_ref(), "token" | "string"),
+        PreviewType::Float4 => matches!(declaration.type_name(), "float4" | "color4f"),
+        PreviewType::Int => declaration.type_name() == "int",
+        PreviewType::Text => matches!(declaration.type_name(), "token" | "string"),
     }
 }
 fn valid(port: &MaterialPort, constant: &MaterialConstant, ty: PreviewType) -> bool {
@@ -571,7 +571,7 @@ fn source_expression(
             if file_port
                 .property_type
                 .as_ref()
-                .is_none_or(|t| t.is_array || t.type_name.as_ref() != "asset")
+                .is_none_or(|t| t.is_array() || t.type_name() != "asset")
             {
                 return Err(issue(
                     Some(node.path),

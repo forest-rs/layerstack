@@ -25,9 +25,8 @@
 use crate::shading::{Port, PortEdit, PortError};
 use crate::usd_shade::{NodeDefApiImplementationSource, Shader, ShaderEdit};
 use crate::{Scene, SchemaEdit};
-use alloc::sync::Arc;
 use core::ops::Deref;
-use layerstack::{PathId, PropertyType, Value};
+use layerstack::{PathId, PropertyType};
 
 /// The standard `UsdPreviewSurface` shader node.
 #[derive(Clone, Copy, Debug)]
@@ -521,9 +520,8 @@ impl PreviewSurfaceEdit {
     /// Creates `inputs:clearcoat` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_clearcoat_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::Float(0.0);
-        self.shader
-            .create_input(edit, "clearcoat", PropertyType::new("float", false, zero))
+        let ty = PropertyType::parse("float").expect("a registered value type");
+        self.shader.create_input(edit, "clearcoat", ty)
     }
     /// Authors `inputs:clearcoat` at default time, creating the typed input if needed.
     pub fn set_clearcoat(&self, edit: &mut SchemaEdit<'_>, value: f32) -> Result<&Self, PortError> {
@@ -550,12 +548,8 @@ impl PreviewSurfaceEdit {
         &self,
         edit: &mut SchemaEdit<'_>,
     ) -> Result<PortEdit, PortError> {
-        let zero = Value::Float(0.0);
-        self.shader.create_input(
-            edit,
-            "clearcoatRoughness",
-            PropertyType::new("float", false, zero),
-        )
+        let ty = PropertyType::parse("float").expect("a registered value type");
+        self.shader.create_input(edit, "clearcoatRoughness", ty)
     }
     /// Authors `inputs:clearcoatRoughness` at default time, creating the typed input if needed.
     pub fn set_clearcoat_roughness(
@@ -586,12 +580,8 @@ impl PreviewSurfaceEdit {
         &self,
         edit: &mut SchemaEdit<'_>,
     ) -> Result<PortEdit, PortError> {
-        let zero = Value::Vec3f([0.0, 0.0, 0.0]);
-        self.shader.create_input(
-            edit,
-            "diffuseColor",
-            PropertyType::new("color3f", false, zero),
-        )
+        let ty = PropertyType::parse("color3f").expect("a registered value type");
+        self.shader.create_input(edit, "diffuseColor", ty)
     }
     /// Authors `inputs:diffuseColor` at default time, creating the typed input if needed.
     pub fn set_diffuse_color(
@@ -622,12 +612,8 @@ impl PreviewSurfaceEdit {
         &self,
         edit: &mut SchemaEdit<'_>,
     ) -> Result<PortEdit, PortError> {
-        let zero = Value::Float(0.0);
-        self.shader.create_input(
-            edit,
-            "displacement",
-            PropertyType::new("float", false, zero),
-        )
+        let ty = PropertyType::parse("float").expect("a registered value type");
+        self.shader.create_input(edit, "displacement", ty)
     }
     /// Authors `inputs:displacement` at default time, creating the typed input if needed.
     pub fn set_displacement(
@@ -658,12 +644,8 @@ impl PreviewSurfaceEdit {
         &self,
         edit: &mut SchemaEdit<'_>,
     ) -> Result<PortEdit, PortError> {
-        let zero = Value::Vec3f([0.0, 0.0, 0.0]);
-        self.shader.create_input(
-            edit,
-            "emissiveColor",
-            PropertyType::new("color3f", false, zero),
-        )
+        let ty = PropertyType::parse("color3f").expect("a registered value type");
+        self.shader.create_input(edit, "emissiveColor", ty)
     }
     /// Authors `inputs:emissiveColor` at default time, creating the typed input if needed.
     pub fn set_emissive_color(
@@ -691,9 +673,8 @@ impl PreviewSurfaceEdit {
     /// Creates `inputs:ior` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_ior_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::Float(0.0);
-        self.shader
-            .create_input(edit, "ior", PropertyType::new("float", false, zero))
+        let ty = PropertyType::parse("float").expect("a registered value type");
+        self.shader.create_input(edit, "ior", ty)
     }
     /// Authors `inputs:ior` at default time, creating the typed input if needed.
     pub fn set_ior(&self, edit: &mut SchemaEdit<'_>, value: f32) -> Result<&Self, PortError> {
@@ -717,9 +698,8 @@ impl PreviewSurfaceEdit {
     /// Creates `inputs:metallic` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_metallic_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::Float(0.0);
-        self.shader
-            .create_input(edit, "metallic", PropertyType::new("float", false, zero))
+        let ty = PropertyType::parse("float").expect("a registered value type");
+        self.shader.create_input(edit, "metallic", ty)
     }
     /// Authors `inputs:metallic` at default time, creating the typed input if needed.
     pub fn set_metallic(&self, edit: &mut SchemaEdit<'_>, value: f32) -> Result<&Self, PortError> {
@@ -743,9 +723,8 @@ impl PreviewSurfaceEdit {
     /// Creates `inputs:normal` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_normal_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::Vec3f([0.0, 0.0, 0.0]);
-        self.shader
-            .create_input(edit, "normal", PropertyType::new("normal3f", false, zero))
+        let ty = PropertyType::parse("normal3f").expect("a registered value type");
+        self.shader.create_input(edit, "normal", ty)
     }
     /// Authors `inputs:normal` at default time, creating the typed input if needed.
     pub fn set_normal(
@@ -773,9 +752,8 @@ impl PreviewSurfaceEdit {
     /// Creates `inputs:occlusion` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_occlusion_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::Float(0.0);
-        self.shader
-            .create_input(edit, "occlusion", PropertyType::new("float", false, zero))
+        let ty = PropertyType::parse("float").expect("a registered value type");
+        self.shader.create_input(edit, "occlusion", ty)
     }
     /// Authors `inputs:occlusion` at default time, creating the typed input if needed.
     pub fn set_occlusion(&self, edit: &mut SchemaEdit<'_>, value: f32) -> Result<&Self, PortError> {
@@ -799,9 +777,8 @@ impl PreviewSurfaceEdit {
     /// Creates `inputs:opacity` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_opacity_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::Float(0.0);
-        self.shader
-            .create_input(edit, "opacity", PropertyType::new("float", false, zero))
+        let ty = PropertyType::parse("float").expect("a registered value type");
+        self.shader.create_input(edit, "opacity", ty)
     }
     /// Authors `inputs:opacity` at default time, creating the typed input if needed.
     pub fn set_opacity(&self, edit: &mut SchemaEdit<'_>, value: f32) -> Result<&Self, PortError> {
@@ -828,10 +805,8 @@ impl PreviewSurfaceEdit {
         &self,
         edit: &mut SchemaEdit<'_>,
     ) -> Result<PortEdit, PortError> {
-        let t = edit.tokens();
-        let zero = Value::Token(t.intern(""));
-        self.shader
-            .create_input(edit, "opacityMode", PropertyType::new("token", false, zero))
+        let ty = PropertyType::parse("token").expect("a registered value type");
+        self.shader.create_input(edit, "opacityMode", ty)
     }
     /// Authors `inputs:opacityMode` at default time, creating the typed input if needed.
     pub fn set_opacity_mode(
@@ -862,12 +837,8 @@ impl PreviewSurfaceEdit {
         &self,
         edit: &mut SchemaEdit<'_>,
     ) -> Result<PortEdit, PortError> {
-        let zero = Value::Float(0.0);
-        self.shader.create_input(
-            edit,
-            "opacityThreshold",
-            PropertyType::new("float", false, zero),
-        )
+        let ty = PropertyType::parse("float").expect("a registered value type");
+        self.shader.create_input(edit, "opacityThreshold", ty)
     }
     /// Authors `inputs:opacityThreshold` at default time, creating the typed input if needed.
     pub fn set_opacity_threshold(
@@ -895,9 +866,8 @@ impl PreviewSurfaceEdit {
     /// Creates `inputs:roughness` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_roughness_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::Float(0.0);
-        self.shader
-            .create_input(edit, "roughness", PropertyType::new("float", false, zero))
+        let ty = PropertyType::parse("float").expect("a registered value type");
+        self.shader.create_input(edit, "roughness", ty)
     }
     /// Authors `inputs:roughness` at default time, creating the typed input if needed.
     pub fn set_roughness(&self, edit: &mut SchemaEdit<'_>, value: f32) -> Result<&Self, PortError> {
@@ -924,12 +894,8 @@ impl PreviewSurfaceEdit {
         &self,
         edit: &mut SchemaEdit<'_>,
     ) -> Result<PortEdit, PortError> {
-        let zero = Value::Vec3f([0.0, 0.0, 0.0]);
-        self.shader.create_input(
-            edit,
-            "specularColor",
-            PropertyType::new("color3f", false, zero),
-        )
+        let ty = PropertyType::parse("color3f").expect("a registered value type");
+        self.shader.create_input(edit, "specularColor", ty)
     }
     /// Authors `inputs:specularColor` at default time, creating the typed input if needed.
     pub fn set_specular_color(
@@ -960,12 +926,8 @@ impl PreviewSurfaceEdit {
         &self,
         edit: &mut SchemaEdit<'_>,
     ) -> Result<PortEdit, PortError> {
-        let zero = Value::Int(0);
-        self.shader.create_input(
-            edit,
-            "useSpecularWorkflow",
-            PropertyType::new("int", false, zero),
-        )
+        let ty = PropertyType::parse("int").expect("a registered value type");
+        self.shader.create_input(edit, "useSpecularWorkflow", ty)
     }
     /// Authors `inputs:useSpecularWorkflow` at default time, creating the typed input if needed.
     pub fn set_use_specular_workflow(
@@ -996,21 +958,14 @@ impl PreviewSurfaceEdit {
         &self,
         edit: &mut SchemaEdit<'_>,
     ) -> Result<PortEdit, PortError> {
-        let t = edit.tokens();
-        let zero = Value::Token(t.intern(""));
-        self.shader.create_output(
-            edit,
-            "displacement",
-            PropertyType::new("token", false, zero),
-        )
+        let ty = PropertyType::parse("token").expect("a registered value type");
+        self.shader.create_output(edit, "displacement", ty)
     }
     /// Creates `outputs:surface` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_surface_output(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let t = edit.tokens();
-        let zero = Value::Token(t.intern(""));
-        self.shader
-            .create_output(edit, "surface", PropertyType::new("token", false, zero))
+        let ty = PropertyType::parse("token").expect("a registered value type");
+        self.shader.create_output(edit, "surface", ty)
     }
 }
 
@@ -1133,9 +1088,8 @@ impl PrimvarReaderFloatEdit {
     /// Creates `inputs:fallback` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_fallback_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::Float(0.0);
-        self.shader
-            .create_input(edit, "fallback", PropertyType::new("float", false, zero))
+        let ty = PropertyType::parse("float").expect("a registered value type");
+        self.shader.create_input(edit, "fallback", ty)
     }
     /// Authors `inputs:fallback` at default time, creating the typed input if needed.
     pub fn set_fallback(&self, edit: &mut SchemaEdit<'_>, value: f32) -> Result<&Self, PortError> {
@@ -1159,9 +1113,8 @@ impl PrimvarReaderFloatEdit {
     /// Creates `inputs:varname` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_varname_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::String(Arc::from(""));
-        self.shader
-            .create_input(edit, "varname", PropertyType::new("string", false, zero))
+        let ty = PropertyType::parse("string").expect("a registered value type");
+        self.shader.create_input(edit, "varname", ty)
     }
     /// Authors `inputs:varname` at default time, creating the typed input if needed.
     pub fn set_varname(&self, edit: &mut SchemaEdit<'_>, value: &str) -> Result<&Self, PortError> {
@@ -1185,9 +1138,8 @@ impl PrimvarReaderFloatEdit {
     /// Creates `outputs:result` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_result_output(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::Float(0.0);
-        self.shader
-            .create_output(edit, "result", PropertyType::new("float", false, zero))
+        let ty = PropertyType::parse("float").expect("a registered value type");
+        self.shader.create_output(edit, "result", ty)
     }
 }
 
@@ -1310,9 +1262,8 @@ impl PrimvarReaderFloat2Edit {
     /// Creates `inputs:fallback` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_fallback_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::Vec2f([0.0, 0.0]);
-        self.shader
-            .create_input(edit, "fallback", PropertyType::new("float2", false, zero))
+        let ty = PropertyType::parse("float2").expect("a registered value type");
+        self.shader.create_input(edit, "fallback", ty)
     }
     /// Authors `inputs:fallback` at default time, creating the typed input if needed.
     pub fn set_fallback(
@@ -1340,9 +1291,8 @@ impl PrimvarReaderFloat2Edit {
     /// Creates `inputs:varname` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_varname_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::String(Arc::from(""));
-        self.shader
-            .create_input(edit, "varname", PropertyType::new("string", false, zero))
+        let ty = PropertyType::parse("string").expect("a registered value type");
+        self.shader.create_input(edit, "varname", ty)
     }
     /// Authors `inputs:varname` at default time, creating the typed input if needed.
     pub fn set_varname(&self, edit: &mut SchemaEdit<'_>, value: &str) -> Result<&Self, PortError> {
@@ -1366,9 +1316,8 @@ impl PrimvarReaderFloat2Edit {
     /// Creates `outputs:result` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_result_output(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::Vec2f([0.0, 0.0]);
-        self.shader
-            .create_output(edit, "result", PropertyType::new("float2", false, zero))
+        let ty = PropertyType::parse("float2").expect("a registered value type");
+        self.shader.create_output(edit, "result", ty)
     }
 }
 
@@ -1491,9 +1440,8 @@ impl PrimvarReaderFloat3Edit {
     /// Creates `inputs:fallback` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_fallback_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::Vec3f([0.0, 0.0, 0.0]);
-        self.shader
-            .create_input(edit, "fallback", PropertyType::new("float3", false, zero))
+        let ty = PropertyType::parse("float3").expect("a registered value type");
+        self.shader.create_input(edit, "fallback", ty)
     }
     /// Authors `inputs:fallback` at default time, creating the typed input if needed.
     pub fn set_fallback(
@@ -1521,9 +1469,8 @@ impl PrimvarReaderFloat3Edit {
     /// Creates `inputs:varname` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_varname_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::String(Arc::from(""));
-        self.shader
-            .create_input(edit, "varname", PropertyType::new("string", false, zero))
+        let ty = PropertyType::parse("string").expect("a registered value type");
+        self.shader.create_input(edit, "varname", ty)
     }
     /// Authors `inputs:varname` at default time, creating the typed input if needed.
     pub fn set_varname(&self, edit: &mut SchemaEdit<'_>, value: &str) -> Result<&Self, PortError> {
@@ -1547,9 +1494,8 @@ impl PrimvarReaderFloat3Edit {
     /// Creates `outputs:result` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_result_output(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::Vec3f([0.0, 0.0, 0.0]);
-        self.shader
-            .create_output(edit, "result", PropertyType::new("float3", false, zero))
+        let ty = PropertyType::parse("float3").expect("a registered value type");
+        self.shader.create_output(edit, "result", ty)
     }
 }
 
@@ -1672,9 +1618,8 @@ impl PrimvarReaderFloat4Edit {
     /// Creates `inputs:fallback` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_fallback_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::Vec4f([0.0, 0.0, 0.0, 0.0]);
-        self.shader
-            .create_input(edit, "fallback", PropertyType::new("float4", false, zero))
+        let ty = PropertyType::parse("float4").expect("a registered value type");
+        self.shader.create_input(edit, "fallback", ty)
     }
     /// Authors `inputs:fallback` at default time, creating the typed input if needed.
     pub fn set_fallback(
@@ -1702,9 +1647,8 @@ impl PrimvarReaderFloat4Edit {
     /// Creates `inputs:varname` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_varname_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::String(Arc::from(""));
-        self.shader
-            .create_input(edit, "varname", PropertyType::new("string", false, zero))
+        let ty = PropertyType::parse("string").expect("a registered value type");
+        self.shader.create_input(edit, "varname", ty)
     }
     /// Authors `inputs:varname` at default time, creating the typed input if needed.
     pub fn set_varname(&self, edit: &mut SchemaEdit<'_>, value: &str) -> Result<&Self, PortError> {
@@ -1728,9 +1672,8 @@ impl PrimvarReaderFloat4Edit {
     /// Creates `outputs:result` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_result_output(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::Vec4f([0.0, 0.0, 0.0, 0.0]);
-        self.shader
-            .create_output(edit, "result", PropertyType::new("float4", false, zero))
+        let ty = PropertyType::parse("float4").expect("a registered value type");
+        self.shader.create_output(edit, "result", ty)
     }
 }
 
@@ -1853,9 +1796,8 @@ impl PrimvarReaderIntEdit {
     /// Creates `inputs:fallback` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_fallback_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::Int(0);
-        self.shader
-            .create_input(edit, "fallback", PropertyType::new("int", false, zero))
+        let ty = PropertyType::parse("int").expect("a registered value type");
+        self.shader.create_input(edit, "fallback", ty)
     }
     /// Authors `inputs:fallback` at default time, creating the typed input if needed.
     pub fn set_fallback(&self, edit: &mut SchemaEdit<'_>, value: i32) -> Result<&Self, PortError> {
@@ -1879,9 +1821,8 @@ impl PrimvarReaderIntEdit {
     /// Creates `inputs:varname` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_varname_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::String(Arc::from(""));
-        self.shader
-            .create_input(edit, "varname", PropertyType::new("string", false, zero))
+        let ty = PropertyType::parse("string").expect("a registered value type");
+        self.shader.create_input(edit, "varname", ty)
     }
     /// Authors `inputs:varname` at default time, creating the typed input if needed.
     pub fn set_varname(&self, edit: &mut SchemaEdit<'_>, value: &str) -> Result<&Self, PortError> {
@@ -1905,9 +1846,8 @@ impl PrimvarReaderIntEdit {
     /// Creates `outputs:result` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_result_output(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::Int(0);
-        self.shader
-            .create_output(edit, "result", PropertyType::new("int", false, zero))
+        let ty = PropertyType::parse("int").expect("a registered value type");
+        self.shader.create_output(edit, "result", ty)
     }
 }
 
@@ -2035,11 +1975,8 @@ impl PrimvarReaderMatrixEdit {
     /// Creates `inputs:fallback` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_fallback_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::Matrix4d(alloc::boxed::Box::new([
-            0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-        ]));
-        self.shader
-            .create_input(edit, "fallback", PropertyType::new("matrix4d", false, zero))
+        let ty = PropertyType::parse("matrix4d").expect("a registered value type");
+        self.shader.create_input(edit, "fallback", ty)
     }
     /// Authors `inputs:fallback` at default time, creating the typed input if needed.
     pub fn set_fallback(
@@ -2067,9 +2004,8 @@ impl PrimvarReaderMatrixEdit {
     /// Creates `inputs:varname` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_varname_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::String(Arc::from(""));
-        self.shader
-            .create_input(edit, "varname", PropertyType::new("string", false, zero))
+        let ty = PropertyType::parse("string").expect("a registered value type");
+        self.shader.create_input(edit, "varname", ty)
     }
     /// Authors `inputs:varname` at default time, creating the typed input if needed.
     pub fn set_varname(&self, edit: &mut SchemaEdit<'_>, value: &str) -> Result<&Self, PortError> {
@@ -2093,11 +2029,8 @@ impl PrimvarReaderMatrixEdit {
     /// Creates `outputs:result` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_result_output(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::Matrix4d(alloc::boxed::Box::new([
-            0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-        ]));
-        self.shader
-            .create_output(edit, "result", PropertyType::new("matrix4d", false, zero))
+        let ty = PropertyType::parse("matrix4d").expect("a registered value type");
+        self.shader.create_output(edit, "result", ty)
     }
 }
 
@@ -2220,9 +2153,8 @@ impl PrimvarReaderNormalEdit {
     /// Creates `inputs:fallback` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_fallback_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::Vec3f([0.0, 0.0, 0.0]);
-        self.shader
-            .create_input(edit, "fallback", PropertyType::new("normal3f", false, zero))
+        let ty = PropertyType::parse("normal3f").expect("a registered value type");
+        self.shader.create_input(edit, "fallback", ty)
     }
     /// Authors `inputs:fallback` at default time, creating the typed input if needed.
     pub fn set_fallback(
@@ -2250,9 +2182,8 @@ impl PrimvarReaderNormalEdit {
     /// Creates `inputs:varname` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_varname_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::String(Arc::from(""));
-        self.shader
-            .create_input(edit, "varname", PropertyType::new("string", false, zero))
+        let ty = PropertyType::parse("string").expect("a registered value type");
+        self.shader.create_input(edit, "varname", ty)
     }
     /// Authors `inputs:varname` at default time, creating the typed input if needed.
     pub fn set_varname(&self, edit: &mut SchemaEdit<'_>, value: &str) -> Result<&Self, PortError> {
@@ -2276,9 +2207,8 @@ impl PrimvarReaderNormalEdit {
     /// Creates `outputs:result` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_result_output(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::Vec3f([0.0, 0.0, 0.0]);
-        self.shader
-            .create_output(edit, "result", PropertyType::new("normal3f", false, zero))
+        let ty = PropertyType::parse("normal3f").expect("a registered value type");
+        self.shader.create_output(edit, "result", ty)
     }
 }
 
@@ -2401,9 +2331,8 @@ impl PrimvarReaderPointEdit {
     /// Creates `inputs:fallback` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_fallback_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::Vec3f([0.0, 0.0, 0.0]);
-        self.shader
-            .create_input(edit, "fallback", PropertyType::new("point3f", false, zero))
+        let ty = PropertyType::parse("point3f").expect("a registered value type");
+        self.shader.create_input(edit, "fallback", ty)
     }
     /// Authors `inputs:fallback` at default time, creating the typed input if needed.
     pub fn set_fallback(
@@ -2431,9 +2360,8 @@ impl PrimvarReaderPointEdit {
     /// Creates `inputs:varname` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_varname_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::String(Arc::from(""));
-        self.shader
-            .create_input(edit, "varname", PropertyType::new("string", false, zero))
+        let ty = PropertyType::parse("string").expect("a registered value type");
+        self.shader.create_input(edit, "varname", ty)
     }
     /// Authors `inputs:varname` at default time, creating the typed input if needed.
     pub fn set_varname(&self, edit: &mut SchemaEdit<'_>, value: &str) -> Result<&Self, PortError> {
@@ -2457,9 +2385,8 @@ impl PrimvarReaderPointEdit {
     /// Creates `outputs:result` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_result_output(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::Vec3f([0.0, 0.0, 0.0]);
-        self.shader
-            .create_output(edit, "result", PropertyType::new("point3f", false, zero))
+        let ty = PropertyType::parse("point3f").expect("a registered value type");
+        self.shader.create_output(edit, "result", ty)
     }
 }
 
@@ -2582,9 +2509,8 @@ impl PrimvarReaderStringEdit {
     /// Creates `inputs:fallback` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_fallback_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::String(Arc::from(""));
-        self.shader
-            .create_input(edit, "fallback", PropertyType::new("string", false, zero))
+        let ty = PropertyType::parse("string").expect("a registered value type");
+        self.shader.create_input(edit, "fallback", ty)
     }
     /// Authors `inputs:fallback` at default time, creating the typed input if needed.
     pub fn set_fallback(&self, edit: &mut SchemaEdit<'_>, value: &str) -> Result<&Self, PortError> {
@@ -2608,9 +2534,8 @@ impl PrimvarReaderStringEdit {
     /// Creates `inputs:varname` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_varname_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::String(Arc::from(""));
-        self.shader
-            .create_input(edit, "varname", PropertyType::new("string", false, zero))
+        let ty = PropertyType::parse("string").expect("a registered value type");
+        self.shader.create_input(edit, "varname", ty)
     }
     /// Authors `inputs:varname` at default time, creating the typed input if needed.
     pub fn set_varname(&self, edit: &mut SchemaEdit<'_>, value: &str) -> Result<&Self, PortError> {
@@ -2634,9 +2559,8 @@ impl PrimvarReaderStringEdit {
     /// Creates `outputs:result` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_result_output(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::String(Arc::from(""));
-        self.shader
-            .create_output(edit, "result", PropertyType::new("string", false, zero))
+        let ty = PropertyType::parse("string").expect("a registered value type");
+        self.shader.create_output(edit, "result", ty)
     }
 }
 
@@ -2759,9 +2683,8 @@ impl PrimvarReaderVectorEdit {
     /// Creates `inputs:fallback` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_fallback_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::Vec3f([0.0, 0.0, 0.0]);
-        self.shader
-            .create_input(edit, "fallback", PropertyType::new("vector3f", false, zero))
+        let ty = PropertyType::parse("vector3f").expect("a registered value type");
+        self.shader.create_input(edit, "fallback", ty)
     }
     /// Authors `inputs:fallback` at default time, creating the typed input if needed.
     pub fn set_fallback(
@@ -2789,9 +2712,8 @@ impl PrimvarReaderVectorEdit {
     /// Creates `inputs:varname` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_varname_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::String(Arc::from(""));
-        self.shader
-            .create_input(edit, "varname", PropertyType::new("string", false, zero))
+        let ty = PropertyType::parse("string").expect("a registered value type");
+        self.shader.create_input(edit, "varname", ty)
     }
     /// Authors `inputs:varname` at default time, creating the typed input if needed.
     pub fn set_varname(&self, edit: &mut SchemaEdit<'_>, value: &str) -> Result<&Self, PortError> {
@@ -2815,9 +2737,8 @@ impl PrimvarReaderVectorEdit {
     /// Creates `outputs:result` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_result_output(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::Vec3f([0.0, 0.0, 0.0]);
-        self.shader
-            .create_output(edit, "result", PropertyType::new("vector3f", false, zero))
+        let ty = PropertyType::parse("vector3f").expect("a registered value type");
+        self.shader.create_output(edit, "result", ty)
     }
 }
 
@@ -2993,9 +2914,8 @@ impl Transform2dEdit {
     /// Creates `inputs:in` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_in_value_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::Vec2f([0.0, 0.0]);
-        self.shader
-            .create_input(edit, "in", PropertyType::new("float2", false, zero))
+        let ty = PropertyType::parse("float2").expect("a registered value type");
+        self.shader.create_input(edit, "in", ty)
     }
     /// Authors `inputs:in` at default time, creating the typed input if needed.
     pub fn set_in_value(
@@ -3023,9 +2943,8 @@ impl Transform2dEdit {
     /// Creates `inputs:rotation` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_rotation_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::Float(0.0);
-        self.shader
-            .create_input(edit, "rotation", PropertyType::new("float", false, zero))
+        let ty = PropertyType::parse("float").expect("a registered value type");
+        self.shader.create_input(edit, "rotation", ty)
     }
     /// Authors `inputs:rotation` at default time, creating the typed input if needed.
     pub fn set_rotation(&self, edit: &mut SchemaEdit<'_>, value: f32) -> Result<&Self, PortError> {
@@ -3049,9 +2968,8 @@ impl Transform2dEdit {
     /// Creates `inputs:scale` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_scale_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::Vec2f([0.0, 0.0]);
-        self.shader
-            .create_input(edit, "scale", PropertyType::new("float2", false, zero))
+        let ty = PropertyType::parse("float2").expect("a registered value type");
+        self.shader.create_input(edit, "scale", ty)
     }
     /// Authors `inputs:scale` at default time, creating the typed input if needed.
     pub fn set_scale(
@@ -3082,12 +3000,8 @@ impl Transform2dEdit {
         &self,
         edit: &mut SchemaEdit<'_>,
     ) -> Result<PortEdit, PortError> {
-        let zero = Value::Vec2f([0.0, 0.0]);
-        self.shader.create_input(
-            edit,
-            "translation",
-            PropertyType::new("float2", false, zero),
-        )
+        let ty = PropertyType::parse("float2").expect("a registered value type");
+        self.shader.create_input(edit, "translation", ty)
     }
     /// Authors `inputs:translation` at default time, creating the typed input if needed.
     pub fn set_translation(
@@ -3115,9 +3029,8 @@ impl Transform2dEdit {
     /// Creates `outputs:result` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_result_output(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::Vec2f([0.0, 0.0]);
-        self.shader
-            .create_output(edit, "result", PropertyType::new("float2", false, zero))
+        let ty = PropertyType::parse("float2").expect("a registered value type");
+        self.shader.create_output(edit, "result", ty)
     }
 }
 
@@ -3424,9 +3337,8 @@ impl UvTextureEdit {
     /// Creates `inputs:bias` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_bias_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::Vec4f([0.0, 0.0, 0.0, 0.0]);
-        self.shader
-            .create_input(edit, "bias", PropertyType::new("float4", false, zero))
+        let ty = PropertyType::parse("float4").expect("a registered value type");
+        self.shader.create_input(edit, "bias", ty)
     }
     /// Authors `inputs:bias` at default time, creating the typed input if needed.
     pub fn set_bias(&self, edit: &mut SchemaEdit<'_>, value: [f32; 4]) -> Result<&Self, PortError> {
@@ -3450,9 +3362,8 @@ impl UvTextureEdit {
     /// Creates `inputs:fallback` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_fallback_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::Vec4f([0.0, 0.0, 0.0, 0.0]);
-        self.shader
-            .create_input(edit, "fallback", PropertyType::new("float4", false, zero))
+        let ty = PropertyType::parse("float4").expect("a registered value type");
+        self.shader.create_input(edit, "fallback", ty)
     }
     /// Authors `inputs:fallback` at default time, creating the typed input if needed.
     pub fn set_fallback(
@@ -3480,9 +3391,8 @@ impl UvTextureEdit {
     /// Creates `inputs:file` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_file_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::Asset(Arc::from(""));
-        self.shader
-            .create_input(edit, "file", PropertyType::new("asset", false, zero))
+        let ty = PropertyType::parse("asset").expect("a registered value type");
+        self.shader.create_input(edit, "file", ty)
     }
     /// Authors `inputs:file` at default time, creating the typed input if needed.
     pub fn set_file(&self, edit: &mut SchemaEdit<'_>, value: &str) -> Result<&Self, PortError> {
@@ -3506,9 +3416,8 @@ impl UvTextureEdit {
     /// Creates `inputs:scale` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_scale_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::Vec4f([0.0, 0.0, 0.0, 0.0]);
-        self.shader
-            .create_input(edit, "scale", PropertyType::new("float4", false, zero))
+        let ty = PropertyType::parse("float4").expect("a registered value type");
+        self.shader.create_input(edit, "scale", ty)
     }
     /// Authors `inputs:scale` at default time, creating the typed input if needed.
     pub fn set_scale(
@@ -3539,13 +3448,8 @@ impl UvTextureEdit {
         &self,
         edit: &mut SchemaEdit<'_>,
     ) -> Result<PortEdit, PortError> {
-        let t = edit.tokens();
-        let zero = Value::Token(t.intern(""));
-        self.shader.create_input(
-            edit,
-            "sourceColorSpace",
-            PropertyType::new("token", false, zero),
-        )
+        let ty = PropertyType::parse("token").expect("a registered value type");
+        self.shader.create_input(edit, "sourceColorSpace", ty)
     }
     /// Authors `inputs:sourceColorSpace` at default time, creating the typed input if needed.
     pub fn set_source_color_space(
@@ -3573,9 +3477,8 @@ impl UvTextureEdit {
     /// Creates `inputs:st` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_st_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::Vec2f([0.0, 0.0]);
-        self.shader
-            .create_input(edit, "st", PropertyType::new("float2", false, zero))
+        let ty = PropertyType::parse("float2").expect("a registered value type");
+        self.shader.create_input(edit, "st", ty)
     }
     /// Authors `inputs:st` at default time, creating the typed input if needed.
     pub fn set_st(&self, edit: &mut SchemaEdit<'_>, value: [f32; 2]) -> Result<&Self, PortError> {
@@ -3599,10 +3502,8 @@ impl UvTextureEdit {
     /// Creates `inputs:wrapS` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_wrap_s_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let t = edit.tokens();
-        let zero = Value::Token(t.intern(""));
-        self.shader
-            .create_input(edit, "wrapS", PropertyType::new("token", false, zero))
+        let ty = PropertyType::parse("token").expect("a registered value type");
+        self.shader.create_input(edit, "wrapS", ty)
     }
     /// Authors `inputs:wrapS` at default time, creating the typed input if needed.
     pub fn set_wrap_s(&self, edit: &mut SchemaEdit<'_>, value: &str) -> Result<&Self, PortError> {
@@ -3626,10 +3527,8 @@ impl UvTextureEdit {
     /// Creates `inputs:wrapT` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_wrap_t_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let t = edit.tokens();
-        let zero = Value::Token(t.intern(""));
-        self.shader
-            .create_input(edit, "wrapT", PropertyType::new("token", false, zero))
+        let ty = PropertyType::parse("token").expect("a registered value type");
+        self.shader.create_input(edit, "wrapT", ty)
     }
     /// Authors `inputs:wrapT` at default time, creating the typed input if needed.
     pub fn set_wrap_t(&self, edit: &mut SchemaEdit<'_>, value: &str) -> Result<&Self, PortError> {
@@ -3653,36 +3552,31 @@ impl UvTextureEdit {
     /// Creates `outputs:a` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_a_output(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::Float(0.0);
-        self.shader
-            .create_output(edit, "a", PropertyType::new("float", false, zero))
+        let ty = PropertyType::parse("float").expect("a registered value type");
+        self.shader.create_output(edit, "a", ty)
     }
     /// Creates `outputs:b` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_b_output(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::Float(0.0);
-        self.shader
-            .create_output(edit, "b", PropertyType::new("float", false, zero))
+        let ty = PropertyType::parse("float").expect("a registered value type");
+        self.shader.create_output(edit, "b", ty)
     }
     /// Creates `outputs:g` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_g_output(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::Float(0.0);
-        self.shader
-            .create_output(edit, "g", PropertyType::new("float", false, zero))
+        let ty = PropertyType::parse("float").expect("a registered value type");
+        self.shader.create_output(edit, "g", ty)
     }
     /// Creates `outputs:r` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_r_output(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::Float(0.0);
-        self.shader
-            .create_output(edit, "r", PropertyType::new("float", false, zero))
+        let ty = PropertyType::parse("float").expect("a registered value type");
+        self.shader.create_output(edit, "r", ty)
     }
     /// Creates `outputs:rgb` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_rgb_output(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
-        let zero = Value::Vec3f([0.0, 0.0, 0.0]);
-        self.shader
-            .create_output(edit, "rgb", PropertyType::new("float3", false, zero))
+        let ty = PropertyType::parse("float3").expect("a registered value type");
+        self.shader.create_output(edit, "rgb", ty)
     }
 }

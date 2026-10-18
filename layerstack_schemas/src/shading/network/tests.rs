@@ -10,7 +10,7 @@ use layerstack::{
 };
 
 fn attr(value: Value, ty: &str) -> PropertySpec {
-    PropertySpec::typed_attribute(PropertyType::new(ty, false, value.clone())).with_default(value)
+    PropertySpec::typed_attribute(PropertyType::parse(ty).unwrap()).with_default(value)
 }
 fn port(
     store: &mut InMemoryStore,
@@ -23,16 +23,7 @@ fn port(
 ) {
     let p = store.path(path);
     let n = store.tokens.intern(name);
-    let scalar = match ty {
-        "float" => Value::Float(0.),
-        "float2" => Value::Vec2f([0.; 2]),
-        "float3" | "color3f" => Value::Vec3f([0.; 3]),
-        "float4" => Value::Vec4f([0.; 4]),
-        "asset" => Value::Asset("".into()),
-        "token" => Value::Token(store.tokens.intern("")),
-        _ => Value::String("".into()),
-    };
-    let mut spec = PropertySpec::typed_attribute(PropertyType::new(ty, false, scalar));
+    let mut spec = PropertySpec::typed_attribute(PropertyType::parse(ty).unwrap());
     if let Some(value) = value {
         spec = spec.with_default(value);
     }
@@ -579,7 +570,7 @@ fn arrays_decode_failures_and_depth_limits_remain_explicit() {
     let target = EditTarget::for_layer(LayerId(2));
     tx.create_property(
         target.property(PropertyPath::new(surface, custom)),
-        PropertySpec::typed_attribute(PropertyType::new("float", true, Value::Float(0.)))
+        PropertySpec::typed_attribute(PropertyType::parse("float[]").unwrap())
             .with_default(Value::from(vec![1_f32, 2.])),
     );
     tx.set_targets(
@@ -588,12 +579,11 @@ fn arrays_decode_failures_and_depth_limits_remain_explicit() {
     );
     tx.create_property(
         target.property(PropertyPath::new(surface, broken)),
-        PropertySpec::typed_attribute(PropertyType::new("float", true, Value::Float(0.)))
-            .with_default(Value::TypedArray(layerstack::TypedArray::Deferred(
-                Arc::new(BrokenArray {
-                    error: ArrayReadError::InvalidData("fixture decode failed".into()),
-                }),
-            ))),
+        PropertySpec::typed_attribute(PropertyType::parse("float[]").unwrap()).with_default(
+            Value::TypedArray(layerstack::TypedArray::Deferred(Arc::new(BrokenArray {
+                error: ArrayReadError::InvalidData("fixture decode failed".into()),
+            }))),
+        ),
     );
     tx.set_default(
         target.property(PropertyPath::new(surface, roughness)),
@@ -873,12 +863,8 @@ fn shared_shader_edits_refresh_both_materials_and_unrelated_edits_keep_handles()
     );
     tx.create_property(
         root.property(terminal),
-        PropertySpec::typed_attribute(PropertyType::new(
-            "token",
-            false,
-            Value::Token(store.tokens.intern("")),
-        ))
-        .with_targets(ListOp::explicit(vec![TargetPath::Property(source)])),
+        PropertySpec::typed_attribute(PropertyType::parse("token").unwrap())
+            .with_targets(ListOp::explicit(vec![TargetPath::Property(source)])),
     );
     tx.create_prim(root.prim(notes), layerstack::Specifier::Def, None);
     tx.create_property(
@@ -1013,7 +999,7 @@ fn shared_container_outputs_at_different_depths_survive_both_branch_orderings() 
         let output = store.property_path("/Library/B.outputs:r");
         tx.create_property(
             target.property(output),
-            PropertySpec::typed_attribute(PropertyType::new("float", false, Value::Float(0.))),
+            PropertySpec::typed_attribute(PropertyType::parse("float").unwrap()),
         );
         let a = store.property_path("/Library/G.outputs:a");
         let b_output = store.property_path("/Library/G.outputs:b");
@@ -1022,14 +1008,14 @@ fn shared_container_outputs_at_different_depths_survive_both_branch_orderings() 
         let input = store.property_path("/Library/B.inputs:value");
         tx.create_property(
             target.property(input),
-            PropertySpec::typed_attribute(PropertyType::new("float", false, Value::Float(0.)))
+            PropertySpec::typed_attribute(PropertyType::parse("float").unwrap())
                 .with_targets(ListOp::explicit(vec![TargetPath::Property(b_output)])),
         );
         let roughness = PropertyPath::new(surface, store.tokens.intern("inputs:roughness"));
         let metallic = PropertyPath::new(surface, store.tokens.intern("inputs:metallic"));
         tx.create_property(
             target.property(metallic),
-            PropertySpec::typed_attribute(PropertyType::new("float", false, Value::Float(0.))),
+            PropertySpec::typed_attribute(PropertyType::parse("float").unwrap()),
         );
         for (port, source) in if swap {
             [(roughness, output), (metallic, a)]

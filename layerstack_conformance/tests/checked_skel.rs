@@ -424,11 +424,9 @@ fn normal_buffers_fail_explicitly_in_snapshot_and_retained_deformation() {
     let mut author = Transaction::new();
     author.create_property(
         target.property(property),
-        layerstack::PropertySpec::typed_attribute(layerstack::PropertyType::new(
-            "normal3f",
-            true,
-            Value::Vec3f([0.; 3]),
-        ))
+        layerstack::PropertySpec::typed_attribute(
+            layerstack::PropertyType::parse("normal3f[]").unwrap(),
+        )
         .with_default(Value::from(vec![[0_f32, 1., 0.]; 2])),
     );
     live.apply(&mut store, &author).unwrap();

@@ -57,7 +57,7 @@ fn setup() -> (InMemoryStore, LiveStage, Procedural<Pick>) {
     layer.insert_prim(input, PrimSpec::def());
     layer.set_property(
         system_property,
-        PropertySpec::typed_attribute(PropertyType::new("token", false, Value::Token(system)))
+        PropertySpec::typed_attribute(PropertyType::parse("token").unwrap())
             .with_default(Value::Token(system)),
     );
     layer.set_property(
@@ -67,7 +67,7 @@ fn setup() -> (InMemoryStore, LiveStage, Procedural<Pick>) {
     for (path, value) in [(a, 1), (b, 2)] {
         layer.set_property(
             path,
-            PropertySpec::typed_attribute(PropertyType::new("int", false, Value::Int(0)))
+            PropertySpec::typed_attribute(PropertyType::parse("int").unwrap())
                 .with_default(Value::Int(value)),
         );
     }
@@ -136,7 +136,7 @@ fn unchanged_queries_skip_resolution_and_detached_work_tracks_source_and_epoch()
     let a = store.property_path("/Inputs.a");
     store.layers.get_mut(&ROOT).unwrap().set_property(
         a,
-        PropertySpec::typed_attribute(PropertyType::new("int", false, Value::Int(0)))
+        PropertySpec::typed_attribute(PropertyType::parse("int").unwrap())
             .with_default(Value::Int(9)),
     );
     let published = store.property_path("/Published.value");
@@ -148,7 +148,7 @@ fn unchanged_queries_skip_resolution_and_detached_work_tracks_source_and_epoch()
     );
     transaction.create_property(
         EditTarget::for_layer(ROOT).property(published),
-        PropertySpec::typed_attribute(PropertyType::new("int", false, Value::Int(0)))
+        PropertySpec::typed_attribute(PropertyType::parse("int").unwrap())
             .with_default(Value::Int(1)),
     );
     assert!(matches!(
@@ -208,7 +208,7 @@ fn composed_reads_track_absence_and_replace_dynamic_dependencies() {
     let mut edit = Transaction::new();
     edit.create_property(
         EditTarget::for_layer(ROOT).property(bias),
-        PropertySpec::typed_attribute(PropertyType::new("int", false, Value::Int(0)))
+        PropertySpec::typed_attribute(PropertyType::parse("int").unwrap())
             .with_default(Value::Int(3)),
     );
     live.apply(&mut store, &edit).unwrap();
@@ -304,7 +304,7 @@ fn missing_recipes_systems_and_wrong_kinds_never_return_stale_outputs() {
     wrong.remove_spec(EditTarget::for_layer(ROOT).property(source));
     wrong.create_property(
         EditTarget::for_layer(ROOT).property(source),
-        PropertySpec::typed_attribute(PropertyType::new("int", false, Value::Int(0)))
+        PropertySpec::typed_attribute(PropertyType::parse("int").unwrap())
             .with_default(Value::Int(1)),
     );
     live.apply(&mut store, &wrong).unwrap();

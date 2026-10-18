@@ -489,13 +489,7 @@ pub(crate) fn schema_of(
             .cloned(),
         name: tokens.resolve(p.name).to_string(),
         kind: p.kind,
-        value_type: p.type_name.as_ref().map(|t| {
-            (
-                t.type_name.to_string(),
-                t.is_array,
-                t.default_scalar.clone(),
-            )
-        }),
+        value_type: p.type_name.as_ref().map(value_type_of),
         variability: p.variability,
         fallback: p.fallback.clone(),
         metadata: p.metadata.clone(),
@@ -759,4 +753,18 @@ impl AssetResolver for NoAssets {
     fn resolved_path(&self, _: LayerId) -> Option<&str> {
         None
     }
+}
+
+/// A declared type as the model keeps it: its element type's name, whether
+/// it is an array, and its default scalar.
+pub(crate) fn value_type_of(t: &layerstack::PropertyType) -> (String, bool, Value) {
+    let name = t.type_name();
+    let element = t
+        .value_type()
+        .map_or_else(|| name.strip_suffix("[]").unwrap_or(name), |ty| ty.name());
+    (
+        element.to_string(),
+        t.is_array(),
+        t.default_scalar().clone(),
+    )
 }

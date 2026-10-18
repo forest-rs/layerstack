@@ -1614,20 +1614,16 @@ mod cache_tests {
                     .with_type_name(xform)
                     .with_property(
                         order,
-                        PropertySpec::typed_attribute(layerstack::PropertyType::new(
-                            "token",
-                            true,
-                            Value::Token(translate),
-                        ))
+                        PropertySpec::typed_attribute(
+                            layerstack::PropertyType::parse("token[]").unwrap(),
+                        )
                         .with_default(Value::Array(ops)),
                     )
                     .with_property(
                         translate,
-                        PropertySpec::typed_attribute(layerstack::PropertyType::new(
-                            "double3",
-                            false,
-                            Value::Vec3d([0.0; 3]),
-                        ))
+                        PropertySpec::typed_attribute(
+                            layerstack::PropertyType::parse("double3").unwrap(),
+                        )
                         .with_default(Value::Vec3d([
                             i as f64 + 1.0,
                             0.0,

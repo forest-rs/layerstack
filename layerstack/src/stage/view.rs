@@ -357,7 +357,7 @@ mod tests {
     };
 
     fn double(value: f64) -> PropertySpec {
-        PropertySpec::typed_attribute(PropertyType::new("double", false, Value::Double(0.0)))
+        PropertySpec::typed_attribute(PropertyType::parse("double").unwrap())
             .with_default(Value::Double(value))
     }
 
@@ -378,8 +378,8 @@ mod tests {
             store.tokens.intern("kind:tag"),
             store.tokens.intern("x"),
         );
-        let string = PropertyType::new("string", false, Value::string(""));
-        let token = PropertyType::new("token", false, Value::Token(x));
+        let string = PropertyType::parse("string").unwrap();
+        let token = PropertyType::parse("token").unwrap();
         let mut layer = Layer::new(LayerId(1));
         layer.set_default_prim(Some(store.tokens.intern("World")));
         layer.insert_prim(
@@ -495,11 +495,7 @@ mod tests {
         let item = store.path("/Item");
         let (price, note) = (store.tokens.intern("price"), store.tokens.intern("note"));
         let typed = |value: Option<f64>, samples: Vec<(f64, f64)>| {
-            let mut spec = PropertySpec::typed_attribute(PropertyType::new(
-                "double",
-                false,
-                Value::Double(0.0),
-            ));
+            let mut spec = PropertySpec::typed_attribute(PropertyType::parse("double").unwrap());
             spec.default = value.map(Value::Double);
             if !samples.is_empty() {
                 spec = spec.with_time_samples(

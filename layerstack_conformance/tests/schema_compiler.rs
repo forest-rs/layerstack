@@ -584,10 +584,10 @@ fn assert_matches_oracle(registry: &SchemaRegistry, tokens: &mut TokenInterner) 
                     continue;
                 }
                 let type_name = property.type_name.as_ref().map(|t| {
-                    if t.is_array && !t.type_name.ends_with("[]") {
-                        format!("{}[]", t.type_name)
+                    if t.is_array() && !t.type_name().ends_with("[]") {
+                        format!("{}[]", t.type_name())
                     } else {
-                        t.type_name.to_string()
+                        t.type_name().to_string()
                     }
                 });
                 check(what("type"), json!(type_name), json!(expected.type_name));

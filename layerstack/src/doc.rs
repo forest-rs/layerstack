@@ -480,8 +480,7 @@ impl Value {
     /// let points = store.tokens.intern("points");
     /// let mut layer = Layer::new(LayerId(1));
     /// layer.insert_prim(prim, PrimSpec::def().with_property(points,
-    ///     PropertySpec::typed_attribute(PropertyType::new("point3f", true,
-    ///         Value::Vec3f([0.0; 3])))
+    ///     PropertySpec::typed_attribute(PropertyType::parse("point3f[]").unwrap())
     ///         .with_default(Value::from(vec![[1.0_f32, 2.0, 3.0]]))));
     /// store.insert_layer(layer);
     /// let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());

@@ -12,7 +12,7 @@ use serde_json::json;
 use std::process::Command;
 
 fn attr(value: i32) -> PropertySpec {
-    PropertySpec::typed_attribute(PropertyType::new("int", false, Value::Int(0)))
+    PropertySpec::typed_attribute(PropertyType::parse("int").unwrap())
         .with_default(Value::Int(value))
 }
 fn fixture() -> InMemoryStore {
@@ -204,8 +204,7 @@ fn session_time_domains_include_authoring_offsets_and_root_default_prim() {
         }
         let root_rate = root_tcps.or(root_fps).unwrap_or(24.0);
         let x = store.tokens.intern("animated");
-        let mut prop =
-            PropertySpec::typed_attribute(PropertyType::new("double", false, Value::Double(0.0)));
+        let mut prop = PropertySpec::typed_attribute(PropertyType::parse("double").unwrap());
         prop.time_samples = Some(vec![(root_rate, Value::Double(2.0))].into());
         let asset = store.path("/Asset");
         store

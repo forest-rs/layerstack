@@ -71,7 +71,7 @@ pub fn render_value(value: &Value, names: Names<'_>) -> String {
             // float3 element kind. Compare that kind and the entire program.
             format!(
                 "ArrayEdit<{}>({:?})",
-                render_value(&edit.value_type().default_scalar, names),
+                render_value(edit.value_type().default_scalar(), names),
                 edit.edit()
             )
         }
@@ -153,10 +153,7 @@ fn render_properties(
             header.push_str(" uniform");
         }
         if let Some(ty) = &spec.type_name {
-            let _ = write!(header, " type={}", ty.type_name);
-            if ty.is_array && !ty.type_name.ends_with("[]") {
-                header.push_str("[]");
-            }
+            let _ = write!(header, " type={}", ty.type_name());
         }
         out.push(header);
         let inner = format!("{indent}    ");

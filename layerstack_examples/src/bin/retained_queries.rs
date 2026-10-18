@@ -44,7 +44,7 @@ fn main() {
     cube.set_size(&mut edit, 2.0);
     let material = Material::define(&mut edit, material);
     let shader = Shader::define(&mut edit, shader);
-    let ty = PropertyType::new("float", false, Value::Float(0.0));
+    let ty = PropertyType::parse("float").expect("a registered value type");
     let roughness = material
         .create_input(&mut edit, "roughness", ty.clone())
         .unwrap();

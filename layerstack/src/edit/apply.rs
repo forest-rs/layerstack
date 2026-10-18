@@ -777,11 +777,13 @@ pub(super) struct Journal<'a> {
     /// `touched` as a set: a bulk edit touches as many prims as it has
     /// steps.
     touched_set: hashbrown::HashSet<(LayerId, PathId)>,
-    /// The child names of prim specs outside variant branches that
-    /// [`add_child`] has looked at, kept current by the `Child` steps run
-    /// since and dropped when a step replaces the spec, so creating many
-    /// children of one prim does not scan its growing list each time.
-    children: HashMap<(LayerId, PathId), hashbrown::HashSet<TokenId>>,
+    /// The prim specs outside variant branches that [`add_child`] has
+    /// looked at: `None` once it scanned the spec's child names, then, from
+    /// the second child added, the names as a set, kept current by the
+    /// `Child` steps run since. A step replacing the spec drops its entry.
+    /// Creating many children of one prim does not scan its growing list
+    /// each time, and creating one does not index the list at all.
+    children: HashMap<(LayerId, PathId), Option<hashbrown::HashSet<TokenId>>>,
 }
 
 impl Journal<'_> {
@@ -799,7 +801,7 @@ impl Journal<'_> {
                 name,
                 index,
             } if sites.is_empty() => {
-                if let Some(names) = self.children.get_mut(&(*layer, *path)) {
+                if let Some(Some(names)) = self.children.get_mut(&(*layer, *path)) {
                     if index.is_some() {
                         names.insert(*name);
                     } else {
@@ -1954,11 +1956,21 @@ pub(super) fn add_child(
     let spec = spec_at(layer(store, id)?, parent).ok_or_else(|| diverged(store, parent))?;
     let children = spec.children();
     let listed = match parent {
-        Loc::Prim { path, sites } if sites.is_empty() => journal
-            .children
-            .entry((id, *path))
-            .or_insert_with(|| children.iter().copied().collect())
-            .contains(&name),
+        Loc::Prim { path, sites } if sites.is_empty() => {
+            match journal.children.get_mut(&(id, *path)) {
+                Some(Some(names)) => names.contains(&name),
+                Some(scanned) => {
+                    let names: hashbrown::HashSet<TokenId> = children.iter().copied().collect();
+                    let listed = names.contains(&name);
+                    *scanned = Some(names);
+                    listed
+                }
+                None => {
+                    journal.children.insert((id, *path), None);
+                    children.contains(&name)
+                }
+            }
+        }
         _ => children.contains(&name),
     };
     if listed {

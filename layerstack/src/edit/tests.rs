@@ -2691,3 +2691,50 @@ fn a_prim_copied_to_another_layer_anchors_its_internal_arcs_there() {
         Some(crate::ResolvedValue::Scalar(Value::Double(1.0)))
     );
 }
+
+/// Creating children of a prim lists each once, after the names the prim
+/// already lists, in the order a transaction creates them, whether it
+/// creates one child of the prim or several; a name the prim already
+/// lists, though no spec backs it, is not listed again. The inverse
+/// restores the list.
+///
+/// OpenUSD: `SdfCreatePrimInLayer` (a created prim spec is added to its
+/// parent's `primChildren`).
+#[test]
+fn created_children_are_listed_once_in_creation_order() {
+    let mut store = InMemoryStore::default();
+    let world = store.path("/World");
+    let [a, b, c, d, e, f] = ["A", "B", "C", "D", "E", "F"].map(|name| store.tokens.intern(name));
+    let mut layer = Layer::new(SCENE);
+    let mut spec = PrimSpec::def();
+    // `D` and `E` are listed without specs.
+    spec.authored_children = vec![a, d, e];
+    layer.insert_prim(world, spec);
+    layer.insert_prim(store.path("/World/A"), PrimSpec::def());
+    store.insert_layer(layer);
+    let listed =
+        |store: &InMemoryStore| store.layers[&SCENE].prims[&world].authored_children.clone();
+    let target = EditTarget::for_layer(SCENE);
+    let create = |store: &mut InMemoryStore, names: &[&str]| {
+        let mut txn = Transaction::new();
+        for name in names {
+            txn.create_prim(target.prim(store.path(name)), Specifier::Def, None);
+        }
+        txn.apply(store).expect("applies")
+    };
+
+    let undo_one = create(&mut store, &["/World/D"]);
+    assert_eq!(listed(&store), [a, d, e]);
+    let undo_two = create(&mut store, &["/World/B"]);
+    assert_eq!(listed(&store), [a, d, e, b]);
+    let undo_many = create(
+        &mut store,
+        &["/World/C", "/World/E", "/World/B/Leaf", "/World/F"],
+    );
+    assert_eq!(listed(&store), [a, d, e, b, c, f]);
+
+    for undo in [undo_many, undo_two, undo_one] {
+        undo.apply(&mut store).expect("undoes");
+    }
+    assert_eq!(listed(&store), [a, d, e]);
+}

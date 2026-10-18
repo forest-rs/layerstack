@@ -804,6 +804,7 @@ dependencies = [
  "fearless_simd",
  "glam",
  "layerstack",
+ "layerstack_conformance",
  "layerstack_io",
  "layerstack_schemas",
  "layerstack_usda",

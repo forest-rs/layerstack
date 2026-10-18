@@ -245,3 +245,32 @@ composition timer. Composition assertions check child and dependency coverage.
 The `usdc_open` target includes `usdc_integer_import`: signed and unsigned
 32/64-bit arrays at small and mesh-buffer sizes. Input files are prepared outside
 measurement, and complete layer import is timed separately from destruction.
+
+The `library_membership` benchmark opens the generated parts library
+(`layerstack_conformance::library_scene`, full shape) and asks which collections
+include each prim. The scene is written once into Cargo's benchmark temporary
+directory and removed afterwards; the schema registry is built outside the
+open timer. `library_forward_query` asks each of the 40 compiled
+`MembershipQuery`s, the cost without the index.
+
+```sh
+cargo bench -p wind_tunnel --bench library_membership -- --warm-up-time 2 --measurement-time 5
+```
+
+Measured on macOS 27.0.1 arm64 with Rust 1.99.0, release profile, 2026-10-18
+(10,133 prims, 40 collections, 801,606 `token[]` cells; 10.1 MB USDA, 3.6 MB USDC):
+
+| Phase | USDA | USDC |
+|---|---:|---:|
+| Open and compose | 125 ms | 109 ms |
+| `MembershipIndex::build` | 611 µs | 608 µs |
+| Reverse query, per prim (all 10,133) | 235 ns | 233 ns |
+| Reverse query, per leaf (4,000) | 272 ns | 275 ns |
+| Forward query (40 collections), per prim | 1.00 µs | 1.04 µs |
+| `apply_changes`, one appended include | 6.4 µs | 6.4 µs |
+
+The two expression-decided collections are matched on every query and take
+about 170 ns of the 235 ns; the 38 rule-map collections alone cost about 61 ns
+per prim. USDC retains no arrays here: retained loading covers numeric arrays,
+and `token[]` values decode during import. Without the `tags` arrays, both
+forms open in about 55 ms.

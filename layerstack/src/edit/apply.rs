@@ -1652,7 +1652,7 @@ fn set_value(
     let id = at.layer();
     let defined = stage
         .zip(at.stage_path())
-        .and_then(|(stage, (prim, _))| stage.property_definition(prim, name, &*store));
+        .and_then(|(stage, (prim, _))| stage.property_definition(prim, name));
     if defined
         .as_ref()
         .is_some_and(|d| d.kind != PropertyKind::Attribute)
@@ -1865,7 +1865,7 @@ fn write_targets(
             let prim = at.stage_path().map(|(prim, _)| prim);
             let defined = stage
                 .zip(prim)
-                .and_then(|(stage, prim)| stage.property_definition(prim, name, &*store));
+                .and_then(|(stage, prim)| stage.property_definition(prim, name));
             let declared = stage
                 .zip(prim)
                 .and_then(|(stage, prim)| stage.resolve_property_declaration(prim, name));

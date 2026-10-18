@@ -599,7 +599,7 @@ impl Flattener<'_, '_> {
         let store: &dyn LayerStore = &*self.store;
         let mut spec = PrimSpec {
             specifier: self.stage.resolve_specifier(source, store),
-            type_name: self.stage.resolve_type_name(source, store),
+            type_name: self.stage.resolve_type_name(source),
             ..PrimSpec::default()
         };
         self.copy_prim_metadata(source, &mut spec, remap);
@@ -998,7 +998,7 @@ impl Flattener<'_, '_> {
     /// Spec: AOUSD Core §13.3.2.3 (the prim definition).
     fn schema_variability(&self, prim: PathId, name: TokenId) -> Option<Variability> {
         self.stage
-            .property_definition(prim, name, &*self.store)
+            .property_definition(prim, name)
             .map(|definition| definition.variability)
     }
 

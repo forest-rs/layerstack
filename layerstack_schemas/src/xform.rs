@@ -790,27 +790,19 @@ impl PreparedTransform {
             |i| {
                 let token = self.ops[i].attribute;
                 let value = match time {
-                    Time::Default => match scene
-                        .stage()
-                        .resolve_value_with_schema(path, token, scene.store())?
-                        .value
-                    {
-                        ResolvedValue::Scalar(value) => value,
-                        _ => return None,
-                    },
+                    Time::Default => {
+                        match scene.stage().resolve_value_with_schema(path, token)?.value {
+                            ResolvedValue::Scalar(value) => value,
+                            _ => return None,
+                        }
+                    }
                     Time::At {
                         code,
                         interpolation,
                     } => {
                         scene
                             .stage()
-                            .resolve_value_at_time_with_schema(
-                                path,
-                                token,
-                                code,
-                                interpolation,
-                                scene.store(),
-                            )?
+                            .resolve_value_at_time_with_schema(path, token, code, interpolation)?
                             .value
                     }
                 };

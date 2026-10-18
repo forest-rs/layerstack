@@ -182,9 +182,7 @@ fn collection_expressions_match_openusd() {
                     "collection:{}:membershipExpression",
                     collection.instance()
                 ))
-                .and_then(|property| {
-                    stage.resolve_value_with_schema(*prim, property.property(), store)
-                })
+                .and_then(|property| stage.resolve_value_with_schema(*prim, property.property()))
                 .and_then(|resolved| match resolved.value {
                     layerstack::ResolvedValue::Scalar(Value::PathExpression(text)) => {
                         PathExpression::parse(&text).ok().map(|e| e.text())

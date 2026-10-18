@@ -117,7 +117,7 @@ impl<'a> Prim<'a> {
     #[doc(alias = "UsdPrim::GetTypeName")]
     #[doc(alias = "GetTypeName")]
     pub fn type_name(self) -> Option<TokenId> {
-        self.stage.resolve_type_name(self.path, self.store)
+        self.stage.resolve_type_name(self.path)
     }
     /// Effective schema type, including `fallbackPrimTypes` mapping.
     pub fn schema_type_name(self) -> Option<TokenId> {

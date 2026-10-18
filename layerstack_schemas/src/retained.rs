@@ -829,7 +829,7 @@ fn provider_value(
     let resolved = match time {
         Time::Default => scene
             .stage()
-            .resolve_value_with_schema(p.prim_path(), p.property(), scene.store())
+            .resolve_value_with_schema(p.prim_path(), p.property())
             .and_then(|v| match v.value {
                 ResolvedValue::Scalar(value) => Some((value, v.provenance)),
                 _ => None,
@@ -839,13 +839,7 @@ fn provider_value(
             interpolation,
         } => scene
             .stage()
-            .resolve_value_at_time_with_schema(
-                p.prim_path(),
-                p.property(),
-                code,
-                interpolation,
-                scene.store(),
-            )
+            .resolve_value_at_time_with_schema(p.prim_path(), p.property(), code, interpolation)
             .map(|v| (v.value, v.provenance)),
     };
     resolved.map_or((None, None), |(value, provenance)| {

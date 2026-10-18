@@ -468,7 +468,7 @@ impl Verifier<'_> {
         );
         let type_name = |stage: &Stage| {
             stage
-                .resolve_type_name(prim, store)
+                .resolve_type_name(prim)
                 .map_or_else(|| "none".into(), |t| String::from(self.tokens.resolve(t)))
         };
         let (want, got) = (type_name(source), type_name(flattened));

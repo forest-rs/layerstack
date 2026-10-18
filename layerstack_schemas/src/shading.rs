@@ -218,7 +218,7 @@ impl Scene<'_> {
             .map(|d| d.kind)
             .or_else(|| {
                 self.stage()
-                    .property_definition(path.prim_path(), path.property(), self.store())
+                    .property_definition(path.prim_path(), path.property())
                     .map(|d| d.kind)
             })
             == Some(PropertyKind::Attribute)

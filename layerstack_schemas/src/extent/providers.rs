@@ -128,7 +128,7 @@ impl ExtentProviders {
         path: PathId,
     ) -> Option<(TokenId, Arc<dyn ExtentProvider>)> {
         let schemas = scene.stage().schemas()?;
-        let mut schema = scene.stage().resolve_type_name(path, scene.store())?;
+        let mut schema = scene.stage().resolve_type_name(path)?;
         let mut visited = Vec::new();
         loop {
             if visited.contains(&schema) {

@@ -46,14 +46,14 @@ fn fallback_types_select_concrete_schemas_without_changing_authored_type() {
             ..Default::default()
         },
     );
-    assert_eq!(stage.resolve_type_name(prim, &store), Some(future));
+    assert_eq!(stage.resolve_type_name(prim), Some(future));
     assert!(stage.prim_definition_ref(prim).unwrap().is_a(mesh));
     assert!(stage.prim_definition_ref(known).unwrap().is_a(mesh));
     assert!(!stage.prim_definition_ref(known).unwrap().is_a(sphere));
     let subdivision = store.tokens.lookup("subdivisionScheme").unwrap();
     assert_eq!(
         stage
-            .resolve_field_with_schema(prim, subdivision, &store)
+            .resolve_field_with_schema(prim, subdivision)
             .unwrap()
             .value,
         Value::Token(store.tokens.lookup("catmullClark").unwrap())

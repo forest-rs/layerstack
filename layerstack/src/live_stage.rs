@@ -4838,12 +4838,12 @@ mod tests {
         assert_eq!(stage.property_names(prim, &store), vec![name]);
         assert_eq!(
             stage
-                .resolve_field_with_schema(prim, name, &store)
+                .resolve_field_with_schema(prim, name)
                 .map(|resolved| resolved.value),
             Some(Value::Int(3))
         );
         let left_upper = store.tokens.lookup("left:upper").expect("instance name");
-        let definition = stage.prim_definition(prim, &store).expect("on the stage");
+        let definition = stage.prim_definition(prim).expect("on the stage");
         assert!(definition.has_api_instance(slot, left_upper));
     }
 
@@ -4892,9 +4892,9 @@ mod tests {
             |store: &InMemoryStore| store.layers[&LayerId(1)].prims[&prim].properties.clone();
         let absent = properties(&store);
         let at = |name| EditTarget::for_layer(LayerId(1)).property(PropertyPath::new(prim, name));
-        let resolved = |live: &LiveStage, store: &InMemoryStore| {
+        let resolved = |live: &LiveStage| {
             live.stage()
-                .resolve_field_with_schema(prim, width, store)
+                .resolve_field_with_schema(prim, width)
                 .map(|r| r.value)
         };
 
@@ -4939,14 +4939,14 @@ mod tests {
         );
         assert_eq!(spec.variability, Variability::Uniform);
         assert_eq!(spec.default, Some(Value::Float(2.0)));
-        assert_eq!(resolved(&live, &store), Some(Value::Float(2.0)));
+        assert_eq!(resolved(&live), Some(Value::Float(2.0)));
 
         let undone = live.apply(&mut store, &applied.inverse).expect("undo");
         assert_eq!(properties(&store), absent, "no spec is left behind");
-        assert_eq!(resolved(&live, &store), Some(Value::Float(1.0)));
+        assert_eq!(resolved(&live), Some(Value::Float(1.0)));
 
         live.apply(&mut store, &undone.inverse).expect("redo");
         assert_eq!(properties(&store), created);
-        assert_eq!(resolved(&live, &store), Some(Value::Float(2.0)));
+        assert_eq!(resolved(&live), Some(Value::Float(2.0)));
     }
 }

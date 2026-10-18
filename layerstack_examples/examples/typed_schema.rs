@@ -200,7 +200,7 @@ fn main() {
         .expect("interned by the edits");
     let resolved = live
         .stage()
-        .resolve_value_with_schema(arm, name, &store)
+        .resolve_value_with_schema(arm, name)
         .expect("authored");
     let provenance = resolved.provenance.expect("composed with provenance");
     println!(

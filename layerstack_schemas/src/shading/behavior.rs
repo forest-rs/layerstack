@@ -140,7 +140,7 @@ impl Scene<'_> {
             .map(|d| d.kind)
             .or_else(|| {
                 self.stage()
-                    .property_definition(source.prim_path(), source.property(), self.store())
+                    .property_definition(source.prim_path(), source.property())
                     .map(|d| d.kind)
             });
         if source_kind != Some(PropertyKind::Attribute) {

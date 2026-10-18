@@ -776,15 +776,7 @@ impl LiveStage {
         paths: &[PathId],
         touched: &[(LayerId, PathId)],
     ) -> Option<(Vec<PathId>, Changes)> {
-        let source_empty = store.layer(self.root)?.prims.is_empty();
-        // Ordinary population of an empty layer has no pseudo-root either.
-        // Include its old index in the removal batch instead of retaining a
-        // synthetic root from the supporting ancestor seed.
-        let roots = if source_empty {
-            alloc::vec![store.paths_mut().intern(crate::Path::root())]
-        } else {
-            minimal_roots(store, paths)
-        };
+        let roots = minimal_roots(store, paths);
         let mut old = HashSet::new();
         for root in &roots {
             if self.stage.has_prim(*root) {
@@ -840,9 +832,6 @@ impl LiveStage {
                     .is_some_and(|l| l.prims.contains_key(path))
         });
         seed.insert(pseudo_root);
-        if source_empty {
-            seed.clear();
-        }
         let options = StageOptions {
             with_dependencies: true,
             ..self.options.clone()

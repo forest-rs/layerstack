@@ -546,11 +546,11 @@ fn build_paths(
                     "/"
                 };
                 budget.charge_text(parent.len() + sep.len() + element.len())?;
-                let path = if parent == "/" {
-                    alloc::format!("{sep}{element}")
-                } else {
-                    alloc::format!("{parent}{sep}{element}")
-                };
+                let prefix = if parent == "/" { "" } else { parent.as_str() };
+                let mut path = String::with_capacity(prefix.len() + sep.len() + element.len());
+                path.push_str(prefix);
+                path.push_str(sep);
+                path.push_str(element);
 
                 paths[target] = path;
             }

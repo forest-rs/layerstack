@@ -112,10 +112,19 @@ pub enum Rejection {
     /// [`PrimField`](super::PrimField) have the `set_`, `clear_`, `add_` and
     /// `remove_` edits of [`Transaction`](super::Transaction).
     ReservedField(TokenId),
-    /// The edit addresses the pseudo-root, which holds no prim fields.
+    /// The edit addresses the pseudo-root (`/`) or a property path on it.
+    /// The pseudo-root spec holds a layer's metadata and root prims, and
+    /// no prim fields (other than the root prim order) or properties:
+    /// author layer metadata with
+    /// [`Transaction::set_layer_metadata`](super::Transaction::set_layer_metadata).
     ///
-    /// OpenUSD: `UsdStage::_SetMetadata` rejects metadata on the
-    /// pseudo-root.
+    /// OpenUSD rejects these edits too (`UsdStage::_SetMetadata`,
+    /// `_CanEditInfoOnSpec`, `SdfPrimSpec::_ValidateEdit`,
+    /// `SdfAttributeSpec::New`), except that `UsdPrim::SetMetadata` and
+    /// `ClearMetadata` on the pseudo-root write a field registered on
+    /// layers as layer metadata.
+    ///
+    /// Spec: AOUSD Core §5.1 (the pseudo-root), §7.6.1 (layer metadata).
     PseudoRoot,
     /// An arc targets the pseudo-root; arcs target prims.
     ///
@@ -230,7 +239,9 @@ impl fmt::Display for Rejection {
                 write!(f, "the value is not a `{declared}`")
             }
             Self::ReservedField(_) => f.write_str("the field has a dedicated member"),
-            Self::PseudoRoot => f.write_str("the pseudo-root holds no prim fields"),
+            Self::PseudoRoot => f.write_str(
+                "the pseudo-root holds no prim fields or properties; layer metadata has its own edits",
+            ),
             Self::PseudoRootArc => f.write_str("an arc cannot target the pseudo-root"),
             Self::NotOnVariant(field) => write!(f, "a variant spec holds no {field:?} field"),
             Self::NoSuchSublayer(index) => write!(f, "no sublayer at index {index}"),

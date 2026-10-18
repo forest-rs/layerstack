@@ -90,9 +90,6 @@ fn copy_prim(
 ) -> Result<(), Rejection> {
     let paths = store.paths();
     let (source, destination) = (paths.resolve(from).clone(), paths.resolve(to).clone());
-    if source.depth() == 0 || destination.depth() == 0 {
-        return Err(Rejection::PseudoRoot);
-    }
     if from_layer == to_layer
         && (source.is_prefix_of(&destination) || destination.is_prefix_of(&source))
     {

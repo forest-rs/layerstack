@@ -1,0 +1,27 @@
+#usda 1.0
+(
+    defaultPrim = "Garden"
+    doc = "A garden of rocks and ferns"
+)
+
+reorder rootPrims = ["Rock", "Garden"]
+
+def Xform "Garden" (
+    variants = {
+        string season = "summer"
+    }
+    prepend variantSets = "season"
+)
+{
+    double height = 1
+    variantSet "season" = {
+        "autumn" {
+        }
+        "summer" {
+        }
+    }
+}
+
+def Xform "Rock"
+{
+}

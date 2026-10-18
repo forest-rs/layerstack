@@ -349,8 +349,13 @@ impl<B: Storage> StageDocument<B> {
         target: &str,
         package: &PreparedPackage,
     ) -> Result<(), IoError> {
-        let identifier = self.storage.identify(target, None)?;
-        self.storage.write(&identifier, &package.write_usdz()?)
+        let identifier = self
+            .storage
+            .identify(target, None)
+            .map_err(|e| e.at(target))?;
+        self.storage
+            .write(&identifier, &package.write_usdz()?)
+            .map_err(|e| e.at(&identifier))
     }
 
     fn external_package_dependency(
@@ -393,7 +398,10 @@ impl<B: Storage> StageDocument<B> {
                 catalog.package_identifier(package)
             })
         });
-        let outer = self.storage.identify(path.outer(), anchor)?;
+        let outer = self
+            .storage
+            .identify(path.outer(), anchor)
+            .map_err(|e| e.at(path.outer()))?;
         Ok(path.with_outer(&outer))
     }
 }

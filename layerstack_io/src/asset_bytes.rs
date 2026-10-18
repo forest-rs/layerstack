@@ -224,7 +224,9 @@ pub(super) fn read<B: Storage>(
     }
     let path = PackagePath::parse(asset, 32)
         .map_err(|reason| IoError::new(IoErrorKind::Rejected, reason))?;
-    let identifier = storage.identify(path.outer(), outer_anchor.as_deref())?;
+    let identifier = storage
+        .identify(path.outer(), outer_anchor.as_deref())
+        .map_err(|e| e.at(path.outer()))?;
     if let Some((first, rest)) = path.members().split_first() {
         let member = PackagePath::join(first, rest);
         let resident = catalog
@@ -242,7 +244,9 @@ pub(super) fn read<B: Storage>(
                     Some(limits) => {
                         storage.read_encoded_bounded(&identifier, limits.package_bytes)?
                     }
-                    None => storage.read_encoded(&identifier)?,
+                    None => storage
+                        .read_encoded(&identifier)
+                        .map_err(|e| e.at(&identifier))?,
                 };
                 let archive = Arc::new(
                     PackageSnapshot::new(bytes, package_limits)
@@ -257,7 +261,9 @@ pub(super) fn read<B: Storage>(
     }
     let bytes = match limits {
         Some(limits) => storage.read_encoded_bounded(&identifier, limits.bytes)?,
-        None => storage.read_encoded(&identifier)?,
+        None => storage
+            .read_encoded(&identifier)
+            .map_err(|e| e.at(&identifier))?,
     };
     Ok(AssetBytes {
         bytes,

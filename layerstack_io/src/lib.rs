@@ -120,13 +120,22 @@ pub enum IoErrorKind {
     /// The document has exhausted its layer identity space.
     IdentityExhausted,
 }
-/// A storage or format failure. Operations retain the layer/identifier context.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// A storage or format failure, naming the source it is about.
+#[derive(Clone, Debug)]
 pub struct IoError {
     /// Machine-readable category.
     pub kind: IoErrorKind,
     /// Human-readable evidence from storage or the format implementation.
     pub message: String,
+    /// The source the failed operation addressed: the identifier it read,
+    /// wrote or rejected, or the asset path as authored when resolving it
+    /// failed. `None` only for a failure no source is involved in, or one a
+    /// host [`Storage`] returned directly to its own caller.
+    pub identifier: Option<String>,
+    /// For [`IoErrorKind::Rejected`] by a strict import, the error
+    /// diagnostics of the source it rejected, with their spans; empty
+    /// otherwise.
+    pub diagnostics: Vec<MemberDiagnostic>,
     /// Original retained-array failure when `kind` is [`IoErrorKind::Decode`].
     pub array_read_error: Option<layerstack::ArrayReadError>,
 }
@@ -136,12 +145,26 @@ impl IoError {
         Self {
             kind,
             message: message.into(),
+            identifier: None,
+            diagnostics: Vec::new(),
             array_read_error: None,
         }
+    }
+    /// This error, naming `identifier` as its source unless it names one
+    /// already.
+    #[must_use]
+    pub fn at(mut self, identifier: &str) -> Self {
+        if self.identifier.is_none() {
+            self.identifier = Some(String::from(identifier));
+        }
+        self
     }
 }
 impl core::fmt::Display for IoError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        if let Some(identifier) = &self.identifier {
+            write!(f, "{identifier}: ")?;
+        }
         f.write_str(&self.message)
     }
 }
@@ -460,7 +483,7 @@ impl<B: Storage> StageDocument<B> {
         target: &str,
         options: StageOptions,
     ) -> Result<Self, IoError> {
-        let identifier = storage.identify(target, None)?;
+        let identifier = storage.identify(target, None).map_err(|e| e.at(target))?;
         let format = identifier_format(&identifier, &FileFormats::default())?;
         if format == Format::Usdz {
             return Err(IoError::new(
@@ -874,8 +897,11 @@ impl<B: Storage> StageDocument<B> {
                     "a layer read with format arguments is built from them; export a copy instead",
                 ))
             } else {
-                self.serialize(id, source.format)
-                    .and_then(|bytes| self.storage.write(&source.identifier, &bytes))
+                self.serialize(id, source.format).and_then(|bytes| {
+                    self.storage
+                        .write(&source.identifier, &bytes)
+                        .map_err(|e| e.at(&source.identifier))
+                })
             };
             match result {
                 Ok(()) => {
@@ -892,10 +918,15 @@ impl<B: Storage> StageDocument<B> {
     /// Exports an authored layer as USDA (`.usda`) or USDC (`.usd`/`.usdc`).
     /// Writes a copy: does not rebind arcs, rename the source or mark it saved.
     pub fn export_layer(&mut self, layer: LayerId, target: &str) -> Result<(), IoError> {
-        let identifier = self.storage.identify(target, None)?;
+        let identifier = self
+            .storage
+            .identify(target, None)
+            .map_err(|e| e.at(target))?;
         let format = identifier_format(&identifier, &self.formats)?;
         let bytes = self.serialize(layer, format)?;
-        self.storage.write(&identifier, &bytes)
+        self.storage
+            .write(&identifier, &bytes)
+            .map_err(|e| e.at(&identifier))
     }
     /// Writes an explicit, already localized package plan. Asset selection and
     /// package member naming belong to the caller and existing localization API.
@@ -904,11 +935,16 @@ impl<B: Storage> StageDocument<B> {
         target: &str,
         plan: &layerstack_usdz::localize::LocalizationPlan,
     ) -> Result<(), IoError> {
-        let identifier = self.storage.identify(target, None)?;
+        let identifier = self
+            .storage
+            .identify(target, None)
+            .map_err(|e| e.at(target))?;
         let bytes = plan
             .write_usdz(&self.store.tokens, &self.store.paths)
             .map_err(localization_error)?;
-        self.storage.write(&identifier, &bytes)
+        self.storage
+            .write(&identifier, &bytes)
+            .map_err(|e| e.at(&identifier))
     }
     /// Reloads resident used sources, excluding anonymous/session layers.
     /// Equivalent to preparing and immediately committing [`Self::prepare_reload`].
@@ -1289,11 +1325,9 @@ impl<'a, B: Storage> Reader<'a, B> {
                 .iter()
                 .any(|d| d.diagnostic.is_error())
         {
-            return Err(IoError::new(
-                IoErrorKind::Rejected,
-                alloc::format!(
-                    "{identifier}: strict import rejected malformed or unrepresented content"
-                ),
+            return Err(strict_rejection(
+                identifier,
+                &self.diagnostics[first_diagnostic..],
             ));
         }
         Ok(layer)
@@ -1439,7 +1473,11 @@ impl<B: Storage> Reader<'_, B> {
         let storage = &*self.storage;
         self.identities
             .entry((anchor, String::from(asset)))
-            .or_insert_with_key(|(anchor, asset)| storage.identify(asset, anchor.as_deref()))
+            .or_insert_with_key(|(anchor, asset)| {
+                storage
+                    .identify(asset, anchor.as_deref())
+                    .map_err(|e| e.at(asset))
+            })
             .clone()
     }
     fn load(
@@ -1599,7 +1637,9 @@ impl<B: Storage> Reader<'_, B> {
             .for_identifier(&identifier)
             .is_none_or(FileFormat::reads_source)
         {
-            self.storage.read_encoded(&outer)?
+            self.storage
+                .read_encoded(&outer)
+                .map_err(|e| e.at(&outer))?
         } else {
             EncodedBytes::from(Vec::new())
         };
@@ -1673,6 +1713,21 @@ impl<B: Storage> AssetResolver for Reader<'_, B> {
         Some(id)
     }
 }
+/// The error a strict import returns for `identifier`, whose reading
+/// reported `diagnostics`: it keeps those that are errors.
+fn strict_rejection(identifier: &str, diagnostics: &[MemberDiagnostic]) -> IoError {
+    let mut error = IoError::new(
+        IoErrorKind::Rejected,
+        "strict import rejected malformed or unrepresented content",
+    )
+    .at(identifier);
+    error.diagnostics = diagnostics
+        .iter()
+        .filter(|d| d.diagnostic.is_error())
+        .cloned()
+        .collect();
+    error
+}
 fn localization_error(error: layerstack_usdz::localize::LocalizationError) -> IoError {
     match error {
         layerstack_usdz::localize::LocalizationError::Usda(error)
@@ -1686,9 +1741,8 @@ fn save_error(error: layerstack_usda::save::SaveError) -> IoError {
     let message = error.to_string();
     if let layerstack_usda::save::SaveError::ArrayRead { error, .. } = error {
         IoError {
-            kind: IoErrorKind::Decode,
-            message,
             array_read_error: Some(error),
+            ..IoError::new(IoErrorKind::Decode, message)
         }
     } else {
         IoError::new(IoErrorKind::Unsupported, message)

@@ -319,12 +319,12 @@ fn format_failures_reject_the_layer_with_its_identifier() {
     .unwrap_err();
     assert_eq!(error.kind, IoErrorKind::Rejected);
     assert_eq!(
-        error.message,
+        error.to_string(),
         "field.grid:SDF_FORMAT_ARGS:rows=many: `rows` must be a count"
     );
     let error =
         open("#usda 1.0\ndef \"A\" (prepend references = @gen.noise@</Noise>) {}\n").unwrap_err();
-    assert_eq!(error.message, "gen.noise: noise needs a `seed`");
+    assert_eq!(error.to_string(), "gen.noise: noise needs a `seed`");
     let error = open(
         "#usda 1.0\ndef \"A\" (prepend references = @gen.noise:SDF_FORMAT_ARGS:seed@</Noise>) {}\n",
     )

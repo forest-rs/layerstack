@@ -121,7 +121,9 @@ fn render_error(loaded: &LoadedStage, error: &CompositionError) -> Error {
             }),
             asset: None,
         },
-        CompositionError::UnresolvedAsset(UnresolvedAsset { prim, arc, asset }) => Error {
+        CompositionError::UnresolvedAsset(UnresolvedAsset {
+            prim, arc, asset, ..
+        }) => Error {
             prim: display(loaded, *prim),
             arc: arc_name(arc),
             layer: None,

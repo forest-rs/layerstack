@@ -356,6 +356,9 @@ pub(crate) enum DecodedField<'a> {
     /// A `token[]` value as token-table indices ([`decode_text_indices`]),
     /// which assembly maps to token ids without copying their text.
     TokenArray(Vec<u32>),
+    /// A value left encoded, for a retained read to decode on demand.
+    #[cfg(feature = "std")]
+    Retained(RawValueRep),
 }
 
 impl DecodedField<'_> {
@@ -363,6 +366,8 @@ impl DecodedField<'_> {
         match self {
             Self::Value(value) => Some(value),
             Self::MathArray(_) | Self::FloatArray(_) | Self::TokenArray(_) => None,
+            #[cfg(feature = "std")]
+            Self::Retained(_) => None,
         }
     }
 }
@@ -413,6 +418,17 @@ pub(crate) fn decode_text_indices(
         budget.charge_elements(text_units)?;
         Ok(indices)
     })
+}
+
+/// The element count an array value's payload declares, read without
+/// decoding the elements; `None` when the payload cannot be read.
+#[cfg(feature = "std")]
+pub(crate) fn array_len(rep: &RawValueRep, data: &[u8]) -> Option<u64> {
+    let offset = payload_offset_usize(rep, data).ok()?;
+    if offset == 0 {
+        return Some(0);
+    }
+    read_u64_at(data, offset).ok()
 }
 
 /// Decodes one field with the same validation and budget as the public decoder,
@@ -609,6 +625,8 @@ fn decode_nested(
             DecodedField::TokenArray(_) => {
                 unreachable!("token indices are decoded only for top-level fields")
             }
+            #[cfg(feature = "std")]
+            DecodedField::Retained(_) => unreachable!("only top-level fields are retained"),
         });
     }
     within_value_budget(budget, |budget| {

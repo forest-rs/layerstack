@@ -16,7 +16,7 @@ layerstack_usda = "0.1" # Shared authored-document API used below.
 
 Requires Rust **1.89** or later. Uses `no_std` with `alloc`; an allocator is
 required. Default features are empty. The `std` feature enables thread-safe
-retained numeric arrays. Callers read and write files themselves; eager APIs
+retained values. Callers read and write files themselves; eager APIs
 consume byte slices, and retained import takes immutable `Arc<[u8]>` input.
 
 ## Write a document
@@ -75,18 +75,22 @@ responsibility.
 
 With the existing `std` feature, `read_usdc_lazy` takes immutable `Arc<[u8]>`
 input and assembles the same `Layer`, retaining numeric defaults and time
-samples as `TypedArray::Deferred`. Composition and raw value inspection can
-keep payloads encoded. `TypedArray::try_materialize` borrows a cached native
-buffer or cached error; `Stage::try_resolve_property_path` and its time-query
-counterpart materialize the selected array and report failures explicitly.
-Ordinary slice accessors work too, returning `None` on decode failure.
+samples as `TypedArray::Deferred`, and `token[]` and `string[]` attribute
+defaults of at least `MIN_RETAINED_TEXT_ARRAY` elements as `Value::Deferred`.
+Everything composition reads stays eager. Composition and raw value inspection
+can keep payloads encoded. `TypedArray::try_materialize` and
+`Value::try_materialize` borrow a cached decoded value or cached error; value
+resolution reads through deferred values, and `Stage::try_resolve_property_path`
+and its time-query counterpart materialize the selected value and report
+failures explicitly. Ordinary accessors work too, returning `None` on decode
+failure.
 
 The adapter owns a thread-safe, immutable cache, with one decode per distinct
-numeric representation and one shared budget across assembly and later reads.
+value representation and one shared budget across assembly and later reads.
 It performs no file I/O or background work. `RetainedValues::stats` exposes
 retained input bytes, live sources, cached element bytes, failures, decode
 attempts and remaining budget without decoding values. Saving materializes
-retained arrays and fails before writing output when one cannot decode.
+retained values and fails before writing output when one cannot decode.
 Caches remain alive through layer/query clones. Demand-all workloads retain
 both encoded bytes and decoded buffers, so eager import remains useful when
 all values will be needed. File ownership and loading dependencies remain

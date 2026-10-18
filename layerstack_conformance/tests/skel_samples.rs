@@ -11,7 +11,7 @@ use layerstack_schemas::{
 };
 #[test]
 fn ordered_samples_preserve_duplicates_unbound_parts_and_shared_pose_work() {
-    let (mut store, live) = support::scene(include_str!("../fixtures/skel_blend_shapes.usda"));
+    let (store, live) = support::scene(include_str!("../fixtures/skel_blend_shapes.usda"));
     let paths = ["/Rig/Geometry/Mesh", "/Rig/Rigid", "/Rig/Unbound/Child"].map(|p| store.path(p));
     let scene = Scene::new(live.stage(), &store);
     let times = [Time::at(1.), Time::at(2.), Time::at(2.)];
@@ -54,7 +54,7 @@ fn ordered_samples_preserve_duplicates_unbound_parts_and_shared_pose_work() {
 }
 #[test]
 fn visitor_errors_stop_before_later_parts_or_samples() {
-    let (mut store, live) = support::scene(include_str!("../fixtures/skel_skinning.usda"));
+    let (store, live) = support::scene(include_str!("../fixtures/skel_skinning.usda"));
     let paths = ["/Rig/Geometry/Mesh", "/Rig/Rigid"].map(|p| store.path(p));
     let scene = Scene::new(live.stage(), &store);
     let mut cache = SkelCache::new(Time::Default);
@@ -84,7 +84,7 @@ fn morph_only_sampling_keeps_definition_revisions_and_reuses_equal_times() {
         "rel skel:skeleton = </Rig/Skeleton>",
         "rel skel:skeleton = []",
     );
-    let (mut store, live) = support::scene(&source);
+    let (store, live) = support::scene(&source);
     let paths = [store.path("/Rig/Geometry/Mesh")];
     let scene = Scene::new(live.stage(), &store);
     let mut cache = BlendShapeCache::new(Time::Default);

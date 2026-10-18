@@ -112,7 +112,7 @@ fn arc_path(loaded: &LoadedStage, graph: &PrimIndexGraph, node: NodeId) -> Vec<(
 #[test]
 fn sources_name_the_nodes_openusd_provides_them_from() {
     let oracle = oracle();
-    let (mut loaded, stage) = compose(&oracle);
+    let (loaded, stage) = compose(&oracle);
     let mut mismatches = Vec::new();
     for prim in &oracle.prims {
         let id = loaded.store.path(&prim.path);

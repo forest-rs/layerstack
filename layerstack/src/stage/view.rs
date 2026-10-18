@@ -569,7 +569,7 @@ mod tests {
 
     #[test]
     fn layer_specs_iterate_in_namespace_order() {
-        let mut store = InMemoryStore::default();
+        let store = InMemoryStore::default();
         let (b, a, a_child) = (store.path("/B"), store.path("/A"), store.path("/A/Child"));
         let (set, x) = (store.tokens.intern("v"), store.tokens.intern("x"));
         let mut layer = Layer::new(LayerId(1));

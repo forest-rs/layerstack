@@ -12,7 +12,7 @@ use layerstack_schemas::{
 
 #[test]
 fn applied_groups_preserve_defaults_authored_units_and_asset_readiness() {
-    let (mut store, live) = support::scene(
+    let (store, live) = support::scene(
         r#"#usda 1.0
 (metersPerUnit = 0.01)
 def SphereLight "L" (prepend apiSchemas = ["ShapingAPI", "ShadowAPI"]) {
@@ -50,7 +50,7 @@ def SphereLight "Custom" { custom float inputs:shaping:focus = 2 }
 }
 #[test]
 fn unresolved_controls_remain_errors_and_assets_remain_inspectable() {
-    let (mut store, live) = support::scene(
+    let (store, live) = support::scene(
         r#"#usda 1.0
 def SphereLight "L" (prepend apiSchemas = ["ShapingAPI", "ShadowAPI"]) {
  float inputs:shaping:focus.connect = </L/Shader.outputs:focus>
@@ -76,7 +76,7 @@ def SphereLight "L" (prepend apiSchemas = ["ShapingAPI", "ShadowAPI"]) {
 }
 #[test]
 fn dome_versions_keep_their_distinct_pole_semantics_and_texture_evidence() {
-    let (mut store, live) = support::scene(
+    let (store, live) = support::scene(
         r#"#usda 1.0
 (upAxis = "Z")
 def DomeLight "Legacy" { asset inputs:texture:file = @./sky.exr@ }

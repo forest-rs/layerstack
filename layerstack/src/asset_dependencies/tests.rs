@@ -197,7 +197,7 @@ fn recursive_inventory_visits_unselected_variants_and_reports_partial_resolution
 
 #[test]
 fn rewriting_covers_sparse_samples_metadata_and_clip_templates_without_mutating_source() {
-    let mut store = InMemoryStore::default();
+    let store = InMemoryStore::default();
     let path = store.path("/Model");
     let file = store.tokens.intern("file");
     let clips = store.tokens.intern("clips");
@@ -256,7 +256,7 @@ fn rewriting_covers_sparse_samples_metadata_and_clip_templates_without_mutating_
 
 #[test]
 fn unrelated_numeric_samples_keep_shared_storage_and_noop_rewrites_keep_generation() {
-    let mut store = InMemoryStore::default();
+    let store = InMemoryStore::default();
     let path = store.path("/Model");
     let file = store.tokens.intern("file");
     let animated = store.tokens.intern("animated");
@@ -304,7 +304,7 @@ fn missing_loaded_layers_and_empty_host_results_cannot_claim_completeness() {
 
 #[test]
 fn direct_prim_asset_identity_stays_distinct_from_identical_nested_resources() {
-    let mut store = InMemoryStore::default();
+    let store = InMemoryStore::default();
     let path = store.path("/Model");
     let asset_info = store.tokens.intern("assetInfo");
     let attr = store.tokens.intern("value");
@@ -378,7 +378,7 @@ fn direct_prim_asset_identity_stays_distinct_from_identical_nested_resources() {
 
 #[test]
 fn unselected_variant_identities_are_scoped_to_prim_metadata() {
-    let mut store = InMemoryStore::default();
+    let store = InMemoryStore::default();
     let path = store.path("/Model");
     let asset_info = store.tokens.intern("assetInfo");
     let set = store.tokens.intern("mode");

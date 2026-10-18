@@ -245,7 +245,7 @@ fn check(
     expected: &[Vec<f64>],
     samples: &[f64],
 ) -> (InMemoryStore, Stage) {
-    let (mut store, stage) = compose(layers);
+    let (store, stage) = compose(layers);
     let path = store.property_path(property);
     for (&time, expected) in queries.iter().zip(expected) {
         let actual = numeric_array(
@@ -330,7 +330,7 @@ fn raw_sparse_clips_interpolate_and_explain_the_weaker_default_base() {
         ("manifest.usda".into(), clip("float[] x")),
         ("base.usda".into(), text("over \"P\" {\nfloat[] x=[0,0]\n}")),
     ];
-    let (mut store, stage) = check(
+    let (store, stage) = check(
         &layers,
         "/P.x",
         &[2., 5., 8.],
@@ -383,7 +383,7 @@ fn authored_sparse_samples_at_the_clip_anchor_exclude_that_sites_clips() {
         ),
         ("manifest.usda".into(), clip("float[] x")),
     ];
-    let (mut store, stage) = check(
+    let (store, stage) = check(
         &layers,
         "/P.x",
         &[0., 5., 10.],
@@ -424,7 +424,7 @@ fn skeleton_discovery_keeps_clip_samples_after_a_dense_to_sparse_transition() {
         ),
         ("manifest.usda".into(), clip("float[] blendShapeWeights")),
     ];
-    let (mut store, stage) = check(
+    let (store, stage) = check(
         &layers,
         "/P.blendShapeWeights",
         &[5., 15., 20.],
@@ -572,7 +572,7 @@ fn stronger_sparse_upper_endpoint_lands_on_a_synthetic_clip_activation() {
 ("manifest.usda".into(), "#usda 1.0\ndef \"C\" {\nfloat[] x\n}\n".into()),
 ("base.usda".into(), "#usda 1.0\nover \"P\" {\nfloat[] x.timeSamples={2:[2,2],7:[7,7]}\n}\n".into())
     ];
-    let (mut store, stage) = check(
+    let (store, stage) = check(
         &layers,
         "/P.x",
         &[2., 5., 7.],
@@ -643,7 +643,7 @@ fn synthetic_sparse_clip_lower_metadata_advances_the_weaker_sample_query() {
 ("manifest.usda".into(), "#usda 1.0\ndef \"C\" {\nfloat[] x\n}\n".into()),
 ("base.usda".into(), "#usda 1.0\nover \"P\" {\nfloat[] x.timeSamples={2:[2,2],8:[8,8]}\n}\n".into())
     ];
-    let (mut store, stage) = check(
+    let (store, stage) = check(
         &layers,
         "/P.x",
         &[2., 5., 7., 8., 9.],

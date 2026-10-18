@@ -469,7 +469,7 @@ mod tests {
     use alloc::{boxed::Box, vec};
     #[test]
     fn cpp_specifier_exception_and_recursive_dictionary_sample_merge() {
-        let mut store = InMemoryStore::default();
+        let store = InMemoryStore::default();
         let p = store.path("/P");
         let a = store.tokens.intern("a");
         let data = store.tokens.intern("customData");
@@ -629,7 +629,7 @@ mod tests {
     }
     #[test]
     fn variant_contexts_arcs_and_weak_only_properties_survive() {
-        let mut store = InMemoryStore::default();
+        let store = InMemoryStore::default();
         let host = store.path("/Model");
         let child = store.path("/Model/Geom");
         let base = store.path("/Base");
@@ -709,7 +709,7 @@ mod tests {
     }
     #[test]
     fn layer_errors_preserve_content_and_generations() {
-        let mut store = InMemoryStore::default();
+        let store = InMemoryStore::default();
         let path = store.path("/P");
         let a = store.tokens.intern("a");
         let mut strong = Layer::new(LayerId(1));

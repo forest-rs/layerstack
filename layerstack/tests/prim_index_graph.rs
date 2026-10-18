@@ -108,7 +108,7 @@ fn grove() -> (InMemoryStore, Stage) {
 /// authors it). OpenUSD: `PcpPrimIndex::GetGraph()`.
 #[test]
 fn sources_name_the_node_of_their_arc_path() {
-    let (mut store, stage) = grove();
+    let (store, stage) = grove();
     let grove = store.path("/Grove");
     let graph = stage.explain_prim_graph(grove).expect("graph");
     let sources = stage.explain_prim(grove).expect("sources");
@@ -169,7 +169,7 @@ fn sources_name_the_node_of_their_arc_path() {
 /// referencing prim's).
 #[test]
 fn ancestral_arcs_add_nodes_to_descendants() {
-    let (mut store, stage) = grove();
+    let (store, stage) = grove();
     let leaves = store.path("/Grove/Leaves");
     let graph = stage.explain_prim_graph(leaves).expect("graph");
     let sources = stage.explain_prim(leaves).expect("sources");

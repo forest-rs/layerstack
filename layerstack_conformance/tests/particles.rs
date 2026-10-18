@@ -31,7 +31,7 @@ fn all_splat_channels_match_cpp_at_earliest_time() {
     let oracle: Oracle =
         serde_json::from_str(include_str!("../fixtures/particles/oracle.json")).unwrap();
     assert_eq!(oracle.version, layerstack_schemas::OPENUSD_VERSION);
-    let (mut store, live) = support::scene(include_str!("../fixtures/particles/scene.usda"));
+    let (store, live) = support::scene(include_str!("../fixtures/particles/scene.usda"));
     for row in oracle.rows {
         let path = store.path(&row.path);
         let scene = Scene::new(live.stage(), &store);

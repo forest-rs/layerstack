@@ -52,7 +52,7 @@ fn bench(c: &mut Criterion) {
     for dual in [false, true] {
         let method = if dual { "dqs_" } else { "" };
         for meshes in [8, 64] {
-            let (mut store, live) = support::scene(&source(meshes, dual));
+            let (store, live) = support::scene(&source(meshes, dual));
             let paths: Vec<_> = (0..meshes)
                 .map(|i| store.path(&format!("/Rig/M{i}")))
                 .collect();

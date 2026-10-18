@@ -250,13 +250,13 @@ impl Path {
     /// ```
     /// use layerstack::{Path, PathError, TokenInterner};
     ///
-    /// let mut tokens = TokenInterner::default();
+    /// let tokens = TokenInterner::default();
     ///
-    /// let path = Path::parse_absolute("/A/B", &mut tokens).unwrap();
+    /// let path = Path::parse_absolute("/A/B", &tokens).unwrap();
     /// assert_eq!(path.depth(), 2);
     /// assert_eq!(path.display(&tokens), "/A/B");
     ///
-    /// assert_eq!(Path::parse_absolute("relative", &mut tokens), Err(PathError::NotAbsolute));
+    /// assert_eq!(Path::parse_absolute("relative", &tokens), Err(PathError::NotAbsolute));
     /// ```
     pub fn parse_absolute(s: &str, tokens: &TokenInterner) -> Result<Self, PathError> {
         if !s.starts_with('/') {
@@ -386,10 +386,10 @@ impl Path {
 /// ```
 /// use layerstack::{Path, PathInterner, TokenInterner};
 ///
-/// let mut tokens = TokenInterner::default();
+/// let tokens = TokenInterner::default();
 /// let paths = PathInterner::default();
 ///
-/// let path = Path::parse_absolute("/Robot/Arm", &mut tokens).unwrap();
+/// let path = Path::parse_absolute("/Robot/Arm", &tokens).unwrap();
 /// let id = paths.intern(path);
 /// assert_eq!(paths.display(id, &tokens), "/Robot/Arm");
 /// ```
@@ -587,7 +587,26 @@ pub enum PathError {
     NotAbsolute,
     /// Path contains an empty segment (e.g. `//`).
     EmptySegment,
+    /// A segment is not a prim name, which is an identifier (`Rock`, not
+    /// `.radius` or `Rock{shape=jagged}`). The checked store helpers
+    /// ([`InMemoryStore::try_path`](crate::InMemoryStore::try_path)) check
+    /// names; [`Path::parse_absolute`] does not.
+    ///
+    /// Spec: AOUSD Core §7.3.3 (`PrimName`), §8.5 (path grammar).
+    InvalidPrimName,
 }
+
+impl core::fmt::Display for PathError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(match self {
+            Self::NotAbsolute => "the path is not absolute: it does not start with `/`",
+            Self::EmptySegment => "the path has an empty segment",
+            Self::InvalidPrimName => "a segment of the path is not a prim name (an identifier)",
+        })
+    }
+}
+
+impl core::error::Error for PathError {}
 
 /// Errors that can occur when parsing a [`PropertyPath`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -602,13 +621,35 @@ pub enum PropertyPathError {
     EmptyPropertyName,
     /// Property separator `.` was missing.
     MissingProperty,
-    /// Concrete prim paths do not admit property separators in namespace segments.
+    /// A segment of the prim path is not a prim name: it holds a property
+    /// separator, or, for the checked store helpers, is not an identifier.
     InvalidPrimPath,
-    /// Property name was malformed for a concrete property path.
+    /// Property name was malformed for a concrete property path: it holds
+    /// a path separator, or, for the checked store helpers, is not
+    /// identifiers joined by `:`.
     InvalidPropertyName,
     /// Concrete property paths do not admit variant selections.
     VariantSelectionNotAllowed,
 }
+
+impl core::fmt::Display for PropertyPathError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(match self {
+            Self::NotAbsolute => "the path is not absolute: it does not start with `/`",
+            Self::EmptySegment => "the path has an empty segment",
+            Self::RootPrimNotAllowed => "a property path names a prim, not the pseudo-root `/`",
+            Self::EmptyPropertyName => "the property name is empty",
+            Self::MissingProperty => "the path has no property: `.` and a name are missing",
+            Self::InvalidPrimPath => "a segment of the prim path is not a prim name",
+            Self::InvalidPropertyName => "the property name is not a namespaced identifier",
+            Self::VariantSelectionNotAllowed => {
+                "a property path holds no variant selections; use a spec path"
+            }
+        })
+    }
+}
+
+impl core::error::Error for PropertyPathError {}
 
 /// Errors that can occur when parsing a [`TargetPath`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -619,13 +660,58 @@ pub enum TargetPathError {
     Property(PropertyPathError),
 }
 
+impl core::fmt::Display for TargetPathError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Prim(error) => write!(f, "invalid prim target: {error}"),
+            Self::Property(error) => write!(f, "invalid property target: {error}"),
+        }
+    }
+}
+
+impl core::error::Error for TargetPathError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::Prim(error) => Some(error),
+            Self::Property(error) => Some(error),
+        }
+    }
+}
+
 impl From<PathError> for PropertyPathError {
     fn from(value: PathError) -> Self {
         match value {
             PathError::NotAbsolute => Self::NotAbsolute,
             PathError::EmptySegment => Self::EmptySegment,
+            PathError::InvalidPrimName => Self::InvalidPrimPath,
         }
     }
+}
+
+/// Checks that each segment of the absolute prim path text `s` is a prim
+/// name, interning nothing. AOUSD Core §7.3.3 (`PrimName`), §8.5.
+pub(crate) fn check_prim_names(s: &str) -> Result<(), PathError> {
+    let Some(rest) = s.strip_prefix('/') else {
+        return Err(PathError::NotAbsolute);
+    };
+    if rest.is_empty() {
+        return Ok(());
+    }
+    for segment in rest.split('/') {
+        if segment.is_empty() {
+            return Err(PathError::EmptySegment);
+        }
+        if !crate::ident::is_identifier(segment) {
+            return Err(PathError::InvalidPrimName);
+        }
+    }
+    Ok(())
+}
+
+/// Whether `name` is a property name: identifiers joined by `:`.
+/// AOUSD Core §7.3.3 (`PropertyName`), §8.5.
+pub(crate) fn is_property_name(name: &str) -> bool {
+    name.split(':').all(crate::ident::is_identifier)
 }
 
 #[cfg(test)]

@@ -16,7 +16,7 @@ use layerstack::{
 };
 
 fn fixture() -> (InMemoryStore, Layer, Layer, ClipBundleOptions) {
-    let mut store = InMemoryStore::default();
+    let store = InMemoryStore::default();
     let model = store.path("/Model");
     let root = store.path("/");
     let model_name = store.tokens.intern("Model");

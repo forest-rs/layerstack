@@ -237,7 +237,7 @@ fn flattening_combines_the_list_ops() {
         &mut |_, asset| Some(asset.to_string()),
     )
     .expect("flattens");
-    let mut store = loaded.store;
+    let store = loaded.store;
     for (path, want) in oracle["flatten"].as_object().unwrap() {
         let prim = store.path(path);
         let spec = flat.layer.prim(prim).expect("flattened prim spec");

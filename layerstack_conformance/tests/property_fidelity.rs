@@ -294,7 +294,7 @@ fn ui_hint_limits_combine_like_usdcat_flatten() {
         StageOptions::default(),
     );
 
-    let mut flattened = load_usda(&assets_dir().join("ui_hints.flattened.usda"));
+    let flattened = load_usda(&assets_dir().join("ui_hints.flattened.usda"));
     let flat_softness = flattened.property_path("/Root.softness");
 
     for key_name in ["limits", "customData"] {

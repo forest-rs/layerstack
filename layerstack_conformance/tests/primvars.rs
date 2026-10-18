@@ -22,7 +22,7 @@ fn scene() -> (InMemoryStore, LiveStage) {
 fn inheritance_flattening_and_animation_match_cpp() {
     let expected: serde_json::Value =
         serde_json::from_str(include_str!("../fixtures/primvar_behavior.json")).unwrap();
-    let (mut store, live) = scene();
+    let (store, live) = scene();
     let path = store.path("/Root/Group/Mesh");
     let scene = Scene::new(live.stage(), &store);
     let prim = PrimView::new(scene, path);
@@ -168,7 +168,7 @@ fn query_scene() -> (InMemoryStore, LiveStage) {
 fn id_targets_and_index_animation_queries_match_cpp() {
     let expected: serde_json::Value =
         serde_json::from_str(include_str!("../fixtures/primvar_queries.json")).unwrap();
-    let (mut store, live) = query_scene();
+    let (store, live) = query_scene();
     let path = store.path("/Root/Group/Mesh");
     let scene = Scene::new(live.stage(), &store);
     for name in [
@@ -270,7 +270,7 @@ fn id_target_authoring_is_atomic_and_undoable() {
 fn traversal_fed_inheritance_matches_cpp_and_full_queries() {
     let expected: serde_json::Value =
         serde_json::from_str(include_str!("../fixtures/primvar_queries.json")).unwrap();
-    let (mut store, live) = query_scene();
+    let (store, live) = query_scene();
     let paths = [
         "/Root",
         "/Root/Group",
@@ -506,7 +506,7 @@ fn primvar_block_erases_local_animation_and_authors_future_indices_barrier() {
 
 #[test]
 fn incremental_inheritance_distinguishes_unchanged_from_cleared() {
-    let (mut store, live) = support::scene(
+    let (store, live) = support::scene(
         r#"#usda 1.0
         def "Only" {
             float primvars:only = 1
@@ -630,7 +630,7 @@ fn removed_primvars_can_be_recreated_in_the_same_edit() {
 
 #[test]
 fn primvars_with_values_requires_an_attribute_value_source() {
-    let (mut store, live) = support::scene(
+    let (store, live) = support::scene(
         r#"#usda 1.0
         def Mesh "P" {
             string primvars:idOnly
@@ -821,7 +821,7 @@ fn removed_primvar_ui_labels_do_not_leak_into_recreated_properties() {
 
 #[test]
 fn validated_primvar_mapping_shares_sources_without_expanding_values() {
-    let (mut store, live) = scene();
+    let (store, live) = scene();
     let path = store.path("/Root/Group/Mesh");
     let scene = Scene::new(live.stage(), &store);
     for name in ["packed", "scalar", "animated", "blockedIndices", "empty"] {

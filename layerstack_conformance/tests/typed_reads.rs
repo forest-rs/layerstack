@@ -171,7 +171,7 @@ fn fixture() -> (LoadedStage, Stage, LayerId) {
 fn typed_defaults_skip_incompatible_opinions_without_numeric_retry() {
     let oracle: Json =
         serde_json::from_str(include_str!("../fixtures/typed_reads/oracle.json")).unwrap();
-    let (mut loaded, stage, weak) = fixture();
+    let (loaded, stage, weak) = fixture();
     for (text, record) in oracle.as_object().unwrap() {
         let (prim, name) = text.rsplit_once('.').unwrap();
         let path = loaded.store.path(prim);
@@ -382,7 +382,7 @@ fn typed_defaults_skip_incompatible_opinions_without_numeric_retry() {
 fn typed_numeric_sparse_composition_matches_cpp_without_weaker_retry() {
     let oracle: Json =
         serde_json::from_str(include_str!("../fixtures/typed_reads/oracle.json")).unwrap();
-    let (mut loaded, stage, _) = fixture();
+    let (loaded, stage, _) = fixture();
     let path = loaded.store.path("/SparseCompatibleBase");
     let field = loaded.store.tokens.lookup("value").unwrap();
     let actual = stage
@@ -426,7 +426,7 @@ fn typed_sparse_reads_can_omit_provenance() {
 
 #[test]
 fn tagged_sparse_numeric_reads_convert_only_the_final_array() {
-    let (mut loaded, stage, _) = fixture();
+    let (loaded, stage, _) = fixture();
     let property = loaded.store.property_path("/SparseContribution.value");
     for time in [Time::Default, Time::at(9.0)] {
         let converted = std::cell::Cell::new(0);
@@ -495,7 +495,7 @@ fn empty_sample_maps_preserve_default_sources_when_flattened() {
 
 #[test]
 fn empty_sample_maps_do_not_mask_transform_animation() {
-    let (mut loaded, stage, _) = fixture();
+    let (loaded, stage, _) = fixture();
     let path = loaded.store.path("/EmptySamplesXform");
     let scene = Scene::new(&stage, &loaded.store);
     let xform = layerstack_schemas::usd_geom::Xformable::new(&scene, path).unwrap();

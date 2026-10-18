@@ -16,13 +16,16 @@ use crate::{
     interner::TokenId,
     interner::TokenInterner,
     listop::ListOp,
-    path::{Path, PathId, PathInterner, PropertyPath, TargetPath},
+    path::{
+        Path, PathError, PathId, PathInterner, PropertyPath, PropertyPathError, TargetPath,
+        TargetPathError,
+    },
     prim_index::OpinionValue,
     property::{
         PropertyEntry, PropertySpec, PropertyType, get_property, get_property_mut, remove_property,
         set_property_vec,
     },
-    spec_path::{SpecPath, VariantSelectionSite},
+    spec_path::{SpecPath, SpecPathError, VariantSelectionSite},
 };
 
 /// Identifies a layer by stable ID.
@@ -3047,33 +3050,134 @@ impl InMemoryStore {
         self.insert_asset_layer(anchor, asset_path, LayerId::UNRESOLVED);
     }
 
-    /// Parses and interns an absolute path, returning its [`PathId`].
+    /// Parses and interns an absolute prim path such as `/World/Rock`,
+    /// returning its [`PathId`]. Interns nothing when `s` is rejected.
     ///
-    /// # Panics
+    /// Interning takes `&self`, so this works while the store is borrowed
+    /// elsewhere, for example by a [`crate::StageView`].
     ///
-    /// Panics if `s` is not a valid absolute path (must start with `/`).
-    pub fn path(&mut self, s: &str) -> PathId {
-        let p = Path::parse_absolute(s, &self.tokens).expect("valid absolute path");
-        self.paths.intern(p)
+    /// ```
+    /// use layerstack::{InMemoryStore, PathError};
+    ///
+    /// let store = InMemoryStore::default();
+    /// let rock = store.try_path("/World/Rock").unwrap();
+    /// assert_eq!(store.paths.display(rock, &store.tokens), "/World/Rock");
+    /// assert_eq!(store.try_path("World/Rock"), Err(PathError::NotAbsolute));
+    /// assert_eq!(store.try_path("/.radius"), Err(PathError::InvalidPrimName));
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// [`PathError`] when `s` is not absolute, has an empty segment, or has
+    /// a segment that is not a prim name (an identifier).
+    ///
+    /// Spec: AOUSD Core §7.3.3 (`PrimName`), §8.5 (path grammar).
+    pub fn try_path(&self, s: &str) -> Result<PathId, PathError> {
+        crate::path::check_prim_names(s)?;
+        Ok(self.paths.intern(Path::parse_absolute(s, &self.tokens)?))
     }
 
-    /// Parses a concrete property path, interning its prim path and property token.
+    /// Parses and interns an absolute prim path, as [`Self::try_path`]
+    /// does: a shorthand for tests and examples.
     ///
     /// # Panics
     ///
-    /// Panics if `s` is not a valid property path such as `/Prim.attrName`.
-    pub fn property_path(&mut self, s: &str) -> PropertyPath {
-        PropertyPath::parse(s, &self.tokens, &self.paths).expect("valid property path")
+    /// Panics if `s` is not a prim path such as `/World/Rock`.
+    #[track_caller]
+    pub fn path(&self, s: &str) -> PathId {
+        self.try_path(s)
+            .unwrap_or_else(|error| panic!("`{s}` is not a prim path: {error}"))
     }
 
-    /// Parses a concrete relationship or connection target path.
+    /// Parses a concrete property path such as `/World/Rock.radius`,
+    /// interning its prim path and property name. Interns nothing when `s`
+    /// is rejected.
+    ///
+    /// # Errors
+    ///
+    /// [`PropertyPathError`] when `s` is not a prim path followed by `.`
+    /// and a property name: identifiers joined by `:`.
+    ///
+    /// Spec: AOUSD Core §7.3.3 (`PropertyName`), §8.5 (path grammar).
+    pub fn try_property_path(&self, s: &str) -> Result<PropertyPath, PropertyPathError> {
+        let (prim, property) = PropertyPath::split(s)?;
+        crate::path::check_prim_names(prim)?;
+        if !crate::path::is_property_name(property) {
+            return Err(PropertyPathError::InvalidPropertyName);
+        }
+        PropertyPath::parse(s, &self.tokens, &self.paths)
+    }
+
+    /// Parses a concrete property path, as [`Self::try_property_path`]
+    /// does: a shorthand for tests and examples.
     ///
     /// # Panics
     ///
-    /// Panics if `s` is not a valid target path such as `/Prim` or
+    /// Panics if `s` is not a property path such as `/World/Rock.radius`.
+    #[track_caller]
+    pub fn property_path(&self, s: &str) -> PropertyPath {
+        self.try_property_path(s)
+            .unwrap_or_else(|error| panic!("`{s}` is not a property path: {error}"))
+    }
+
+    /// Parses a concrete relationship or connection target path: a prim
+    /// path ([`Self::try_path`]) or, with a `.`, a property path
+    /// ([`Self::try_property_path`]). Interns nothing when `s` is rejected.
+    ///
+    /// # Errors
+    ///
+    /// [`TargetPathError`] with the prim or property path's error.
+    pub fn try_target_path(&self, s: &str) -> Result<TargetPath, TargetPathError> {
+        if s.contains('.') {
+            self.try_property_path(s)
+                .map(TargetPath::Property)
+                .map_err(TargetPathError::Property)
+        } else {
+            self.try_path(s)
+                .map(TargetPath::Prim)
+                .map_err(TargetPathError::Prim)
+        }
+    }
+
+    /// Parses a concrete target path, as [`Self::try_target_path`] does: a
+    /// shorthand for tests and examples.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `s` is not a target path such as `/Prim` or
     /// `/Prim.attrName`.
-    pub fn target_path(&mut self, s: &str) -> TargetPath {
-        TargetPath::parse(s, &self.tokens, &self.paths).expect("valid target path")
+    #[track_caller]
+    pub fn target_path(&self, s: &str) -> TargetPath {
+        self.try_target_path(s)
+            .unwrap_or_else(|error| panic!("`{s}` is not a target path: {error}"))
+    }
+
+    /// Parses a spec path, which may select variants, such as
+    /// `/World/Fern{season=autumn}.color`: the store's shorthand for
+    /// [`SpecPath::parse`]. Interns nothing when `s` is rejected.
+    ///
+    /// # Errors
+    ///
+    /// [`SpecPathError`] when `s` is malformed, a prim or variant set name
+    /// is not an identifier, the property is on the pseudo-root, or the
+    /// property name is not identifiers joined by `:`.
+    ///
+    /// Spec: AOUSD Core §7.3.3 (names), §8.5 (path grammar).
+    pub fn try_spec_path(&self, s: &str) -> Result<SpecPath, SpecPathError> {
+        crate::spec_path::check_names(s)?;
+        SpecPath::parse(s, &self.tokens, &self.paths)
+    }
+
+    /// Parses a spec path, as [`Self::try_spec_path`] does: a shorthand for
+    /// tests and examples.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `s` is not a spec path such as `/World/Fern{season=autumn}`.
+    #[track_caller]
+    pub fn spec_path(&self, s: &str) -> SpecPath {
+        self.try_spec_path(s)
+            .unwrap_or_else(|error| panic!("`{s}` is not a spec path: {error}"))
     }
 }
 
@@ -3135,8 +3239,126 @@ mod tests {
     }
 
     #[test]
-    fn defined_prims_are_listed_among_their_parents_children() {
+    fn checked_path_helpers_reject_malformed_text() {
+        let store = InMemoryStore::default();
+        let paths_before = store.paths.len();
+        for bad in ["World/Rock", "/.radius", ""] {
+            assert!(store.try_path(bad).is_err(), "try_path({bad:?})");
+            assert!(
+                store.try_property_path(bad).is_err(),
+                "try_property_path({bad:?})"
+            );
+            assert!(
+                store.try_target_path(bad).is_err(),
+                "try_target_path({bad:?})"
+            );
+            assert!(store.try_spec_path(bad).is_err(), "try_spec_path({bad:?})");
+        }
+        assert_eq!(store.try_path("World/Rock"), Err(PathError::NotAbsolute));
+        assert_eq!(store.try_path("/.radius"), Err(PathError::InvalidPrimName));
+        assert_eq!(store.try_path(""), Err(PathError::NotAbsolute));
+        assert_eq!(
+            store.try_property_path("/.radius"),
+            Err(PropertyPathError::RootPrimNotAllowed)
+        );
+        assert_eq!(
+            store.try_property_path("World/Rock"),
+            Err(PropertyPathError::MissingProperty)
+        );
+        assert_eq!(
+            store.try_property_path("/World/Ro ck.radius"),
+            Err(PropertyPathError::InvalidPrimPath)
+        );
+        assert_eq!(
+            store.try_property_path("/World/Rock.ra dius"),
+            Err(PropertyPathError::InvalidPropertyName)
+        );
+        assert_eq!(
+            store.try_target_path("/.radius"),
+            Err(TargetPathError::Property(
+                PropertyPathError::RootPrimNotAllowed
+            ))
+        );
+        assert_eq!(
+            store.try_target_path(""),
+            Err(TargetPathError::Prim(PathError::NotAbsolute))
+        );
+        assert_eq!(
+            store.try_spec_path("/.radius"),
+            Err(SpecPathError::RootPrimNotAllowed)
+        );
+        assert_eq!(store.try_spec_path(""), Err(SpecPathError::NotAbsolute));
+        assert_eq!(
+            store.try_spec_path("/World/Fern{1season=autumn}"),
+            Err(SpecPathError::MalformedVariantSelection)
+        );
+        assert_eq!(
+            store.try_spec_path("/World//Fern"),
+            Err(SpecPathError::EmptySegment)
+        );
+        assert_eq!(
+            store.try_path("/World/Rock{shape=jagged}"),
+            Err(PathError::InvalidPrimName)
+        );
+        assert!(
+            store.tokens.lookup("World/Rock").is_none() && store.tokens.lookup(".radius").is_none(),
+            "a rejected path interns nothing"
+        );
+        assert_eq!(store.paths.len(), paths_before);
+        assert_eq!(
+            format!("{}", PathError::InvalidPrimName),
+            "a segment of the path is not a prim name (an identifier)"
+        );
+    }
+
+    #[test]
+    fn checked_path_helpers_intern_through_a_shared_reference() {
         let mut store = InMemoryStore::default();
+        store.insert_layer(Layer::new(LayerId(1)));
+        let stage = crate::Stage::compose(&mut store, LayerId(1), crate::StageOptions::default());
+        let shared: &InMemoryStore = &store;
+        // A view borrows the store while paths are still interned.
+        let view = stage.view(shared);
+        let rock = shared.try_path("/World/Rock").unwrap();
+        assert!(view.prim(rock).is_none());
+        assert_eq!(shared.path("/World/Rock"), rock);
+        let root = shared.paths.lookup(&Path::root()).unwrap();
+        assert_eq!(shared.try_path("/"), Ok(root));
+        let radius = shared.try_property_path("/World/Rock.geom:radius").unwrap();
+        assert_eq!(
+            (radius.prim_path(), shared.tokens.resolve(radius.property())),
+            (rock, "geom:radius")
+        );
+        assert_eq!(shared.property_path("/World/Rock.geom:radius"), radius);
+        assert_eq!(
+            shared.try_target_path("/World/Rock"),
+            Ok(TargetPath::Prim(rock))
+        );
+        assert_eq!(
+            shared.try_target_path("/World/Rock.geom:radius"),
+            Ok(TargetPath::Property(radius))
+        );
+        assert_eq!(shared.target_path("/World/Rock"), TargetPath::Prim(rock));
+        let branch = shared
+            .try_spec_path("/World/Fern{season=autumn}Leaf.color")
+            .unwrap();
+        assert_eq!(
+            branch.display(&shared.paths, &shared.tokens),
+            "/World/Fern{season=autumn}Leaf.color"
+        );
+        assert_eq!(
+            shared.spec_path("/World/Fern{season=}"),
+            shared.try_spec_path("/World/Fern{season=}").unwrap()
+        );
+        assert_eq!(
+            shared.try_spec_path("/"),
+            Ok(SpecPath::from_prim_path(root))
+        );
+    }
+
+    #[test]
+    fn defined_prims_are_listed_among_their_parents_children() {
+        let store = InMemoryStore::default();
         let (abc, ad) = (store.path("/A/B/C"), store.path("/A/D"));
         let (root, a, b) = (store.path("/"), store.path("/A"), store.path("/A/B"));
         let name = |s: &str| store.tokens.intern(s);
@@ -3156,7 +3378,7 @@ mod tests {
 
     #[test]
     fn layer_methods_move_the_generation_forward() {
-        let mut store = InMemoryStore::default();
+        let store = InMemoryStore::default();
         let size = store.tokens.intern("size");
         let rock = store.path("/Rock");
         let mut layer = Layer::new(LayerId(1));
@@ -3222,7 +3444,7 @@ mod tests {
 
     #[test]
     fn prim_edits_record_their_path() {
-        let mut store = InMemoryStore::default();
+        let store = InMemoryStore::default();
         let rock = store.path("/Rock");
         let mut layer = Layer::new(LayerId(1));
         layer.insert_prim(rock, PrimSpec::def());

@@ -71,7 +71,7 @@ fn blackbody_matches_cpp_float_arithmetic_and_rejects_nonfinite_kelvin() {
 }
 #[test]
 fn contextual_identifiers_and_link_membership_match_cpp_with_selection_evidence() {
-    let (mut store, live) = support::scene(SCENE);
+    let (store, live) = support::scene(SCENE);
     let light_path = store.path("/Light");
     let filter_path = store.path("/Filter");
     let targets: Vec<_> = ["/Included", "/Excluded", "/Unshadowed"]
@@ -304,7 +304,7 @@ struct BlockedSelection {
 }
 #[test]
 fn blocked_shader_identifiers_match_cpp_and_preserve_typed_default_skipping() {
-    let (mut store, live) = support::scene(SCENE);
+    let (store, live) = support::scene(SCENE);
     for row in oracle().blocked_selections {
         let path = store.path(&row.path);
         let scene = Scene::new(live.stage(), &store);

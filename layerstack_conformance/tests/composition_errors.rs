@@ -207,7 +207,7 @@ fn errors_match_openusd() {
 #[test]
 fn stacks_targets_and_values_match_openusd() {
     for composition in &oracle().compositions {
-        let (mut loaded, stage) = compose(composition);
+        let (loaded, stage) = compose(composition);
         let pseudo_root = loaded.store.path("/");
         let mut composed: Vec<String> = stage
             .traverse(pseudo_root)

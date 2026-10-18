@@ -27,7 +27,7 @@ fn vectors(actual: &[[f32; 3]], expected: &serde_json::Value) {
 }
 #[test]
 fn mapped_animation_inbetweens_normals_and_combined_skinning_match_cpp() {
-    let (mut store, live) = support::scene(include_str!("../fixtures/skel_blend_shapes.usda"));
+    let (store, live) = support::scene(include_str!("../fixtures/skel_blend_shapes.usda"));
     let path = store.path("/Rig/Geometry/Mesh");
     let scene = Scene::new(live.stage(), &store);
     let skin = SkinningQuery::new(&scene, path).unwrap().unwrap();
@@ -83,7 +83,7 @@ fn bindings_are_local_and_malformed_active_shapes_return_no_partial_result() {
         "uniform int[] pointIndices = [1]",
         "uniform int[] pointIndices = [99]",
     );
-    let (mut store, live) = support::scene(&source);
+    let (store, live) = support::scene(&source);
     let geometry = store.path("/Rig/Geometry");
     let mesh = store.path("/Rig/Geometry/Mesh");
     let scene = Scene::new(live.stage(), &store);
@@ -107,7 +107,7 @@ fn inbetween_knots_are_validated() {
     for weight in ["0", "1", "nan"] {
         let source = include_str!("../fixtures/skel_blend_shapes.usda")
             .replace("weight = 0.5", &format!("weight = {weight}"));
-        let (mut store, live) = support::scene(&source);
+        let (store, live) = support::scene(&source);
         let path = store.path("/Rig/Geometry/Mesh");
         assert!(BlendShapeQuery::new(&Scene::new(live.stage(), &store), path).is_err());
     }

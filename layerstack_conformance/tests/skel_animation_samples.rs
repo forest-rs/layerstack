@@ -33,7 +33,7 @@ def SkelAnimation "Sparse" (references = </Base> {offset}) {{
     float[] blendShapeWeights = edit [write 0.5 to [0]]
 }}"#
         );
-        let (mut store, live) = support::scene(&source);
+        let (store, live) = support::scene(&source);
         let path = store.path("/Sparse");
         let scene = Scene::new(live.stage(), &store);
         let a = SkelAnimation::new(&scene, path).unwrap();
@@ -101,7 +101,7 @@ fn sparse_samples_union_grids_but_dense_regions_and_blocks_mask_weaker_times() {
         let source = format!(
             "{BASE}\ndef SkelAnimation \"Sparse\" (references = </Base>) {{\n{FIXED_RS}\nfloat3[] translations{translations}\nfloat[] blendShapeWeights{weights}\n}}"
         );
-        let (mut store, live) = support::scene(&source);
+        let (store, live) = support::scene(&source);
         let path = store.path("/Sparse");
         let scene = Scene::new(live.stage(), &store);
         let a = SkelAnimation::new(&scene, path).unwrap();
@@ -130,7 +130,7 @@ fn sparse_edits_stop_at_intermediate_dense_sources_and_single_samples_are_consta
         let source = format!(
             "{BASE}\ndef SkelAnimation \"Middle\" (references = </Base>) {{\n{middle}\n}}\ndef SkelAnimation \"Sparse\" (references = </Middle>) {{\n{FIXED_RS}\n{sparse}\n}}"
         );
-        let (mut store, live) = support::scene(&source);
+        let (store, live) = support::scene(&source);
         let path = store.path("/Sparse");
         let scene = Scene::new(live.stage(), &store);
         let a = SkelAnimation::new(&scene, path).unwrap();

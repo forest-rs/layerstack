@@ -68,7 +68,7 @@ fn filtering_matches_cpp_and_snapshots_follow_explicit_recomputation() {
 }
 #[test]
 fn invalid_filter_targets_return_no_partial_table() {
-    let (mut store, live) = support::scene(
+    let (store, live) = support::scene(
         "#usda 1.0\ndef PhysicsCollisionGroup \"Group\" {\nrel physics:filteredGroups = </Missing>\n}",
     );
     let group = store.path("/Group");

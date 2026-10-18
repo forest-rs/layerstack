@@ -107,7 +107,7 @@ fn layer_name(loaded: &LoadedStage, layer: layerstack::LayerId) -> String {
 #[test]
 fn prims_compose_in_order() {
     let oracle = oracle();
-    let (mut loaded, stage) = compose(&oracle);
+    let (loaded, stage) = compose(&oracle);
     let pseudo_root = loaded.store.path("/");
     let composed: Vec<String> = stage
         .traverse(pseudo_root)
@@ -121,7 +121,7 @@ fn prims_compose_in_order() {
 #[test]
 fn prim_stacks_hold_every_nested_variant_spec() {
     let oracle = oracle();
-    let (mut loaded, stage) = compose(&oracle);
+    let (loaded, stage) = compose(&oracle);
     let mut mismatches = Vec::new();
     for prim in &oracle.prims {
         let id = loaded.store.path(&prim.path);
@@ -154,7 +154,7 @@ fn prim_stacks_hold_every_nested_variant_spec() {
 #[test]
 fn variant_selections_match_openusd() {
     let oracle = oracle();
-    let (mut loaded, stage) = compose(&oracle);
+    let (loaded, stage) = compose(&oracle);
     let mut mismatches = Vec::new();
     for prim in &oracle.prims {
         let id = loaded.store.path(&prim.path);
@@ -185,7 +185,7 @@ fn variant_selections_match_openusd() {
 #[test]
 fn values_match_openusd() {
     let oracle = oracle();
-    let (mut loaded, stage) = compose(&oracle);
+    let (loaded, stage) = compose(&oracle);
     let mut mismatches = Vec::new();
     for (attr, expected) in &oracle.values {
         let property = loaded.store.property_path(attr);
@@ -213,7 +213,7 @@ fn values_match_openusd() {
 #[test]
 fn nested_sets_rank_by_the_branch_declaring_them() {
     let oracle = oracle();
-    let (mut loaded, stage) = compose(&oracle);
+    let (loaded, stage) = compose(&oracle);
     assert!(
         stage.composition_errors().is_empty(),
         "{:?}",

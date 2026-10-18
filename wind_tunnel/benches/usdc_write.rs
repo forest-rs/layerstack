@@ -150,7 +150,7 @@ fn bench_layer_save(c: &mut Criterion) {
     let mut group = c.benchmark_group("usdc_layer_save");
     for len in [64, 1_000_000] {
         for animated in [false, true] {
-            let mut store = InMemoryStore::default();
+            let store = InMemoryStore::default();
             let prim = store.path("/Root");
             let mut spec = PrimSpec::def();
             for field in 0..4 {

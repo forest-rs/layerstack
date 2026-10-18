@@ -42,7 +42,7 @@ fn retained_inputs_reconstruct_points_and_reuse_shared_rig_arrays() {
             SkinningMethod::DualQuaternion,
         ),
     ] {
-        let (mut store, live) = support::scene(source);
+        let (store, live) = support::scene(source);
         let paths = paths.map(|p| store.path(p));
         let scene = Scene::new(live.stage(), &store);
         let mut cache = SkelCache::new(Time::Default);
@@ -242,7 +242,7 @@ fn temporal_binding_values_refresh_without_changing_definitions() {
         "int[] primvars:skel:jointWeights:indices = [1,0]",
         "int[] primvars:skel:jointWeights:indices = [1,0]\n float[] primvars:skel:jointWeights.timeSamples = {1: [0.25,0.75,1,0], 3: [0.5,0.5,0.5,0.5]}\n matrix4d primvars:skel:geomBindTransform.timeSamples = {1: ((1,0,0,0),(0,1,0,0),(0,0,1,0),(1,1,0,1)), 3: ((1,0,0,0),(0,1,0,0),(0,0,1,0),(3,3,0,1))}",
     );
-    let (mut store, live) = support::scene(&source);
+    let (store, live) = support::scene(&source);
     let path = store.path("/Rig/Geometry/Mesh");
     let scene = Scene::new(live.stage(), &store);
     let mut cache = SkelCache::new(Time::at(1.));
@@ -284,7 +284,7 @@ fn inputs_work_without_vertices_and_static_revisions_survive_time_changes() {
             "rel skel:animationSource = </Rig/Animation>",
             "rel skel:animationSource = []",
         );
-    let (mut store, live) = support::scene(&source);
+    let (store, live) = support::scene(&source);
     let path = store.path("/Rig/Rigid");
     let scene = Scene::new(live.stage(), &store);
     let mut cache = SkelCache::new(Time::Default);
@@ -365,7 +365,7 @@ fn unmapped_joints_have_identity_matrices_and_explicit_dqs_fallback() {
         "def Xform \"Geometry\" (prepend apiSchemas = [\"SkelBindingAPI\"]) {",
         "def Xform \"Geometry\" (prepend apiSchemas = [\"SkelBindingAPI\"]) { uniform token[] skel:joints = [\"missing\", \"b\"]",
     );
-    let (mut store, live) = support::scene(&source);
+    let (store, live) = support::scene(&source);
     let path = store.path("/Rig/Geometry/Vertex");
     let scene = Scene::new(live.stage(), &store);
     let mut cache = SkelCache::new(Time::at(2.));

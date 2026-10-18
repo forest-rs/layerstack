@@ -473,12 +473,115 @@ pub enum SpecPathError {
     EmptyPropertyName,
     /// Underlying concrete prim path was invalid.
     InvalidPrimPath(PathError),
+    /// A property on the pseudo-root (`/.radius`), which holds none. The
+    /// checked store helper
+    /// ([`InMemoryStore::try_spec_path`](crate::InMemoryStore::try_spec_path))
+    /// checks this; [`SpecPath::parse`] does not.
+    RootPrimNotAllowed,
+    /// The property name is not identifiers joined by `:`. Checked by the
+    /// store helper only, as for [`Self::RootPrimNotAllowed`].
+    ///
+    /// Spec: AOUSD Core §7.3.3 (`PropertyName`).
+    InvalidPropertyName,
 }
 
 impl From<PathError> for SpecPathError {
     fn from(value: PathError) -> Self {
         Self::InvalidPrimPath(value)
     }
+}
+
+impl core::fmt::Display for SpecPathError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::NotAbsolute => {
+                f.write_str("the path is not absolute: it does not start with `/`")
+            }
+            Self::EmptySegment => f.write_str("the path has an empty segment"),
+            Self::MalformedVariantSelection => {
+                f.write_str("a variant selection is not `{set=variant}`")
+            }
+            Self::EmptyPropertyName => f.write_str("the property name is empty"),
+            Self::InvalidPrimPath(error) => write!(f, "invalid prim path: {error}"),
+            Self::RootPrimNotAllowed => {
+                f.write_str("a property path names a prim, not the pseudo-root `/`")
+            }
+            Self::InvalidPropertyName => {
+                f.write_str("the property name is not a namespaced identifier")
+            }
+        }
+    }
+}
+
+impl core::error::Error for SpecPathError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::InvalidPrimPath(error) => Some(error),
+            _ => None,
+        }
+    }
+}
+
+/// Checks the names of the spec path text `s` as [`SpecPath::parse`] reads
+/// it: each prim segment a prim name, each variant set name an identifier,
+/// and a property name on a prim, not the pseudo-root. Interns nothing.
+///
+/// Spec: AOUSD Core §7.3.3 (names), §8.5 (path grammar).
+pub(crate) fn check_names(s: &str) -> Result<(), SpecPathError> {
+    use crate::ident::is_identifier;
+    let Some(rest) = s.strip_prefix('/') else {
+        return Err(SpecPathError::NotAbsolute);
+    };
+    let mut prims = 0_usize;
+    let mut rest = rest;
+    while let Some(next) = rest.chars().next() {
+        match next {
+            '/' => return Err(SpecPathError::EmptySegment),
+            '{' => {
+                let close = rest
+                    .find('}')
+                    .ok_or(SpecPathError::MalformedVariantSelection)?;
+                let (set, _) = rest[1..close]
+                    .split_once('=')
+                    .ok_or(SpecPathError::MalformedVariantSelection)?;
+                if !is_identifier(set) {
+                    return Err(SpecPathError::MalformedVariantSelection);
+                }
+                rest = &rest[close + 1..];
+                if let Some(after) = rest.strip_prefix('/') {
+                    rest = after;
+                }
+            }
+            '.' => {
+                let property = &rest[1..];
+                if property.is_empty() {
+                    return Err(SpecPathError::EmptyPropertyName);
+                }
+                if prims == 0 {
+                    return Err(SpecPathError::RootPrimNotAllowed);
+                }
+                if !crate::path::is_property_name(property) {
+                    return Err(SpecPathError::InvalidPropertyName);
+                }
+                return Ok(());
+            }
+            _ => {
+                let end = rest.find(['/', '{', '.']).unwrap_or(rest.len());
+                if !is_identifier(&rest[..end]) {
+                    return Err(SpecPathError::InvalidPrimPath(PathError::InvalidPrimName));
+                }
+                prims += 1;
+                rest = &rest[end..];
+                if let Some(after) = rest.strip_prefix('/') {
+                    if after.is_empty() {
+                        return Err(SpecPathError::EmptySegment);
+                    }
+                    rest = after;
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]

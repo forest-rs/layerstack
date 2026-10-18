@@ -493,7 +493,7 @@ mod tests {
 
     #[test]
     fn batched_opinions_preserve_shared_snapshots_and_equal_key_order() {
-        let mut store = InMemoryStore::default();
+        let store = InMemoryStore::default();
         let prim = store.path("/Emitter");
         let field = store.tokens.intern("value");
         let site = SpecPath::from_prim_path(prim);
@@ -538,7 +538,7 @@ mod tests {
 
     #[test]
     fn field_identity_strength_and_removal_survive_grouping() {
-        let mut store = InMemoryStore::default();
+        let store = InMemoryStore::default();
         let prim = store.path("/Emitter");
         let a = store.tokens.intern("a");
         let b = store.tokens.intern("b");

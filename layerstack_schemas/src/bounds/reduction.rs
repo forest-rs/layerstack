@@ -123,7 +123,7 @@ mod tests {
     fn replacements_shrink_ranges_and_reclaim_purpose_buckets() {
         use ImageablePurpose::{Default, Guide, Proxy, Render};
         let purposes = [Default, Render, Proxy, Guide];
-        let mut store = layerstack::InMemoryStore::default();
+        let store = layerstack::InMemoryStore::default();
         let children: Vec<_> = (0..71)
             .map(|i| store.path(&alloc::format!("/P{i}")))
             .collect();

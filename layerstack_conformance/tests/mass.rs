@@ -48,7 +48,7 @@ fn rigid_body_mass_matches_openusd_callback_evaluation() {
     let oracle: Oracle =
         serde_json::from_str(include_str!("../fixtures/mass/oracle.json")).unwrap();
     assert_eq!(oracle.version, layerstack_schemas::OPENUSD_VERSION);
-    let (mut store, live) = support::scene(include_str!("../fixtures/mass/scene.usda"));
+    let (store, live) = support::scene(include_str!("../fixtures/mass/scene.usda"));
     for row in oracle.rows {
         let path = store.path(&row.path);
         let scene = Scene::new(live.stage(), &store);
@@ -161,7 +161,7 @@ fn pure_aggregation_and_principal_frame_reconstruct_inertia() {
 }
 #[test]
 fn invalid_geometry_and_missing_mass_return_errors_without_nonfinite_results() {
-    let (mut store, live) = support::scene(include_str!("../fixtures/mass/scene.usda"));
+    let (store, live) = support::scene(include_str!("../fixtures/mass/scene.usda"));
     let path = store.path("/Default");
     let scene = Scene::new(live.stage(), &store);
     let body = PhysicsRigidBodyApi::get(&scene, path).unwrap();
@@ -188,7 +188,7 @@ fn invalid_geometry_and_missing_mass_return_errors_without_nonfinite_results() {
 
 #[test]
 fn missing_mass_and_invalid_units_are_reported_explicitly() {
-    let (mut store, live) = support::scene(
+    let (store, live) = support::scene(
         "#usda 1.0\ndef Xform \"Body\" (prepend apiSchemas = [\"PhysicsRigidBodyAPI\"]) {}\n",
     );
     let path = store.path("/Body");
@@ -198,7 +198,7 @@ fn missing_mass_and_invalid_units_are_reported_explicitly() {
         body.compute_mass_properties(|_| panic!("no colliders")),
         Err(MassError::InvalidMass)
     );
-    let (mut store, live) = support::scene(
+    let (store, live) = support::scene(
         "#usda 1.0\n( metersPerUnit = 0 )\ndef Xform \"Body\" (prepend apiSchemas = [\"PhysicsRigidBodyAPI\",\"PhysicsMassAPI\"]) {\n float physics:mass = 3\n}\n",
     );
     let path = store.path("/Body");

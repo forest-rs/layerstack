@@ -149,7 +149,7 @@ fn each_library_registers_with_its_dependencies() {
 
 #[test]
 fn views_are_had_for_prims_of_their_schemas() {
-    let (mut store, live) = stage();
+    let (store, live) = stage();
     let [spectro, imager, spinner, scope, rack, lamp] = [
         "/Spectro", "/Imager", "/Spinner", "/Scope", "/Rack", "/Lamp",
     ]
@@ -175,7 +175,7 @@ fn views_are_had_for_prims_of_their_schemas() {
 
 #[test]
 fn getters_read_authored_values_fallbacks_and_samples() {
-    let (mut store, live) = stage();
+    let (store, live) = stage();
     let [spectro, imager, spinner, lamp] =
         ["/Spectro", "/Imager", "/Spinner", "/Lamp"].map(|p| store.path(p));
     let scene = Scene::new(live.stage(), &store);
@@ -241,7 +241,7 @@ fn getters_read_authored_values_fallbacks_and_samples() {
 
 #[test]
 fn multiple_apply_instances_read_their_own_properties() {
-    let (mut store, live) = stage();
+    let (store, live) = stage();
     let [spectro, imager] = ["/Spectro", "/Imager"].map(|p| store.path(p));
     let scene = Scene::new(live.stage(), &store);
     let names: Vec<&str> = ChannelApi::instances(&scene, spectro)
@@ -268,7 +268,7 @@ fn multiple_apply_instances_read_their_own_properties() {
 
 #[test]
 fn inherited_openusd_views_read_through_deref() {
-    let (mut store, live) = stage();
+    let (store, live) = stage();
     let [scope_path, rack] = ["/Scope", "/Rack"].map(|p| store.path(p));
     let scene = Scene::new(live.stage(), &store);
     let scope = Telescope::new(&scene, scope_path).expect("a telescope");

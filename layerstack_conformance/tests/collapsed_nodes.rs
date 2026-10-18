@@ -114,7 +114,7 @@ fn layer_id(loaded: &LoadedStage, name: &str) -> LayerId {
 #[test]
 fn prim_stacks_repeat_each_occurrence_of_a_site() {
     let oracle = oracle();
-    let (mut loaded, stage) = compose(&oracle);
+    let (loaded, stage) = compose(&oracle);
     let pseudo_root = loaded.store.path("/");
     let mut composed: Vec<String> = stage
         .traverse(pseudo_root)
@@ -158,7 +158,7 @@ fn prim_stacks_repeat_each_occurrence_of_a_site() {
 #[test]
 fn each_occurrence_keeps_its_own_layer_offset() {
     let oracle = oracle();
-    let (mut loaded, stage) = compose(&oracle);
+    let (loaded, stage) = compose(&oracle);
     assert!(
         !oracle.property_stacks.is_empty(),
         "the oracle records property stacks"
@@ -198,7 +198,7 @@ fn each_occurrence_keeps_its_own_layer_offset() {
 #[test]
 fn values_match_openusd() {
     let oracle = oracle();
-    let (mut loaded, stage) = compose(&oracle);
+    let (loaded, stage) = compose(&oracle);
     let mut mismatches = Vec::new();
     for (attr, expected) in &oracle.values {
         let property = loaded.store.property_path(attr);
@@ -219,7 +219,7 @@ fn values_match_openusd() {
 #[test]
 fn time_samples_use_the_strongest_occurrence_offset() {
     let oracle = oracle();
-    let (mut loaded, stage) = compose(&oracle);
+    let (loaded, stage) = compose(&oracle);
     assert!(
         !oracle.samples.is_empty(),
         "the oracle records time samples"

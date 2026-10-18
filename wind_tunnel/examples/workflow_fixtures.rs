@@ -15,7 +15,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let wide_prims: usize = args.next().map_or(Ok(256), |arg| arg.parse())?;
     std::fs::create_dir_all(&directory)?;
     for shape in ["wide", "deep", "animated"] {
-        let mut store = InMemoryStore::default();
+        let store = InMemoryStore::default();
         let mut layer = Layer::new(LayerId(1));
         let root = store.path("/");
         layer.insert_prim(root, PrimSpec::default());

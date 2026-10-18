@@ -100,7 +100,7 @@ fn failure_scene(
 fn subset_members_preserve_errors_in_unassigned_and_both_checked_validations() {
     for time in [Time::Default, Time::held(1.), Time::at(1.5)] {
         let error = ArrayReadError::BudgetExceeded { limit: 19 };
-        let (mut store, live, property) =
+        let (store, live, property) =
             failure_scene(MESH, "/M/S.indices", Value::Int(0), &error, time);
         let mesh_path = store.path("/M");
         let scene = Scene::new(live.stage(), &store);
@@ -187,8 +187,7 @@ fn subset_queries_preserve_errors_for_every_supported_topology_array() {
     for (source, element, name, kind) in cases {
         for time in [Time::Default, Time::held(1.), Time::at(1.5)] {
             let error = ArrayReadError::InvalidData(format!("failed {name}").into());
-            let (mut store, live, property) =
-                failure_scene(&source, name, kind.clone(), &error, time);
+            let (store, live, property) = failure_scene(&source, name, kind.clone(), &error, time);
             let path = store.path("/M");
             let scene = Scene::new(live.stage(), &store);
             let geometry = Imageable::new(&scene, path).unwrap();
@@ -216,7 +215,7 @@ fn mesh_validation_distinguishes_every_failed_array_from_missing_topology() {
     ] {
         for time in [Time::Default, Time::held(1.), Time::at(1.5)] {
             let error = ArrayReadError::BudgetExceeded { limit: 23 };
-            let (mut store, live, property) = failure_scene(MESH, name, kind.clone(), &error, time);
+            let (store, live, property) = failure_scene(MESH, name, kind.clone(), &error, time);
             let path = store.path("/M");
             let scene = Scene::new(live.stage(), &store);
             let mesh = Mesh::new(&scene, path).unwrap();
@@ -231,7 +230,7 @@ fn mesh_validation_distinguishes_every_failed_array_from_missing_topology() {
 
 #[test]
 fn checked_validation_retains_ordinary_missing_topology_as_a_problem() {
-    let (mut store, live) = support::scene("#usda 1.0\ndef Mesh \"M\" {}");
+    let (store, live) = support::scene("#usda 1.0\ndef Mesh \"M\" {}");
     let path = store.path("/M");
     let scene = Scene::new(live.stage(), &store);
     let geometry = Imageable::new(&scene, path).unwrap();

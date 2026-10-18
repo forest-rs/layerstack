@@ -41,7 +41,7 @@ fn family_validation_and_discovery_match_openusd() {
     let oracle: Oracle =
         serde_json::from_str(include_str!("../fixtures/subsets/oracle.json")).unwrap();
     assert_eq!(oracle.version, layerstack_schemas::OPENUSD_VERSION);
-    let (mut store, live) = support::scene(include_str!("../fixtures/subsets/scene.usda"));
+    let (store, live) = support::scene(include_str!("../fixtures/subsets/scene.usda"));
     for row in oracle.rows {
         let p = store.path(&row.path);
         let scene = Scene::new(live.stage(), &store);
@@ -92,7 +92,7 @@ fn malformed_counts_and_unsorted_edges_are_safe_and_deterministic() {
         validate_mesh_topology(&[3], &[1], 3),
         Err(MeshTopologyError::InvalidVertexIndex(3))
     );
-    let (mut store, live) = support::scene(
+    let (store, live) = support::scene(
         "#usda 1.0\ndef Mesh \"M\" {\n point3f[] points = [(0,0,0),(1,0,0),(0,1,0)]\n int[] faceVertexCounts = [3]\n int[] faceVertexIndices = [0,1,2]\n def GeomSubset \"S\" {\n uniform token elementType = \"edge\"\n uniform token familyName = \"edges\"\n int[] indices = [1,2,0,1]\n }\n}\n",
     );
     let path = store.path("/M");
@@ -113,7 +113,7 @@ fn malformed_counts_and_unsorted_edges_are_safe_and_deterministic() {
 
 #[test]
 fn incomplete_pairs_do_not_merge_between_subsets() {
-    let (mut store, live) = support::scene(
+    let (store, live) = support::scene(
         r#"#usda 1.0
 def Mesh "M" {
  point3f[] points = [(0,0,0),(1,0,0),(0,1,0)]

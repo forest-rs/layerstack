@@ -41,7 +41,7 @@ fn light_extents_match_cpp_defaults_and_interpolated_float_parameters() {
         } else {
             text
         };
-        let (mut store, live) = support::scene(&text);
+        let (store, live) = support::scene(&text);
         let path = store.path("/Light");
         let time = row.time.map_or(Time::Default, |code| Time::At {
             code,
@@ -99,7 +99,7 @@ fn authored_extents_win_and_dimension_edits_invalidate_retained_bounds() {
             .max,
         [4.; 3]
     );
-    let (mut store, live) = support::scene(
+    let (store, live) = support::scene(
         "#usda 1.0\ndef SphereLight \"Light\" {\n float3[] extent = [(-7,-8,-9), (7,8,9)]\n bool inputs:treatAsPoint = true\n}\n",
     );
     let path = store.path("/Light");
@@ -126,7 +126,7 @@ fn blocked_light_dimensions_fail_at_default_and_retire_numeric_cached_bounds() {
         ("PortalLight", "width"),
         ("PortalLight", "height"),
     ] {
-        let (mut store, live) = support::scene(&format!(
+        let (store, live) = support::scene(&format!(
             "#usda 1.0\ndef {schema} \"Light\" {{\n float inputs:{dimension} = None\n}}\n"
         ));
         let path = store.path("/Light");

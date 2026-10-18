@@ -14,7 +14,7 @@ use layerstack_schemas::{
 
 #[test]
 fn point_and_curve_extents_match_cpp_at_default_and_sampled_times() {
-    let (mut store, live) = support::scene(include_str!("../fixtures/point_curve_bounds.usda"));
+    let (store, live) = support::scene(include_str!("../fixtures/point_curve_bounds.usda"));
     let expected: serde_json::Value =
         serde_json::from_str(include_str!("../fixtures/point_curve_bounds.json")).unwrap();
     let mut cache = BoundsCache::new(Time::Default, BoundsOptions::default());

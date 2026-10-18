@@ -39,7 +39,7 @@ fn matrices(
 fn masks_motion_and_prototype_local_transforms_match_cpp() {
     let expected: serde_json::Value =
         serde_json::from_str(include_str!("../fixtures/point_instancer_behavior.json")).unwrap();
-    let (mut store, live) = support::scene(SOURCE);
+    let (store, live) = support::scene(SOURCE);
     let path = store.path("/World/Instances");
     let implicit = store.path("/World/ImplicitIds");
     let interpolated = store.path("/World/Interpolated");
@@ -210,7 +210,7 @@ fn invalid_topology_and_prototype_cycles_fail_explicitly() {
             },
         ),
     ] {
-        let (mut store, live) = support::scene(text);
+        let (store, live) = support::scene(text);
         let path = store.path("/I");
         let view = PointInstancer::new(&Scene::new(live.stage(), &store), path).unwrap();
         let options = InstanceTransformOptions {
@@ -223,7 +223,7 @@ fn invalid_topology_and_prototype_cycles_fail_explicitly() {
             expected
         );
     }
-    let (mut store, live) = support::scene(
+    let (store, live) = support::scene(
         "#usda 1.0\ndef PointInstancer \"I\" {\nrel prototypes = </I>\nint[] protoIndices = [0]\npoint3f[] positions = [(0,0,0)]\n}",
     );
     let path = store.path("/I");

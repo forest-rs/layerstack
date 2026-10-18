@@ -99,7 +99,7 @@ fn layer_name(loaded: &LoadedStage, layer: layerstack::LayerId) -> String {
 #[test]
 fn prim_stacks_and_values_match_openusd() {
     let oracle = oracle();
-    let (mut loaded, stage) = compose(&oracle);
+    let (loaded, stage) = compose(&oracle);
     let pseudo_root = loaded.store.path("/");
     let mut composed: Vec<String> = stage
         .traverse(pseudo_root)
@@ -152,7 +152,7 @@ fn prim_stacks_and_values_match_openusd() {
 #[test]
 fn time_samples_take_the_authoring_sublayer_offset() {
     let oracle = oracle();
-    let (mut loaded, stage) = compose(&oracle);
+    let (loaded, stage) = compose(&oracle);
     assert!(
         !oracle.samples.is_empty(),
         "the oracle records time samples"
@@ -184,7 +184,7 @@ fn time_samples_take_the_authoring_sublayer_offset() {
 #[test]
 fn explanations_report_the_combined_offset() {
     let oracle = oracle();
-    let (mut loaded, stage) = compose(&oracle);
+    let (loaded, stage) = compose(&oracle);
     let mut mismatches = Vec::new();
     for (attr, &(offset, scale)) in &oracle.offsets {
         let property = loaded.store.property_path(attr);

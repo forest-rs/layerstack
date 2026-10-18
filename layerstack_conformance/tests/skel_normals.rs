@@ -44,7 +44,7 @@ fn matrix(actual: &[[f64; 4]; 4], expected: &serde_json::Value) {
 }
 #[test]
 fn normals_rigid_transforms_and_standalone_animation_match_cpp() {
-    let (mut store, live) = support::scene(include_str!("../fixtures/skel_normals.usda"));
+    let (store, live) = support::scene(include_str!("../fixtures/skel_normals.usda"));
     let expected: serde_json::Value =
         serde_json::from_str(include_str!("../fixtures/skel_normals.json")).unwrap();
     let paths: Vec<_> = expected["frames"]
@@ -152,7 +152,7 @@ fn sample_helpers_apply_offsets_masking_and_single_sample_variability() {
             "{}\ndef SkelAnimation \"Offset\" (references = </Rig/Animation> (offset = 10; scale = -2)) {{\n{body}\n}}\n",
             include_str!("../fixtures/skel_normals.usda")
         );
-        let (mut store, live) = support::scene(&text);
+        let (store, live) = support::scene(&text);
         let path = store.path("/Offset");
         let scene = Scene::new(live.stage(), &store);
         let anim = SkelAnimation::new(&scene, path).unwrap();
@@ -178,7 +178,7 @@ fn unavailable_and_malformed_animation_components_are_distinct() {
         "half3[] scales = [(2,0.5,1), (1,3,0.5)]",
         "half3[] scales = None",
     );
-    let (mut store, live) = support::scene(&text);
+    let (store, live) = support::scene(&text);
     let path = store.path("/Rig/Animation");
     let scene = Scene::new(live.stage(), &store);
     assert!(
@@ -192,7 +192,7 @@ fn unavailable_and_malformed_animation_components_are_distinct() {
         "half3[] scales = [(2,0.5,1), (1,3,0.5)]",
         "half3[] scales = [(1,1,1)]",
     );
-    let (mut store, live) = support::scene(&text);
+    let (store, live) = support::scene(&text);
     let path = store.path("/Rig/Animation");
     let scene = Scene::new(live.stage(), &store);
     assert!(matches!(

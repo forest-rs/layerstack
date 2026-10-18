@@ -270,7 +270,12 @@ pub struct LiveStage {
     /// refreshing, not the namespace beneath them.
     support_sources: Vec<(LayerId, PathId)>,
     layer_discovery: discovery::LayerDiscovery,
+    /// The child specs of layers that do not list them, kept across
+    /// compositions so an edit re-indexes only the specs it adds.
+    child_index: crate::prim_indexing::ChildIndex,
     work: RecompositionWork,
+    /// [`Self::child_index`]'s work when [`Self::work`] was last reset.
+    child_index_mark: crate::prim_indexing::ChildIndexWork,
     notices: notices::Journal,
 }
 
@@ -282,7 +287,8 @@ impl LiveStage {
             with_dependencies: true,
             ..options.clone()
         };
-        let mut stage = Stage::compose_retained(store, root, opts, false);
+        let child_index = crate::prim_indexing::ChildIndex::default();
+        let mut stage = Stage::compose_retained(store, root, opts, false, &child_index);
         let deps = stage.take_deps().unwrap_or_default();
         let tracker =
             InvalidationTracker::from_graph_with_cycle_handling(deps.graph, CycleHandling::Ignore);
@@ -311,6 +317,8 @@ impl LiveStage {
             structural_sources: Vec::new(),
             support_sources: Vec::new(),
             layer_discovery: discovery::LayerDiscovery::default(),
+            child_index_mark: child_index.work(),
+            child_index,
             work: RecompositionWork::default(),
             notices: notices::Journal::default(),
         };
@@ -547,7 +555,7 @@ impl LiveStage {
             .flatten()
             .map(|index| index as &dyn crate::edit::SourceNamespace);
         let outcome = crate::edit::apply(store, txn, Some(&self.stage), namespace)?;
-        self.work = RecompositionWork::default();
+        self.reset_work();
         // Prims whose dynamic payload arguments the edits may change are
         // recomposed, though no value refresh or source mapping finds them.
         let argument_dependents = if sources_current {
@@ -795,7 +803,8 @@ impl LiveStage {
             with_dependencies: true,
             ..self.options.clone()
         };
-        let mut partial = Stage::compose_local_paths(store, self.root, options, seed);
+        let mut partial =
+            Stage::compose_local_paths(store, self.root, options, seed, &self.child_index);
         let deps = partial.take_deps().unwrap_or_default();
         let mut changes = Changes::default();
         for path in &affected {
@@ -825,6 +834,7 @@ impl LiveStage {
             &hierarchy,
             boundary_children,
             &affected,
+            &self.child_index,
         );
         self.update_prim_edges(&affected, &deps);
         for &path in &affected {
@@ -1225,9 +1235,12 @@ impl LiveStage {
 
     /// Notifies that a structural change occurred (prims added/removed, arcs changed).
     ///
-    /// This forces a full rebuild on the next [`recompose`](Self::recompose) call.
+    /// This forces a full rebuild on the next [`recompose`](Self::recompose)
+    /// call, which also indexes the child specs of every layer anew rather
+    /// than trusting the generations it indexed them at.
     pub fn notify_structural_change(&mut self) {
         self.needs_full_rebuild = true;
+        self.child_index.clear();
     }
 
     /// Recomposes affected prims and returns the set of prims that were updated.
@@ -1364,7 +1377,7 @@ impl LiveStage {
         store: &mut dyn LayerStore,
         mut changes: Option<&mut Changes>,
     ) -> Vec<PathId> {
-        self.work = RecompositionWork::default();
+        self.reset_work();
         // Store snapshots preserve old numeric IDs but have independent future
         // interning domains. Layer generations alone cannot detect publication
         // of that snapshot; refresh all retained affinity and dependency evidence.
@@ -1657,7 +1670,7 @@ impl LiveStage {
             threads: self.options.threads,
             dynamic_formats: self.options.dynamic_formats.clone(),
         };
-        Stage::compose_retained(store, self.root, scoped_opts, true)
+        Stage::compose_retained(store, self.root, scoped_opts, true, &self.child_index)
     }
 
     /// Recomposes the whole stage and returns every path in the new stage
@@ -1681,7 +1694,7 @@ impl LiveStage {
             with_dependencies: true,
             ..self.options.clone()
         };
-        let mut stage = Stage::compose_retained(store, self.root, opts, false);
+        let mut stage = Stage::compose_retained(store, self.root, opts, false, &self.child_index);
         let deps = stage.take_deps().unwrap_or_default();
 
         self.work.full_rebuild = true;
@@ -3896,6 +3909,82 @@ mod tests {
         live.recompose(&mut store);
         assert_matches_fresh(&live, &mut store, &[]);
         assert_eq!(live.stage().children_of(parent), Some(&[b, a][..]));
+    }
+
+    /// Creating and removing children of a parent whose layer does not list
+    /// them composes what a fresh composition does. The stage keeps its
+    /// child index across edits: creations patch it, removals index the
+    /// layer anew, and value edits leave it alone.
+    ///
+    /// Spec: AOUSD Core §11 (stage population). OpenUSD:
+    /// `PcpComposeSiteChildNames`.
+    #[test]
+    fn child_creations_and_removals_keep_the_child_index() {
+        use crate::{EditTarget, Specifier, edit::Transaction};
+        let mut store = InMemoryStore::default();
+        let world = p(&mut store, "/World");
+        let value = store.tokens.intern("x");
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(world, PrimSpec::def());
+        for i in 0..4 {
+            let rock = p(&mut store, &alloc::format!("/World/Rock{i}"));
+            layer.insert_prim(rock, PrimSpec::def());
+        }
+        store.insert_layer(layer);
+        let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+        let target = EditTarget::for_layer(LayerId(1));
+        let index_work = |live: &LiveStage| {
+            let work = live.recomposition_work();
+            (work.child_index_rebuilds, work.child_index_patches)
+        };
+
+        let mut undo = Vec::new();
+        for path in ["/World/Plant0", "/World/Plant1/Leaf", "/World/Rock1/Moss"] {
+            let mut txn = Transaction::new();
+            txn.create_prim(target.prim(p(&mut store, path)), Specifier::Def, None);
+            undo.push(live.apply(&mut store, &txn).unwrap().inverse);
+            assert_eq!(index_work(&live), (0, 1), "{path}");
+            assert_fresh(&live, &mut store, value);
+        }
+
+        let mut txn = Transaction::new();
+        txn.remove_spec(target.prim(p(&mut store, "/World/Rock2")));
+        let restore = live.apply(&mut store, &txn).unwrap().inverse;
+        assert_eq!(index_work(&live), (1, 0));
+        assert_fresh(&live, &mut store, value);
+        live.apply(&mut store, &restore).unwrap();
+        assert_eq!(index_work(&live), (0, 1));
+        assert_fresh(&live, &mut store, value);
+        while let Some(inverse) = undo.pop() {
+            live.apply(&mut store, &inverse).unwrap();
+            assert_fresh(&live, &mut store, value);
+        }
+
+        let mut txn = Transaction::new();
+        txn.create_property(
+            target.property(PropertyPath::new(world, value)),
+            PropertySpec::typed_attribute(crate::PropertyType::new(
+                "double",
+                false,
+                Value::Double(0.0),
+            ))
+            .with_default(Value::Double(1.0)),
+        );
+        live.apply(&mut store, &txn).unwrap();
+        assert_eq!(index_work(&live), (0, 0), "a value edit re-indexes nothing");
+        assert_fresh(&live, &mut store, value);
+
+        // An edit made outside the stage patches the index too.
+        let stone = p(&mut store, "/World/Stone");
+        store
+            .layers
+            .get_mut(&LayerId(1))
+            .unwrap()
+            .insert_prim(stone, PrimSpec::def());
+        live.notify_changed_layers(&store);
+        live.recompose(&mut store);
+        assert_eq!(index_work(&live), (0, 1));
+        assert_fresh(&live, &mut store, value);
     }
 
     /// Child order folds layer by layer: each layer appends its children,

@@ -496,14 +496,19 @@ impl Stage {
         options: StageOptions,
         exact_mask: bool,
     ) -> Self {
-        Self::compose_retained(store, root, options, exact_mask)
+        let child_index = crate::prim_indexing::ChildIndex::default();
+        Self::compose_retained(store, root, options, exact_mask, &child_index)
     }
 
+    /// Composes as [`Self::compose`] does, reading the child specs of layers
+    /// that do not list them from `child_index`, which a live stage keeps
+    /// across compositions.
     pub(crate) fn compose_retained(
         store: &mut dyn LayerStore,
         root: LayerId,
         mut options: StageOptions,
         exact_mask: bool,
+        child_index: &crate::prim_indexing::ChildIndex,
     ) -> Self {
         options.muted_layers.remove(&root);
         let captured = options.clone();
@@ -514,8 +519,14 @@ impl Stage {
             muted: &captured.muted_layers,
         };
         let store: &mut dyn LayerStore = &mut controlled;
-        let mut stage =
-            crate::compose::compose_stage_retained(store, root, options, None, exact_mask);
+        let mut stage = crate::compose::compose_stage_retained(
+            store,
+            root,
+            options,
+            None,
+            exact_mask,
+            child_index,
+        );
         stage.options = captured.clone();
         stage.store_identity = Some(store.identity());
         stage.root_layer = Some(root);
@@ -531,10 +542,17 @@ impl Stage {
         root: LayerId,
         options: StageOptions,
         paths: alloc::collections::BTreeSet<PathId>,
+        child_index: &crate::prim_indexing::ChildIndex,
     ) -> Self {
         let captured = options.clone();
         let schemas = options.schemas.clone();
-        let mut stage = crate::compose::compose_stage_with_paths(store, root, options, Some(paths));
+        let mut stage = crate::compose::compose_stage_with_paths(
+            store,
+            root,
+            options,
+            Some(paths),
+            child_index,
+        );
         stage.options = captured;
         stage.store_identity = Some(store.identity());
         stage.root_layer = Some(root);
@@ -556,6 +574,7 @@ impl Stage {
         hierarchy: &[PathId],
         boundary_children: Vec<(PathId, Vec<PathId>)>,
         composed_roots: &[PathId],
+        child_index: &crate::prim_indexing::ChildIndex,
     ) {
         for path in affected {
             if let Some(old) = self.prims.remove(path) {
@@ -590,7 +609,7 @@ impl Stage {
                 self.children.remove(&parent);
                 continue;
             }
-            crate::prim_indexing::order_children(store, index, &mut children);
+            crate::prim_indexing::order_children(store, index, child_index, &mut children);
             // Ordinary composition orders before pruning inactive children:
             // invisible names can delimit reorder groups of visible names.
             children.retain(|child| self.prims.contains_key(child));

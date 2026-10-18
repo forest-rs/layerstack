@@ -53,7 +53,7 @@ use super::{
 pub(crate) struct Ctx<'s> {
     pub(crate) store: &'s dyn LayerStore,
     pub(crate) stacks: LayerStacks,
-    pub(crate) child_index: ChildIndex,
+    pub(crate) child_index: &'s ChildIndex,
     pub(crate) fallbacks: &'s VariantFallbacks,
     /// Whether payloads at a stage path are loaded.
     pub(crate) include_payload: &'s (dyn Fn(&crate::path::PathInterner, PathId) -> bool + Sync),

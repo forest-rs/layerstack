@@ -507,20 +507,90 @@ fn has_child_spec(store: &dyn LayerStore, layer: &Layer, site: &SpecPath, name: 
 /// The child prim specs of each prim spec of a layer, for specs that list
 /// no children of their own (layers built through `Layer::insert_prim`),
 /// shared by the threads composing a stage.
+///
+/// A live stage keeps one across compositions. A layer's entry stays
+/// current while [`Layer::structural_generation`] does, so value edits
+/// never re-index it. When only specs were added, the entry is patched from
+/// the prim paths the layer recorded as changed
+/// ([`Layer::changed_paths_since`]); a removed spec, a replaced layer or
+/// expired history indexes the layer anew.
 #[derive(Default)]
 pub(crate) struct ChildIndex {
-    /// Per layer, its generation and the children under each parent site.
-    layers: ReadLock<HashMap<LayerId, Arc<(u64, LayerChildren)>>>,
+    state: ReadLock<IndexState>,
+}
+
+#[derive(Default)]
+struct IndexState {
+    /// The token and path domains the entries' names come from.
+    identity: Option<crate::StoreIdentity>,
+    layers: HashMap<LayerId, IndexedLayer>,
+    work: ChildIndexWork,
+}
+
+/// One layer's children, as of the generations it was indexed or patched
+/// at.
+struct IndexedLayer {
+    generation: u64,
+    structure: u64,
+    children: Arc<LayerChildren>,
+}
+
+/// The layers a [`ChildIndex`] has indexed, counted since it was made.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct ChildIndexWork {
+    /// Layers indexed from every prim spec they hold.
+    pub(crate) rebuilds: usize,
+    /// Layers whose entry was patched with the specs they added.
+    pub(crate) patches: usize,
+}
+
+impl core::fmt::Debug for ChildIndex {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        self.state.read(|state| {
+            f.debug_struct("ChildIndex")
+                .field("layers", &state.layers.len())
+                .field("work", &state.work)
+                .finish()
+        })
+    }
 }
 
 /// The children of a layer's parent sites, keyed by the parent's prim
 /// names (rather than interned paths, since a spec's ancestors need not be
 /// interned), then by the variant selections enclosing them, which most
-/// parents have one set of.
+/// parents have one set of. Each list is sorted by name.
 type LayerChildren =
     HashMap<Vec<TokenId>, Vec<(Vec<crate::spec_path::VariantSelectionSite>, Vec<TokenId>)>>;
 
 impl ChildIndex {
+    /// Forgets every entry when `store` interns names in other domains
+    /// than the entries were indexed with.
+    pub(crate) fn prepare(&self, store: &dyn LayerStore) {
+        let identity = store.identity();
+        if self
+            .state
+            .read(|state| state.identity.as_ref() == Some(&identity))
+        {
+            return;
+        }
+        self.state.write(|state| {
+            if state.identity.as_ref() != Some(&identity) {
+                state.layers.clear();
+                state.identity = Some(identity);
+            }
+        });
+    }
+
+    /// Forgets every entry, keeping the work counted.
+    pub(crate) fn clear(&self) {
+        self.state.write(|state| state.layers.clear());
+    }
+
+    /// The layers indexed and patched so far.
+    pub(crate) fn work(&self) -> ChildIndexWork {
+        self.state.read(|state| state.work)
+    }
+
     /// Calls `f` with the names of the child specs `layer` authors beneath
     /// `site`.
     fn with_children<R>(
@@ -530,24 +600,9 @@ impl ChildIndex {
         site: &SpecPath,
         f: impl FnOnce(&[TokenId]) -> R,
     ) -> R {
-        let generation = layer.generation();
-        let current = self.layers.read(|layers| {
-            layers
-                .get(&layer.id)
-                .filter(|entry| entry.0 == generation)
-                .cloned()
-        });
-        // Indexed without the lock; threads indexing one layer at once each
-        // keep their own.
-        let entry = current.unwrap_or_else(|| {
-            let entry = Arc::new((generation, index_layer(store, layer)));
-            self.layers
-                .write(|layers| layers.insert(layer.id, entry.clone()));
-            entry
-        });
+        let entry = self.layer_children(store, layer);
         let segments = store.paths().resolve(site.prim_path()).segments();
         let names = entry
-            .1
             .get(segments)
             .and_then(|branches| {
                 branches
@@ -556,6 +611,185 @@ impl ChildIndex {
             })
             .map_or(&[][..], |(_, names)| names.as_slice());
         f(names)
+    }
+
+    /// The children of `layer`'s parent sites, brought up to date.
+    fn layer_children(&self, store: &dyn LayerStore, layer: &Layer) -> Arc<LayerChildren> {
+        let (generation, structure) = (layer.generation(), layer.structural_generation());
+        let seen = self.state.read(|state| {
+            state.layers.get(&layer.id).map(|entry| {
+                let current = entry.structure == structure;
+                (entry.generation, current.then(|| entry.children.clone()))
+            })
+        });
+        match seen {
+            Some((seen, Some(children))) => {
+                if seen != generation {
+                    // Only values changed. Later patches read the layer's
+                    // history from here, while it is still retained.
+                    self.state.write(|state| {
+                        if let Some(entry) = state.layers.get_mut(&layer.id)
+                            && entry.structure == structure
+                        {
+                            entry.generation = generation;
+                        }
+                    });
+                }
+                return children;
+            }
+            Some((seen, None)) => {
+                if let Some(changed) = layer.changed_paths_since(seen)
+                    && let Some(children) = self.patch(store, layer, seen, &changed)
+                {
+                    return children;
+                }
+            }
+            None => {}
+        }
+        // Indexed without the lock; threads indexing one layer at once each
+        // keep their own, and the first to finish is kept.
+        let children = Arc::new(index_layer(store, layer));
+        self.state.write(|state| {
+            if let Some(entry) = state.layers.get(&layer.id)
+                && (entry.generation, entry.structure) == (generation, structure)
+            {
+                return entry.children.clone();
+            }
+            state.work.rebuilds += 1;
+            state.layers.insert(
+                layer.id,
+                IndexedLayer {
+                    generation,
+                    structure,
+                    children: children.clone(),
+                },
+            );
+            children
+        })
+    }
+
+    /// Adds the specs `layer` authors at the `changed` prim paths to its
+    /// entry, indexed at generation `seen`, or `None` when a name the entry
+    /// lists for them lost its spec, which only re-indexing drops.
+    fn patch(
+        &self,
+        store: &dyn LayerStore,
+        layer: &Layer,
+        seen: u64,
+        changed: &[PathId],
+    ) -> Option<Arc<LayerChildren>> {
+        let (generation, structure) = (layer.generation(), layer.structural_generation());
+        self.state.write(|state| {
+            let entry = state.layers.get_mut(&layer.id)?;
+            if entry.structure == structure {
+                // Another thread patched it first.
+                return Some(entry.children.clone());
+            }
+            if entry.generation != seen || !listings_hold(store, layer, &entry.children, changed) {
+                return None;
+            }
+            // Unshared between compositions, so patched in place.
+            add_specs(store, layer, Arc::make_mut(&mut entry.children), changed);
+            entry.generation = generation;
+            entry.structure = structure;
+            let children = entry.children.clone();
+            state.work.patches += 1;
+            Some(children)
+        })
+    }
+}
+
+/// Whether `names`, sorted by name, holds `name`, and where it belongs.
+fn find_name(names: &[TokenId], name: TokenId, tokens: &TokenInterner) -> Result<usize, usize> {
+    let key = tokens.resolve(name);
+    names.binary_search_by(|probe| tokens.resolve(*probe).cmp(key))
+}
+
+/// Whether every listing `index` holds for a name at the `changed` prim
+/// paths still has a spec of `layer` in its variant branches to list it.
+/// A spec removed, or moved to other branches, leaves its name listed; so
+/// does a name listed only as the ancestor of specs beneath it, which this
+/// does not look for.
+fn listings_hold(
+    store: &dyn LayerStore,
+    layer: &Layer,
+    index: &LayerChildren,
+    changed: &[PathId],
+) -> bool {
+    let (paths, tokens) = (store.paths(), store.tokens());
+    changed.iter().all(|&path| {
+        let Some((&name, parent)) = paths.resolve(path).segments().split_last() else {
+            return true;
+        };
+        index
+            .get(parent)
+            .into_iter()
+            .flatten()
+            .all(|(sites, names)| {
+                find_name(names, name, tokens).is_err()
+                    || layer
+                        .prim_specs(path)
+                        .any(|spec| spec.outer_variant_sites == *sites)
+            })
+    })
+}
+
+/// Lists the specs `layer` authors at the `changed` prim paths in `index`,
+/// as [`index_layer`] lists every spec.
+fn add_specs(store: &dyn LayerStore, layer: &Layer, index: &mut LayerChildren, changed: &[PathId]) {
+    let (paths, tokens) = (store.paths(), store.tokens());
+    // Each list grown, with the length of its sorted prefix: names not in
+    // the prefix are appended, then sorted in once all are known, so a
+    // patch adding many names to one list stays linear.
+    let mut grown: HashMap<(Vec<TokenId>, usize), usize> = HashMap::new();
+    for &path in changed {
+        let segments = paths.resolve(path).segments();
+        if segments.is_empty() {
+            continue;
+        }
+        for spec in layer.prim_specs(path) {
+            let outer = &spec.outer_variant_sites;
+            let first = if outer.is_empty() {
+                0
+            } else {
+                segments.len() - 1
+            };
+            for depth in first..segments.len() {
+                let parent = &segments[..depth];
+                if !index.contains_key(parent) {
+                    index.insert(parent.to_vec(), Vec::new());
+                }
+                let branches = index.get_mut(parent).expect("inserted above");
+                let at = match branches.iter().position(|(sites, _)| sites == outer) {
+                    Some(at) => at,
+                    None => {
+                        branches.push((outer.clone(), Vec::new()));
+                        branches.len() - 1
+                    }
+                };
+                let names = &mut branches[at].1;
+                let sorted = *grown
+                    .entry((parent.to_vec(), at))
+                    .or_insert_with(|| names.len());
+                if find_name(&names[..sorted], segments[depth], tokens).is_err() {
+                    names.push(segments[depth]);
+                }
+            }
+        }
+    }
+    for ((parent, at), sorted) in grown {
+        let names = &mut index.get_mut(&parent[..]).expect("grown above")[at].1;
+        if names.len() - sorted <= 16 {
+            for name in names.split_off(sorted) {
+                if let Err(slot) = find_name(names, name, tokens) {
+                    names.insert(slot, name);
+                }
+            }
+        } else {
+            // A stable sort merges the appended run into the sorted one.
+            names.sort_by(|a, b| tokens.resolve(*a).cmp(tokens.resolve(*b)));
+            names.dedup();
+        }
     }
 }
 
@@ -602,9 +836,12 @@ fn index_layer(store: &dyn LayerStore, layer: &Layer) -> LayerChildren {
 mod tests {
     use alloc::vec;
 
+    use alloc::vec::Vec;
+
     use crate::{
         InMemoryStore, Layer, LayerId, ListOp, PrimSpec, PropertySpec, PropertyType, Stage,
-        StageOptions, SublayerEntry, Value, VariantSetSpec, VariantSpec,
+        StageOptions, SublayerEntry, TokenId, Value, VariantSetSpec, VariantSpec,
+        spec_path::VariantSelectionSite,
     };
 
     /// A site evaluates the variant sets its layers' `variantSetNames` list
@@ -666,5 +903,126 @@ mod tests {
         assert_eq!(value(height), Some(Value::Double(2.0)));
         assert_eq!(value(gloss), None, "never listed");
         assert_eq!(stage.variant_sets(rock, &store), [(size, Some(big))]);
+    }
+
+    /// `index`'s entry for layer 1 of `store`, brought up to date, with
+    /// each parent's branches in a fixed order.
+    fn kept(
+        index: &super::ChildIndex,
+        store: &InMemoryStore,
+    ) -> alloc::collections::BTreeMap<Vec<TokenId>, Vec<Branch>> {
+        let layer = store.layers.get(&LayerId(1)).unwrap();
+        ordered(&index.layer_children(store, layer))
+    }
+
+    type Branch = (Vec<VariantSelectionSite>, Vec<TokenId>);
+
+    fn ordered(
+        children: &super::LayerChildren,
+    ) -> alloc::collections::BTreeMap<Vec<TokenId>, Vec<Branch>> {
+        children
+            .iter()
+            .map(|(parent, branches)| {
+                let mut branches = branches.clone();
+                branches.sort();
+                (parent.clone(), branches)
+            })
+            .collect()
+    }
+
+    /// The entry layer 1 of `store` would be indexed with afresh.
+    fn fresh(store: &InMemoryStore) -> alloc::collections::BTreeMap<Vec<TokenId>, Vec<Branch>> {
+        ordered(&super::index_layer(
+            store,
+            store.layers.get(&LayerId(1)).unwrap(),
+        ))
+    }
+
+    /// A kept child index patches the specs a layer adds, in and out of
+    /// variant branches and without their ancestors, into the entry it
+    /// indexed, and leaves the entry alone when only values change.
+    #[test]
+    fn kept_child_index_patches_added_specs() {
+        let mut store = InMemoryStore::default();
+        let [world, rock, plant, hill] =
+            ["/World", "/World/Rock", "/World/Plant", "/Terrain/Hill"].map(|path| store.path(path));
+        let [size, big] = ["size", "big"].map(|name| store.tokens.intern(name));
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(world, PrimSpec::def());
+        layer.insert_prim(rock, PrimSpec::def());
+        store.insert_layer(layer);
+        let index = super::ChildIndex::default();
+        index.prepare(&store);
+        assert_eq!(kept(&index, &store), fresh(&store));
+        assert_eq!((index.work().rebuilds, index.work().patches), (1, 0));
+
+        let layer = store.layers.get_mut(&LayerId(1)).unwrap();
+        layer.insert_prim(plant, PrimSpec::def());
+        layer.insert_prim(hill, PrimSpec::def());
+        let mut branch = PrimSpec::def();
+        branch.outer_variant_sites = vec![VariantSelectionSite {
+            host_path: world,
+            set: size,
+            variant: big,
+        }];
+        layer.insert_prim(rock, branch);
+        // Enough names at once to sort them in rather than insert each.
+        for i in 0..40 {
+            let path = store.path(&alloc::format!("/World/Stone{i}"));
+            store
+                .layers
+                .get_mut(&LayerId(1))
+                .unwrap()
+                .insert_prim(path, PrimSpec::def());
+        }
+        assert_eq!(kept(&index, &store), fresh(&store));
+        assert_eq!((index.work().rebuilds, index.work().patches), (1, 1));
+
+        let x = store.tokens.intern("x");
+        let layer = store.layers.get_mut(&LayerId(1)).unwrap();
+        let double = PropertyType::new("double", false, Value::Double(0.0));
+        layer.set_property(
+            crate::PropertyPath::new(rock, x),
+            PropertySpec::typed_attribute(double).with_default(Value::Double(1.0)),
+        );
+        assert!(layer.generation() > layer.structural_generation());
+        assert_eq!(kept(&index, &store), fresh(&store));
+        assert_eq!(
+            (index.work().rebuilds, index.work().patches),
+            (1, 1),
+            "a value edit re-indexes nothing"
+        );
+    }
+
+    /// A removed spec, a replaced layer and another store's names each
+    /// index the layer anew.
+    #[test]
+    fn kept_child_index_rebuilds_after_removals_and_replacements() {
+        let mut store = InMemoryStore::default();
+        let [world, rock, plant] =
+            ["/World", "/World/Rock", "/World/Plant"].map(|path| store.path(path));
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(world, PrimSpec::def());
+        layer.insert_prim(rock, PrimSpec::def());
+        layer.insert_prim(plant, PrimSpec::def());
+        store.insert_layer(layer.clone());
+        let index = super::ChildIndex::default();
+        index.prepare(&store);
+        kept(&index, &store);
+
+        store.layers.get_mut(&LayerId(1)).unwrap().remove_prim(rock);
+        assert_eq!(kept(&index, &store), fresh(&store));
+        assert_eq!((index.work().rebuilds, index.work().patches), (2, 0));
+
+        // The replacement holds what the first layer held: only its
+        // advanced generations tell it apart.
+        store.insert_layer(layer);
+        assert_eq!(kept(&index, &store), fresh(&store));
+        assert_eq!((index.work().rebuilds, index.work().patches), (3, 0));
+
+        let snapshot = store.snapshot();
+        index.prepare(&snapshot);
+        assert_eq!(kept(&index, &snapshot), fresh(&snapshot));
+        assert_eq!((index.work().rebuilds, index.work().patches), (4, 0));
     }
 }

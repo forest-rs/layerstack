@@ -523,6 +523,10 @@ fn has_child_spec(store: &dyn LayerStore, layer: &Layer, site: &SpecPath, name: 
 #[derive(Default)]
 pub(crate) struct ChildIndex {
     state: ReadLock<IndexState>,
+    /// For an index of a projected store ([`ChildIndex::projected`]), the
+    /// children of the parents whose child specs the projection changes,
+    /// by layer, in place of the entries' own; empty otherwise.
+    overrides: HashMap<LayerId, LayerChildren>,
 }
 
 #[derive(Default)]
@@ -556,6 +560,7 @@ impl core::fmt::Debug for ChildIndex {
             f.debug_struct("ChildIndex")
                 .field("layers", &state.layers.len())
                 .field("work", &state.work)
+                .field("overrides", &self.overrides.len())
                 .finish()
         })
     }
@@ -606,8 +611,19 @@ impl ChildIndex {
         site: &SpecPath,
         f: impl FnOnce(&[TokenId]) -> R,
     ) -> R {
-        let entry = self.layer_children(store, layer);
         let segments = store.paths().resolve(site.prim_path()).segments();
+        if let Some(branches) = self
+            .overrides
+            .get(&layer.id)
+            .and_then(|overrides| overrides.get(segments))
+        {
+            let names = branches
+                .iter()
+                .find(|(sites, _)| sites.iter().copied().eq(site.variant_selection_sites()))
+                .map_or(&[][..], |(_, names)| names.as_slice());
+            return f(names);
+        }
+        let entry = self.layer_children(store, layer);
         let names = entry
             .get(segments)
             .and_then(|branches| {
@@ -628,6 +644,7 @@ impl ChildIndex {
         layer: &Layer,
         parent: PathId,
     ) -> Vec<TokenId> {
+        debug_assert!(self.overrides.is_empty(), "a projected index is not listed");
         let entry = self.layer_children(store, layer);
         let segments = store.paths().resolve(parent).segments();
         let mut names: Vec<TokenId> = entry
@@ -639,6 +656,103 @@ impl ChildIndex {
         names.sort_unstable();
         names.dedup();
         names
+    }
+
+    /// An index of the store as it is with the prim slots `changed` of
+    /// each `original` layer holding what its `edited` working copy holds
+    /// there instead: this index's entries, brought up to date for the
+    /// edited layers, with the child names of the parents above the
+    /// changed slots composed again. Composing the projected store with it
+    /// reads the child specs a whole index of the projected layers would
+    /// list, without indexing them. `None` when a changed slot holds a
+    /// spec inside a variant branch.
+    ///
+    /// Each `edited` copy holds every slot at `changed`, as the projected
+    /// layer would; the projected layers keep their originals'
+    /// generations.
+    pub(crate) fn projected(
+        &self,
+        store: &dyn LayerStore,
+        edits: &[(&Layer, &Layer, &[PathId])],
+    ) -> Option<Self> {
+        let plain = |layer: &Layer, path: PathId| {
+            layer.variant_prims.get(&path).is_none_or(Vec::is_empty)
+                && layer
+                    .prims
+                    .get(&path)
+                    .is_none_or(|spec| spec.outer_variant_sites.is_empty())
+        };
+        let mut overrides = HashMap::new();
+        let mut bases = Vec::new();
+        for &(original, edited, changed) in edits {
+            if !changed
+                .iter()
+                .all(|path| plain(original, *path) && plain(edited, *path))
+            {
+                return None;
+            }
+            let base = self.layer_children(store, original);
+            let children = projected_children(store, original, edited, changed, &base);
+            // Every test that prepares an edit checks the projected names
+            // against an index of the whole projected layer.
+            #[cfg(test)]
+            {
+                let mut whole = original.clone();
+                for path in changed {
+                    match edited.prims.get(path) {
+                        Some(spec) => whole.prims.insert(*path, spec.clone()),
+                        None => whole.prims.remove(path),
+                    };
+                    match edited.variant_prims.get(path) {
+                        Some(specs) => whole.variant_prims.insert(*path, specs.clone()),
+                        None => whole.variant_prims.remove(path),
+                    };
+                }
+                let fresh = index_layer(store, &whole);
+                for (parent, branches) in &children {
+                    let plain =
+                        |b: &Vec<(Vec<crate::spec_path::VariantSelectionSite>, Vec<TokenId>)>| {
+                            b.iter()
+                                .find(|(sites, _)| sites.is_empty())
+                                .map(|(_, names)| names.clone())
+                                .unwrap_or_default()
+                        };
+                    assert_eq!(
+                        plain(branches),
+                        fresh.get(parent).map(plain).unwrap_or_default(),
+                        "projected child names"
+                    );
+                }
+            }
+            overrides.insert(original.id, children);
+            bases.push(original.id);
+        }
+        let state = self.state.read(|state| IndexState {
+            identity: state.identity.clone(),
+            layers: state
+                .layers
+                .iter()
+                .map(|(id, entry)| {
+                    (
+                        *id,
+                        IndexedLayer {
+                            generation: entry.generation,
+                            structure: entry.structure,
+                            children: Arc::clone(&entry.children),
+                        },
+                    )
+                })
+                .collect(),
+            work: ChildIndexWork::default(),
+        });
+        debug_assert!(
+            bases.iter().all(|id| state.layers.contains_key(id)),
+            "an edited layer's entry is indexed above"
+        );
+        Some(Self {
+            state: ReadLock::new(state),
+            overrides,
+        })
     }
 
     /// The children of `layer`'s parent sites, brought up to date.
@@ -725,6 +839,95 @@ impl ChildIndex {
             Some(children)
         })
     }
+}
+
+/// The children, outside variant branches, of each parent above a slot of
+/// `changed` in `original` as projected with `edited`'s slots there, from
+/// `base`, `original`'s entry: a name stays listed while a spec at or
+/// beneath it remains, and a changed slot's name is listed when its spec
+/// is there. The other branch lists of those parents are `base`'s.
+fn projected_children(
+    store: &dyn LayerStore,
+    original: &Layer,
+    edited: &Layer,
+    changed: &[PathId],
+    base: &LayerChildren,
+) -> LayerChildren {
+    let (paths, tokens) = (store.paths(), store.tokens());
+    let changed_set: HashSet<PathId> = changed.iter().copied().collect();
+    // Whether the projected layer authors a spec outside variant branches
+    // at `path`.
+    let projected_spec = |path: PathId| {
+        let layer = if changed_set.contains(&path) {
+            edited
+        } else {
+            original
+        };
+        layer
+            .prims
+            .get(&path)
+            .is_some_and(|spec| spec.outer_variant_sites.is_empty())
+    };
+    // Whether the projected layer authors a spec at or beneath `segments`.
+    let holds = |segments: &[TokenId]| -> bool {
+        let mut pending = alloc::vec![segments.to_vec()];
+        while let Some(segments) = pending.pop() {
+            if paths.lookup_segments(&segments).is_some_and(projected_spec) {
+                return true;
+            }
+            for (sites, names) in base.get(&segments).into_iter().flatten() {
+                if sites.is_empty() {
+                    for name in names {
+                        let mut child = segments.clone();
+                        child.push(*name);
+                        pending.push(child);
+                    }
+                }
+            }
+        }
+        changed.iter().any(|path| {
+            paths.resolve(*path).segments().starts_with(segments) && projected_spec(*path)
+        })
+    };
+    // Each parent above a changed slot, with the names of its children
+    // on the way to one.
+    let mut parents: HashMap<Vec<TokenId>, HashSet<TokenId>> = HashMap::new();
+    for path in changed {
+        let segments = paths.resolve(*path).segments();
+        for depth in 0..segments.len() {
+            parents
+                .entry(segments[..depth].to_vec())
+                .or_default()
+                .insert(segments[depth]);
+        }
+    }
+    let mut out = LayerChildren::new();
+    for (parent, touched) in parents {
+        let mut branches: Vec<_> = base.get(&parent).cloned().unwrap_or_default();
+        let at = match branches.iter().position(|(sites, _)| sites.is_empty()) {
+            Some(at) => at,
+            None => {
+                branches.push((Vec::new(), Vec::new()));
+                branches.len() - 1
+            }
+        };
+        let names = &mut branches[at].1;
+        let keep = |name: TokenId| {
+            let mut child = parent.clone();
+            child.push(name);
+            holds(&child)
+        };
+        names.retain(|name| !touched.contains(name) || keep(*name));
+        for name in touched {
+            if let Err(at) = find_name(names, name, tokens)
+                && keep(name)
+            {
+                names.insert(at, name);
+            }
+        }
+        out.insert(parent, branches);
+    }
+    out
 }
 
 /// Whether `names`, sorted by name, holds `name`, and where it belongs.

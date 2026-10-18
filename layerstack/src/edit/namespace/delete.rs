@@ -32,9 +32,9 @@ pub(super) fn prepare(
     prepare_with(stage, store, target, object, true)
 }
 
-/// [`prepare`] by copying every layer whole, as before stages retained
-/// preparation evidence: the oracle the retained proofs are tested
-/// against.
+/// [`prepare`] by copying and composing every layer whole, as before
+/// stages retained preparation evidence: the oracle the retained proofs
+/// are tested against.
 #[cfg(test)]
 pub(super) fn prepare_by_composition(
     stage: &Stage,
@@ -46,9 +46,9 @@ pub(super) fn prepare_by_composition(
 }
 
 /// [`prepare`], editing working copies of the slots the delete can change
-/// when `use_retained` and the stage retains preparation evidence;
-/// otherwise copying every layer whole. Both find the same edit, or the
-/// same error.
+/// and composing only `object` and its ancestors when `use_retained` and
+/// the stage retains preparation evidence; otherwise copying and composing
+/// every layer whole. Both find the same edit, or the same error.
 fn prepare_with(
     stage: &Stage,
     store: &mut dyn LayerStore,
@@ -219,9 +219,12 @@ fn working_slots(
     slots
 }
 
-/// Whether `object` composes in the stage the `edited` layers project:
-/// the whole edited layers, or for working copies (`copied`), their
-/// layers with the copies' slots in place.
+/// Whether `object` composes in the stage the `edited` layers project.
+/// With retained evidence (`index`), the projected layers are composed in
+/// place in `store`, or copied whole when the store does not lend them,
+/// and only `object` and its ancestors are composed, which a whole
+/// composition composes alike; otherwise every edited layer is copied whole
+/// and the whole stage composed.
 fn composes(
     store: &mut dyn LayerStore,
     stage: &Stage,
@@ -235,28 +238,76 @@ fn composes(
         TargetPath::Prim(prim) => stage.has_prim(prim),
         TargetPath::Property(property) => stage.has_property_path(property),
     };
-    let projected;
-    let layers = match index {
-        None => edited,
-        Some(_) => {
-            let mut layers = HashMap::new();
-            for (id, slots) in copied {
-                let original = store.layer(*id).ok_or(NamespaceError::NoSuchObject)?;
-                let paths = retained::copy_slots(slots, &edited[id]);
-                if let Some(layer) = retained::project(original, &edited[id], &paths) {
-                    layers.insert(*id, layer);
-                }
-            }
-            projected = layers;
-            &projected
-        }
+    let Some(index) = index else {
+        let mut overlay = Overlay {
+            store,
+            layers: edited,
+        };
+        return Ok(exists(&Stage::compose(
+            &mut overlay,
+            root,
+            stage.options().clone(),
+        )));
     };
-    let mut overlay = Overlay { store, layers };
-    Ok(exists(&Stage::compose(
-        &mut overlay,
-        root,
-        stage.options().clone(),
-    )))
+    let mut edits = HashMap::new();
+    for (id, slots) in copied {
+        let original = store.layer(*id).ok_or(NamespaceError::NoSuchObject)?;
+        let paths = retained::copy_slots(slots, &edited[id]);
+        if let Some(edit) = retained::layer_edit(original, &edited[id], &paths) {
+            edits.insert(*id, edit);
+        }
+    }
+    let mut projected = Vec::new();
+    for (id, edit) in &edits {
+        let original = store.layer(*id).ok_or(NamespaceError::NoSuchObject)?;
+        projected.push((original, &edited[id], edit.slots.as_slice()));
+    }
+    let children = index
+        .children()
+        .projected(store, &projected)
+        .unwrap_or_default();
+    let options = crate::StageOptions {
+        mask: Some(crate::PopulationMask {
+            include: alloc::vec![object.prim_path()],
+        }),
+        with_dependencies: false,
+        ..stage.options().clone()
+    };
+    let compose = |store: &mut dyn LayerStore| {
+        let partial = Stage::compose_retained(
+            store,
+            root,
+            options.clone(),
+            false,
+            &HashSet::new(),
+            &children,
+        );
+        let found = exists(&partial);
+        // Every test that prepares a delete checks the part against the
+        // whole.
+        #[cfg(test)]
+        assert_eq!(
+            found,
+            exists(&Stage::compose(store, root, stage.options().clone())),
+            "a partial projection finds what the whole projection finds"
+        );
+        found
+    };
+    let mut in_place = retained::InPlace::project(store, edited, &edits);
+    if in_place.complete() {
+        return Ok(compose(in_place.store()));
+    }
+    drop(in_place);
+    let mut layers = HashMap::new();
+    for (id, edit) in &edits {
+        let original = store.layer(*id).ok_or(NamespaceError::NoSuchObject)?;
+        layers.insert(*id, retained::materialize(original, &edited[id], edit));
+    }
+    let mut overlay = Overlay {
+        store,
+        layers: &layers,
+    };
+    Ok(compose(&mut overlay))
 }
 
 /// Removes `object`'s specs from `layer`: for a prim, every spec at or

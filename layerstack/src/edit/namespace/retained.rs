@@ -174,26 +174,64 @@ pub(super) fn append_delta_at(
     }
 }
 
-/// `original` with the slots of its working copy `edited` at `paths`, and
-/// its layer fields and relocates: the whole edited layer, for composing
-/// the projected stage. `None` when nothing differs.
-pub(super) fn project(original: &Layer, edited: &Layer, paths: &[PathId]) -> Option<Layer> {
-    let differs = |path: &PathId| {
-        !original.prims.get(path).same_ref(edited.prims.get(path))
-            || !original
-                .variant_prims
-                .get(path)
-                .same_ref(edited.variant_prims.get(path))
+/// What a prepared edit changes in one layer, against its working copy.
+pub(super) struct LayerEdit {
+    /// The prim slots whose content changes, sorted.
+    pub(super) slots: Vec<PathId>,
+    /// Those of `slots` that change other than in their child lists and
+    /// child order.
+    pub(super) structural: Vec<PathId>,
+    /// Whether the layer's metadata or relocates change.
+    pub(super) fields: bool,
+}
+
+/// Whether `before` and `after` differ in their child lists or child order
+/// only.
+fn children_only(before: &PrimSpec, after: &PrimSpec) -> bool {
+    let without_children = |spec: &PrimSpec| PrimSpec {
+        authored_children: Vec::new(),
+        prim_order: None,
+        ..spec.clone()
     };
-    if !paths.iter().any(differs)
-        && original.default_prim == edited.default_prim
-        && original.metadata.same(&edited.metadata)
-        && original.relocates == edited.relocates
-    {
+    without_children(before).same(&without_children(after))
+}
+
+/// What the working copy `edited` of `original` changes at the slots
+/// `paths` it may differ at, and in the layer's fields; `None` for
+/// nothing.
+pub(super) fn layer_edit(original: &Layer, edited: &Layer, paths: &[PathId]) -> Option<LayerEdit> {
+    let mut slots = Vec::new();
+    let mut structural = Vec::new();
+    for &path in paths {
+        let (before, after) = (original.prims.get(&path), edited.prims.get(&path));
+        let branches_same = original
+            .variant_prims
+            .get(&path)
+            .same_ref(edited.variant_prims.get(&path));
+        if before.same_ref(after) && branches_same {
+            continue;
+        }
+        slots.push(path);
+        if !(branches_same && before.zip(after).is_some_and(|(b, a)| children_only(b, a))) {
+            structural.push(path);
+        }
+    }
+    let fields =
+        !original.metadata.same(&edited.metadata) || original.relocates != edited.relocates;
+    if slots.is_empty() && !fields && original.default_prim == edited.default_prim {
         return None;
     }
+    Some(LayerEdit {
+        slots,
+        structural,
+        fields,
+    })
+}
+
+/// `original` as `edit` leaves it, from its working copy `edited`.
+pub(super) fn materialize(original: &Layer, edited: &Layer, edit: &LayerEdit) -> Layer {
     let mut layer = original.clone();
-    for &path in paths.iter().filter(|path| differs(path)) {
+    for &path in &edit.slots {
         match edited.prims.get(&path) {
             Some(spec) => layer.prims.insert(path, spec.clone()),
             None => layer.prims.remove(&path),
@@ -206,7 +244,139 @@ pub(super) fn project(original: &Layer, edited: &Layer, paths: &[PathId]) -> Opt
     layer.default_prim = edited.default_prim;
     layer.metadata.clone_from(&edited.metadata);
     layer.relocates.clone_from(&edited.relocates);
-    Some(layer)
+    layer
+}
+
+/// A layer's content an [`InPlace`] projection replaced.
+struct Displaced {
+    layer: LayerId,
+    slots: Vec<(PathId, Option<PrimSpec>, Option<Vec<PrimSpec>>)>,
+    default_prim: Option<TokenId>,
+    metadata: Vec<FieldEntry>,
+    relocates: Vec<crate::Relocate>,
+}
+
+/// `store`, with the slots and fields each [`LayerEdit`] changes holding
+/// its working copy's content, until dropped: the projected store, made
+/// without copying any layer whole. The layers keep their generations and
+/// change histories, and get their own content back exactly when this is
+/// dropped, so no edit is recorded or visible after preparation returns.
+pub(super) struct InPlace<'a> {
+    store: &'a mut dyn LayerStore,
+    displaced: Vec<Displaced>,
+    complete: bool,
+}
+
+impl<'a> InPlace<'a> {
+    /// Projects the `edits` of the working copies `edited` into `store`.
+    /// [`Self::complete`] tells whether the store lent every layer.
+    pub(super) fn project(
+        store: &'a mut dyn LayerStore,
+        edited: &crate::HashMap<LayerId, Layer>,
+        edits: &crate::HashMap<LayerId, LayerEdit>,
+    ) -> Self {
+        let mut projection = Self {
+            store,
+            displaced: Vec::new(),
+            complete: true,
+        };
+        let mut ids: Vec<LayerId> = edits.keys().copied().collect();
+        ids.sort_unstable();
+        for id in ids {
+            let (edit, copy) = (&edits[&id], &edited[&id]);
+            let Some(layer) = projection.store.layer_mut(id) else {
+                projection.complete = false;
+                break;
+            };
+            let mut displaced = Displaced {
+                layer: id,
+                slots: Vec::with_capacity(edit.slots.len()),
+                default_prim: core::mem::replace(&mut layer.default_prim, copy.default_prim),
+                metadata: core::mem::replace(&mut layer.metadata, copy.metadata.clone()),
+                relocates: core::mem::replace(&mut layer.relocates, copy.relocates.clone()),
+            };
+            for &path in &edit.slots {
+                let main = match copy.prims.get(&path) {
+                    Some(spec) => layer.prims.insert(path, spec.clone()),
+                    None => layer.prims.remove(&path),
+                };
+                let branches = match copy.variant_prims.get(&path) {
+                    Some(specs) => layer.variant_prims.insert(path, specs.clone()),
+                    None => layer.variant_prims.remove(&path),
+                };
+                displaced.slots.push((path, main, branches));
+            }
+            projection.displaced.push(displaced);
+        }
+        projection
+    }
+
+    /// Whether every edited layer is projected.
+    pub(super) fn complete(&self) -> bool {
+        self.complete
+    }
+
+    /// The projected store.
+    pub(super) fn store(&mut self) -> &mut dyn LayerStore {
+        &mut *self.store
+    }
+}
+
+impl Drop for InPlace<'_> {
+    fn drop(&mut self) {
+        for displaced in self.displaced.drain(..).rev() {
+            let layer = self
+                .store
+                .layer_mut(displaced.layer)
+                .expect("a projected layer stays in its store");
+            layer.default_prim = displaced.default_prim;
+            layer.metadata = displaced.metadata;
+            layer.relocates = displaced.relocates;
+            for (path, main, branches) in displaced.slots {
+                match main {
+                    Some(spec) => layer.prims.insert(path, spec),
+                    None => layer.prims.remove(&path),
+                };
+                match branches {
+                    Some(specs) => layer.variant_prims.insert(path, specs),
+                    None => layer.variant_prims.remove(&path),
+                };
+            }
+        }
+    }
+}
+
+/// The paths of `paths` beneath none of the others, sorted.
+pub(super) fn minimal_roots(store: &dyn LayerStore, paths: &[PathId]) -> Vec<PathId> {
+    let set: HashSet<PathId> = paths.iter().copied().collect();
+    let mut roots: Vec<PathId> = set
+        .iter()
+        .copied()
+        .filter(|path| {
+            let mut current = store.paths().parent(*path);
+            while let Some(parent) = current {
+                if set.contains(&parent) {
+                    return false;
+                }
+                current = store.paths().parent(parent);
+            }
+            true
+        })
+        .collect();
+    roots.sort_unstable();
+    roots
+}
+
+/// Whether `path` is one of `roots` or beneath one.
+pub(super) fn is_beneath(store: &dyn LayerStore, path: PathId, roots: &HashSet<PathId>) -> bool {
+    let mut current = Some(path);
+    while let Some(at) = current {
+        if roots.contains(&at) {
+            return true;
+        }
+        current = store.paths().parent(at);
+    }
+    false
 }
 
 /// [`Same`] between optional borrowed slots.

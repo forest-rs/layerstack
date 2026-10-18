@@ -1544,6 +1544,104 @@ fn live_stage_edits_a_variant_spec_nested_in_a_branch() {
     assert_live_matches_fresh(&live, &mut store, "undone");
 }
 
+/// Variant sets compose only where `variantSetNames` lists them: adding a
+/// set creates its spec and lists it, clearing the names leaves the spec
+/// unlisted, and removing the set removes its spec and the branch's
+/// opinions but not its listing. Every edit's inverse restores the layers.
+///
+/// Spec: AOUSD Core §7.3.6 (variant set specs), §7.6.2.3.5
+/// (`variantSetNames`), §10.5 (variant selection). OpenUSD:
+/// `UsdVariantSets::AddVariantSet`, `SdfPrimSpec::RemoveVariantSet`.
+#[test]
+fn variant_sets_compose_only_where_listed() {
+    let mut store = rocks();
+    let original = layers(&store);
+    let mut live = crate::LiveStage::compose(&mut store, SCENE, StageOptions::default());
+    let (shape, round, look, wet, shine) = (
+        store.tokens.intern("shape"),
+        store.tokens.intern("round"),
+        store.tokens.intern("look"),
+        store.tokens.intern("wet"),
+        store.tokens.intern("shine"),
+    );
+    let (rock, rock_a) = (store.path("/Rock"), store.path("/World/RockA"));
+    let at = Address::spec(ROCK, SpecPath::from_prim_path(rock));
+    let shine_at = |live: &crate::LiveStage| {
+        live.stage()
+            .resolve_field_path(crate::PropertyPath::new(rock_a, shine))
+            .map(|resolved| resolved.value)
+    };
+    let names_at =
+        |store: &InMemoryStore| store.layers[&ROCK].prims[&rock].variant_set_names.clone();
+
+    // Clearing the names leaves `shape` authored but unlisted.
+    let mut clear = Transaction::new();
+    clear.clear_variant_set_names(at.clone());
+    let cleared = live.apply(&mut store, &clear).expect("clears");
+    assert!(names_at(&store).is_empty());
+    assert_eq!(live.stage().variant_sets(rock_a, &store), []);
+    assert_live_matches_fresh(&live, &mut store, "unlisted");
+    live.apply(&mut store, &cleared.inverse)
+        .expect("undo clear");
+    assert_eq!(layers(&store), original);
+
+    // Adding `look` with a branch and a selection: it composes after
+    // `shape`.
+    let mut add = Transaction::new();
+    add.add_variant_set(at.clone(), look, ListPosition::BackOfPrepend)
+        .create_property(
+            Address::spec(ROCK, spec(&mut store, "/Rock{look=wet}.shine")),
+            attr(0.5),
+        )
+        .set_variant_selection(at.clone(), look, Some(wet));
+    let added = live.apply(&mut store, &add).expect("adds");
+    assert_eq!(
+        names_at(&store),
+        crate::ListOp::prepended(vec![shape, look])
+    );
+    assert_eq!(
+        live.stage().variant_sets(rock_a, &store),
+        [(shape, Some(round)), (look, Some(wet))]
+    );
+    assert_eq!(shine_at(&live), Some(Value::Double(0.5)));
+    assert_live_matches_fresh(&live, &mut store, "added");
+
+    // Removing the set removes its branch, and leaves it listed.
+    let mut remove = Transaction::new();
+    remove.remove_variant_set(at.clone(), look);
+    let removed = live.apply(&mut store, &remove).expect("removes");
+    assert!(
+        !store.layers[&ROCK].prims[&rock]
+            .variant_sets
+            .contains_key(&look)
+    );
+    assert_eq!(
+        names_at(&store),
+        crate::ListOp::prepended(vec![shape, look])
+    );
+    assert_eq!(shine_at(&live), None);
+    assert_live_matches_fresh(&live, &mut store, "removed");
+
+    live.apply(&mut store, &removed.inverse)
+        .expect("undo remove");
+    assert_eq!(shine_at(&live), Some(Value::Double(0.5)));
+    live.apply(&mut store, &added.inverse).expect("undo add");
+    assert_eq!(layers(&store), original, "the inverses restore the layers");
+    assert_live_matches_fresh(&live, &mut store, "undone");
+
+    // A name that is not an identifier is rejected.
+    let bad = store.tokens.intern("1bad");
+    let mut invalid = Transaction::new();
+    invalid.add_variant_set(at, bad, ListPosition::BackOfPrepend);
+    assert!(matches!(
+        live.apply(&mut store, &invalid),
+        Err(EditError::Rejected {
+            reason: Rejection::InvalidVariantSetName(_),
+            ..
+        })
+    ));
+}
+
 /// Relationship targets and attribute connections are set, replaced and
 /// cleared on their spec, a missing relationship spec is created, and each
 /// edit's inverse restores the layer exactly, with redo reapplying it.

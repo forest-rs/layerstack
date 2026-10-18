@@ -25,7 +25,8 @@ use super::{
 };
 use crate::{
     doc::{
-        FieldEntry, FieldValue, Layer, LayerId, LayerStore, PrimSpec, Specifier, Value, VariantSpec,
+        FieldEntry, FieldValue, Layer, LayerId, LayerStore, PrimSpec, Specifier, Value,
+        VariantSetSpec, VariantSpec,
     },
     interner::TokenId,
     listop::ListOp,
@@ -101,6 +102,16 @@ pub(crate) enum Raw {
         variant: TokenId,
         spec: Option<VariantSpec>,
         drop_set: bool,
+    },
+    /// Stores (`Some`) or removes (`None`) the whole variant set spec `set`
+    /// held by the spec at `host`, with the variant specs in it. The prim
+    /// specs authored in its branches are stored apart, in
+    /// [`Raw::PrimSlots`] steps.
+    VariantSet {
+        layer: LayerId,
+        host: Loc,
+        set: TokenId,
+        spec: Option<VariantSetSpec>,
     },
     /// Stores (`Some`) or removes (`None`) the property `name` of the spec
     /// at `loc`; a new property is inserted at `index`.
@@ -181,6 +192,7 @@ impl Raw {
             | Self::PrimSlots { layer, .. }
             | Self::Child { layer, .. }
             | Self::Variant { layer, .. }
+            | Self::VariantSet { layer, .. }
             | Self::Property { layer, .. }
             | Self::Default { layer, .. }
             | Self::Animation { layer, .. }
@@ -204,7 +216,7 @@ impl Raw {
                 let path = store.paths().resolve(parent.prim_path()).join(&[*name]);
                 store.paths().lookup(&path)
             }
-            Self::Variant { host, .. } => Some(host.prim_path()),
+            Self::Variant { host, .. } | Self::VariantSet { host, .. } => Some(host.prim_path()),
             Self::Selection { loc, .. }
             | Self::PrimField { loc, .. }
             | Self::Property { loc, .. }
@@ -227,6 +239,7 @@ impl Raw {
             | Self::PrimSlots { .. }
             | Self::Child { .. }
             | Self::Variant { .. }
+            | Self::VariantSet { .. }
             | Self::Selection { .. }
             | Self::PrimField { .. } => None,
             Self::Property { loc, .. }
@@ -328,6 +341,20 @@ impl Raw {
                     ..
                 },
             ) => (layer, host, set, variant) == (l, h, s, v) && spec.same(sp),
+            (
+                Self::VariantSet {
+                    layer,
+                    host,
+                    set,
+                    spec,
+                },
+                Self::VariantSet {
+                    layer: l,
+                    host: h,
+                    set: s,
+                    spec: sp,
+                },
+            ) => (layer, host, set) == (l, h, s) && spec.same(sp),
             (
                 Self::Property {
                     layer,
@@ -476,9 +503,9 @@ impl Raw {
                 Slot::Spec,
             ),
             Self::PrimSlots { path, .. } => (SpecPath::from_prim_path(*path), Slot::Spec),
-            Self::Child { parent: loc, .. } | Self::Variant { host: loc, .. } => {
-                (loc.spec_path(paths), Slot::Spec)
-            }
+            Self::Child { parent: loc, .. }
+            | Self::Variant { host: loc, .. }
+            | Self::VariantSet { host: loc, .. } => (loc.spec_path(paths), Slot::Spec),
             Self::Property { loc, name, .. } => {
                 (loc.spec_path(paths).with_property(*name), Slot::Spec)
             }
@@ -783,7 +810,7 @@ impl Journal<'_> {
             Raw::PrimSlots { layer, path, .. } => {
                 self.children.remove(&(*layer, *path));
             }
-            Raw::Variant { layer, host, .. } => {
+            Raw::Variant { layer, host, .. } | Raw::VariantSet { layer, host, .. } => {
                 let host = host.prim_path();
                 self.children.remove(&(*layer, host));
             }
@@ -959,6 +986,7 @@ pub(crate) fn apply(
             | Raw::LayerFields { .. }
             | Raw::LayerMetadata { .. }
             | Raw::Variant { .. }
+            | Raw::VariantSet { .. }
             | Raw::Selection { .. }
             | Raw::Field { .. }
             | Raw::PrimField { .. } => {
@@ -1316,6 +1344,12 @@ fn apply_op(
             layer_fields::set_relocates(store, *layer, relocates, journal)
         }
         Op::EditArc { at, edit } => prim_fields::edit_arc(store, at, edit, journal),
+        Op::AddVariantSet { at, name, position } => {
+            super::variant_sets::add_variant_set(store, at, *name, *position, journal)
+        }
+        Op::RemoveVariantSet { at, name } => {
+            super::variant_sets::remove_variant_set(store, at, *name, journal)
+        }
         Op::SetTimeSample { at, time, value } => {
             set_value(store, at, Some(at.layer_time(*time)), value, stage, journal)
         }
@@ -2172,6 +2206,27 @@ fn apply_raw(store: &mut dyn LayerStore, step: &Raw) -> Result<Raw, Rejection> {
                     })
                 }
             }
+        }
+        Raw::VariantSet {
+            host, set, spec, ..
+        } => {
+            let Some(holder) = store.layer_mut(id).and_then(|l| spec_at_mut(l, host)) else {
+                return Err(diverged_at(store, host));
+            };
+            let variant_sets = holder.into_variant_sets();
+            let old = match spec {
+                Some(spec) => variant_sets.insert(*set, spec.clone()),
+                None => match variant_sets.remove(set) {
+                    Some(old) => Some(old),
+                    None => return Err(diverged_at(store, host)),
+                },
+            };
+            Ok(Raw::VariantSet {
+                layer: id,
+                host: host.clone(),
+                set: *set,
+                spec: old,
+            })
         }
         Raw::Property {
             loc,

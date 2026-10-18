@@ -16,8 +16,10 @@
 //!   generations and expected authored values. Besides values, metadata
 //!   and targets, it authors the prim fields kept in dedicated members
 //!   ([`PrimField`]): the specifier, type name, `active`, `instanceable`,
-//!   child and property order, and the composition arcs, whose list ops
-//!   it also edits item by item ([`ListPosition`]); and the layer fields
+//!   child and property order, the composition arcs, whose list ops it
+//!   also edits item by item ([`ListPosition`]), and `variantSetNames`,
+//!   with variant sets added and removed
+//!   ([`Transaction::add_variant_set`]); and the layer fields
 //!   kept in dedicated members, the sublayers with their offsets and the
 //!   relocates, checked against what composition can use; and it copies
 //!   prim and property specs, remapping the paths they author

@@ -510,7 +510,10 @@ impl LiveStage {
     /// the stage has one layer, all authored ancestors, no population mask,
     /// and no arcs, variants, relocates or instanceable specs. The work also
     /// includes ancestor composition and the changed boundary child lists to
-    /// preserve ordering and pruning. Unchanged sibling indexes are retained;
+    /// preserve ordering and pruning. A prim whose spec changes only the
+    /// child names it lists, as the pseudo-root's does when its first root
+    /// prim is authored or a namespace edit moves a prim to or from it, is
+    /// such a boundary, not resynced. Unchanged sibling indexes are retained;
     /// processing a wide boundary list still costs work proportional to it.
     /// Shared/session and referenced structural edits map retained authored
     /// change paths through their source sites and replace complete dependent
@@ -632,7 +635,7 @@ impl LiveStage {
             && let Some(paths) = &outcome.local_structure
             && !paths.is_empty()
             && let Some((mut recomposed, mut changes)) =
-                self.refresh_local_structure(store, paths, &outcome.touched)
+                self.refresh_local_structure(store, paths, &outcome.child_lists, &outcome.touched)
         {
             include_resyncs(store, &mut changes, &declaration_resyncs);
             self.notices.publish(&mut changes, &self.stage, store);
@@ -770,10 +773,16 @@ impl LiveStage {
 
     /// Updates local namespace regions using the source index. Composition of
     /// each candidate still uses the same graph construction and finalization.
+    ///
+    /// `child_lists` are the prims whose specs changed only the child names
+    /// they list, the pseudo-root's included: like the parents of `paths`
+    /// they are boundary parents, their prim indexes replaced and their
+    /// child lists composed whole, and their subtrees are not resynced.
     fn refresh_local_structure(
         &mut self,
         store: &mut dyn LayerStore,
         paths: &[PathId],
+        child_lists: &[PathId],
         touched: &[(LayerId, PathId)],
     ) -> Option<(Vec<PathId>, Changes)> {
         let roots = minimal_roots(store, paths);
@@ -794,6 +803,7 @@ impl LiveStage {
         let hierarchy: Vec<_> = affected.iter().copied().collect();
         let in_hierarchy = affected.clone();
         affected.extend(touched.iter().map(|(_, path)| *path));
+        affected.extend(child_lists.iter().copied());
         let mut parents: Vec<PathId> = roots
             .iter()
             .filter_map(|root| {
@@ -803,6 +813,7 @@ impl LiveStage {
                     .parent()
                     .and_then(|p| store.paths().lookup(&p))
             })
+            .chain(child_lists.iter().copied())
             .filter(|parent| !in_hierarchy.contains(parent))
             .collect();
         parents.sort_unstable();
@@ -4239,6 +4250,260 @@ mod tests {
         while let Some(inverse) = undo.pop() {
             live.apply(&mut store, &inverse).unwrap();
             assert_lists_match_fresh(&live, &mut store);
+        }
+    }
+
+    /// The work of a live edit: prim indexes composed and replaced, and
+    /// whether the stage was rebuilt.
+    type Work = (usize, usize, bool);
+
+    /// Applies `txn` to `live`, checks that the stage composes what a fresh
+    /// composition does, and that the edit was recomposed with the `work`
+    /// given, as `(composed, replaced, full rebuild)`, and reported with the
+    /// `resynced` and `info` prims given, by path.
+    fn apply_root_edit(
+        live: &mut LiveStage,
+        store: &mut InMemoryStore,
+        txn: &Transaction,
+        work: Work,
+        resynced: &[&str],
+        info: &[&str],
+    ) -> Transaction {
+        let applied = live.apply(store, txn).unwrap();
+        let paths = |store: &mut InMemoryStore, names: &[&str]| -> Vec<PathId> {
+            names.iter().map(|name| p(store, name)).collect()
+        };
+        let done = live.recomposition_work();
+        assert_eq!(
+            (
+                done.composed_prim_indexes,
+                done.replaced_prim_indexes,
+                done.full_rebuild
+            ),
+            work,
+            "{resynced:?}: {done:?}"
+        );
+        if !done.full_rebuild {
+            // The pseudo-root, or each boundary parent, composes its child
+            // names once.
+            assert_eq!(done.boundary_lists_reordered, 0, "{done:?}");
+            assert!(done.boundary_lists_composed > 0, "{done:?}");
+        }
+        assert_eq!(applied.changes.resynced, paths(store, resynced));
+        assert_eq!(applied.changes.changed_info_only, paths(store, info));
+        assert_lists_match_fresh(live, store);
+        applied.inverse
+    }
+
+    /// Creating and removing root prims, reordering them, editing
+    /// `defaultPrim` and adding a sublayer, then undoing each, on a layer
+    /// built without a pseudo-root spec, compose what a fresh composition
+    /// does. A root prim created or removed resyncs that prim alone, with
+    /// the pseudo-root's child list composed once and reported info-only,
+    /// even when the first one brings the pseudo-root's spec into being
+    /// and its undo takes it away. A reorder, a `defaultPrim` edit and a
+    /// sublayer resync the stage.
+    ///
+    /// Spec: AOUSD Core §11.3.1 (child order), §10.3.1 (layer stacks),
+    /// §7.6.1.2.3 (`defaultPrim`). OpenUSD resyncs the child a spec is added
+    /// or removed for, and the pseudo-root for a reorder of its children,
+    /// a significant layer stack change or a `defaultPrim` with none before
+    /// (`PcpChanges::DidChange`, `UsdStage::_ProcessChange` on
+    /// `didReorderChildren`).
+    #[test]
+    fn root_prim_edits_resync_only_the_root_prims_they_change() {
+        use crate::{EditTarget, Specifier};
+        let mut store = InMemoryStore::default();
+        let field = store.tokens.intern("x");
+        let mut layer = Layer::new(LayerId(1));
+        for name in ["/World", "/World/A", "/World/A/X", "/Rock", "/Rock/Moss"] {
+            let path = p(&mut store, name);
+            layer.insert_prim(path, PrimSpec::def().with_property(field, attr(1)));
+        }
+        store.insert_layer(layer);
+        let mut sublayer = Layer::new(LayerId(2));
+        sublayer.insert_prim(p(&mut store, "/Pebble"), PrimSpec::def());
+        store.insert_layer(sublayer);
+        let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+        let root = p(&mut store, "/");
+        let target = EditTarget::for_layer(LayerId(1));
+        let create = |store: &mut InMemoryStore, path: &str| {
+            let mut txn = Transaction::new();
+            txn.create_prim(target.prim(p(store, path)), Specifier::Def, None);
+            txn
+        };
+        let mut undo = Vec::new();
+
+        // The first root prim authored creates the pseudo-root's spec.
+        let txn = create(&mut store, "/Plant");
+        undo.push(apply_root_edit(
+            &mut live,
+            &mut store,
+            &txn,
+            (2, 2, false),
+            &["/Plant"],
+            &["/"],
+        ));
+        assert!(store.layers[&LayerId(1)].prims.contains_key(&root));
+        let txn = create(&mut store, "/Fern");
+        undo.push(apply_root_edit(
+            &mut live,
+            &mut store,
+            &txn,
+            (2, 1, false),
+            &["/Fern"],
+            &["/"],
+        ));
+        let mut txn = Transaction::new();
+        txn.remove_spec(target.prim(p(&mut store, "/Rock")));
+        undo.push(apply_root_edit(
+            &mut live,
+            &mut store,
+            &txn,
+            (1, 2, false),
+            &["/Rock"],
+            &["/"],
+        ));
+
+        let names = ["Fern", "World"].map(|name| store.tokens.intern(name));
+        let mut txn = Transaction::new();
+        txn.set_prim_order(target.prim(root), names.to_vec());
+        undo.push(apply_root_edit(
+            &mut live,
+            &mut store,
+            &txn,
+            (6, 6, true),
+            &["/"],
+            &[],
+        ));
+        let key = store.tokens.intern("defaultPrim");
+        let mut txn = Transaction::new();
+        txn.set_layer_metadata(LayerId(1), key, FieldValue::Value(Value::Token(names[0])));
+        undo.push(apply_root_edit(
+            &mut live,
+            &mut store,
+            &txn,
+            (6, 6, true),
+            &["/"],
+            &[],
+        ));
+        let mut txn = Transaction::new();
+        txn.insert_sublayer(LayerId(1), 0, SublayerEntry::new(LayerId(2)));
+        undo.push(apply_root_edit(
+            &mut live,
+            &mut store,
+            &txn,
+            (7, 7, true),
+            &["/"],
+            &[],
+        ));
+
+        let expected: [(Work, &[&str], &[&str]); 6] = [
+            // Removing the first root prim takes the pseudo-root's spec too.
+            ((1, 2, false), &["/Plant"], &["/"]),
+            ((1, 1, false), &["/Fern"], &["/"]),
+            ((3, 2, false), &["/Rock"], &["/"]),
+            ((6, 6, true), &["/"], &[]),
+            ((6, 6, true), &["/"], &[]),
+            ((6, 7, true), &["/"], &[]),
+        ];
+        for (inverse, (work, resynced, info)) in undo.iter().rev().zip(expected.iter().rev()) {
+            apply_root_edit(&mut live, &mut store, inverse, *work, resynced, info);
+        }
+        assert!(!store.layers[&LayerId(1)].prims.contains_key(&root));
+    }
+
+    /// Renaming a root prim and reparenting prims to and from the root, on
+    /// a layer listing its children as one read from USDA does, rewrites
+    /// the parents' child lists: each edit, and its undo, resyncs the moved
+    /// subtrees alone and composes what a fresh composition does, whether
+    /// the stage takes the local path or, with a reference, the general one.
+    ///
+    /// Spec: AOUSD Core §11.3.1 (child order from `primChildren`). OpenUSD:
+    /// `UsdNamespaceEditor`, whose edits `PcpChanges::DidChange` resyncs at
+    /// the old and new paths.
+    #[test]
+    fn root_namespace_edits_resync_only_the_moved_prims() {
+        use crate::{EditTarget, NamespaceEdit, TargetPath};
+        for general in [false, true] {
+            let mut store = InMemoryStore::default();
+            let field = store.tokens.intern("x");
+            let mut layer = Layer::new(LayerId(1));
+            let mut roots = vec![];
+            for (name, children) in [
+                ("/World", &["A"][..]),
+                ("/World/A", &["X"]),
+                ("/World/A/X", &[]),
+                ("/Rock", &["Moss"]),
+                ("/Rock/Moss", &[]),
+            ] {
+                let path = p(&mut store, name);
+                let children = children.iter().map(|c| store.tokens.intern(c)).collect();
+                let spec = PrimSpec::def()
+                    .with_children(children)
+                    .with_property(field, attr(1));
+                layer.insert_prim(path, spec);
+            }
+            roots.extend(["World", "Rock"].map(|name| store.tokens.intern(name)));
+            if general {
+                let lib = p(&mut store, "/Lib");
+                layer.insert_prim(lib, PrimSpec::def());
+                let reference = Reference::new(LayerId(1), lib);
+                layer.insert_prim(
+                    p(&mut store, "/Ref"),
+                    PrimSpec::def().with_reference(reference),
+                );
+                roots.extend(["Lib", "Ref"].map(|name| store.tokens.intern(name)));
+            }
+            let root = p(&mut store, "/");
+            layer.insert_prim(root, PrimSpec::default().with_children(roots));
+            store.insert_layer(layer);
+            let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+            assert_eq!(live.local_namespace.is_some(), !general);
+            let target = EditTarget::for_layer(LayerId(1));
+            let moves = [
+                (
+                    "/World",
+                    "/Stone",
+                    (4, 7, false),
+                    ["/Stone", "/World"],
+                    &["/"][..],
+                ),
+                (
+                    "/Stone/A",
+                    "/A",
+                    (4, 6, false),
+                    ["/A", "/Stone/A"],
+                    &["/", "/Stone"],
+                ),
+                (
+                    "/Rock",
+                    "/Stone/Rock",
+                    (4, 6, false),
+                    ["/Rock", "/Stone/Rock"],
+                    &["/", "/Stone"],
+                ),
+            ];
+            let mut undo = Vec::new();
+            for (from, to, work, resynced, info) in moves {
+                let (from, to) = (p(&mut store, from), p(&mut store, to));
+                let edit = NamespaceEdit::prepare(
+                    live.stage(),
+                    &mut store,
+                    &target,
+                    TargetPath::Prim(from),
+                    TargetPath::Prim(to),
+                )
+                .unwrap();
+                let txn = edit.transaction().clone();
+                undo.push((
+                    apply_root_edit(&mut live, &mut store, &txn, work, &resynced, info),
+                    (work, resynced, info),
+                ));
+            }
+            while let Some((inverse, (work, resynced, info))) = undo.pop() {
+                apply_root_edit(&mut live, &mut store, &inverse, work, &resynced, info);
+            }
         }
     }
 

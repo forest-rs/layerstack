@@ -567,7 +567,12 @@ pub(crate) struct Outcome {
     /// changed, which changes namespace or composition arcs.
     pub(crate) structural: bool,
     /// Local prim slots changed, or None if an edit needs general composition.
+    /// The slots of [`Self::child_lists`] are left out.
     pub(crate) local_structure: Option<Vec<PathId>>,
+    /// Prims whose spec slots changed only the child names they list
+    /// ([`lists_children_only`]), sorted: their prim indexes and namespace
+    /// stay as they were, and only their child lists are composed again.
+    pub(crate) child_lists: Vec<PathId>,
     /// Source prims whose property declarations or schema identity changed.
     pub(crate) resync_sites: Vec<(LayerId, PathId)>,
     /// The edits of inputs dynamic file format arguments may compose from.
@@ -910,7 +915,14 @@ pub(crate) fn apply(
             .map(|g| g.written.change_path(store))
             .collect::<Option<Vec<_>>>();
         let root = store.paths().lookup(&crate::Path::root());
-        let root_has_child_edits = journal.steps.iter().any(|g| matches!(&g.written, Raw::Child { layer, parent, .. } if *layer == *id && Some(parent.prim_path()) == root));
+        // The pseudo-root's child names change as a child is listed or
+        // unlisted (`Raw::Child`), or as its spec is written whole, as
+        // creating its spec or a namespace edit does.
+        let root_has_child_edits = journal.steps.iter().any(|g| match &g.written {
+            Raw::Child { layer, parent, .. } => *layer == *id && Some(parent.prim_path()) == root,
+            Raw::PrimSlots { layer, path, .. } => *layer == *id && Some(*path) == root,
+            _ => false,
+        });
         let root_only_supports_children = root_has_child_edits
             && journal
                 .steps
@@ -958,7 +970,9 @@ pub(crate) fn apply(
         children: _,
     } = journal;
     let mut local_structure = Some(Vec::new());
+    let mut child_lists = Vec::new();
     let mut resync_sites = Vec::new();
+    let root = store.paths().lookup(&crate::Path::root());
     for guarded in &steps {
         // OpenUSD: UsdStage::_ComputePendingChanges groups property additions
         // and removals, and apiSchemas changes, into resync notices. Our
@@ -980,7 +994,10 @@ pub(crate) fn apply(
         match &guarded.written {
             Raw::PrimSlots { path, .. } => {
                 if let Some(paths) = &mut local_structure {
-                    paths.push(*path);
+                    match lists_children_only(guarded, root) {
+                        Some(parent) => child_lists.push(parent),
+                        None => paths.push(*path),
+                    }
                 }
             }
             Raw::LayerRelocates { .. }
@@ -1000,6 +1017,12 @@ pub(crate) fn apply(
     if let Some(paths) = &mut local_structure {
         paths.sort_unstable();
         paths.dedup();
+        // A slot another step changes otherwise is not a child list alone.
+        child_lists.sort_unstable();
+        child_lists.dedup();
+        child_lists.retain(|path| paths.binary_search(path).is_err());
+    } else {
+        child_lists.clear();
     }
     resync_sites.sort_unstable();
     resync_sites.dedup();
@@ -1011,6 +1034,7 @@ pub(crate) fn apply(
         properties,
         values,
         local_structure,
+        child_lists,
         resync_sites,
         argument_inputs,
         inverse: Transaction {
@@ -1023,6 +1047,48 @@ pub(crate) fn apply(
     })
 }
 
+/// The prim path of `guarded` when it is a [`Raw::PrimSlots`] step that
+/// changes only the child names its prim spec lists (`primChildren`), as
+/// creating the pseudo-root's spec for its first listed child, or a
+/// namespace edit renaming or reparenting a child, rewrites them. The
+/// prim's spec stack, and so its prim index, is as it was; only its child
+/// list composes anew. The pseudo-root exists with or without a spec
+/// (`SdfLayer::GetPseudoRoot`), so its spec may come or go this way; any
+/// other prim keeps its spec, and its `primOrder` too.
+///
+/// Spec: AOUSD Core §11.3.1 (child order from `primChildren`). OpenUSD
+/// records a child spec added or removed at the child's path
+/// (`didAddNonInertPrim` and its siblings in `SdfChangeList`), which
+/// `PcpChanges::DidChange` resyncs, not at its parent's.
+fn lists_children_only(guarded: &Guarded, root: Option<PathId>) -> Option<PathId> {
+    let (
+        Raw::PrimSlots {
+            path,
+            main,
+            branches,
+            ..
+        },
+        Raw::PrimSlots {
+            main: before,
+            branches: before_branches,
+            ..
+        },
+    ) = (&guarded.written, &guarded.step)
+    else {
+        return None;
+    };
+    let pseudo_root = Some(*path) == root;
+    if !branches.same(before_branches) || (!pseudo_root && (main.is_none() || before.is_none())) {
+        return None;
+    }
+    let unlisted = |spec: &Option<PrimSpec>| {
+        let mut spec = spec.clone().unwrap_or_default();
+        spec.authored_children.clear();
+        spec
+    };
+    unlisted(main).same(&unlisted(before)).then_some(*path)
+}
+
 /// The prims of `layer`, a layer of `stage`'s own layer stack, whose specs
 /// the journal's steps only created, removed or listed as the parent of a
 /// child, keeping them inert (`over`, no opinions, no branches) and listing
@@ -1033,7 +1099,8 @@ pub(crate) fn apply(
 /// An inert spec changes its prim's own spec stack, not the namespace
 /// beneath it: its children compose already, and a stronger spec listing
 /// names a weaker one lists already adds nothing to the composed child
-/// order. The pseudo-root is handled by its caller.
+/// order. So does a spec whose steps only change the child names it lists
+/// ([`lists_children_only`]). The pseudo-root is handled by its caller.
 ///
 /// Spec: AOUSD Core §10 (namespace composition: a prim exists where any
 /// site holds a spec). OpenUSD records such a spec as `didAddInertPrim` or
@@ -1093,6 +1160,13 @@ fn support_only_prims(
     candidates.sort_unstable();
     candidates.dedup();
     candidates.retain(|&path| {
+        // A spec whose child names alone change keeps its prim's index too.
+        if by_path[&path]
+            .iter()
+            .all(|&at| lists_children_only(steps[at], root) == Some(path))
+        {
+            return true;
+        }
         by_path[&path]
             .iter()
             .map(|&at| steps[at])

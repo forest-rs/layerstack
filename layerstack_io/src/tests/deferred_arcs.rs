@@ -214,33 +214,41 @@ def "Look" (
 #[test]
 fn missing_assets_in_unselected_branches_are_not_read_or_reported() {
     let a = look("a");
-    let backend = Memory::with(&[("model.usda", MODEL), ("a.usda", &a)]);
-    let mut doc = StageDocument::open(backend, "model.usda", StageOptions::default()).unwrap();
-    assert!(doc.load_report().asset_failures.is_empty());
-    assert!(doc.stage.stage().composition_errors().is_empty());
+    for import_policy in [ImportPolicy::Strict, ImportPolicy::AllowRecovery] {
+        let backend = Memory::with(&[("model.usda", MODEL), ("a.usda", &a)]);
+        let loading = LoadOptions {
+            import_policy,
+            ..Default::default()
+        };
+        let mut doc =
+            StageDocument::open_with(backend, "model.usda", StageOptions::default(), loading)
+                .unwrap();
+        assert!(doc.load_report().asset_failures.is_empty());
+        assert!(doc.stage.stage().composition_errors().is_empty());
 
-    // Strict import reports the asset once composition asks for it.
-    select(&mut doc, "b");
-    let error = doc.load_requested_assets().unwrap_err();
-    assert_eq!(error.kind, IoErrorKind::NotFound);
-
-    // Recovering import records it missing; composition reports it.
-    let backend = Memory::with(&[("model.usda", MODEL), ("a.usda", &a)]);
-    let loading = LoadOptions {
-        import_policy: ImportPolicy::AllowRecovery,
-        ..Default::default()
-    };
-    let mut doc =
-        StageDocument::open_with(backend, "model.usda", StageOptions::default(), loading).unwrap();
-    select(&mut doc, "b");
-    let report = doc.load_requested_assets().unwrap();
-    assert_eq!(report.asset_failures.len(), 1);
-    assert_eq!(report.asset_failures[0].asset, "b.usda");
-    assert!(doc.stage.stage().asset_requests().is_empty());
-    assert!(matches!(
-        doc.stage.stage().composition_errors(),
-        [CompositionError::UnresolvedAsset(error)] if error.asset == "b.usda"
-    ));
+        // Either policy records the asset missing once composition asks
+        // for it, and composition reports it (AOUSD Core §10.6).
+        select(&mut doc, "b");
+        let report = doc.load_requested_assets().unwrap();
+        assert_eq!(report.asset_failures.len(), 1);
+        assert_eq!(report.asset_failures[0].asset, "b.usda");
+        assert!(report.asset_failures[0].is_missing());
+        assert!(doc.stage.stage().asset_requests().is_empty());
+        let root = doc.stage.stage().root_layer().unwrap();
+        let model = doc.store.path("/Model");
+        let [CompositionError::UnresolvedAsset(error)] = doc.stage.stage().composition_errors()
+        else {
+            panic!("{:?}", doc.stage.stage().composition_errors());
+        };
+        assert_eq!(
+            (error.asset.as_str(), error.prim, error.introducing_layer),
+            ("b.usda", model, root)
+        );
+        let spec = error
+            .introducing_spec
+            .display(&doc.store.paths, &doc.store.tokens);
+        assert_eq!(spec, "/Model{look=b}");
+    }
 }
 
 #[test]

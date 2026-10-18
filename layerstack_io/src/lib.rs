@@ -251,9 +251,37 @@ pub trait Storage: layerstack::MaybeSync {
     fn write(&mut self, identifier: &str, bytes: &[u8]) -> Result<(), IoError>;
 }
 /// Whether recoverable malformed or unrepresented content may be imported.
+///
+/// The policy governs the content of the layers read, not whether the
+/// layers a scene depends on exist. Under either policy, a reference,
+/// payload or sublayer whose asset is not found
+/// ([`IoErrorKind::NotFound`]) does not fail the open, load or reload: the
+/// arc contributes nothing, the miss is kept in
+/// [`LoadReport::asset_failures`] ([`AssetFailure::is_missing`]), and
+/// composition reports it as [`layerstack::CompositionError::UnresolvedAsset`]
+/// or [`layerstack::CompositionError::UnresolvedSublayer`]. A missing package
+/// member is kept as an [`ImportDiagnostic::AssetResolve`] instead. A root
+/// layer that is not found still fails the open, as does an asset
+/// [`StageDocument::load_asset`] is asked for.
+///
+/// Spec: AOUSD Core §9 (asset resolution), §10.3.1 (sublayers), §10.3.2.1
+/// ("If a layer stack cannot be computed for a reference's layer asset path,
+/// it is a composition error and that reference is ignored"), §10.3.2.2,
+/// §10.6. OpenUSD opens the stage and reports `PcpErrorInvalidAssetPath` and
+/// `PcpErrorInvalidSublayerPath`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ImportPolicy {
-    /// Reject errors instead of accepting a partial representation.
+    /// Reject a layer whose content is malformed or not represented: an
+    /// error diagnostic from its format reader, or a dependency that was
+    /// found but could not be read or was itself rejected (any
+    /// [`AssetFailure`] that [`AssetFailure::is_missing`] does not report).
+    /// The rejection reaches the open, load or reload that read the layer.
+    ///
+    /// This is stricter than OpenUSD, which opens a stage whose dependency
+    /// fails to parse, ignores that dependency and reports it as
+    /// `PcpErrorInvalidAssetPath`, as it does a missing one.
+    /// [`Self::AllowRecovery`] opens it too, keeping what parses and the
+    /// reader's diagnostics.
     #[default]
     Strict,
     /// Preserve available content and retain all recovery diagnostics.
@@ -308,7 +336,9 @@ pub struct LoadReport {
     /// Format diagnostics with source/member identity and original spans/paths.
     pub diagnostics: Vec<MemberDiagnostic>,
     /// Asset transport or decoding failures, including failures hidden by a
-    /// recoverable authored arc. Strict imports reject these.
+    /// recoverable authored arc. Strict imports reject these, except a
+    /// dependency that is not found ([`AssetFailure::is_missing`]), which
+    /// both policies keep here.
     pub asset_failures: Vec<AssetFailure>,
 }
 impl LoadReport {
@@ -318,12 +348,16 @@ impl LoadReport {
         self.diagnostics.extend(other.diagnostics);
         self.asset_failures.extend(other.asset_failures);
     }
-    /// Whether imported content was malformed or omitted during recovery.
+    /// Whether imported content was malformed, omitted during recovery, or
+    /// named a dependency that was not found.
     pub fn has_errors(&self) -> bool {
         !self.asset_failures.is_empty() || self.diagnostics.iter().any(|d| d.diagnostic.is_error())
     }
 }
 /// Evidence for a failed dependency read.
+///
+/// `Display` names the asset as authored and the transport or format
+/// failure; [`StageDocument::identifier`] names the `anchor` layer.
 #[derive(Clone, Debug)]
 pub struct AssetFailure {
     /// Authored asset path.
@@ -332,6 +366,40 @@ pub struct AssetFailure {
     pub anchor: Option<LayerId>,
     /// Original transport or format failure.
     pub error: IoError,
+}
+impl AssetFailure {
+    /// Whether the asset was not found ([`IoErrorKind::NotFound`]): a
+    /// missing dependency, which neither [`ImportPolicy`] rejects.
+    ///
+    /// Spec: AOUSD Core §10.3.2.1, §10.6 (a composition error, not a read
+    /// failure). OpenUSD: `PcpErrorInvalidAssetPath`.
+    #[must_use]
+    pub fn is_missing(&self) -> bool {
+        self.error.kind == IoErrorKind::NotFound
+    }
+}
+impl core::fmt::Display for AssetFailure {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "could not open asset @{}@: {}", self.asset, self.error)
+    }
+}
+/// The failure among `failures` that a strict import rejects its layer
+/// with: the first that is not a missing dependency.
+fn strict_failure(failures: &[AssetFailure]) -> Option<&AssetFailure> {
+    failures.iter().find(|failure| !failure.is_missing())
+}
+/// Whether a strict import rejects its layer for `diagnostic`: an error
+/// other than a package member that is not found, which is a missing
+/// dependency (AOUSD Core §9.7, §10.6).
+fn strict_rejects(diagnostic: &MemberDiagnostic) -> bool {
+    diagnostic.diagnostic.is_error()
+        && !matches!(
+            diagnostic.diagnostic,
+            ImportDiagnostic::AssetResolve {
+                error: AssetResolveError::NotFound,
+                ..
+            }
+        )
 }
 /// Failure to save one layer. Other selected layers may have saved successfully.
 #[derive(Clone, Debug)]
@@ -641,8 +709,10 @@ impl<B: Storage> StageDocument<B> {
     /// this loads their assets; nothing is read implicitly. Each round
     /// composes only the prims whose arcs name the loaded assets. An asset
     /// that fails to load is recorded as missing, so composition reports it
-    /// ([`layerstack::CompositionError::UnresolvedAsset`]); strict import
-    /// returns the error instead, keeping the layers earlier rounds loaded.
+    /// ([`layerstack::CompositionError::UnresolvedAsset`]), and kept in the
+    /// report's [`LoadReport::asset_failures`]. Strict import returns the
+    /// error instead, keeping the layers earlier rounds loaded, unless the
+    /// asset was not found ([`AssetFailure::is_missing`]).
     ///
     /// Returns the layers loaded, with their diagnostics and failures.
     ///
@@ -686,14 +756,17 @@ impl<B: Storage> StageDocument<B> {
                         }
                     }
                     Err(error) => {
-                        if self.import_policy == ImportPolicy::Strict {
-                            return Err(error);
-                        }
-                        reader.failures.push(AssetFailure {
+                        let failure = AssetFailure {
                             asset: asset.clone(),
                             anchor: Some(anchor),
                             error,
-                        });
+                        };
+                        // A missing dependency is a composition error, not
+                        // a rejected read (AOUSD Core §10.3.2.1, §10.6).
+                        if self.import_policy == ImportPolicy::Strict && !failure.is_missing() {
+                            return Err(failure.error);
+                        }
+                        reader.failures.push(failure);
                         reader.bindings.insert((anchor, asset), LayerId::UNRESOLVED);
                     }
                 }
@@ -1112,6 +1185,17 @@ impl<'a, B: Storage> Reader<'a, B> {
                     }
                     Err(error) => {
                         self.bindings.insert(key, LayerId::UNRESOLVED);
+                        // An evaluated path naming no asset is a missing
+                        // dependency under either policy (AOUSD Core
+                        // §10.3.2.1, §10.6); composition reports it.
+                        if error.kind == IoErrorKind::NotFound {
+                            self.failures.push(AssetFailure {
+                                asset: request.asset_path,
+                                anchor: Some(request.anchor),
+                                error,
+                            });
+                            continue;
+                        }
                         if self.policy == ImportPolicy::Strict {
                             return Err(error);
                         }
@@ -1315,15 +1399,18 @@ impl<'a, B: Storage> Reader<'a, B> {
                 result.layer
             }
         };
+        // A dependency that is not found leaves its arc to composition to
+        // report (AOUSD Core §10.3.1, §10.3.2.1, §10.6); strict import
+        // rejects only content that is malformed or unrepresented.
         if self.policy == ImportPolicy::Strict
-            && let Some(failure) = self.failures.get(first_failure)
+            && let Some(failure) = strict_failure(&self.failures[first_failure..])
         {
             return Err(failure.error.clone());
         }
         if self.policy == ImportPolicy::Strict
             && self.diagnostics[first_diagnostic..]
                 .iter()
-                .any(|d| d.diagnostic.is_error())
+                .any(strict_rejects)
         {
             return Err(strict_rejection(
                 identifier,
@@ -1714,7 +1801,8 @@ impl<B: Storage> AssetResolver for Reader<'_, B> {
     }
 }
 /// The error a strict import returns for `identifier`, whose reading
-/// reported `diagnostics`: it keeps those that are errors.
+/// reported `diagnostics`: it keeps those that rejected it
+/// ([`strict_rejects`]).
 fn strict_rejection(identifier: &str, diagnostics: &[MemberDiagnostic]) -> IoError {
     let mut error = IoError::new(
         IoErrorKind::Rejected,
@@ -1723,7 +1811,7 @@ fn strict_rejection(identifier: &str, diagnostics: &[MemberDiagnostic]) -> IoErr
     .at(identifier);
     error.diagnostics = diagnostics
         .iter()
-        .filter(|d| d.diagnostic.is_error())
+        .filter(|d| strict_rejects(d))
         .cloned()
         .collect();
     error

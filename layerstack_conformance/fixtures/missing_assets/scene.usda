@@ -1,0 +1,60 @@
+#usda 1.0
+(
+    subLayers = [
+        @./absent_layer.usda@,
+        @./terrain.usda@
+    ]
+)
+
+# A missing reference: the arc contributes nothing, the local opinion stays.
+def "Rock" (
+    references = @./absent_rock.usda@</Rock>
+)
+{
+    int size = 1
+}
+
+# A missing reference beside a valid one: the valid sibling still loads.
+def "Pair" (
+    references = [
+        @./absent_rock.usda@</Rock>,
+        @./plant.usda@</Plant>
+    ]
+)
+{
+}
+
+# A missing payload, reported only while the payload is loaded.
+def "Seed" (
+    payload = @./absent_seed.usda@</Seed>
+)
+{
+    int count = 2
+}
+
+# A missing reference inside the variant the prim selects.
+def "Moss" (
+    variants = {
+        string look = "mossy"
+    }
+    prepend variantSets = "look"
+)
+{
+    variantSet "look" = {
+        "bare" {
+        }
+        "mossy" (
+            references = @./absent_moss.usda@</Moss>
+        )
+        {
+            int tufts = 3
+        }
+    }
+}
+
+# A missing reference inside a referenced layer.
+def "Bed" (
+    references = @./bed.usda@</Bed>
+)
+{
+}

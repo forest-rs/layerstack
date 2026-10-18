@@ -531,6 +531,11 @@ jobs:
       - name: check value types oracle
         run: python layerstack_conformance/scripts/value_types_oracle.py --check
 
+      # The missing assets oracle must be what OpenUSD opens, reports and
+      # reloads when a scene's dependencies are missing.
+      - name: check missing assets oracle
+        run: python layerstack_conformance/scripts/missing_assets_oracle.py --check
+
       # These compare with OpenUSD when a Python with `pxr` is given and
       # skip otherwise, as they do in the test jobs: flattening (instancing
       # and prototype sharing included), layer saves, and prim field edits.

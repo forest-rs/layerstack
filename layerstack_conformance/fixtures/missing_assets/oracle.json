@@ -1,0 +1,545 @@
+{
+ "appearing": {
+  "absent_layer.usda": "#usda 1.0\n\ndef \"Valley\"\n{\n    int depth = 7\n}\n",
+  "absent_moss.usda": "#usda 1.0\n\ndef \"Moss\"\n{\n    int spores = 11\n}\n",
+  "absent_rock.usda": "#usda 1.0\n\ndef \"Rock\"\n{\n    int size = 8\n    int grain = 9\n}\n",
+  "absent_seed.usda": "#usda 1.0\n\ndef \"Seed\"\n{\n    int sprouts = 10\n}\n",
+  "absent_soil.usda": "#usda 1.0\n\ndef \"Soil\"\n{\n    int depth = 12\n}\n"
+ },
+ "cases": {
+  "broken": {
+   "errors": [
+    {
+     "arc": "reference",
+     "asset": "malformed.usda",
+     "introducing_layer": "broken.usda",
+     "introducing_spec": "/Cairn",
+     "prim": "/Cairn",
+     "type": "InvalidAssetPath"
+    }
+   ],
+   "opened": true,
+   "prims": {
+    "/Cairn": {
+     "attributes": {
+      "leaves": 5
+     },
+     "stack": [
+      [
+       "broken.usda",
+       "/Cairn"
+      ],
+      [
+       "plant.usda",
+       "/Plant"
+      ]
+     ]
+    }
+   }
+  },
+  "load_all": {
+   "errors": [
+    {
+     "arc": "payload",
+     "asset": "absent_seed.usda",
+     "introducing_layer": "scene.usda",
+     "introducing_spec": "/Seed",
+     "prim": "/Seed",
+     "type": "InvalidAssetPath"
+    },
+    {
+     "arc": "reference",
+     "asset": "absent_moss.usda",
+     "introducing_layer": "scene.usda",
+     "introducing_spec": "/Moss{look=mossy}",
+     "prim": "/Moss",
+     "type": "InvalidAssetPath"
+    },
+    {
+     "arc": "reference",
+     "asset": "absent_rock.usda",
+     "introducing_layer": "scene.usda",
+     "introducing_spec": "/Pair",
+     "prim": "/Pair",
+     "type": "InvalidAssetPath"
+    },
+    {
+     "arc": "reference",
+     "asset": "absent_rock.usda",
+     "introducing_layer": "scene.usda",
+     "introducing_spec": "/Rock",
+     "prim": "/Rock",
+     "type": "InvalidAssetPath"
+    },
+    {
+     "arc": "reference",
+     "asset": "absent_soil.usda",
+     "introducing_layer": "bed.usda",
+     "introducing_spec": "/Bed",
+     "prim": "/Bed",
+     "type": "InvalidAssetPath"
+    },
+    {
+     "asset": "absent_layer.usda",
+     "layer": "scene.usda",
+     "type": "InvalidSublayerPath"
+    }
+   ],
+   "opened": true,
+   "prims": {
+    "/Bed": {
+     "attributes": {
+      "width": 6
+     },
+     "stack": [
+      [
+       "scene.usda",
+       "/Bed"
+      ],
+      [
+       "bed.usda",
+       "/Bed"
+      ]
+     ]
+    },
+    "/Hill": {
+     "attributes": {
+      "height": 4
+     },
+     "stack": [
+      [
+       "terrain.usda",
+       "/Hill"
+      ]
+     ]
+    },
+    "/Moss": {
+     "attributes": {
+      "tufts": 3
+     },
+     "stack": [
+      [
+       "scene.usda",
+       "/Moss"
+      ],
+      [
+       "scene.usda",
+       "/Moss{look=mossy}"
+      ]
+     ]
+    },
+    "/Pair": {
+     "attributes": {
+      "leaves": 5
+     },
+     "stack": [
+      [
+       "scene.usda",
+       "/Pair"
+      ],
+      [
+       "plant.usda",
+       "/Plant"
+      ]
+     ]
+    },
+    "/Rock": {
+     "attributes": {
+      "size": 1
+     },
+     "stack": [
+      [
+       "scene.usda",
+       "/Rock"
+      ]
+     ]
+    },
+    "/Seed": {
+     "attributes": {
+      "count": 2
+     },
+     "stack": [
+      [
+       "scene.usda",
+       "/Seed"
+      ]
+     ]
+    }
+   }
+  },
+  "load_none": {
+   "errors": [
+    {
+     "arc": "reference",
+     "asset": "absent_moss.usda",
+     "introducing_layer": "scene.usda",
+     "introducing_spec": "/Moss{look=mossy}",
+     "prim": "/Moss",
+     "type": "InvalidAssetPath"
+    },
+    {
+     "arc": "reference",
+     "asset": "absent_rock.usda",
+     "introducing_layer": "scene.usda",
+     "introducing_spec": "/Pair",
+     "prim": "/Pair",
+     "type": "InvalidAssetPath"
+    },
+    {
+     "arc": "reference",
+     "asset": "absent_rock.usda",
+     "introducing_layer": "scene.usda",
+     "introducing_spec": "/Rock",
+     "prim": "/Rock",
+     "type": "InvalidAssetPath"
+    },
+    {
+     "arc": "reference",
+     "asset": "absent_soil.usda",
+     "introducing_layer": "bed.usda",
+     "introducing_spec": "/Bed",
+     "prim": "/Bed",
+     "type": "InvalidAssetPath"
+    },
+    {
+     "asset": "absent_layer.usda",
+     "layer": "scene.usda",
+     "type": "InvalidSublayerPath"
+    }
+   ],
+   "opened": true,
+   "prims": {
+    "/Bed": {
+     "attributes": {
+      "width": 6
+     },
+     "stack": [
+      [
+       "scene.usda",
+       "/Bed"
+      ],
+      [
+       "bed.usda",
+       "/Bed"
+      ]
+     ]
+    },
+    "/Hill": {
+     "attributes": {
+      "height": 4
+     },
+     "stack": [
+      [
+       "terrain.usda",
+       "/Hill"
+      ]
+     ]
+    },
+    "/Moss": {
+     "attributes": {
+      "tufts": 3
+     },
+     "stack": [
+      [
+       "scene.usda",
+       "/Moss"
+      ],
+      [
+       "scene.usda",
+       "/Moss{look=mossy}"
+      ]
+     ]
+    },
+    "/Pair": {
+     "attributes": {
+      "leaves": 5
+     },
+     "stack": [
+      [
+       "scene.usda",
+       "/Pair"
+      ],
+      [
+       "plant.usda",
+       "/Plant"
+      ]
+     ]
+    },
+    "/Rock": {
+     "attributes": {
+      "size": 1
+     },
+     "stack": [
+      [
+       "scene.usda",
+       "/Rock"
+      ]
+     ]
+    },
+    "/Seed": {
+     "attributes": {
+      "count": 2
+     },
+     "stack": [
+      [
+       "scene.usda",
+       "/Seed"
+      ]
+     ]
+    }
+   }
+  },
+  "loaded_later": {
+   "errors": [
+    {
+     "arc": "reference",
+     "asset": "absent_moss.usda",
+     "introducing_layer": "scene.usda",
+     "introducing_spec": "/Moss{look=mossy}",
+     "prim": "/Moss",
+     "type": "InvalidAssetPath"
+    },
+    {
+     "arc": "reference",
+     "asset": "absent_rock.usda",
+     "introducing_layer": "scene.usda",
+     "introducing_spec": "/Pair",
+     "prim": "/Pair",
+     "type": "InvalidAssetPath"
+    },
+    {
+     "arc": "reference",
+     "asset": "absent_rock.usda",
+     "introducing_layer": "scene.usda",
+     "introducing_spec": "/Rock",
+     "prim": "/Rock",
+     "type": "InvalidAssetPath"
+    },
+    {
+     "arc": "reference",
+     "asset": "absent_soil.usda",
+     "introducing_layer": "bed.usda",
+     "introducing_spec": "/Bed",
+     "prim": "/Bed",
+     "type": "InvalidAssetPath"
+    },
+    {
+     "asset": "absent_layer.usda",
+     "layer": "scene.usda",
+     "type": "InvalidSublayerPath"
+    }
+   ],
+   "opened": true,
+   "prims": {
+    "/Bed": {
+     "attributes": {
+      "width": 6
+     },
+     "stack": [
+      [
+       "scene.usda",
+       "/Bed"
+      ],
+      [
+       "bed.usda",
+       "/Bed"
+      ]
+     ]
+    },
+    "/Hill": {
+     "attributes": {
+      "height": 4
+     },
+     "stack": [
+      [
+       "terrain.usda",
+       "/Hill"
+      ]
+     ]
+    },
+    "/Moss": {
+     "attributes": {
+      "tufts": 3
+     },
+     "stack": [
+      [
+       "scene.usda",
+       "/Moss"
+      ],
+      [
+       "scene.usda",
+       "/Moss{look=mossy}"
+      ]
+     ]
+    },
+    "/Pair": {
+     "attributes": {
+      "leaves": 5
+     },
+     "stack": [
+      [
+       "scene.usda",
+       "/Pair"
+      ],
+      [
+       "plant.usda",
+       "/Plant"
+      ]
+     ]
+    },
+    "/Rock": {
+     "attributes": {
+      "size": 1
+     },
+     "stack": [
+      [
+       "scene.usda",
+       "/Rock"
+      ]
+     ]
+    },
+    "/Seed": {
+     "attributes": {
+      "count": 2,
+      "sprouts": 10
+     },
+     "stack": [
+      [
+       "scene.usda",
+       "/Seed"
+      ],
+      [
+       "absent_seed.usda",
+       "/Seed"
+      ]
+     ]
+    }
+   }
+  },
+  "missing_root": {
+   "opened": false
+  },
+  "reloaded": {
+   "errors": [],
+   "opened": true,
+   "prims": {
+    "/Bed": {
+     "attributes": {
+      "depth": 12,
+      "width": 6
+     },
+     "stack": [
+      [
+       "scene.usda",
+       "/Bed"
+      ],
+      [
+       "bed.usda",
+       "/Bed"
+      ],
+      [
+       "absent_soil.usda",
+       "/Soil"
+      ]
+     ]
+    },
+    "/Hill": {
+     "attributes": {
+      "height": 4
+     },
+     "stack": [
+      [
+       "terrain.usda",
+       "/Hill"
+      ]
+     ]
+    },
+    "/Moss": {
+     "attributes": {
+      "spores": 11,
+      "tufts": 3
+     },
+     "stack": [
+      [
+       "scene.usda",
+       "/Moss"
+      ],
+      [
+       "scene.usda",
+       "/Moss{look=mossy}"
+      ],
+      [
+       "absent_moss.usda",
+       "/Moss"
+      ]
+     ]
+    },
+    "/Pair": {
+     "attributes": {
+      "grain": 9,
+      "leaves": 5,
+      "size": 8
+     },
+     "stack": [
+      [
+       "scene.usda",
+       "/Pair"
+      ],
+      [
+       "absent_rock.usda",
+       "/Rock"
+      ],
+      [
+       "plant.usda",
+       "/Plant"
+      ]
+     ]
+    },
+    "/Rock": {
+     "attributes": {
+      "grain": 9,
+      "size": 1
+     },
+     "stack": [
+      [
+       "scene.usda",
+       "/Rock"
+      ],
+      [
+       "absent_rock.usda",
+       "/Rock"
+      ]
+     ]
+    },
+    "/Seed": {
+     "attributes": {
+      "count": 2,
+      "sprouts": 10
+     },
+     "stack": [
+      [
+       "scene.usda",
+       "/Seed"
+      ],
+      [
+       "absent_seed.usda",
+       "/Seed"
+      ]
+     ]
+    },
+    "/Valley": {
+     "attributes": {
+      "depth": 7
+     },
+     "stack": [
+      [
+       "absent_layer.usda",
+       "/Valley"
+      ]
+     ]
+    }
+   }
+  }
+ },
+ "openusd_version": "26.8"
+}

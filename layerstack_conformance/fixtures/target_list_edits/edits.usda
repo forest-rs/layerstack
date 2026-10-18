@@ -1,0 +1,49 @@
+#usda 1.0
+(
+    subLayers = [
+        @edits_sub.usda@
+    ]
+)
+
+def "Lamp"
+{
+    rel lights
+    rel explicit = [
+        </A>,
+        </B>,
+    ]
+    delete rel deleted = </A>
+    prepend rel deleted = </B>
+    custom rel declared
+    color3f inputs:color
+    color3f inputs:tint.connect = </Source.outputs:a>
+}
+
+def "Rock" (
+    prepend variantSets = "size"
+    variants = {
+        string size = "big"
+    }
+)
+{
+    variantSet "size" = {
+        "big" {
+            rel lights
+        }
+    }
+
+    def "Pebble"
+    {
+        double radius = 1
+    }
+}
+
+def "Vehicle" (
+    prepend references = @asset.usda@</Model>
+)
+{
+}
+
+def SphereLight "Key"
+{
+}

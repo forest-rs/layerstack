@@ -1,0 +1,1746 @@
+{
+ "edits": [
+  {
+   "accepted": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true
+   ],
+   "after": [
+    {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [],
+      "delete": [],
+      "explicit": null,
+      "prepend": [
+       "/A"
+      ],
+      "reorder": []
+     },
+     "type": null
+    },
+    {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [],
+      "delete": [],
+      "explicit": null,
+      "prepend": [
+       "/B",
+       "/A"
+      ],
+      "reorder": []
+     },
+     "type": null
+    },
+    {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [
+       "/C"
+      ],
+      "delete": [],
+      "explicit": null,
+      "prepend": [
+       "/B",
+       "/A"
+      ],
+      "reorder": []
+     },
+     "type": null
+    },
+    {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [
+       "/C",
+       "/A"
+      ],
+      "delete": [],
+      "explicit": null,
+      "prepend": [
+       "/B",
+       "/A"
+      ],
+      "reorder": []
+     },
+     "type": null
+    },
+    {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [
+       "/C",
+       "/A"
+      ],
+      "delete": [],
+      "explicit": null,
+      "prepend": [
+       "/B",
+       "/A"
+      ],
+      "reorder": []
+     },
+     "type": null
+    },
+    {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [
+       "/C",
+       "/A"
+      ],
+      "delete": [],
+      "explicit": null,
+      "prepend": [
+       "/A",
+       "/B"
+      ],
+      "reorder": []
+     },
+     "type": null
+    },
+    {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [
+       "/D",
+       "/C",
+       "/A"
+      ],
+      "delete": [],
+      "explicit": null,
+      "prepend": [
+       "/A",
+       "/B"
+      ],
+      "reorder": []
+     },
+     "type": null
+    },
+    {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [
+       "/D",
+       "/C",
+       "/A"
+      ],
+      "delete": [],
+      "explicit": null,
+      "prepend": [
+       "/B",
+       "/A"
+      ],
+      "reorder": []
+     },
+     "type": null
+    }
+   ],
+   "name": "add_positions",
+   "prim": "/Lamp",
+   "steps": [
+    {
+     "call": "add_target",
+     "position": "back_of_prepend",
+     "property": "lights",
+     "target": "/A"
+    },
+    {
+     "call": "add_target",
+     "position": "front_of_prepend",
+     "property": "lights",
+     "target": "/B"
+    },
+    {
+     "call": "add_target",
+     "position": "back_of_append",
+     "property": "lights",
+     "target": "/C"
+    },
+    {
+     "call": "add_target",
+     "position": "back_of_append",
+     "property": "lights",
+     "target": "/A"
+    },
+    {
+     "call": "add_target",
+     "position": "back_of_append",
+     "property": "lights",
+     "target": "/A"
+    },
+    {
+     "call": "add_target",
+     "position": "back_of_prepend",
+     "property": "lights",
+     "target": "/B"
+    },
+    {
+     "call": "add_target",
+     "position": "front_of_append",
+     "property": "lights",
+     "target": "/D"
+    },
+    {
+     "call": "add_target",
+     "position": "back_of_prepend",
+     "property": "lights",
+     "target": "/A"
+    }
+   ],
+   "target": {
+    "kind": "root"
+   }
+  },
+  {
+   "accepted": [
+    true,
+    true,
+    true,
+    true
+   ],
+   "after": [
+    {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [],
+      "delete": [],
+      "explicit": [
+       "/C",
+       "/A",
+       "/B"
+      ],
+      "prepend": [],
+      "reorder": []
+     },
+     "type": null
+    },
+    {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [],
+      "delete": [],
+      "explicit": [
+       "/C",
+       "/B",
+       "/A"
+      ],
+      "prepend": [],
+      "reorder": []
+     },
+     "type": null
+    },
+    {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [],
+      "delete": [],
+      "explicit": [
+       "/B",
+       "/C",
+       "/A"
+      ],
+      "prepend": [],
+      "reorder": []
+     },
+     "type": null
+    },
+    {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [],
+      "delete": [],
+      "explicit": [
+       "/B",
+       "/C",
+       "/A",
+       "/D"
+      ],
+      "prepend": [],
+      "reorder": []
+     },
+     "type": null
+    }
+   ],
+   "name": "add_explicit",
+   "prim": "/Lamp",
+   "steps": [
+    {
+     "call": "add_target",
+     "position": "front_of_append",
+     "property": "explicit",
+     "target": "/C"
+    },
+    {
+     "call": "add_target",
+     "position": "back_of_append",
+     "property": "explicit",
+     "target": "/A"
+    },
+    {
+     "call": "add_target",
+     "position": "front_of_prepend",
+     "property": "explicit",
+     "target": "/B"
+    },
+    {
+     "call": "add_target",
+     "position": "back_of_prepend",
+     "property": "explicit",
+     "target": "/D"
+    }
+   ],
+   "target": {
+    "kind": "root"
+   }
+  },
+  {
+   "accepted": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true
+   ],
+   "after": [
+    {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [],
+      "delete": [
+       "/A"
+      ],
+      "explicit": null,
+      "prepend": [
+       "/B",
+       "/A"
+      ],
+      "reorder": []
+     },
+     "type": null
+    },
+    {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [
+       "/B"
+      ],
+      "delete": [
+       "/A"
+      ],
+      "explicit": null,
+      "prepend": [
+       "/B",
+       "/A"
+      ],
+      "reorder": []
+     },
+     "type": null
+    },
+    {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [],
+      "delete": [
+       "/A",
+       "/B"
+      ],
+      "explicit": null,
+      "prepend": [
+       "/A"
+      ],
+      "reorder": []
+     },
+     "type": null
+    },
+    {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [],
+      "delete": [
+       "/A",
+       "/B"
+      ],
+      "explicit": null,
+      "prepend": [],
+      "reorder": []
+     },
+     "type": null
+    },
+    {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [],
+      "delete": [
+       "/A",
+       "/B"
+      ],
+      "explicit": null,
+      "prepend": [],
+      "reorder": []
+     },
+     "type": null
+    },
+    {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [],
+      "delete": [
+       "/A",
+       "/B",
+       "/C"
+      ],
+      "explicit": null,
+      "prepend": [],
+      "reorder": []
+     },
+     "type": null
+    }
+   ],
+   "name": "add_and_remove_deleted",
+   "prim": "/Lamp",
+   "steps": [
+    {
+     "call": "add_target",
+     "position": "back_of_prepend",
+     "property": "deleted",
+     "target": "/A"
+    },
+    {
+     "call": "add_target",
+     "position": "back_of_append",
+     "property": "deleted",
+     "target": "/B"
+    },
+    {
+     "call": "remove_target",
+     "property": "deleted",
+     "target": "/B"
+    },
+    {
+     "call": "remove_target",
+     "property": "deleted",
+     "target": "/A"
+    },
+    {
+     "call": "remove_target",
+     "property": "deleted",
+     "target": "/A"
+    },
+    {
+     "call": "remove_target",
+     "property": "deleted",
+     "target": "/C"
+    }
+   ],
+   "target": {
+    "kind": "root"
+   }
+  },
+  {
+   "accepted": [
+    true,
+    true,
+    true,
+    true
+   ],
+   "after": [
+    {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [],
+      "delete": [],
+      "explicit": [
+       "/B"
+      ],
+      "prepend": [],
+      "reorder": []
+     },
+     "type": null
+    },
+    {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [],
+      "delete": [],
+      "explicit": [
+       "/B"
+      ],
+      "prepend": [],
+      "reorder": []
+     },
+     "type": null
+    },
+    {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [],
+      "delete": [],
+      "explicit": [],
+      "prepend": [],
+      "reorder": []
+     },
+     "type": null
+    },
+    {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [],
+      "delete": [],
+      "explicit": [
+       "/C"
+      ],
+      "prepend": [],
+      "reorder": []
+     },
+     "type": null
+    }
+   ],
+   "name": "remove_explicit",
+   "prim": "/Lamp",
+   "steps": [
+    {
+     "call": "remove_target",
+     "property": "explicit",
+     "target": "/A"
+    },
+    {
+     "call": "remove_target",
+     "property": "explicit",
+     "target": "/Z"
+    },
+    {
+     "call": "remove_target",
+     "property": "explicit",
+     "target": "/B"
+    },
+    {
+     "call": "add_target",
+     "position": "back_of_append",
+     "property": "explicit",
+     "target": "/C"
+    }
+   ],
+   "target": {
+    "kind": "root"
+   }
+  },
+  {
+   "accepted": [
+    true,
+    true,
+    true
+   ],
+   "after": [
+    {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [
+       "/Rock/Pebble.radius"
+      ],
+      "delete": [],
+      "explicit": null,
+      "prepend": [],
+      "reorder": []
+     },
+     "type": null
+    },
+    {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [
+       "/Rock/Pebble.radius",
+       "/Rock/Pebble"
+      ],
+      "delete": [],
+      "explicit": null,
+      "prepend": [],
+      "reorder": []
+     },
+     "type": null
+    },
+    {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [
+       "/Rock/Pebble"
+      ],
+      "delete": [
+       "/Rock/Pebble.radius"
+      ],
+      "explicit": null,
+      "prepend": [],
+      "reorder": []
+     },
+     "type": null
+    }
+   ],
+   "name": "property_targets",
+   "prim": "/Lamp",
+   "steps": [
+    {
+     "call": "add_target",
+     "position": "back_of_append",
+     "property": "lights",
+     "target": "/Rock/Pebble.radius"
+    },
+    {
+     "call": "add_target",
+     "position": "back_of_append",
+     "property": "lights",
+     "target": "/Rock/Pebble"
+    },
+    {
+     "call": "remove_target",
+     "property": "lights",
+     "target": "/Rock/Pebble.radius"
+    }
+   ],
+   "target": {
+    "kind": "root"
+   }
+  },
+  {
+   "accepted": [
+    true,
+    true
+   ],
+   "after": [
+    {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [],
+      "delete": [
+       "/A"
+      ],
+      "explicit": null,
+      "prepend": [],
+      "reorder": []
+     },
+     "type": null
+    },
+    {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [
+       "/B"
+      ],
+      "delete": [
+       "/A"
+      ],
+      "explicit": null,
+      "prepend": [],
+      "reorder": []
+     },
+     "type": null
+    }
+   ],
+   "name": "remove_creates_spec",
+   "prim": "/Lamp",
+   "steps": [
+    {
+     "call": "remove_target",
+     "property": "lights",
+     "target": "/A"
+    },
+    {
+     "call": "add_target",
+     "position": "back_of_append",
+     "property": "lights",
+     "target": "/B"
+    }
+   ],
+   "target": {
+    "kind": "sublayer"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "after": [
+    {
+     "custom": true,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [],
+      "delete": [],
+      "explicit": null,
+      "prepend": [
+       "/A"
+      ],
+      "reorder": []
+     },
+     "type": null
+    }
+   ],
+   "name": "add_undeclared",
+   "prim": "/Lamp",
+   "steps": [
+    {
+     "call": "add_target",
+     "position": "back_of_prepend",
+     "property": "extra",
+     "target": "/A"
+    }
+   ],
+   "target": {
+    "kind": "root"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "after": [
+    {
+     "custom": true,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [],
+      "delete": [
+       "/A"
+      ],
+      "explicit": null,
+      "prepend": [],
+      "reorder": []
+     },
+     "type": null
+    }
+   ],
+   "name": "add_undeclared_in_sublayer",
+   "prim": "/Lamp",
+   "steps": [
+    {
+     "call": "remove_target",
+     "property": "extra",
+     "target": "/A"
+    }
+   ],
+   "target": {
+    "kind": "sublayer"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "after": [
+    {
+     "custom": true,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [
+       "/A"
+      ],
+      "delete": [],
+      "explicit": null,
+      "prepend": [],
+      "reorder": []
+     },
+     "type": null
+    }
+   ],
+   "name": "add_declared_custom",
+   "prim": "/Lamp",
+   "steps": [
+    {
+     "call": "add_target",
+     "position": "back_of_append",
+     "property": "declared",
+     "target": "/A"
+    }
+   ],
+   "target": {
+    "kind": "sublayer"
+   }
+  },
+  {
+   "accepted": [
+    true,
+    true,
+    true,
+    true
+   ],
+   "after": [
+    {
+     "custom": false,
+     "kind": "attribute",
+     "targets": {
+      "add": [],
+      "append": [],
+      "delete": [],
+      "explicit": null,
+      "prepend": [
+       "/Source.outputs:a"
+      ],
+      "reorder": []
+     },
+     "type": "color3f"
+    },
+    {
+     "custom": false,
+     "kind": "attribute",
+     "targets": {
+      "add": [],
+      "append": [
+       "/Source.outputs:b"
+      ],
+      "delete": [],
+      "explicit": null,
+      "prepend": [
+       "/Source.outputs:a"
+      ],
+      "reorder": []
+     },
+     "type": "color3f"
+    },
+    {
+     "custom": false,
+     "kind": "attribute",
+     "targets": {
+      "add": [],
+      "append": [
+       "/Source.outputs:b"
+      ],
+      "delete": [
+       "/Source.outputs:a"
+      ],
+      "explicit": null,
+      "prepend": [],
+      "reorder": []
+     },
+     "type": "color3f"
+    },
+    {
+     "custom": false,
+     "kind": "attribute",
+     "targets": {
+      "add": [],
+      "append": [
+       "/Source.outputs:b"
+      ],
+      "delete": [
+       "/Source.outputs:a",
+       "/Other.outputs:c"
+      ],
+      "explicit": null,
+      "prepend": [],
+      "reorder": []
+     },
+     "type": "color3f"
+    }
+   ],
+   "name": "connections",
+   "prim": "/Lamp",
+   "steps": [
+    {
+     "call": "add_connection",
+     "position": "back_of_prepend",
+     "property": "inputs:color",
+     "target": "/Source.outputs:a"
+    },
+    {
+     "call": "add_connection",
+     "position": "back_of_append",
+     "property": "inputs:color",
+     "target": "/Source.outputs:b"
+    },
+    {
+     "call": "remove_connection",
+     "property": "inputs:color",
+     "target": "/Source.outputs:a"
+    },
+    {
+     "call": "remove_connection",
+     "property": "inputs:color",
+     "target": "/Other.outputs:c"
+    }
+   ],
+   "target": {
+    "kind": "root"
+   }
+  },
+  {
+   "accepted": [
+    true,
+    true
+   ],
+   "after": [
+    {
+     "custom": false,
+     "kind": "attribute",
+     "targets": {
+      "add": [],
+      "append": [],
+      "delete": [],
+      "explicit": [
+       "/Source.outputs:b",
+       "/Source.outputs:a"
+      ],
+      "prepend": [],
+      "reorder": []
+     },
+     "type": "color3f"
+    },
+    {
+     "custom": false,
+     "kind": "attribute",
+     "targets": {
+      "add": [],
+      "append": [],
+      "delete": [],
+      "explicit": [
+       "/Source.outputs:b"
+      ],
+      "prepend": [],
+      "reorder": []
+     },
+     "type": "color3f"
+    }
+   ],
+   "name": "connections_explicit",
+   "prim": "/Lamp",
+   "steps": [
+    {
+     "call": "add_connection",
+     "position": "front_of_append",
+     "property": "inputs:tint",
+     "target": "/Source.outputs:b"
+    },
+    {
+     "call": "remove_connection",
+     "property": "inputs:tint",
+     "target": "/Source.outputs:a"
+    }
+   ],
+   "target": {
+    "kind": "root"
+   }
+  },
+  {
+   "accepted": [
+    true,
+    true
+   ],
+   "after": [
+    {
+     "custom": false,
+     "kind": "attribute",
+     "targets": {
+      "add": [],
+      "append": [
+       "/Source.outputs:a"
+      ],
+      "delete": [],
+      "explicit": null,
+      "prepend": [],
+      "reorder": []
+     },
+     "type": "color3f"
+    },
+    {
+     "custom": false,
+     "kind": "attribute",
+     "targets": {
+      "add": [],
+      "append": [],
+      "delete": [
+       "/Source.outputs:a"
+      ],
+      "explicit": null,
+      "prepend": [],
+      "reorder": []
+     },
+     "type": "color3f"
+    }
+   ],
+   "name": "connection_creates_spec",
+   "prim": "/Lamp",
+   "steps": [
+    {
+     "call": "add_connection",
+     "position": "back_of_append",
+     "property": "inputs:color",
+     "target": "/Source.outputs:a"
+    },
+    {
+     "call": "remove_connection",
+     "property": "inputs:tint",
+     "target": "/Source.outputs:a"
+    }
+   ],
+   "target": {
+    "kind": "sublayer"
+   }
+  },
+  {
+   "accepted": [
+    true,
+    true
+   ],
+   "after": [
+    {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [
+       "/Rock/Pebble"
+      ],
+      "delete": [],
+      "explicit": null,
+      "prepend": [],
+      "reorder": []
+     },
+     "type": null
+    },
+    {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [
+       "/Rock/Pebble"
+      ],
+      "delete": [
+       "/Lamp"
+      ],
+      "explicit": null,
+      "prepend": [],
+      "reorder": []
+     },
+     "type": null
+    }
+   ],
+   "name": "through_variant",
+   "prim": "/Rock",
+   "steps": [
+    {
+     "call": "add_target",
+     "position": "back_of_append",
+     "property": "lights",
+     "target": "/Rock/Pebble"
+    },
+    {
+     "call": "remove_target",
+     "property": "lights",
+     "target": "/Lamp"
+    }
+   ],
+   "target": {
+    "kind": "variant",
+    "prim": "/Rock"
+   }
+  },
+  {
+   "accepted": [
+    true,
+    true,
+    false,
+    false
+   ],
+   "after": [
+    {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [
+       "/Model/Part"
+      ],
+      "delete": [],
+      "explicit": null,
+      "prepend": [],
+      "reorder": []
+     },
+     "type": null
+    },
+    {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [
+       "/Model/Part"
+      ],
+      "delete": [
+       "/Model"
+      ],
+      "explicit": null,
+      "prepend": [],
+      "reorder": []
+     },
+     "type": null
+    },
+    {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [
+       "/Model/Part"
+      ],
+      "delete": [
+       "/Model"
+      ],
+      "explicit": null,
+      "prepend": [],
+      "reorder": []
+     },
+     "type": null
+    },
+    {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [
+       "/Model/Part"
+      ],
+      "delete": [
+       "/Model"
+      ],
+      "explicit": null,
+      "prepend": [],
+      "reorder": []
+     },
+     "type": null
+    }
+   ],
+   "name": "through_reference",
+   "prim": "/Vehicle",
+   "steps": [
+    {
+     "call": "add_target",
+     "position": "back_of_append",
+     "property": "parts",
+     "target": "/Vehicle/Part"
+    },
+    {
+     "call": "remove_target",
+     "property": "parts",
+     "target": "/Vehicle"
+    },
+    {
+     "call": "add_target",
+     "position": "back_of_append",
+     "property": "parts",
+     "target": "/Lamp"
+    },
+    {
+     "call": "remove_target",
+     "property": "parts",
+     "target": "/Lamp"
+    }
+   ],
+   "target": {
+    "kind": "reference",
+    "prim": "/Vehicle"
+   }
+  },
+  {
+   "accepted": [
+    true,
+    true,
+    true,
+    true,
+    true
+   ],
+   "after": [
+    {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [
+       "/Rock"
+      ],
+      "delete": [],
+      "explicit": null,
+      "prepend": [],
+      "reorder": []
+     },
+     "type": null
+    },
+    {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [
+       "/Rock",
+       "/Vehicle"
+      ],
+      "delete": [],
+      "explicit": null,
+      "prepend": [],
+      "reorder": []
+     },
+     "type": null
+    },
+    {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [
+       "/Vehicle",
+       "/Rock"
+      ],
+      "delete": [],
+      "explicit": null,
+      "prepend": [],
+      "reorder": []
+     },
+     "type": null
+    },
+    {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [
+       "/Vehicle",
+       "/Rock"
+      ],
+      "delete": [
+       "/Lamp"
+      ],
+      "explicit": null,
+      "prepend": [],
+      "reorder": []
+     },
+     "type": null
+    },
+    {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [
+       "/Rock"
+      ],
+      "delete": [
+       "/Lamp",
+       "/Vehicle"
+      ],
+      "explicit": null,
+      "prepend": [],
+      "reorder": []
+     },
+     "type": null
+    }
+   ],
+   "name": "collection_includes",
+   "prim": "/Key",
+   "steps": [
+    {
+     "call": "add_to_includes",
+     "position": "back_of_append",
+     "property": "collection:lightLink:includes",
+     "target": "/Rock"
+    },
+    {
+     "call": "add_to_includes",
+     "position": "back_of_append",
+     "property": "collection:lightLink:includes",
+     "target": "/Vehicle"
+    },
+    {
+     "call": "add_to_includes",
+     "position": "back_of_append",
+     "property": "collection:lightLink:includes",
+     "target": "/Rock"
+    },
+    {
+     "call": "remove_from_includes",
+     "property": "collection:lightLink:includes",
+     "target": "/Lamp"
+    },
+    {
+     "call": "remove_from_includes",
+     "property": "collection:lightLink:includes",
+     "target": "/Vehicle"
+    }
+   ],
+   "target": {
+    "kind": "root"
+   }
+  },
+  {
+   "accepted": [
+    true,
+    true
+   ],
+   "after": [
+    {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [],
+      "delete": [],
+      "explicit": null,
+      "prepend": [
+       "/Rock/Pebble"
+      ],
+      "reorder": []
+     },
+     "type": null
+    },
+    {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [],
+      "delete": [
+       "/Rock"
+      ],
+      "explicit": null,
+      "prepend": [
+       "/Rock/Pebble"
+      ],
+      "reorder": []
+     },
+     "type": null
+    }
+   ],
+   "name": "collection_excludes",
+   "prim": "/Key",
+   "steps": [
+    {
+     "call": "add_to_excludes",
+     "position": "front_of_prepend",
+     "property": "collection:lightLink:excludes",
+     "target": "/Rock/Pebble"
+    },
+    {
+     "call": "remove_from_excludes",
+     "property": "collection:lightLink:excludes",
+     "target": "/Rock"
+    }
+   ],
+   "target": {
+    "kind": "sublayer"
+   }
+  },
+  {
+   "accepted": [
+    true,
+    true,
+    true
+   ],
+   "after": [
+    {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [
+       "/Lamp"
+      ],
+      "delete": [],
+      "explicit": null,
+      "prepend": [],
+      "reorder": []
+     },
+     "type": null
+    },
+    {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [],
+      "delete": [
+       "/Lamp"
+      ],
+      "explicit": null,
+      "prepend": [],
+      "reorder": []
+     },
+     "type": null
+    },
+    {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [
+       "/Rock"
+      ],
+      "delete": [
+       "/Lamp"
+      ],
+      "explicit": null,
+      "prepend": [],
+      "reorder": []
+     },
+     "type": null
+    }
+   ],
+   "name": "light_filters",
+   "prim": "/Key",
+   "steps": [
+    {
+     "call": "add_to_filters",
+     "position": "back_of_append",
+     "property": "light:filters",
+     "target": "/Lamp"
+    },
+    {
+     "call": "remove_from_filters",
+     "property": "light:filters",
+     "target": "/Lamp"
+    },
+    {
+     "call": "add_to_filters",
+     "position": "front_of_append",
+     "property": "light:filters",
+     "target": "/Rock"
+    }
+   ],
+   "target": {
+    "kind": "sublayer"
+   }
+  }
+ ],
+ "openusd_version": "26.8",
+ "scopes": {
+  "composed": {
+   "excludes": [],
+   "filters": [
+    "/World/Filters/Gobo"
+   ],
+   "includes": [
+    "/World/Terrain",
+    "/World/Plants/Fern",
+    "/World/Rocks/A"
+   ]
+  },
+  "prim": "/World/Key",
+  "steps": [
+   {
+    "accepted": true,
+    "after": {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [
+       "/World/Rocks/A"
+      ],
+      "delete": [],
+      "explicit": null,
+      "prepend": [],
+      "reorder": []
+     },
+     "type": null
+    },
+    "call": "add_to_includes",
+    "layer": "scope_weak.usda",
+    "position": "back_of_append",
+    "property": "collection:lightLink:includes",
+    "target": "/World/Rocks/A"
+   },
+   {
+    "accepted": true,
+    "after": {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [
+       "/World/Rocks/A",
+       "/World/Rocks/B"
+      ],
+      "delete": [],
+      "explicit": null,
+      "prepend": [],
+      "reorder": []
+     },
+     "type": null
+    },
+    "call": "add_to_includes",
+    "layer": "scope_weak.usda",
+    "position": "back_of_append",
+    "property": "collection:lightLink:includes",
+    "target": "/World/Rocks/B"
+   },
+   {
+    "accepted": true,
+    "after": {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [
+       "/World/Rocks/A/Moss"
+      ],
+      "delete": [],
+      "explicit": null,
+      "prepend": [],
+      "reorder": []
+     },
+     "type": null
+    },
+    "call": "add_to_excludes",
+    "layer": "scope_weak.usda",
+    "position": "back_of_append",
+    "property": "collection:lightLink:excludes",
+    "target": "/World/Rocks/A/Moss"
+   },
+   {
+    "accepted": true,
+    "after": {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [
+       "/World/Filters/Haze"
+      ],
+      "delete": [],
+      "explicit": null,
+      "prepend": [],
+      "reorder": []
+     },
+     "type": null
+    },
+    "call": "add_to_filters",
+    "layer": "scope_weak.usda",
+    "position": "back_of_append",
+    "property": "light:filters",
+    "target": "/World/Filters/Haze"
+   },
+   {
+    "accepted": true,
+    "after": {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [
+       "/World/Plants/Fern"
+      ],
+      "delete": [],
+      "explicit": null,
+      "prepend": [],
+      "reorder": []
+     },
+     "type": null
+    },
+    "call": "add_to_includes",
+    "layer": "scope_mid.usda",
+    "position": "back_of_append",
+    "property": "collection:lightLink:includes",
+    "target": "/World/Plants/Fern"
+   },
+   {
+    "accepted": true,
+    "after": {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [
+       "/World/Plants/Fern",
+       "/World/Rocks/A"
+      ],
+      "delete": [],
+      "explicit": null,
+      "prepend": [],
+      "reorder": []
+     },
+     "type": null
+    },
+    "call": "add_to_includes",
+    "layer": "scope_mid.usda",
+    "position": "back_of_append",
+    "property": "collection:lightLink:includes",
+    "target": "/World/Rocks/A"
+   },
+   {
+    "accepted": true,
+    "after": {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [
+       "/World/Filters/Gobo"
+      ],
+      "delete": [],
+      "explicit": null,
+      "prepend": [],
+      "reorder": []
+     },
+     "type": null
+    },
+    "call": "add_to_filters",
+    "layer": "scope_mid.usda",
+    "position": "back_of_append",
+    "property": "light:filters",
+    "target": "/World/Filters/Gobo"
+   },
+   {
+    "accepted": true,
+    "after": {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [],
+      "delete": [
+       "/World/Rocks/B"
+      ],
+      "explicit": null,
+      "prepend": [],
+      "reorder": []
+     },
+     "type": null
+    },
+    "call": "remove_from_includes",
+    "layer": "scope_strong.usda",
+    "property": "collection:lightLink:includes",
+    "target": "/World/Rocks/B"
+   },
+   {
+    "accepted": true,
+    "after": {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [],
+      "delete": [
+       "/World/Rocks/B"
+      ],
+      "explicit": null,
+      "prepend": [
+       "/World/Terrain"
+      ],
+      "reorder": []
+     },
+     "type": null
+    },
+    "call": "add_to_includes",
+    "layer": "scope_strong.usda",
+    "position": "front_of_prepend",
+    "property": "collection:lightLink:includes",
+    "target": "/World/Terrain"
+   },
+   {
+    "accepted": true,
+    "after": {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [],
+      "delete": [
+       "/World/Rocks/A/Moss"
+      ],
+      "explicit": null,
+      "prepend": [],
+      "reorder": []
+     },
+     "type": null
+    },
+    "call": "remove_from_excludes",
+    "layer": "scope_strong.usda",
+    "property": "collection:lightLink:excludes",
+    "target": "/World/Rocks/A/Moss"
+   },
+   {
+    "accepted": true,
+    "after": {
+     "custom": false,
+     "kind": "relationship",
+     "targets": {
+      "add": [],
+      "append": [],
+      "delete": [
+       "/World/Filters/Haze"
+      ],
+      "explicit": null,
+      "prepend": [],
+      "reorder": []
+     },
+     "type": null
+    },
+    "call": "remove_from_filters",
+    "layer": "scope_strong.usda",
+    "property": "light:filters",
+    "target": "/World/Filters/Haze"
+   }
+  ]
+ }
+}

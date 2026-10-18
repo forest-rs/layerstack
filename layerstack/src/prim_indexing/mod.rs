@@ -1177,19 +1177,24 @@ pub(crate) fn order_children(
     let position: HashMap<TokenId, usize> =
         order.iter().enumerate().map(|(at, n)| (*n, at)).collect();
     let paths = store.paths();
-    children.sort_by(|a, b| {
-        let (na, nb) = (paths.resolve(*a).leaf(), paths.resolve(*b).leaf());
-        let (pa, pb) = (
-            na.and_then(|n| position.get(&n)),
-            nb.and_then(|n| position.get(&n)),
-        );
-        match (pa, pb) {
-            (Some(x), Some(y)) => x.cmp(y),
-            (Some(_), None) => core::cmp::Ordering::Less,
-            (None, Some(_)) => core::cmp::Ordering::Greater,
-            (None, None) => paths.resolve(*a).cmp_with_tokens(paths.resolve(*b), tokens),
-        }
+    // Each child's place is looked up once, not at every comparison: a
+    // wide parent's children are sorted for every child added to it.
+    let mut placed: Vec<(Option<usize>, PathId)> = children
+        .iter()
+        .map(|&child| {
+            let name = paths.resolve(child).leaf();
+            (name.and_then(|n| position.get(&n).copied()), child)
+        })
+        .collect();
+    placed.sort_by(|(pa, a), (pb, b)| match (pa, pb) {
+        (Some(x), Some(y)) => x.cmp(y),
+        (Some(_), None) => core::cmp::Ordering::Less,
+        (None, Some(_)) => core::cmp::Ordering::Greater,
+        (None, None) => paths.resolve(*a).cmp_with_tokens(paths.resolve(*b), tokens),
     });
+    for (slot, (_, child)) in children.iter_mut().zip(placed) {
+        *slot = child;
+    }
 }
 
 /// Anchors the path expressions `value` authors at `site` (a node's site

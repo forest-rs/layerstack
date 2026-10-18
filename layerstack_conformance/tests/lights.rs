@@ -34,7 +34,7 @@ fn oracle() -> Oracle {
 fn discovery_matches_cpp_including_forwarding_halt_filters_and_instances() {
     let oracle = oracle();
     assert_eq!(oracle.version, layerstack_schemas::OPENUSD_VERSION);
-    let (mut store, live) = support::scene(include_str!("../fixtures/lights/scene.usda"));
+    let (store, live) = support::scene(include_str!("../fixtures/lights/scene.usda"));
     for row in oracle.rows {
         let root = store.path(&row.root);
         let scene = Scene::new(live.stage(), &store);
@@ -58,7 +58,7 @@ fn discovery_matches_cpp_including_forwarding_halt_filters_and_instances() {
 }
 #[test]
 fn runtime_cache_has_explicit_snapshot_lifetime_and_work_counters() {
-    let (mut store, live) = support::scene(include_str!("../fixtures/lights/scene.usda"));
+    let (store, live) = support::scene(include_str!("../fixtures/lights/scene.usda"));
     let root = store.path("/World");
     let missing = store.path("/Absent");
     let mut query = LightListQuery::new(Scene::new(live.stage(), &store));

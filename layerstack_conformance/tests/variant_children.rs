@@ -159,7 +159,7 @@ fn composes_the_prims_openusd_composes() {
 #[test]
 fn prim_stacks_and_children_match_openusd() {
     let oracle = oracle();
-    let (mut loaded, stage) = compose(&oracle);
+    let (loaded, stage) = compose(&oracle);
     let mut mismatches = Vec::new();
     for prim in &oracle.prims {
         let id = loaded.store.path(&prim.path);
@@ -188,7 +188,7 @@ fn prim_stacks_and_children_match_openusd() {
 #[test]
 fn values_match_openusd() {
     let oracle = oracle();
-    let (mut loaded, stage) = compose(&oracle);
+    let (loaded, stage) = compose(&oracle);
     let mut mismatches = Vec::new();
     for (attr, expected) in &oracle.values {
         let property = loaded.store.property_path(attr);

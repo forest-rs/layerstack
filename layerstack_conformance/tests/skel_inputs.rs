@@ -20,7 +20,7 @@ const IDENTITY: [[f64; 4]; 4] = [
 
 #[test]
 fn public_binding_and_shape_samples_reconstruct_the_cpp_oracle() {
-    let (mut store, live) = support::scene(include_str!("../fixtures/skel_blend_shapes.usda"));
+    let (store, live) = support::scene(include_str!("../fixtures/skel_blend_shapes.usda"));
     let path = store.path("/Rig/Geometry/Mesh");
     let scene = Scene::new(live.stage(), &store);
     let query = SkinningQuery::new(&scene, path).unwrap().unwrap();
@@ -107,7 +107,7 @@ fn binding_values_do_not_require_vertex_buffers_or_valid_cpu_bind_palettes() {
             "uniform matrix4d[] bindTransforms = [",
             "uniform matrix4d[] bindTransforms = []\n uniform matrix4d[] ignoredBind = [",
         );
-    let (mut store, live) = support::scene(&source);
+    let (store, live) = support::scene(&source);
     let path = store.path("/Rig/Geometry/Mesh");
     let scene = Scene::new(live.stage(), &store);
     let query = SkinningQuery::new(&scene, path).unwrap().unwrap();
@@ -129,7 +129,7 @@ fn full_shape_upload_validation_includes_inactive_samples() {
         "uniform int[] pointIndices = [1]",
         "uniform int[] pointIndices = [99]",
     );
-    let (mut store, live) = support::scene(&source);
+    let (store, live) = support::scene(&source);
     let path = store.path("/Rig/Geometry/Mesh");
     let scene = Scene::new(live.stage(), &store);
     let query = SkinningQuery::new(&scene, path).unwrap().unwrap();

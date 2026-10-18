@@ -55,7 +55,7 @@ fn numeric_import_preserves_integer_minimum_and_rejects_rounded_overflow() {
         let source = format!(
             "#usda 1.0\ndef \"P\" {{\n {ty} x = {literal}\n {ty}[] array = [{literal}]\n {ty}[] samples.timeSamples = {{0: [{literal}]}}\n}}\n"
         );
-        let mut store = InMemoryStore::default();
+        let store = InMemoryStore::default();
         let result = read_usda(
             &source,
             LayerId(1),

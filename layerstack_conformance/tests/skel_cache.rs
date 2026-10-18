@@ -92,7 +92,7 @@ fn shared_pose_influences_and_outputs_survive_frame_changes() {
             true,
         ),
     ] {
-        let (mut store, live) = support::scene(source);
+        let (store, live) = support::scene(source);
         let paths: Vec<_> = names.iter().map(|p| store.path(p)).collect();
         let mut cache = SkelCache::new(Time::Default);
         for time in [
@@ -137,7 +137,7 @@ fn static_outputs_survive_times_and_single_samples_cover_default_transitions() {
         "rel skel:animationSource = </Rig/Animation>",
         "rel skel:animationSource = []",
     );
-    let (mut store, live) = support::scene(&source);
+    let (store, live) = support::scene(&source);
     let path = store.path("/Rig/Rigid");
     let mut cache = SkelCache::new(Time::Default);
     compare(&mut cache, &store, &live, &[path], false);
@@ -154,7 +154,7 @@ fn static_outputs_survive_times_and_single_samples_cover_default_transitions() {
         "{1: [(0,4,0),(2,0,0)], 3: [(0,8,0),(6,0,0)]}",
         "{1: [(0,8,0),(6,0,0)]}",
     );
-    let (mut store, live) = support::scene(&source);
+    let (store, live) = support::scene(&source);
     let path = store.path("/Rig/Rigid");
     let mut cache = SkelCache::new(Time::Default);
     let default = cache
@@ -432,7 +432,7 @@ fn point_only_bindings_do_not_require_valid_blend_weights() {
         "def SkelAnimation \"Animation\" {",
         "def SkelAnimation \"Animation\" {\n uniform token[] blendShapes = [\"unused\"]\n float[] blendShapeWeights = [1,2]",
     );
-    let (mut store, live) = support::scene(&source);
+    let (store, live) = support::scene(&source);
     let path = store.path("/Rig/Rigid");
     let mut cache = SkelCache::new(Time::Default);
     compare(&mut cache, &store, &live, &[path], false);

@@ -1388,7 +1388,7 @@ mod tests {
 
     #[test]
     fn prepared_entry_ordinals_distinguish_sets_sharing_one_anchor() {
-        let (mut store, _, prim, field) = template_stage(true);
+        let (store, _, prim, field) = template_stage(true);
         let property_path = store.property_path("/Clip.x");
         let spec = SpecPath::from_property_path(property_path);
         let key = OpinionKey {

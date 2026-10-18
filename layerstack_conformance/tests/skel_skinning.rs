@@ -19,7 +19,7 @@ const IDENTITY: [[f64; 4]; 4] = [
 ];
 #[test]
 fn inherited_indexed_and_constant_influences_match_cpp() {
-    let (mut store, live) = support::scene(include_str!("../fixtures/skel_skinning.usda"));
+    let (store, live) = support::scene(include_str!("../fixtures/skel_skinning.usda"));
     let root = store.path("/Rig");
     let expected: serde_json::Value =
         serde_json::from_str(include_str!("../fixtures/skel_skinning.json")).unwrap();
@@ -102,12 +102,12 @@ fn unsupported_skinning_methods_and_bad_influence_metadata_are_explicit() {
         "float[] primvars:skel:jointWeights = [1]",
         "float[] primvars:skel:jointWeights = [1] (interpolation = \"uniform\")",
     );
-    let (mut store, live) = support::scene(&source);
+    let (store, live) = support::scene(&source);
     let path = store.path("/Rig/Rigid");
     let scene = Scene::new(live.stage(), &store);
     assert!(SkinningQuery::new(&scene, path).is_err());
     let source = include_str!("../fixtures/skel_skinning.usda").replace("float[] primvars:skel:jointWeights = [1]", "float[] primvars:skel:jointWeights = [1]\n token primvars:skel:skinningMethod = \"customUnsupported\"");
-    let (mut store, live) = support::scene(&source);
+    let (store, live) = support::scene(&source);
     let path = store.path("/Rig/Rigid");
     let scene = Scene::new(live.stage(), &store);
     assert_eq!(
@@ -147,7 +147,7 @@ fn reusable_point_buffers_validate_before_mutation() {
 
 #[test]
 fn discovery_inherits_binding_inputs_only_within_its_requested_root() {
-    let (mut store, live) = support::scene(include_str!("../fixtures/skel_binding_scope.usda"));
+    let (store, live) = support::scene(include_str!("../fixtures/skel_binding_scope.usda"));
     let expected: serde_json::Value =
         serde_json::from_str(include_str!("../fixtures/skel_binding_scope.json")).unwrap();
     let rows: Vec<_> = expected

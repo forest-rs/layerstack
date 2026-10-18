@@ -609,7 +609,7 @@ mod tests {
     use crate::{InMemoryStore, PropertyType, TypedArray};
     use alloc::vec;
     fn fixture() -> (InMemoryStore, PathId, Layer, Layer, ClipBundleOptions) {
-        let mut store = InMemoryStore::default();
+        let store = InMemoryStore::default();
         let path = store.path("/Model");
         let mesh = store.tokens.intern("Mesh");
         let animated = store.tokens.intern("animated");

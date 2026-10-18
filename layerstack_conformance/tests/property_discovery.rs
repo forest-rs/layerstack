@@ -8,7 +8,7 @@ use layerstack_schemas::{PrimView, Scene};
 mod support;
 #[test]
 fn presence_distinguishes_fallbacks_animation_blocks_and_authored_specs() {
-    let (mut store, live) = support::scene(
+    let (store, live) = support::scene(
         r#"#usda 1.0
         def Mesh "M" {
             float primvars:x = 1 (interpolation = "vertex")

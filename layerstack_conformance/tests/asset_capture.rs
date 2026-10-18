@@ -152,7 +152,7 @@ fn weak_layer_and_retimed_assets_keep_their_actual_anchor() {
 }
 #[test]
 fn blocks_wrong_storage_and_absent_attributes_are_distinct() {
-    let (mut store, live) = support::scene(
+    let (store, live) = support::scene(
         r#"#usda 1.0
 def DomeLight "Dome" { asset inputs:texture:file = None }
 def Scope "Bad" { custom float texture = 2; rel relation }
@@ -210,7 +210,7 @@ fn anchoring_reports_missing_context_and_preserves_host_search_policy() {
             path
         );
     }
-    let (mut store, live) = support::scene(
+    let (store, live) = support::scene(
         "#usda 1.0\ndef DomeLight \"Dome\" {\n asset inputs:texture:file = @textures/a.exr@\n}\n",
     );
     let path = store.path("/Dome");

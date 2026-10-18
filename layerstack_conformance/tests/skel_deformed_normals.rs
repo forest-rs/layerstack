@@ -44,7 +44,7 @@ fn combined_normals_match_cpp_shape_offsets_followed_by_skinning() {
         serde_json::from_str(include_str!("../fixtures/skel_blend_shapes.json")).unwrap();
     for corners in [false, true] {
         for dqs in [false, true] {
-            let (mut store, live) = support::scene(&source(corners, dqs));
+            let (store, live) = support::scene(&source(corners, dqs));
             let path = store.path("/Rig/Geometry/Mesh");
             let scene = Scene::new(live.stage(), &store);
             let q = SkinningQuery::new(&scene, path).unwrap().unwrap();
@@ -167,7 +167,7 @@ fn normal_inputs_need_no_buffers_and_bad_corner_offsets_fail_without_stale_outpu
     let no_buffers = source(false, true)
         .replace("normal3f[] normals = [(0,0,1),(0,0,1)]", "")
         .replace("point3f[] points = [(1,0,0), (0,2,0)]", "");
-    let (mut store, live) = support::scene(&no_buffers);
+    let (store, live) = support::scene(&no_buffers);
     let path = store.path("/Rig/Geometry/Mesh");
     let mut cache = SkelCache::new(Time::Default);
     cache

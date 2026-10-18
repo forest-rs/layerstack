@@ -142,7 +142,7 @@ fn layer_name(loaded: &LoadedStage, layer: layerstack::LayerId) -> String {
 #[test]
 fn prims_and_prim_stacks_match_openusd() {
     let oracle = oracle();
-    let (mut loaded, stage) = compose(&oracle);
+    let (loaded, stage) = compose(&oracle);
     let pseudo_root = loaded.store.path("/");
     let mut composed: Vec<String> = stage
         .traverse(pseudo_root)
@@ -186,7 +186,7 @@ fn prims_and_prim_stacks_match_openusd() {
 #[test]
 fn children_are_ordered_as_in_openusd() {
     let oracle = oracle();
-    let (mut loaded, stage) = compose(&oracle);
+    let (loaded, stage) = compose(&oracle);
     let mut mismatches = Vec::new();
     for prim in &oracle.prims {
         let id = loaded.store.path(&prim.path);
@@ -216,7 +216,7 @@ fn children_are_ordered_as_in_openusd() {
 #[test]
 fn values_match_openusd() {
     let oracle = oracle();
-    let (mut loaded, stage) = compose(&oracle);
+    let (loaded, stage) = compose(&oracle);
     let mut mismatches = Vec::new();
     for (attr, expected) in &oracle.values {
         let property = loaded.store.property_path(attr);
@@ -279,7 +279,7 @@ fn values_match_openusd() {
 #[test]
 fn explanations_credit_the_weaker_expressions() {
     let oracle = oracle();
-    let (mut loaded, stage) = compose(&oracle);
+    let (loaded, stage) = compose(&oracle);
     let contributing = |explained: &[layerstack::ExplainedOpinion<'_>]| {
         explained
             .iter()

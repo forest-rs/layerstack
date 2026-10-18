@@ -28,7 +28,7 @@ fn sparse_defaults_preserve_weaker_motion_grid_and_integrate_composed_values() {
     let source = format!(
         "{BASE}\ndef PointInstancer \"I\" (references = </Base>) {{ point3f[] positions = edit [write (10,0,0) to [0]]\nvector3f[] velocities = edit [write (8,0,0) to [0]] }}"
     );
-    let (mut store, live) = support::scene(&source);
+    let (store, live) = support::scene(&source);
     let path = store.path("/I");
     let scene = Scene::new(live.stage(), &store);
     let q = PointInstancer::new(&scene, path).unwrap();
@@ -65,7 +65,7 @@ fn sparse_sample_grids_union_and_mixed_dense_samples_mask_weaker_sources() {
         let source = format!(
             "{BASE}\ndef PointInstancer \"I\" (references = </Base>) {{ point3f[] positions.timeSamples = {positions}\nvector3f[] velocities.timeSamples = {velocities} }}"
         );
-        let (mut store, live) = support::scene(&source);
+        let (store, live) = support::scene(&source);
         let path = store.path("/I");
         let scene = Scene::new(live.stage(), &store);
         let q = PointInstancer::new(&scene, path).unwrap();
@@ -80,7 +80,7 @@ fn misaligned_sparse_grids_interpolate_normally_and_offsets_use_stage_time() {
     let source = format!(
         "{BASE}\ndef PointInstancer \"I\" (references = </Base>) {{ point3f[] positions.timeSamples = {{1: edit [write (10,0,0) to [0]], 3: edit [write (20,0,0) to [0]]}} }}\ndef PointInstancer \"Offset\" (references = </Base> (offset = 10; scale = -2)) {{ vector3f[] velocities = edit [write (8,0,0) to [0]] }}"
     );
-    let (mut store, live) = support::scene(&source);
+    let (store, live) = support::scene(&source);
     let path = store.path("/I");
     let offset = store.path("/Offset");
     let scene = Scene::new(live.stage(), &store);
@@ -104,8 +104,7 @@ fn misaligned_sparse_grids_interpolate_normally_and_offsets_use_stage_time() {
 }
 #[test]
 fn ordered_batches_match_cpp_motion_fixture_and_reject_partial_results() {
-    let (mut store, live) =
-        support::scene(include_str!("../fixtures/point_instancer_behavior.usda"));
+    let (store, live) = support::scene(include_str!("../fixtures/point_instancer_behavior.usda"));
     let path = store.path("/World/Instances");
     let scene = Scene::new(live.stage(), &store);
     let q = PointInstancer::new(&scene, path).unwrap();
@@ -213,7 +212,7 @@ fn prepared_instance_outputs_stream_in_chunks_and_reuse_caller_storage() {
 
 #[test]
 fn invalid_instance_inputs_leave_reusable_output_unchanged() {
-    let (mut store, live) = support::scene(
+    let (store, live) = support::scene(
         r#"#usda 1.0
         def PointInstancer "I" {
             int[] protoIndices = [0, -1]

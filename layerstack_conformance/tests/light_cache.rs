@@ -91,7 +91,7 @@ fn capture_and_discovery_reuse_unrelated_edits_with_component_upload_stamps() {
 }
 #[test]
 fn retained_time_preserves_static_components_and_refreshes_animated_constants() {
-    let (mut store, live) = support::scene(
+    let (store, live) = support::scene(
         "#usda 1.0\ndef SphereLight \"Animated\" {\n float inputs:intensity.timeSamples = {1: 1, 3: 3}\n}\ndef SphereLight \"Static\" {}\n",
     );
     let animated = store.path("/Animated");
@@ -242,7 +242,7 @@ fn shape_flags_and_context_changes_have_explicit_retained_revisions() {
 }
 #[test]
 fn retained_blocks_refresh_across_default_and_numeric_time_in_both_directions() {
-    let (mut store, live) = support::scene(
+    let (store, live) = support::scene(
         "#usda 1.0\ndef SphereLight \"Light\" {\n float inputs:specular = None\n}\n",
     );
     let light = store.path("/Light");

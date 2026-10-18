@@ -199,7 +199,7 @@ fn check(
         expected.len(),
         "every query needs a fixed expectation"
     );
-    let (mut store, stage) = compose(&layers);
+    let (store, stage) = compose(&layers);
     let property = store.property_path(path);
     let prim = property.prim_path();
     let field = property.property();
@@ -1157,7 +1157,7 @@ fn clip_sources_explain_both_actual_layers_and_do_not_define_properties() {
         "double x.timeSamples = {10:100}",
         "double x",
     );
-    let (mut store, stage) = compose(&layers);
+    let (store, stage) = compose(&layers);
     let property = store.property_path("/P.x");
     let source = stage
         .property_clip_source(
@@ -1192,7 +1192,7 @@ fn clip_sources_explain_both_actual_layers_and_do_not_define_properties() {
 
     let mut undeclared = layers;
     undeclared[0].1 = undeclared[0].1.replace("double x", "");
-    let (mut store, stage) = compose(&undeclared);
+    let (store, stage) = compose(&undeclared);
     let property = store.property_path("/P.x");
     assert!(!stage.has_property_path(property));
     assert!(
@@ -1591,7 +1591,7 @@ fn missing_clip_property_reports_manifest_default_source() {
         "",
         "double x = 42",
     );
-    let (mut store, stage) = compose(&layers);
+    let (store, stage) = compose(&layers);
     let property = store.property_path("/P.x");
     assert_eq!(at(&stage, property, 0.), Some(42.));
     let source = stage
@@ -1665,7 +1665,7 @@ fn review_invalid_clip_query_does_not_explain_weak_default_as_contributing() {
         .1
         .replacen("#usda 1.0", "#usda 1.0\n(subLayers = [@weak.usda@])", 1);
     layers.push(("weak.usda".into(), text("over \"P\" {\n double x = 55\n}")));
-    let (mut store, stage) = compose(&layers);
+    let (store, stage) = compose(&layers);
     let property = store.property_path("/P.x");
     let explanation = stage
         .explain_property_value_at_time(property, f64::NAN, InterpolationType::Linear)
@@ -1745,7 +1745,7 @@ fn review_manifest_blocked_spline_reports_manifest_default_source() {
         false,
         false,
     );
-    let (mut store, stage) = compose(&layers);
+    let (store, stage) = compose(&layers);
     let property = store.property_path("/P.x");
     let source = stage
         .property_clip_source(

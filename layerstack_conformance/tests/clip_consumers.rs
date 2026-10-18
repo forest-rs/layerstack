@@ -103,7 +103,7 @@ def "Clip" {
 }
 #[test]
 fn transform_sample_discovery_and_retained_cache_follow_clips() {
-    let (mut store, stage) = scene();
+    let (store, stage) = scene();
     let world = store.path("/World");
     let scene = Scene::new(&stage, &store);
     let xform = Xformable::new(&scene, world).unwrap();
@@ -116,7 +116,7 @@ fn transform_sample_discovery_and_retained_cache_follow_clips() {
 }
 #[test]
 fn point_motion_anchors_clipped_points_and_velocities_together() {
-    let (mut store, stage) = scene();
+    let (store, stage) = scene();
     let path = store.path("/World/Points");
     let scene = Scene::new(&stage, &store);
     let points = PointBased::new(&scene, path).unwrap();
@@ -133,7 +133,7 @@ fn point_motion_anchors_clipped_points_and_velocities_together() {
 }
 #[test]
 fn skeleton_sample_discovery_reads_inherited_clip_grids() {
-    let (mut store, stage) = scene();
+    let (store, stage) = scene();
     let path = store.path("/World/Animation");
     let scene = Scene::new(&stage, &store);
     let animation = SkelAnimation::new(&scene, path).unwrap();
@@ -150,7 +150,7 @@ fn skeleton_sample_discovery_reads_inherited_clip_grids() {
 }
 #[test]
 fn label_interval_includes_clip_switches() {
-    let (mut store, stage) = scene();
+    let (store, stage) = scene();
     let world = store.path("/World");
     let scene = Scene::new(&stage, &store);
     let mut labels = LabelsQuery::in_interval(
@@ -164,7 +164,7 @@ fn label_interval_includes_clip_switches() {
 
 #[test]
 fn spline_clip_variability_invalidates_retained_transforms_without_sample_knots() {
-    let (mut store, stage) = scene();
+    let (store, stage) = scene();
     let path = store.path("/World/Spline");
     let scene = Scene::new(&stage, &store);
     let xform = Xformable::new(&scene, path).unwrap();
@@ -182,7 +182,7 @@ fn spline_clip_variability_invalidates_retained_transforms_without_sample_knots(
 
 #[test]
 fn invalid_clip_queries_remain_masked_and_report_the_evaluation_error() {
-    let (mut store, stage) = scene();
+    let (store, stage) = scene();
     let property = store.property_path("/World.xformOp:translate");
     for time in [f64::INFINITY, f64::NAN] {
         assert_eq!(

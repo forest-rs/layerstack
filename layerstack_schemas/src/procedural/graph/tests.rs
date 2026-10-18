@@ -656,7 +656,7 @@ impl ProceduralEvaluator for Never {
 }
 #[test]
 fn long_dependency_plans_use_a_heap_stack_and_shared_dependencies_run_once() {
-    let mut store = InMemoryStore::default();
+    let store = InMemoryStore::default();
     let mut graph = ProceduralGraph::new(&store);
     let mut previous = None;
     for i in 0..4096 {

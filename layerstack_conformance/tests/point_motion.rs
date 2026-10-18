@@ -24,7 +24,7 @@ fn batch_point_motion_matches_openusd() {
     let oracle: Oracle =
         serde_json::from_str(include_str!("../fixtures/point_motion/oracle.json")).unwrap();
     assert_eq!(oracle.version, layerstack_schemas::OPENUSD_VERSION);
-    let (mut store, live) = support::scene(include_str!("../fixtures/point_motion/scene.usda"));
+    let (store, live) = support::scene(include_str!("../fixtures/point_motion/scene.usda"));
     for row in oracle.rows {
         let path = store.path(&row.path);
         let scene = Scene::new(live.stage(), &store);
@@ -44,7 +44,7 @@ fn batch_point_motion_matches_openusd() {
 }
 #[test]
 fn sparse_motion_reads_compose_before_integration_and_reject_mixed_times() {
-    let (mut store, live) = support::scene(
+    let (store, live) = support::scene(
         "#usda 1.0\n(timeCodesPerSecond = 4)\ndef Points \"Base\" {\n point3f[] points.timeSamples = {0:[(0,0,0)],2:[(20,0,0)]}\n vector3f[] velocities.timeSamples = {0:[(8,0,0)],2:[(8,0,0)]}\n}\ndef Points \"P\" (references = </Base>) {\n point3f[] points = edit [write (10,0,0) to [0]]\n}\n",
     );
     let path = store.path("/P");
@@ -77,7 +77,7 @@ fn sparse_motion_reads_compose_before_integration_and_reject_mixed_times() {
 #[test]
 fn velocity_sample_alignment_uses_cpp_absolute_epsilon_tolerance() {
     for (offset, expected) in [(1e-16, 1.), (f64::EPSILON, 50.), (3e-16, 50.)] {
-        let (mut store, live) = support::scene(&format!(
+        let (store, live) = support::scene(&format!(
             "#usda 1.0\n(timeCodesPerSecond = 24)\ndef Points \"P\" {{\n point3f[] points.timeSamples = {{0:[(0,0,0)],2:[(100,0,0)]}}\n vector3f[] velocities.timeSamples = {{{offset}:[(24,0,0)],2:[(24,0,0)]}}\n}}\n"
         ));
         let path = store.path("/P");

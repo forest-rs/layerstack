@@ -155,7 +155,7 @@ fn property_metadata_and_color_precedence_match_native_fixture() {
 
 #[test]
 fn bundled_schema_metadata_is_visible_without_an_authored_property() {
-    let (mut store, live) = support_scene::scene("#usda 1.0\ndef Mesh \"Mesh\" {}");
+    let (store, live) = support_scene::scene("#usda 1.0\ndef Mesh \"Mesh\" {}");
     let prim = store.path("/Mesh");
     let name = store.tokens.lookup("subdivisionScheme").unwrap();
     let key = store.tokens.lookup("allowedTokens").unwrap();

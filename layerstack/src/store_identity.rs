@@ -32,9 +32,9 @@ mod tests {
     use crate::{InMemoryStore, LayerStore, PathInterner, TokenInterner};
     #[test]
     fn snapshot_preserves_existing_ids_without_aliasing_future_domains() {
-        let mut store = InMemoryStore::default();
+        let store = InMemoryStore::default();
         let path = store.path("/Original");
-        let mut snapshot = store.snapshot();
+        let snapshot = store.snapshot();
         assert_eq!(snapshot.paths.display(path, &snapshot.tokens), "/Original");
         assert_ne!(snapshot.identity(), store.identity());
         let future = store.path("/PublishedOnly");
@@ -52,7 +52,7 @@ mod tests {
     }
     #[test]
     fn affinity_survives_moves_and_interning_but_not_domain_replacement() {
-        let mut store = InMemoryStore::default();
+        let store = InMemoryStore::default();
         let identity = store.identity();
         store.path("/New");
         let mut moved = store;

@@ -31,7 +31,7 @@ fn matrices(actual: &[[[f64; 4]; 4]], expected: &serde_json::Value) {
 }
 #[test]
 fn sparse_reordered_joint_poses_and_bindings_match_cpp() {
-    let (mut store, live) = support::scene(include_str!("../fixtures/skel_pose.usda"));
+    let (store, live) = support::scene(include_str!("../fixtures/skel_pose.usda"));
     let skeleton = store.path("/Rig/Skeleton");
     let expected: serde_json::Value =
         serde_json::from_str(include_str!("../fixtures/skel_pose.json")).unwrap();
@@ -104,7 +104,7 @@ fn rest_fallback_and_singular_bind_errors_are_explicit() {
             "float3[] translations.timeSamples = {1: [(0,4,0),(2,0,0)], 3: [(0,8,0),(6,0,0)]}",
             "",
         );
-    let (mut store, live) = support::scene(&source);
+    let (store, live) = support::scene(&source);
     let path = store.path("/Rig/Skeleton");
     let scene = Scene::new(live.stage(), &store);
     let query = Skeleton::new(&scene, path).unwrap().query().unwrap();
@@ -116,7 +116,7 @@ fn rest_fallback_and_singular_bind_errors_are_explicit() {
         "((1,0,0,0),(0,1,0,0),(0,0,1,0),(1,0,0,1))",
         "((0,0,0,0),(0,1,0,0),(0,0,1,0),(1,0,0,1))",
     );
-    let (mut store, live) = support::scene(&source);
+    let (store, live) = support::scene(&source);
     let path = store.path("/Rig/Skeleton");
     let scene = Scene::new(live.stage(), &store);
     assert_eq!(

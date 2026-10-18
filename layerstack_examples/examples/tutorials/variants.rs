@@ -5,7 +5,7 @@
 //! the branch without changing the stage's current selection.
 //! <https://openusd.org/release/tut_authoring_variants.html>
 mod support;
-use layerstack::{EditTarget, SpecPath, Transaction};
+use layerstack::{EditTarget, Transaction};
 use layerstack_schemas::{SchemaEdit, usd_geom::SphereEdit};
 fn main() {
     let directory = support::directory();
@@ -19,12 +19,9 @@ fn main() {
     clear.clear_default(EditTarget::for_layer(root).property(color));
     live.apply(store, &clear).unwrap();
     for (name, rgb) in [("red", [1.0, 0.0, 0.0]), ("green", [0.0, 1.0, 0.0])] {
-        let branch = SpecPath::parse(
-            &format!("/hello{{shadingVariant={name}}}"),
-            &store.tokens,
-            &store.paths,
-        )
-        .unwrap();
+        let branch = store
+            .try_spec_path(&format!("/hello{{shadingVariant={name}}}"))
+            .unwrap();
         let mut edit = SchemaEdit::new(
             live.stage(),
             store,

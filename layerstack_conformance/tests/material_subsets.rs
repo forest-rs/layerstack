@@ -37,7 +37,7 @@ fn text(family: &str, b: &str, strength: &str) -> String {
 #[test]
 fn material_subsets_keep_shared_indices_and_inherited_binding_provenance() {
     for stronger in [false, true] {
-        let (mut store, live) = support::scene(&text(
+        let (store, live) = support::scene(&text(
             "partition",
             "1",
             if stronger {
@@ -82,7 +82,7 @@ fn material_subsets_report_family_overlap_bounds_and_coverage() {
         ("partition", "", SubsetProblemKind::IncompletePartition),
         ("nonOverlapping", "2", SubsetProblemKind::InvalidIndex(2)),
     ] {
-        let (mut store, live) = support::scene(&text(family, index, ""));
+        let (store, live) = support::scene(&text(family, index, ""));
         let path = store.path("/M");
         let mut cache = BindingCache::new(MaterialPurpose::All, BindingOptions::default());
         let Err(MaterialSubsetError::InvalidFamily(problems)) =
@@ -92,7 +92,7 @@ fn material_subsets_report_family_overlap_bounds_and_coverage() {
         };
         assert!(problems.problems.iter().any(|p| p.kind == expected));
     }
-    let (mut store, live) = support::scene(&text("unrestricted", "1", ""));
+    let (store, live) = support::scene(&text("unrestricted", "1", ""));
     let path = store.path("/M");
     let mut cache = BindingCache::new(MaterialPurpose::All, BindingOptions::default());
     assert_eq!(
@@ -108,7 +108,7 @@ fn material_subsets_validate_only_requested_time_and_allow_parent_only_meshes() 
         "int[] indices = [1]",
         "int[] indices.timeSamples = {1: [1], 2: [0]}",
     );
-    let (mut store, live) = support::scene(&source);
+    let (store, live) = support::scene(&source);
     let path = store.path("/M");
     let scene = Scene::new(live.stage(), &store);
     let mut cache = BindingCache::new(MaterialPurpose::All, BindingOptions::default());
@@ -121,7 +121,7 @@ fn material_subsets_validate_only_requested_time_and_allow_parent_only_meshes() 
         cache.material_binding_subsets(&scene, path, Time::held(2.)),
         Err(MaterialSubsetError::InvalidFamily(_))
     ));
-    let (mut store, live) = support::scene(
+    let (store, live) = support::scene(
         "#usda 1.0\ndef Material \"A\" {}\ndef Mesh \"M\" { rel material:binding = </A> }",
     );
     let path = store.path("/M");
@@ -292,7 +292,7 @@ fn material_subsets_reject_unauthored_unrestricted_families_and_nonface_members(
     .into_iter()
     .enumerate()
     {
-        let (mut store, live) = support::scene(&source);
+        let (store, live) = support::scene(&source);
         let path = store.path("/M");
         let mut cache = BindingCache::new(MaterialPurpose::All, BindingOptions::default());
         let error = cache
@@ -316,7 +316,7 @@ fn material_subsets_reject_unauthored_unrestricted_families_and_nonface_members(
 fn snapshot_subset_diagnostics_report_requested_time_for_empty_indices() {
     let source =
         text("nonOverlapping", "", "").replace("int[] indices = [0]", "int[] indices = []");
-    let (mut store, live) = support::scene(&source);
+    let (store, live) = support::scene(&source);
     let path = store.path("/M");
     let time = Time::held(7.);
     let mut cache = BindingCache::new(MaterialPurpose::All, BindingOptions::default());

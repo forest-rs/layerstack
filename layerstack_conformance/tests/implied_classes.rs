@@ -107,7 +107,7 @@ fn layer_name(loaded: &LoadedStage, layer: layerstack::LayerId) -> String {
 #[test]
 fn prim_stacks_rank_implied_classes_with_their_layer_stack() {
     let oracle = oracle();
-    let (mut loaded, stage) = compose(&oracle);
+    let (loaded, stage) = compose(&oracle);
     let pseudo_root = loaded.store.path("/");
     let mut composed: Vec<String> = stage
         .traverse(pseudo_root)
@@ -151,7 +151,7 @@ fn prim_stacks_rank_implied_classes_with_their_layer_stack() {
 #[test]
 fn values_match_openusd() {
     let oracle = oracle();
-    let (mut loaded, stage) = compose(&oracle);
+    let (loaded, stage) = compose(&oracle);
     let mut mismatches = Vec::new();
     for (attr, expected) in &oracle.values {
         let property = loaded.store.property_path(attr);
@@ -175,7 +175,7 @@ fn implied_classes_reached_through_an_arc_keep_their_origins() {
     // `/Marsh/Sprout` through a reference: its chain of origins ends at the
     // class `bed.usda` authors, and it ranks by where that origin sits.
     let oracle = oracle();
-    let (mut loaded, stage) = compose(&oracle);
+    let (loaded, stage) = compose(&oracle);
     for prim in ["/Shade", "/Shore"] {
         let id = loaded.store.path(prim);
         let graph = stage.explain_prim_graph(id).expect("composed prim");

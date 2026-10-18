@@ -46,7 +46,7 @@ fn path_string(store: &layerstack::InMemoryStore, path: Option<PathId>) -> Strin
 fn field_queries_match_cpp_with_forwarding_cycles_and_basename_collisions() {
     let oracle = oracle();
     assert_eq!(oracle.version, layerstack_schemas::OPENUSD_VERSION);
-    let (mut store, live) = support::scene(include_str!("../fixtures/volume/scene.usda"));
+    let (store, live) = support::scene(include_str!("../fixtures/volume/scene.usda"));
     let path = store.path("/Volume");
     let scene = Scene::new(live.stage(), &store);
     let volume = Volume::new(&scene, path).unwrap();

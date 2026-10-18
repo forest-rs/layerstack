@@ -108,7 +108,7 @@ fn reference_kernels_cover_twist_hemispheres_scale_shear_and_degeneracies() {
 fn sampled_bindings_normals_and_rigid_transforms_match_cpp() {
     let data: serde_json::Value =
         serde_json::from_str(include_str!("../fixtures/skel_dual_quaternion.json")).unwrap();
-    let (mut store, live) = support::scene(include_str!("../fixtures/skel_dual_quaternion.usda"));
+    let (store, live) = support::scene(include_str!("../fixtures/skel_dual_quaternion.usda"));
     let mut cache = SkelCache::new(Time::Default);
     for row in data["frames"].as_array().unwrap() {
         let path = store.path(row["path"].as_str().unwrap());
@@ -255,7 +255,7 @@ fn blend_shape_animation_precedes_dqs_in_snapshot_and_retained_evaluation() {
     let data: serde_json::Value =
         serde_json::from_str(include_str!("../fixtures/skel_dual_quaternion.json")).unwrap();
     let source = include_str!("../fixtures/skel_blend_shapes.usda").replace("rel skel:skeleton = </Rig/Skeleton>", "rel skel:skeleton = </Rig/Skeleton>\n token primvars:skel:skinningMethod = \"dualQuaternion\"");
-    let (mut store, live) = support::scene(&source);
+    let (store, live) = support::scene(&source);
     let path = store.path("/Rig/Geometry/Mesh");
     let scene = Scene::new(live.stage(), &store);
     let q = SkinningQuery::new(&scene, path).unwrap().unwrap();

@@ -74,7 +74,7 @@ fn close(actual: impl IntoIterator<Item = f64>, expected: impl IntoIterator<Item
 fn sampled_cameras_match_openusd_including_conformed_transforms_and_culling() {
     let oracle: Oracle = serde_json::from_str(include_str!("../fixtures/camera.json")).unwrap();
     assert_eq!(oracle.version, layerstack_schemas::OPENUSD_VERSION);
-    let (mut store, live) = support::scene(include_str!("../fixtures/camera.usda"));
+    let (store, live) = support::scene(include_str!("../fixtures/camera.usda"));
     for row in oracle.rows {
         let path = store.path(&row.path);
         let scene = Scene::new(live.stage(), &store);
@@ -151,7 +151,7 @@ fn sampled_cameras_match_openusd_including_conformed_transforms_and_culling() {
 }
 fn compute(attributes: &str, time: Time) -> Result<ComputedCamera, CameraError> {
     let source = format!("#usda 1.0\ndef Camera \"C\" {{ {attributes} }}");
-    let (mut store, live) = support::scene(&source);
+    let (store, live) = support::scene(&source);
     let path = store.path("/C");
     Camera::new(&Scene::new(live.stage(), &store), path)
         .unwrap()

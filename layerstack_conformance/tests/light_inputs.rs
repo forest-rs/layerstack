@@ -15,7 +15,7 @@ use layerstack_schemas::{
 };
 #[test]
 fn owned_capture_survives_scene_and_guides_typed_engine_parameters() {
-    let (mut store, live) = support::scene(
+    let (store, live) = support::scene(
         r#"#usda 1.0
 ( metersPerUnit = 1
   upAxis = "Z" )
@@ -51,7 +51,7 @@ def Xform "World" {
 }
 #[test]
 fn constants_network_execution_failures_and_ambiguous_providers_are_distinct() {
-    let (mut store, live) = support::scene(
+    let (store, live) = support::scene(
         r#"#usda 1.0
 def SphereLight "Light" {
  custom float inputs:gain = 2
@@ -97,7 +97,7 @@ def SphereLight "Light" {
 }
 #[test]
 fn custom_emitters_and_non_emitters_have_explicit_classification() {
-    let (mut store, live) = support::scene(
+    let (store, live) = support::scene(
         r#"#usda 1.0
 def Xform "Custom" (prepend apiSchemas = ["LightAPI"]) {}
 def Mesh "Mesh" (prepend apiSchemas = ["MeshLightAPI"]) {}
@@ -139,7 +139,7 @@ def LightFilter "Filter" {}
 }
 #[test]
 fn relationship_and_transform_failures_are_localized() {
-    let (mut store, live) = support::scene(
+    let (store, live) = support::scene(
         r#"#usda 1.0
 def SphereLight "Light" {
  rel light:filters = [</Bridge.forward>, </Missing>]
@@ -174,7 +174,7 @@ def LightFilter "Filter" {}
 }
 #[test]
 fn link_decisions_are_owned_ordered_and_distinguish_shadows_from_illumination() {
-    let (mut store, live) = support::scene(
+    let (store, live) = support::scene(
         r#"#usda 1.0
 def SphereLight "Light" {
  rel collection:lightLink:excludes = </Hidden>
@@ -201,7 +201,7 @@ def Scope "Hidden" {}
 }
 #[test]
 fn malformed_numeric_values_and_forwarding_cycles_remain_inspectable() {
-    let (mut store, live) = support::scene(
+    let (store, live) = support::scene(
         r#"#usda 1.0
 def SphereLight "Light" {
  string inputs:intensity = "bad"
@@ -250,7 +250,7 @@ def DomeLight "Dome" { asset inputs:texture:file = @textures/sky.exr@ }
 }
 #[test]
 fn authored_blocks_follow_cpp_default_versus_numeric_time_behavior() {
-    let (mut store, live) = support::scene(
+    let (store, live) = support::scene(
         "#usda 1.0\ndef SphereLight \"Light\" {\n float inputs:specular = None\n}\n",
     );
     let light = store.path("/Light");
@@ -274,7 +274,7 @@ fn authored_blocks_follow_cpp_default_versus_numeric_time_behavior() {
 }
 #[test]
 fn connected_interface_without_a_provider_does_not_become_a_schema_constant() {
-    let (mut store, live) = support::scene(
+    let (store, live) = support::scene(
         "#usda 1.0\ndef SphereLight \"Light\" {\n float inputs:intensity.connect = </Interface.inputs:gain>\n}\ndef NodeGraph \"Interface\" {\n float inputs:gain\n}\n",
     );
     let light = store.path("/Light");
@@ -290,7 +290,7 @@ fn connected_interface_without_a_provider_does_not_become_a_schema_constant() {
 
 #[test]
 fn shape_flags_use_non_port_attributes_even_with_conflicting_custom_inputs() {
-    let (mut store, live) = support::scene(
+    let (store, live) = support::scene(
         r#"#usda 1.0
 def SphereLight "Sphere" {
  bool treatAsPoint = false
@@ -357,7 +357,7 @@ fn shared_forwarding_subgraphs_have_bounded_capture_and_cycle_diagnostics() {
             }
         }
         text.push_str("}\ndef LightFilter \"Filter\" {}\n");
-        let (mut store, live) = support::scene(&text);
+        let (store, live) = support::scene(&text);
         let light = store.path("/Light");
         let bridge = store.path("/Bridge");
         let filter = store.path("/Filter");

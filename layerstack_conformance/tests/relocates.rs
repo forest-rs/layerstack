@@ -224,7 +224,7 @@ fn composed(loaded: &mut LoadedStage, stage: &Stage) -> Vec<(String, Vec<(String
 #[test]
 fn prim_stacks_compose_relocated_prims_at_their_targets() {
     let oracle = oracle();
-    let (mut loaded, stage) = compose(&oracle);
+    let (loaded, stage) = compose(&oracle);
     let pseudo_root = loaded.store.path("/");
     let mut paths: Vec<String> = stage
         .traverse(pseudo_root)
@@ -257,7 +257,7 @@ fn prim_stacks_compose_relocated_prims_at_their_targets() {
 #[test]
 fn values_match_openusd() {
     let oracle = oracle();
-    let (mut loaded, stage) = compose(&oracle);
+    let (loaded, stage) = compose(&oracle);
     let mut mismatches = Vec::new();
     for (attr, expected) in &oracle.values {
         let property = loaded.store.property_path(attr);
@@ -281,7 +281,7 @@ fn relationship_targets_map_through_relocates() {
     // relocation source maps to the target, through the relocates of every
     // layer stack above it; a relocate to nothing leaves it as it is.
     let oracle = oracle();
-    let (mut loaded, stage) = compose(&oracle);
+    let (loaded, stage) = compose(&oracle);
     let mut mismatches = Vec::new();
     for (rel, expected) in &oracle.targets {
         let property = loaded.store.property_path(rel);
@@ -320,7 +320,7 @@ fn error_kind(error: &CompositionError) -> &'static str {
 #[test]
 fn composition_errors_match_openusd() {
     let oracle = oracle();
-    let (mut loaded, stage) = compose(&oracle);
+    let (loaded, stage) = compose(&oracle);
     let mut errors: Vec<ErrorRecord> = stage
         .composition_errors()
         .iter()

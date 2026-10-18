@@ -491,7 +491,7 @@ fn linking_reports_why_it_fails() {
     // A final segment that starts with a bare predicate, matched against
     // the pattern's prefix itself, is too short to match; OpenUSD 26.08
     // reads before its path's first element there (undefined behavior).
-    let mut store = InMemoryStore::default();
+    let store = InMemoryStore::default();
     let world = store.path("/World");
     let toy = Toy(&store);
     let matcher = PathExpression::parse("/World//{even}/*")

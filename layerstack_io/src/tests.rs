@@ -687,7 +687,7 @@ fn package_preparation_includes_unsaved_layers_and_reports_missing_resources_wit
     let bytes = doc.storage.files["out.usdz"].clone();
     let mut output = Memory::default();
     output.files.insert("out.usdz".into(), bytes);
-    let mut reopened = StageDocument::open(output, "out.usdz", StageOptions::default()).unwrap();
+    let reopened = StageDocument::open(output, "out.usdz", StageOptions::default()).unwrap();
     let property = reopened.store.property_path("/Root.answer");
     assert_eq!(
         reopened
@@ -1679,7 +1679,7 @@ fn expression_assets_open_with_the_primary_stack_and_retained_bindings() {
             "#usda 1.0\ndef \"Asset\" {\n def \"Child\" {}\n}\n",
         ),
     ]);
-    let mut doc = StageDocument::open(backend, "root.usda", StageOptions::default()).unwrap();
+    let doc = StageDocument::open(backend, "root.usda", StageOptions::default()).unwrap();
     let child = doc.store.path("/Host/Child");
     assert!(doc.stage.stage().has_prim(child));
     assert!(doc.stage.stage().composition_errors().is_empty());
@@ -1842,7 +1842,7 @@ fn package_expressions_use_the_archive_before_outer_transport() {
         ])
         .unwrap(),
     );
-    let mut doc = StageDocument::open(backend, "scene.usdz", StageOptions::default()).unwrap();
+    let doc = StageDocument::open(backend, "scene.usdz", StageOptions::default()).unwrap();
     let child = doc.store.path("/Host/Child");
     assert!(doc.stage.stage().has_prim(child));
     assert!(doc.stage.stage().composition_errors().is_empty());
@@ -1904,7 +1904,7 @@ fn newly_created_documents_save_and_reopen_without_seed_files() {
         files: doc.storage.files.clone(),
         ..Default::default()
     };
-    let mut reopened = StageDocument::open(backend, "new.usda", StageOptions::default()).unwrap();
+    let reopened = StageDocument::open(backend, "new.usda", StageOptions::default()).unwrap();
     let prim = reopened.store.path("/Root");
     assert!(reopened.stage.stage().has_prim(prim));
 }

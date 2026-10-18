@@ -30,7 +30,7 @@ def SkelAnimation "Animation" (references = </AnimationBase> (offset = 10; scale
 
 #[test]
 fn interval_bounds_select_effective_offset_grids_without_adding_brackets() {
-    let (mut store, live) = support::scene(SOURCE);
+    let (store, live) = support::scene(SOURCE);
     let shape = store.path("/Shape");
     let animation = store.path("/Animation");
     let transform = store.tokens.lookup("xformOp:translate").unwrap();
@@ -106,7 +106,7 @@ fn interval_bounds_select_effective_offset_grids_without_adding_brackets() {
 
 #[test]
 fn inclusive_helpers_keep_nan_reversed_and_infinite_bound_behavior() {
-    let (mut store, live) = support::scene(SOURCE);
+    let (store, live) = support::scene(SOURCE);
     let shape = store.path("/Shape");
     let animation = store.path("/Animation");
     let scene = Scene::new(live.stage(), &store);

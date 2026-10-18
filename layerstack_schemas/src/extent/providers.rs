@@ -430,7 +430,7 @@ mod tests {
 
     #[test]
     fn host_time_dependence_propagates_to_cached_ancestors() {
-        let mut f = Fixture::new(true);
+        let f = Fixture::new(true);
         let root = f.store.path("/Root");
         let mut cache = f.cache(true);
         assert_eq!(f.query(&mut cache, root).unwrap().max, [2.; 3]);

@@ -92,7 +92,7 @@ fn layer_name(loaded: &LoadedStage, layer: layerstack::LayerId) -> String {
 #[test]
 fn prim_stacks_match_openusd() {
     let oracle = oracle();
-    let (mut loaded, stage) = compose(&oracle);
+    let (loaded, stage) = compose(&oracle);
     let pseudo_root = loaded.store.path("/");
     let mut composed: Vec<String> = stage
         .traverse(pseudo_root)
@@ -149,7 +149,7 @@ fn prim_stacks_match_openusd() {
 #[test]
 fn values_match_openusd() {
     let oracle = oracle();
-    let (mut loaded, stage) = compose(&oracle);
+    let (loaded, stage) = compose(&oracle);
     let mut mismatches = Vec::new();
     for (attr, expected) in &oracle.values {
         let property = loaded.store.property_path(attr);

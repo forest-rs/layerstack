@@ -20,7 +20,7 @@ fn source() -> String {
 fn skeleton_free_inputs_and_outputs_match_pinned_cpp_morph_results() {
     let oracle: serde_json::Value =
         serde_json::from_str(include_str!("../fixtures/skel_blend_shapes.json")).unwrap();
-    let (mut store, live) = support::scene(&source());
+    let (store, live) = support::scene(&source());
     let path = store.path("/Rig/Geometry/Mesh");
     let scene = Scene::new(live.stage(), &store);
     let mut cache = BlendShapeCache::new(Time::Default);
@@ -121,7 +121,7 @@ fn bufferless_inputs_and_static_weights_survive_time_changes() {
             "",
         )
         .replace("point3f[] points = [(1,0,0), (0,2,0)]", "");
-    let (mut store, live) = support::scene(&source);
+    let (store, live) = support::scene(&source);
     let path = store.path("/Rig/Geometry/Mesh");
     let scene = Scene::new(live.stage(), &store);
     let mut cache = BlendShapeCache::new(Time::Default);

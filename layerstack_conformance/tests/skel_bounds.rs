@@ -25,7 +25,7 @@ fn hull(points: &[[f32; 3]]) -> Range3d {
 #[test]
 fn skeleton_hulls_match_cpp_vertices_and_reuse_reductions() {
     let text=include_str!("../fixtures/skel_blend_shapes.usda").replace("def Skeleton \"Skeleton\" {","def Skeleton \"Skeleton\" { double3 xformOp:translate = (10,20,30)\n uniform token[] xformOpOrder = [\"xformOp:translate\"]").replace("point3f[] points", "float3[] extent = [(-1,-1,-1),(1,1,1)]\n point3f[] points");
-    let (mut store, live) = support::scene(&text);
+    let (store, live) = support::scene(&text);
     let path = store.path("/Rig/Geometry/Mesh");
     let scene = Scene::new(live.stage(), &store);
     let oracle: serde_json::Value =
@@ -132,7 +132,7 @@ fn empty_mesh_is_empty_and_nonfinite_points_do_not_form_partial_bounds() {
         let text = format!(
             "#usda 1.0\ndef Mesh \"Mesh\" (prepend apiSchemas = [\"SkelBindingAPI\"]) {{ uniform token[] skel:blendShapes = [\"empty\"]\nrel skel:blendShapeTargets = [</Shape>]\npoint3f[] points = {points} }} def BlendShape \"Shape\" {{ uniform vector3f[] offsets = [] }}"
         );
-        let (mut store, live) = support::scene(&text);
+        let (store, live) = support::scene(&text);
         let path = store.path("/Mesh");
         let mut cache = BlendShapeCache::new(Time::Default);
         let result = cache.deformed_mesh_bounds(&Scene::new(live.stage(), &store), path);

@@ -4507,6 +4507,57 @@ mod tests {
         }
     }
 
+    /// On a stage whose arcs keep it off the local path, creating and
+    /// removing prims, root prims among them, reports each parent whose
+    /// child list gained or lost the prim as changed info, as the local
+    /// path does, whether or not its spec changed.
+    ///
+    /// Spec: AOUSD Core §11.3.1 (child order). OpenUSD:
+    /// `UsdNotice::ObjectsChanged::GetChangedInfoOnlyPaths`.
+    #[test]
+    fn general_structural_edits_report_parents_whose_child_lists_change() {
+        use crate::{EditTarget, Specifier};
+        let mut store = InMemoryStore::default();
+        let field = store.tokens.intern("x");
+        let mut layer = Layer::new(LayerId(1));
+        for name in ["/World", "/World/A", "/World/A/X", "/Rock", "/Lib"] {
+            let path = p(&mut store, name);
+            layer.insert_prim(path, PrimSpec::def().with_property(field, attr(1)));
+        }
+        let reference = Reference::new(LayerId(1), p(&mut store, "/Lib"));
+        layer.insert_prim(
+            p(&mut store, "/Ref"),
+            PrimSpec::def().with_reference(reference),
+        );
+        store.insert_layer(layer);
+        let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+        assert!(live.local_namespace.is_none());
+        let target = EditTarget::for_layer(LayerId(1));
+        let mut undo = Vec::new();
+        for (remove, path, work, info) in [
+            (true, "/Rock", (1, 2, false), "/"),
+            (true, "/World/A/X", (3, 2, false), "/World/A"),
+            (false, "/World/B", (3, 2, false), "/World"),
+            (false, "/Plant", (2, 2, false), "/"),
+        ] {
+            let mut txn = Transaction::new();
+            let at = target.prim(p(&mut store, path));
+            if remove {
+                txn.remove_spec(at);
+            } else {
+                txn.create_prim(at, Specifier::Def, None);
+            }
+            let inverse = apply_root_edit(&mut live, &mut store, &txn, work, &[path], &[info]);
+            undo.push((inverse, path, info));
+        }
+        while let Some((inverse, path, info)) = undo.pop() {
+            let applied = live.apply(&mut store, &inverse).unwrap();
+            assert_eq!(applied.changes.resynced, [p(&mut store, path)]);
+            assert_eq!(applied.changes.changed_info_only, [p(&mut store, info)]);
+            assert_lists_match_fresh(&live, &mut store);
+        }
+    }
+
     /// Child order folds layer by layer: each layer appends its children,
     /// then reorders the names gathered so far. Editing the weaker layer's
     /// children or reorder recomposes to the same order as a fresh

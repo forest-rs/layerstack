@@ -25,6 +25,7 @@ use crate::{
     path::PathId,
     prim_index::{OpinionKey, PrimIndex},
     prim_index_graph::{NodeId, PrimIndexGraph},
+    prim_indexing::ChildIndex,
     stage::{Stage, StageOptions},
 };
 
@@ -37,8 +38,9 @@ pub(crate) fn compose_stage_with_paths(
     root: LayerId,
     options: StageOptions,
     populated: Option<BTreeSet<PathId>>,
+    child_index: &ChildIndex,
 ) -> Stage {
-    compose_stage_selected(store, root, options, populated, false)
+    compose_stage_selected(store, root, options, populated, false, child_index)
 }
 
 /// Exact masks are internal recomposition selections, not USD population masks.
@@ -48,8 +50,9 @@ pub(crate) fn compose_stage_selected(
     options: StageOptions,
     populated: Option<BTreeSet<PathId>>,
     exact_mask: bool,
+    child_index: &ChildIndex,
 ) -> Stage {
-    compose_stage_retained(store, root, options, populated, exact_mask)
+    compose_stage_retained(store, root, options, populated, exact_mask, child_index)
 }
 
 pub(crate) fn compose_stage_retained(
@@ -58,19 +61,29 @@ pub(crate) fn compose_stage_retained(
     options: StageOptions,
     populated: Option<BTreeSet<PathId>>,
     exact_mask: bool,
+    child_index: &ChildIndex,
 ) -> Stage {
     let listed: Option<HashSet<PathId>> = populated.map(|paths| paths.into_iter().collect());
-    compose_indexed(store, root, options, exact_mask, listed.as_ref())
+    compose_indexed(
+        store,
+        root,
+        options,
+        exact_mask,
+        listed.as_ref(),
+        child_index,
+    )
 }
 
 /// Composes the stage rooted at `root` by indexing each prim from its
-/// parent's index ([`crate::prim_indexing`]).
+/// parent's index ([`crate::prim_indexing`]), reading the child specs of
+/// layers that do not list them from `child_index`.
 fn compose_indexed(
     store: &mut dyn LayerStore,
     root: LayerId,
     options: StageOptions,
     exact_mask: bool,
     listed: Option<&HashSet<PathId>>,
+    child_index: &ChildIndex,
 ) -> Stage {
     let scope = match (listed, options.mask.as_ref()) {
         (Some(paths), _) => crate::prim_indexing::Scope::listed(store.paths_mut(), paths),
@@ -79,7 +92,8 @@ fn compose_indexed(
         (None, Some(mask)) => crate::prim_indexing::Scope::Mask(mask),
     };
     let mut checks = Findings::default();
-    let mut composed = crate::prim_indexing::compose(store, root, &options, scope, &mut checks);
+    let mut composed =
+        crate::prim_indexing::compose(store, root, &options, scope, child_index, &mut checks);
     let mut errors = core::mem::take(&mut composed.errors);
     let mut prims = core::mem::take(&mut composed.prims);
     for (path, prim) in &mut prims {

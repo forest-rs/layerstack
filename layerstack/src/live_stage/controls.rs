@@ -16,14 +16,35 @@ pub struct RecompositionWork {
     pub replaced_prim_indexes: usize,
     /// Whether scope proof required reconstructing the complete stage.
     pub full_rebuild: bool,
+    /// Layers whose child prim specs were indexed from every prim spec they
+    /// hold, as composition reads them for prims whose specs do not list
+    /// their children. The stage keeps the index across recompositions, so
+    /// this counts layers first read, replaced, or that removed specs or
+    /// outlived their change history.
+    pub child_index_rebuilds: usize,
+    /// Layers whose kept child index was patched with the prim specs they
+    /// added since it was last brought up to date.
+    pub child_index_patches: usize,
 }
 
 impl LiveStage {
-    /// The most recent recomposition's index work. No-op recompositions reset
-    /// this to zero; value refreshes construct no indexes.
+    /// The most recent recomposition's index work, boundary child lists
+    /// included in its child index counts. No-op recompositions reset this
+    /// to zero; value refreshes construct no indexes.
     #[must_use]
     pub fn recomposition_work(&self) -> RecompositionWork {
-        self.work
+        let index = self.child_index.work();
+        RecompositionWork {
+            child_index_rebuilds: index.rebuilds - self.child_index_mark.rebuilds,
+            child_index_patches: index.patches - self.child_index_mark.patches,
+            ..self.work
+        }
+    }
+
+    /// Starts counting the work of a new recomposition.
+    pub(super) fn reset_work(&mut self) {
+        self.work = RecompositionWork::default();
+        self.child_index_mark = self.child_index.work();
     }
 
     /// Queues the structural changes of `layer` at `paths`, and at
@@ -270,7 +291,8 @@ impl LiveStage {
                 with_dependencies: true,
                 ..self.options.clone()
             };
-            let partial = Stage::compose_retained(store, self.root, options, false);
+            let partial =
+                Stage::compose_retained(store, self.root, options, false, &self.child_index);
             self.work.composed_prim_indexes += partial.composition_work().composed_prim_indexes;
             if partial
                 .composition_errors()
@@ -381,6 +403,7 @@ impl LiveStage {
             &hierarchy,
             &roots,
             self.options.clone(),
+            &self.child_index,
         );
         self.update_prim_edges(&affected, &deps);
         for &prim in &affected {

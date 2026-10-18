@@ -47,8 +47,9 @@ use self::{
     graph::{Graph, NONE, NodeIndex, Site, is_class_based},
     indexer::{Ctx, Outputs, Recorded, build_prim_index, is_instanceable},
     layer_stacks::{LayerStacks, StackId},
-    site::ChildIndex,
 };
+
+pub(crate) use self::site::{ChildIndex, ChildIndexWork};
 
 /// Everything a stage is built from.
 #[derive(Default)]
@@ -152,14 +153,17 @@ impl<'m> Scope<'m> {
     }
 }
 
-/// Composes the stage rooted at `root`.
+/// Composes the stage rooted at `root`, reading the child specs of layers
+/// that do not list them from `child_index`.
 pub(crate) fn compose(
     store: &dyn LayerStore,
     root: LayerId,
     options: &StageOptions,
     scope: Scope<'_>,
+    child_index: &ChildIndex,
     checks: &mut crate::composition_checks::Findings,
 ) -> Composition {
+    child_index.prepare(store);
     let root_path = store.paths().intern_segments(&[]);
     let load_rules = options.load_rules.clone();
     let include_payload = move |paths: &crate::path::PathInterner, path: PathId| {
@@ -168,7 +172,7 @@ pub(crate) fn compose(
     let mut ctx = Ctx {
         store,
         stacks: LayerStacks::default(),
-        child_index: ChildIndex::default(),
+        child_index,
         fallbacks: &options.variant_fallbacks,
         include_payload: &include_payload,
         stage_stack: StackId(0),
@@ -864,7 +868,7 @@ fn child_names(ctx: &Ctx<'_>, graph: &Graph) -> Vec<TokenId> {
             ctx.store,
             stack,
             &entry.site.path,
-            &ctx.child_index,
+            ctx.child_index,
             &mut order,
             &mut names,
             &mut unlisted,
@@ -1133,13 +1137,18 @@ type LayerSpecEntries = (
 /// weakest site first ([`child_names`]); children no site names follow,
 /// by name. Live recomposition uses this to rebuild a boundary parent's
 /// list from merged children.
-pub(crate) fn order_children(store: &dyn LayerStore, index: &PrimIndex, children: &mut [PathId]) {
+pub(crate) fn order_children(
+    store: &dyn LayerStore,
+    index: &PrimIndex,
+    child_index: &ChildIndex,
+    children: &mut [PathId],
+) {
+    child_index.prepare(store);
     let graph = &index.graph;
     let contributing: HashSet<NodeId> = index.sources.iter().map(|key| key.node).collect();
     let mut order: Vec<TokenId> = Vec::new();
     let mut names: HashSet<TokenId> = HashSet::new();
     let mut unlisted: Vec<TokenId> = Vec::new();
-    let child_index = ChildIndex::default();
     for id in graph.strength_order().into_iter().rev() {
         if !contributing.contains(&id) {
             continue;
@@ -1152,7 +1161,7 @@ pub(crate) fn order_children(store: &dyn LayerStore, index: &PrimIndex, children
             store,
             &layers,
             node.site(),
-            &child_index,
+            child_index,
             &mut order,
             &mut names,
             &mut unlisted,

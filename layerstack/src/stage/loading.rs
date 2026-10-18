@@ -345,6 +345,7 @@ impl super::Stage {
         hierarchy: &[PathId],
         roots: &[PathId],
         options: super::StageOptions,
+        child_index: &crate::prim_indexing::ChildIndex,
     ) {
         let within = |path: PathId| {
             roots.iter().any(|root| {
@@ -401,6 +402,7 @@ impl super::Stage {
             hierarchy,
             boundaries.into_iter().collect(),
             roots,
+            child_index,
         );
     }
 }

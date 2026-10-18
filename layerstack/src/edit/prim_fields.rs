@@ -303,7 +303,7 @@ pub(crate) fn swap(spec: SpecMut<'_>, value: PrimValue) -> Result<PrimValue, Pri
 
 /// The spec path and location `at` addresses, rejecting a property path
 /// and the pseudo-root, which holds no prim fields.
-fn prim_address(store: &mut dyn LayerStore, at: &Address) -> Result<Loc, Rejection> {
+pub(super) fn prim_address(store: &mut dyn LayerStore, at: &Address) -> Result<Loc, Rejection> {
     let (path, loc) = resolve(store, at)?;
     if path.property().is_some() {
         return Err(Rejection::NotAPrim(path));
@@ -387,6 +387,7 @@ fn map_value(
         PrimValue::Specializes(list) => PrimValue::Specializes(paths(store, list)?),
         PrimValue::References(list) => PrimValue::References(references(store, list)?),
         PrimValue::Payloads(list) => PrimValue::Payloads(references(store, list)?),
+        PrimValue::VariantSetNames(list) => PrimValue::VariantSetNames(unique_items(list)),
         other => other,
     })
 }
@@ -459,7 +460,7 @@ fn edit_list<T: PartialEq>(
 /// Puts `item` at `position` (see [`ListPosition`]).
 ///
 /// OpenUSD: `Usd_InsertListItem` in `pxr/usd/usd/listEditImpl.h`.
-fn insert_item<T: PartialEq>(list: &mut ListOp<T>, item: T, position: ListPosition) {
+pub(super) fn insert_item<T: PartialEq>(list: &mut ListOp<T>, item: T, position: ListPosition) {
     let front = matches!(
         position,
         ListPosition::FrontOfPrepend | ListPosition::FrontOfAppend
@@ -494,6 +495,33 @@ fn remove_item<T: PartialEq>(list: &mut ListOp<T>, item: T) {
     if !list.delete.contains(&item) {
         list.delete.push(item);
     }
+}
+
+/// `list` with the repeats of its explicit, prepended, deleted and appended
+/// items removed, keeping the first of each but for the appended items,
+/// where the last is kept; added and reordered items are kept as given.
+///
+/// OpenUSD: `SdfListOp::_MakeUnique`, which the `SdfListOp` setters call
+/// (`pxr/usd/sdf/listOp.cpp`).
+fn unique_items<T: PartialEq>(mut list: ListOp<T>) -> ListOp<T> {
+    fn first<T: PartialEq>(items: &mut Vec<T>) {
+        let mut kept: Vec<T> = Vec::with_capacity(items.len());
+        for item in items.drain(..) {
+            if !kept.contains(&item) {
+                kept.push(item);
+            }
+        }
+        *items = kept;
+    }
+    if let Some(explicit) = &mut list.explicit {
+        first(explicit);
+    }
+    first(&mut list.prepend);
+    first(&mut list.delete);
+    list.append.reverse();
+    first(&mut list.append);
+    list.append.reverse();
+    list
 }
 
 /// Removes the API schema `name` from the `apiSchemas` of the prim spec at

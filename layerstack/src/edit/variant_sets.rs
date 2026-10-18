@@ -1,27 +1,34 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! Variant set authoring: listing a variant set in the `variantSetNames`
-//! of the spec holding it.
+//! Variant set authoring: adding a variant set to a prim or variant spec
+//! and listing it in its `variantSetNames`, and removing a variant set
+//! spec with everything in it.
 //!
 //! A variant set composes only where a site lists it in
 //! `variantSetNames`; its spec holds the variants. The two are authored
-//! apart, and creating a set's spec lists it only where OpenUSD's
-//! authoring calls do.
+//! apart: adding a set creates its spec and lists it, as
+//! `UsdVariantSets::AddVariantSet` does, while removing a set's spec
+//! leaves the list as it is, as `SdfPrimSpec::RemoveVariantSet` does.
 //!
 //! Spec: AOUSD Core §7.3.6 (prim and variant specs contain variant set
 //! specs), §7.6.2.3.5 (`variantSetNames`), §10.5 (variant selection).
 
+use alloc::vec::Vec;
+
 use super::{
-    apply::{Journal, Raw, layer},
+    apply::{Journal, Raw, ensure, layer, remove_subtree, resolve},
     error::Rejection,
-    prim_fields::PrimValue,
+    prim_fields::{ListPosition, PrimValue, insert_item, prim_address},
     spec::{Loc, SpecRef, spec_at},
+    target::Address,
 };
 use crate::{
-    doc::{LayerId, LayerStore},
+    doc::{LayerId, LayerStore, VariantSetSpec},
+    ident::is_identifier,
     interner::TokenId,
     listop::ListOp,
+    spec_path::VariantSelectionSite,
 };
 
 /// The `variantSetNames` of the prim or variant spec `spec`.
@@ -85,4 +92,82 @@ pub(super) fn prepend_variant_set_name(
     items.retain(|name| *name != set);
     items.insert(0, set);
     write_names(store, id, holder, list, journal)
+}
+
+/// Adds the variant set `name` to the prim or variant spec at `at` (see
+/// [`Transaction::add_variant_set`](super::Transaction::add_variant_set)).
+pub(crate) fn add_variant_set(
+    store: &mut dyn LayerStore,
+    at: &Address,
+    name: TokenId,
+    position: ListPosition,
+    journal: &mut Journal<'_>,
+) -> Result<(), Rejection> {
+    if !is_identifier(store.tokens().resolve(name)) {
+        return Err(Rejection::InvalidVariantSetName(name));
+    }
+    let loc = prim_address(store, at)?;
+    let id = at.layer();
+    ensure(store, id, &loc, journal)?;
+    let Some(spec) = spec_at(layer(store, id)?, &loc) else {
+        return Err(Rejection::Diverged(loc.spec_path(store.paths())));
+    };
+    let has_set = spec.variant_sets().contains_key(&name);
+    let mut list = names(spec).clone();
+    if !has_set {
+        journal.run(
+            store,
+            Raw::VariantSet {
+                layer: id,
+                host: loc.clone(),
+                set: name,
+                spec: Some(VariantSetSpec::default()),
+            },
+        )?;
+    }
+    insert_item(&mut list, name, position);
+    write_names(store, id, loc, list, journal)
+}
+
+/// Removes the variant set `name` of the prim or variant spec at `at`
+/// (see
+/// [`Transaction::remove_variant_set`](super::Transaction::remove_variant_set)).
+pub(crate) fn remove_variant_set(
+    store: &mut dyn LayerStore,
+    at: &Address,
+    name: TokenId,
+    journal: &mut Journal<'_>,
+) -> Result<(), Rejection> {
+    let (path, loc) = resolve(store, at)?;
+    if path.property().is_some() {
+        return Err(Rejection::NotAPrim(path));
+    }
+    let id = at.layer();
+    let Some(spec) = spec_at(layer(store, id)?, &loc) else {
+        return Ok(());
+    };
+    let Some(set) = spec.variant_sets().get(&name) else {
+        return Ok(());
+    };
+    let mut variants: Vec<TokenId> = set.variants.keys().copied().collect();
+    variants.sort_unstable();
+    let host = loc.prim_path();
+    for variant in variants {
+        let mut sites = loc.sites().to_vec();
+        sites.push(VariantSelectionSite {
+            host_path: host,
+            set: name,
+            variant,
+        });
+        remove_subtree(store, id, &Loc::Variant { host, sites }, journal)?;
+    }
+    journal.run(
+        store,
+        Raw::VariantSet {
+            layer: id,
+            host: loc,
+            set: name,
+            spec: None,
+        },
+    )
 }

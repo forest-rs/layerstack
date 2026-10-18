@@ -9,7 +9,7 @@ use super::{
     apply::{self, AnimationState, Guarded},
     error::{EditError, Slot},
     layer_fields::SublayerEdit,
-    prim_fields::{ArcEdit, ArcItem, ListPosition, PrimValue},
+    prim_fields::{ArcEdit, ArcItem, ListPosition, PrimField, PrimValue},
     same::Same,
     spec::{Loc, spec_at},
     target::Address,
@@ -158,6 +158,15 @@ pub(crate) enum Op {
     CopySpec {
         from: Address,
         to: Address,
+    },
+    AddVariantSet {
+        at: Address,
+        name: TokenId,
+        position: ListPosition,
+    },
+    RemoveVariantSet {
+        at: Address,
+        name: TokenId,
     },
     /// A storage-level step of an inverse, guarded by the step it undoes.
     Raw(Box<Guarded>),
@@ -798,6 +807,86 @@ impl Transaction {
         self.edit_arc(at, ArcItem::Specialize(path), None)
     }
 
+    /// Sets the `variantSetNames` list op of the prim or variant spec at
+    /// `at` (for a variant spec, the sets nested in it), replacing the one
+    /// authored there, and creating the spec as an `over` if needed. The
+    /// names need no variant set spec: a listed set without one
+    /// contributes no opinions. Repeated names are dropped as `SdfListOp`
+    /// drops them: the first of each explicit, prepended or deleted name
+    /// is kept, and the last of each appended one.
+    ///
+    /// Only listed sets compose, in the order the list ops of a site's
+    /// layers give, weakest first, applied as list ops.
+    ///
+    /// OpenUSD: `UsdPrim::SetMetadata` of `variantSetNames`,
+    /// `SdfPrimSpec::GetVariantSetNameList`.
+    ///
+    /// Spec: AOUSD Core §7.6.2.3.5 (`variantSetNames`), §12.4 (list ops),
+    /// §10.5 (variant selection).
+    pub fn set_variant_set_names(&mut self, at: Address, names: ListOp<TokenId>) -> &mut Self {
+        self.set_field(at, PrimValue::VariantSetNames(names))
+    }
+
+    /// Clears the `variantSetNames` authored on the spec at `at`, leaving
+    /// its variant set specs, which then compose only where another
+    /// opinion lists them.
+    ///
+    /// OpenUSD: `UsdPrim::ClearMetadata` of `variantSetNames`.
+    ///
+    /// Spec: AOUSD Core §7.6.2.3.5 (`variantSetNames`).
+    pub fn clear_variant_set_names(&mut self, at: Address) -> &mut Self {
+        self.set_field(at, PrimValue::VariantSetNames(ListOp::default()))
+    }
+
+    /// Adds the variant set `name` to the prim or variant spec at `at`:
+    /// creates the spec as an `over` if needed, creates the variant set
+    /// spec unless the spec holds one, and puts `name` in the spec's
+    /// `variantSetNames` at `position`, as [`Transaction::add_inherit`]
+    /// puts an inherit: an explicit list takes it whatever the position,
+    /// and a name already in the chosen list moves. The name is not taken
+    /// out of the deleted names or the other list, so adding a deleted set
+    /// leaves it deleted at that strength and listed after.
+    ///
+    /// Rejected if `name` is not an identifier
+    /// ([`Rejection::InvalidVariantSetName`]), and for the pseudo-root
+    /// ([`Rejection::PseudoRoot`]) and a property path.
+    ///
+    /// OpenUSD: `UsdVariantSets::AddVariantSet`, with
+    /// `Usd_InsertListItem` (`pxr/usd/usd/variantSets.cpp`,
+    /// `pxr/usd/usd/valueUtils.h`).
+    ///
+    /// Spec: AOUSD Core §7.3.6 (variant set specs), §7.6.2.3.5
+    /// (`variantSetNames`), §12.4 (list ops).
+    ///
+    /// [`Rejection::InvalidVariantSetName`]: super::Rejection::InvalidVariantSetName
+    /// [`Rejection::PseudoRoot`]: super::Rejection::PseudoRoot
+    pub fn add_variant_set(
+        &mut self,
+        at: Address,
+        name: TokenId,
+        position: ListPosition,
+    ) -> &mut Self {
+        self.push(Op::AddVariantSet { at, name, position })
+    }
+
+    /// Removes the variant set spec `name` of the prim or variant spec at
+    /// `at` with everything in it: its variant specs and the prim and
+    /// property specs authored in them, nested variant sets included. The
+    /// spec's `variantSetNames` is left as it is, so a set it lists stays
+    /// listed, without opinions. Removing a set the spec does not hold,
+    /// or from a spec that does not exist, does nothing.
+    ///
+    /// Rejected for a property path.
+    ///
+    /// OpenUSD: `SdfPrimSpec::RemoveVariantSet`, which erases the set from
+    /// `variantSetChildren` only (`pxr/usd/sdf/primSpec.cpp`).
+    ///
+    /// Spec: AOUSD Core §7.3.6 (variant set specs), §7.6.2.3.5
+    /// (`variantSetNames`).
+    pub fn remove_variant_set(&mut self, at: Address, name: TokenId) -> &mut Self {
+        self.push(Op::RemoveVariantSet { at, name })
+    }
+
     fn set_field(&mut self, at: Address, value: PrimValue) -> &mut Self {
         self.push(Op::SetPrimField { at, value })
     }
@@ -878,7 +967,7 @@ impl Transaction {
     /// Fields that the layer model keeps in dedicated members are rejected:
     /// they have their own edits ([`Transaction::set_active`],
     /// [`Transaction::add_reference`] and the others for the
-    /// [`PrimField`](super::PrimField)s, [`Transaction::set_default`],
+    /// [`PrimField`]s, [`Transaction::set_default`],
     /// [`Transaction::set_targets`], [`Transaction::set_variant_selection`])
     /// or none.
     ///
@@ -1079,6 +1168,8 @@ impl Op {
             | Self::EditSublayers { .. }
             | Self::SetRelocates { .. } => return None,
             Self::CopySpec { to, .. } => (to, Slot::Spec),
+            Self::AddVariantSet { at, .. } => (at, Slot::Prim(PrimField::VariantSetNames)),
+            Self::RemoveVariantSet { at, .. } => (at, Slot::Spec),
         })
     }
 }

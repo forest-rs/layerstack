@@ -174,6 +174,13 @@ pub enum Rejection {
     /// The copied specs author paths the copy cannot remap (for example
     /// an invalid path expression, or an arc whose asset is an expression).
     UnsupportedCopy,
+    /// A variant set name that is not an identifier.
+    ///
+    /// OpenUSD: `SdfVariantSetSpec::New` and the `variantSetNames` list
+    /// editor reject it.
+    ///
+    /// Spec: AOUSD Core §7.3.3 (identifiers), §7.3.6 (variant set specs).
+    InvalidVariantSetName(TokenId),
     /// A step of an inverse no longer matches the layer: the layer was
     /// changed in a way the inverse cannot undo.
     Diverged(SpecPath),
@@ -249,6 +256,9 @@ impl fmt::Display for Rejection {
             }
             Self::UnsupportedCopy => {
                 f.write_str("the copied specs author paths that cannot be remapped")
+            }
+            Self::InvalidVariantSetName(_) => {
+                f.write_str("the variant set name is not an identifier")
             }
             Self::Diverged(_) => f.write_str("the layer no longer matches the inverse"),
         }

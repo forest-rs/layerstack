@@ -271,7 +271,8 @@ pub use stage::{
     StageMetadataError, StageOptions, Traverse, ValueExplanation, ValueSource,
 };
 pub use stage::{
-    DropReason, DroppedTarget, FromValue, PrimPathArg, PropertyPathArg, StageView, TargetOpinion,
+    DanglingByName, DanglingCounts, DanglingKind, DanglingTarget, DanglingTargetReport, DropReason,
+    DroppedTarget, FromValue, PrimPathArg, PropertyPathArg, StageView, TargetOpinion,
     TargetsExplanation,
 };
 pub use value_type::{UnknownValueType, ValueRole, ValueType};

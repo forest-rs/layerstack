@@ -2,12 +2,12 @@
 
 class "Class"
 {
-    rel look = [</Class/Child>, </Light>, </Light.intensity>]
+    custom rel look = [</Class/Child>, </Light>, </Light.intensity>]
 }
 
 def "Base"
 {
-    rel look = [</Light>, </Light.intensity>, </Base/Child>]
+    custom rel look = [</Light>, </Light.intensity>, </Base/Child>]
 }
 
 def "Inst" (
@@ -31,7 +31,7 @@ def "Rock" (
 {
     variantSet "look" = {
         "a" {
-            rel look = [</Light>, </Light.intensity>, </Rock/Pebble>]
+            custom rel look = [</Light>, </Light.intensity>, </Rock/Pebble>]
         }
     }
 }

@@ -1643,8 +1643,9 @@ fn variant_sets_compose_only_where_listed() {
 }
 
 /// Relationship targets and attribute connections are set, replaced and
-/// cleared on their spec, a missing relationship spec is created, and each
-/// edit's inverse restores the layer exactly, with redo reapplying it.
+/// cleared on their spec, a missing relationship spec is created `custom`
+/// (nothing declares it), and each edit's inverse restores the layer
+/// exactly, with redo reapplying it.
 ///
 /// Spec: AOUSD Core §7.6.4.2.3 (`connectionPaths`), §7.6.5.1.1
 /// (`targetPaths`), §12.4.
@@ -1674,6 +1675,7 @@ fn targets_and_connections_undo_and_redo_exactly() {
     let undo_create = create.apply(&mut store).expect("creates");
     let created = property(&store, look).expect("relationship");
     assert_eq!(created.kind, PropertyKind::Relationship);
+    assert!(created.custom, "nothing declares the relationship");
     assert_eq!(created.targets, Some(ListOp::explicit(vec![target(world)])));
     let after_create = layers(&store);
 

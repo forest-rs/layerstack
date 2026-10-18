@@ -841,34 +841,7 @@ impl<'s> SchemaEdit<'s> {
         {
             return;
         }
-        let mapped = self.target.map_to_spec_path(path, self.store.paths_mut());
-        let local = mapped
-            .as_ref()
-            .and_then(|mapped| {
-                let layer = self.store.layer(self.target.layer())?;
-                if !mapped.variant_chain().is_empty() {
-                    layer
-                        .variant_spec_at(mapped, self.store.paths())?
-                        .properties
-                        .iter()
-                        .find(|entry| entry.name == token)
-                } else {
-                    layer
-                        .prim_specs(mapped.prim_path())
-                        .find(|spec| {
-                            layerstack::SpecPath::from_variant_selection_sites(
-                                mapped.prim_path(),
-                                &spec.outer_variant_sites,
-                                self.store.paths(),
-                            ) == *mapped
-                        })?
-                        .properties
-                        .iter()
-                        .find(|entry| entry.name == token)
-                }
-            })
-            .is_some();
-        if !local {
+        if !self.has_local_property(path, token) {
             let mut spec = PropertySpec::relationship();
             spec.custom = self
                 .stage
@@ -933,9 +906,69 @@ impl<'s> SchemaEdit<'s> {
             .retain(|(at, _)| *at != TargetPath::Property(PropertyPath::new(path, name)));
     }
 
+    /// Whether the edit target's layer holds a spec for the property
+    /// `name` of the prim at `path`.
+    fn has_local_property(&mut self, path: PathId, name: TokenId) -> bool {
+        let Some(mapped) = self.target.map_to_spec_path(path, self.store.paths_mut()) else {
+            return false;
+        };
+        let Some(layer) = self.store.layer(self.target.layer()) else {
+            return false;
+        };
+        let properties = if !mapped.variant_chain().is_empty() {
+            layer
+                .variant_spec_at(&mapped, self.store.paths())
+                .map(|spec| &spec.properties)
+        } else {
+            layer
+                .prim_specs(mapped.prim_path())
+                .find(|spec| {
+                    layerstack::SpecPath::from_variant_selection_sites(
+                        mapped.prim_path(),
+                        &spec.outer_variant_sites,
+                        self.store.paths(),
+                    ) == mapped
+                })
+                .map(|spec| &spec.properties)
+        };
+        properties.is_some_and(|properties| properties.iter().any(|entry| entry.name == name))
+    }
+
+    /// Creates the relationship `name` of `path` at the edit target, not
+    /// `custom`, when the prim's schemas as this edit leaves them define it
+    /// and neither the layer nor this edit has a spec for it: OpenUSD's
+    /// `Create*Rel`, which stamps the schema definition. The stage knows
+    /// no definition for a prim this edit defines or applies a schema to,
+    /// and the transaction would create such a spec `custom`, as it creates
+    /// a relationship nothing declares.
+    ///
+    /// OpenUSD: `UsdStage::_CreateNewPropertySpecFromSchema`.
+    ///
+    /// Spec: AOUSD Core §12.2.4 (properties), §13.3.2.3 (the prim
+    /// definition).
+    fn define_relationship(&mut self, path: PathId, name: TokenId) {
+        if self
+            .created
+            .iter()
+            .any(|(p, n, _)| (*p, *n) == (path, name))
+            || self
+                .definition(path, name)
+                .is_none_or(|definition| definition.kind != PropertyKind::Relationship)
+            || self.has_local_property(path, name)
+        {
+            return;
+        }
+        let at = self.target.property(PropertyPath::new(path, name));
+        self.transaction
+            .create_property(at, PropertySpec::relationship());
+        self.created.push((path, name, None));
+    }
+
     /// Authors `targets` as the explicit targets of the relationship `name`.
     pub(crate) fn set_targets(&mut self, path: PathId, name: &str, targets: &[TargetPath]) {
-        let at = self.property(path, name);
+        let token = self.store.tokens_mut().intern(name);
+        self.define_relationship(path, token);
+        let at = self.target.property(PropertyPath::new(path, token));
         self.transaction
             .set_targets(at, ListOp::explicit(targets.to_vec()));
     }

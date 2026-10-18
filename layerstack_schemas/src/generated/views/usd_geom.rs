@@ -33,7 +33,8 @@ pub enum BackPlateApiPlateVisibility {
     #[doc = "`mute`"]
     Mute,
     /// A token the schema does not list: OpenUSD does not enforce
-    /// `allowedTokens`, so an authored value may be anything.
+    /// `allowedTokens`, so an authored value may be anything. The
+    /// `AllowedTokens` validation rule reports it.
     Other(::alloc::sync::Arc<str>),
 }
 
@@ -933,7 +934,8 @@ pub enum BasisCurvesBasis {
     #[doc = "`catmullRom`"]
     CatmullRom,
     /// A token the schema does not list: OpenUSD does not enforce
-    /// `allowedTokens`, so an authored value may be anything.
+    /// `allowedTokens`, so an authored value may be anything. The
+    /// `AllowedTokens` validation rule reports it.
     Other(::alloc::sync::Arc<str>),
 }
 
@@ -984,7 +986,8 @@ pub enum BasisCurvesCurveType {
     #[doc = "`cubic`"]
     Cubic,
     /// A token the schema does not list: OpenUSD does not enforce
-    /// `allowedTokens`, so an authored value may be anything.
+    /// `allowedTokens`, so an authored value may be anything. The
+    /// `AllowedTokens` validation rule reports it.
     Other(::alloc::sync::Arc<str>),
 }
 
@@ -1035,7 +1038,8 @@ pub enum BasisCurvesWrap {
     #[doc = "`pinned`"]
     Pinned,
     /// A token the schema does not list: OpenUSD does not enforce
-    /// `allowedTokens`, so an authored value may be anything.
+    /// `allowedTokens`, so an authored value may be anything. The
+    /// `AllowedTokens` validation rule reports it.
     Other(::alloc::sync::Arc<str>),
 }
 
@@ -1448,7 +1452,8 @@ pub enum CameraProjection {
     #[doc = "`orthographic`"]
     Orthographic,
     /// A token the schema does not list: OpenUSD does not enforce
-    /// `allowedTokens`, so an authored value may be anything.
+    /// `allowedTokens`, so an authored value may be anything. The
+    /// `AllowedTokens` validation rule reports it.
     Other(::alloc::sync::Arc<str>),
 }
 
@@ -1499,7 +1504,8 @@ pub enum CameraStereoRole {
     #[doc = "`right`"]
     Right,
     /// A token the schema does not list: OpenUSD does not enforce
-    /// `allowedTokens`, so an authored value may be anything.
+    /// `allowedTokens`, so an authored value may be anything. The
+    /// `AllowedTokens` validation rule reports it.
     Other(::alloc::sync::Arc<str>),
 }
 
@@ -2519,7 +2525,8 @@ pub enum CapsuleAxis {
     #[doc = "`Z`"]
     Z,
     /// A token the schema does not list: OpenUSD does not enforce
-    /// `allowedTokens`, so an authored value may be anything.
+    /// `allowedTokens`, so an authored value may be anything. The
+    /// `AllowedTokens` validation rule reports it.
     Other(::alloc::sync::Arc<str>),
 }
 
@@ -2770,7 +2777,8 @@ pub enum Capsule1Axis {
     #[doc = "`Z`"]
     Z,
     /// A token the schema does not list: OpenUSD does not enforce
-    /// `allowedTokens`, so an authored value may be anything.
+    /// `allowedTokens`, so an authored value may be anything. The
+    /// `AllowedTokens` validation rule reports it.
     Other(::alloc::sync::Arc<str>),
 }
 
@@ -3065,7 +3073,8 @@ pub enum ConeAxis {
     #[doc = "`Z`"]
     Z,
     /// A token the schema does not list: OpenUSD does not enforce
-    /// `allowedTokens`, so an authored value may be anything.
+    /// `allowedTokens`, so an authored value may be anything. The
+    /// `AllowedTokens` validation rule reports it.
     Other(::alloc::sync::Arc<str>),
 }
 
@@ -3755,7 +3764,8 @@ pub enum CylinderAxis {
     #[doc = "`Z`"]
     Z,
     /// A token the schema does not list: OpenUSD does not enforce
-    /// `allowedTokens`, so an authored value may be anything.
+    /// `allowedTokens`, so an authored value may be anything. The
+    /// `AllowedTokens` validation rule reports it.
     Other(::alloc::sync::Arc<str>),
 }
 
@@ -4006,7 +4016,8 @@ pub enum Cylinder1Axis {
     #[doc = "`Z`"]
     Z,
     /// A token the schema does not list: OpenUSD does not enforce
-    /// `allowedTokens`, so an authored value may be anything.
+    /// `allowedTokens`, so an authored value may be anything. The
+    /// `AllowedTokens` validation rule reports it.
     Other(::alloc::sync::Arc<str>),
 }
 
@@ -4301,7 +4312,8 @@ pub enum GeomModelApiModelCardGeometry {
     #[doc = "`fromTexture`"]
     FromTexture,
     /// A token the schema does not list: OpenUSD does not enforce
-    /// `allowedTokens`, so an authored value may be anything.
+    /// `allowedTokens`, so an authored value may be anything. The
+    /// `AllowedTokens` validation rule reports it.
     Other(::alloc::sync::Arc<str>),
 }
 
@@ -4354,7 +4366,8 @@ pub enum GeomModelApiModelCardVisibility {
     #[doc = "`inherited`"]
     Inherited,
     /// A token the schema does not list: OpenUSD does not enforce
-    /// `allowedTokens`, so an authored value may be anything.
+    /// `allowedTokens`, so an authored value may be anything. The
+    /// `AllowedTokens` validation rule reports it.
     Other(::alloc::sync::Arc<str>),
 }
 
@@ -4411,7 +4424,8 @@ pub enum GeomModelApiModelDrawMode {
     #[doc = "`inherited`"]
     Inherited,
     /// A token the schema does not list: OpenUSD does not enforce
-    /// `allowedTokens`, so an authored value may be anything.
+    /// `allowedTokens`, so an authored value may be anything. The
+    /// `AllowedTokens` validation rule reports it.
     Other(::alloc::sync::Arc<str>),
 }
 
@@ -5032,7 +5046,8 @@ pub enum GeomSubsetElementType {
     #[doc = "`tetrahedron`"]
     Tetrahedron,
     /// A token the schema does not list: OpenUSD does not enforce
-    /// `allowedTokens`, so an authored value may be anything.
+    /// `allowedTokens`, so an authored value may be anything. The
+    /// `AllowedTokens` validation rule reports it.
     Other(::alloc::sync::Arc<str>),
 }
 
@@ -5340,7 +5355,8 @@ pub enum GprimOrientation {
     #[doc = "`leftHanded`"]
     LeftHanded,
     /// A token the schema does not list: OpenUSD does not enforce
-    /// `allowedTokens`, so an authored value may be anything.
+    /// `allowedTokens`, so an authored value may be anything. The
+    /// `AllowedTokens` validation rule reports it.
     Other(::alloc::sync::Arc<str>),
 }
 
@@ -5972,7 +5988,8 @@ pub enum ImageablePurpose {
     #[doc = "`guide`"]
     Guide,
     /// A token the schema does not list: OpenUSD does not enforce
-    /// `allowedTokens`, so an authored value may be anything.
+    /// `allowedTokens`, so an authored value may be anything. The
+    /// `AllowedTokens` validation rule reports it.
     Other(::alloc::sync::Arc<str>),
 }
 
@@ -6025,7 +6042,8 @@ pub enum ImageableVisibility {
     #[doc = "`invisible`"]
     Invisible,
     /// A token the schema does not list: OpenUSD does not enforce
-    /// `allowedTokens`, so an authored value may be anything.
+    /// `allowedTokens`, so an authored value may be anything. The
+    /// `AllowedTokens` validation rule reports it.
     Other(::alloc::sync::Arc<str>),
 }
 
@@ -6293,7 +6311,8 @@ pub enum MeshFaceVaryingLinearInterpolation {
     #[doc = "`all`"]
     All,
     /// A token the schema does not list: OpenUSD does not enforce
-    /// `allowedTokens`, so an authored value may be anything.
+    /// `allowedTokens`, so an authored value may be anything. The
+    /// `AllowedTokens` validation rule reports it.
     Other(::alloc::sync::Arc<str>),
 }
 
@@ -6359,7 +6378,8 @@ pub enum MeshInterpolateBoundary {
     #[doc = "`edgeAndCorner`"]
     EdgeAndCorner,
     /// A token the schema does not list: OpenUSD does not enforce
-    /// `allowedTokens`, so an authored value may be anything.
+    /// `allowedTokens`, so an authored value may be anything. The
+    /// `AllowedTokens` validation rule reports it.
     Other(::alloc::sync::Arc<str>),
 }
 
@@ -6414,7 +6434,8 @@ pub enum MeshSubdivisionScheme {
     #[doc = "`none`"]
     None,
     /// A token the schema does not list: OpenUSD does not enforce
-    /// `allowedTokens`, so an authored value may be anything.
+    /// `allowedTokens`, so an authored value may be anything. The
+    /// `AllowedTokens` validation rule reports it.
     Other(::alloc::sync::Arc<str>),
 }
 
@@ -6467,7 +6488,8 @@ pub enum MeshTriangleSubdivisionRule {
     #[doc = "`smooth`"]
     Smooth,
     /// A token the schema does not list: OpenUSD does not enforce
-    /// `allowedTokens`, so an authored value may be anything.
+    /// `allowedTokens`, so an authored value may be anything. The
+    /// `AllowedTokens` validation rule reports it.
     Other(::alloc::sync::Arc<str>),
 }
 
@@ -8495,7 +8517,8 @@ pub enum NurbsPatchUForm {
     #[doc = "`periodic`"]
     Periodic,
     /// A token the schema does not list: OpenUSD does not enforce
-    /// `allowedTokens`, so an authored value may be anything.
+    /// `allowedTokens`, so an authored value may be anything. The
+    /// `AllowedTokens` validation rule reports it.
     Other(::alloc::sync::Arc<str>),
 }
 
@@ -8548,7 +8571,8 @@ pub enum NurbsPatchVForm {
     #[doc = "`periodic`"]
     Periodic,
     /// A token the schema does not list: OpenUSD does not enforce
-    /// `allowedTokens`, so an authored value may be anything.
+    /// `allowedTokens`, so an authored value may be anything. The
+    /// `AllowedTokens` validation rule reports it.
     Other(::alloc::sync::Arc<str>),
 }
 
@@ -10022,7 +10046,8 @@ pub enum PlaneAxis {
     #[doc = "`Z`"]
     Z,
     /// A token the schema does not list: OpenUSD does not enforce
-    /// `allowedTokens`, so an authored value may be anything.
+    /// `allowedTokens`, so an authored value may be anything. The
+    /// `AllowedTokens` validation rule reports it.
     Other(::alloc::sync::Arc<str>),
 }
 
@@ -12865,7 +12890,8 @@ pub enum VisibilityApiGuideVisibility {
     #[doc = "`visible`"]
     Visible,
     /// A token the schema does not list: OpenUSD does not enforce
-    /// `allowedTokens`, so an authored value may be anything.
+    /// `allowedTokens`, so an authored value may be anything. The
+    /// `AllowedTokens` validation rule reports it.
     Other(::alloc::sync::Arc<str>),
 }
 
@@ -12918,7 +12944,8 @@ pub enum VisibilityApiProxyVisibility {
     #[doc = "`visible`"]
     Visible,
     /// A token the schema does not list: OpenUSD does not enforce
-    /// `allowedTokens`, so an authored value may be anything.
+    /// `allowedTokens`, so an authored value may be anything. The
+    /// `AllowedTokens` validation rule reports it.
     Other(::alloc::sync::Arc<str>),
 }
 
@@ -12971,7 +12998,8 @@ pub enum VisibilityApiRenderVisibility {
     #[doc = "`visible`"]
     Visible,
     /// A token the schema does not list: OpenUSD does not enforce
-    /// `allowedTokens`, so an authored value may be anything.
+    /// `allowedTokens`, so an authored value may be anything. The
+    /// `AllowedTokens` validation rule reports it.
     Other(::alloc::sync::Arc<str>),
 }
 

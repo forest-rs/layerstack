@@ -463,7 +463,8 @@ pub enum LODOverrideApiLodOverrideMode {
     #[doc = "`allLOD`"]
     AllLod,
     /// A token the schema does not list: OpenUSD does not enforce
-    /// `allowedTokens`, so an authored value may be anything.
+    /// `allowedTokens`, so an authored value may be anything. The
+    /// `AllowedTokens` validation rule reports it.
     Other(::alloc::sync::Arc<str>),
 }
 
@@ -921,7 +922,8 @@ pub enum LODScreenSizeHeuristicProjectionMethod {
     #[doc = "`projectedSphere`"]
     ProjectedSphere,
     /// A token the schema does not list: OpenUSD does not enforce
-    /// `allowedTokens`, so an authored value may be anything.
+    /// `allowedTokens`, so an authored value may be anything. The
+    /// `AllowedTokens` validation rule reports it.
     Other(::alloc::sync::Arc<str>),
 }
 

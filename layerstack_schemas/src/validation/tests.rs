@@ -895,3 +895,122 @@ fn overlay_type_conflicts_name_declared_and_schema_types_per_layer() {
         .value::<f64>(Time::Default);
     assert_eq!(value, Some(2.));
 }
+#[test]
+fn tokens_outside_allowed_tokens_are_reported_with_the_allowed_set() {
+    let mut store = setup();
+    let rock = store.path("/Rock");
+    let xform = store.tokens.intern("Xform");
+    let (purpose, visibility, tags) = (
+        store.tokens.intern("purpose"),
+        store.tokens.intern("visibility"),
+        store.tokens.intern("rock:tags"),
+    );
+    let allowed_key = store.tokens.intern("allowedTokens");
+    let token = |store: &mut InMemoryStore, name: &str| Value::Token(store.tokens.intern(name));
+    let tag_set = Value::array_from_iter(
+        [token(&mut store, "mossy"), token(&mut store, "smooth")],
+        None,
+    );
+    let tag_values = Value::array_from_iter(
+        [token(&mut store, "smooth"), token(&mut store, "crumbly")],
+        None,
+    );
+    let mut spec = PrimSpec::def().with_type_name(xform);
+    // The schema's `allowedTokens`: a uniform attribute, checked once.
+    spec.set_property(
+        purpose,
+        attr("token", token(&mut store, "crumbly")).uniform(),
+    );
+    // A varying one, at each requested time.
+    spec.set_property(
+        visibility,
+        PropertySpec::typed_attribute(PropertyType::parse("token").unwrap())
+            .with_default(token(&mut store, "inherited"))
+            .with_time_samples(vec![(2.0, token(&mut store, "hidden"))]),
+    );
+    // Authored `allowedTokens` on a token array with no schema.
+    spec.set_property(
+        tags,
+        PropertySpec::typed_attribute(PropertyType::parse("token[]").unwrap())
+            .custom()
+            .with_default(tag_values)
+            .with_metadata(allowed_key, tag_set),
+    );
+    let mut layer = Layer::new(LayerId(1));
+    layer.insert_prim(rock, spec);
+    store.insert_layer(layer);
+    let stage = stage(&mut store);
+    let scene = Scene::new(&stage, &store);
+    let report = ValidationContext::new([BuiltinRule::AllowedTokens])
+        .validate(
+            &scene,
+            ValidationScope::Stage,
+            &[Time::Default, Time::at(2.0)],
+        )
+        .unwrap();
+    let found: Vec<_> = report
+        .problems
+        .iter()
+        .map(|problem| {
+            let ValidationProblemKind::DisallowedToken {
+                value,
+                index,
+                allowed,
+            } = &problem.kind
+            else {
+                panic!("{problem:?}");
+            };
+            assert_eq!(problem.site.prim, Some(rock));
+            assert_eq!(
+                problem.site.source.as_ref().map(|s| s.layer),
+                Some(LayerId(1))
+            );
+            let allowed: Vec<&str> = allowed.iter().map(|t| &**t).collect();
+            (
+                store.tokens.resolve(problem.site.property.unwrap()),
+                problem.time,
+                &**value,
+                *index,
+                allowed,
+            )
+        })
+        .collect();
+    assert_eq!(
+        found,
+        [
+            (
+                "purpose",
+                None,
+                "crumbly",
+                None,
+                vec!["default", "render", "proxy", "guide"]
+            ),
+            (
+                "rock:tags",
+                Some(Time::Default),
+                "crumbly",
+                Some(1),
+                vec!["mossy", "smooth"]
+            ),
+            (
+                "rock:tags",
+                Some(Time::at(2.0)),
+                "crumbly",
+                Some(1),
+                vec!["mossy", "smooth"]
+            ),
+            (
+                "visibility",
+                Some(Time::at(2.0)),
+                "hidden",
+                None,
+                vec!["inherited", "invisible"]
+            ),
+        ]
+    );
+    assert_eq!(report.work.token_values, 5);
+    assert_eq!(
+        BuiltinRule::AllowedTokens.time_domain(),
+        RuleTimeDomain::RequestedTimes
+    );
+}

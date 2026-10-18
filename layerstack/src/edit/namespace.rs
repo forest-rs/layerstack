@@ -13,6 +13,9 @@ use core::fmt;
 
 mod coordinated;
 mod delete;
+#[cfg(test)]
+mod differential_tests;
+mod retained;
 
 use super::{
     EditTarget, Transaction,
@@ -35,6 +38,12 @@ use crate::{
 /// The transaction checks every inspected layer's generation and returns the
 /// usual guarded inverse, which guards each affected prim slot in full.
 /// Preparation changes no layer (it may intern paths).
+///
+/// Against the snapshot of a [`crate::LiveStage`], preparation proves the
+/// snapshot current from the layer generations the stage records, and finds
+/// dependent namespace and the specs to inspect from what the stage retains,
+/// without visiting the stage. Against a stage composed on its own, it
+/// composes and visits the whole stage; both find the same edit.
 ///
 /// Root-stack edits coordinate all contributing local opinions and author
 /// relocates for prim namespace introduced through ancestral arcs. Explicit

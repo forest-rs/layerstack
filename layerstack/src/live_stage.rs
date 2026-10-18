@@ -323,8 +323,9 @@ impl LiveStage {
             work: RecompositionWork::default(),
             notices: notices::Journal::default(),
         };
-        live.reindex_all_sources();
+        live.reindex_all_sources(store.paths());
         live.record_generations(store);
+        live.publish_preparation(store);
         live
     }
 
@@ -638,6 +639,7 @@ impl LiveStage {
                 self.refresh_local_structure(store, paths, &outcome.child_lists, &outcome.touched)
         {
             include_resyncs(store, &mut changes, &declaration_resyncs);
+            self.publish_preparation(store);
             self.notices.publish(&mut changes, &self.stage, store);
             store.paths().sort_paths(&mut recomposed, store.tokens());
             return Ok(Applied {
@@ -761,6 +763,7 @@ impl LiveStage {
             .filter(|(prim, _)| changes.changed_info_only.contains(prim))
             .map(|(prim, fields)| crate::PrimPropertyChanges { prim, fields })
             .collect();
+        self.publish_preparation(store);
         self.notices.publish(&mut changes, &self.stage, store);
         store.paths().sort_paths(&mut recomposed, store.tokens());
         Ok(Applied {
@@ -909,7 +912,7 @@ impl LiveStage {
             if !self.stage.has_prim(path) {
                 self.tracker.remove_key(path);
             }
-            self.reindex_sources(path);
+            self.reindex_sources(store.paths(), path);
         }
         self.generations
             .insert(self.root, generations_of(store, self.root));
@@ -974,6 +977,9 @@ impl LiveStage {
                 },
                 _ => self.notify_structural_change(),
             }
+        }
+        if !changed.is_empty() {
+            self.publish_preparation(store);
         }
         changed.into_iter().map(|(layer, _)| layer).collect()
     }
@@ -1451,6 +1457,16 @@ impl LiveStage {
     fn recompose_report(
         &mut self,
         store: &mut dyn LayerStore,
+        changes: Option<&mut Changes>,
+    ) -> Vec<PathId> {
+        let recomposed = self.recompose_pending(store, changes);
+        self.publish_preparation(store);
+        recomposed
+    }
+
+    fn recompose_pending(
+        &mut self,
+        store: &mut dyn LayerStore,
         mut changes: Option<&mut Changes>,
     ) -> Vec<PathId> {
         self.reset_work();
@@ -1543,7 +1559,7 @@ impl LiveStage {
 
         self.update_prim_edges(&affected, &partial_deps);
         for &prim in &affected {
-            self.reindex_sources(prim);
+            self.reindex_sources(store.paths(), prim);
         }
 
         if let Some(changes) = changes.as_mut() {
@@ -1595,7 +1611,7 @@ impl LiveStage {
         self.stage.merge_prims_from(store, partial, &rest, &rest);
         self.update_prim_edges(&rest, &partial_deps);
         for &prim in &rest {
-            self.reindex_sources(prim);
+            self.reindex_sources(store.paths(), prim);
         }
         let replaced = rest.len();
         self.structural_roots.extend(diverging);
@@ -1809,7 +1825,7 @@ impl LiveStage {
         self.default_prim_dependents = deps.default_prim_dependents;
         self.relocation_layers = deps.relocation_layers;
         self.expression_variables = deps.expression_variables;
-        self.reindex_all_sources();
+        self.reindex_all_sources(store.paths());
         self.record_generations(store);
         self.local_namespace = local::LocalNamespace::build(store, self.root, &self.options);
         if let Some(changes) = changes {
@@ -1834,21 +1850,50 @@ impl LiveStage {
         changed
     }
 
-    /// Rebuilds the source-site index from the whole stage.
-    fn reindex_all_sources(&mut self) {
+    /// Rebuilds the source-site index and the stage's preparation evidence
+    /// from the whole stage.
+    fn reindex_all_sources(&mut self, paths: &crate::PathInterner) {
         self.source_to_prims.clear();
         self.prim_to_sources.clear();
         self.dynamic_to_prims.clear();
         self.prim_to_dynamic.clear();
         let prims: Vec<PathId> = self.stage.prim_paths().collect();
         for prim in prims {
-            self.reindex_sources(prim);
+            self.reindex_source_sites(prim);
         }
+        self.stage.retain_preparation(paths);
+    }
+
+    /// Replaces the source-site index entries and the stage's preparation
+    /// evidence for `prim` with those of its current prim index.
+    fn reindex_sources(&mut self, paths: &crate::PathInterner, prim: PathId) {
+        self.reindex_source_sites(prim);
+        self.stage.reindex_preparation(paths, prim);
+    }
+
+    /// Records, in the stage's preparation evidence, the generations of
+    /// the layers the stage reads ([`Self::generations`]) when it reflects
+    /// them, nothing being pending, or that it may not otherwise.
+    fn publish_preparation(&mut self, store: &dyn LayerStore) {
+        let pending = self.needs_full_rebuild
+            || self.controls_pending
+            || self.tracker.has_invalidated(OPINION_EDIT)
+            || !self.structural_roots.is_empty()
+            || !self.structural_sources.is_empty()
+            || !self.support_sources.is_empty();
+        let generations = (!pending).then(|| {
+            self.generations
+                .iter()
+                .map(|(layer, seen)| (*layer, seen.map(|(generation, _)| generation)))
+                .collect()
+        });
+        self.stage
+            .record_preparation_generations(store, generations);
     }
 
     /// Replaces the source-site index entries for `prim` with those of its
     /// current prim index.
-    fn reindex_sources(&mut self, prim: PathId) {
+    fn reindex_source_sites(&mut self, prim: PathId) {
         let dynamic = self.stage.dynamic_sites(prim);
         reindex(
             &mut self.dynamic_to_prims,

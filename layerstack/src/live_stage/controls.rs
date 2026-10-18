@@ -441,7 +441,7 @@ impl LiveStage {
         self.record_boundary_orders(orders);
         self.update_prim_edges(&affected, &deps);
         for &prim in &affected {
-            self.reindex_sources(prim);
+            self.reindex_sources(store.paths(), prim);
         }
         self.record_generations(store);
         if local_structure_changed {

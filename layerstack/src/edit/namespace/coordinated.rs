@@ -7,7 +7,7 @@
 //! `UsdNamespaceEditor::_ProcessPrimEdit` / `PcpGatherDependentNamespaceEdits`.
 
 use super::*;
-use crate::{ArcKind, HashMap, NodeId, Relocate};
+use crate::{ArcKind, HashMap, NodeId, Relocate, stage::preparation::PreparationIndex};
 
 pub(super) fn prepare(
     primary: &Stage,
@@ -16,6 +16,53 @@ pub(super) fn prepare(
     target: &EditTarget,
     source: TargetPath,
     destination: TargetPath,
+) -> Result<NamespaceEdit, NamespaceError> {
+    prepare_with(
+        primary,
+        dependents,
+        store,
+        target,
+        source,
+        destination,
+        true,
+    )
+}
+
+/// [`prepare`] by composing and visiting every stage and layer whole, as
+/// before stages retained preparation evidence: the oracle the retained
+/// proofs are tested against.
+#[cfg(test)]
+pub(super) fn prepare_by_composition(
+    primary: &Stage,
+    dependents: &[&Stage],
+    store: &mut dyn LayerStore,
+    target: &EditTarget,
+    source: TargetPath,
+    destination: TargetPath,
+) -> Result<NamespaceEdit, NamespaceError> {
+    prepare_with(
+        primary,
+        dependents,
+        store,
+        target,
+        source,
+        destination,
+        false,
+    )
+}
+
+/// [`prepare`], from the evidence the stages retain
+/// ([`crate::stage::preparation`]) when `use_retained` and every stage
+/// keeps it, otherwise by composing and visiting them whole. Both find the
+/// same edit, or the same error.
+fn prepare_with(
+    primary: &Stage,
+    dependents: &[&Stage],
+    store: &mut dyn LayerStore,
+    target: &EditTarget,
+    source: TargetPath,
+    destination: TargetPath,
+    use_retained: bool,
 ) -> Result<NamespaceEdit, NamespaceError> {
     validate_paths(store, source, destination)?;
     validate_stage(primary, store, source, destination)?;
@@ -28,18 +75,49 @@ pub(super) fn prepare(
     let stages: Vec<_> = core::iter::once(primary)
         .chain(dependents.iter().copied())
         .collect();
+    // The evidence of every stage, or of none.
+    let retained: Option<Vec<&PreparationIndex>> = if use_retained {
+        stages.iter().map(|stage| stage.preparation()).collect()
+    } else {
+        None
+    };
+    let indexes = retained.as_deref().unwrap_or_default();
     let root_layers = primary.layer_stack();
     let mut inspected = Vec::new();
-    for stage in &stages {
-        validate_snapshot(stage, store)?;
+    for (i, stage) in stages.iter().enumerate() {
+        validate_snapshot(stage, store, indexes.get(i).copied())?;
         let root = stage.root_layer().ok_or(NamespaceError::NoSuchObject)?;
-        inspected.extend(reachable_layers(stage, store, root));
+        inspected.extend(match indexes.get(i) {
+            Some(index) => retained::reachable_layers(store, indexes, index, root),
+            None => reachable_layers(stage, store, root),
+        });
         inspected.extend(stage.layer_stack());
     }
     inspected.sort_unstable();
     inspected.dedup();
     for id in &inspected {
         let layer = store.layer(*id).ok_or(NamespaceError::NoSuchObject)?;
+        if retained.is_some() {
+            // Only specs that author arcs or variant sets can fail these
+            // checks.
+            let slots = retained::links_of(indexes, layer);
+            let branched = !layer.variant_prims.is_empty()
+                || slots.iter().any(|path| {
+                    layer
+                        .prims
+                        .get(path)
+                        .is_some_and(|p| !p.variant_sets.is_empty())
+                });
+            if branched {
+                return Err(NamespaceError::UnsupportedComposition(
+                    "dormant variant composition requires explicit dependency coordination",
+                ));
+            }
+            for spec in slots.iter().filter_map(|path| layer.prims.get(path)) {
+                validate_arcs(store, spec)?;
+            }
+            continue;
+        }
         if !layer.variant_prims.is_empty()
             || layer.prims.values().any(|p| !p.variant_sets.is_empty())
         {
@@ -48,20 +126,7 @@ pub(super) fn prepare(
             ));
         }
         for spec in layer.prims.values() {
-            if spec
-                .references
-                .items()
-                .chain(spec.payloads.items())
-                .any(|r| {
-                    r.stored_target_layer(store)
-                        .is_none_or(|target| store.layer(target).is_none())
-                        || r.is_expression()
-                })
-            {
-                return Err(NamespaceError::UnsupportedComposition(
-                    "unloaded or expression-based assets require resolved dependency coordination",
-                ));
-            }
+            validate_arcs(store, spec)?;
         }
     }
 
@@ -97,22 +162,38 @@ pub(super) fn prepare(
         } else {
             Vec::new()
         };
-        gather_dependent_moves(stage, store, root_layers, &source_move, &mut mappings)?;
+        gather_dependent_moves(
+            stage,
+            indexes.get(i).copied(),
+            store,
+            root_layers,
+            &source_move,
+            &mut mappings,
+        )?;
         normalize_moves(store, &mut mappings)?;
         for mapping in &mappings {
             validate_stage(stage, store, mapping.from, mapping.to)?;
             if mapping.from.property_path().is_none() {
-                for path in stage.prim_paths() {
-                    if store
-                        .paths()
-                        .resolve(mapping.from.prim_path())
-                        .is_prefix_of(store.paths().resolve(path))
-                        && inactive_prim(stage, store, path)
-                    {
-                        return Err(NamespaceError::UnsupportedComposition(
-                            "namespace moves containing inactive composed descendants are not supported",
-                        ));
-                    }
+                let from = mapping.from.prim_path();
+                let inactive = if retained.is_some() {
+                    // The snapshot holds the prims beneath `from` as its
+                    // descendants, inactive ones included.
+                    stage
+                        .traverse_all(from)
+                        .any(|path| inactive_prim(stage, store, path))
+                } else {
+                    stage.prim_paths().any(|path| {
+                        store
+                            .paths()
+                            .resolve(from)
+                            .is_prefix_of(store.paths().resolve(path))
+                            && inactive_prim(stage, store, path)
+                    })
+                };
+                if inactive {
+                    return Err(NamespaceError::UnsupportedComposition(
+                        "namespace moves containing inactive composed descendants are not supported",
+                    ));
                 }
             }
         }
@@ -261,7 +342,35 @@ pub(super) fn prepare(
     })
 }
 
-fn validate_snapshot(stage: &Stage, store: &mut dyn LayerStore) -> Result<(), NamespaceError> {
+/// Rejects a spec whose references or payloads target an unloaded or
+/// unresolved layer, or an asset expression.
+fn validate_arcs(store: &dyn LayerStore, spec: &PrimSpec) -> Result<(), NamespaceError> {
+    if spec
+        .references
+        .items()
+        .chain(spec.payloads.items())
+        .any(|r| {
+            r.stored_target_layer(store)
+                .is_none_or(|target| store.layer(target).is_none())
+                || r.is_expression()
+        })
+    {
+        return Err(NamespaceError::UnsupportedComposition(
+            "unloaded or expression-based assets require resolved dependency coordination",
+        ));
+    }
+    Ok(())
+}
+
+/// Rejects a snapshot that does not reflect `store`, or whose composition
+/// preparation cannot coordinate. A snapshot whose `index` records the
+/// generations of every layer it reads is current when they all still
+/// match; any other is composed again and compared.
+fn validate_snapshot(
+    stage: &Stage,
+    store: &mut dyn LayerStore,
+    index: Option<&PreparationIndex>,
+) -> Result<(), NamespaceError> {
     if stage.store_identity() != Some(&store.identity()) {
         return Err(NamespaceError::UnsupportedComposition(
             "dependent stages must share the store's token/path domains",
@@ -278,6 +387,9 @@ fn validate_snapshot(stage: &Stage, store: &mut dyn LayerStore) -> Result<(), Na
         return Err(NamespaceError::UnsupportedComposition(
             "masked, muted, unloaded or unresolved composition requires explicit dependency coordination",
         ));
+    }
+    if index.is_some_and(|index| index.is_current(store)) {
+        return Ok(());
     }
     let fresh = Stage::compose(
         store,
@@ -301,8 +413,15 @@ fn validate_snapshot(stage: &Stage, store: &mut dyn LayerStore) -> Result<(), Na
     Ok(())
 }
 
+/// The namespace moves in `stage` that follow `source` through arcs into
+/// the layers `source_layers`: one for each prim whose composition graph
+/// has a node other than its local one at or beneath the moved site. The
+/// prims are visited in [`PathId`] order, so the first that cannot be
+/// mapped is always the one reported; with retained evidence (`index`),
+/// only the prims it lists with such nodes, otherwise every prim.
 fn gather_dependent_moves(
     stage: &Stage,
+    index: Option<&PreparationIndex>,
     store: &mut dyn LayerStore,
     source_layers: &[LayerId],
     source: &PathMove,
@@ -310,7 +429,21 @@ fn gather_dependent_moves(
 ) -> Result<(), NamespaceError> {
     let raw_from = store.paths().resolve(source.from.prim_path()).clone();
     let raw_to = store.paths().resolve(source.to.prim_path()).clone();
-    for prim in stage.prim_paths() {
+    let prims: Vec<PathId> = match index {
+        Some(index) => {
+            let mut prims: Vec<PathId> = index
+                .prims_with_nodes_beneath(source.from.prim_path())
+                .collect();
+            prims.sort_unstable();
+            prims
+        }
+        None => {
+            let mut prims: Vec<PathId> = stage.prim_paths().collect();
+            prims.sort_unstable();
+            prims
+        }
+    };
+    for prim in prims {
         let Some(graph) = stage.explain_prim_graph(prim) else {
             continue;
         };

@@ -20,6 +20,18 @@ use super::coordinated::Overlay;
 use super::*;
 use crate::{HashMap, Relocate};
 
+/// [`prepare`], which composes the whole projected stage: the oracle the
+/// retained proofs are tested against.
+#[cfg(test)]
+pub(super) fn prepare_by_composition(
+    stage: &Stage,
+    store: &mut dyn LayerStore,
+    target: &EditTarget,
+    object: TargetPath,
+) -> Result<NamespaceEdit, NamespaceError> {
+    prepare(stage, store, target, object)
+}
+
 pub(super) fn prepare(
     stage: &Stage,
     store: &mut dyn LayerStore,

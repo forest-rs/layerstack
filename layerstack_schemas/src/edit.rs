@@ -331,6 +331,35 @@ impl<'s> SchemaEdit<'s> {
         self.stage.has_prim(path) || self.defined.iter().any(|(p, _)| *p == path)
     }
 
+    /// Whether the prim at `path` is of the typed schema `schema`, or of
+    /// one derived from it (`IsA`), as this edit leaves it: the type of its
+    /// last [`Self::define_prim`] in this edit, else its type on the stage.
+    /// `false` when no prim is there, when it has no type, or when the
+    /// stage has no schema registry. A type authored by other means, such
+    /// as a raw [`Transaction`] edit, is not seen until it is applied.
+    ///
+    /// OpenUSD: `UsdPrim::IsA`.
+    ///
+    /// Spec: AOUSD Core §13.3.1 (typed schemas).
+    #[must_use]
+    pub fn is_a(&self, path: PathId, schema: &str) -> bool {
+        let tokens = self.store.tokens();
+        let Some(schema) = tokens.lookup(schema) else {
+            return false;
+        };
+        match self.defined.iter().rev().find(|(p, _)| *p == path) {
+            Some((_, defined)) => self
+                .stage
+                .schemas()
+                .zip(tokens.lookup(defined))
+                .is_some_and(|(registry, defined)| registry.is_a(defined, schema)),
+            None => self
+                .stage
+                .prim_definition_ref(path)
+                .is_some_and(|definition| definition.is_a(schema)),
+        }
+    }
+
     /// The prim's type as this edit leaves it.
     fn type_name(&mut self, path: PathId) -> Option<TokenId> {
         match self.defined.iter().rev().find(|(p, _)| *p == path) {

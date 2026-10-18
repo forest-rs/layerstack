@@ -1310,9 +1310,10 @@ fn typed_view(
          #[doc = {edit_doc:?}]\n#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]\npub struct {edit} {{\n    base: {base_edit},\n}}\n\n\
          impl Deref for {edit} {{\n    type Target = {base_edit};\n\n    \
          fn deref(&self) -> &Self::Target {{\n        &self.base\n    }}\n}}\n\n\
-         {allow}impl {edit} {{\n    /// A handle authoring the prim at `path` through `edit`, if the prim\n    /// exists: on the edit's stage, or defined earlier in `edit`. Setters\n    /// never create a prim that does not.\n    #[must_use]\n    \
+         {allow}impl {edit} {{\n    #[doc = {new_edit_doc:?}]\n    #[must_use]\n    \
          pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {{\n        \
-         PrimEdit::new(edit, path).map(Self::from_prim)\n    }}\n\n    \
+         edit.is_a(path, {view}::SCHEMA)\n            \
+         .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))\n    }}\n\n    \
          /// A handle authoring the schema's properties on the prim `prim`\n    \
          /// authors, whatever its type.\n    #[must_use]\n    \
          pub fn from_prim(prim: PrimEdit) -> Self {{\n        Self {{\n            base: {edit_base},\n        }}\n    }}\n\n\
@@ -1323,6 +1324,21 @@ fn typed_view(
         new_doc = format!(
             "A view of the prim at `path`, if it is a `{}` or of a schema derived from it.",
             schema.name
+        ),
+        new_edit_doc = format!(
+            "A handle authoring the prim at `path` through `edit`, if it is a `{name}` or of a \
+             schema derived from it (`IsA`) as the edit leaves it: defined so earlier in \
+             `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n\
+             `None` for a prim that is not there, or not typed so yet, such as an untyped \
+             `def` or an `over`: {define_ref} types it, and \
+             `{edit}::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties \
+             on any prim that exists. Setters never create a prim.",
+            name = schema.name,
+            define_ref = if concrete {
+                format!("[`{view}::define`]")
+            } else {
+                "[`SchemaEdit::define_prim`] with a concrete schema derived from it".to_owned()
+            },
         ),
         edit_doc = format!(
             "Authors the properties of {} `{}` through a [`SchemaEdit`]; it derefs to \

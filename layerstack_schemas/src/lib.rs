@@ -105,7 +105,11 @@
 //! defined earlier in the edit: from a view's `edit`, a concrete schema's
 //! `define`, an applied schema's `apply` (which fails with
 //! `CannotApply::NoSuchPrim` for a missing prim), or `new`, which returns
-//! `None` for one. No edit manufactures an `over` for a missing prim.
+//! `None` for one. A typed handle's `new` (`MeshEdit::new(&edit, path)`)
+//! also requires the prim to be of the schema as the edit leaves it
+//! ([`SchemaEdit::is_a`]), as the view's `new` does; for an untyped prim,
+//! `MeshEdit::from_prim(PrimEdit::new(&edit, path)?)` still authors.
+//! No edit manufactures an `over` for a missing prim.
 //! Relationship targets are stage paths, mapped through the edit target
 //! (through a reference, `/Instance/Light` is authored as `/Asset/Light`);
 //! one it does not map rejects the transaction when it is applied.

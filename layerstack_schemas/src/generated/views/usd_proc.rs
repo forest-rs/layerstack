@@ -123,12 +123,11 @@ impl Deref for GenerativeProceduralEdit {
 }
 
 impl GenerativeProceduralEdit {
-    /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `GenerativeProcedural` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`GenerativeProcedural::define`] types it, and `GenerativeProceduralEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+        edit.is_a(path, GenerativeProcedural::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`

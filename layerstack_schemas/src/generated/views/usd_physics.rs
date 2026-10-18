@@ -476,12 +476,11 @@ impl Deref for PhysicsCollisionGroupEdit {
 }
 
 impl PhysicsCollisionGroupEdit {
-    /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `PhysicsCollisionGroup` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`PhysicsCollisionGroup::define`] types it, and `PhysicsCollisionGroupEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+        edit.is_a(path, PhysicsCollisionGroup::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -716,12 +715,11 @@ impl Deref for PhysicsDistanceJointEdit {
 }
 
 impl PhysicsDistanceJointEdit {
-    /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `PhysicsDistanceJoint` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`PhysicsDistanceJoint::define`] types it, and `PhysicsDistanceJointEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+        edit.is_a(path, PhysicsDistanceJoint::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -1471,12 +1469,11 @@ impl Deref for PhysicsFixedJointEdit {
 }
 
 impl PhysicsFixedJointEdit {
-    /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `PhysicsFixedJoint` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`PhysicsFixedJoint::define`] types it, and `PhysicsFixedJointEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+        edit.is_a(path, PhysicsFixedJoint::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -1814,12 +1811,11 @@ impl Deref for PhysicsJointEdit {
 }
 
 impl PhysicsJointEdit {
-    /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `PhysicsJoint` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`PhysicsJoint::define`] types it, and `PhysicsJointEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+        edit.is_a(path, PhysicsJoint::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -3347,12 +3343,11 @@ impl Deref for PhysicsPrismaticJointEdit {
 }
 
 impl PhysicsPrismaticJointEdit {
-    /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `PhysicsPrismaticJoint` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`PhysicsPrismaticJoint::define`] types it, and `PhysicsPrismaticJointEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+        edit.is_a(path, PhysicsPrismaticJoint::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -3607,12 +3602,11 @@ impl Deref for PhysicsRevoluteJointEdit {
 }
 
 impl PhysicsRevoluteJointEdit {
-    /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `PhysicsRevoluteJoint` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`PhysicsRevoluteJoint::define`] types it, and `PhysicsRevoluteJointEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+        edit.is_a(path, PhysicsRevoluteJoint::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -4190,12 +4184,11 @@ impl Deref for PhysicsSceneEdit {
 }
 
 impl PhysicsSceneEdit {
-    /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `PhysicsScene` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`PhysicsScene::define`] types it, and `PhysicsSceneEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+        edit.is_a(path, PhysicsScene::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -4458,12 +4451,11 @@ impl Deref for PhysicsSphericalJointEdit {
 }
 
 impl PhysicsSphericalJointEdit {
-    /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `PhysicsSphericalJoint` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`PhysicsSphericalJoint::define`] types it, and `PhysicsSphericalJointEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+        edit.is_a(path, PhysicsSphericalJoint::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`

@@ -61,8 +61,20 @@ impl core::fmt::Debug for StageView<'_> {
 impl Stage {
     /// This stage bound to `store`, which holds the layers it was composed
     /// from (see [`StageView`]).
+    ///
+    /// # Panics
+    ///
+    /// In debug builds, when `store` is not the store the stage was
+    /// composed from ([`Stage::store_identity`]): its ids would name other
+    /// names and paths there. Release builds do not check.
     #[must_use]
+    #[track_caller]
     pub fn view<'a>(&'a self, store: &'a dyn LayerStore) -> StageView<'a> {
+        debug_assert!(
+            self.store_identity()
+                .is_none_or(|identity| *identity == store.identity()),
+            "Stage::view: the store is not the one the stage was composed from"
+        );
         StageView { stage: self, store }
     }
 }

@@ -528,11 +528,26 @@ impl LiveStage {
     /// `UsdAttribute::Set` does.
     ///
     /// On error nothing was applied and nothing is recomposed.
+    ///
+    /// # Errors
+    ///
+    /// [`EditError::ForeignStore`] when `store` is not the store this stage
+    /// was composed from ([`crate::Stage::store_identity`]); otherwise the
+    /// errors of [`Transaction::apply`].
     pub fn apply(
         &mut self,
         store: &mut dyn LayerStore,
         txn: &Transaction,
     ) -> Result<Applied, EditError> {
+        if let Some(stage) = self.stage.store_identity() {
+            let identity = store.identity();
+            if *stage != identity {
+                return Err(EditError::ForeignStore {
+                    stage: stage.clone(),
+                    store: identity,
+                });
+            }
+        }
         let pending_opinions = self.tracker.has_invalidated(OPINION_EDIT);
         let pending_recomposition = self.needs_full_rebuild
             || pending_opinions
@@ -1328,6 +1343,14 @@ impl LiveStage {
     /// changes produce conservative resyncs. Like OpenUSD's layer notices,
     /// evidence belongs to the stage, independently of its consumers; unlike
     /// OpenUSD's synchronous dispatch, synchronization here is explicit.
+    ///
+    /// Synchronizing (or recomposing) against a store other than the one the
+    /// stage was composed from, such as an [`crate::InMemoryStore::snapshot`]
+    /// published in its place, rebinds the stage to that store: it is
+    /// rebuilt in full there ([`RecompositionWork::full_rebuild`]) and
+    /// reports a pseudo-root resync. This is the only way a stage changes
+    /// stores; [`Self::apply`] rejects another store
+    /// ([`EditError::ForeignStore`]).
     pub fn synchronize(&mut self, store: &mut dyn LayerStore) {
         self.notify_changed_layers(store);
         self.recompose_changes(store);
@@ -1576,7 +1599,13 @@ impl LiveStage {
 
     /// The composed stage bound to `store`, which holds the layers it was
     /// composed from (see [`crate::StageView`]).
+    ///
+    /// # Panics
+    ///
+    /// In debug builds, when `store` is not that store, as
+    /// [`Stage::view`] does.
     #[must_use]
+    #[track_caller]
     pub fn view<'a>(&'a self, store: &'a dyn LayerStore) -> crate::StageView<'a> {
         self.stage.view(store)
     }

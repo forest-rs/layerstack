@@ -99,14 +99,14 @@ fn runtime_single_and_multiple_apply_publish_defaults_and_undo() {
     assert!(scene.has_api(path, "PipelineSlotAPI", Some("main")));
     assert_eq!(
         live.stage()
-            .resolve_field_with_schema(tint.prim_path(), tint.property(), &store)
+            .resolve_field_with_schema(tint.prim_path(), tint.property())
             .unwrap()
             .value,
         Value::Vec3f([0.25, 0.5, 1.])
     );
     assert_eq!(
         live.stage()
-            .resolve_field_with_schema(gain.prim_path(), gain.property(), &store)
+            .resolve_field_with_schema(gain.prim_path(), gain.property())
             .unwrap()
             .value,
         Value::Float(2.)

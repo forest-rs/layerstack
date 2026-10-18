@@ -325,7 +325,7 @@ impl Predicates for CollectionPredicates<'_> {
 /// abstract or unknown type has none, as `UsdPrimTypeInfo::GetSchemaType`
 /// has none).
 fn concrete_type(scene: &Scene<'_>, prim: PathId) -> Option<layerstack::TokenId> {
-    let type_name = scene.stage().resolve_type_name(prim, scene.store())?;
+    let type_name = scene.stage().resolve_type_name(prim)?;
     let registry = scene.stage().schemas()?;
     registry
         .schema(type_name)

@@ -74,11 +74,7 @@ impl<'a> Port<'a> {
             .or_else(|| {
                 self.scene
                     .stage()
-                    .property_definition(
-                        self.path.prim_path(),
-                        self.path.property(),
-                        self.scene.store(),
-                    )
+                    .property_definition(self.path.prim_path(), self.path.property())
                     .and_then(|d| d.type_name)
             })
     }

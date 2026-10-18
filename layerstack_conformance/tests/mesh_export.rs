@@ -174,7 +174,7 @@ fn assert_stage_matches_scene(store: &mut InMemoryStore) {
     let cube_id = store.path("/Root/Cube");
     let mesh_type = store.tokens.intern("Mesh");
     assert_eq!(
-        stage.resolve_type_name(cube_id, store),
+        stage.resolve_type_name(cube_id),
         Some(mesh_type),
         "Cube is a Mesh"
     );
@@ -857,7 +857,7 @@ fn targets(stage: &Stage, store: &mut InMemoryStore, prim: &str, name: &str) -> 
 fn type_name(stage: &Stage, store: &mut InMemoryStore, prim: &str) -> String {
     let prim_id = store.path(prim);
     let ty = stage
-        .resolve_type_name(prim_id, store)
+        .resolve_type_name(prim_id)
         .unwrap_or_else(|| panic!("{prim} is typed"));
     store.tokens.resolve(ty).to_string()
 }

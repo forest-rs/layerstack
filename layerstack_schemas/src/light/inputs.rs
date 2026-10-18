@@ -133,7 +133,7 @@ fn capture_value(scene: &Scene<'_>, path: PropertyPath, time: Time) -> LightValu
         match time {
             Time::Default => scene
                 .stage()
-                .resolve_value_with_schema(path.prim_path(), path.property(), scene.store())
+                .resolve_value_with_schema(path.prim_path(), path.property())
                 .and_then(|r| match r.value {
                     ResolvedValue::Scalar(v) => Some((v, r.provenance)),
                     _ => None,
@@ -148,7 +148,6 @@ fn capture_value(scene: &Scene<'_>, path: PropertyPath, time: Time) -> LightValu
                     path.property(),
                     code,
                     interpolation,
-                    scene.store(),
                 )
                 .map(|r| (r.value, r.provenance)),
         }
@@ -557,7 +556,7 @@ impl LightInputs {
         dependencies.dedup();
         let type_name = scene
             .stage()
-            .resolve_type_name(light, scene.store())
+            .resolve_type_name(light)
             .map_or(String::new(), |t| scene.store().tokens().resolve(t).into());
         Ok(Self {
             light,

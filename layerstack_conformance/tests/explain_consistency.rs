@@ -194,22 +194,22 @@ fn check_stage(label: &str, store: &mut InMemoryStore, root: LayerId, tally: &mu
             tally.check(
                 || format!("{} default with schema", name()),
                 with_schemas
-                    .explain_value_with_schema(prim, property, store)
+                    .explain_value_with_schema(prim, property)
                     .and_then(|e| e.value),
                 with_schemas
-                    .resolve_value_with_schema(prim, property, store)
+                    .resolve_value_with_schema(prim, property)
                     .map(|r| r.value),
             );
             // Without fallbacks, an authored property is always explained,
             // blocks included.
             let unexplained = stage
-                .explain_value_with_schema(prim, property, store)
+                .explain_value_with_schema(prim, property)
                 .map(|e| e.value);
             tally.check(
                 || format!("{} default without fallback", name()),
                 unexplained.clone().flatten(),
                 stage
-                    .resolve_value_with_schema(prim, property, store)
+                    .resolve_value_with_schema(prim, property)
                     .map(|r| r.value),
             );
             tally.check(
@@ -219,7 +219,7 @@ fn check_stage(label: &str, store: &mut InMemoryStore, root: LayerId, tally: &mu
             );
             // An authored value that reports no use of the fallback is the
             // same under another fallback.
-            if let Some(explained) = with_schemas.explain_value_with_schema(prim, property, store)
+            if let Some(explained) = with_schemas.explain_value_with_schema(prim, property)
                 && !explained.seeded_by_fallback
                 && !matches!(explained.source, ValueSource::Fallback | ValueSource::None)
             {
@@ -227,7 +227,7 @@ fn check_stage(label: &str, store: &mut InMemoryStore, root: LayerId, tally: &mu
                     || format!("{} default independent of the fallback", name()),
                     explained.value,
                     alternate
-                        .resolve_value_with_schema(prim, property, store)
+                        .resolve_value_with_schema(prim, property)
                         .map(|r| r.value),
                 );
             }
@@ -245,7 +245,7 @@ fn check_stage(label: &str, store: &mut InMemoryStore, root: LayerId, tally: &mu
                         );
                     }
                     let explained = with_schemas
-                        .explain_value_at_time_with_schema(prim, property, time, interp, store);
+                        .explain_value_at_time_with_schema(prim, property, time, interp);
                     let seeded = explained.as_ref().is_none_or(|e| {
                         e.seeded_by_fallback
                             || matches!(e.source, ValueSource::Fallback | ValueSource::None)
@@ -255,7 +255,7 @@ fn check_stage(label: &str, store: &mut InMemoryStore, root: LayerId, tally: &mu
                         || format!("{} at {time} {interp:?} with schema", name()),
                         value.clone(),
                         with_schemas
-                            .resolve_value_at_time_with_schema(prim, property, time, interp, store)
+                            .resolve_value_at_time_with_schema(prim, property, time, interp)
                             .map(|r| r.value),
                     );
                     if !seeded {
@@ -268,20 +268,18 @@ fn check_stage(label: &str, store: &mut InMemoryStore, root: LayerId, tally: &mu
                             },
                             value,
                             alternate
-                                .resolve_value_at_time_with_schema(
-                                    prim, property, time, interp, store,
-                                )
+                                .resolve_value_at_time_with_schema(prim, property, time, interp)
                                 .map(|r| r.value),
                         );
                     }
                     let unexplained = stage
-                        .explain_value_at_time_with_schema(prim, property, time, interp, store)
+                        .explain_value_at_time_with_schema(prim, property, time, interp)
                         .map(|e| e.value);
                     tally.check(
                         || format!("{} at {time} {interp:?} without fallback", name()),
                         unexplained.clone().flatten(),
                         stage
-                            .resolve_value_at_time_with_schema(prim, property, time, interp, store)
+                            .resolve_value_at_time_with_schema(prim, property, time, interp)
                             .map(|r| r.value),
                     );
                     tally.check(

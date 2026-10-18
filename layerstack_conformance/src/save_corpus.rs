@@ -821,7 +821,7 @@ pub fn composed(root: Root<'_>, assets: &[(&str, &str)]) -> String {
     for prim in prims {
         let shown = store.paths.display(prim, &store.tokens);
         let type_name = stage
-            .resolve_type_name(prim, &store)
+            .resolve_type_name(prim)
             .map(|t| store.tokens.resolve(t).to_string());
         let specifier = stage.resolve_specifier(prim, &store);
         let _ = writeln!(out, "{shown} {specifier:?} {type_name:?}");

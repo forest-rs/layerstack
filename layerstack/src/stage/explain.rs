@@ -40,9 +40,7 @@ use super::{
     ListChainer, Lookup, ResolvedValue, Stage, chain_field_list, dictionary_chain, value_at_time,
 };
 use crate::{
-    doc::{
-        FieldValue, InterpolationType, LayerId, LayerOffset, LayerStore, Value, ValueDictionaries,
-    },
+    doc::{FieldValue, InterpolationType, LayerId, LayerOffset, Value, ValueDictionaries},
     interner::TokenId,
     listop::ListOp,
     path::{PathId, PropertyPath},
@@ -354,7 +352,6 @@ impl Stage {
         &self,
         prim: PathId,
         field: TokenId,
-        _store: &dyn LayerStore,
     ) -> Option<ValueExplanation<'_, ResolvedValue>> {
         let index = self.prims.get(&prim);
         let authored = index.and_then(|index| index.property_opinions(field));
@@ -414,7 +411,6 @@ impl Stage {
         field: TokenId,
         time: f64,
         interp: InterpolationType,
-        _store: &dyn LayerStore,
     ) -> Option<ValueExplanation<'_, Value>> {
         let fallback = self.schema_fallback(prim, field);
         let index = self.prims.get(&prim)?;

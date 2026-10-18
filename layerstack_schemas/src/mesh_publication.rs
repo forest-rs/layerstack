@@ -372,7 +372,7 @@ impl GeneratedMesh {
         let local = layer.prim_at(&mapped);
         let type_name = local
             .and_then(|spec| spec.type_name)
-            .or_else(|| stage.resolve_type_name(path, store));
+            .or_else(|| stage.resolve_type_name(path));
         if (local.is_some() || stage.has_prim(path))
             && type_name.map(|name| store.tokens().resolve(name)) != Some("Mesh")
         {

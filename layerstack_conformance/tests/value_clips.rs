@@ -213,7 +213,7 @@ fn check(
         .map(|&t| {
             scalar(
                 if schema {
-                    stage.resolve_value_at_time_with_schema(prim, field, t, interpolation, &store)
+                    stage.resolve_value_at_time_with_schema(prim, field, t, interpolation)
                 } else {
                     stage.resolve_property_path_at_time(property, t, interpolation)
                 }
@@ -223,7 +223,7 @@ fn check(
         .collect();
     let actual_default = scalar(if schema {
         stage
-            .resolve_field_with_schema(prim, field, &store)
+            .resolve_field_with_schema(prim, field)
             .map(|r| r.value)
     } else {
         stage

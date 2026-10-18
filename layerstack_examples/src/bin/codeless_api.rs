@@ -103,7 +103,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     let value = live
         .stage()
-        .resolve_field_with_schema(gain.prim_path(), gain.property(), &store)
+        .resolve_field_with_schema(gain.prim_path(), gain.property())
         .expect("runtime schema supplies its fallback")
         .value;
     assert_eq!(

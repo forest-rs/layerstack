@@ -635,7 +635,7 @@ fn schema_fallback_is_explained() {
 
     // Nothing authored: the fallback alone.
     let explained = stage
-        .explain_value_with_schema(tree, height, &store)
+        .explain_value_with_schema(tree, height)
         .expect("fallback");
     assert_eq!(
         explained.value,
@@ -646,7 +646,7 @@ fn schema_fallback_is_explained() {
 
     // An authored edit composes over the fallback seed.
     let explained = stage
-        .explain_value_with_schema(tree, points, &store)
+        .explain_value_with_schema(tree, points)
         .expect("authored");
     assert_eq!(
         explained.value,
@@ -657,7 +657,7 @@ fn schema_fallback_is_explained() {
     assert_eq!(roles(&explained.opinions), vec![(LayerId(2), EDIT)]);
 
     let at_time = stage
-        .explain_value_at_time_with_schema(tree, height, 3.0, InterpolationType::Linear, &store)
+        .explain_value_at_time_with_schema(tree, height, 3.0, InterpolationType::Linear)
         .expect("fallback");
     assert_eq!(at_time.value, Some(Value::Double(1.0)));
     assert_eq!(at_time.source, ValueSource::Fallback);
@@ -680,7 +680,7 @@ fn a_block_resolves_the_schema_fallback() {
     );
     let tree = store.path("/Tree");
     let explained = stage
-        .explain_value_with_schema(tree, height, &store)
+        .explain_value_with_schema(tree, height)
         .expect("authored");
     assert_eq!(
         explained.value,
@@ -783,7 +783,7 @@ fn blocks_without_a_fallback_are_still_explained() {
 
     // An authored default block, at a numeric time and at the default time.
     let at_time = stage
-        .explain_value_at_time_with_schema(tree, height, 5.0, linear, &store)
+        .explain_value_at_time_with_schema(tree, height, 5.0, linear)
         .expect("the authored block is explained");
     assert_eq!(at_time.value, None);
     assert_eq!(at_time.source, ValueSource::None);
@@ -792,7 +792,7 @@ fn blocks_without_a_fallback_are_still_explained() {
         vec![(LayerId(1), OpinionRole::Block)]
     );
     let default = stage
-        .explain_value_with_schema(tree, height, &store)
+        .explain_value_with_schema(tree, height)
         .expect("the authored block is explained");
     assert_eq!(default.value, None);
     assert_eq!(
@@ -810,7 +810,7 @@ fn blocks_without_a_fallback_are_still_explained() {
 
     // A blocked sample held at the query time.
     let sampled = stage
-        .explain_value_at_time_with_schema(tree, width, 5.0, linear, &store)
+        .explain_value_at_time_with_schema(tree, width, 5.0, linear)
         .expect("the blocked sample is explained");
     assert_eq!(sampled.value, None);
     assert_eq!(sampled.source, ValueSource::None);
@@ -822,14 +822,10 @@ fn blocks_without_a_fallback_are_still_explained() {
     // Nothing authored and no fallback: nothing to explain.
     assert!(
         stage
-            .explain_value_at_time_with_schema(tree, depth, 5.0, linear, &store)
+            .explain_value_at_time_with_schema(tree, depth, 5.0, linear)
             .is_none()
     );
-    assert!(
-        stage
-            .explain_value_with_schema(tree, depth, &store)
-            .is_none()
-    );
+    assert!(stage.explain_value_with_schema(tree, depth).is_none());
 }
 
 /// Linear interpolation between a dense sample and a sparse sample seeded by
@@ -854,14 +850,14 @@ fn check_mixed_samples(samples: Vec<(f64, Value)>, lower_seeded: bool) {
     let linear = InterpolationType::Linear;
 
     let explained = stage
-        .explain_value_at_time_with_schema(tree, points, 5.0, linear, &store)
+        .explain_value_at_time_with_schema(tree, points, 5.0, linear)
         .expect("authored");
     // `[0, 0]` and `[30, 20]`, the fallback supplying the `20`.
     assert_eq!(explained.value, Some(floats(&[15.0, 10.0])));
     assert_eq!(
         explained.value,
         stage
-            .resolve_value_at_time_with_schema(tree, points, 5.0, linear, &store)
+            .resolve_value_at_time_with_schema(tree, points, 5.0, linear)
             .map(|resolved| resolved.value)
     );
     assert!(explained.seeded_by_fallback);

@@ -428,20 +428,10 @@ impl Composed {
             (None, false) => self.stage.resolve_field_path(path)?.value,
             (Some(time), true) => {
                 self.stage
-                    .resolve_value_at_time_with_schema(
-                        prim,
-                        property,
-                        time,
-                        query.interpolation(),
-                        &self.store,
-                    )?
+                    .resolve_value_at_time_with_schema(prim, property, time, query.interpolation())?
                     .value
             }
-            (None, true) => {
-                self.stage
-                    .resolve_field_with_schema(prim, property, &self.store)?
-                    .value
-            }
+            (None, true) => self.stage.resolve_field_with_schema(prim, property)?.value,
         };
         Some(Resolved::from_value(&value))
     }

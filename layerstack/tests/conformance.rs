@@ -1679,7 +1679,7 @@ fn type_name_resolved_from_strongest() {
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
 
-    let resolved = stage.resolve_type_name(p, &store);
+    let resolved = stage.resolve_type_name(p);
     assert_eq!(resolved, Some(xform_tok));
 }
 
@@ -1713,7 +1713,7 @@ fn type_name_from_reference_when_local_untyped() {
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
 
-    let resolved = stage.resolve_type_name(p, &store);
+    let resolved = stage.resolve_type_name(p);
     assert_eq!(resolved, Some(mesh_tok));
 }
 
@@ -1735,7 +1735,7 @@ fn type_name_none_when_untyped() {
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
 
-    assert_eq!(stage.resolve_type_name(p, &store), None);
+    assert_eq!(stage.resolve_type_name(p), None);
 }
 
 // --- Schema fallback integration tests ---
@@ -1785,7 +1785,7 @@ fn schema_fallback_provides_value_when_no_opinion() {
     // No authored opinion on "extent" → fallback from schema.
     assert_eq!(stage.resolve_field(p, extent_tok), None);
     let resolved = stage
-        .resolve_field_with_schema(p, extent_tok, &store)
+        .resolve_field_with_schema(p, extent_tok)
         .expect("schema fallback");
     assert_eq!(resolved.value, Value::Double(0.0));
 }
@@ -1817,7 +1817,7 @@ fn authored_opinion_beats_schema_fallback() {
 
     // Authored value wins over schema fallback.
     let resolved = stage
-        .resolve_field_with_schema(p, double_sided_tok, &store)
+        .resolve_field_with_schema(p, double_sided_tok)
         .expect("resolved");
     assert_eq!(resolved.value, Value::Bool(true));
 }
@@ -1847,7 +1847,7 @@ fn schema_isa_inheritance_fallback() {
     );
 
     let resolved = stage
-        .resolve_field_with_schema(p, visibility_tok, &store)
+        .resolve_field_with_schema(p, visibility_tok)
         .expect("inherited fallback");
     assert_eq!(resolved.value, Value::from("inherited"));
 }
@@ -1889,13 +1889,13 @@ fn schema_applied_api_provides_fallback() {
     // Without the applied schema, no fallback.
     assert!(
         stage
-            .resolve_field_with_schema(bare, includes_tok, &store)
+            .resolve_field_with_schema(bare, includes_tok)
             .is_none()
     );
 
     // With it, the applied API schema's fallback is found.
     let resolved = stage
-        .resolve_field_with_schema(p, includes_tok, &store)
+        .resolve_field_with_schema(p, includes_tok)
         .expect("api schema fallback");
     assert_eq!(resolved.value, Value::Null);
 }
@@ -1918,11 +1918,7 @@ fn schema_no_type_no_fallback() {
         [SchemaDefinition::typed(mesh_tok).with_property(defined(extent_tok, 0.0))],
     );
 
-    assert!(
-        stage
-            .resolve_field_with_schema(p, extent_tok, &store)
-            .is_none()
-    );
+    assert!(stage.resolve_field_with_schema(p, extent_tok).is_none());
 }
 
 #[test]
@@ -1950,7 +1946,7 @@ fn schema_builtin_api_fallback() {
     );
 
     let resolved = stage
-        .resolve_field_with_schema(p, api_field_tok, &store)
+        .resolve_field_with_schema(p, api_field_tok)
         .expect("built-in api fallback");
     assert_eq!(resolved.value, Value::Int(42));
 }
@@ -2471,7 +2467,7 @@ fn dictionary_combines_over_schema_fallback() {
         ))],
     );
     let resolved = stage
-        .resolve_value_with_schema(p, field, &store)
+        .resolve_value_with_schema(p, field)
         .expect("customData");
     assert_eq!(
         resolved.value,
@@ -2896,9 +2892,7 @@ fn property_named_api_schemas_does_not_hide_applied_schemas() {
         [SchemaDefinition::api(test_api).with_property(defined(answer, 7))],
     );
     assert_eq!(
-        stage
-            .resolve_field_with_schema(p, answer, &store)
-            .map(|r| r.value),
+        stage.resolve_field_with_schema(p, answer).map(|r| r.value),
         Some(Value::Int(7)),
         "the applied schema's fallback survives a property named `apiSchemas`"
     );

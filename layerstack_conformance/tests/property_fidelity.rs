@@ -505,7 +505,7 @@ fn declarations_come_from_the_selected_variant_branch() {
         let xform = store.tokens.intern("Xform");
         let order = store.tokens.intern(order);
         let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
-        assert_eq!(stage.resolve_type_name(c, &store), Some(xform), "{fixture}");
+        assert_eq!(stage.resolve_type_name(c), Some(xform), "{fixture}");
         assert_eq!(
             stage.resolve_specifier(c, &store),
             Some(layerstack::Specifier::Class),

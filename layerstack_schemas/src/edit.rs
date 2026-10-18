@@ -338,7 +338,7 @@ impl<'s> SchemaEdit<'s> {
                 let defined = defined.clone();
                 Some(self.store.tokens_mut().intern(defined))
             }
-            None => self.stage.resolve_type_name(path, &*self.store),
+            None => self.stage.resolve_type_name(path),
         }
     }
 
@@ -453,11 +453,7 @@ impl<'s> SchemaEdit<'s> {
             }
             return self.definition(path, token).and_then(|d| d.fallback);
         }
-        match self
-            .stage
-            .resolve_value_with_schema(path, token, &*self.store)?
-            .value
-        {
+        match self.stage.resolve_value_with_schema(path, token)?.value {
             ResolvedValue::Scalar(value) => Some(value),
             _ => None,
         }
@@ -1021,7 +1017,7 @@ impl<'s> SchemaEdit<'s> {
         let schema_token = tokens.intern(schema);
         let type_name = match self.defined.iter().rev().find(|(p, _)| *p == path) {
             Some((_, defined)) => Some(tokens.intern(defined)),
-            None => self.stage.resolve_type_name(path, &*self.store),
+            None => self.stage.resolve_type_name(path),
         };
         let tokens = self.store.tokens_mut();
         registry.can_apply(type_name, schema_token, instance, tokens)?;

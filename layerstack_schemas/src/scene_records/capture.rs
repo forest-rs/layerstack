@@ -58,7 +58,7 @@ pub(super) fn paths(
                 prim: path,
                 type_name: scene
                     .stage()
-                    .resolve_type_name(path, scene.store())
+                    .resolve_type_name(path)
                     .map(|t| scene.store().tokens().resolve(t))
                     .unwrap_or("")
                     .into(),

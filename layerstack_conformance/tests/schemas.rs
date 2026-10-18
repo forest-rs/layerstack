@@ -390,11 +390,9 @@ fn check_set(set: &str, failures: &mut Vec<String>) {
     for expected in &oracle.prims {
         let path = &expected.path;
         let prim = store.path(path);
-        let definition = stage
-            .prim_definition(prim, store)
-            .expect("prim on the stage");
+        let definition = stage.prim_definition(prim).expect("prim on the stage");
         let tokens = &store.tokens;
-        let resolved_type = stage.resolve_type_name(prim, store);
+        let resolved_type = stage.resolve_type_name(prim);
         check(
             format!("{path} type name"),
             json!(resolved_type.map_or("", |t| tokens.resolve(t))),
@@ -478,10 +476,7 @@ fn check_set(set: &str, failures: &mut Vec<String>) {
             let property = store.tokens.intern(&probe);
             check(
                 format!("{path} lookup of {probe}"),
-                json!(format!(
-                    "{:?}",
-                    stage.property_definition(prim, property, store)
-                )),
+                json!(format!("{:?}", stage.property_definition(prim, property))),
                 json!(format!("{:?}", definition.property(property))),
             );
         }
@@ -500,7 +495,7 @@ fn check_set(set: &str, failures: &mut Vec<String>) {
                 check(what("interned"), json!(false), json!(true));
                 continue;
             };
-            let defined = stage.property_definition(prim, property, store);
+            let defined = stage.property_definition(prim, property);
             check(
                 what("defined by the prim definition"),
                 json!(defined.as_ref() == definition.property(property)),
@@ -546,7 +541,7 @@ fn check_set(set: &str, failures: &mut Vec<String>) {
             check(what("fallback"), json!(fallback), json!(expected.fallback));
 
             let value = stage
-                .resolve_value_with_schema(prim, property, store)
+                .resolve_value_with_schema(prim, property)
                 .map(|resolved| match resolved.value {
                     ResolvedValue::Scalar(value) => json(&value, tokens),
                     other => panic!("{path}.{name} resolves to {other:?}"),

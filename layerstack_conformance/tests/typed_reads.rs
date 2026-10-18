@@ -371,9 +371,7 @@ fn typed_defaults_skip_incompatible_opinions_without_numeric_retry() {
     // Typed selection does not change the raw value or its stronger source.
     let path = loaded.store.path("/Skip");
     let field = loaded.store.tokens.lookup("inputs:intensity").unwrap();
-    let raw = stage
-        .resolve_value_with_schema(path, field, &loaded.store)
-        .unwrap();
+    let raw = stage.resolve_value_with_schema(path, field).unwrap();
     assert_eq!(raw.value, ResolvedValue::Scalar(Value::Double(2.0)));
     assert_eq!(raw.provenance.unwrap().layer, loaded.root_layer);
 }

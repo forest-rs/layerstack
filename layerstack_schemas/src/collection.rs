@@ -262,7 +262,7 @@ fn object_exists(scene: &Scene<'_>, path: TargetPath) -> bool {
                     .resolve_property_declaration(prim, property.property())
                     .is_some()
                     || stage
-                        .property_definition(prim, property.property(), scene.store())
+                        .property_definition(prim, property.property())
                         .is_some())
         }
     }

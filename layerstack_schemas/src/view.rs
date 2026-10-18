@@ -331,11 +331,10 @@ impl<'a> PrimView<'a> {
         match time {
             Time::Default => {
                 let token = self.scene.token(name)?;
-                let resolved = self.scene.stage.resolve_value_with_schema(
-                    self.path,
-                    token,
-                    self.scene.store,
-                )?;
+                let resolved = self
+                    .scene
+                    .stage
+                    .resolve_value_with_schema(self.path, token)?;
                 match resolved.value {
                     ResolvedValue::Scalar(value) => Some(value),
                     _ => None,
@@ -348,13 +347,7 @@ impl<'a> PrimView<'a> {
                 let token = self.scene.token(name)?;
                 self.scene
                     .stage
-                    .resolve_value_at_time_with_schema(
-                        self.path,
-                        token,
-                        code,
-                        interpolation,
-                        self.scene.store,
-                    )
+                    .resolve_value_at_time_with_schema(self.path, token, code, interpolation)
                     .map(|resolved| resolved.value)
             }
         }
@@ -805,7 +798,7 @@ pub(crate) fn is_relationship(scene: &Scene<'_>, path: PropertyPath) -> bool {
         return declared.kind == PropertyKind::Relationship;
     }
     stage
-        .property_definition(path.prim_path(), path.property(), scene.store())
+        .property_definition(path.prim_path(), path.property())
         .is_some_and(|defined| defined.kind == PropertyKind::Relationship)
 }
 

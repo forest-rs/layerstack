@@ -60,7 +60,7 @@ pub(crate) fn read_store(
         if stage.is_defined(path, store)
             && !stage.is_abstract(path, store)
             && stage
-                .resolve_type_name(path, store)
+                .resolve_type_name(path)
                 .is_some_and(|name| store.tokens.resolve(name) == "Shader")
         {
             prims.push(path);

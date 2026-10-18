@@ -3180,7 +3180,7 @@ impl Stage {
     ///
     /// Spec: AOUSD Core §7.6 (typeName field), §12.2.3 (type name resolution).
     #[must_use]
-    pub fn resolve_type_name(&self, prim: PathId, _store: &dyn LayerStore) -> Option<TokenId> {
+    pub fn resolve_type_name(&self, prim: PathId) -> Option<TokenId> {
         self.prims
             .get(&prim)?
             .type_info
@@ -3231,7 +3231,6 @@ impl Stage {
         &self,
         prim: PathId,
         field: TokenId,
-        _store: &dyn LayerStore,
     ) -> Option<Resolved<ResolvedValue>> {
         let index = self.prims.get(&prim);
         let authored = index.and_then(|index| index.property_opinions(field));
@@ -3602,9 +3601,8 @@ impl Stage {
         &self,
         prim: PathId,
         field: TokenId,
-        store: &dyn LayerStore,
     ) -> Option<Resolved<Value>> {
-        let resolved = self.resolve_value_with_schema(prim, field, store)?;
+        let resolved = self.resolve_value_with_schema(prim, field)?;
         match resolved.value {
             ResolvedValue::Scalar(v) => Some(Resolved {
                 value: v,
@@ -3652,7 +3650,6 @@ impl Stage {
         field: TokenId,
         time: f64,
         interp: InterpolationType,
-        _store: &dyn LayerStore,
     ) -> Option<Resolved<Value>> {
         let fallback = self.schema_fallback(prim, field);
         let (resolved, clip_selected) = self.resolve_property_at_time(
@@ -3720,7 +3717,7 @@ impl Stage {
     /// };
     /// let stage = Stage::compose(&mut store, LayerId(1), options);
     ///
-    /// let definition = stage.prim_definition(prim, &store).expect("on the stage");
+    /// let definition = stage.prim_definition(prim).expect("on the stage");
     /// assert!(definition.is_a(tile));
     /// assert!(definition.property(width).is_some());
     /// ```
@@ -3728,7 +3725,7 @@ impl Stage {
     /// Spec: AOUSD Core §13.3.1 (typeless prims), §13.3.2.3 (the prim
     /// definition). OpenUSD: `UsdPrim::GetPrimDefinition`.
     #[must_use]
-    pub fn prim_definition(&self, prim: PathId, _store: &dyn LayerStore) -> Option<PrimDefinition> {
+    pub fn prim_definition(&self, prim: PathId) -> Option<PrimDefinition> {
         self.prim_definition_ref(prim).cloned()
     }
 
@@ -3752,7 +3749,6 @@ impl Stage {
         &self,
         prim: PathId,
         property: TokenId,
-        _store: &dyn LayerStore,
     ) -> Option<PropertyDefinition> {
         self.property_definition_ref(prim, property).cloned()
     }
@@ -4192,7 +4188,7 @@ mod tests {
         let undo = live.apply(&mut store, &add).unwrap().inverse;
         assert_eq!(
             live.stage()
-                .resolve_field_with_schema(a, field, &store)
+                .resolve_field_with_schema(a, field)
                 .unwrap()
                 .value,
             Value::Int(7)
@@ -4265,20 +4261,20 @@ mod tests {
             .get_mut(&path)
             .unwrap()
             .type_name = Some(b);
-        assert_eq!(live.stage().resolve_type_name(path, &store), Some(a));
+        assert_eq!(live.stage().resolve_type_name(path), Some(a));
         assert_eq!(
             live.stage()
-                .resolve_field_with_schema(path, field, &store)
+                .resolve_field_with_schema(path, field)
                 .unwrap()
                 .value,
             Value::Int(1)
         );
         live.notify_layer_edit(LayerId(1));
         live.recompose(&mut store);
-        assert_eq!(live.stage().resolve_type_name(path, &store), Some(b));
+        assert_eq!(live.stage().resolve_type_name(path), Some(b));
         assert_eq!(
             live.stage()
-                .resolve_field_with_schema(path, field, &store)
+                .resolve_field_with_schema(path, field)
                 .unwrap()
                 .value,
             Value::Int(2)
@@ -4364,7 +4360,7 @@ mod tests {
         other.insert_prim(b, PrimSpec::def().with_type_name(tree));
         store.insert_layer(other);
         let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
-        assert_eq!(stage.resolve_type_name(a, &store), Some(tree));
+        assert_eq!(stage.resolve_type_name(a), Some(tree));
     }
 
     #[test]
@@ -4717,7 +4713,7 @@ mod tests {
     #[test]
     fn path_expressions_compose_over_the_schema_fallback() {
         let expression = |text: &str| Value::PathExpression(text.into());
-        let (stage, store, prim, field) = schema_fallback_fixture_of(
+        let (stage, _store, prim, field) = schema_fallback_fixture_of(
             vec![
                 FieldValue::Value(expression("/Strong %_")),
                 FieldValue::Value(expression("%_ /Weak")),
@@ -4741,24 +4737,18 @@ mod tests {
         );
         assert_eq!(
             stage
-                .resolve_value_with_schema(prim, field, &store)
+                .resolve_value_with_schema(prim, field)
                 .map(|r| r.value),
             Some(ResolvedValue::Scalar(composed.clone()))
         );
         assert_eq!(
             stage
-                .resolve_value_at_time_with_schema(
-                    prim,
-                    field,
-                    1.0,
-                    InterpolationType::Held,
-                    &store,
-                )
+                .resolve_value_at_time_with_schema(prim, field, 1.0, InterpolationType::Held,)
                 .map(|r| r.value),
             Some(composed.clone())
         );
         let explained = stage
-            .explain_value_with_schema(prim, field, &store)
+            .explain_value_with_schema(prim, field)
             .expect("authored");
         assert_eq!(
             explained.value,
@@ -4767,7 +4757,7 @@ mod tests {
         assert!(explained.seeded_by_fallback);
         assert_eq!(explained.contributors().count(), 2);
         let explained = stage
-            .explain_value_at_time_with_schema(prim, field, 1.0, InterpolationType::Held, &store)
+            .explain_value_at_time_with_schema(prim, field, 1.0, InterpolationType::Held)
             .expect("authored");
         assert_eq!(explained.value, Some(composed));
         assert_eq!(explained.contributors().count(), 2);
@@ -4788,7 +4778,7 @@ mod tests {
     /// proposal, "Value Resolution").
     #[test]
     fn stronger_array_edit_over_block_materializes_over_fallback() {
-        let (stage, store, prim, field) = schema_fallback_fixture(vec![
+        let (stage, _store, prim, field) = schema_fallback_fixture(vec![
             FieldValue::Value(append_edit(7)),
             FieldValue::Value(Value::Blocked),
             FieldValue::Value(array_value(&[1, 2])),
@@ -4804,7 +4794,7 @@ mod tests {
         );
 
         let with_schema = stage
-            .resolve_value_with_schema(prim, field, &store)
+            .resolve_value_with_schema(prim, field)
             .expect("edit resolves");
         assert_eq!(
             with_schema.value,
@@ -4815,7 +4805,7 @@ mod tests {
 
     #[test]
     fn strongest_array_block_resolves_to_schema_fallback() {
-        let (stage, store, prim, field) = schema_fallback_fixture(vec![
+        let (stage, _store, prim, field) = schema_fallback_fixture(vec![
             FieldValue::Value(Value::Blocked),
             FieldValue::Value(append_edit(7)),
             FieldValue::Value(array_value(&[1, 2])),
@@ -4826,7 +4816,7 @@ mod tests {
             None
         );
         let with_schema = stage
-            .resolve_value_with_schema(prim, field, &store)
+            .resolve_value_with_schema(prim, field)
             .expect("fallback resolves");
         assert_eq!(
             with_schema.value,
@@ -4843,20 +4833,20 @@ mod tests {
     /// value resolution).
     #[test]
     fn time_query_with_schema_shares_the_fallback_contract() {
-        let resolve = |stage: &Stage, store, prim, field| {
+        let resolve = |stage: &Stage, prim, field| {
             [InterpolationType::Held, InterpolationType::Linear].map(|interp| {
                 stage
-                    .resolve_value_at_time_with_schema(prim, field, 1.0, interp, store)
+                    .resolve_value_at_time_with_schema(prim, field, 1.0, interp)
                     .map(|resolved| resolved.value)
             })
         };
-        let (stage, store, prim, field) = schema_fallback_fixture(vec![
+        let (stage, _store, prim, field) = schema_fallback_fixture(vec![
             FieldValue::Value(append_edit(7)),
             FieldValue::Value(Value::Blocked),
             FieldValue::Value(array_value(&[1, 2])),
         ]);
         assert_eq!(
-            resolve(&stage, &store, prim, field),
+            resolve(&stage, prim, field),
             [Some(array_value(&[5, 6, 7])), Some(array_value(&[5, 6, 7]))],
             "the edit composes over the fallback, never over the blocked [1, 2]"
         );
@@ -4872,12 +4862,12 @@ mod tests {
             "without a schema the edit composes over the empty array"
         );
 
-        let (stage, store, prim, field) = schema_fallback_fixture(vec![
+        let (stage, _store, prim, field) = schema_fallback_fixture(vec![
             FieldValue::Value(Value::Blocked),
             FieldValue::Value(array_value(&[1, 2])),
         ]);
         assert_eq!(
-            resolve(&stage, &store, prim, field),
+            resolve(&stage, prim, field),
             [Some(array_value(&[5, 6])), Some(array_value(&[5, 6]))],
             "a strongest block resolves the fallback unmodified"
         );

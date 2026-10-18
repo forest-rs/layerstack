@@ -218,7 +218,7 @@ fn authored() -> (InMemoryStore, LiveStage, Harness) {
     let mut store = InMemoryStore::default();
     store.insert_layer(Layer::new(LayerId(1)));
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&mut store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
         ..StageOptions::default()
     };
     let mut live = LiveStage::compose(&mut store, LayerId(1), options);
@@ -328,7 +328,7 @@ fn path_expression_setters_author_what_getters_read() {
     let mut store = InMemoryStore::default();
     store.insert_layer(Layer::new(LayerId(1)));
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&mut store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
         ..StageOptions::default()
     };
     let mut live = LiveStage::compose(&mut store, LayerId(1), options);
@@ -387,7 +387,7 @@ fn referenced() -> (InMemoryStore, LiveStage, EditTarget) {
     main.insert_prim(instance, PrimSpec::def().with_reference(reference));
     store.insert_layer(main);
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&mut store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
         ..StageOptions::default()
     };
     let live = LiveStage::compose(&mut store, LayerId(1), options);
@@ -534,7 +534,7 @@ fn missing_prims_are_not_authored() {
     store.insert_layer(Layer::new(LayerId(1)));
     let (missing, later) = (store.path("/Missing"), store.path("/Later"));
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&mut store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
         ..StageOptions::default()
     };
     let live = LiveStage::compose(&mut store, LayerId(1), options);
@@ -593,7 +593,7 @@ fn local_variant_targets_keep_paths_outside_the_branch() {
     layer.insert_prim(light, PrimSpec::def());
     store.insert_layer(layer);
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&mut store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
         ..StageOptions::default()
     };
     let mut live = LiveStage::compose(&mut store, LayerId(1), options);

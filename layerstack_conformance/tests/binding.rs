@@ -74,9 +74,7 @@ fn load() -> (layerstack_conformance::usda_real::LoadedStage, Stage) {
     );
     assert!(loaded.invalid.is_empty(), "{:?}", loaded.invalid);
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(
-            &mut loaded.store.tokens,
-        ))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(&loaded.store.tokens))),
         ..StageOptions::default()
     };
     let stage = Stage::compose(&mut loaded.store, loaded.root_layer, options);
@@ -285,9 +283,7 @@ fn binding_caches_follow_edits() {
 
     let (mut loaded, _) = load();
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(
-            &mut loaded.store.tokens,
-        ))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(&loaded.store.tokens))),
         ..StageOptions::default()
     };
     let layer = loaded.root_layer;

@@ -22,7 +22,7 @@
 //! use layerstack::{InMemoryStore, StageOptions};
 //!
 //! let mut store = InMemoryStore::default();
-//! let schemas = layerstack_schemas::openusd(&mut store.tokens);
+//! let schemas = layerstack_schemas::openusd(&store.tokens);
 //! assert!(schemas.issues().is_empty());
 //!
 //! let mesh = store.tokens.intern("Mesh");
@@ -136,7 +136,7 @@
 //! let mut store = InMemoryStore::default();
 //! store.insert_layer(Layer::new(LayerId(1)));
 //! let options = StageOptions {
-//!     schemas: Some(Arc::new(layerstack_schemas::openusd(&mut store.tokens))),
+//!     schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
 //!     ..StageOptions::default()
 //! };
 //! let mut live = LiveStage::compose(&mut store, LayerId(1), options);
@@ -176,7 +176,7 @@
 //!
 //! let mut store = InMemoryStore::default();
 //! store.insert_layer(Layer::new(LayerId(1)));
-//! let schemas = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+//! let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
 //! let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions {
 //!     schemas: Some(schemas), ..StageOptions::default()
 //! });
@@ -270,7 +270,7 @@
 //! let mut store = InMemoryStore::default();
 //! store.insert_layer(Layer::new(LayerId(1)));
 //! let options = StageOptions {
-//!     schemas: Some(Arc::new(layerstack_schemas::openusd(&mut store.tokens))),
+//!     schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
 //!     ..StageOptions::default()
 //! };
 //! let mut live = LiveStage::compose(&mut store, LayerId(1), options);
@@ -541,7 +541,7 @@ use layerstack::{SchemaRegistry, SchemaRegistryBuilder, TokenInterner};
 pub fn register(
     builder: &mut SchemaRegistryBuilder,
     domains: &[Domain],
-    tokens: &mut TokenInterner,
+    tokens: &TokenInterner,
 ) -> Result<(), layerstack::MetadataConflict> {
     for domain in with_dependencies(domains) {
         domain.tables().register(builder, tokens)?;
@@ -552,7 +552,7 @@ pub fn register(
 /// A registry of the schemas of `domains` and of the domains they depend
 /// on.
 #[must_use]
-pub fn registry(domains: &[Domain], tokens: &mut TokenInterner) -> SchemaRegistry {
+pub fn registry(domains: &[Domain], tokens: &TokenInterner) -> SchemaRegistry {
     let mut builder = SchemaRegistry::builder();
     register(&mut builder, domains, tokens).expect("generated OpenUSD metadata declarations agree");
     builder.build(tokens)
@@ -560,7 +560,7 @@ pub fn registry(domains: &[Domain], tokens: &mut TokenInterner) -> SchemaRegistr
 
 /// A registry of every OpenUSD schema this crate has ([`Domain::ALL`]).
 #[must_use]
-pub fn openusd(tokens: &mut TokenInterner) -> SchemaRegistry {
+pub fn openusd(tokens: &TokenInterner) -> SchemaRegistry {
     registry(Domain::ALL, tokens)
 }
 
@@ -590,8 +590,8 @@ mod tests {
 
     #[test]
     fn a_domain_brings_its_dependencies() {
-        let mut tokens = TokenInterner::default();
-        let lights = registry(&[Domain::UsdLux], &mut tokens);
+        let tokens = TokenInterner::default();
+        let lights = registry(&[Domain::UsdLux], &tokens);
         assert!(lights.issues().is_empty(), "{:?}", lights.issues());
         let sphere_light = tokens.intern("SphereLight");
         let boundable = tokens.intern("Boundable");
@@ -601,16 +601,16 @@ mod tests {
 
     #[test]
     fn every_domain_registers_without_issues() {
-        let mut tokens = TokenInterner::default();
-        let all = openusd(&mut tokens);
+        let tokens = TokenInterner::default();
+        let all = openusd(&tokens);
         assert!(all.issues().is_empty(), "{:?}", all.issues());
         assert!(all.schema(tokens.intern("Mesh")).is_some());
     }
 
     #[test]
     fn application_limits_come_from_plug_info() {
-        let mut tokens = TokenInterner::default();
-        let volumes = registry(&[Domain::UsdVol], &mut tokens);
+        let tokens = TokenInterner::default();
+        let volumes = registry(&[Domain::UsdVol], &tokens);
         let [radius_api, field, mesh] =
             ["ParticleFieldOpacityAttributeAPI", "ParticleField", "Mesh"].map(|n| tokens.intern(n));
         assert_eq!(

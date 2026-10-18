@@ -47,7 +47,7 @@ fn bench(c: &mut Criterion) {
             }
             store.insert_layer(layer);
             let options = StageOptions {
-                schemas: Some(Arc::new(layerstack_schemas::openusd(&mut store.tokens))),
+                schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
                 ..StageOptions::default()
             };
             let stage = Stage::compose(&mut store, LayerId(1), options);
@@ -134,7 +134,7 @@ fn animation(c: &mut Criterion) {
         }
         store.insert_layer(layer);
         let options = StageOptions {
-            schemas: Some(Arc::new(layerstack_schemas::openusd(&mut store.tokens))),
+            schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
             ..StageOptions::default()
         };
         let stage = Stage::compose(&mut store, LayerId(1), options);

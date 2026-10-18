@@ -70,7 +70,7 @@ fn ancestors_custom_named_definition_and_unknown_assignment_stops_inheritance() 
     use layerstack::{InMemoryStore, Layer, LayerId, LiveStage, StageOptions, edit::EditTarget};
     let mut store = InMemoryStore::default();
     store.insert_layer(Layer::new(LayerId(1)));
-    let schemas = Arc::new(crate::openusd(&mut store.tokens));
+    let schemas = Arc::new(crate::openusd(&store.tokens));
     let mut stage = LiveStage::compose(
         &mut store,
         LayerId(1),
@@ -149,7 +149,7 @@ fn authored_attribute_metadata_bypasses_name_validation_and_empty_suppresses_inh
             ),
     );
     store.insert_layer(layer);
-    let schemas = Arc::new(crate::openusd(&mut store.tokens));
+    let schemas = Arc::new(crate::openusd(&store.tokens));
     let mut stage = LiveStage::compose(
         &mut store,
         LayerId(1),
@@ -227,7 +227,7 @@ fn schema_metadata_empty_and_block_preserve_color_precedence() {
     let empty_tint = store.tokens.intern("emptyTint");
     let blocked_tint = store.tokens.intern("blockedTint");
     let authored_empty = store.tokens.intern("authoredEmpty");
-    let native = crate::openusd(&mut store.tokens);
+    let native = crate::openusd(&store.tokens);
     let mut builder = SchemaRegistry::builder();
     for definition in native.schemas() {
         builder.register(definition.clone());
@@ -249,7 +249,7 @@ fn schema_metadata_empty_and_block_preserve_color_precedence() {
                     .with_metadata(color, Value::Token(unknown)),
             ),
     );
-    let schemas = Arc::new(builder.build(&mut store.tokens));
+    let schemas = Arc::new(builder.build(&store.tokens));
     let mut layer = Layer::new(LayerId(1));
     layer.insert_prim(
         parent,

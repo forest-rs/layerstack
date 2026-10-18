@@ -512,7 +512,7 @@ mod tests {
                 ),
         );
         store.insert_layer(layer);
-        let schemas = crate::openusd(&mut store.tokens);
+        let schemas = crate::openusd(&store.tokens);
         let live = LiveStage::compose(
             &mut store,
             LayerId(1),
@@ -613,7 +613,7 @@ mod tests {
         root.sublayers_mut()
             .push(layerstack::SublayerEntry::new(LayerId(1)));
         store.insert_layer(root);
-        let schemas = crate::openusd(&mut store.tokens);
+        let schemas = crate::openusd(&store.tokens);
         let mut live = LiveStage::compose(
             &mut store,
             LayerId(2),
@@ -694,7 +694,7 @@ mod tests {
             PrimSpec::def().with_reference(layerstack::Reference::new(LayerId(1), source)),
         );
         store.insert_layer(root);
-        let schemas = crate::openusd(&mut store.tokens);
+        let schemas = crate::openusd(&store.tokens);
         let mut live = LiveStage::compose(
             &mut store,
             LayerId(2),

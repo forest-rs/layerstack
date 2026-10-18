@@ -43,7 +43,7 @@ fn main() {
     store.insert_layer(shot);
     store.insert_layer(Layer::new(LayerId(2)));
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&mut store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
         with_provenance: true,
         ..StageOptions::default()
     };

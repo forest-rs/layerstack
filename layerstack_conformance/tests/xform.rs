@@ -86,9 +86,7 @@ fn transforms_visibility_and_purpose_match_openusd() {
         load_entry_usda(&workspace_root().join("layerstack_conformance/fixtures/xform/scene.usda"));
     assert!(loaded.invalid.is_empty(), "{:?}", loaded.invalid);
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(
-            &mut loaded.store.tokens,
-        ))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(&loaded.store.tokens))),
         ..StageOptions::default()
     };
     let stage = Stage::compose(&mut loaded.store, loaded.root_layer, options);
@@ -264,9 +262,7 @@ fn problem_ops_are_reported() {
         &workspace_root().join("layerstack_conformance/fixtures/xform/problems.usda"),
     );
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(
-            &mut loaded.store.tokens,
-        ))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(&loaded.store.tokens))),
         ..StageOptions::default()
     };
     let stage = Stage::compose(&mut loaded.store, loaded.root_layer, options);
@@ -327,9 +323,7 @@ fn an_invalidated_cache_recomputes_the_edited_subtree() {
     let mut loaded =
         load_entry_usda(&workspace_root().join("layerstack_conformance/fixtures/xform/scene.usda"));
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(
-            &mut loaded.store.tokens,
-        ))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(&loaded.store.tokens))),
         ..StageOptions::default()
     };
     let mut live = LiveStage::compose(&mut loaded.store, loaded.root_layer, options);
@@ -390,9 +384,7 @@ fn pure_steps_fold_to_what_the_views_compute() {
     let mut loaded =
         load_entry_usda(&workspace_root().join("layerstack_conformance/fixtures/xform/scene.usda"));
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(
-            &mut loaded.store.tokens,
-        ))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(&loaded.store.tokens))),
         ..StageOptions::default()
     };
     let stage = Stage::compose(&mut loaded.store, loaded.root_layer, options);

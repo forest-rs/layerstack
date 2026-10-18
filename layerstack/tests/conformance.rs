@@ -1754,7 +1754,7 @@ fn compose_with_schemas(
     for schema in schemas {
         builder.register(schema);
     }
-    let registry = builder.build(&mut store.tokens);
+    let registry = builder.build(&store.tokens);
     let options = StageOptions {
         schemas: Some(Arc::new(registry)),
         ..StageOptions::default()

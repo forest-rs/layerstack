@@ -187,7 +187,7 @@ fn read(set: &str, file: &str) -> String {
 /// `plugInfo.json` declares.
 fn registry(set: &str, store: &mut InMemoryStore) -> SchemaRegistry {
     if set == "openusd" {
-        return layerstack_schemas::openusd(&mut store.tokens);
+        return layerstack_schemas::openusd(&store.tokens);
     }
     let plug_info: PlugInfo = serde_json::from_str(&read(set, "plugInfo.json")).expect("plugInfo");
     let info = &plug_info.plugins[0].info;
@@ -245,9 +245,8 @@ fn registry(set: &str, store: &mut InMemoryStore) -> SchemaRegistry {
         &mut NoAssets,
     );
     assert!(emitted.diagnostics.is_empty(), "{:?}", emitted.diagnostics);
-    let definitions =
-        read_generated_schema(&emitted.layer, &declared, &mut store.tokens, &store.paths)
-            .expect("every declared schema");
+    let definitions = read_generated_schema(&emitted.layer, &declared, &store.tokens, &store.paths)
+        .expect("every declared schema");
 
     let mut builder = SchemaRegistry::builder();
     for definition in definitions {
@@ -264,7 +263,7 @@ fn registry(set: &str, store: &mut InMemoryStore) -> SchemaRegistry {
             builder.auto_apply(token(schema), token(target));
         }
     }
-    builder.build(&mut store.tokens)
+    builder.build(&store.tokens)
 }
 
 /// A float as the oracle writes it: non-finite values as `inf`, `-inf` and

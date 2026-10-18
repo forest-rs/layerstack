@@ -162,7 +162,7 @@ fn captures_owned_uniform_and_sampled_inputs() {
     use layerstack::{InMemoryStore, Layer, LayerId, LiveStage, StageOptions, edit::EditTarget};
     let mut store = InMemoryStore::default();
     store.insert_layer(Layer::new(LayerId(1)));
-    let schemas = Arc::new(crate::openusd(&mut store.tokens));
+    let schemas = Arc::new(crate::openusd(&store.tokens));
     let mut stage = LiveStage::compose(
         &mut store,
         LayerId(1),
@@ -207,7 +207,7 @@ fn capture_samples_uniform_settings_at_requested_time() {
     use layerstack::{InMemoryStore, Layer, LayerId, LiveStage, StageOptions, edit::EditTarget};
     let mut store = InMemoryStore::default();
     store.insert_layer(Layer::new(LayerId(1)));
-    let schemas = Arc::new(crate::openusd(&mut store.tokens));
+    let schemas = Arc::new(crate::openusd(&store.tokens));
     let mut stage = LiveStage::compose(
         &mut store,
         LayerId(1),

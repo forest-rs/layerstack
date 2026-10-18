@@ -18,7 +18,7 @@
 //! store.insert_layer(Layer::new(layer));
 //! let world = store.path("/World");
 //! let path = store.path("/World/Mesh");
-//! let schemas = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+//! let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
 //! let mut live = LiveStage::compose(&mut store, layer,
 //!     StageOptions { schemas: Some(schemas), ..Default::default() });
 //! let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(layer));

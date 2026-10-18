@@ -211,9 +211,8 @@ pub(crate) fn module_text(
             ..SchemaDeclaration::new(tokens.intern(&class.name), kind)
         });
     }
-    let definitions =
-        read_generated_schema(&emitted.layer, &declared, &mut store.tokens, &store.paths)
-            .map_err(|e| error(format!("generatedSchema.usda: {e}")))?;
+    let definitions = read_generated_schema(&emitted.layer, &declared, &store.tokens, &store.paths)
+        .map_err(|e| error(format!("generatedSchema.usda: {e}")))?;
     let mut schemas = Vec::new();
     for definition in definitions {
         schemas.push(
@@ -420,7 +419,7 @@ pub(crate) fn module_text(
          ///\n\
          /// A metadata declaration that conflicts with one already registered.\n\
          pub fn register(\n    builder: &mut ::layerstack::SchemaRegistryBuilder,\n    \
-         tokens: &mut ::layerstack::TokenInterner,\n) -> Result<(), ::layerstack::MetadataConflict> {{\n    \
+         tokens: &::layerstack::TokenInterner,\n) -> Result<(), ::layerstack::MetadataConflict> {{\n    \
          TABLES.register(builder, tokens)\n}}\n\n\
          /// A registry of the library's schemas and of the OpenUSD schemas they\n\
          /// build on ([`DEPENDENCIES`]).\n\
@@ -429,7 +428,7 @@ pub(crate) fn module_text(
          ///\n\
          /// A metadata declaration of the library that conflicts with one of\n\
          /// OpenUSD's.\n\
-         pub fn registry(\n    tokens: &mut ::layerstack::TokenInterner,\n\
+         pub fn registry(\n    tokens: &::layerstack::TokenInterner,\n\
          ) -> Result<::layerstack::SchemaRegistry, ::layerstack::MetadataConflict> {{\n    \
          let mut builder = ::layerstack::SchemaRegistry::builder();\n    \
          ::layerstack_schemas::register(&mut builder, DEPENDENCIES, tokens)?;\n    \

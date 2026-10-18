@@ -720,7 +720,7 @@ mod tests {
         let mut store = InMemoryStore::default();
         store.insert_layer(Layer::new(LayerId(1)));
         let options = StageOptions {
-            schemas: Some(Arc::new(crate::openusd(&mut store.tokens))),
+            schemas: Some(Arc::new(crate::openusd(&store.tokens))),
             ..Default::default()
         };
         let mut live = LiveStage::compose(&mut store, LayerId(1), options);

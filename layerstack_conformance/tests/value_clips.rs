@@ -121,7 +121,7 @@ fn compose(layers: &Layers) -> (InMemoryStore, Stage) {
             store.insert_asset_layer(anchor, &format!("./{rel}"), id);
         }
     }
-    let schemas = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
     let stage = Stage::compose(
         &mut store,
         LayerId(1),
@@ -1131,7 +1131,7 @@ fn manifest_activation_blocks_exclude_clip_samples_only_when_interpolating_gaps(
 }
 
 fn live(store: &mut InMemoryStore) -> layerstack::LiveStage {
-    let schemas = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
     layerstack::LiveStage::compose(
         store,
         LayerId(1),

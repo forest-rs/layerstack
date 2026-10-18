@@ -311,7 +311,7 @@ pub(crate) fn read(pxr: &Path, source: &Path) -> Result<Model, String> {
             });
         }
         let definitions =
-            read_generated_schema(&emitted.layer, &declared, &mut store.tokens, &store.paths)
+            read_generated_schema(&emitted.layer, &declared, &store.tokens, &store.paths)
                 .map_err(|e| format!("{}: {e}", path.display()))?;
 
         let api_names = source_api_names(source, plugin, &mut files)?;

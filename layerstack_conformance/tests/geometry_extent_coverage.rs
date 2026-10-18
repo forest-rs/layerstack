@@ -38,7 +38,7 @@ impl Fixture {
         let mut layer = Layer::new(LayerId(1));
         layer.insert_prim(path, prim);
         store.insert_layer(layer);
-        let schemas = layerstack_schemas::openusd(&mut store.tokens);
+        let schemas = layerstack_schemas::openusd(&store.tokens);
         let live = LiveStage::compose(
             &mut store,
             LayerId(1),

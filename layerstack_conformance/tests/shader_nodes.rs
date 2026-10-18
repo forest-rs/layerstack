@@ -20,7 +20,7 @@ mod generated;
 fn scene() -> (InMemoryStore, LiveStage) {
     let mut store = InMemoryStore::default();
     store.insert_layer(Layer::new(LayerId(1)));
-    let schemas = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
     let live = LiveStage::compose(
         &mut store,
         LayerId(1),
@@ -179,7 +179,7 @@ fn defining_a_node_overrides_a_weaker_source_asset_implementation() {
         .unwrap()
         .sublayers_mut()
         .push(layerstack::SublayerEntry::new(LayerId(2)));
-    let schemas = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
     let mut live = LiveStage::compose(
         &mut store,
         LayerId(1),
@@ -256,7 +256,7 @@ def NodeGraph "Graph" {
     store.insert_layer(emitted.layer);
     let options = StageOptions {
         with_provenance: true,
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&mut store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
         ..StageOptions::default()
     };
     let legacy = store.path("/Graph/Legacy");

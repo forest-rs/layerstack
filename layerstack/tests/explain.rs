@@ -90,7 +90,7 @@ fn with_schemas(store: &mut InMemoryStore, schemas: Vec<SchemaDefinition>) -> St
         builder.register(schema);
     }
     StageOptions {
-        schemas: Some(Arc::new(builder.build(&mut store.tokens))),
+        schemas: Some(Arc::new(builder.build(&store.tokens))),
         ..StageOptions::default()
     }
 }

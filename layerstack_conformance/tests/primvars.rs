@@ -370,7 +370,7 @@ fn primvar_groups_discard_failures_and_nonindexed_authoring_masks_weaker_indices
     let mut root = Layer::new(LayerId(1));
     root.sublayers_mut().push(SublayerEntry::new(LayerId(2)));
     store.insert_layer(root);
-    let schemas = std::sync::Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+    let schemas = std::sync::Arc::new(layerstack_schemas::openusd(&store.tokens));
     let mut live = LiveStage::compose(
         &mut store,
         LayerId(1),
@@ -540,7 +540,7 @@ fn weaker_primvar_value_and_block_edits_can_precede_metadata() {
         let mut root = Layer::new(LayerId(1));
         root.sublayers_mut().push(SublayerEntry::new(LayerId(2)));
         store.insert_layer(root);
-        let schemas = std::sync::Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+        let schemas = std::sync::Arc::new(layerstack_schemas::openusd(&store.tokens));
         let mut live = LiveStage::compose(
             &mut store,
             LayerId(1),
@@ -681,7 +681,7 @@ fn removed_primvar_declarations_reveal_weaker_sources_and_group_rollback() {
         ),
     );
     store.insert_layer(root);
-    let schemas = std::sync::Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+    let schemas = std::sync::Arc::new(layerstack_schemas::openusd(&store.tokens));
     let mut live = LiveStage::compose(
         &mut store,
         LayerId(1),
@@ -762,7 +762,7 @@ fn removed_primvar_ui_labels_do_not_leak_into_recreated_properties() {
             let mut root = Layer::new(LayerId(1));
             root.sublayers_mut().push(SublayerEntry::new(LayerId(2)));
             store.insert_layer(root);
-            let schemas = std::sync::Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+            let schemas = std::sync::Arc::new(layerstack_schemas::openusd(&store.tokens));
             live = LiveStage::compose(
                 &mut store,
                 LayerId(1),

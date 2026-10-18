@@ -43,7 +43,7 @@ fn render_specs_match_openusd() {
         &workspace_root().join("layerstack_conformance/fixtures/render_spec/scene.usda"),
     );
     assert!(loaded.invalid.is_empty(), "{:?}", loaded.invalid);
-    let schemas = Arc::new(layerstack_schemas::openusd(&mut loaded.store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(&loaded.store.tokens));
     let stage = Stage::compose(
         &mut loaded.store,
         loaded.root_layer,

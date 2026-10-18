@@ -65,7 +65,7 @@ fn weak_layer_and_retimed_assets_keep_their_actual_anchor() {
                 scale: 2.,
             },
         ));
-    let schemas = std::sync::Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+    let schemas = std::sync::Arc::new(layerstack_schemas::openusd(&store.tokens));
     let live = LiveStage::compose(
         &mut store,
         LayerId(1),
@@ -120,7 +120,7 @@ fn weak_layer_and_retimed_assets_keep_their_actual_anchor() {
                 .with_type(PropertyType::parse("float").unwrap())
                 .with_default(Value::Float(2.)),
         );
-    let schemas = std::sync::Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+    let schemas = std::sync::Arc::new(layerstack_schemas::openusd(&store.tokens));
     let live = LiveStage::compose(
         &mut store,
         LayerId(1),
@@ -257,7 +257,7 @@ fn source_only_asset_edits_change_anchors_and_parameter_upload_revisions() {
         .unwrap()
         .sublayers_mut()
         .push(SublayerEntry::new(LayerId(2)));
-    let schemas = std::sync::Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+    let schemas = std::sync::Arc::new(layerstack_schemas::openusd(&store.tokens));
     let mut live = LiveStage::compose(
         &mut store,
         LayerId(1),

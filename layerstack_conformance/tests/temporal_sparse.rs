@@ -401,7 +401,7 @@ impl Composed {
             }
             let mut builder = SchemaRegistry::builder();
             builder.register(definition);
-            Arc::new(builder.build(&mut store.tokens))
+            Arc::new(builder.build(&store.tokens))
         });
         let options = StageOptions {
             schemas: schemas.clone(),

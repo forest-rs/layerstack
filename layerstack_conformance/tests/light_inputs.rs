@@ -226,7 +226,7 @@ def DomeLight "Dome" { asset inputs:texture:file = @textures/sky.exr@ }
     );
     let filter = store.path("/Filter");
     let dome = store.path("/Dome");
-    let schemas = std::sync::Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+    let schemas = std::sync::Arc::new(layerstack_schemas::openusd(&store.tokens));
     let live = layerstack::LiveStage::compose(
         &mut store,
         LayerId(1),

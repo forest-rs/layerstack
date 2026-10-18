@@ -904,7 +904,7 @@ impl PreparedCache {
 /// store.insert_layer(Layer::new(layer));
 /// let parent = store.path("/World");
 /// let child = store.path("/World/Child");
-/// let schemas = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+/// let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
 /// let mut live = LiveStage::compose(&mut store, layer,
 ///     StageOptions { schemas: Some(schemas), ..Default::default() });
 /// let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(layer));
@@ -1564,7 +1564,7 @@ mod cache_tests {
         );
         store.insert_layer(layer);
         let options = StageOptions {
-            schemas: Some(Arc::new(crate::openusd(&mut store.tokens))),
+            schemas: Some(Arc::new(crate::openusd(&store.tokens))),
             ..StageOptions::default()
         };
         let live = LiveStage::compose(&mut store, LayerId(1), options);
@@ -1626,7 +1626,7 @@ mod cache_tests {
         }
         store.insert_layer(layer);
         let options = StageOptions {
-            schemas: Some(Arc::new(crate::openusd(&mut store.tokens))),
+            schemas: Some(Arc::new(crate::openusd(&store.tokens))),
             ..StageOptions::default()
         };
         let live = LiveStage::compose(&mut store, LayerId(1), options);

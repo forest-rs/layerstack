@@ -126,7 +126,7 @@ impl DanglingCollection {
 ///
 /// let mut store = InMemoryStore::default();
 /// let options = StageOptions {
-///     schemas: Some(Arc::new(layerstack_schemas::openusd(&mut store.tokens))),
+///     schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
 ///     ..StageOptions::default()
 /// };
 /// let (lamp, gone) = (store.path("/Lamp"), store.path("/Gone"));

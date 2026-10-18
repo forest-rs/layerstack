@@ -250,7 +250,7 @@ fn schemas(store: &mut InMemoryStore) -> SchemaRegistry {
                 .with_property(property(order, Value::Array(Vec::new())).uniform()),
         )
         .register(SchemaDefinition::typed(xform).with_parent(xformable));
-    builder.build(&mut store.tokens)
+    builder.build(&store.tokens)
 }
 
 /// The directory of a case's entry layer, canonical as OpenUSD resolves

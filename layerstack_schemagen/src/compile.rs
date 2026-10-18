@@ -164,7 +164,7 @@
 //! store and a stage composed with the registry:
 //!
 //! ```ignore
-//! let registry = schemas::registry(&mut store.tokens)?;
+//! let registry = schemas::registry(&store.tokens)?;
 //! let options = StageOptions { schemas: Some(Arc::new(registry)), ..StageOptions::default() };
 //! // ... compose `stage` from `store` with `options` ...
 //! let scene = Scene::new(stage, &store);

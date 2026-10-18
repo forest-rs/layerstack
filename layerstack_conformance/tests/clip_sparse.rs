@@ -119,7 +119,7 @@ fn compose(layers: &Layers) -> (InMemoryStore, Stage) {
             store.insert_asset_layer(anchor, &format!("./{rel}"), id);
         }
     }
-    let schemas = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
     let stage = Stage::compose(
         &mut store,
         LayerId(1),

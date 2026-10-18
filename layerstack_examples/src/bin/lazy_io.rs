@@ -21,8 +21,8 @@ use std::{path::PathBuf, sync::Arc};
 fn fixture() -> Result<PathBuf, Box<dyn std::error::Error>> {
     let directory = std::env::temp_dir().join(format!("layerstack-lazy-{}", std::process::id()));
     std::fs::create_dir_all(&directory)?;
-    let mut store = InMemoryStore::default();
-    let schemas = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+    let store = InMemoryStore::default();
+    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
     let mut document = StageDocument::create_in(
         Filesystem::new(&directory, [])?,
         store,

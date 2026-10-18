@@ -66,7 +66,7 @@ struct CollectionRecord {
 
 fn options(store: &mut InMemoryStore) -> StageOptions {
     StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&mut store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
         ..StageOptions::default()
     }
 }

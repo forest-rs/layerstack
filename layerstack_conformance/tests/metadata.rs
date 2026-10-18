@@ -12,8 +12,8 @@ use std::sync::Arc;
 
 #[test]
 fn generated_metadata_retains_types_targets_and_defaults_without_creating_properties() {
-    let mut store = InMemoryStore::default();
-    let registry = layerstack_schemas::registry(&[Domain::UsdShade], &mut store.tokens);
+    let store = InMemoryStore::default();
+    let registry = layerstack_schemas::registry(&[Domain::UsdShade], &store.tokens);
     let render_type = registry
         .metadata(store.tokens.lookup("renderType").unwrap())
         .unwrap();
@@ -45,7 +45,7 @@ fn generated_metadata_retains_types_targets_and_defaults_without_creating_proper
         })
         .unwrap();
     assert!(
-        layerstack_schemas::register(&mut builder, &[Domain::UsdShade], &mut store.tokens).is_err()
+        layerstack_schemas::register(&mut builder, &[Domain::UsdShade], &store.tokens).is_err()
     );
 }
 
@@ -65,7 +65,7 @@ fn composed_metadata_and_layer_defaults_match_cpp() {
     let render_type = store.tokens.intern("renderType");
     let inactive = store.tokens.intern("inactiveIds");
     let meters = store.tokens.intern("metersPerUnit");
-    let registry = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+    let registry = Arc::new(layerstack_schemas::openusd(&store.tokens));
     let mut root = Layer::new(LayerId(1));
     root.sublayers_mut().push(SublayerEntry::new(LayerId(2)));
     root.insert_prim(mesh, PrimSpec::def().with_type_name(mesh_type));
@@ -218,7 +218,7 @@ fn entry(name: layerstack::TokenId, spec: PropertySpec) -> PropertyEntry {
 fn empty_stage_retains_its_root_and_reads_only_layer_applicable_defaults() {
     let mut store = InMemoryStore::default();
     store.insert_layer(Layer::new(LayerId(1)));
-    let schemas = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
     let element_size = store.tokens.lookup("elementSize").unwrap();
     let stage = Stage::compose(
         &mut store,

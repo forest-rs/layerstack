@@ -23,7 +23,7 @@ use layerstack::{
 };
 
 /// Constructs a value, interning its tokens in the interner passed in.
-pub type Construct = fn(&mut TokenInterner) -> Value;
+pub type Construct = fn(&TokenInterner) -> Value;
 
 /// `Some(construct)`: a fallback or default constructor, which the tables
 /// write as a closure.
@@ -121,7 +121,7 @@ impl SchemaTables {
     pub fn register(
         &self,
         builder: &mut SchemaRegistryBuilder,
-        tokens: &mut TokenInterner,
+        tokens: &TokenInterner,
     ) -> Result<(), MetadataConflict> {
         for metadata in self.metadata {
             builder.register_metadata(metadata.definition(tokens))?;
@@ -152,7 +152,7 @@ pub struct Metadata {
 }
 
 impl Metadata {
-    fn definition(&self, tokens: &mut TokenInterner) -> layerstack::MetadataDefinition {
+    fn definition(&self, tokens: &TokenInterner) -> layerstack::MetadataDefinition {
         layerstack::MetadataDefinition {
             name: tokens.intern(self.name),
             type_name: self.type_name.into(),
@@ -164,7 +164,7 @@ impl Metadata {
 }
 
 impl Property {
-    fn definition(&self, tokens: &mut TokenInterner) -> PropertyDefinition {
+    fn definition(&self, tokens: &TokenInterner) -> PropertyDefinition {
         PropertyDefinition {
             name: tokens.intern(self.name),
             kind: self.kind,
@@ -186,7 +186,7 @@ impl Property {
 impl Schema {
     /// The schema's definition, with its names interned in `tokens`.
     #[must_use]
-    pub fn definition(&self, tokens: &mut TokenInterner) -> SchemaDefinition {
+    pub fn definition(&self, tokens: &TokenInterner) -> SchemaDefinition {
         let mut schema = SchemaDefinition::new(tokens.intern(self.name), self.kind);
         schema.parent = self.parent.map(|parent| tokens.intern(parent));
         schema.built_ins = self.built_ins.iter().map(|b| tokens.intern(b)).collect();

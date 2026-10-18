@@ -282,7 +282,7 @@ fn topology_reads_skip_incompatible_defaults_but_keep_numeric_source_selection()
             ),
         );
         store.insert_layer(root);
-        let schemas = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+        let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
         let stage = layerstack::Stage::compose(
             &mut store,
             LayerId(1),

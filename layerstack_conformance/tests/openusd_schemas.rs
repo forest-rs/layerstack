@@ -182,8 +182,8 @@ fn openusd_schema_registry_matches() {
     );
     assert_eq!(oracle.instances.len(), 2, "a plain and a nested instance");
 
-    let mut tokens = TokenInterner::default();
-    let registry = layerstack_schemas::openusd(&mut tokens);
+    let tokens = TokenInterner::default();
+    let registry = layerstack_schemas::openusd(&tokens);
     assert!(registry.issues().is_empty(), "{:?}", registry.issues());
 
     let mut failures: Vec<String> = Vec::new();
@@ -274,7 +274,7 @@ fn openusd_schema_registry_matches() {
                     .expect("abstract definition")
                     .clone()
             } else {
-                registry.intern_instance_names(&applied, &mut tokens);
+                registry.intern_instance_names(&applied, &tokens);
                 let type_name =
                     (!expected.type_name.is_empty()).then(|| tokens.intern(&expected.type_name));
                 registry.prim_definition(type_name, &applied, &tokens)

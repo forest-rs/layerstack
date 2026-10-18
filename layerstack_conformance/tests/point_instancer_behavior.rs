@@ -160,10 +160,10 @@ fn computed_bounds_match_cpp_and_follow_external_prototype_edits() {
 fn retained_bounds_route_prototype_changes_outside_the_query_namespace() {
     for ignore_visibility in [false, true] {
         for use_extents_hint in [false, true] {
-            let (mut store, _) = support::scene(SOURCE);
+            let (store, _) = support::scene(SOURCE);
             let path = store.path("/World/Instances");
             let prototype = store.path("/World/Prototype");
-            let schemas = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+            let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
             let mut session = QuerySession::new(
                 store,
                 LayerId(1),
@@ -237,10 +237,10 @@ fn invalid_topology_and_prototype_cycles_fail_explicitly() {
 #[test]
 fn failed_retained_bounds_recover_when_an_external_prototype_is_created() {
     let text = "#usda 1.0\ndef PointInstancer \"I\" {\nrel prototypes = </Missing>\nint[] protoIndices = [0]\npoint3f[] positions = [(0,0,0)]\n}";
-    let (mut store, _) = support::scene(text);
+    let (store, _) = support::scene(text);
     let path = store.path("/I");
     let missing = store.path("/Missing");
-    let schemas = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
     let mut session = QuerySession::new(
         store,
         LayerId(1),
@@ -286,11 +286,11 @@ def Scope "P" {
 }
 def Cube "Cube" {}
 "#;
-    let (mut store, _) = support::scene(text);
+    let (store, _) = support::scene(text);
     let path = store.path("/I");
     let inner = store.path("/P/Inner");
     let cube = store.path("/Cube");
-    let schemas = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
     let mut session = QuerySession::new(
         store,
         LayerId(1),

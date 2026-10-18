@@ -154,7 +154,7 @@ fn fixture() -> (LoadedStage, Stage, LayerId) {
         .property_mut(upper)
         .unwrap();
     spec.time_samples.as_mut().unwrap().make_mut()[1].1 = wrong;
-    let schemas = layerstack_schemas::openusd(&mut loaded.store.tokens);
+    let schemas = layerstack_schemas::openusd(&loaded.store.tokens);
     let stage = Stage::compose(
         &mut loaded.store,
         loaded.root_layer,

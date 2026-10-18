@@ -65,7 +65,7 @@ fn registry(store: &mut InMemoryStore) -> SchemaRegistry {
             })
             .unwrap();
     }
-    builder.build(&mut store.tokens)
+    builder.build(&store.tokens)
 }
 
 fn field<'a>(
@@ -362,7 +362,7 @@ fn empty_arrays_cannot_validate_unsupported_registered_type_names() {
         "float[][]",
         "hostOpaque[]",
     ] {
-        let mut store = InMemoryStore::default();
+        let store = InMemoryStore::default();
         let name = store.tokens.intern("hostField");
         let mut builder = SchemaRegistry::builder();
         builder
@@ -374,7 +374,7 @@ fn empty_arrays_cannot_validate_unsupported_registered_type_names() {
                 documentation: "".into(),
             })
             .unwrap();
-        let registry = builder.build(&mut store.tokens);
+        let registry = builder.build(&store.tokens);
         let result = read_usda_with_registry(
             "#usda 1.0\ndef \"P\" (hostField = []) {}",
             LayerId(1),

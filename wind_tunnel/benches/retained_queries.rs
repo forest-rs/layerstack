@@ -47,7 +47,7 @@ fn bench(c: &mut Criterion) {
         }
         store.insert_layer(layer);
         let options = StageOptions {
-            schemas: Some(Arc::new(layerstack_schemas::openusd(&mut store.tokens))),
+            schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
             ..StageOptions::default()
         };
         // The host-owned path synchronizes once before a batch, including the

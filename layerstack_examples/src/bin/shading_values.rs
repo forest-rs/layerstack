@@ -17,7 +17,7 @@ fn main() {
     store.insert_layer(Layer::new(LayerId(1)));
     let material = store.path("/Material");
     let shader = store.path("/Material/Surface");
-    let schemas = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
     let mut live = LiveStage::compose(
         &mut store,
         LayerId(1),

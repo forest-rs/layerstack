@@ -546,7 +546,7 @@ def Scope "Recipes" {
         root.push_str(" def PointInstancer \"Scatter\" { rel prototypes = </Assets/Tree> }\n}\n");
         import(&mut store, &root, ROOT);
         let options = StageOptions {
-            schemas: Some(Arc::new(layerstack_schemas::openusd(&mut store.tokens))),
+            schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
             with_provenance: true,
             ..Default::default()
         };

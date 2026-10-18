@@ -107,7 +107,7 @@ impl core::error::Error for GeneratedSchemaError {}
 pub fn read_generated_schema(
     layer: &Layer,
     declared: &[SchemaDeclaration],
-    tokens: &mut TokenInterner,
+    tokens: &TokenInterner,
     paths: &PathInterner,
 ) -> Result<Vec<SchemaDefinition>, GeneratedSchemaError> {
     let api_schemas = tokens.intern("apiSchemas");
@@ -171,7 +171,7 @@ pub fn read_generated_schema(
 
 /// `name` without the placeholder that follows the schema name in a
 /// multiple-apply template's built-in.
-fn from_template(name: TokenId, tokens: &mut TokenInterner) -> TokenId {
+fn from_template(name: TokenId, tokens: &TokenInterner) -> TokenId {
     let text = tokens.resolve(name);
     let Some((schema, rest)) = text.split_once(':') else {
         return name;
@@ -190,7 +190,7 @@ fn from_template(name: TokenId, tokens: &mut TokenInterner) -> TokenId {
 }
 
 /// The names `customData.apiSchemaOverridePropertyNames` lists.
-fn override_names(custom_data: Option<&FieldValue>, tokens: &mut TokenInterner) -> Vec<TokenId> {
+fn override_names(custom_data: Option<&FieldValue>, tokens: &TokenInterner) -> Vec<TokenId> {
     let Some(FieldValue::Value(Value::Dictionary(entries))) = custom_data else {
         return Vec::new();
     };

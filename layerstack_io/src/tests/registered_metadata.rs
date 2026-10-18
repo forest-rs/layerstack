@@ -7,7 +7,7 @@ use super::*;
 use layerstack::{FieldValue, MetadataDefinition, MetadataTarget};
 
 fn setup(files: &[(&str, &str)]) -> (Memory, InMemoryStore, StageOptions) {
-    let mut store = InMemoryStore::default();
+    let store = InMemoryStore::default();
     let mut builder = layerstack::SchemaRegistry::builder();
     for (name, ty) in [("hostScale", "float"), ("hostAsset", "asset")] {
         builder
@@ -20,7 +20,7 @@ fn setup(files: &[(&str, &str)]) -> (Memory, InMemoryStore, StageOptions) {
             })
             .unwrap();
     }
-    let registry = Arc::new(builder.build(&mut store.tokens));
+    let registry = Arc::new(builder.build(&store.tokens));
     (
         Memory::with(files),
         store,

@@ -46,7 +46,7 @@ fn labels_match_openusd() {
         &workspace_root().join("layerstack_conformance/fixtures/labels/scene.usda"),
     );
     assert!(loaded.invalid.is_empty(), "{:?}", loaded.invalid);
-    let schemas = Arc::new(layerstack_schemas::openusd(&mut loaded.store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(&loaded.store.tokens));
     let stage = Stage::compose(
         &mut loaded.store,
         loaded.root_layer,
@@ -154,7 +154,7 @@ fn label_queries_belong_to_one_snapshot() {
     let mut loaded = load_entry_usda(
         &workspace_root().join("layerstack_conformance/fixtures/labels/scene.usda"),
     );
-    let schemas = Arc::new(layerstack_schemas::openusd(&mut loaded.store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(&loaded.store.tokens));
     let mut live = LiveStage::compose(
         &mut loaded.store,
         loaded.root_layer,

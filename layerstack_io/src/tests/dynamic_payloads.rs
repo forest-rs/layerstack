@@ -389,7 +389,7 @@ pub(super) fn registry(store: &mut InMemoryStore) -> Arc<SchemaRegistry> {
             })
             .unwrap();
     }
-    Arc::new(builder.build(&mut store.tokens))
+    Arc::new(builder.build(&store.tokens))
 }
 
 /// Opens `root` with the test format registered.

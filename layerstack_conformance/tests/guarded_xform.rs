@@ -32,7 +32,7 @@ fn fixture(
     store.insert_layer(root);
     store.insert_layer(Layer::new(LayerId(2)));
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&mut store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
         ..StageOptions::default()
     };
     let live = LiveStage::compose(&mut store, LayerId(1), options);
@@ -163,7 +163,7 @@ fn referenced_matrix_replacement_maps_namespace_and_stage_time_together() {
     store.insert_layer(root);
     store.insert_layer(referenced);
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&mut store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
         ..StageOptions::default()
     };
     let mut live = LiveStage::compose(&mut store, LayerId(1), options);

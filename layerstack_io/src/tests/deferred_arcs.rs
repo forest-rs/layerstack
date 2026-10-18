@@ -252,6 +252,51 @@ fn missing_assets_in_unselected_branches_are_not_read_or_reported() {
 }
 
 #[test]
+fn a_missing_deferred_asset_that_appears_loads_after_a_reload() {
+    // `shot.usda` selects the branch `model.usda` defers, whose asset is
+    // missing when the stage opens.
+    let a = look("a");
+    let backend = Memory::with(&[
+        (
+            "root.usda",
+            "#usda 1.0\n(\n subLayers = [@shot.usda@, @model.usda@]\n)\n",
+        ),
+        (
+            "shot.usda",
+            "#usda 1.0\nover \"Model\" (\n variants = { string look = \"b\" }\n) {}\n",
+        ),
+        ("model.usda", MODEL),
+        ("a.usda", &a),
+    ]);
+    let mut doc = StageDocument::open(backend, "root.usda", StageOptions::default()).unwrap();
+    assert_eq!(name(&doc, "/Model"), None);
+    assert!(doc.load_report().asset_failures[0].is_missing());
+    assert!(matches!(
+        doc.stage.stage().composition_errors(),
+        [CompositionError::UnresolvedAsset(error)] if error.asset == "b.usda"
+    ));
+
+    // The miss is recorded: asking again reads nothing.
+    doc.storage
+        .files
+        .insert("b.usda".into(), look("b").into_bytes());
+    doc.storage.reads.clear();
+    assert!(doc.load_requested_assets().unwrap().layers.is_empty());
+    assert!(!read(&doc, "b.usda"));
+
+    // A reload retries it, as `UsdStage::Reload` retries every invalid
+    // asset: composition asks for it again, and loading it composes it.
+    doc.reload(ReloadPolicy::PreserveDirty).unwrap();
+    assert!(doc.stage.stage().composition_errors().is_empty());
+    assert_eq!(doc.stage.stage().asset_requests().len(), 1);
+    let report = doc.load_requested_assets().unwrap();
+    assert_eq!(report.layers.len(), 1);
+    assert!(report.asset_failures.is_empty());
+    assert_eq!(name(&doc, "/Model"), Some(Value::string("b")));
+    assert!(doc.stage.stage().composition_errors().is_empty());
+}
+
+#[test]
 fn binary_layers_defer_unselected_branch_arcs() {
     let a = look("a");
     let b = look("b");

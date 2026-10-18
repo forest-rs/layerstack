@@ -2479,11 +2479,28 @@ fn convert_scalar_listop<T>(
 /// Positions are looked up in a map: both lists come from the file, so
 /// searching `children` for each property would take quadratic time.
 fn sort_by_children(properties: &mut [PropertyEntry], children: &[TokenId]) {
+    // A short list is searched faster than it is hashed, and most prims
+    // list their properties in the order their specs came in.
+    if children.len() <= 16 {
+        let place = |entry: &PropertyEntry| {
+            children
+                .iter()
+                .position(|child| *child == entry.name)
+                .unwrap_or(usize::MAX)
+        };
+        if !properties.is_sorted_by_key(place) {
+            properties.sort_by_key(place);
+        }
+        return;
+    }
     let mut position: HashMap<TokenId, usize> = HashMap::new();
     for (i, child) in children.iter().enumerate() {
         position.entry(*child).or_insert(i);
     }
-    properties.sort_by_key(|entry| position.get(&entry.name).copied().unwrap_or(usize::MAX));
+    let place = |entry: &PropertyEntry| position.get(&entry.name).copied().unwrap_or(usize::MAX);
+    if !properties.is_sorted_by_key(place) {
+        properties.sort_by_key(place);
+    }
 }
 
 /// Whether `rep` is a `token[]` value, which assembly decodes to token-table
@@ -2714,6 +2731,35 @@ def "Other" {}
         assert!(tree.layer == text.layer, "the same layer");
         assert_eq!(tree.diagnostics, text.diagnostics);
         assert!(tree.layer == read.emitted.layer, "the layer written");
+    }
+
+    /// Properties follow the authored `properties` order, those it does not
+    /// name last in the order they came, whether the list is searched or
+    /// hashed, and whether or not they came in order.
+    #[test]
+    fn properties_follow_their_authored_order() {
+        let tokens = TokenInterner::default();
+        let entry = |name: &str| PropertyEntry {
+            name: tokens.intern(name),
+            spec: Arc::new(PropertySpec::relationship()),
+        };
+        let names = |entries: &[PropertyEntry]| -> Vec<String> {
+            entries
+                .iter()
+                .map(|entry| String::from(tokens.resolve(entry.name)))
+                .collect()
+        };
+        for extra in [0, 20] {
+            let mut children: Vec<TokenId> =
+                ["c", "a", "b"].iter().map(|n| tokens.intern(n)).collect();
+            // A long list names more properties than the prim has.
+            children.extend((0..extra).map(|i| tokens.intern(alloc::format!("x{i}"))));
+            let mut properties = alloc::vec![entry("a"), entry("z"), entry("b"), entry("c")];
+            sort_by_children(&mut properties, &children);
+            assert_eq!(names(&properties), ["c", "a", "b", "z"], "{extra}");
+            sort_by_children(&mut properties, &children);
+            assert_eq!(names(&properties), ["c", "a", "b", "z"], "in order already");
+        }
     }
 
     #[test]

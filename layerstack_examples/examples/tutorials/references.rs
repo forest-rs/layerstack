@@ -4,48 +4,49 @@
 //! References remap one authored asset into independent stage occurrences.
 //! <https://openusd.org/release/tut_referencing_layers.html>
 mod support;
-use layerstack::{EditTarget, Reference, Specifier, Transaction};
+use layerstack::{
+    EditTarget, LayerOffset, ListPosition, Reference, ReferenceTarget, Specifier, Transaction,
+};
 use layerstack_schemas::{SchemaEdit, usd_geom::SphereEdit};
 fn main() {
     let directory = support::directory();
     support::hello(&directory);
     let mut document = support::create(&directory, "RefExample.usda");
-    let (asset, _) = document.load_asset("./HelloWorld.usda", None).unwrap();
-    let (store, live) = document.parts_mut();
-    let root = live.stage().root_layer().unwrap();
+    let root = document.stage().stage().root_layer().unwrap();
+    let at = EditTarget::for_layer(root);
+    let store = document.store_mut();
     let first = store.path("/refSphere");
     let second = store.path("/refSphere2");
-    let mut create = Transaction::new();
+    // Two `over` prims, each referencing the asset's default prim, as
+    // `UsdStage::OverridePrim` and `UsdReferences::AddReference` author
+    // them. The reference names the asset as authored, anchored to the root
+    // layer; the document loads it when the edit asks for it.
+    let mut arcs = Transaction::new();
     for path in [first, second] {
-        create.create_prim(
-            EditTarget::for_layer(root).prim(path),
-            Specifier::Over,
-            None,
+        arcs.create_prim(at.prim(path), Specifier::Over, None);
+        let hello = Reference::deferred(
+            root,
+            "./HelloWorld.usda",
+            ReferenceTarget::DefaultPrim,
+            LayerOffset::IDENTITY,
         );
+        arcs.add_reference(at.prim(path), hello, ListPosition::BackOfPrepend);
     }
-    live.apply(store, &create).unwrap();
-    // Layer APIs author composition arcs. Preserve each created spec and its
-    // hierarchy bookkeeping; direct layer edits synchronize explicitly.
-    let layer = store.layers.get_mut(&root).unwrap();
-    for path in [first, second] {
-        let spec = layer.prims()[&path]
-            .clone()
-            .with_reference(Reference::with_asset_default_prim(
-                asset,
-                "./HelloWorld.usda",
-            ));
-        layer.insert_prim(path, spec);
-    }
-    live.synchronize(store);
+    let (applied, loaded) = document.apply(&arcs).unwrap();
+    assert_eq!(applied.asset_requests.len(), 2, "each reference asks");
+    assert_eq!(loaded.layers.len(), 1, "for the one asset, now loaded");
+    // Override the color of one occurrence: the referenced sphere is a
+    // `Sphere` on the stage, so its typed edit handle is had by path.
+    let (store, live) = document.parts_mut();
     let red = store.path("/refSphere2/world");
-    let mut edit = SchemaEdit::new(live.stage(), store, EditTarget::for_layer(root));
+    let mut edit = SchemaEdit::new(live.stage(), store, at);
     SphereEdit::new(&edit, red)
-        .unwrap()
+        .expect("a Sphere, through the reference")
         .set_display_color(&mut edit, &[[1.0, 0.0, 0.0]]);
     let transaction = edit.finish();
-    live.apply(store, &transaction).unwrap();
+    document.apply(&transaction).unwrap();
     assert!(
-        live.stage().composition_errors().is_empty(),
+        document.stage().stage().composition_errors().is_empty(),
         "authored composition must be valid"
     );
     let report = document.save();

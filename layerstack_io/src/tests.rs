@@ -1768,6 +1768,57 @@ fn top_level_transport_errors_keep_machine_readable_categories() {
     );
 }
 
+/// Every failure names the source it is about: a missing root, a missing
+/// dependency, and a malformed source, whose strict rejection keeps the
+/// error diagnostics that rejected it.
+#[test]
+fn errors_name_their_source_and_strict_rejections_keep_diagnostics() {
+    let missing =
+        StageDocument::open(Memory::default(), "absent.usda", StageOptions::default()).unwrap_err();
+    assert_eq!(missing.kind, IoErrorKind::NotFound);
+    assert_eq!(missing.identifier.as_deref(), Some("absent.usda"));
+    assert!(
+        missing.to_string().starts_with("absent.usda: "),
+        "{missing}"
+    );
+
+    let doc = StageDocument::open_in(
+        Memory::with(&[(
+            "root.usda",
+            "#usda 1.0\ndef \"Rock\" (\n references = @moss.usda@</Moss>\n) {}\n",
+        )]),
+        InMemoryStore::default(),
+        "root.usda",
+        StageOptions::default(),
+        ImportPolicy::AllowRecovery,
+    )
+    .unwrap();
+    let failures = &doc.load_report().asset_failures;
+    assert_eq!(failures.len(), 1, "{failures:?}");
+    assert_eq!(failures[0].error.identifier.as_deref(), Some("moss.usda"));
+
+    let malformed = StageDocument::open(
+        Memory::with(&[(
+            "root.usda",
+            "#usda 1.0\ndef \"Rock\" {\n float[] size = [1,\n}\n",
+        )]),
+        "root.usda",
+        StageOptions::default(),
+    )
+    .unwrap_err();
+    assert_eq!(malformed.kind, IoErrorKind::Rejected);
+    assert_eq!(malformed.identifier.as_deref(), Some("root.usda"));
+    assert!(!malformed.diagnostics.is_empty());
+    assert!(
+        malformed
+            .diagnostics
+            .iter()
+            .all(|d| d.diagnostic.is_error()),
+        "{:?}",
+        malformed.diagnostics
+    );
+}
+
 #[test]
 fn strict_nested_failures_cannot_disappear_inside_parser_recovery() {
     let mut backend = Memory::with(&[(

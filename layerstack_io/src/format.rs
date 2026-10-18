@@ -149,10 +149,7 @@ impl FormatSource<'_> {
     /// build a layer from what it was given.
     #[must_use]
     pub fn rejected(&self, reason: impl fmt::Display) -> IoError {
-        IoError::new(
-            IoErrorKind::Rejected,
-            alloc::format!("{}: {reason}", self.identifier),
-        )
+        IoError::new(IoErrorKind::Rejected, alloc::format!("{reason}")).at(self.identifier)
     }
 }
 

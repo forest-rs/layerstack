@@ -100,7 +100,10 @@ impl<B: Storage> Shared<'_, B> {
             return found.clone();
         }
         // Identified without the lock, so threads identify sources at once.
-        let found = self.storage.identify(asset, Some(anchor));
+        let found = self
+            .storage
+            .identify(asset, Some(anchor))
+            .map_err(|e| e.at(asset));
         lock(&self.identities).entry(key).or_insert(found).clone()
     }
 
@@ -137,7 +140,7 @@ impl<B: Storage> Shared<'_, B> {
             match self.storage.read_encoded(outer) {
                 Ok(bytes) => bytes,
                 Err(error) => {
-                    read.outcome = Outcome::Unread(error);
+                    read.outcome = Outcome::Unread(error.at(outer));
                     return (task.provisional, read);
                 }
             }
@@ -500,12 +503,5 @@ fn strict_error<B>(
     reader.diagnostics[first_diagnostic..]
         .iter()
         .any(|d| d.diagnostic.is_error())
-        .then(|| {
-            IoError::new(
-                IoErrorKind::Rejected,
-                alloc::format!(
-                    "{identifier}: strict import rejected malformed or unrepresented content"
-                ),
-            )
-        })
+        .then(|| crate::strict_rejection(identifier, &reader.diagnostics[first_diagnostic..]))
 }

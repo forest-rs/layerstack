@@ -525,6 +525,23 @@ impl PathInterner {
         self.intern_segments(&segments)
     }
 
+    /// Interns the path of `parent`'s child prim `name`, as
+    /// [`Self::intern`] interns `parent`'s path joined with `name`, without
+    /// building that path first.
+    ///
+    /// ```
+    /// use layerstack::{Path, PathInterner, TokenInterner};
+    ///
+    /// let (tokens, paths) = (TokenInterner::default(), PathInterner::default());
+    /// let a = paths.intern(Path::parse_absolute("/A", &tokens).unwrap());
+    /// let b = paths.intern_child(a, tokens.intern("B"));
+    /// assert_eq!(b, paths.intern(Path::parse_absolute("/A/B", &tokens).unwrap()));
+    /// ```
+    #[must_use]
+    pub fn intern_child(&self, parent: PathId, name: TokenId) -> PathId {
+        self.intern_joined(parent, &[name])
+    }
+
     /// Interns `path` moved from beneath `from` to beneath `to`: `to` itself
     /// for `from`, and `None` for a path outside `from`.
     pub(crate) fn intern_reparented(

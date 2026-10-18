@@ -3164,6 +3164,7 @@ mod tests {
             fields: vec![],
             fieldsets: vec![],
             paths: vec![],
+            path_nodes: Vec::new(),
             specs: vec![],
             version: CrateVersion::NEWEST_READABLE,
         };
@@ -3189,6 +3190,7 @@ mod tests {
             fields: vec![],
             fieldsets: vec![],
             paths: vec![],
+            path_nodes: Vec::new(),
             specs: vec![],
             version: CrateVersion::NEWEST_READABLE,
         };
@@ -3521,6 +3523,7 @@ mod tests {
             fields: vec![],
             fieldsets: vec![],
             paths: vec![],
+            path_nodes: Vec::new(),
             specs: vec![],
             version: CrateVersion::SPLINE_TANGENT_ALGORITHMS,
         };
@@ -3575,6 +3578,7 @@ mod tests {
             fields: vec![],
             fieldsets: vec![],
             paths: vec!["/".into(), "/Ref".into()],
+            path_nodes: Vec::new(),
             specs: vec![],
             version,
         }

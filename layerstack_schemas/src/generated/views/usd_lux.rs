@@ -613,7 +613,8 @@ pub enum DomeLightTextureFormat {
     #[doc = "`cubeMapVerticalCross`"]
     CubeMapVerticalCross,
     /// A token the schema does not list: OpenUSD does not enforce
-    /// `allowedTokens`, so an authored value may be anything.
+    /// `allowedTokens`, so an authored value may be anything. The
+    /// `AllowedTokens` validation rule reports it.
     Other(::alloc::sync::Arc<str>),
 }
 
@@ -976,7 +977,8 @@ pub enum DomeLight1TextureFormat {
     #[doc = "`cubeMapVerticalCross`"]
     CubeMapVerticalCross,
     /// A token the schema does not list: OpenUSD does not enforce
-    /// `allowedTokens`, so an authored value may be anything.
+    /// `allowedTokens`, so an authored value may be anything. The
+    /// `AllowedTokens` validation rule reports it.
     Other(::alloc::sync::Arc<str>),
 }
 
@@ -1039,7 +1041,8 @@ pub enum DomeLight1PoleAxis {
     #[doc = "`Z`"]
     Z,
     /// A token the schema does not list: OpenUSD does not enforce
-    /// `allowedTokens`, so an authored value may be anything.
+    /// `allowedTokens`, so an authored value may be anything. The
+    /// `AllowedTokens` validation rule reports it.
     Other(::alloc::sync::Arc<str>),
 }
 
@@ -1563,7 +1566,8 @@ pub enum LightApiMaterialSyncMode {
     #[doc = "`noMaterialResponse`"]
     NoMaterialResponse,
     /// A token the schema does not list: OpenUSD does not enforce
-    /// `allowedTokens`, so an authored value may be anything.
+    /// `allowedTokens`, so an authored value may be anything. The
+    /// `AllowedTokens` validation rule reports it.
     Other(::alloc::sync::Arc<str>),
 }
 
@@ -2286,7 +2290,8 @@ pub enum LightListApiLightListCacheBehavior {
     #[doc = "`ignore`"]
     Ignore,
     /// A token the schema does not list: OpenUSD does not enforce
-    /// `allowedTokens`, so an authored value may be anything.
+    /// `allowedTokens`, so an authored value may be anything. The
+    /// `AllowedTokens` validation rule reports it.
     Other(::alloc::sync::Arc<str>),
 }
 
@@ -2549,7 +2554,8 @@ pub enum ListApiLightListCacheBehavior {
     #[doc = "`ignore`"]
     Ignore,
     /// A token the schema does not list: OpenUSD does not enforce
-    /// `allowedTokens`, so an authored value may be anything.
+    /// `allowedTokens`, so an authored value may be anything. The
+    /// `AllowedTokens` validation rule reports it.
     Other(::alloc::sync::Arc<str>),
 }
 

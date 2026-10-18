@@ -338,7 +338,8 @@ pub enum OpenVDBAssetFieldClass {
     #[doc = "`unknown`"]
     Unknown,
     /// A token the schema does not list: OpenUSD does not enforce
-    /// `allowedTokens`, so an authored value may be anything.
+    /// `allowedTokens`, so an authored value may be anything. The
+    /// `AllowedTokens` validation rule reports it.
     Other(::alloc::sync::Arc<str>),
 }
 
@@ -631,7 +632,8 @@ pub enum ParticleField3DGaussianSplatProjectionModeHint {
     #[doc = "`tangential`"]
     Tangential,
     /// A token the schema does not list: OpenUSD does not enforce
-    /// `allowedTokens`, so an authored value may be anything.
+    /// `allowedTokens`, so an authored value may be anything. The
+    /// `AllowedTokens` validation rule reports it.
     Other(::alloc::sync::Arc<str>),
 }
 
@@ -682,7 +684,8 @@ pub enum ParticleField3DGaussianSplatSortingModeHint {
     #[doc = "`rayHitDistance`"]
     RayHitDistance,
     /// A token the schema does not list: OpenUSD does not enforce
-    /// `allowedTokens`, so an authored value may be anything.
+    /// `allowedTokens`, so an authored value may be anything. The
+    /// `AllowedTokens` validation rule reports it.
     Other(::alloc::sync::Arc<str>),
 }
 
@@ -3131,7 +3134,8 @@ pub enum VolumeFieldAssetVectorDataRoleHint {
     #[doc = "`Color`"]
     Color,
     /// A token the schema does not list: OpenUSD does not enforce
-    /// `allowedTokens`, so an authored value may be anything.
+    /// `allowedTokens`, so an authored value may be anything. The
+    /// `AllowedTokens` validation rule reports it.
     Other(::alloc::sync::Arc<str>),
 }
 

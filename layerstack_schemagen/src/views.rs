@@ -1168,7 +1168,8 @@ fn token_enum(cx: &Context<'_, '_>, name: &str, property: &Property) -> Result<S
     Ok(format!(
         "#[doc = {doc:?}]\n#[derive(Clone, Debug, PartialEq, Eq, Hash)]\npub enum {name} {{\n{declared}    \
          /// A token the schema does not list: OpenUSD does not enforce\n    \
-         /// `allowedTokens`, so an authored value may be anything.\n    Other({arc}<str>),\n}}\n\n\
+         /// `allowedTokens`, so an authored value may be anything. The\n    \
+         /// `AllowedTokens` validation rule reports it.\n    Other({arc}<str>),\n}}\n\n\
          impl {name} {{\n    /// The tokens the schema allows, in its order.\n    \
          pub const TOKENS: &'static [&'static str] = &[{tokens}];\n\n    \
          /// The value `token` names, `Other` when the schema does not\n    /// list it.\n    \

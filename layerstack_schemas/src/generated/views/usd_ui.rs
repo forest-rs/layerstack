@@ -33,7 +33,8 @@ pub enum AccessibilityApiPriority {
     #[doc = "`high`"]
     High,
     /// A token the schema does not list: OpenUSD does not enforce
-    /// `allowedTokens`, so an authored value may be anything.
+    /// `allowedTokens`, so an authored value may be anything. The
+    /// `AllowedTokens` validation rule reports it.
     Other(::alloc::sync::Arc<str>),
 }
 
@@ -515,7 +516,8 @@ pub enum NodeGraphNodeApiExpansionState {
     #[doc = "`minimized`"]
     Minimized,
     /// A token the schema does not list: OpenUSD does not enforce
-    /// `allowedTokens`, so an authored value may be anything.
+    /// `allowedTokens`, so an authored value may be anything. The
+    /// `AllowedTokens` validation rule reports it.
     Other(::alloc::sync::Arc<str>),
 }
 

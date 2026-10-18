@@ -76,6 +76,17 @@ pub enum BuiltinRule {
     /// ones reported; [`ValidationProblemKind::AttributeTypeMismatch`] names
     /// both types so a consumer can tell which side disagrees.
     AttributeTypes,
+    /// A token attribute's composed value, and each element of a token
+    /// array's, must be one of the attribute's composed `allowedTokens`
+    /// (authored or from its schema), when it has any. A uniform attribute
+    /// is checked once, at the default time; a varying one at every
+    /// requested time. [`ValidationProblemKind::DisallowedToken`] names the
+    /// value and the allowed set.
+    ///
+    /// OpenUSD 26.8 has no such validator: `UsdValidation` registers none
+    /// that reads `allowedTokens`, and `UsdAttribute::Get` returns any
+    /// authored token, so this rule is layerstack's own.
+    AllowedTokens,
     /// Root-layer metersPerUnit and upAxis must be authored (fallbacks do not count).
     #[cfg(feature = "usd-geom")]
     GeometryStageMetadata,
@@ -122,6 +133,7 @@ impl BuiltinRule {
     #[must_use]
     pub fn time_domain(self) -> RuleTimeDomain {
         match self {
+            Self::AllowedTokens => RuleTimeDomain::RequestedTimes,
             #[cfg(feature = "usd-geom")]
             Self::MeshTopology => RuleTimeDomain::RequestedTimes,
             #[cfg(feature = "usd-geom")]
@@ -198,6 +210,18 @@ pub enum ValidationProblemKind {
         /// This source's authored declaration.
         authored: Option<AttributeTypeName>,
     },
+    /// A token attribute resolves to a token, or a token array holds one,
+    /// that its `allowedTokens` does not list. The site names the attribute
+    /// and the source of the value; the problem's time, a varying
+    /// attribute's requested time.
+    DisallowedToken {
+        /// The token the attribute's value holds.
+        value: Arc<str>,
+        /// Its index, when the value is a token array.
+        index: Option<usize>,
+        /// The attribute's composed `allowedTokens`, in their order.
+        allowed: Vec<Arc<str>>,
+    },
     /// Missing root-layer metadata; schema fallbacks do not satisfy authoring.
     #[cfg(feature = "usd-geom")]
     MissingGeometryMetadata(&'static str),
@@ -261,6 +285,8 @@ pub struct ValidationWork {
     pub custom_invocations: usize,
     /// Authored property declarations inspected for type conflicts.
     pub property_specs: usize,
+    /// Token attribute values read and checked against `allowedTokens`.
+    pub token_values: usize,
     /// Mesh topology evaluations at distinct requested times.
     pub mesh_time_evaluations: usize,
     /// Calls into the subset-family validator; each may read multiple times.
@@ -355,6 +381,7 @@ impl ValidationContext {
             BuiltinRule::CompositionErrors,
             BuiltinRule::DefaultPrim,
             BuiltinRule::AttributeTypes,
+            BuiltinRule::AllowedTokens,
             #[cfg(feature = "usd-geom")]
             BuiltinRule::GeometryStageMetadata,
             #[cfg(feature = "usd-geom")]

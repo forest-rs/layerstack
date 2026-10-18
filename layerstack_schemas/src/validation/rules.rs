@@ -5,7 +5,7 @@ use super::*;
 #[cfg(feature = "usd-geom")]
 use alloc::collections::BTreeSet;
 use alloc::vec;
-use layerstack::{Path, PropertyKind, PropertyPath, PropertyType};
+use layerstack::{Path, PropertyKind, PropertyPath, PropertyType, Value};
 
 fn time_order(a: &Time, b: &Time) -> core::cmp::Ordering {
     match (a, b) {
@@ -308,6 +308,103 @@ fn properties(scene: &Scene<'_>, prim: PathId) -> Vec<TokenId> {
     });
     names
 }
+/// The tokens of a token value, or of a token array value with `true`;
+/// `None` for another type.
+fn token_elements(value: &Value) -> Option<(Vec<TokenId>, bool)> {
+    if let Value::Token(token) = value {
+        return Some((vec![*token], false));
+    }
+    let array = value.array_ref()?;
+    if let Some(typed) = array.typed()
+        && !matches!(typed.element_kind(), Value::Token(_))
+    {
+        return None;
+    }
+    let elements = array
+        .iter()
+        .map(|item| match *item {
+            Value::Token(token) => Some(token),
+            _ => None,
+        })
+        .collect::<Option<Vec<_>>>()?;
+    Some((elements, true))
+}
+/// Checks each authored token attribute of `prim` against its composed
+/// `allowedTokens` ([`BuiltinRule::AllowedTokens`]).
+///
+/// Spec: AOUSD Core §12.2.5 (property metadata), §13.3.2.3–§13.3.2.4
+/// (schema property metadata fallbacks).
+fn allowed_tokens(scene: &Scene<'_>, prim: PathId, rule: BuiltinRule, out: &mut ValidationReport) {
+    let stage = scene.stage();
+    let tokens = scene.store().tokens();
+    let Some(key) = tokens.lookup("allowedTokens") else {
+        return;
+    };
+    for property in properties(scene, prim) {
+        let Some(decl) = stage.resolve_property_declaration(prim, property) else {
+            continue;
+        };
+        let schema = stage.property_definition_ref(prim, property);
+        if schema.map_or(decl.kind, |s| s.kind) != PropertyKind::Attribute {
+            continue;
+        }
+        let allowed = match stage
+            .resolve_property_metadata(prim, property, key)
+            .map(|resolved| resolved.value)
+        {
+            Some(layerstack::ResolvedValue::Scalar(value)) => {
+                token_elements(&value).map(|(list, _)| list)
+            }
+            Some(layerstack::ResolvedValue::TokenList(list)) => Some(list),
+            _ => None,
+        };
+        // An empty list restricts nothing, as an absent one.
+        let Some(allowed) = allowed.filter(|list| !list.is_empty()) else {
+            continue;
+        };
+        let uniform =
+            schema.map_or(decl.variability, |s| s.variability) == layerstack::Variability::Uniform;
+        let times = if uniform {
+            vec![Time::Default]
+        } else {
+            out.times.clone()
+        };
+        for time in times {
+            out.work.token_values += 1;
+            let Some(resolved) = stage.read_property_with_provenance(
+                PropertyPath::new(prim, property),
+                time,
+                token_elements,
+            ) else {
+                continue;
+            };
+            let (elements, array) = &resolved.value;
+            for (index, token) in elements.iter().enumerate() {
+                if allowed.contains(token) {
+                    continue;
+                }
+                push(
+                    out,
+                    rule,
+                    ValidationSite {
+                        prim: Some(prim),
+                        property: Some(property),
+                        source: resolved.provenance.as_ref().map(|p| ValidationSource {
+                            layer: p.layer,
+                            spec: Some(p.spec_path.clone()),
+                        }),
+                    },
+                    (!uniform).then_some(time),
+                    ValidationProblemKind::DisallowedToken {
+                        value: tokens.resolve(*token).into(),
+                        index: array.then_some(index),
+                        allowed: allowed.iter().map(|t| tokens.resolve(*t).into()).collect(),
+                    },
+                );
+            }
+        }
+    }
+}
 fn prim_rule(scene: &Scene<'_>, prim: PathId, rule: BuiltinRule, out: &mut ValidationReport) {
     match rule {
         BuiltinRule::AttributeTypes => {
@@ -357,6 +454,7 @@ fn prim_rule(scene: &Scene<'_>, prim: PathId, rule: BuiltinRule, out: &mut Valid
                 }
             }
         }
+        BuiltinRule::AllowedTokens => allowed_tokens(scene, prim, rule, out),
         #[cfg(feature = "usd-geom")]
         BuiltinRule::MeshTopology => {
             if let Some(mesh) = crate::usd_geom::Mesh::new(scene, prim) {

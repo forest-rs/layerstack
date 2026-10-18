@@ -1113,28 +1113,21 @@ fn prim_index(
         let id = NodeId::from_raw_index(at);
         let node_offset = node.map_to_root.offset();
         let lookup_path = node.site.path.prim_path();
-        let mut found: Vec<LayerSpecEntries> = Vec::new();
-        {
-            let stack = ctx.stacks.get(node.site.stack);
-            for (strength, layer_id, spec) in site::specs(ctx.store, stack, &node.site.path) {
-                let layer_strength = u16::try_from(strength).unwrap_or(u16::MAX);
-                let layer_offset = node_offset.compose(stack.offset_at(strength));
-                let entries = crate::doc::composed_entries(spec.fields(), spec.properties())
-                    .map(|entry| (entry.name(), entry.value()))
-                    .collect();
-                found.push((layer_strength, layer_id, layer_offset, entries));
-            }
-        }
         // Paths authored across an arc name sites of its target's
         // namespace: they compose mapped through the arcs to the root.
         let maps = !node.map_to_root.is_identity();
         // The class or arc target the node's specs are authored beneath, at
         // the namespace depth it was introduced at: a target a class
-        // authors inside itself names no instance of it.
-        let at_intro = graph.path_at_introduction(ctx.store.paths(), graph::node_index(at));
-        let arc_root = ctx.store.paths().resolve(at_intro.prim_path()).clone();
-        let source_path = ctx.store.paths().resolve(lookup_path).clone();
-        for (layer_strength, layer_id, layer_offset, entries) in found {
+        // authors inside itself names no instance of it. Only an arc that
+        // maps paths reads it.
+        let arc_root = maps.then(|| {
+            let at_intro = graph.path_at_introduction(ctx.store.paths(), graph::node_index(at));
+            ctx.store.paths().resolve(at_intro.prim_path()).clone()
+        });
+        let stack = ctx.stacks.get(node.site.stack);
+        for (strength, layer_id, spec) in site::specs(ctx.store, stack, &node.site.path) {
+            let layer_strength = u16::try_from(strength).unwrap_or(u16::MAX);
+            let layer_offset = node_offset.compose(stack.offset_at(strength));
             index.add_source(OpinionKey {
                 node: id,
                 layer_strength,
@@ -1142,8 +1135,9 @@ fn prim_index(
                 lookup_path,
                 spec_path: node.site.path.clone(),
             });
-            let mut opinions = Vec::with_capacity(entries.len());
-            for (field, mut value) in entries {
+            let entries = crate::doc::composed_entries(spec.fields(), spec.properties());
+            index.add_opinions(entries.map(|entry| {
+                let (field, mut value) = (entry.name(), entry.value());
                 let key = OpinionKey {
                     node: id,
                     layer_strength,
@@ -1153,8 +1147,8 @@ fn prim_index(
                 };
                 // Relative expressions anchor at every node, the root's
                 // included.
-                map_path_expressions(ctx.store, &node.map_to_root, &source_path, &mut value);
-                if maps {
+                map_path_expressions(ctx.store, &node.map_to_root, lookup_path, &mut value);
+                if let Some(arc_root) = &arc_root {
                     let map_to_root = &node.map_to_root;
                     let map = |store: &dyn LayerStore, path: PathId| {
                         map_to_root.map_source_to_target(store.paths(), path)
@@ -1164,7 +1158,7 @@ fn prim_index(
                         &mut value,
                         crate::composition_checks::ArcPathMap {
                             arc: node.arc_kind,
-                            source: &arc_root,
+                            source: arc_root,
                             map: &map,
                         },
                         crate::composition_checks::TargetOwner {
@@ -1176,29 +1170,18 @@ fn prim_index(
                         checks,
                     );
                 }
-                opinions.push(Opinion {
+                Opinion {
                     key,
                     field,
                     value,
                     layer_offset,
-                });
-            }
-            index.add_opinions(opinions.into_iter());
+                }
+            }));
         }
     }
     index.finalize();
     index
 }
-
-/// One layer's spec at a node's site: its strength in the node's layer
-/// stack, the layer, the offset it is read with, and its fields and
-/// properties.
-type LayerSpecEntries = (
-    u16,
-    LayerId,
-    crate::doc::LayerOffset,
-    Vec<(TokenId, crate::prim_index::OpinionValue)>,
-);
 
 /// Orders `children`, child prims of the prim `index` composes, as
 /// composition orders them: by the names its contributing sites author,
@@ -1273,7 +1256,7 @@ pub(crate) fn order_children(
 fn map_path_expressions(
     store: &dyn LayerStore,
     map_to_root: &map_function::MapFunction,
-    site: &crate::path::Path,
+    site: PathId,
     value: &mut crate::prim_index::OpinionValue,
 ) {
     use crate::path_expression::value::{anchor_value_with, has_path_expression};
@@ -1290,7 +1273,9 @@ fn map_path_expressions(
     if !default_changes && !samples_change {
         return;
     }
-    let anchor: Vec<alloc::string::String> = site
+    let anchor: Vec<alloc::string::String> = store
+        .paths()
+        .resolve(site)
         .segments()
         .iter()
         .map(|name| alloc::string::String::from(store.tokens().resolve(*name)))

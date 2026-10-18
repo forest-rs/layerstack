@@ -341,17 +341,20 @@ impl PrimIndex {
         self.add_opinions(core::iter::once(opinion));
     }
 
-    /// Appends one known-size batch before finalization, preserving equal-key
+    /// Appends one batch before finalization, preserving equal-key
     /// insertion order. Detach shared snapshots once and reserve the first
-    /// batch exactly, so sparse prims do not reserve four large records.
-    pub(crate) fn add_opinions(&mut self, opinions: impl ExactSizeIterator<Item = Opinion>) {
-        if opinions.len() == 0 {
+    /// batch exactly, by its size hint, so sparse prims do not reserve four
+    /// large records.
+    pub(crate) fn add_opinions(&mut self, opinions: impl Iterator<Item = Opinion>) {
+        let len = opinions.size_hint().0;
+        let mut opinions = opinions.peekable();
+        if opinions.peek().is_none() {
             return;
         }
         let data = Arc::make_mut(&mut self.data);
         debug_assert!(data.fields.is_empty(), "append before finalization");
         if data.opinions.capacity() == 0 {
-            data.opinions.reserve_exact(opinions.len());
+            data.opinions.reserve_exact(len);
         }
         data.opinions.extend(opinions);
     }

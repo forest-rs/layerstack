@@ -231,6 +231,40 @@ fn dangling_targets_match_openusd() {
     }
 }
 
+/// Examples read as text, for an importer to quote.
+#[test]
+fn examples_display_as_paths() {
+    let oracle: Oracle = serde_json::from_str(ORACLE).expect("the oracle parses");
+    let (loaded, stage) = compose(&oracle, false);
+    let report = DanglingReport::compute(&Scene::new(&stage, &loaded.store), 3);
+    let (paths, tokens) = (&loaded.store.paths, &loaded.store.tokens);
+    let shade = report
+        .targets
+        .relationships
+        .iter()
+        .find(|group| tokens.resolve(group.name) == "shade")
+        .expect("the shade relationships");
+    assert_eq!(
+        shade.examples[0].display(paths, tokens),
+        "/Placements/Spot_005.shade -> /Plants/Fern_05/Petal (NoPrim)"
+    );
+    let shadow = report
+        .collections
+        .iter()
+        .find(|c| c.collection.name == "shadowLink")
+        .expect("the sun's shadow link");
+    let shown: Vec<String> = shadow
+        .examples
+        .iter()
+        .map(|example| example.display(paths, tokens))
+        .collect();
+    assert!(
+        shown.contains(&"includes /Gone.collection:lightLink (NoPrim)".to_owned())
+            && shown.contains(&"includes /Lights/Fill.collection:glare (NoCollection)".to_owned()),
+        "{shown:?}"
+    );
+}
+
 /// The counts the fixture was written to have, so a regenerated oracle
 /// that lost a category fails here too.
 #[test]

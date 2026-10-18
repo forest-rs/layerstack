@@ -16,6 +16,7 @@
 //! Spec: AOUSD Core §7.3.3 (properties), §11.3 (population: inactive prims
 //! and unloaded payloads), §12.4 (target list resolution).
 
+use alloc::string::String;
 use alloc::vec::Vec;
 
 use hashbrown::HashMap;
@@ -128,6 +129,20 @@ pub struct DanglingTarget {
     pub target: TargetPath,
     /// Why it dangles.
     pub kind: DanglingKind,
+}
+
+impl DanglingTarget {
+    /// The example as text: `/Placements/Spot.shade -> /Plants/Fern/Petal
+    /// (NoPrim)`.
+    #[must_use]
+    pub fn display(&self, paths: &PathInterner, tokens: &crate::TokenInterner) -> String {
+        alloc::format!(
+            "{} -> {} ({:?})",
+            self.source.display(paths, tokens),
+            self.target.display(paths, tokens),
+            self.kind
+        )
+    }
 }
 
 /// The targets or connections of every property of one name.

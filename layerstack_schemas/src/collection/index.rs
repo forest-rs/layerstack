@@ -227,6 +227,11 @@ impl MembershipIndex {
     /// or an ancestor, as [`MembershipQuery::is_included`] decides it; the
     /// pseudo-root is in no rule map. Each expression-decided collection
     /// matches `path` against `scene`.
+    ///
+    /// A path no collection includes, and the pseudo-root, give an empty
+    /// list, not an error. Rule maps decide by path, as the forward query
+    /// does, so a path beneath an included prim is reported whether or not
+    /// the stage holds a prim there.
     #[must_use]
     pub fn collections_including(&self, scene: &Scene<'_>, path: TargetPath) -> Vec<Inclusion<'_>> {
         let mut found: Vec<(u32, Inclusion<'_>)> = Vec::new();
@@ -324,6 +329,15 @@ impl MembershipIndex {
     ///
     /// A collection is compiled whole: there is no partial update of one
     /// rule map, nor of an expression.
+    ///
+    /// Every report must reach the index, in the order the stage applied
+    /// them; one report covering several edits, such as
+    /// `LiveStage::changes_since` gives, counts as all of them. The index
+    /// cannot tell that a report was skipped: it then keeps answering with
+    /// the collections as they were before the skipped edits, until a
+    /// later report happens to recompile them. To catch up after missing
+    /// reports, apply `LiveStage::changes_since` from a cursor taken when
+    /// the index was last current, or [`Self::build`] it again.
     ///
     /// OpenUSD: `UsdNotice::ObjectsChanged`'s resynced and changed-info-only
     /// paths.

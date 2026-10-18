@@ -1,0 +1,34 @@
+#usda 1.0
+(
+    doc = "The payload of `/Terrain/Quarry` (unloaded) and `/Terrain/Meadow`."
+)
+
+def Xform "Quarry"
+{
+    float depth = 3
+
+    def Xform "Stone_00"
+    {
+        rel vein = </Quarry/Stone_01>
+    }
+
+    def Xform "Stone_01"
+    {
+        rel vein = </Quarry/Stone_02>
+    }
+
+    def Xform "Stone_02"
+    {
+        rel vein = </Quarry/Stone_03>
+    }
+
+    def Xform "Stone_03"
+    {
+        rel vein = </Quarry/Stone_04>
+    }
+
+    def Xform "Stone_04"
+    {
+        rel vein = </Quarry/Stone_00>
+    }
+}

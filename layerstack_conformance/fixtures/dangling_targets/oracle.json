@@ -1,0 +1,990 @@
+{
+ "examples": 3,
+ "mask": [
+  "/Placements",
+  "/Lights"
+ ],
+ "masked": {
+  "collections": [
+   {
+    "dangling_excludes": {
+     "inactive": 0,
+     "masked": 3,
+     "no_prim": 0,
+     "no_property": 0,
+     "unloaded": 0
+    },
+    "dangling_includes": {
+     "inactive": 0,
+     "masked": 6,
+     "no_prim": 0,
+     "no_property": 0,
+     "unloaded": 0
+    },
+    "examples": [
+     [
+      "includes",
+      "/Terrain",
+      "masked"
+     ],
+     [
+      "includes",
+      "/Terrain/Boulder",
+      "masked"
+     ],
+     [
+      "includes",
+      "/Terrain/Rock_00.weight",
+      "masked"
+     ]
+    ],
+    "excludes": 3,
+    "includes": 6,
+    "missing_collections": 0,
+    "name": "lightLink",
+    "owner": "/Lights/Sun"
+   },
+   {
+    "dangling_excludes": {
+     "inactive": 0,
+     "masked": 0,
+     "no_prim": 0,
+     "no_property": 0,
+     "unloaded": 0
+    },
+    "dangling_includes": {
+     "inactive": 0,
+     "masked": 1,
+     "no_prim": 0,
+     "no_property": 0,
+     "unloaded": 0
+    },
+    "examples": [
+     [
+      "includes",
+      "/Lights/Fill.collection:glare",
+      "no_collection"
+     ],
+     [
+      "includes",
+      "/Gone.collection:lightLink",
+      "masked"
+     ]
+    ],
+    "excludes": 0,
+    "includes": 3,
+    "missing_collections": 1,
+    "name": "shadowLink",
+    "owner": "/Lights/Sun"
+   },
+   {
+    "dangling_excludes": {
+     "inactive": 0,
+     "masked": 0,
+     "no_prim": 1,
+     "no_property": 0,
+     "unloaded": 0
+    },
+    "dangling_includes": {
+     "inactive": 0,
+     "masked": 0,
+     "no_prim": 0,
+     "no_property": 0,
+     "unloaded": 0
+    },
+    "examples": [
+     [
+      "excludes",
+      "/Placements/Spot_99",
+      "no_prim"
+     ]
+    ],
+    "excludes": 1,
+    "includes": 1,
+    "missing_collections": 0,
+    "name": "lightLink",
+    "owner": "/Lights/Fill"
+   }
+  ],
+  "connections": {
+   "input": {
+    "dangling": {
+     "inactive": 0,
+     "masked": 60,
+     "no_prim": 0,
+     "no_property": 0,
+     "unloaded": 0
+    },
+    "examples": [
+     [
+      "/Placements/Spot_000.input",
+      "/Terrain/Rock_00.mass",
+      "masked"
+     ],
+     [
+      "/Placements/Spot_001.input",
+      "/Terrain/Rock_01.size",
+      "masked"
+     ],
+     [
+      "/Placements/Spot_002.input",
+      "/Terrain/Rock_02.size",
+      "masked"
+     ]
+    ],
+    "properties": 60,
+    "targets": 60
+   }
+  },
+  "relationships": {
+   "anchor": {
+    "dangling": {
+     "inactive": 0,
+     "masked": 60,
+     "no_prim": 0,
+     "no_property": 0,
+     "unloaded": 0
+    },
+    "examples": [
+     [
+      "/Placements/Spot_000.anchor",
+      "/Terrain/Rock_00",
+      "masked"
+     ],
+     [
+      "/Placements/Spot_001.anchor",
+      "/Terrain/Rock_01",
+      "masked"
+     ],
+     [
+      "/Placements/Spot_002.anchor",
+      "/Terrain/Rock_02",
+      "masked"
+     ]
+    ],
+    "properties": 60,
+    "targets": 60
+   },
+   "collection:lightLink:excludes": {
+    "dangling": {
+     "inactive": 0,
+     "masked": 3,
+     "no_prim": 1,
+     "no_property": 0,
+     "unloaded": 0
+    },
+    "examples": [
+     [
+      "/Lights/Sun.collection:lightLink:excludes",
+      "/Terrain/Rock_03",
+      "masked"
+     ],
+     [
+      "/Lights/Sun.collection:lightLink:excludes",
+      "/Terrain/Pebble",
+      "masked"
+     ],
+     [
+      "/Lights/Sun.collection:lightLink:excludes",
+      "/Terrain/Retired",
+      "masked"
+     ]
+    ],
+    "properties": 2,
+    "targets": 4
+   },
+   "collection:lightLink:includes": {
+    "dangling": {
+     "inactive": 0,
+     "masked": 6,
+     "no_prim": 0,
+     "no_property": 0,
+     "unloaded": 0
+    },
+    "examples": [
+     [
+      "/Lights/Sun.collection:lightLink:includes",
+      "/Terrain",
+      "masked"
+     ],
+     [
+      "/Lights/Sun.collection:lightLink:includes",
+      "/Terrain/Boulder",
+      "masked"
+     ],
+     [
+      "/Lights/Sun.collection:lightLink:includes",
+      "/Terrain/Rock_00.weight",
+      "masked"
+     ]
+    ],
+    "properties": 2,
+    "targets": 7
+   },
+   "collection:shadowLink:includes": {
+    "dangling": {
+     "inactive": 0,
+     "masked": 1,
+     "no_prim": 0,
+     "no_property": 1,
+     "unloaded": 0
+    },
+    "examples": [
+     [
+      "/Lights/Sun.collection:shadowLink:includes",
+      "/Lights/Fill.collection:glare",
+      "no_property"
+     ],
+     [
+      "/Lights/Sun.collection:shadowLink:includes",
+      "/Gone.collection:lightLink",
+      "masked"
+     ]
+    ],
+    "properties": 1,
+    "targets": 3
+   },
+   "neighbors": {
+    "dangling": {
+     "inactive": 0,
+     "masked": 0,
+     "no_prim": 2,
+     "no_property": 0,
+     "unloaded": 0
+    },
+    "examples": [
+     [
+      "/Placements/Spot_059.neighbors",
+      "/Placements/Spot_060",
+      "no_prim"
+     ],
+     [
+      "/Placements/Spot_059.neighbors",
+      "/Placements/Spot_060.anchor",
+      "no_prim"
+     ]
+    ],
+    "properties": 60,
+    "targets": 120
+   },
+   "retired": {
+    "dangling": {
+     "inactive": 0,
+     "masked": 60,
+     "no_prim": 0,
+     "no_property": 0,
+     "unloaded": 0
+    },
+    "examples": [
+     [
+      "/Placements/Spot_000.retired",
+      "/Terrain/Rock_00",
+      "masked"
+     ],
+     [
+      "/Placements/Spot_001.retired",
+      "/Terrain/Retired/Rock_01",
+      "masked"
+     ],
+     [
+      "/Placements/Spot_002.retired",
+      "/Terrain/Rock_02",
+      "masked"
+     ]
+    ],
+    "properties": 60,
+    "targets": 60
+   },
+   "shade": {
+    "dangling": {
+     "inactive": 0,
+     "masked": 60,
+     "no_prim": 0,
+     "no_property": 0,
+     "unloaded": 0
+    },
+    "examples": [
+     [
+      "/Placements/Spot_000.shade",
+      "/Plants/Fern_00/Frond",
+      "masked"
+     ],
+     [
+      "/Placements/Spot_001.shade",
+      "/Plants/Fern_01/Frond",
+      "masked"
+     ],
+     [
+      "/Placements/Spot_002.shade",
+      "/Plants/Fern_02/Frond",
+      "masked"
+     ]
+    ],
+    "properties": 60,
+    "targets": 60
+   },
+   "source": {
+    "dangling": {
+     "inactive": 0,
+     "masked": 60,
+     "no_prim": 0,
+     "no_property": 0,
+     "unloaded": 0
+    },
+    "examples": [
+     [
+      "/Placements/Spot_000.source",
+      "/Terrain/Meadow/Stone_00",
+      "masked"
+     ],
+     [
+      "/Placements/Spot_001.source",
+      "/Terrain/Meadow/Stone_01",
+      "masked"
+     ],
+     [
+      "/Placements/Spot_002.source",
+      "/Terrain/Quarry/Stone_02",
+      "masked"
+     ]
+    ],
+    "properties": 60,
+    "targets": 60
+   },
+   "support": {
+    "dangling": {
+     "inactive": 0,
+     "masked": 60,
+     "no_prim": 0,
+     "no_property": 0,
+     "unloaded": 0
+    },
+    "examples": [
+     [
+      "/Placements/Spot_000.support",
+      "/Terrain/Rock_00.size",
+      "masked"
+     ],
+     [
+      "/Placements/Spot_001.support",
+      "/Terrain/Rock_01.size",
+      "masked"
+     ],
+     [
+      "/Placements/Spot_002.support",
+      "/Terrain/Rock_02.size",
+      "masked"
+     ]
+    ],
+    "properties": 60,
+    "targets": 60
+   }
+  }
+ },
+ "openusd_version": "26.8",
+ "stage": {
+  "collections": [
+   {
+    "dangling_excludes": {
+     "inactive": 1,
+     "masked": 0,
+     "no_prim": 1,
+     "no_property": 0,
+     "unloaded": 0
+    },
+    "dangling_includes": {
+     "inactive": 1,
+     "masked": 0,
+     "no_prim": 1,
+     "no_property": 1,
+     "unloaded": 1
+    },
+    "examples": [
+     [
+      "includes",
+      "/Terrain/Boulder",
+      "no_prim"
+     ],
+     [
+      "includes",
+      "/Terrain/Rock_00.weight",
+      "no_property"
+     ],
+     [
+      "includes",
+      "/Terrain/Retired/Rock_01",
+      "inactive"
+     ]
+    ],
+    "excludes": 3,
+    "includes": 6,
+    "missing_collections": 0,
+    "name": "lightLink",
+    "owner": "/Lights/Sun"
+   },
+   {
+    "dangling_excludes": {
+     "inactive": 0,
+     "masked": 0,
+     "no_prim": 0,
+     "no_property": 0,
+     "unloaded": 0
+    },
+    "dangling_includes": {
+     "inactive": 0,
+     "masked": 0,
+     "no_prim": 1,
+     "no_property": 0,
+     "unloaded": 0
+    },
+    "examples": [
+     [
+      "includes",
+      "/Lights/Fill.collection:glare",
+      "no_collection"
+     ],
+     [
+      "includes",
+      "/Gone.collection:lightLink",
+      "no_prim"
+     ]
+    ],
+    "excludes": 0,
+    "includes": 3,
+    "missing_collections": 1,
+    "name": "shadowLink",
+    "owner": "/Lights/Sun"
+   },
+   {
+    "dangling_excludes": {
+     "inactive": 0,
+     "masked": 0,
+     "no_prim": 1,
+     "no_property": 0,
+     "unloaded": 0
+    },
+    "dangling_includes": {
+     "inactive": 0,
+     "masked": 0,
+     "no_prim": 0,
+     "no_property": 0,
+     "unloaded": 0
+    },
+    "examples": [
+     [
+      "excludes",
+      "/Placements/Spot_99",
+      "no_prim"
+     ]
+    ],
+    "excludes": 1,
+    "includes": 1,
+    "missing_collections": 0,
+    "name": "lightLink",
+    "owner": "/Lights/Fill"
+   },
+   {
+    "dangling_excludes": {
+     "inactive": 0,
+     "masked": 0,
+     "no_prim": 0,
+     "no_property": 0,
+     "unloaded": 0
+    },
+    "dangling_includes": {
+     "inactive": 0,
+     "masked": 0,
+     "no_prim": 0,
+     "no_property": 1,
+     "unloaded": 0
+    },
+    "examples": [
+     [
+      "includes",
+      "/Plants/Fern_02/Frond.height",
+      "no_property"
+     ]
+    ],
+    "excludes": 0,
+    "includes": 3,
+    "missing_collections": 0,
+    "name": "plants",
+    "owner": "/Sets"
+   },
+   {
+    "dangling_excludes": {
+     "inactive": 1,
+     "masked": 0,
+     "no_prim": 0,
+     "no_property": 0,
+     "unloaded": 0
+    },
+    "dangling_includes": {
+     "inactive": 0,
+     "masked": 0,
+     "no_prim": 2,
+     "no_property": 0,
+     "unloaded": 0
+    },
+    "examples": [
+     [
+      "includes",
+      "/Terrain/Rock_20",
+      "no_prim"
+     ],
+     [
+      "includes",
+      "/Terrain/Rock_21",
+      "no_prim"
+     ],
+     [
+      "excludes",
+      "/Terrain/Retired/Rock_02",
+      "inactive"
+     ]
+    ],
+    "excludes": 1,
+    "includes": 22,
+    "missing_collections": 0,
+    "name": "rocks",
+    "owner": "/Sets"
+   },
+   {
+    "dangling_excludes": {
+     "inactive": 0,
+     "masked": 0,
+     "no_prim": 0,
+     "no_property": 0,
+     "unloaded": 0
+    },
+    "dangling_includes": {
+     "inactive": 0,
+     "masked": 0,
+     "no_prim": 0,
+     "no_property": 0,
+     "unloaded": 0
+    },
+    "examples": [],
+    "excludes": 0,
+    "includes": 0,
+    "missing_collections": 0,
+    "name": "shallow",
+    "owner": "/Sets"
+   }
+  ],
+  "connections": {
+   "input": {
+    "dangling": {
+     "inactive": 0,
+     "masked": 0,
+     "no_prim": 0,
+     "no_property": 6,
+     "unloaded": 0
+    },
+    "examples": [
+     [
+      "/Placements/Spot_000.input",
+      "/Terrain/Rock_00.mass",
+      "no_property"
+     ],
+     [
+      "/Placements/Spot_011.input",
+      "/Terrain/Rock_11.mass",
+      "no_property"
+     ],
+     [
+      "/Placements/Spot_022.input",
+      "/Terrain/Rock_02.mass",
+      "no_property"
+     ]
+    ],
+    "properties": 60,
+    "targets": 60
+   }
+  },
+  "relationships": {
+   "anchor": {
+    "dangling": {
+     "inactive": 0,
+     "masked": 0,
+     "no_prim": 6,
+     "no_property": 0,
+     "unloaded": 0
+    },
+    "examples": [
+     [
+      "/Placements/Spot_003.anchor",
+      "/Terrain/Rock_99",
+      "no_prim"
+     ],
+     [
+      "/Placements/Spot_013.anchor",
+      "/Terrain/Rock_99",
+      "no_prim"
+     ],
+     [
+      "/Placements/Spot_023.anchor",
+      "/Terrain/Rock_99",
+      "no_prim"
+     ]
+    ],
+    "properties": 60,
+    "targets": 60
+   },
+   "base": {
+    "dangling": {
+     "inactive": 0,
+     "masked": 0,
+     "no_prim": 0,
+     "no_property": 0,
+     "unloaded": 0
+    },
+    "examples": [],
+    "properties": 10,
+    "targets": 10
+   },
+   "collection:lightLink:excludes": {
+    "dangling": {
+     "inactive": 1,
+     "masked": 0,
+     "no_prim": 2,
+     "no_property": 0,
+     "unloaded": 0
+    },
+    "examples": [
+     [
+      "/Lights/Sun.collection:lightLink:excludes",
+      "/Terrain/Pebble",
+      "no_prim"
+     ],
+     [
+      "/Lights/Sun.collection:lightLink:excludes",
+      "/Terrain/Retired",
+      "inactive"
+     ],
+     [
+      "/Lights/Fill.collection:lightLink:excludes",
+      "/Placements/Spot_99",
+      "no_prim"
+     ]
+    ],
+    "properties": 2,
+    "targets": 4
+   },
+   "collection:lightLink:includes": {
+    "dangling": {
+     "inactive": 1,
+     "masked": 0,
+     "no_prim": 1,
+     "no_property": 1,
+     "unloaded": 1
+    },
+    "examples": [
+     [
+      "/Lights/Sun.collection:lightLink:includes",
+      "/Terrain/Boulder",
+      "no_prim"
+     ],
+     [
+      "/Lights/Sun.collection:lightLink:includes",
+      "/Terrain/Rock_00.weight",
+      "no_property"
+     ],
+     [
+      "/Lights/Sun.collection:lightLink:includes",
+      "/Terrain/Retired/Rock_01",
+      "inactive"
+     ]
+    ],
+    "properties": 2,
+    "targets": 7
+   },
+   "collection:plants:includes": {
+    "dangling": {
+     "inactive": 0,
+     "masked": 0,
+     "no_prim": 0,
+     "no_property": 1,
+     "unloaded": 0
+    },
+    "examples": [
+     [
+      "/Sets.collection:plants:includes",
+      "/Plants/Fern_02/Frond.height",
+      "no_property"
+     ]
+    ],
+    "properties": 1,
+    "targets": 3
+   },
+   "collection:rocks:excludes": {
+    "dangling": {
+     "inactive": 1,
+     "masked": 0,
+     "no_prim": 0,
+     "no_property": 0,
+     "unloaded": 0
+    },
+    "examples": [
+     [
+      "/Sets.collection:rocks:excludes",
+      "/Terrain/Retired/Rock_02",
+      "inactive"
+     ]
+    ],
+    "properties": 1,
+    "targets": 1
+   },
+   "collection:rocks:includes": {
+    "dangling": {
+     "inactive": 0,
+     "masked": 0,
+     "no_prim": 2,
+     "no_property": 0,
+     "unloaded": 0
+    },
+    "examples": [
+     [
+      "/Sets.collection:rocks:includes",
+      "/Terrain/Rock_20",
+      "no_prim"
+     ],
+     [
+      "/Sets.collection:rocks:includes",
+      "/Terrain/Rock_21",
+      "no_prim"
+     ]
+    ],
+    "properties": 1,
+    "targets": 22
+   },
+   "collection:shadowLink:includes": {
+    "dangling": {
+     "inactive": 0,
+     "masked": 0,
+     "no_prim": 1,
+     "no_property": 1,
+     "unloaded": 0
+    },
+    "examples": [
+     [
+      "/Lights/Sun.collection:shadowLink:includes",
+      "/Lights/Fill.collection:glare",
+      "no_property"
+     ],
+     [
+      "/Lights/Sun.collection:shadowLink:includes",
+      "/Gone.collection:lightLink",
+      "no_prim"
+     ]
+    ],
+    "properties": 1,
+    "targets": 3
+   },
+   "neighbors": {
+    "dangling": {
+     "inactive": 0,
+     "masked": 0,
+     "no_prim": 2,
+     "no_property": 0,
+     "unloaded": 0
+    },
+    "examples": [
+     [
+      "/Placements/Spot_059.neighbors",
+      "/Placements/Spot_060",
+      "no_prim"
+     ],
+     [
+      "/Placements/Spot_059.neighbors",
+      "/Placements/Spot_060.anchor",
+      "no_prim"
+     ]
+    ],
+    "properties": 60,
+    "targets": 120
+   },
+   "restsOn": {
+    "dangling": {
+     "inactive": 0,
+     "masked": 0,
+     "no_prim": 3,
+     "no_property": 0,
+     "unloaded": 0
+    },
+    "examples": [
+     [
+      "/Terrain/Rock_05.restsOn",
+      "/Terrain/Boulder",
+      "no_prim"
+     ],
+     [
+      "/Terrain/Rock_12.restsOn",
+      "/Terrain/Boulder",
+      "no_prim"
+     ],
+     [
+      "/Terrain/Rock_19.restsOn",
+      "/Terrain/Boulder",
+      "no_prim"
+     ]
+    ],
+    "properties": 20,
+    "targets": 20
+   },
+   "retired": {
+    "dangling": {
+     "inactive": 20,
+     "masked": 0,
+     "no_prim": 0,
+     "no_property": 0,
+     "unloaded": 0
+    },
+    "examples": [
+     [
+      "/Placements/Spot_001.retired",
+      "/Terrain/Retired/Rock_01",
+      "inactive"
+     ],
+     [
+      "/Placements/Spot_004.retired",
+      "/Terrain/Retired.size",
+      "inactive"
+     ],
+     [
+      "/Placements/Spot_007.retired",
+      "/Terrain/Retired",
+      "inactive"
+     ]
+    ],
+    "properties": 60,
+    "targets": 60
+   },
+   "shade": {
+    "dangling": {
+     "inactive": 0,
+     "masked": 0,
+     "no_prim": 5,
+     "no_property": 5,
+     "unloaded": 0
+    },
+    "examples": [
+     [
+      "/Placements/Spot_005.shade",
+      "/Plants/Fern_05/Petal",
+      "no_prim"
+     ],
+     [
+      "/Placements/Spot_011.shade",
+      "/Plants/Fern_01/Frond.height",
+      "no_property"
+     ],
+     [
+      "/Placements/Spot_017.shade",
+      "/Plants/Fern_07/Petal",
+      "no_prim"
+     ]
+    ],
+    "properties": 60,
+    "targets": 60
+   },
+   "source": {
+    "dangling": {
+     "inactive": 0,
+     "masked": 0,
+     "no_prim": 0,
+     "no_property": 0,
+     "unloaded": 15
+    },
+    "examples": [
+     [
+      "/Placements/Spot_002.source",
+      "/Terrain/Quarry/Stone_02",
+      "unloaded"
+     ],
+     [
+      "/Placements/Spot_004.source",
+      "/Terrain/Quarry.depth",
+      "unloaded"
+     ],
+     [
+      "/Placements/Spot_010.source",
+      "/Terrain/Quarry/Stone_00",
+      "unloaded"
+     ]
+    ],
+    "properties": 60,
+    "targets": 60
+   },
+   "stem": {
+    "dangling": {
+     "inactive": 0,
+     "masked": 0,
+     "no_prim": 10,
+     "no_property": 0,
+     "unloaded": 0
+    },
+    "examples": [
+     [
+      "/Plants/Fern_00/Frond.stem",
+      "/Plants/Fern_00/Stem",
+      "no_prim"
+     ],
+     [
+      "/Plants/Fern_01/Frond.stem",
+      "/Plants/Fern_01/Stem",
+      "no_prim"
+     ],
+     [
+      "/Plants/Fern_02/Frond.stem",
+      "/Plants/Fern_02/Stem",
+      "no_prim"
+     ]
+    ],
+    "properties": 10,
+    "targets": 10
+   },
+   "support": {
+    "dangling": {
+     "inactive": 0,
+     "masked": 0,
+     "no_prim": 0,
+     "no_property": 6,
+     "unloaded": 0
+    },
+    "examples": [
+     [
+      "/Placements/Spot_004.support",
+      "/Terrain/Rock_04.weight",
+      "no_property"
+     ],
+     [
+      "/Placements/Spot_014.support",
+      "/Terrain/Rock_14.weight",
+      "no_property"
+     ],
+     [
+      "/Placements/Spot_024.support",
+      "/Terrain/Rock_04.weight",
+      "no_property"
+     ]
+    ],
+    "properties": 60,
+    "targets": 60
+   },
+   "vein": {
+    "dangling": {
+     "inactive": 0,
+     "masked": 0,
+     "no_prim": 0,
+     "no_property": 0,
+     "unloaded": 0
+    },
+    "examples": [],
+    "properties": 5,
+    "targets": 5
+   }
+  }
+ },
+ "unloaded": "/Terrain/Quarry"
+}

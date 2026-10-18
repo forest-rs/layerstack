@@ -1,0 +1,1223 @@
+#usda 1.0
+(
+    doc = """Relationships, connections and collections whose targets
+    dangle, by kind: no prim, no property, inactive, unloaded (the stage
+    unloads `/Terrain/Quarry`), and instance proxies, which resolve."""
+)
+
+def Scope "Terrain"
+{
+    def Xform "Rock_00"
+    {
+        float size = 0
+        rel restsOn = </Terrain>
+    }
+
+    def Xform "Rock_01"
+    {
+        float size = 1
+        rel restsOn = </Terrain/Rock_00>
+    }
+
+    def Xform "Rock_02"
+    {
+        float size = 2
+        rel restsOn = </Terrain/Rock_01>
+    }
+
+    def Xform "Rock_03"
+    {
+        float size = 3
+        rel restsOn = </Terrain/Rock_02>
+    }
+
+    def Xform "Rock_04"
+    {
+        float size = 4
+        rel restsOn = </Terrain/Rock_03>
+    }
+
+    def Xform "Rock_05"
+    {
+        float size = 5
+        rel restsOn = </Terrain/Boulder>
+    }
+
+    def Xform "Rock_06"
+    {
+        float size = 6
+        rel restsOn = </Terrain/Rock_05>
+    }
+
+    def Xform "Rock_07"
+    {
+        float size = 7
+        rel restsOn = </Terrain/Rock_06>
+    }
+
+    def Xform "Rock_08"
+    {
+        float size = 8
+        rel restsOn = </Terrain/Rock_07>
+    }
+
+    def Xform "Rock_09"
+    {
+        float size = 9
+        rel restsOn = </Terrain/Rock_08>
+    }
+
+    def Xform "Rock_10"
+    {
+        float size = 10
+        rel restsOn = </Terrain/Rock_09>
+    }
+
+    def Xform "Rock_11"
+    {
+        float size = 11
+        rel restsOn = </Terrain/Rock_10>
+    }
+
+    def Xform "Rock_12"
+    {
+        float size = 12
+        rel restsOn = </Terrain/Boulder>
+    }
+
+    def Xform "Rock_13"
+    {
+        float size = 13
+        rel restsOn = </Terrain/Rock_12>
+    }
+
+    def Xform "Rock_14"
+    {
+        float size = 14
+        rel restsOn = </Terrain/Rock_13>
+    }
+
+    def Xform "Rock_15"
+    {
+        float size = 15
+        rel restsOn = </Terrain/Rock_14>
+    }
+
+    def Xform "Rock_16"
+    {
+        float size = 16
+        rel restsOn = </Terrain/Rock_15>
+    }
+
+    def Xform "Rock_17"
+    {
+        float size = 17
+        rel restsOn = </Terrain/Rock_16>
+    }
+
+    def Xform "Rock_18"
+    {
+        float size = 18
+        rel restsOn = </Terrain/Rock_17>
+    }
+
+    def Xform "Rock_19"
+    {
+        float size = 19
+        rel restsOn = </Terrain/Boulder>
+    }
+
+    def Scope "Retired" (
+        active = false
+    )
+    {
+        float size = 1
+
+        def Xform "Rock_00"
+        {
+        }
+
+        def Xform "Rock_01"
+        {
+        }
+
+        def Xform "Rock_02"
+        {
+        }
+
+        def Xform "Rock_03"
+        {
+        }
+
+        def Xform "Rock_04"
+        {
+        }
+
+    }
+
+    def Xform "Quarry" (
+        prepend payload = @./quarry.usda@</Quarry>
+    )
+    {
+        def Xform "Local"
+        {
+        }
+    }
+
+    def Xform "Meadow" (
+        prepend payload = @./quarry.usda@</Quarry>
+    )
+    {
+    }
+}
+
+def Scope "Plants"
+{
+    def Xform "Fern_00" (
+        instanceable = true
+        prepend references = @./plants.usda@</Fern>
+    )
+    {
+    }
+
+    def Xform "Fern_01" (
+        instanceable = true
+        prepend references = @./plants.usda@</Fern>
+    )
+    {
+    }
+
+    def Xform "Fern_02" (
+        instanceable = true
+        prepend references = @./plants.usda@</Fern>
+    )
+    {
+    }
+
+    def Xform "Fern_03" (
+        instanceable = true
+        prepend references = @./plants.usda@</Fern>
+    )
+    {
+    }
+
+    def Xform "Fern_04" (
+        instanceable = true
+        prepend references = @./plants.usda@</Fern>
+    )
+    {
+    }
+
+    def Xform "Fern_05" (
+        instanceable = true
+        prepend references = @./plants.usda@</Fern>
+    )
+    {
+    }
+
+    def Xform "Fern_06" (
+        instanceable = true
+        prepend references = @./plants.usda@</Fern>
+    )
+    {
+    }
+
+    def Xform "Fern_07" (
+        instanceable = true
+        prepend references = @./plants.usda@</Fern>
+    )
+    {
+    }
+
+    def Xform "Fern_08" (
+        instanceable = true
+        prepend references = @./plants.usda@</Fern>
+    )
+    {
+    }
+
+    def Xform "Fern_09" (
+        instanceable = true
+        prepend references = @./plants.usda@</Fern>
+    )
+    {
+    }
+
+}
+
+def Scope "Lights"
+{
+    def Xform "Sun" (
+        prepend apiSchemas = ["CollectionAPI:lightLink", "CollectionAPI:shadowLink"]
+    )
+    {
+        rel collection:lightLink:excludes = [
+            </Terrain/Rock_03>,
+            </Terrain/Pebble>,
+            </Terrain/Retired>,
+        ]
+        rel collection:lightLink:includes = [
+            </Terrain>,
+            </Terrain/Boulder>,
+            </Terrain/Rock_00.weight>,
+            </Terrain/Retired/Rock_01>,
+            </Terrain/Quarry/Stone_00>,
+            </Plants/Fern_00/Frond>,
+        ]
+        rel collection:shadowLink:includes = [
+            </Lights/Fill.collection:lightLink>,
+            </Lights/Fill.collection:glare>,
+            </Gone.collection:lightLink>,
+        ]
+    }
+
+    def Xform "Fill" (
+        prepend apiSchemas = ["CollectionAPI:lightLink"]
+    )
+    {
+        rel collection:lightLink:excludes = </Placements/Spot_99>
+        rel collection:lightLink:includes = </Placements>
+    }
+}
+
+def Scope "Sets" (
+    prepend apiSchemas = ["CollectionAPI:rocks", "CollectionAPI:plants", "CollectionAPI:shallow"]
+)
+{
+    uniform token collection:plants:expansionRule = "expandPrimsAndProperties"
+    rel collection:plants:includes = [
+        </Plants/Fern_00>,
+        </Plants/Fern_01/Frond.width>,
+        </Plants/Fern_02/Frond.height>,
+    ]
+    rel collection:rocks:excludes = </Terrain/Retired/Rock_02>
+    rel collection:rocks:includes = [
+        </Terrain/Rock_00>,
+        </Terrain/Rock_01>,
+        </Terrain/Rock_02>,
+        </Terrain/Rock_03>,
+        </Terrain/Rock_04>,
+        </Terrain/Rock_05>,
+        </Terrain/Rock_06>,
+        </Terrain/Rock_07>,
+        </Terrain/Rock_08>,
+        </Terrain/Rock_09>,
+        </Terrain/Rock_10>,
+        </Terrain/Rock_11>,
+        </Terrain/Rock_12>,
+        </Terrain/Rock_13>,
+        </Terrain/Rock_14>,
+        </Terrain/Rock_15>,
+        </Terrain/Rock_16>,
+        </Terrain/Rock_17>,
+        </Terrain/Rock_18>,
+        </Terrain/Rock_19>,
+        </Terrain/Rock_20>,
+        </Terrain/Rock_21>
+    ]
+    uniform pathExpression collection:shallow:membershipExpression = "/Terrain/Rock_0*"
+}
+
+def Scope "Placements"
+{
+    def Xform "Spot_000"
+    {
+        float input
+        float input.connect = </Terrain/Rock_00.mass>
+        rel anchor = </Terrain/Rock_00>
+        rel neighbors = [
+            </Placements/Spot_001>,
+            </Placements/Spot_001.anchor>,
+        ]
+        rel retired = </Terrain/Rock_00>
+        rel shade = </Plants/Fern_00/Frond>
+        rel source = </Terrain/Meadow/Stone_00>
+        rel support = </Terrain/Rock_00.size>
+    }
+
+    def Xform "Spot_001"
+    {
+        float input
+        float input.connect = </Terrain/Rock_01.size>
+        rel anchor = </Terrain/Rock_01>
+        rel neighbors = [
+            </Placements/Spot_002>,
+            </Placements/Spot_002.anchor>,
+        ]
+        rel retired = </Terrain/Retired/Rock_01>
+        rel shade = </Plants/Fern_01/Frond>
+        rel source = </Terrain/Meadow/Stone_01>
+        rel support = </Terrain/Rock_01.size>
+    }
+
+    def Xform "Spot_002"
+    {
+        float input
+        float input.connect = </Terrain/Rock_02.size>
+        rel anchor = </Terrain/Rock_02>
+        rel neighbors = [
+            </Placements/Spot_003>,
+            </Placements/Spot_003.anchor>,
+        ]
+        rel retired = </Terrain/Rock_02>
+        rel shade = </Plants/Fern_02/Frond>
+        rel source = </Terrain/Quarry/Stone_02>
+        rel support = </Terrain/Rock_02.size>
+    }
+
+    def Xform "Spot_003"
+    {
+        float input
+        float input.connect = </Terrain/Rock_03.size>
+        rel anchor = </Terrain/Rock_99>
+        rel neighbors = [
+            </Placements/Spot_004>,
+            </Placements/Spot_004.anchor>,
+        ]
+        rel retired = </Terrain/Rock_03>
+        rel shade = </Plants/Fern_03/Frond>
+        rel source = </Terrain/Meadow/Stone_03>
+        rel support = </Terrain/Rock_03.size>
+    }
+
+    def Xform "Spot_004"
+    {
+        float input
+        float input.connect = </Terrain/Rock_04.size>
+        rel anchor = </Terrain/Rock_04>
+        rel neighbors = [
+            </Placements/Spot_005>,
+            </Placements/Spot_005.anchor>,
+        ]
+        rel retired = </Terrain/Retired.size>
+        rel shade = </Plants/Fern_04/Frond>
+        rel source = </Terrain/Quarry.depth>
+        rel support = </Terrain/Rock_04.weight>
+    }
+
+    def Xform "Spot_005"
+    {
+        float input
+        float input.connect = </Terrain/Rock_05.size>
+        rel anchor = </Terrain/Rock_05>
+        rel neighbors = [
+            </Placements/Spot_006>,
+            </Placements/Spot_006.anchor>,
+        ]
+        rel retired = </Terrain/Rock_05>
+        rel shade = </Plants/Fern_05/Petal>
+        rel source = </Terrain/Meadow/Stone_00>
+        rel support = </Terrain/Rock_05.size>
+    }
+
+    def Xform "Spot_006"
+    {
+        float input
+        float input.connect = </Terrain/Rock_06.size>
+        rel anchor = </Terrain/Rock_06>
+        rel neighbors = [
+            </Placements/Spot_007>,
+            </Placements/Spot_007.anchor>,
+        ]
+        rel retired = </Terrain/Rock_06>
+        rel shade = </Plants/Fern_06/Frond>
+        rel source = </Terrain/Quarry/Local>
+        rel support = </Terrain/Rock_06.size>
+    }
+
+    def Xform "Spot_007"
+    {
+        float input
+        float input.connect = </Terrain/Rock_07.size>
+        rel anchor = </Terrain/Rock_07>
+        rel neighbors = [
+            </Placements/Spot_008>,
+            </Placements/Spot_008.anchor>,
+        ]
+        rel retired = </Terrain/Retired>
+        rel shade = </Plants/Fern_07/Frond.width>
+        rel source = </Terrain/Meadow/Stone_02>
+        rel support = </Terrain/Rock_07.size>
+    }
+
+    def Xform "Spot_008"
+    {
+        float input
+        float input.connect = </Terrain/Rock_08.size>
+        rel anchor = </Terrain/Rock_08>
+        rel neighbors = [
+            </Placements/Spot_009>,
+            </Placements/Spot_009.anchor>,
+        ]
+        rel retired = </Terrain/Rock_08>
+        rel shade = </Plants/Fern_08/Frond>
+        rel source = </Terrain/Meadow/Stone_03>
+        rel support = </Terrain/Rock_08.size>
+    }
+
+    def Xform "Spot_009"
+    {
+        float input
+        float input.connect = </Terrain/Rock_09.size>
+        rel anchor = </Terrain/Rock_09>
+        rel neighbors = [
+            </Placements/Spot_010>,
+            </Placements/Spot_010.anchor>,
+        ]
+        rel retired = </Terrain/Rock_09>
+        rel shade = </Plants/Fern_09/Frond>
+        rel source = </Terrain/Meadow/Stone_04>
+        rel support = </Terrain/Rock_09.size>
+    }
+
+    def Xform "Spot_010"
+    {
+        float input
+        float input.connect = </Terrain/Rock_10.size>
+        rel anchor = </Terrain/Rock_10>
+        rel neighbors = [
+            </Placements/Spot_011>,
+            </Placements/Spot_011.anchor>,
+        ]
+        rel retired = </Terrain/Retired/Rock_00>
+        rel shade = </Plants/Fern_00/Frond>
+        rel source = </Terrain/Quarry/Stone_00>
+        rel support = </Terrain/Rock_10.size>
+    }
+
+    def Xform "Spot_011"
+    {
+        float input
+        float input.connect = </Terrain/Rock_11.mass>
+        rel anchor = </Terrain/Rock_11>
+        rel neighbors = [
+            </Placements/Spot_012>,
+            </Placements/Spot_012.anchor>,
+        ]
+        rel retired = </Terrain/Rock_11>
+        rel shade = </Plants/Fern_01/Frond.height>
+        rel source = </Terrain/Meadow/Stone_01>
+        rel support = </Terrain/Rock_11.size>
+    }
+
+    def Xform "Spot_012"
+    {
+        float input
+        float input.connect = </Terrain/Rock_12.size>
+        rel anchor = </Terrain/Rock_12>
+        rel neighbors = [
+            </Placements/Spot_013>,
+            </Placements/Spot_013.anchor>,
+        ]
+        rel retired = </Terrain/Rock_12>
+        rel shade = </Plants/Fern_02/Frond>
+        rel source = </Terrain/Quarry.depth>
+        rel support = </Terrain/Rock_12.size>
+    }
+
+    def Xform "Spot_013"
+    {
+        float input
+        float input.connect = </Terrain/Rock_13.size>
+        rel anchor = </Terrain/Rock_99>
+        rel neighbors = [
+            </Placements/Spot_014>,
+            </Placements/Spot_014.anchor>,
+        ]
+        rel retired = </Terrain/Retired.size>
+        rel shade = </Plants/Fern_03/Frond>
+        rel source = </Terrain/Meadow/Stone_03>
+        rel support = </Terrain/Rock_13.size>
+    }
+
+    def Xform "Spot_014"
+    {
+        float input
+        float input.connect = </Terrain/Rock_14.size>
+        rel anchor = </Terrain/Rock_14>
+        rel neighbors = [
+            </Placements/Spot_015>,
+            </Placements/Spot_015.anchor>,
+        ]
+        rel retired = </Terrain/Rock_14>
+        rel shade = </Plants/Fern_04/Frond>
+        rel source = </Terrain/Quarry/Local>
+        rel support = </Terrain/Rock_14.weight>
+    }
+
+    def Xform "Spot_015"
+    {
+        float input
+        float input.connect = </Terrain/Rock_15.size>
+        rel anchor = </Terrain/Rock_15>
+        rel neighbors = [
+            </Placements/Spot_016>,
+            </Placements/Spot_016.anchor>,
+        ]
+        rel retired = </Terrain/Rock_15>
+        rel shade = </Plants/Fern_05/Frond>
+        rel source = </Terrain/Meadow/Stone_00>
+        rel support = </Terrain/Rock_15.size>
+    }
+
+    def Xform "Spot_016"
+    {
+        float input
+        float input.connect = </Terrain/Rock_16.size>
+        rel anchor = </Terrain/Rock_16>
+        rel neighbors = [
+            </Placements/Spot_017>,
+            </Placements/Spot_017.anchor>,
+        ]
+        rel retired = </Terrain/Retired>
+        rel shade = </Plants/Fern_06/Frond>
+        rel source = </Terrain/Meadow/Stone_01>
+        rel support = </Terrain/Rock_16.size>
+    }
+
+    def Xform "Spot_017"
+    {
+        float input
+        float input.connect = </Terrain/Rock_17.size>
+        rel anchor = </Terrain/Rock_17>
+        rel neighbors = [
+            </Placements/Spot_018>,
+            </Placements/Spot_018.anchor>,
+        ]
+        rel retired = </Terrain/Rock_17>
+        rel shade = </Plants/Fern_07/Petal>
+        rel source = </Terrain/Meadow/Stone_02>
+        rel support = </Terrain/Rock_17.size>
+    }
+
+    def Xform "Spot_018"
+    {
+        float input
+        float input.connect = </Terrain/Rock_18.size>
+        rel anchor = </Terrain/Rock_18>
+        rel neighbors = [
+            </Placements/Spot_019>,
+            </Placements/Spot_019.anchor>,
+        ]
+        rel retired = </Terrain/Rock_18>
+        rel shade = </Plants/Fern_08/Frond>
+        rel source = </Terrain/Quarry/Stone_03>
+        rel support = </Terrain/Rock_18.size>
+    }
+
+    def Xform "Spot_019"
+    {
+        float input
+        float input.connect = </Terrain/Rock_19.size>
+        rel anchor = </Terrain/Rock_19>
+        rel neighbors = [
+            </Placements/Spot_020>,
+            </Placements/Spot_020.anchor>,
+        ]
+        rel retired = </Terrain/Retired/Rock_04>
+        rel shade = </Plants/Fern_09/Frond.width>
+        rel source = </Terrain/Meadow/Stone_04>
+        rel support = </Terrain/Rock_19.size>
+    }
+
+    def Xform "Spot_020"
+    {
+        float input
+        float input.connect = </Terrain/Rock_00.size>
+        rel anchor = </Terrain/Rock_00>
+        rel neighbors = [
+            </Placements/Spot_021>,
+            </Placements/Spot_021.anchor>,
+        ]
+        rel retired = </Terrain/Rock_00>
+        rel shade = </Plants/Fern_00/Frond>
+        rel source = </Terrain/Quarry.depth>
+        rel support = </Terrain/Rock_00.size>
+    }
+
+    def Xform "Spot_021"
+    {
+        float input
+        float input.connect = </Terrain/Rock_01.size>
+        rel anchor = </Terrain/Rock_01>
+        rel neighbors = [
+            </Placements/Spot_022>,
+            </Placements/Spot_022.anchor>,
+        ]
+        rel retired = </Terrain/Rock_01>
+        rel shade = </Plants/Fern_01/Frond>
+        rel source = </Terrain/Meadow/Stone_01>
+        rel support = </Terrain/Rock_01.size>
+    }
+
+    def Xform "Spot_022"
+    {
+        float input
+        float input.connect = </Terrain/Rock_02.mass>
+        rel anchor = </Terrain/Rock_02>
+        rel neighbors = [
+            </Placements/Spot_023>,
+            </Placements/Spot_023.anchor>,
+        ]
+        rel retired = </Terrain/Retired.size>
+        rel shade = </Plants/Fern_02/Frond>
+        rel source = </Terrain/Quarry/Local>
+        rel support = </Terrain/Rock_02.size>
+    }
+
+    def Xform "Spot_023"
+    {
+        float input
+        float input.connect = </Terrain/Rock_03.size>
+        rel anchor = </Terrain/Rock_99>
+        rel neighbors = [
+            </Placements/Spot_024>,
+            </Placements/Spot_024.anchor>,
+        ]
+        rel retired = </Terrain/Rock_03>
+        rel shade = </Plants/Fern_03/Frond.height>
+        rel source = </Terrain/Meadow/Stone_03>
+        rel support = </Terrain/Rock_03.size>
+    }
+
+    def Xform "Spot_024"
+    {
+        float input
+        float input.connect = </Terrain/Rock_04.size>
+        rel anchor = </Terrain/Rock_04>
+        rel neighbors = [
+            </Placements/Spot_025>,
+            </Placements/Spot_025.anchor>,
+        ]
+        rel retired = </Terrain/Rock_04>
+        rel shade = </Plants/Fern_04/Frond>
+        rel source = </Terrain/Meadow/Stone_04>
+        rel support = </Terrain/Rock_04.weight>
+    }
+
+    def Xform "Spot_025"
+    {
+        float input
+        float input.connect = </Terrain/Rock_05.size>
+        rel anchor = </Terrain/Rock_05>
+        rel neighbors = [
+            </Placements/Spot_026>,
+            </Placements/Spot_026.anchor>,
+        ]
+        rel retired = </Terrain/Retired>
+        rel shade = </Plants/Fern_05/Frond>
+        rel source = </Terrain/Meadow/Stone_00>
+        rel support = </Terrain/Rock_05.size>
+    }
+
+    def Xform "Spot_026"
+    {
+        float input
+        float input.connect = </Terrain/Rock_06.size>
+        rel anchor = </Terrain/Rock_06>
+        rel neighbors = [
+            </Placements/Spot_027>,
+            </Placements/Spot_027.anchor>,
+        ]
+        rel retired = </Terrain/Rock_06>
+        rel shade = </Plants/Fern_06/Frond>
+        rel source = </Terrain/Quarry/Stone_01>
+        rel support = </Terrain/Rock_06.size>
+    }
+
+    def Xform "Spot_027"
+    {
+        float input
+        float input.connect = </Terrain/Rock_07.size>
+        rel anchor = </Terrain/Rock_07>
+        rel neighbors = [
+            </Placements/Spot_028>,
+            </Placements/Spot_028.anchor>,
+        ]
+        rel retired = </Terrain/Rock_07>
+        rel shade = </Plants/Fern_07/Frond>
+        rel source = </Terrain/Meadow/Stone_02>
+        rel support = </Terrain/Rock_07.size>
+    }
+
+    def Xform "Spot_028"
+    {
+        float input
+        float input.connect = </Terrain/Rock_08.size>
+        rel anchor = </Terrain/Rock_08>
+        rel neighbors = [
+            </Placements/Spot_029>,
+            </Placements/Spot_029.anchor>,
+        ]
+        rel retired = </Terrain/Retired/Rock_03>
+        rel shade = </Plants/Fern_08/Frond>
+        rel source = </Terrain/Quarry.depth>
+        rel support = </Terrain/Rock_08.size>
+    }
+
+    def Xform "Spot_029"
+    {
+        float input
+        float input.connect = </Terrain/Rock_09.size>
+        rel anchor = </Terrain/Rock_09>
+        rel neighbors = [
+            </Placements/Spot_030>,
+            </Placements/Spot_030.anchor>,
+        ]
+        rel retired = </Terrain/Rock_09>
+        rel shade = </Plants/Fern_09/Petal>
+        rel source = </Terrain/Meadow/Stone_04>
+        rel support = </Terrain/Rock_09.size>
+    }
+
+    def Xform "Spot_030"
+    {
+        float input
+        float input.connect = </Terrain/Rock_10.size>
+        rel anchor = </Terrain/Rock_10>
+        rel neighbors = [
+            </Placements/Spot_031>,
+            </Placements/Spot_031.anchor>,
+        ]
+        rel retired = </Terrain/Rock_10>
+        rel shade = </Plants/Fern_00/Frond>
+        rel source = </Terrain/Quarry/Local>
+        rel support = </Terrain/Rock_10.size>
+    }
+
+    def Xform "Spot_031"
+    {
+        float input
+        float input.connect = </Terrain/Rock_11.size>
+        rel anchor = </Terrain/Rock_11>
+        rel neighbors = [
+            </Placements/Spot_032>,
+            </Placements/Spot_032.anchor>,
+        ]
+        rel retired = </Terrain/Retired.size>
+        rel shade = </Plants/Fern_01/Frond.width>
+        rel source = </Terrain/Meadow/Stone_01>
+        rel support = </Terrain/Rock_11.size>
+    }
+
+    def Xform "Spot_032"
+    {
+        float input
+        float input.connect = </Terrain/Rock_12.size>
+        rel anchor = </Terrain/Rock_12>
+        rel neighbors = [
+            </Placements/Spot_033>,
+            </Placements/Spot_033.anchor>,
+        ]
+        rel retired = </Terrain/Rock_12>
+        rel shade = </Plants/Fern_02/Frond>
+        rel source = </Terrain/Meadow/Stone_02>
+        rel support = </Terrain/Rock_12.size>
+    }
+
+    def Xform "Spot_033"
+    {
+        float input
+        float input.connect = </Terrain/Rock_13.mass>
+        rel anchor = </Terrain/Rock_99>
+        rel neighbors = [
+            </Placements/Spot_034>,
+            </Placements/Spot_034.anchor>,
+        ]
+        rel retired = </Terrain/Rock_13>
+        rel shade = </Plants/Fern_03/Frond>
+        rel source = </Terrain/Meadow/Stone_03>
+        rel support = </Terrain/Rock_13.size>
+    }
+
+    def Xform "Spot_034"
+    {
+        float input
+        float input.connect = </Terrain/Rock_14.size>
+        rel anchor = </Terrain/Rock_14>
+        rel neighbors = [
+            </Placements/Spot_035>,
+            </Placements/Spot_035.anchor>,
+        ]
+        rel retired = </Terrain/Retired>
+        rel shade = </Plants/Fern_04/Frond>
+        rel source = </Terrain/Quarry/Stone_04>
+        rel support = </Terrain/Rock_14.weight>
+    }
+
+    def Xform "Spot_035"
+    {
+        float input
+        float input.connect = </Terrain/Rock_15.size>
+        rel anchor = </Terrain/Rock_15>
+        rel neighbors = [
+            </Placements/Spot_036>,
+            </Placements/Spot_036.anchor>,
+        ]
+        rel retired = </Terrain/Rock_15>
+        rel shade = </Plants/Fern_05/Frond.height>
+        rel source = </Terrain/Meadow/Stone_00>
+        rel support = </Terrain/Rock_15.size>
+    }
+
+    def Xform "Spot_036"
+    {
+        float input
+        float input.connect = </Terrain/Rock_16.size>
+        rel anchor = </Terrain/Rock_16>
+        rel neighbors = [
+            </Placements/Spot_037>,
+            </Placements/Spot_037.anchor>,
+        ]
+        rel retired = </Terrain/Rock_16>
+        rel shade = </Plants/Fern_06/Frond>
+        rel source = </Terrain/Quarry.depth>
+        rel support = </Terrain/Rock_16.size>
+    }
+
+    def Xform "Spot_037"
+    {
+        float input
+        float input.connect = </Terrain/Rock_17.size>
+        rel anchor = </Terrain/Rock_17>
+        rel neighbors = [
+            </Placements/Spot_038>,
+            </Placements/Spot_038.anchor>,
+        ]
+        rel retired = </Terrain/Retired/Rock_02>
+        rel shade = </Plants/Fern_07/Frond>
+        rel source = </Terrain/Meadow/Stone_02>
+        rel support = </Terrain/Rock_17.size>
+    }
+
+    def Xform "Spot_038"
+    {
+        float input
+        float input.connect = </Terrain/Rock_18.size>
+        rel anchor = </Terrain/Rock_18>
+        rel neighbors = [
+            </Placements/Spot_039>,
+            </Placements/Spot_039.anchor>,
+        ]
+        rel retired = </Terrain/Rock_18>
+        rel shade = </Plants/Fern_08/Frond>
+        rel source = </Terrain/Quarry/Local>
+        rel support = </Terrain/Rock_18.size>
+    }
+
+    def Xform "Spot_039"
+    {
+        float input
+        float input.connect = </Terrain/Rock_19.size>
+        rel anchor = </Terrain/Rock_19>
+        rel neighbors = [
+            </Placements/Spot_040>,
+            </Placements/Spot_040.anchor>,
+        ]
+        rel retired = </Terrain/Rock_19>
+        rel shade = </Plants/Fern_09/Frond>
+        rel source = </Terrain/Meadow/Stone_04>
+        rel support = </Terrain/Rock_19.size>
+    }
+
+    def Xform "Spot_040"
+    {
+        float input
+        float input.connect = </Terrain/Rock_00.size>
+        rel anchor = </Terrain/Rock_00>
+        rel neighbors = [
+            </Placements/Spot_041>,
+            </Placements/Spot_041.anchor>,
+        ]
+        rel retired = </Terrain/Retired.size>
+        rel shade = </Plants/Fern_00/Frond>
+        rel source = </Terrain/Meadow/Stone_00>
+        rel support = </Terrain/Rock_00.size>
+    }
+
+    def Xform "Spot_041"
+    {
+        float input
+        float input.connect = </Terrain/Rock_01.size>
+        rel anchor = </Terrain/Rock_01>
+        rel neighbors = [
+            </Placements/Spot_042>,
+            </Placements/Spot_042.anchor>,
+        ]
+        rel retired = </Terrain/Rock_01>
+        rel shade = </Plants/Fern_01/Petal>
+        rel source = </Terrain/Meadow/Stone_01>
+        rel support = </Terrain/Rock_01.size>
+    }
+
+    def Xform "Spot_042"
+    {
+        float input
+        float input.connect = </Terrain/Rock_02.size>
+        rel anchor = </Terrain/Rock_02>
+        rel neighbors = [
+            </Placements/Spot_043>,
+            </Placements/Spot_043.anchor>,
+        ]
+        rel retired = </Terrain/Rock_02>
+        rel shade = </Plants/Fern_02/Frond>
+        rel source = </Terrain/Quarry/Stone_02>
+        rel support = </Terrain/Rock_02.size>
+    }
+
+    def Xform "Spot_043"
+    {
+        float input
+        float input.connect = </Terrain/Rock_03.size>
+        rel anchor = </Terrain/Rock_99>
+        rel neighbors = [
+            </Placements/Spot_044>,
+            </Placements/Spot_044.anchor>,
+        ]
+        rel retired = </Terrain/Retired>
+        rel shade = </Plants/Fern_03/Frond.width>
+        rel source = </Terrain/Meadow/Stone_03>
+        rel support = </Terrain/Rock_03.size>
+    }
+
+    def Xform "Spot_044"
+    {
+        float input
+        float input.connect = </Terrain/Rock_04.mass>
+        rel anchor = </Terrain/Rock_04>
+        rel neighbors = [
+            </Placements/Spot_045>,
+            </Placements/Spot_045.anchor>,
+        ]
+        rel retired = </Terrain/Rock_04>
+        rel shade = </Plants/Fern_04/Frond>
+        rel source = </Terrain/Quarry.depth>
+        rel support = </Terrain/Rock_04.weight>
+    }
+
+    def Xform "Spot_045"
+    {
+        float input
+        float input.connect = </Terrain/Rock_05.size>
+        rel anchor = </Terrain/Rock_05>
+        rel neighbors = [
+            </Placements/Spot_046>,
+            </Placements/Spot_046.anchor>,
+        ]
+        rel retired = </Terrain/Rock_05>
+        rel shade = </Plants/Fern_05/Frond>
+        rel source = </Terrain/Meadow/Stone_00>
+        rel support = </Terrain/Rock_05.size>
+    }
+
+    def Xform "Spot_046"
+    {
+        float input
+        float input.connect = </Terrain/Rock_06.size>
+        rel anchor = </Terrain/Rock_06>
+        rel neighbors = [
+            </Placements/Spot_047>,
+            </Placements/Spot_047.anchor>,
+        ]
+        rel retired = </Terrain/Retired/Rock_01>
+        rel shade = </Plants/Fern_06/Frond>
+        rel source = </Terrain/Quarry/Local>
+        rel support = </Terrain/Rock_06.size>
+    }
+
+    def Xform "Spot_047"
+    {
+        float input
+        float input.connect = </Terrain/Rock_07.size>
+        rel anchor = </Terrain/Rock_07>
+        rel neighbors = [
+            </Placements/Spot_048>,
+            </Placements/Spot_048.anchor>,
+        ]
+        rel retired = </Terrain/Rock_07>
+        rel shade = </Plants/Fern_07/Frond.height>
+        rel source = </Terrain/Meadow/Stone_02>
+        rel support = </Terrain/Rock_07.size>
+    }
+
+    def Xform "Spot_048"
+    {
+        float input
+        float input.connect = </Terrain/Rock_08.size>
+        rel anchor = </Terrain/Rock_08>
+        rel neighbors = [
+            </Placements/Spot_049>,
+            </Placements/Spot_049.anchor>,
+        ]
+        rel retired = </Terrain/Rock_08>
+        rel shade = </Plants/Fern_08/Frond>
+        rel source = </Terrain/Meadow/Stone_03>
+        rel support = </Terrain/Rock_08.size>
+    }
+
+    def Xform "Spot_049"
+    {
+        float input
+        float input.connect = </Terrain/Rock_09.size>
+        rel anchor = </Terrain/Rock_09>
+        rel neighbors = [
+            </Placements/Spot_050>,
+            </Placements/Spot_050.anchor>,
+        ]
+        rel retired = </Terrain/Retired.size>
+        rel shade = </Plants/Fern_09/Frond>
+        rel source = </Terrain/Meadow/Stone_04>
+        rel support = </Terrain/Rock_09.size>
+    }
+
+    def Xform "Spot_050"
+    {
+        float input
+        float input.connect = </Terrain/Rock_10.size>
+        rel anchor = </Terrain/Rock_10>
+        rel neighbors = [
+            </Placements/Spot_051>,
+            </Placements/Spot_051.anchor>,
+        ]
+        rel retired = </Terrain/Rock_10>
+        rel shade = </Plants/Fern_00/Frond>
+        rel source = </Terrain/Quarry/Stone_00>
+        rel support = </Terrain/Rock_10.size>
+    }
+
+    def Xform "Spot_051"
+    {
+        float input
+        float input.connect = </Terrain/Rock_11.size>
+        rel anchor = </Terrain/Rock_11>
+        rel neighbors = [
+            </Placements/Spot_052>,
+            </Placements/Spot_052.anchor>,
+        ]
+        rel retired = </Terrain/Rock_11>
+        rel shade = </Plants/Fern_01/Frond>
+        rel source = </Terrain/Meadow/Stone_01>
+        rel support = </Terrain/Rock_11.size>
+    }
+
+    def Xform "Spot_052"
+    {
+        float input
+        float input.connect = </Terrain/Rock_12.size>
+        rel anchor = </Terrain/Rock_12>
+        rel neighbors = [
+            </Placements/Spot_053>,
+            </Placements/Spot_053.anchor>,
+        ]
+        rel retired = </Terrain/Retired>
+        rel shade = </Plants/Fern_02/Frond>
+        rel source = </Terrain/Quarry.depth>
+        rel support = </Terrain/Rock_12.size>
+    }
+
+    def Xform "Spot_053"
+    {
+        float input
+        float input.connect = </Terrain/Rock_13.size>
+        rel anchor = </Terrain/Rock_99>
+        rel neighbors = [
+            </Placements/Spot_054>,
+            </Placements/Spot_054.anchor>,
+        ]
+        rel retired = </Terrain/Rock_13>
+        rel shade = </Plants/Fern_03/Petal>
+        rel source = </Terrain/Meadow/Stone_03>
+        rel support = </Terrain/Rock_13.size>
+    }
+
+    def Xform "Spot_054"
+    {
+        float input
+        float input.connect = </Terrain/Rock_14.size>
+        rel anchor = </Terrain/Rock_14>
+        rel neighbors = [
+            </Placements/Spot_055>,
+            </Placements/Spot_055.anchor>,
+        ]
+        rel retired = </Terrain/Rock_14>
+        rel shade = </Plants/Fern_04/Frond>
+        rel source = </Terrain/Quarry/Local>
+        rel support = </Terrain/Rock_14.weight>
+    }
+
+    def Xform "Spot_055"
+    {
+        float input
+        float input.connect = </Terrain/Rock_15.mass>
+        rel anchor = </Terrain/Rock_15>
+        rel neighbors = [
+            </Placements/Spot_056>,
+            </Placements/Spot_056.anchor>,
+        ]
+        rel retired = </Terrain/Retired/Rock_00>
+        rel shade = </Plants/Fern_05/Frond.width>
+        rel source = </Terrain/Meadow/Stone_00>
+        rel support = </Terrain/Rock_15.size>
+    }
+
+    def Xform "Spot_056"
+    {
+        float input
+        float input.connect = </Terrain/Rock_16.size>
+        rel anchor = </Terrain/Rock_16>
+        rel neighbors = [
+            </Placements/Spot_057>,
+            </Placements/Spot_057.anchor>,
+        ]
+        rel retired = </Terrain/Rock_16>
+        rel shade = </Plants/Fern_06/Frond>
+        rel source = </Terrain/Meadow/Stone_01>
+        rel support = </Terrain/Rock_16.size>
+    }
+
+    def Xform "Spot_057"
+    {
+        float input
+        float input.connect = </Terrain/Rock_17.size>
+        rel anchor = </Terrain/Rock_17>
+        rel neighbors = [
+            </Placements/Spot_058>,
+            </Placements/Spot_058.anchor>,
+        ]
+        rel retired = </Terrain/Rock_17>
+        rel shade = </Plants/Fern_07/Frond>
+        rel source = </Terrain/Meadow/Stone_02>
+        rel support = </Terrain/Rock_17.size>
+    }
+
+    def Xform "Spot_058"
+    {
+        float input
+        float input.connect = </Terrain/Rock_18.size>
+        rel anchor = </Terrain/Rock_18>
+        rel neighbors = [
+            </Placements/Spot_059>,
+            </Placements/Spot_059.anchor>,
+        ]
+        rel retired = </Terrain/Retired.size>
+        rel shade = </Plants/Fern_08/Frond>
+        rel source = </Terrain/Quarry/Stone_03>
+        rel support = </Terrain/Rock_18.size>
+    }
+
+    def Xform "Spot_059"
+    {
+        float input
+        float input.connect = </Terrain/Rock_19.size>
+        rel anchor = </Terrain/Rock_19>
+        rel neighbors = [
+            </Placements/Spot_060>,
+            </Placements/Spot_060.anchor>,
+        ]
+        rel retired = </Terrain/Rock_19>
+        rel shade = </Plants/Fern_09/Frond.height>
+        rel source = </Terrain/Meadow/Stone_04>
+        rel support = </Terrain/Rock_19.size>
+    }
+
+}

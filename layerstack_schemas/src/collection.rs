@@ -19,8 +19,10 @@
 //! `mode` and path expressions are OpenUSD's, as of 26.08.
 
 mod cache;
+mod dangling;
 mod index;
 pub use cache::*;
+pub use dangling::*;
 pub use index::*;
 
 use alloc::{

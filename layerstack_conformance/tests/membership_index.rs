@@ -282,6 +282,31 @@ fn the_pebble_is_in_the_collections_openusd_puts_it_in() {
         !got.iter()
             .any(|(owner, name, _)| owner == "/Garden" && name == "path")
     );
+    // Each inclusion names the entry that decided it: the pebble itself, an
+    // ancestor, or the pseudo-root for `includeRoot`.
+    let decided: Vec<(String, Option<String>)> = index
+        .collections_including(&scene, TargetPath::Prim(pebble.expect("the pebble")))
+        .into_iter()
+        .map(|inclusion| {
+            let store = scene.store();
+            (
+                inclusion.collection.name.clone(),
+                inclusion
+                    .decided_at
+                    .map(|at| at.display(store.paths(), store.tokens()).to_string()),
+            )
+        })
+        .collect();
+    for (name, at) in [
+        ("smooth", "/Parts/Stones/Granite/Pebble"),
+        ("stones", "/Parts/Stones"),
+        ("everything", "/"),
+    ] {
+        assert!(
+            decided.contains(&(name.into(), Some(at.into()))),
+            "{name} at {at}: {decided:?}"
+        );
+    }
 }
 
 fn path(store: &InMemoryStore, text: &str) -> layerstack::Path {

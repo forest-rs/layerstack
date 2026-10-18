@@ -34,6 +34,18 @@ pub struct Inclusion<'a> {
     /// How it includes the path, as [`MembershipQuery::is_included`]
     /// reports it: never [`Membership::Excluded`].
     pub membership: Membership,
+    /// The rule-map entry that decided it: the path itself, or the
+    /// nearest ancestor the collection names. A collection with
+    /// `includeRoot` decides every path no nearer entry does at the
+    /// pseudo-root, so this names the pseudo-root for those (light-linking
+    /// collections often have it). `None` for a collection decided by its
+    /// `membershipExpression`.
+    ///
+    /// To ask only about collections that name the path or one of its
+    /// ancestors, skip inclusions decided at the pseudo-root; to ask only
+    /// about collections owned within a subtree, test
+    /// [`CollectionIdentity::owner`].
+    pub decided_at: Option<TargetPath>,
 }
 
 /// What [`MembershipIndex::apply_changes`] did, by collection, each list in
@@ -247,7 +259,7 @@ impl MembershipIndex {
                     if let Some(membership) = decide(rule, current, path) {
                         decided.push(slot);
                         if membership.is_included() {
-                            found.push(self.inclusion(slot, membership));
+                            found.push(self.inclusion(slot, membership, Some(current)));
                         }
                     }
                 }
@@ -257,7 +269,7 @@ impl MembershipIndex {
         for &slot in &self.expressions {
             let membership = self.entry(slot).query.is_included(scene, path);
             if membership.is_included() {
-                found.push(self.inclusion(slot, membership));
+                found.push(self.inclusion(slot, membership, None));
             }
         }
         found.sort_unstable_by_key(|(rank, _)| *rank);
@@ -478,13 +490,19 @@ impl MembershipIndex {
             .expect("a live collection slot")
     }
 
-    fn inclusion(&self, slot: u32, membership: Membership) -> (u32, Inclusion<'_>) {
+    fn inclusion(
+        &self,
+        slot: u32,
+        membership: Membership,
+        decided_at: Option<TargetPath>,
+    ) -> (u32, Inclusion<'_>) {
         let entry = self.entry(slot);
         (
             entry.rank,
             Inclusion {
                 collection: &entry.identity,
                 membership,
+                decided_at,
             },
         )
     }

@@ -339,12 +339,20 @@ impl<B: Storage> Reader<'_, B> {
         for layer in &mut self.pending[first_pending..] {
             layer.map_layer_ids(final_id);
         }
-        // A diagnostic names the layer read, even one that failed.
-        for diagnostic in &mut self.diagnostics[first_diagnostic..] {
-            if let Some(&id) = ids.get(&diagnostic.layer_id) {
-                diagnostic.layer_id = id;
+        // A diagnostic names the layer read, even one that failed, and so
+        // do those a strict rejection carries.
+        let rename = |diagnostics: &mut [layerstack_usdz::MemberDiagnostic]| {
+            for diagnostic in diagnostics {
+                if let Some(&id) = ids.get(&diagnostic.layer_id) {
+                    diagnostic.layer_id = id;
+                }
             }
-        }
+        };
+        rename(&mut self.diagnostics[first_diagnostic..]);
+        let result = result.map_err(|mut error| {
+            rename(&mut error.diagnostics);
+            error
+        });
         Some(result.map(|(layer_id, layer)| ResolvedAsset {
             layer_id,
             resolved_path: Arc::from(identifier.as_str()),

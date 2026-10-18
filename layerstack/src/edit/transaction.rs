@@ -486,8 +486,10 @@ impl Transaction {
     /// on that spec. A missing property spec is created: with the prim's
     /// schema definition of the property when it has one, else with the
     /// stage's composed declaration (for a stage address applied through
-    /// [`LiveStage::apply`](crate::LiveStage::apply)), else as a
-    /// relationship. An attribute created this way needs a declared type.
+    /// [`LiveStage::apply`](crate::LiveStage::apply)), whose `custom`
+    /// qualifier it keeps, else as a `custom` relationship, as OpenUSD
+    /// stamps one for a property nothing declares. An attribute created
+    /// this way needs a declared type.
     ///
     /// Target paths are named as the address is: through an edit target
     /// ([`EditTarget::property`](super::EditTarget::property)) they are

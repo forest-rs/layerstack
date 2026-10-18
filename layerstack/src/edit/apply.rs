@@ -1824,9 +1824,16 @@ fn set_targets(
                     check_registered(&path, &ty)?;
                     let mut spec = PropertySpec::typed_attribute(ty);
                     spec.variability = declared.variability;
+                    spec.custom = declared.custom;
                     spec
                 }
-                (None, _) => PropertySpec::relationship(),
+                (None, Some(declared)) => PropertySpec {
+                    custom: declared.custom,
+                    ..PropertySpec::relationship()
+                },
+                // OpenUSD: `UsdRelationship::_CreateSpec(fallbackCustom =
+                // true)` stamps a relationship nothing declares `custom`.
+                (None, None) => PropertySpec::relationship().custom(),
             };
             spec.targets = Some(targets.clone());
             ensure(store, id, &loc, journal)?;

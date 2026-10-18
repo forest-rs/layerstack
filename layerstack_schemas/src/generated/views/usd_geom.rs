@@ -6215,6 +6215,31 @@ impl ImageableEdit {
         self
     }
 
+    #[doc = "Adds `target` to [`Self::set_proxy_prim`]'s targets at `position`, editing the edit target's list op instead of replacing it: weaker layers' targets stay, and a target already in the chosen list moves. An explicit list takes it whatever the position."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdGeomImageable::CreateProxyPrimRel().AddTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn add_to_proxy_prim(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+        position: ::layerstack::ListPosition,
+    ) -> &Self {
+        self.add_target(edit, "proxyPrim", target, position);
+        self
+    }
+
+    #[doc = "Removes `target` from [`Self::set_proxy_prim`]'s targets: it is deleted in the edit target's list op, which removes it from weaker layers' targets too, or taken out of an explicit list."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdGeomImageable::CreateProxyPrimRel().RemoveTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn remove_from_proxy_prim(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+    ) -> &Self {
+        self.remove_target(edit, "proxyPrim", target);
+        self
+    }
+
     #[doc = "Purpose is a classification of geometry into categories that can each be independently included or excluded from traversals of prims on a stage, such as rendering or bounding-box computation traversals."]
     #[doc = ""]
     #[doc = "USD attribute `purpose` (`token`, uniform; fallback `\"default\"`)."]
@@ -11801,6 +11826,31 @@ impl PointInstancerEdit {
         targets: &[::layerstack::TargetPath],
     ) -> &Self {
         self.write_targets(edit, "prototypes", targets);
+        self
+    }
+
+    #[doc = "Adds `target` to [`Self::set_prototypes`]'s targets at `position`, editing the edit target's list op instead of replacing it: weaker layers' targets stay, and a target already in the chosen list moves. An explicit list takes it whatever the position."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdGeomPointInstancer::CreatePrototypesRel().AddTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn add_to_prototypes(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+        position: ::layerstack::ListPosition,
+    ) -> &Self {
+        self.add_target(edit, "prototypes", target, position);
+        self
+    }
+
+    #[doc = "Removes `target` from [`Self::set_prototypes`]'s targets: it is deleted in the edit target's list op, which removes it from weaker layers' targets too, or taken out of an explicit list."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdGeomPointInstancer::CreatePrototypesRel().RemoveTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn remove_from_prototypes(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+    ) -> &Self {
+        self.remove_target(edit, "prototypes", target);
         self
     }
 

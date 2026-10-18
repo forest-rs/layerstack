@@ -259,6 +259,31 @@ impl LODDistanceHeuristicEdit {
         self
     }
 
+    #[doc = "Adds `target` to [`Self::set_bounding_volume`]'s targets at `position`, editing the edit target's list op instead of replacing it: weaker layers' targets stay, and a target already in the chosen list moves. An explicit list takes it whatever the position."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdLodDistanceHeuristic::CreateBoundingVolumeRel().AddTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn add_to_bounding_volume(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+        position: ::layerstack::ListPosition,
+    ) -> &Self {
+        self.add_target(edit, "boundingVolume", target, position);
+        self
+    }
+
+    #[doc = "Removes `target` from [`Self::set_bounding_volume`]'s targets: it is deleted in the edit target's list op, which removes it from weaker layers' targets too, or taken out of an explicit list."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdLodDistanceHeuristic::CreateBoundingVolumeRel().RemoveTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn remove_from_bounding_volume(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+    ) -> &Self {
+        self.remove_target(edit, "boundingVolume", target);
+        self
+    }
+
     #[doc = "The center point of this LOD Root in local coordinates."]
     #[doc = ""]
     #[doc = "USD attribute `center` (`point3f`; fallback `(0.0, 0.0, 0.0)`)."]
@@ -861,6 +886,31 @@ impl LODRootApiEdit {
         self.write_targets(edit, "lod:heuristics", targets);
         self
     }
+
+    #[doc = "Adds `target` to [`Self::set_lod_heuristics`]'s targets at `position`, editing the edit target's list op instead of replacing it: weaker layers' targets stay, and a target already in the chosen list moves. An explicit list takes it whatever the position."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdLodRootAPI::CreateLodHeuristicsRel().AddTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn add_to_lod_heuristics(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+        position: ::layerstack::ListPosition,
+    ) -> &Self {
+        self.add_target(edit, "lod:heuristics", target, position);
+        self
+    }
+
+    #[doc = "Removes `target` from [`Self::set_lod_heuristics`]'s targets: it is deleted in the edit target's list op, which removes it from weaker layers' targets too, or taken out of an explicit list."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdLodRootAPI::CreateLodHeuristicsRel().RemoveTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn remove_from_lod_heuristics(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+    ) -> &Self {
+        self.remove_target(edit, "lod:heuristics", target);
+        self
+    }
 }
 
 #[doc = "The tokens `projectionMethod` allows."]
@@ -1178,6 +1228,31 @@ impl LODScreenSizeHeuristicEdit {
         targets: &[::layerstack::TargetPath],
     ) -> &Self {
         self.write_targets(edit, "boundingVolume", targets);
+        self
+    }
+
+    #[doc = "Adds `target` to [`Self::set_bounding_volume`]'s targets at `position`, editing the edit target's list op instead of replacing it: weaker layers' targets stay, and a target already in the chosen list moves. An explicit list takes it whatever the position."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdLodScreenSizeHeuristic::CreateBoundingVolumeRel().AddTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn add_to_bounding_volume(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+        position: ::layerstack::ListPosition,
+    ) -> &Self {
+        self.add_target(edit, "boundingVolume", target, position);
+        self
+    }
+
+    #[doc = "Removes `target` from [`Self::set_bounding_volume`]'s targets: it is deleted in the edit target's list op, which removes it from weaker layers' targets too, or taken out of an explicit list."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdLodScreenSizeHeuristic::CreateBoundingVolumeRel().RemoveTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn remove_from_bounding_volume(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+    ) -> &Self {
+        self.remove_target(edit, "boundingVolume", target);
         self
     }
 

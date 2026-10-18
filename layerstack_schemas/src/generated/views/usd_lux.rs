@@ -935,6 +935,31 @@ impl DomeLightEdit {
         self.write_targets(edit, "portals", targets);
         self
     }
+
+    #[doc = "Adds `target` to [`Self::set_portals`]'s targets at `position`, editing the edit target's list op instead of replacing it: weaker layers' targets stay, and a target already in the chosen list moves. An explicit list takes it whatever the position."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdLuxDomeLight::CreatePortalsRel().AddTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn add_to_portals(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+        position: ::layerstack::ListPosition,
+    ) -> &Self {
+        self.add_target(edit, "portals", target, position);
+        self
+    }
+
+    #[doc = "Removes `target` from [`Self::set_portals`]'s targets: it is deleted in the edit target's list op, which removes it from weaker layers' targets too, or taken out of an explicit list."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdLuxDomeLight::CreatePortalsRel().RemoveTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn remove_from_portals(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+    ) -> &Self {
+        self.remove_target(edit, "portals", target);
+        self
+    }
 }
 
 #[doc = "The tokens `inputs:texture:format` allows."]
@@ -1353,6 +1378,31 @@ impl DomeLight1Edit {
         self.write_targets(edit, "portals", targets);
         self
     }
+
+    #[doc = "Adds `target` to [`Self::set_portals`]'s targets at `position`, editing the edit target's list op instead of replacing it: weaker layers' targets stay, and a target already in the chosen list moves. An explicit list takes it whatever the position."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdLuxDomeLight_1::CreatePortalsRel().AddTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn add_to_portals(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+        position: ::layerstack::ListPosition,
+    ) -> &Self {
+        self.add_target(edit, "portals", target, position);
+        self
+    }
+
+    #[doc = "Removes `target` from [`Self::set_portals`]'s targets: it is deleted in the edit target's list op, which removes it from weaker layers' targets too, or taken out of an explicit list."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdLuxDomeLight_1::CreatePortalsRel().RemoveTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn remove_from_portals(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+    ) -> &Self {
+        self.remove_target(edit, "portals", target);
+        self
+    }
 }
 
 #[doc = "A light that emits outwards from a geometric prim. Deprecated, use MeshLight instead."]
@@ -1474,6 +1524,31 @@ impl GeometryLightEdit {
         targets: &[::layerstack::TargetPath],
     ) -> &Self {
         self.write_targets(edit, "geometry", targets);
+        self
+    }
+
+    #[doc = "Adds `target` to [`Self::set_geometry`]'s targets at `position`, editing the edit target's list op instead of replacing it: weaker layers' targets stay, and a target already in the chosen list moves. An explicit list takes it whatever the position."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdLuxGeometryLight::CreateGeometryRel().AddTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn add_to_geometry(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+        position: ::layerstack::ListPosition,
+    ) -> &Self {
+        self.add_target(edit, "geometry", target, position);
+        self
+    }
+
+    #[doc = "Removes `target` from [`Self::set_geometry`]'s targets: it is deleted in the edit target's list op, which removes it from weaker layers' targets too, or taken out of an explicit list."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdLuxGeometryLight::CreateGeometryRel().RemoveTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn remove_from_geometry(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+    ) -> &Self {
+        self.remove_target(edit, "geometry", target);
         self
     }
 }
@@ -2027,6 +2102,31 @@ impl LightApiEdit {
         self
     }
 
+    #[doc = "Adds `target` to [`Self::set_filters`]'s targets at `position`, editing the edit target's list op instead of replacing it: weaker layers' targets stay, and a target already in the chosen list moves. An explicit list takes it whatever the position."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdLuxLightAPI::CreateFiltersRel().AddTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn add_to_filters(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+        position: ::layerstack::ListPosition,
+    ) -> &Self {
+        self.add_target(edit, "light:filters", target, position);
+        self
+    }
+
+    #[doc = "Removes `target` from [`Self::set_filters`]'s targets: it is deleted in the edit target's list op, which removes it from weaker layers' targets too, or taken out of an explicit list."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdLuxLightAPI::CreateFiltersRel().RemoveTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn remove_from_filters(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+    ) -> &Self {
+        self.remove_target(edit, "light:filters", target);
+        self
+    }
+
     #[doc = "Specifies the lighting response of a material (if any) bound to the prim that has this schema applied."]
     #[doc = ""]
     #[doc = "USD attribute `light:materialSyncMode` (`token`, uniform; fallback `\"noMaterialResponse\"`)."]
@@ -2385,6 +2485,31 @@ impl LightListApiEdit {
         self
     }
 
+    #[doc = "Adds `target` to [`Self::set_light_list`]'s targets at `position`, editing the edit target's list op instead of replacing it: weaker layers' targets stay, and a target already in the chosen list moves. An explicit list takes it whatever the position."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdLuxLightListAPI::CreateLightListRel().AddTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn add_to_light_list(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+        position: ::layerstack::ListPosition,
+    ) -> &Self {
+        self.add_target(edit, "lightList", target, position);
+        self
+    }
+
+    #[doc = "Removes `target` from [`Self::set_light_list`]'s targets: it is deleted in the edit target's list op, which removes it from weaker layers' targets too, or taken out of an explicit list."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdLuxLightListAPI::CreateLightListRel().RemoveTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn remove_from_light_list(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+    ) -> &Self {
+        self.remove_target(edit, "lightList", target);
+        self
+    }
+
     #[doc = "Controls how the cached light list should be interpreted: consumeAndHalt, consumeAndContinue, or ignore."]
     #[doc = ""]
     #[doc = "USD attribute `lightList:cacheBehavior` (`token`)."]
@@ -2620,6 +2745,31 @@ impl ListApiEdit {
         targets: &[::layerstack::TargetPath],
     ) -> &Self {
         self.write_targets(edit, "lightList", targets);
+        self
+    }
+
+    #[doc = "Adds `target` to [`Self::set_light_list`]'s targets at `position`, editing the edit target's list op instead of replacing it: weaker layers' targets stay, and a target already in the chosen list moves. An explicit list takes it whatever the position."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdLuxListAPI::CreateLightListRel().AddTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn add_to_light_list(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+        position: ::layerstack::ListPosition,
+    ) -> &Self {
+        self.add_target(edit, "lightList", target, position);
+        self
+    }
+
+    #[doc = "Removes `target` from [`Self::set_light_list`]'s targets: it is deleted in the edit target's list op, which removes it from weaker layers' targets too, or taken out of an explicit list."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdLuxListAPI::CreateLightListRel().RemoveTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn remove_from_light_list(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+    ) -> &Self {
+        self.remove_target(edit, "lightList", target);
         self
     }
 

@@ -23,8 +23,8 @@ use core::fmt;
 use alloc::{string::String, vec::Vec};
 
 use layerstack::{
-    InterpolationType, LayerStore, PathId, PropertyKind, PropertyPath, ResolvedValue, Stage,
-    TargetPath, Time, TokenId, TokenInterner, Value,
+    InterpolationType, LayerStore, ListPosition, PathId, PropertyKind, PropertyPath, ResolvedValue,
+    Stage, TargetPath, Time, TokenId, TokenInterner, Value,
 };
 
 use crate::edit::SchemaEdit;
@@ -574,6 +574,37 @@ impl PrimEdit {
     pub fn write_targets(&self, edit: &mut SchemaEdit<'_>, name: &str, targets: &[TargetPath]) {
         edit.set_targets(self.path, name, targets);
     }
+
+    /// Adds `target`, a stage path mapped through the edit target, to the
+    /// targets of the relationship `name` (its USD name) at `position`. It
+    /// edits the list op the edit target's spec authors, where
+    /// [`Self::write_targets`] replaces it with an explicit list, so the
+    /// targets weaker layers author stay.
+    ///
+    /// OpenUSD: `UsdRelationship::AddTarget`.
+    ///
+    /// Spec: AOUSD Core §7.6.5.1.1 (`targetPaths`), §12.4 (list ops).
+    pub fn add_target(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        name: &str,
+        target: TargetPath,
+        position: ListPosition,
+    ) {
+        edit.add_target(self.path, name, target, position);
+    }
+
+    /// Removes `target`, a stage path mapped through the edit target, from
+    /// the targets of the relationship `name` (its USD name): the edit
+    /// target's list op deletes it, which removes it from the targets
+    /// weaker layers author too, or an explicit list drops it.
+    ///
+    /// OpenUSD: `UsdRelationship::RemoveTarget`.
+    ///
+    /// Spec: AOUSD Core §7.6.5.1.1 (`targetPaths`), §12.4 (list ops).
+    pub fn remove_target(&self, edit: &mut SchemaEdit<'_>, name: &str, target: TargetPath) {
+        edit.remove_target(self.path, name, target);
+    }
 }
 
 /// One instance of a multiple-apply schema on a composed prim: the root
@@ -710,6 +741,30 @@ impl InstanceEdit {
     pub fn write_targets(&self, edit: &mut SchemaEdit<'_>, template: &str, targets: &[TargetPath]) {
         self.prim
             .write_targets(edit, &instance_name(template, &self.instance), targets);
+    }
+
+    /// [`PrimEdit::add_target`] of the instance's relationship `template`
+    /// (see [`Self::write_value`]).
+    pub fn add_target(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        template: &str,
+        target: TargetPath,
+        position: ListPosition,
+    ) {
+        self.prim.add_target(
+            edit,
+            &instance_name(template, &self.instance),
+            target,
+            position,
+        );
+    }
+
+    /// [`PrimEdit::remove_target`] of the instance's relationship
+    /// `template` (see [`Self::write_value`]).
+    pub fn remove_target(&self, edit: &mut SchemaEdit<'_>, template: &str, target: TargetPath) {
+        self.prim
+            .remove_target(edit, &instance_name(template, &self.instance), target);
     }
 }
 

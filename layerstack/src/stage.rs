@@ -1911,14 +1911,19 @@ impl Stage {
             .sources
             .iter()
             .chain(index.opinions.iter().map(|op| &op.key));
-        let mut sites = HashSet::new();
+        // Sorted and deduplicated rather than hashed: a prim has few sites,
+        // each named by many of its keys.
+        let mut sites = Vec::with_capacity(2 * (index.sources.len() + index.opinions.len()));
         for key in keys {
-            sites.insert((key.layer_id, key.lookup_path));
-            sites.insert((key.layer_id, key.spec_path.prim_path()));
+            sites.push((key.layer_id, key.lookup_path));
+            let spec_prim = key.spec_path.prim_path();
+            if spec_prim != key.lookup_path {
+                sites.push((key.layer_id, spec_prim));
+            }
         }
         sites.extend(self.clips.source_sites(prim));
-        let mut sites: Vec<_> = sites.into_iter().collect();
         sites.sort_unstable();
+        sites.dedup();
         sites
     }
 

@@ -18,7 +18,9 @@
 //!   local one reaches, and of each namespace above such a site;
 //! - the layers each prim's opinions come from ([`Stage::prim_stack`]);
 //! - for each layer, the prim specs that author a path or a composition
-//!   arc ([`slot_names_paths`]), as of a generation of the layer.
+//!   arc ([`slot_names_paths`]), as of a generation of the layer, found by
+//!   the first preparation that asks for them: an open that never edits
+//!   namespace never visits every spec for them.
 //!
 //! A stage composed by [`Stage::compose`] keeps none of this, and
 //! preparation then composes and scans it as before.
@@ -35,6 +37,7 @@ use crate::{
     prim_index::{ArcKind, PrimIndex},
     prim_indexing::ChildIndex,
     property::PropertyEntry,
+    sync::Memo,
 };
 
 use super::Stage;
@@ -64,11 +67,12 @@ pub(crate) struct PreparationIndex {
 }
 
 /// The prim specs of one layer that author a path or an arc
-/// ([`slot_names_paths`]), at one generation of the layer.
+/// ([`slot_names_paths`]), at one generation of the layer: found when first
+/// asked for, then kept up to date as the layer changes.
 #[derive(Debug)]
 struct LayerLinks {
     generation: u64,
-    slots: HashSet<PathId>,
+    slots: Memo<HashSet<PathId>>,
 }
 
 impl PreparationIndex {
@@ -131,21 +135,26 @@ impl PreparationIndex {
         self.generations = generations;
     }
 
-    /// Brings `layer`'s link inventory up to its generation, from the
-    /// prim paths it recorded as changed when its history reaches back
-    /// that far, by visiting every spec otherwise.
+    /// Brings `layer`'s link inventory up to its generation: one found
+    /// already is patched from the prim paths the layer recorded as changed
+    /// when its history reaches back that far; any other is left for the
+    /// first preparation that asks for it ([`Self::links`]) to find.
     fn refresh_links(&mut self, layer: &Layer) {
         let generation = layer.generation();
         if let Some(links) = self.links.get_mut(&layer.id) {
             if links.generation == generation {
                 return;
             }
+            let Some(slots) = links.slots.get_mut() else {
+                links.generation = generation;
+                return;
+            };
             if let Some(changed) = layer.changed_paths_since(links.generation) {
                 for path in changed {
                     if slot_names_paths(layer, path) {
-                        links.slots.insert(path);
+                        slots.insert(path);
                     } else {
-                        links.slots.remove(&path);
+                        slots.remove(&path);
                     }
                 }
                 links.generation = generation;
@@ -156,18 +165,19 @@ impl PreparationIndex {
             layer.id,
             LayerLinks {
                 generation,
-                slots: scan_links(layer),
+                slots: Memo::default(),
             },
         );
     }
 
     /// The prim slots of `layer` that author paths, when the inventory
-    /// holds them at its generation.
+    /// holds the layer at its generation, found by visiting every spec of
+    /// the layer the first time they are asked for.
     pub(crate) fn links(&self, layer: &Layer) -> Option<&HashSet<PathId>> {
         self.links
             .get(&layer.id)
             .filter(|links| links.generation == layer.generation())
-            .map(|links| &links.slots)
+            .map(|links| links.slots.get_or_init(|| scan_links(layer)))
     }
 
     /// Every layer some composed prim's opinions come from.
@@ -271,7 +281,11 @@ impl PreparationIndex {
         for (id, links) in &self.links {
             if let Some(layer) = store.layer(*id) {
                 assert_eq!(links.generation, layer.generation());
-                assert_eq!(links.slots, scan_links(layer), "links of {id:?}");
+                assert_eq!(
+                    self.links(layer),
+                    Some(&scan_links(layer)),
+                    "links of {id:?}"
+                );
             }
         }
     }
@@ -412,5 +426,81 @@ impl Stage {
         if let Some(index) = &mut self.preparation {
             index.record_generations(store, generations);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use alloc::{sync::Arc, vec, vec::Vec};
+
+    use super::PreparationIndex;
+    use crate::{
+        InMemoryStore, Layer, LayerId, LayerStore, ListOp, PathId, PrimSpec, PropertySpec,
+        TargetPath, prim_indexing::ChildIndex,
+    };
+
+    /// A prim spec with a relationship targeting `target`.
+    fn linking(store: &mut InMemoryStore, target: PathId) -> PrimSpec {
+        let rel = store.tokens.intern("rel");
+        PrimSpec::def().with_property(
+            rel,
+            PropertySpec::relationship()
+                .with_targets(ListOp::explicit(vec![TargetPath::Prim(target)])),
+        )
+    }
+
+    /// The generations of `ids` as `store` holds them, for recording.
+    fn generations(store: &InMemoryStore, ids: &[LayerId]) -> Vec<(LayerId, Option<u64>)> {
+        ids.iter()
+            .map(|id| (*id, store.layer(*id).map(Layer::generation)))
+            .collect()
+    }
+
+    /// Recording generations visits no spec: the link inventory of a layer
+    /// is found when a preparation first asks for it, then patched as the
+    /// layer changes, and a layer changed before anyone asked is found as
+    /// it is then.
+    #[test]
+    fn link_inventories_are_found_when_first_asked_for() {
+        let mut store = InMemoryStore::default();
+        let (a, b, c, target) = (
+            store.path("/A"),
+            store.path("/B"),
+            store.path("/C"),
+            store.path("/T"),
+        );
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(a, linking(&mut store, target));
+        layer.insert_prim(target, PrimSpec::def());
+        store.insert_layer(layer);
+        let mut index = PreparationIndex::new(Arc::new(ChildIndex::default()));
+        index.record_generations(&store, Some(generations(&store, &[LayerId(1)])));
+        assert!(
+            index
+                .links
+                .get_mut(&LayerId(1))
+                .and_then(|links| links.slots.get_mut())
+                .is_none(),
+            "not found while recording"
+        );
+
+        // Changed before anyone asked: found as the layer is now.
+        let spec = linking(&mut store, target);
+        store.layer_mut(LayerId(1)).unwrap().insert_prim(b, spec);
+        index.record_generations(&store, Some(generations(&store, &[LayerId(1)])));
+        let layer = store.layer(LayerId(1)).unwrap();
+        assert_eq!(index.links(layer), Some(&[a, b].into_iter().collect()));
+
+        // Changed after: patched from the layer's history.
+        let spec = linking(&mut store, target);
+        store.layer_mut(LayerId(1)).unwrap().insert_prim(c, spec);
+        store
+            .layer_mut(LayerId(1))
+            .unwrap()
+            .insert_prim(a, PrimSpec::def());
+        index.record_generations(&store, Some(generations(&store, &[LayerId(1)])));
+        let layer = store.layer(LayerId(1)).unwrap();
+        assert_eq!(index.links(layer), Some(&[b, c].into_iter().collect()));
+        assert_eq!(index.links(layer), Some(&super::scan_links(layer)));
     }
 }

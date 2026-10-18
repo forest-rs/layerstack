@@ -25,7 +25,7 @@
 //!
 //! Spec: AOUSD Core §8 (namespace), §10 (composition arcs).
 
-use alloc::vec::Vec;
+use alloc::{sync::Arc, vec::Vec};
 
 use hashbrown::{HashMap, HashSet};
 
@@ -33,6 +33,7 @@ use crate::{
     doc::{FieldEntry, FieldValue, Layer, LayerId, LayerStore, PrimSpec, Value},
     path::{PathId, PathInterner},
     prim_index::{ArcKind, PrimIndex},
+    prim_indexing::ChildIndex,
     property::PropertyEntry,
 };
 
@@ -46,6 +47,8 @@ pub(crate) struct PreparationIndex {
     /// the store did not hold, when the snapshot reflects them all and no
     /// recomposition is pending; `None` otherwise.
     generations: Option<Vec<(LayerId, Option<u64>)>>,
+    /// The live stage's index of the child specs of its layers.
+    children: Arc<ChildIndex>,
     /// The prim specs of each layer that author paths, by generation.
     links: HashMap<LayerId, LayerLinks>,
     /// Each composed prim's opinion layers, sorted.
@@ -67,16 +70,22 @@ struct LayerLinks {
 }
 
 impl PreparationIndex {
-    /// An empty index.
-    pub(crate) fn new() -> Self {
+    /// An empty index sharing `children` with its live stage.
+    pub(crate) fn new(children: Arc<ChildIndex>) -> Self {
         Self {
             generations: None,
+            children,
             links: HashMap::new(),
             prim_stack_layers: HashMap::new(),
             stack_layer_counts: HashMap::new(),
             prim_node_sites: HashMap::new(),
             nodes_beneath: HashMap::new(),
         }
+    }
+
+    /// The live stage's child index.
+    pub(crate) fn children(&self) -> &ChildIndex {
+        &self.children
     }
 
     /// Whether the snapshot reflects the store: every layer it reads
@@ -356,9 +365,10 @@ impl Stage {
         self.preparation.as_deref()
     }
 
-    /// Starts retaining preparation evidence for every composed prim.
-    pub(crate) fn retain_preparation(&mut self, paths: &PathInterner) {
-        let mut index = PreparationIndex::new();
+    /// Starts retaining preparation evidence, sharing `children`, for
+    /// every composed prim.
+    pub(crate) fn retain_preparation(&mut self, children: Arc<ChildIndex>, paths: &PathInterner) {
+        let mut index = PreparationIndex::new(children);
         for (&prim, prim_index) in &self.prims {
             index.reindex(paths, prim, Some(prim_index));
         }

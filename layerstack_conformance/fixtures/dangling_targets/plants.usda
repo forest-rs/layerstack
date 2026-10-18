@@ -1,0 +1,15 @@
+#usda 1.0
+(
+    doc = "The asset every instanced `/Plants/Fern_*` references."
+)
+
+def Xform "Fern"
+{
+    def Xform "Frond"
+    {
+        float width = 1
+        rel base = </Fern>
+        rel litBy = </Lights/Sun>
+        rel stem = </Fern/Stem>
+    }
+}

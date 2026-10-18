@@ -587,10 +587,25 @@ impl Graph {
         self.subtree(0)
     }
 
+    /// Whether the arena holds the nodes in [`Self::strength_order`].
+    fn in_strength_order(&self) -> bool {
+        match self.nodes.len() {
+            // An empty arena, or the root alone.
+            0 | 1 => true,
+            count => self.strength_order().into_iter().eq(0..node_index(count)),
+        }
+    }
+
     /// Reorders the arena into strength order and removes culled nodes
     /// that are not origins of kept nodes. OpenUSD:
     /// `PcpPrimIndex_Graph::Finalize`.
     pub(crate) fn finalize(&mut self) {
+        // Already in strength order with nothing to erase, as most indexes
+        // are (every one without arcs): relinking would rebuild the links
+        // the order was read from.
+        if self.nodes.iter().all(|node| !node.culled) && self.in_strength_order() {
+            return;
+        }
         let order = self.strength_order();
         let count = self.nodes.len();
         let mut erase: Vec<bool> = self.nodes.iter().map(|node| node.culled).collect();

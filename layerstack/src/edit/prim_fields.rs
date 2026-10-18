@@ -453,7 +453,9 @@ pub(crate) fn edit_arc(
     write(store, at, loc, edited, journal)
 }
 
-fn edit_list<T: PartialEq>(
+/// `list` with `item` put at `position` ([`insert_item`]), or removed
+/// for `None` ([`remove_item`]).
+pub(super) fn edit_list<T: PartialEq>(
     mut list: ListOp<T>,
     item: T,
     position: Option<ListPosition>,

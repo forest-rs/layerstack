@@ -1793,6 +1793,127 @@ fn applied_schemas_are_prepended_once_and_undo_exactly() {
     assert_eq!(list(&store, rock), Some(ListOp::appended(vec![label])));
 }
 
+/// Targets are added at each list position and removed one at a time:
+/// an addition moves a target already in the chosen list, leaves it in
+/// the other list and in the deleted targets, and goes to an explicit
+/// list whatever the position; a removal deletes the target, once, or
+/// takes it out of an explicit list. Removing from a property the layer
+/// does not author creates the spec, holding the deletion, and a target
+/// through a reference node maps to the asset's namespace. Undo is exact.
+///
+/// OpenUSD: `UsdRelationship::AddTarget` (`Usd_InsertListItem`) and
+/// `RemoveTarget` (`SdfListEditorProxy::Remove`).
+///
+/// Spec: AOUSD Core §7.6.5.1.1 (`targetPaths`), §12.4 (list ops).
+#[test]
+fn targets_are_added_and_removed_one_at_a_time() {
+    use crate::{ListOp, PropertyKind, PropertyPath, TargetPath};
+
+    let mut store = rocks();
+    let stage = compose(&mut store);
+    let (rock, world) = (store.path("/Rock"), store.path("/World"));
+    let (rock_b, pebble_b) = (
+        store.path("/World/RockB"),
+        store.path("/World/RockB/Pebble"),
+    );
+    let (a, b, c) = (
+        TargetPath::Prim(store.path("/A")),
+        TargetPath::Prim(store.path("/B")),
+        TargetPath::Prim(store.path("/C")),
+    );
+    let (look, size) = (store.tokens.intern("look"), store.tokens.intern("size"));
+    let at = |name| EditTarget::for_layer(ROCK).property(PropertyPath::new(rock, name));
+    let targets = |store: &InMemoryStore, path, name| {
+        store.layers[&ROCK].prims[&path]
+            .properties
+            .iter()
+            .find(|entry| entry.name == name)
+            .map(|entry| {
+                (
+                    entry.spec.kind,
+                    entry.spec.custom,
+                    entry.spec.targets.clone(),
+                )
+            })
+    };
+    let original = layers(&store);
+
+    let mut add = Transaction::new();
+    add.add_target(at(look), a, ListPosition::BackOfPrepend)
+        .add_target(at(look), b, ListPosition::FrontOfPrepend)
+        .add_target(at(look), c, ListPosition::BackOfAppend)
+        .add_target(at(look), a, ListPosition::BackOfAppend)
+        .add_target(at(look), b, ListPosition::BackOfPrepend)
+        .remove_target(at(look), c)
+        .remove_target(at(look), c);
+    let undo_add = add.apply(&mut store).expect("adds and removes");
+    assert_eq!(
+        targets(&store, rock, look),
+        Some((
+            PropertyKind::Relationship,
+            true,
+            Some(ListOp {
+                prepend: vec![a, b],
+                append: vec![a],
+                delete: vec![c],
+                ..ListOp::default()
+            })
+        )),
+        "a relationship nothing declares is created custom"
+    );
+
+    // An attribute's connections are edited as targets are, and an
+    // explicit list takes every addition.
+    let mut explicit = Transaction::new();
+    explicit
+        .set_targets(at(size), ListOp::explicit(vec![a, b]))
+        .add_target(at(size), c, ListPosition::FrontOfAppend)
+        .add_target(at(size), a, ListPosition::BackOfPrepend)
+        .remove_target(at(size), b);
+    let undo_explicit = explicit.apply(&mut store).expect("edits the explicit list");
+    let (kind, _, connections) = targets(&store, rock, size).expect("the attribute");
+    assert_eq!(kind, PropertyKind::Attribute);
+    assert_eq!(connections, Some(ListOp::explicit(vec![c, a])));
+
+    // Through the reference node of `/World/RockB`, the asset's `/Rock`
+    // gains the deletion of the mapped target.
+    let through_b = EditTarget::for_node(&stage, rock_b, node(&stage, rock_b, ArcKind::References))
+        .expect("reference node");
+    let shine = store.tokens.intern("shine");
+    let mut remove = Transaction::new();
+    remove.remove_target(
+        through_b.property(PropertyPath::new(rock_b, shine)),
+        TargetPath::Prim(pebble_b),
+    );
+    let undo_remove = remove.apply(&mut store).expect("removes");
+    let pebble = TargetPath::Prim(store.path("/Rock/Pebble"));
+    assert_eq!(
+        targets(&store, rock, shine).and_then(|(_, _, targets)| targets),
+        Some(ListOp {
+            delete: vec![pebble],
+            ..ListOp::default()
+        })
+    );
+    let mut outside = Transaction::new();
+    outside.add_target(
+        through_b.property(PropertyPath::new(rock_b, shine)),
+        TargetPath::Prim(world),
+        ListPosition::BackOfAppend,
+    );
+    assert_eq!(
+        outside.apply(&mut store),
+        Err(EditError::Rejected {
+            op: 0,
+            reason: Rejection::UnmappableTarget(TargetPath::Prim(world)),
+        })
+    );
+
+    for undo in [undo_remove, undo_explicit, undo_add] {
+        undo.apply(&mut store).expect("undo");
+    }
+    assert_eq!(layers(&store), original);
+}
+
 /// Targets given through an edit target are stage paths, mapped to the
 /// target layer's namespace as the property's own path is: through a
 /// reference `/World/RockB/Pebble` is authored as `/Rock/Pebble`, and

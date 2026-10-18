@@ -13,8 +13,10 @@
 //!   slot.
 //! - A [`Transaction`] lists spec edits, each addressed through a target
 //!   or by spec path ([`Address`]), and optional preconditions: layer
-//!   generations and expected authored values. Besides values, metadata
-//!   and targets, it authors the prim fields kept in dedicated members
+//!   generations and expected authored values. Besides values and
+//!   metadata, it authors relationship targets and attribute connections,
+//!   whole or one target at a time ([`Transaction::add_target`]), the
+//!   prim fields kept in dedicated members
 //!   ([`PrimField`]): the specifier, type name, `active`, `instanceable`,
 //!   child and property order, the composition arcs, whose list ops it
 //!   also edits item by item ([`ListPosition`]), and `variantSetNames`,

@@ -98,6 +98,7 @@ pub fn assemble(
         tokens,
         token_ids,
         paths,
+        target_paths: HashMap::new(),
         defer_variant_arcs: resolver.defers_variant_arcs(),
         in_branch: false,
         in_payloads: false,
@@ -128,6 +129,9 @@ struct AssembleCtx<'a> {
     /// The token ids of the file's token table, by index.
     token_ids: TokenIds,
     paths: &'a PathInterner,
+    /// Relationship targets and connections parsed so far, by their text:
+    /// many specs name the same targets (a material, a collection).
+    target_paths: HashMap<String, Option<TargetPath>>,
     resolver: &'a mut dyn AssetResolver,
     /// Whether arcs inside variant branches are left for composition to
     /// resolve ([`AssetResolver::defers_variant_arcs`]).
@@ -254,7 +258,10 @@ impl<'a> AssembleCtx<'a> {
         let mut fields = Vec::new();
 
         // Build a path-to-spec-index map grouped by prim path for child lookup.
-        let mut prim_specs_map: HashMap<&str, PrimSpec> = HashMap::new();
+        // Sized up front: growing it would move every prim spec it holds.
+        let prims = self.sections.specs.iter();
+        let prims = prims.filter(|spec| spec.form == SpecForm::Prim).count();
+        let mut prim_specs_map: HashMap<&str, PrimSpec> = HashMap::with_capacity(prims);
         // Authored property order (`propertyChildren`) per prim path.
         let mut property_children: HashMap<&str, Vec<TokenId>> = HashMap::new();
 
@@ -394,9 +401,12 @@ impl<'a> AssembleCtx<'a> {
         // each branch keeps its own spec (`Layer::insert_prim`).
         //
         // Spec: AOUSD Core §7.3.6 (variant specs contain prim specs).
-        let mut prim_specs: Vec<_> = prim_specs_map.into_iter().collect();
-        prim_specs.sort_by(|a, b| a.0.cmp(b.0));
-        for (path_str, mut prim) in prim_specs {
+        // Sorted by path, so paths intern in the same order on every read.
+        // The keys alone are sorted: moving whole prim specs costs more.
+        let mut prim_paths: Vec<&str> = prim_specs_map.keys().copied().collect();
+        prim_paths.sort_unstable();
+        for path_str in prim_paths {
+            let mut prim = prim_specs_map.remove(path_str).expect("a key of the map");
             let namespace = match split_branch_path(path_str) {
                 Some((namespace, sites)) => {
                     prim.outer_variant_sites = self.branch_sites(&namespace, &sites)?;
@@ -1607,10 +1617,8 @@ impl<'a> AssembleCtx<'a> {
         match value {
             CrateValue::ListOp(listop) => self.convert_target_listop(listop),
             CrateValue::PathVector(paths) => {
-                let target_paths: Vec<TargetPath> = paths
-                    .iter()
-                    .filter_map(|s| TargetPath::parse(s, self.tokens, self.paths).ok())
-                    .collect();
+                let target_paths: Vec<TargetPath> =
+                    paths.iter().filter_map(|s| self.target_path(s)).collect();
                 Ok(ListOp::explicit(target_paths))
             }
             _ => Ok(ListOp::default()),
@@ -1623,15 +1631,12 @@ impl<'a> AssembleCtx<'a> {
     ) -> Result<ListOp<TargetPath>, UsdcError> {
         let mut result = ListOp::default();
 
-        let convert_items = |items: &[CrateValue],
-                             tokens: &TokenInterner,
-                             paths: &PathInterner|
-         -> Vec<TargetPath> {
+        let mut convert_items = |items: &[CrateValue]| -> Vec<TargetPath> {
             items
                 .iter()
                 .filter_map(|v| {
                     if let CrateValue::String(s) = v {
-                        TargetPath::parse(s, tokens, paths).ok()
+                        self.target_path(s)
                     } else {
                         None
                     }
@@ -1640,15 +1645,25 @@ impl<'a> AssembleCtx<'a> {
         };
 
         if let Some(items) = &listop.explicit_items {
-            result.explicit = Some(convert_items(items, self.tokens, self.paths));
+            result.explicit = Some(convert_items(items));
         }
-        result.prepend = convert_items(&listop.prepended_items, self.tokens, self.paths);
-        result.append = convert_items(&listop.appended_items, self.tokens, self.paths);
-        result.delete = convert_items(&listop.deleted_items, self.tokens, self.paths);
-        result.add = convert_items(&listop.added_items, self.tokens, self.paths);
-        result.reorder = convert_items(&listop.ordered_items, self.tokens, self.paths);
+        result.prepend = convert_items(&listop.prepended_items);
+        result.append = convert_items(&listop.appended_items);
+        result.delete = convert_items(&listop.deleted_items);
+        result.add = convert_items(&listop.added_items);
+        result.reorder = convert_items(&listop.ordered_items);
 
         Ok(result)
+    }
+
+    /// Parses a target path's text ([`TargetPath::parse`]) once per read.
+    fn target_path(&mut self, text: &str) -> Option<TargetPath> {
+        if let Some(parsed) = self.target_paths.get(text) {
+            return *parsed;
+        }
+        let parsed = TargetPath::parse(text, self.tokens, self.paths).ok();
+        self.target_paths.insert(String::from(text), parsed);
+        parsed
     }
 
     /// Converts a `payload` field value to a list op.

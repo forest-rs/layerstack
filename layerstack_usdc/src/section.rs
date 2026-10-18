@@ -43,6 +43,28 @@ pub struct SpecDef {
     pub form: SpecForm,
 }
 
+/// Where one path of [`CrateSections::paths`] sits in the encoded path tree.
+///
+/// Spec: AOUSD Core §16.3.8 (PATHS section).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PathNode {
+    /// A table entry no encoded path fills; its text is empty.
+    Unused,
+    /// The pseudo-root, `/`.
+    Root,
+    /// The path whose text is the parent's followed by the element named by
+    /// token `token`: a prim name or variant selection, or with `property`
+    /// a property name.
+    Child {
+        /// The index of the parent path.
+        parent: u32,
+        /// The token table index of the element.
+        token: u32,
+        /// Whether the element is a property name.
+        property: bool,
+    },
+}
+
 /// All parsed section data from a USDC file.
 ///
 /// Holds the decoded contents of all six sections ready for scene assembly.
@@ -60,6 +82,11 @@ pub struct CrateSections {
     pub fieldsets: Vec<i32>,
     /// Reconstructed SDF path strings from the PATHS section.
     pub paths: Vec<String>,
+    /// Where each of [`Self::paths`] sits in the tree the PATHS section
+    /// encodes, by the same index, so a reader can name a path by its
+    /// parent and element without its text; empty for sections built
+    /// without one, whose readers use the text.
+    pub path_nodes: Vec<PathNode>,
     /// Spec definitions from the SPECS section.
     pub specs: Vec<SpecDef>,
     /// The file's format version, from the header.
@@ -111,10 +138,10 @@ pub fn parse_sections(
         vec![]
     };
 
-    let paths = if let Some(entry) = toc.paths {
+    let (paths, path_nodes) = if let Some(entry) = toc.paths {
         parse_paths(data, &entry, &tokens, budget)?
     } else {
-        vec![]
+        (vec![], vec![])
     };
 
     let specs = if let Some(entry) = toc.specs {
@@ -129,6 +156,7 @@ pub fn parse_sections(
         fields,
         fieldsets,
         paths,
+        path_nodes,
         specs,
         version,
     })
@@ -401,7 +429,7 @@ fn parse_paths(
     entry: &SectionEntry,
     tokens: &[String],
     budget: &mut DecodeBudget,
-) -> Result<Vec<String>, UsdcError> {
+) -> Result<(Vec<String>, Vec<PathNode>), UsdcError> {
     let section = section_slice(data, entry)?;
     if section.len() < 16 {
         return Err(UsdcError::UnexpectedEof {
@@ -444,16 +472,18 @@ fn parse_paths(
     }
     budget.charge(num_paths)?;
     let mut paths = vec![String::new(); n_paths];
+    let mut nodes = vec![PathNode::Unused; n_paths];
     build_paths(
         &path_indices,
         &element_token_indices,
         &jumps,
         tokens,
         &mut paths,
+        &mut nodes,
         budget,
     )?;
 
-    Ok(paths)
+    Ok((paths, nodes))
 }
 
 /// Iterative path reconstruction using an explicit stack.
@@ -476,6 +506,7 @@ fn build_paths(
     jumps: &[i64],
     tokens: &[String],
     paths: &mut [String],
+    nodes: &mut [PathNode],
     budget: &mut DecodeBudget,
 ) -> Result<(), UsdcError> {
     if path_indices.is_empty() {
@@ -497,10 +528,11 @@ fn build_paths(
     }
     let mut visited = vec![false; path_indices.len()];
 
-    // Stack frames: (start_index, parent_path, is_first_iteration)
-    let mut stack: Vec<(usize, String, bool)> = vec![(0, String::new(), true)];
+    // Stack frames: (start_index, parent_path, parent's index,
+    // is_first_iteration)
+    let mut stack: Vec<(usize, String, u32, bool)> = vec![(0, String::new(), u32::MAX, true)];
 
-    while let Some((mut idx, mut parent, mut first)) = stack.pop() {
+    while let Some((mut idx, mut parent, mut parent_at, mut first)) = stack.pop() {
         // do-while: always execute at least once per stack frame,
         // then continue while has_child || has_sibling.
         loop {
@@ -521,6 +553,7 @@ fn build_paths(
                 // Root node.
                 parent = String::from("/");
                 paths[target] = parent.clone();
+                nodes[target] = PathNode::Root;
             } else {
                 let token_idx_raw = element_token_indices[idx];
                 let is_property = token_idx_raw < 0;
@@ -553,6 +586,16 @@ fn build_paths(
                 path.push_str(element);
 
                 paths[target] = path;
+                #[allow(
+                    clippy::cast_possible_truncation,
+                    reason = "token indices are u32-range"
+                )]
+                let token = token_idx_raw.unsigned_abs() as u32;
+                nodes[target] = PathNode::Child {
+                    parent: parent_at,
+                    token,
+                    property: is_property,
+                };
             }
             first = false;
 
@@ -570,12 +613,13 @@ fn build_paths(
                     else {
                         return Err(UsdcError::PathReconstruction);
                     };
-                    stack.push((sibling_idx, parent.clone(), false));
+                    stack.push((sibling_idx, parent.clone(), parent_at, false));
                 }
 
                 // Descend into child: advance to next index with current path
                 // as new parent.
                 parent = paths[target].clone();
+                parent_at = u32::try_from(target).map_err(|_| UsdcError::PathReconstruction)?;
                 idx += 1;
             } else if has_sibling {
                 // No children but has sibling: advance to the next entry
@@ -703,12 +747,14 @@ mod tests {
         let jumps = vec![0_i64]; // leaf
 
         let mut paths = vec![String::new(); 1];
+        let mut nodes = vec![PathNode::Unused; 1];
         build_paths(
             &path_indices,
             &element_token_indices,
             &jumps,
             &tokens,
             &mut paths,
+            &mut nodes,
             &mut DecodeBudget::with_limit(u64::MAX),
         )
         .unwrap();
@@ -728,12 +774,14 @@ mod tests {
         let jumps = vec![-1_i64, 0];
 
         let mut paths = vec![String::new(); 2];
+        let mut nodes = vec![PathNode::Unused; 2];
         build_paths(
             &path_indices,
             &element_token_indices,
             &jumps,
             &tokens,
             &mut paths,
+            &mut nodes,
             &mut DecodeBudget::with_limit(u64::MAX),
         )
         .unwrap();
@@ -757,12 +805,14 @@ mod tests {
         let jumps = vec![-1_i64, -1, 0];
 
         let mut paths = vec![String::new(); 3];
+        let mut nodes = vec![PathNode::Unused; 3];
         build_paths(
             &path_indices,
             &element_token_indices,
             &jumps,
             &tokens,
             &mut paths,
+            &mut nodes,
             &mut DecodeBudget::with_limit(u64::MAX),
         )
         .unwrap();
@@ -790,12 +840,14 @@ mod tests {
         let jumps = vec![-1, -1, 0, -1, -1, -2_i64];
 
         let mut paths = vec![String::new(); 6];
+        let mut nodes = vec![PathNode::Unused; 6];
         build_paths(
             &path_indices,
             &element_token_indices,
             &jumps,
             &tokens,
             &mut paths,
+            &mut nodes,
             &mut DecodeBudget::with_limit(u64::MAX),
         )
         .unwrap();
@@ -810,6 +862,23 @@ mod tests {
                 "/root{foo=eggs}Child",
                 "/root{foo=eggs}Child.attr",
             ]
+        );
+        let child = |parent, token, property| PathNode::Child {
+            parent,
+            token,
+            property,
+        };
+        assert_eq!(
+            nodes,
+            [
+                PathNode::Root,
+                child(0, 0, false),
+                child(1, 1, false),
+                child(1, 2, false),
+                child(3, 3, false),
+                child(4, 4, true),
+            ],
+            "each path names its parent and element"
         );
     }
 
@@ -826,12 +895,14 @@ mod tests {
         jumps[depth] = -2; // the last prim is a leaf
         let build = |budget: &mut DecodeBudget| {
             let mut paths = vec![String::new(); depth + 1];
+            let mut nodes = vec![PathNode::Unused; depth + 1];
             build_paths(
                 &path_indices,
                 &element_token_indices,
                 &jumps,
                 &tokens,
                 &mut paths,
+                &mut nodes,
                 budget,
             )
             .map(|()| paths)
@@ -859,12 +930,14 @@ mod tests {
         let tokens = vec!["a".to_string(), "b".to_string()];
         let build = |indices: &[i64], elements: &[i64], jumps: &[i64]| {
             let mut paths = vec![String::new(); 3];
+            let mut nodes = vec![PathNode::Unused; 3];
             build_paths(
                 indices,
                 elements,
                 jumps,
                 &tokens,
                 &mut paths,
+                &mut nodes,
                 &mut DecodeBudget::with_limit(u64::MAX),
             )
         };
@@ -910,12 +983,14 @@ mod tests {
         let jumps = vec![-1, -1, 0, 0, 0, -2_i64];
 
         let mut paths = vec![String::new(); 6];
+        let mut nodes = vec![PathNode::Unused; 6];
         build_paths(
             &path_indices,
             &element_token_indices,
             &jumps,
             &tokens,
             &mut paths,
+            &mut nodes,
             &mut DecodeBudget::with_limit(u64::MAX),
         )
         .unwrap();

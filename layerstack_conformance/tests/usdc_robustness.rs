@@ -548,6 +548,7 @@ fn spline_knots_are_charged_before_parsing() {
         fields: Vec::new(),
         fieldsets: Vec::new(),
         paths: Vec::new(),
+        path_nodes: Vec::new(),
         specs: Vec::new(),
         version: layerstack_usdc::CrateVersion::NEWEST_READABLE,
     };

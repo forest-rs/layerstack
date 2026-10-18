@@ -7,8 +7,8 @@ use std::hint::black_box;
 
 use criterion::{BenchmarkId, Criterion, SamplingMode, criterion_group, criterion_main};
 use layerstack::{
-    InMemoryStore, Layer, LayerId, LiveStage, PrimSpec, PropertyPath, PropertySpec, PropertyType,
-    StageOptions, Value,
+    InMemoryStore, Layer, LayerId, LiveStage, NamespaceEdit, PrimSpec, PropertyPath, PropertySpec,
+    PropertyType, StageOptions, TargetPath, Value,
     edit::{EditTarget, Transaction},
 };
 
@@ -325,12 +325,134 @@ fn bench_many_creates(c: &mut Criterion) {
     group.finish();
 }
 
+/// A stage with `existing` root prims, each with two children, and the
+/// `n` transactions that each create one more root prim. When `listed`,
+/// the pseudo-root and each root prim list their children, as a layer
+/// read from USDA does; otherwise only their prim specs name them, as in a
+/// layer built by `Layer::insert_prim`, which holds no pseudo-root spec
+/// until the first root prim is authored.
+fn many_root_creates(
+    existing: usize,
+    listed: bool,
+    n: usize,
+) -> (InMemoryStore, LiveStage, Vec<Transaction>) {
+    let mut store = InMemoryStore::default();
+    let mut layer = Layer::new(LayerId(1));
+    let leaves = ["Moss", "Lichen"].map(|name| store.tokens.intern(name));
+    let mut roots = Vec::new();
+    for i in 0..existing {
+        let name = format!("/Rock{i}");
+        let path = store.path(&name);
+        for leaf in ["Moss", "Lichen"] {
+            let child = store.path(&format!("{name}/{leaf}"));
+            layer.insert_prim(child, PrimSpec::def());
+        }
+        let mut spec = PrimSpec::def();
+        if listed {
+            spec.authored_children = leaves.to_vec();
+        }
+        layer.insert_prim(path, spec);
+        roots.push(store.paths.resolve(path).leaf().unwrap());
+    }
+    if listed {
+        let root = store.path("/");
+        layer.insert_prim(root, PrimSpec::default().with_children(roots));
+    }
+    store.insert_layer(layer);
+    let live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+    let target = EditTarget::for_layer(LayerId(1));
+    let txns = (0..n)
+        .map(|i| {
+            let path = store.path(&format!("/Plant{i}"));
+            let mut txn = Transaction::new();
+            txn.create_prim(target.prim(path), layerstack::Specifier::Def, None);
+            txn
+        })
+        .collect();
+    (store, live, txns)
+}
+
+/// `n` transactions applied one after another, each creating one root
+/// prim, on a stage that already has `n` root prims with two children
+/// each: as for children of one parent ([`bench_many_creates`]), each edit
+/// should compose the pseudo-root's child names once and the new prim,
+/// not the stage. `listed` and `unlisted` are as for
+/// [`many_root_creates`].
+fn bench_many_root_creates(c: &mut Criterion) {
+    let mut group = c.benchmark_group("live_many_root_creates");
+    group.sample_size(10);
+    group.sampling_mode(SamplingMode::Flat);
+    for n in [1_000, 2_000, 4_000, 8_000] {
+        for (case, listed) in [("unlisted", false), ("listed", true)] {
+            group.bench_with_input(BenchmarkId::new(case, n), &n, |b, &n| {
+                b.iter_custom(|iterations| {
+                    let mut total = core::time::Duration::ZERO;
+                    for _ in 0..iterations {
+                        let (mut store, mut live, txns) = many_root_creates(n, listed, n);
+                        let start = std::time::Instant::now();
+                        for txn in &txns {
+                            black_box(live.apply(&mut store, txn).unwrap());
+                        }
+                        total += start.elapsed();
+                    }
+                    total
+                });
+            });
+        }
+    }
+    group.finish();
+}
+
+/// Root prims renamed one after another, each by its own namespace edit,
+/// on a stage of `n` root prims with two children each: a rename rewrites
+/// the pseudo-root's child names, and should compose them once and the
+/// renamed subtree, not the stage. Only the transactions are timed, not
+/// preparing them. `listed` and `unlisted` are as for
+/// [`many_root_creates`].
+fn bench_root_renames(c: &mut Criterion) {
+    const RENAMES: usize = 64;
+    let mut group = c.benchmark_group("live_root_renames");
+    group.sample_size(10);
+    group.sampling_mode(SamplingMode::Flat);
+    for n in [1_000, 2_000, 4_000, 8_000] {
+        for (case, listed) in [("unlisted", false), ("listed", true)] {
+            group.bench_with_input(BenchmarkId::new(case, n), &n, |b, &n| {
+                b.iter_custom(|iterations| {
+                    let mut total = core::time::Duration::ZERO;
+                    for _ in 0..iterations {
+                        let (mut store, mut live, _) = many_root_creates(n, listed, 0);
+                        for i in 0..RENAMES {
+                            let from = TargetPath::Prim(store.path(&format!("/Rock{i}")));
+                            let to = TargetPath::Prim(store.path(&format!("/Stone{i}")));
+                            let edit = NamespaceEdit::prepare(
+                                live.stage(),
+                                &mut store,
+                                &EditTarget::for_layer(LayerId(1)),
+                                from,
+                                to,
+                            )
+                            .unwrap();
+                            let start = std::time::Instant::now();
+                            black_box(live.apply(&mut store, edit.transaction()).unwrap());
+                            total += start.elapsed();
+                        }
+                    }
+                    total
+                });
+            });
+        }
+    }
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_live_edits,
     bench_local_structure,
     bench_batch_removals,
     bench_bulk_create,
-    bench_many_creates
+    bench_many_creates,
+    bench_many_root_creates,
+    bench_root_renames
 );
 criterion_main!(benches);

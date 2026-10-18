@@ -72,6 +72,17 @@ impl<T> Memo<T> {
     pub(crate) fn get_or_init(&self, f: impl FnOnce() -> T) -> &T {
         self.0.get_or_init(f)
     }
+
+    /// The value, if computed, to change in place.
+    pub(crate) fn get_mut(&mut self) -> Option<&mut T> {
+        self.0.get_mut()
+    }
+}
+
+impl<T: core::fmt::Debug> core::fmt::Debug for Memo<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_tuple("Memo").field(&self.0.get()).finish()
+    }
 }
 
 impl<T> Default for Memo<T> {

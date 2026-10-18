@@ -1379,6 +1379,14 @@ pub enum WriteError {
         /// Variant path (`/P{v=x}`).
         path: String,
     },
+    /// An empty explicit `variantSets` list, which USDA has no spelling
+    /// for: OpenUSD's text parser takes only a name or a non-empty list
+    /// there, and OpenUSD's own writer leaves the value out. The crate
+    /// format holds it.
+    EmptyExplicitVariantSets {
+        /// Path of the prim or variant (`/P`, `/P{v=x}`).
+        path: String,
+    },
 }
 
 impl fmt::Display for WriteError {
@@ -1442,6 +1450,9 @@ impl fmt::Display for WriteError {
             Self::EmptyVariantSet { path } => write!(f, "{path}: variant set has no variants"),
             Self::InvalidVariant { path } => {
                 write!(f, "{path}: a variant's prim spec is not an untyped over")
+            }
+            Self::EmptyExplicitVariantSets { path } => {
+                write!(f, "{path}: USDA cannot write an empty explicit variantSets")
             }
         }
     }
@@ -1665,6 +1676,16 @@ fn validate_text_prim(prim: &Prim, parent: &str) -> Result<(), WriteError> {
 /// prim spec at `path`: its properties, its children and its variant sets,
 /// nested ones included.
 fn validate_text_body(body: &Prim, path: &str) -> Result<(), WriteError> {
+    if body
+        .variant_set_names
+        .as_ref()
+        .and_then(|op| op.explicit.as_ref())
+        .is_some_and(Vec::is_empty)
+    {
+        return Err(WriteError::EmptyExplicitVariantSets {
+            path: String::from(path),
+        });
+    }
     for property in &body.properties {
         let Property::Attribute(attribute) = property else {
             continue;
@@ -4404,6 +4425,20 @@ def Xform "Tree" (
                 path: "/Tree#variantSets".into()
             },
             "a variantSets list op says something"
+        );
+        assert_eq!(
+            bad(|p| p.variant_set_names = Some(ListOp::explicit(Vec::new()))),
+            WriteError::EmptyExplicitVariantSets {
+                path: "/Tree".into()
+            },
+            "USDA cannot spell an empty explicit variantSets"
+        );
+        let mut empty_explicit = doc.clone();
+        empty_explicit.prims[0].variant_set_names = Some(ListOp::explicit(Vec::new()));
+        assert_eq!(
+            empty_explicit.validate(),
+            Ok(()),
+            "the crate format holds an empty explicit variantSets"
         );
         assert_eq!(
             bad(|p| p.variant_sets[0].variants[0].children[0].name = "1".into()),

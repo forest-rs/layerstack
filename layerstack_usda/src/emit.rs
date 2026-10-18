@@ -451,7 +451,9 @@ impl EmitCtx<'_> {
                     }
                 }
                 ast::PrimMeta::VariantSets(listop) => {
-                    spec.variant_set_names.merge(self.emit_name_listop(listop));
+                    let names = self.emit_name_listop(listop);
+                    declare_listed_sets(&names, &mut spec.variant_sets);
+                    spec.variant_set_names.merge(names);
                 }
                 ast::PrimMeta::Custom(entry) if entry.key == "instanceable" => {
                     if let ast::MetadataValue::Value(ast::Value::Bool(b)) = &entry.value {
@@ -1091,9 +1093,9 @@ impl EmitCtx<'_> {
                 }
                 ast::PrimMeta::VariantSets(listop) => {
                     // The sets nested in this branch, as for a prim spec.
-                    variant_spec
-                        .variant_set_names
-                        .merge(self.emit_name_listop(listop));
+                    let names = self.emit_name_listop(listop);
+                    declare_listed_sets(&names, &mut variant_spec.variant_sets);
+                    variant_spec.variant_set_names.merge(names);
                 }
             }
         }
@@ -2088,6 +2090,20 @@ fn convert_array_edit_index(index: ast::ArrayEditIndex) -> ArrayIndex {
     }
 }
 
+/// Creates an empty variant set spec for each name an explicit or `add`
+/// `variantSets` list names that `sets` lacks, as OpenUSD's text parser
+/// does for those two forms (and no other); it holds no variants, so it
+/// changes no composition.
+///
+/// Spec: AOUSD Core §7.6.2.3.5 (`variantSetNames`). OpenUSD: the
+/// `TextParserAction<NameList>` in
+/// `pxr/usd/sdf/textFileFormatParser.cpp`.
+fn declare_listed_sets(names: &ListOp<TokenId>, sets: &mut HashMap<TokenId, VariantSetSpec>) {
+    for name in names.explicit.iter().flatten().chain(&names.add) {
+        sets.entry(*name).or_default();
+    }
+}
+
 // ── Tests ───────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -2170,6 +2186,53 @@ mod tests {
             &mut resolver,
         );
         (result, tokens, paths)
+    }
+
+    /// An explicit or `add` `variantSets` creates an empty set spec for
+    /// each name it lists, as OpenUSD's text parser does; the other forms
+    /// create none, and every form is kept as authored.
+    ///
+    /// Spec: AOUSD Core §7.6.2.3.5 (`variantSetNames`).
+    #[test]
+    fn explicit_and_added_variant_sets_declare_set_specs() {
+        let src = "\
+#usda 1.0
+def \"P\" (
+    variantSets = \"a\"
+)
+{
+}
+
+def \"Q\" (
+    add variantSets = \"b\"
+    prepend variantSets = \"c\"
+    append variantSets = \"d\"
+    delete variantSets = \"e\"
+)
+{
+}
+";
+        let (result, tokens, paths) = emit_source(src);
+        let spec = |path: &str| {
+            let id = paths
+                .lookup(&Path::parse_absolute(path, &tokens).unwrap())
+                .unwrap();
+            result.layer.prim(id).unwrap()
+        };
+        let [a, b, c, d, e] = ["a", "b", "c", "d", "e"].map(|name| tokens.intern(name));
+        let (p, q) = (spec("/P"), spec("/Q"));
+        assert_eq!(p.variant_set_names, ListOp::explicit(vec![a]));
+        assert_eq!(
+            q.variant_set_names,
+            ListOp::added(vec![b])
+                .with_prepended(vec![c])
+                .with_appended(vec![d])
+                .with_deleted(vec![e])
+        );
+        assert!(p.variant_sets[&a].variants.is_empty());
+        let mut declared: Vec<_> = q.variant_sets.keys().copied().collect();
+        declared.sort();
+        assert_eq!(declared, [b]);
     }
 
     #[test]

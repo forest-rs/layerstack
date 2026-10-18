@@ -5,7 +5,7 @@
 
 use std::hint::black_box;
 
-use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
+use criterion::{BenchmarkId, Criterion, SamplingMode, criterion_group, criterion_main};
 use layerstack::{
     InMemoryStore, Layer, LayerId, LiveStage, PrimSpec, PropertyPath, PropertySpec, PropertyType,
     StageOptions, Value,
@@ -266,11 +266,87 @@ fn bench_bulk_create(c: &mut Criterion) {
     group.finish();
 }
 
+/// A stage whose `/World` holds `existing` child prims, listed by `/World`
+/// as a layer read from USDA lists them when `listed`, and the `n`
+/// transactions that each create one more child of `/World`.
+fn many_creates(
+    existing: usize,
+    listed: bool,
+    n: usize,
+) -> (InMemoryStore, LiveStage, Vec<Transaction>) {
+    let mut store = InMemoryStore::default();
+    let world = store.path("/World");
+    let root = store.path("/");
+    let name = store.tokens.intern("World");
+    let mut layer = Layer::new(LayerId(1));
+    let mut children = Vec::new();
+    for i in 0..existing {
+        let path = store.path(&format!("/World/Rock{i}"));
+        layer.insert_prim(path, PrimSpec::def());
+        children.push(store.paths.resolve(path).leaf().unwrap());
+    }
+    let mut parent = PrimSpec::def();
+    if listed {
+        parent.authored_children = children;
+    }
+    layer.insert_prim(world, parent);
+    layer.insert_prim(root, PrimSpec::default().with_children(vec![name]));
+    store.insert_layer(layer);
+    let live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+    let target = EditTarget::for_layer(LayerId(1));
+    let txns = (0..n)
+        .map(|i| {
+            let path = store.path(&format!("/World/Plant{i}"));
+            let mut txn = Transaction::new();
+            txn.create_prim(target.prim(path), layerstack::Specifier::Def, None);
+            txn
+        })
+        .collect();
+    (store, live, txns)
+}
+
+/// `n` transactions applied one after another, each creating one child of
+/// the same parent, as an interactive author adds prims: each edit should
+/// cost about the same however many came before, so the total grows with
+/// `n`, not with `n` squared. `empty` starts from a childless parent;
+/// `listed` and `unlisted` start from a parent with `n` children that it
+/// lists (as a layer read from USDA does) or that only their prim specs
+/// name (as a layer built by `Layer::insert_prim` does).
+fn bench_many_creates(c: &mut Criterion) {
+    let mut group = c.benchmark_group("live_many_creates");
+    group.sample_size(10);
+    group.sampling_mode(SamplingMode::Flat);
+    for n in [1_000, 2_000, 4_000, 8_000] {
+        for (case, existing, listed) in [
+            ("empty", 0, false),
+            ("unlisted", n, false),
+            ("listed", n, true),
+        ] {
+            group.bench_with_input(BenchmarkId::new(case, n), &n, |b, &n| {
+                b.iter_custom(|iterations| {
+                    let mut total = core::time::Duration::ZERO;
+                    for _ in 0..iterations {
+                        let (mut store, mut live, txns) = many_creates(existing, listed, n);
+                        let start = std::time::Instant::now();
+                        for txn in &txns {
+                            black_box(live.apply(&mut store, txn).unwrap());
+                        }
+                        total += start.elapsed();
+                    }
+                    total
+                });
+            });
+        }
+    }
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_live_edits,
     bench_local_structure,
     bench_batch_removals,
-    bench_bulk_create
+    bench_bulk_create,
+    bench_many_creates
 );
 criterion_main!(benches);

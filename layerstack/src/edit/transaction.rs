@@ -62,12 +62,24 @@ use crate::{
 /// ancestors and variant branches (`SdfCreatePrimInLayer`), and an
 /// attribute spec with its declared type.
 ///
+/// An edit addressed to the pseudo-root (`/`) or to a property path on it
+/// is rejected ([`Rejection::PseudoRoot`]), except for the root prim order
+/// ([`Transaction::set_prim_order`]): the pseudo-root spec holds a layer's
+/// metadata and root prims, and no prim fields or properties. Layer
+/// metadata has its own edits, [`Transaction::set_layer_metadata`] and
+/// its siblings; OpenUSD's `UsdPrim::SetMetadata` on the pseudo-root
+/// writes a field registered on layers as layer metadata, which this
+/// keeps to one edit. AOUSD Core §5.1 (the pseudo-root), §7.6.1 (layer
+/// metadata).
+///
 /// OpenUSD: an `SdfChangeBlock` of `SdfLayer` / `SdfPrimSpec` /
 /// `SdfAttributeSpec` edits, except that OpenUSD neither rolls back a
 /// failed block nor records inverses.
 ///
 /// Spec: AOUSD Core §7 (scene description: layers, prim, variant and
 /// property specs).
+///
+/// [`Rejection::PseudoRoot`]: super::Rejection::PseudoRoot
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Transaction {
     pub(crate) preconditions: Vec<Precondition>,
@@ -605,8 +617,11 @@ impl Transaction {
     /// Sets the child order (`reorder nameChildren`) of the prim spec at
     /// `at`, creating the spec as an `over` if needed. Names are authored
     /// as given; an empty order is authored too. A variant spec has none.
+    /// On the pseudo-root this is the layer's root prim order (`reorder
+    /// rootPrims`), the one prim field the pseudo-root holds.
     ///
-    /// OpenUSD: `UsdPrim::SetChildrenReorder`.
+    /// OpenUSD: `UsdPrim::SetChildrenReorder`; on the pseudo-root,
+    /// `SdfLayer::SetRootPrimOrder`.
     ///
     /// Spec: AOUSD Core §7.6.2 (prim spec fields), §11 (child order).
     pub fn set_prim_order(&mut self, at: Address, order: Vec<TokenId>) -> &mut Self {

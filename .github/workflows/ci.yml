@@ -521,6 +521,11 @@ jobs:
           LAYERSTACK_USD_PYTHON: python
         run: cargo test --locked -p layerstack_conformance --test variant_set_names
 
+      # The pseudo-root oracle must be what OpenUSD's authoring calls do
+      # when aimed at the pseudo-root, at the Usd and Sdf levels.
+      - name: check pseudo-root edits oracle
+        run: python layerstack_conformance/scripts/pseudo_root_edits_oracle.py --check
+
       # The transform oracle must be what OpenUSD computes, to within the
       # rounding of the platform's trigonometry.
       - name: check transform oracle

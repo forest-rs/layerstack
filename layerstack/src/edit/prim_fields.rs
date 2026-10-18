@@ -14,7 +14,7 @@
 use alloc::vec::Vec;
 
 use super::{
-    apply::{Journal, Raw, ensure, field_index, layer, resolve},
+    apply::{Journal, Raw, ensure, field_index, layer, resolve, resolve_including_pseudo_root},
     error::Rejection,
     spec::{Loc, SpecMut, SpecRef, spec_at},
     target::Address,
@@ -302,14 +302,11 @@ pub(crate) fn swap(spec: SpecMut<'_>, value: PrimValue) -> Result<PrimValue, Pri
 }
 
 /// The spec path and location `at` addresses, rejecting a property path
-/// and the pseudo-root, which holds no prim fields.
+/// and the pseudo-root, which holds no prim fields ([`resolve`]).
 pub(super) fn prim_address(store: &mut dyn LayerStore, at: &Address) -> Result<Loc, Rejection> {
     let (path, loc) = resolve(store, at)?;
     if path.property().is_some() {
         return Err(Rejection::NotAPrim(path));
-    }
-    if matches!(loc, Loc::Prim { path, .. } if store.paths().resolve(path).depth() == 0) {
-        return Err(Rejection::PseudoRoot);
     }
     Ok(loc)
 }
@@ -401,7 +398,18 @@ pub(crate) fn set_field(
     value: PrimValue,
     journal: &mut Journal<'_>,
 ) -> Result<(), Rejection> {
-    let loc = prim_address(store, at)?;
+    // The pseudo-root spec holds the root prim order, and no other prim
+    // field (AOUSD Core §5.1; OpenUSD `SdfLayer::SetRootPrimOrder`).
+    let loc = match value {
+        PrimValue::PrimOrder(_) => {
+            let (path, loc) = resolve_including_pseudo_root(store, at)?;
+            if path.property().is_some() {
+                return Err(Rejection::NotAPrim(path));
+            }
+            loc
+        }
+        _ => prim_address(store, at)?,
+    };
     let value = map_value(store, at, value)?;
     write(store, at, loc, value, journal)
 }

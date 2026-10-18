@@ -1167,8 +1167,41 @@ fn check_preconditions(store: &mut dyn LayerStore, txn: &Transaction) -> Result<
     Ok(())
 }
 
-/// The spec path and storage location `at` names.
+/// The spec path and storage location `at` names, rejecting the
+/// pseudo-root and property paths on it ([`Rejection::PseudoRoot`]).
+///
+/// Every edit addressed to a spec passes through here, so the check is
+/// made once. The pseudo-root spec holds a layer's metadata and its root
+/// prims, and no prim fields or properties: layer metadata has its own
+/// edits ([`Transaction::set_layer_metadata`]), and the root prim order,
+/// the one prim field it holds, resolves through
+/// [`resolve_including_pseudo_root`].
+///
+/// OpenUSD rejects these edits on the pseudo-root, at the Usd level
+/// (`UsdStage::_SetMetadata`, `UsdPrim::AddAppliedSchema`) and the Sdf
+/// level (`_CanEditInfoOnSpec`, `SdfPrimSpec::_ValidateEdit`,
+/// `SdfAttributeSpec::New`), except for fields registered on layers,
+/// which it writes as the layer's metadata.
+///
+/// Spec: AOUSD Core §5.1 (the pseudo-root), §7.6.1 (layer metadata).
+///
+/// [`Transaction::set_layer_metadata`]: super::Transaction::set_layer_metadata
 pub(super) fn resolve(
+    store: &mut dyn LayerStore,
+    at: &Address,
+) -> Result<(SpecPath, Loc), Rejection> {
+    let (path, loc) = resolve_including_pseudo_root(store, at)?;
+    if store.paths().resolve(path.prim_path()).depth() == 0 {
+        return Err(Rejection::PseudoRoot);
+    }
+    Ok((path, loc))
+}
+
+/// The spec path and storage location `at` names, the pseudo-root's
+/// included: for an edit of the root prim order, the one prim field the
+/// pseudo-root spec holds (OpenUSD: `SdfLayer::SetRootPrimOrder`, which
+/// `UsdPrim::SetChildrenReorder` on the pseudo-root calls).
+pub(super) fn resolve_including_pseudo_root(
     store: &mut dyn LayerStore,
     at: &Address,
 ) -> Result<(SpecPath, Loc), Rejection> {

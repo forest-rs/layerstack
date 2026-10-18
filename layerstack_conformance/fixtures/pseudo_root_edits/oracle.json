@@ -1,0 +1,900 @@
+{
+ "cases": [
+  {
+   "edit": {
+    "op": "create_prim"
+   },
+   "name": "create_prim",
+   "sdf": {
+    "accepted": true,
+    "changed": false
+   },
+   "usd": {
+    "accepted": true,
+    "changed": false,
+    "root_prims": [
+     "Rock",
+     "Garden"
+    ]
+   }
+  },
+  {
+   "edit": {
+    "op": "remove_spec"
+   },
+   "name": "remove_spec",
+   "sdf": null,
+   "usd": {
+    "accepted": false,
+    "changed": false,
+    "root_prims": [
+     "Rock",
+     "Garden"
+    ]
+   }
+  },
+  {
+   "edit": {
+    "from": "/Rock",
+    "op": "copy_spec",
+    "to": "/"
+   },
+   "name": "copy_spec_to_pseudo_root",
+   "sdf": {
+    "accepted": true,
+    "changed": true,
+    "prim_fields": [
+     "specifier",
+     "typeName"
+    ],
+    "reads_back": true,
+    "root_prim_order": []
+   },
+   "usd": null
+  },
+  {
+   "edit": {
+    "from": "/",
+    "op": "copy_spec",
+    "to": "/Copy"
+   },
+   "name": "copy_spec_from_pseudo_root",
+   "sdf": {
+    "accepted": false,
+    "changed": false
+   },
+   "usd": null
+  },
+  {
+   "edit": {
+    "key": "documentation",
+    "op": "set_metadata",
+    "string": "Moss on every rock"
+   },
+   "name": "set_metadata_documentation",
+   "sdf": {
+    "accepted": true,
+    "changed": true,
+    "field": "Moss on every rock",
+    "prim_fields": [],
+    "reads_back": true,
+    "root_prim_order": [
+     "Rock",
+     "Garden"
+    ]
+   },
+   "usd": {
+    "accepted": true,
+    "changed": true,
+    "field": "Moss on every rock",
+    "prim_fields": [],
+    "reads_back": true,
+    "root_prim_order": [
+     "Rock",
+     "Garden"
+    ],
+    "root_prims": [
+     "Rock",
+     "Garden"
+    ]
+   }
+  },
+  {
+   "edit": {
+    "double": 12.0,
+    "key": "startTimeCode",
+    "op": "set_metadata"
+   },
+   "name": "set_metadata_start_time_code",
+   "sdf": {
+    "accepted": true,
+    "changed": true,
+    "field": 12.0,
+    "prim_fields": [],
+    "reads_back": true,
+    "root_prim_order": [
+     "Rock",
+     "Garden"
+    ]
+   },
+   "usd": {
+    "accepted": true,
+    "changed": true,
+    "field": 12.0,
+    "prim_fields": [],
+    "reads_back": true,
+    "root_prim_order": [
+     "Rock",
+     "Garden"
+    ],
+    "root_prims": [
+     "Rock",
+     "Garden"
+    ]
+   }
+  },
+  {
+   "edit": {
+    "key": "kind",
+    "op": "set_metadata",
+    "token": "component"
+   },
+   "name": "set_metadata_kind",
+   "sdf": {
+    "accepted": false,
+    "changed": false
+   },
+   "usd": {
+    "accepted": false,
+    "changed": false,
+    "root_prims": [
+     "Rock",
+     "Garden"
+    ]
+   }
+  },
+  {
+   "edit": {
+    "bool": true,
+    "key": "hidden",
+    "op": "set_metadata"
+   },
+   "name": "set_metadata_hidden",
+   "sdf": {
+    "accepted": false,
+    "changed": false
+   },
+   "usd": {
+    "accepted": false,
+    "changed": false,
+    "root_prims": [
+     "Rock",
+     "Garden"
+    ]
+   }
+  },
+  {
+   "edit": {
+    "key": "documentation",
+    "op": "clear_metadata"
+   },
+   "name": "clear_metadata_documentation",
+   "sdf": {
+    "accepted": true,
+    "changed": true,
+    "field": null,
+    "prim_fields": [],
+    "reads_back": true,
+    "root_prim_order": [
+     "Rock",
+     "Garden"
+    ]
+   },
+   "usd": {
+    "accepted": true,
+    "changed": true,
+    "field": null,
+    "prim_fields": [],
+    "reads_back": true,
+    "root_prim_order": [
+     "Rock",
+     "Garden"
+    ],
+    "root_prims": [
+     "Rock",
+     "Garden"
+    ]
+   }
+  },
+  {
+   "edit": {
+    "key": "kind",
+    "op": "clear_metadata"
+   },
+   "name": "clear_metadata_kind",
+   "sdf": {
+    "accepted": false,
+    "changed": false
+   },
+   "usd": {
+    "accepted": false,
+    "changed": false,
+    "root_prims": [
+     "Rock",
+     "Garden"
+    ]
+   }
+  },
+  {
+   "edit": {
+    "op": "set_variant_selection",
+    "variant": "autumn"
+   },
+   "name": "set_variant_selection",
+   "sdf": {
+    "accepted": false,
+    "changed": false
+   },
+   "usd": {
+    "accepted": false,
+    "changed": false,
+    "root_prims": [
+     "Rock",
+     "Garden"
+    ]
+   }
+  },
+  {
+   "edit": {
+    "op": "set_variant_selection",
+    "variant": null
+   },
+   "name": "clear_variant_selection",
+   "sdf": {
+    "accepted": false,
+    "changed": false
+   },
+   "usd": {
+    "accepted": false,
+    "changed": false,
+    "root_prims": [
+     "Rock",
+     "Garden"
+    ]
+   }
+  },
+  {
+   "edit": {
+    "op": "add_variant_set"
+   },
+   "name": "add_variant_set",
+   "sdf": {
+    "accepted": false,
+    "changed": false
+   },
+   "usd": {
+    "accepted": false,
+    "changed": false,
+    "root_prims": [
+     "Rock",
+     "Garden"
+    ]
+   }
+  },
+  {
+   "edit": {
+    "op": "remove_variant_set"
+   },
+   "name": "remove_variant_set",
+   "sdf": {
+    "accepted": true,
+    "changed": false
+   },
+   "usd": null
+  },
+  {
+   "edit": {
+    "op": "set_variant_set_names"
+   },
+   "name": "set_variant_set_names",
+   "sdf": {
+    "accepted": true,
+    "changed": true,
+    "prim_fields": [
+     "variantSetNames"
+    ],
+    "reads_back": true,
+    "root_prim_order": [
+     "Rock",
+     "Garden"
+    ]
+   },
+   "usd": {
+    "accepted": false,
+    "changed": false,
+    "root_prims": [
+     "Rock",
+     "Garden"
+    ]
+   }
+  },
+  {
+   "edit": {
+    "op": "add_applied_schema"
+   },
+   "name": "add_applied_schema",
+   "sdf": {
+    "accepted": false,
+    "changed": false
+   },
+   "usd": {
+    "accepted": false,
+    "changed": false,
+    "root_prims": [
+     "Rock",
+     "Garden"
+    ]
+   }
+  },
+  {
+   "edit": {
+    "op": "remove_applied_schema"
+   },
+   "name": "remove_applied_schema",
+   "sdf": {
+    "accepted": false,
+    "changed": false
+   },
+   "usd": {
+    "accepted": false,
+    "changed": false,
+    "root_prims": [
+     "Rock",
+     "Garden"
+    ]
+   }
+  },
+  {
+   "edit": {
+    "op": "set_specifier"
+   },
+   "name": "set_specifier",
+   "sdf": {
+    "accepted": false,
+    "changed": false
+   },
+   "usd": {
+    "accepted": false,
+    "changed": false,
+    "root_prims": [
+     "Rock",
+     "Garden"
+    ]
+   }
+  },
+  {
+   "edit": {
+    "op": "set_type_name"
+   },
+   "name": "set_type_name",
+   "sdf": {
+    "accepted": false,
+    "changed": false
+   },
+   "usd": {
+    "accepted": false,
+    "changed": false,
+    "root_prims": [
+     "Rock",
+     "Garden"
+    ]
+   }
+  },
+  {
+   "edit": {
+    "op": "clear_type_name"
+   },
+   "name": "clear_type_name",
+   "sdf": {
+    "accepted": false,
+    "changed": false
+   },
+   "usd": {
+    "accepted": false,
+    "changed": false,
+    "root_prims": [
+     "Rock",
+     "Garden"
+    ]
+   }
+  },
+  {
+   "edit": {
+    "op": "set_active"
+   },
+   "name": "set_active",
+   "sdf": {
+    "accepted": false,
+    "changed": false
+   },
+   "usd": {
+    "accepted": false,
+    "changed": false,
+    "root_prims": [
+     "Rock",
+     "Garden"
+    ]
+   }
+  },
+  {
+   "edit": {
+    "op": "clear_active"
+   },
+   "name": "clear_active",
+   "sdf": {
+    "accepted": false,
+    "changed": false
+   },
+   "usd": {
+    "accepted": false,
+    "changed": false,
+    "root_prims": [
+     "Rock",
+     "Garden"
+    ]
+   }
+  },
+  {
+   "edit": {
+    "op": "set_instanceable"
+   },
+   "name": "set_instanceable",
+   "sdf": {
+    "accepted": false,
+    "changed": false
+   },
+   "usd": {
+    "accepted": false,
+    "changed": false,
+    "root_prims": [
+     "Rock",
+     "Garden"
+    ]
+   }
+  },
+  {
+   "edit": {
+    "op": "set_property_order"
+   },
+   "name": "set_property_order",
+   "sdf": {
+    "accepted": false,
+    "changed": false
+   },
+   "usd": {
+    "accepted": false,
+    "changed": false,
+    "root_prims": [
+     "Rock",
+     "Garden"
+    ]
+   }
+  },
+  {
+   "edit": {
+    "op": "set_prim_order",
+    "order": [
+     "Garden",
+     "Rock"
+    ]
+   },
+   "name": "set_prim_order",
+   "sdf": {
+    "accepted": true,
+    "changed": true,
+    "prim_fields": [],
+    "reads_back": true,
+    "root_prim_order": [
+     "Garden",
+     "Rock"
+    ]
+   },
+   "usd": {
+    "accepted": true,
+    "changed": true,
+    "prim_fields": [],
+    "reads_back": true,
+    "root_prim_order": [
+     "Garden",
+     "Rock"
+    ],
+    "root_prims": [
+     "Garden",
+     "Rock"
+    ]
+   }
+  },
+  {
+   "edit": {
+    "op": "clear_prim_order"
+   },
+   "name": "clear_prim_order",
+   "sdf": {
+    "accepted": true,
+    "changed": true,
+    "prim_fields": [],
+    "reads_back": true,
+    "root_prim_order": []
+   },
+   "usd": {
+    "accepted": true,
+    "changed": true,
+    "prim_fields": [],
+    "reads_back": true,
+    "root_prim_order": [],
+    "root_prims": [
+     "Garden",
+     "Rock"
+    ]
+   }
+  },
+  {
+   "edit": {
+    "op": "add_reference"
+   },
+   "name": "add_reference",
+   "sdf": {
+    "accepted": true,
+    "changed": true,
+    "prim_fields": [
+     "references"
+    ],
+    "reads_back": false,
+    "root_prim_order": [
+     "Rock",
+     "Garden"
+    ]
+   },
+   "usd": {
+    "accepted": true,
+    "changed": true,
+    "prim_fields": [
+     "references"
+    ],
+    "reads_back": false,
+    "root_prim_order": [
+     "Rock",
+     "Garden"
+    ],
+    "root_prims": [
+     "Rock",
+     "Garden"
+    ]
+   }
+  },
+  {
+   "edit": {
+    "op": "set_references"
+   },
+   "name": "set_references",
+   "sdf": {
+    "accepted": false,
+    "changed": false
+   },
+   "usd": {
+    "accepted": false,
+    "changed": false,
+    "root_prims": [
+     "Rock",
+     "Garden"
+    ]
+   }
+  },
+  {
+   "edit": {
+    "op": "add_payload"
+   },
+   "name": "add_payload",
+   "sdf": {
+    "accepted": true,
+    "changed": true,
+    "prim_fields": [
+     "payload"
+    ],
+    "reads_back": false,
+    "root_prim_order": [
+     "Rock",
+     "Garden"
+    ]
+   },
+   "usd": {
+    "accepted": true,
+    "changed": true,
+    "prim_fields": [
+     "payload"
+    ],
+    "reads_back": false,
+    "root_prim_order": [
+     "Rock",
+     "Garden"
+    ],
+    "root_prims": [
+     "Rock",
+     "Garden"
+    ]
+   }
+  },
+  {
+   "edit": {
+    "op": "add_inherit"
+   },
+   "name": "add_inherit",
+   "sdf": {
+    "accepted": false,
+    "changed": false
+   },
+   "usd": {
+    "accepted": false,
+    "changed": false,
+    "root_prims": [
+     "Rock",
+     "Garden"
+    ]
+   }
+  },
+  {
+   "edit": {
+    "op": "add_specialize"
+   },
+   "name": "add_specialize",
+   "sdf": {
+    "accepted": false,
+    "changed": false
+   },
+   "usd": {
+    "accepted": false,
+    "changed": false,
+    "root_prims": [
+     "Rock",
+     "Garden"
+    ]
+   }
+  },
+  {
+   "edit": {
+    "op": "create_attribute"
+   },
+   "name": "create_attribute",
+   "sdf": {
+    "accepted": true,
+    "changed": true,
+    "prim_fields": [
+     "properties"
+    ],
+    "reads_back": false,
+    "root_prim_order": [
+     "Rock",
+     "Garden"
+    ]
+   },
+   "usd": {
+    "accepted": true,
+    "changed": true,
+    "prim_fields": [
+     "properties"
+    ],
+    "reads_back": false,
+    "root_prim_order": [
+     "Rock",
+     "Garden"
+    ],
+    "root_prims": [
+     "Rock",
+     "Garden"
+    ]
+   }
+  },
+  {
+   "edit": {
+    "op": "create_relationship"
+   },
+   "name": "create_relationship",
+   "sdf": {
+    "accepted": true,
+    "changed": true,
+    "prim_fields": [
+     "properties"
+    ],
+    "reads_back": false,
+    "root_prim_order": [
+     "Rock",
+     "Garden"
+    ]
+   },
+   "usd": {
+    "accepted": true,
+    "changed": true,
+    "prim_fields": [
+     "properties"
+    ],
+    "reads_back": false,
+    "root_prim_order": [
+     "Rock",
+     "Garden"
+    ],
+    "root_prims": [
+     "Rock",
+     "Garden"
+    ]
+   }
+  },
+  {
+   "edit": {
+    "op": "remove_spec",
+    "property": true
+   },
+   "name": "remove_property",
+   "sdf": null,
+   "usd": {
+    "accepted": false,
+    "changed": false,
+    "root_prims": [
+     "Rock",
+     "Garden"
+    ]
+   }
+  },
+  {
+   "edit": {
+    "op": "set_default"
+   },
+   "name": "set_default",
+   "sdf": null,
+   "usd": {
+    "accepted": false,
+    "changed": false,
+    "root_prims": [
+     "Rock",
+     "Garden"
+    ]
+   }
+  },
+  {
+   "edit": {
+    "op": "set_time_sample"
+   },
+   "name": "set_time_sample",
+   "sdf": null,
+   "usd": {
+    "accepted": false,
+    "changed": false,
+    "root_prims": [
+     "Rock",
+     "Garden"
+    ]
+   }
+  },
+  {
+   "edit": {
+    "op": "block_attribute"
+   },
+   "name": "block_attribute",
+   "sdf": null,
+   "usd": {
+    "accepted": false,
+    "changed": false,
+    "root_prims": [
+     "Rock",
+     "Garden"
+    ]
+   }
+  },
+  {
+   "edit": {
+    "op": "clear_default"
+   },
+   "name": "clear_default",
+   "sdf": null,
+   "usd": {
+    "accepted": true,
+    "changed": false,
+    "root_prims": [
+     "Rock",
+     "Garden"
+    ]
+   }
+  },
+  {
+   "edit": {
+    "op": "remove_time_sample"
+   },
+   "name": "remove_time_sample",
+   "sdf": null,
+   "usd": {
+    "accepted": true,
+    "changed": false,
+    "root_prims": [
+     "Rock",
+     "Garden"
+    ]
+   }
+  },
+  {
+   "edit": {
+    "op": "set_property_metadata"
+   },
+   "name": "set_property_metadata",
+   "sdf": null,
+   "usd": {
+    "accepted": false,
+    "changed": false,
+    "root_prims": [
+     "Rock",
+     "Garden"
+    ]
+   }
+  },
+  {
+   "edit": {
+    "op": "clear_property_metadata"
+   },
+   "name": "clear_property_metadata",
+   "sdf": null,
+   "usd": {
+    "accepted": true,
+    "changed": false,
+    "root_prims": [
+     "Rock",
+     "Garden"
+    ]
+   }
+  },
+  {
+   "edit": {
+    "op": "set_targets"
+   },
+   "name": "set_targets",
+   "sdf": null,
+   "usd": {
+    "accepted": false,
+    "changed": true,
+    "prim_fields": [
+     "properties"
+    ],
+    "reads_back": false,
+    "root_prim_order": [
+     "Rock",
+     "Garden"
+    ],
+    "root_prims": [
+     "Rock",
+     "Garden"
+    ]
+   }
+  },
+  {
+   "edit": {
+    "op": "clear_targets"
+   },
+   "name": "clear_targets",
+   "sdf": null,
+   "usd": {
+    "accepted": false,
+    "changed": true,
+    "prim_fields": [
+     "properties"
+    ],
+    "reads_back": false,
+    "root_prim_order": [
+     "Rock",
+     "Garden"
+    ],
+    "root_prims": [
+     "Rock",
+     "Garden"
+    ]
+   }
+  }
+ ],
+ "openusd_version": "26.8"
+}

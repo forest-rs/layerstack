@@ -2403,6 +2403,36 @@ fn prim_field_edits_reject_what_they_cannot_author() {
     txn.set_active(layer.prim(root), false);
     assert_eq!(reason(&mut store, &txn), Rejection::PseudoRoot);
 
+    // Every edit of the pseudo-root but its root prim order is rejected,
+    // properties on it included; layer metadata has its own edits.
+    let (doc, size, world) = (
+        store.tokens.intern("documentation"),
+        store.tokens.intern("size"),
+        store.tokens.intern("World"),
+    );
+    let on_root = layer.property(crate::PropertyPath::new(root, size));
+    let mut txn = Transaction::new();
+    txn.set_metadata(
+        layer.prim(root),
+        doc,
+        FieldValue::Value(Value::String("moss".into())),
+    );
+    assert_eq!(reason(&mut store, &txn), Rejection::PseudoRoot);
+    let mut txn = Transaction::new();
+    txn.create_property(on_root, attr(1.0));
+    assert_eq!(reason(&mut store, &txn), Rejection::PseudoRoot);
+    let mut txn = Transaction::new();
+    txn.remove_spec(layer.prim(root));
+    assert_eq!(reason(&mut store, &txn), Rejection::PseudoRoot);
+    let mut txn = Transaction::new();
+    txn.set_prim_order(layer.prim(root), vec![world]);
+    let undo = txn.apply(&mut store).expect("the root prim order");
+    assert_eq!(
+        store.layers[&SCENE].prim(root).unwrap().prim_order,
+        Some(vec![world])
+    );
+    undo.apply(&mut store).unwrap();
+
     let mut txn = Transaction::new();
     txn.add_inherit(layer.prim(rock_a), root, ListPosition::BackOfPrepend);
     assert_eq!(reason(&mut store, &txn), Rejection::PseudoRootArc);

@@ -29,8 +29,11 @@
 //! creates a fresh store, so it rejects a registry
 //! ([`IoErrorKind::ForeignSchemaRegistry`]): no prebuilt registry belongs to
 //! that store's tokens. [`Storage`] supports transports without `std`.
-//! [`StageDocument::parts_mut`] provides explicit access for atomic authoring;
-//! saving, exporting and reloading remain separate operations.
+//! [`StageDocument::apply`] authors the document: it applies a
+//! [`layerstack::Transaction`] and loads the assets the edit asks for, such as
+//! a deferred payload it adds. [`StageDocument::parts_mut`] gives the store and
+//! live stage apart for lower-level control; saving, exporting and reloading
+//! remain separate operations.
 //!
 //! [`StageDocument::open_with`] and [`StageDocument::open_in_with`] accept
 //! [`LoadOptions`] for eager or retained USDC arrays and a per-file decoder
@@ -44,8 +47,9 @@
 //! OpenUSD does: an arc inside a variant branch its own layer does not select
 //! is deferred, and composition asks for those its selections reach
 //! ([`layerstack::Stage::asset_requests`]), which opening loads. After an edit
-//! or reload selects another variant, [`StageDocument::load_requested_assets`]
-//! loads what it needs; [`VariantArcLoading::All`] resolves every branch's
+//! selects another variant, [`StageDocument::apply`] loads what it needs; after
+//! a reload or an edit through [`StageDocument::parts_mut`],
+//! [`StageDocument::load_requested_assets`] does; [`VariantArcLoading::All`] resolves every branch's
 //! arcs up front instead.
 //!
 //! [`LoadOptions::formats`] registers host [`FileFormat`]s, such as procedural
@@ -78,6 +82,8 @@ use layerstack_usdz::snapshot::{PackageLimits, PackageSnapshot, PackageStats};
 use layerstack_usdz::{ImportDiagnostic, MemberDiagnostic};
 pub use layerstack_usdz::{UsdcArrayLoading, UsdcReadOptions};
 
+mod apply;
+pub use apply::ApplyError;
 pub mod format;
 pub use format::{
     FORMAT_ARGS_DELIMITER, FileFormat, FileFormats, FormatArgs, FormatRegistrationError,
@@ -906,6 +912,11 @@ impl<B: Storage> StageDocument<B> {
         self.stage.view(&self.store)
     }
     /// Disjoint mutable access for atomic stage edits and explicit controls.
+    ///
+    /// To author a transaction, prefer [`Self::apply`]: an edit applied
+    /// here with [`LiveStage::apply`] may ask for assets
+    /// ([`layerstack::Applied::asset_requests`]) that contribute nothing
+    /// until [`Self::load_requested_assets`] loads them.
     pub fn parts_mut(&mut self) -> (&mut InMemoryStore, &mut LiveStage) {
         (&mut self.store, &mut self.stage)
     }

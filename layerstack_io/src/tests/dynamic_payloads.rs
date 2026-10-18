@@ -808,7 +808,7 @@ pub(super) fn author<B: Storage>(
                 .is_some_and(|found| found.ends_with(layer))
         })
         .unwrap();
-    let (store, live) = doc.parts_mut();
+    let store = doc.store_mut();
     let path = store.path(prim);
     let token = store.tokens.intern(name);
     let mut txn = Transaction::new();
@@ -843,9 +843,7 @@ pub(super) fn author<B: Storage>(
             layerstack::FieldValue::Value(value),
         );
     }
-    let applied = live.apply(store, &txn).unwrap();
-    doc.load_requested_assets().unwrap();
-    applied
+    doc.apply(&txn).unwrap().0
 }
 
 /// The paths of `prims`, sorted.
@@ -966,6 +964,32 @@ fn argument_input_edits_resync_the_prims_whose_arguments_they_change() {
             none
         );
     }
+}
+
+#[test]
+fn argument_input_edits_report_the_assets_they_request() {
+    let mut doc = open(lab(), "root.usda", true);
+    let text = Value::String("text".into());
+    let applied = author(&mut doc, "root.usda", "/Lab", "documentation", text, true);
+    assert!(applied.asset_requests.is_empty());
+    // The new height gives `/Lab`'s payloads new arguments, so new
+    // identifiers to load, which `StageDocument::apply` then loaded.
+    let applied = author(
+        &mut doc,
+        "root.usda",
+        "/Lab",
+        HEIGHT,
+        Value::Double(2.0),
+        true,
+    );
+    assert!(!applied.asset_requests.is_empty());
+    for request in &applied.asset_requests {
+        let prim = doc.store().paths.display(request.prim, &doc.store().tokens);
+        assert!(prim.starts_with("/Lab"), "{prim}");
+        assert_eq!(request.arc, layerstack::ArcKind::Payloads);
+        assert!(request.asset_path.contains(FORMAT_ARGS_DELIMITER));
+    }
+    assert!(doc.stage().stage().asset_requests().is_empty());
 }
 
 #[test]

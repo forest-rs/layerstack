@@ -42,6 +42,9 @@ use `prepare_package` to inventory and localize a dependency closure, inspect it
 report, then `export_package` to write the candidate. Layer export writes
 a copy and preserves the original source binding and dirty state. Every mutating
 `Layer` method records its edit, so synchronization and saving see each one.
+Author with `StageDocument::apply(&transaction)`: it applies the edit and loads
+the assets the edit asks for (`Applied::asset_requests`), such as a deferred
+payload it adds.
 
 Start with `cargo run -p layerstack_examples --example tutorial_stage_io` for a
 complete create/edit/undo/export/reload workflow, or `tutorial_references` for
@@ -53,8 +56,9 @@ stay in this crate.
 Opening reads only the layers the stage's variant selections reach, as OpenUSD
 does: an arc inside a variant branch its own layer does not select is deferred,
 and composition asks for those its selections reach (`Stage::asset_requests`),
-which opening loads. After an edit or reload selects another variant,
-`StageDocument::load_requested_assets` loads what it needs;
+which opening loads. After an edit selects another variant,
+`StageDocument::apply` loads what it needs; after a reload or an edit through
+`parts_mut`, `StageDocument::load_requested_assets` does;
 `VariantArcLoading::All` resolves every branch's arcs up front instead.
 
 For large USDC scenes, `StageDocument::open_with` or `open_in_with` accepts

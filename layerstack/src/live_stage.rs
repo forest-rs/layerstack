@@ -527,6 +527,14 @@ impl LiveStage {
     /// ([`crate::Stage::resolve_property_declaration`]), as
     /// `UsdAttribute::Set` does.
     ///
+    /// [`Applied::asset_requests`] lists the asset requests the transaction
+    /// introduced, such as a deferred payload it adds or a dynamic file
+    /// format argument it changes. Those arcs contribute nothing until the
+    /// host loads the assets and composes again; nothing is read here. A
+    /// `layerstack_io::StageDocument` host applies with
+    /// `StageDocument::apply`, which applies the transaction and then loads
+    /// every pending request (`StageDocument::load_requested_assets`).
+    ///
     /// On error nothing was applied and nothing is recomposed.
     ///
     /// # Errors
@@ -535,6 +543,26 @@ impl LiveStage {
     /// was composed from ([`crate::Stage::store_identity`]); otherwise the
     /// errors of [`Transaction::apply`].
     pub fn apply(
+        &mut self,
+        store: &mut dyn LayerStore,
+        txn: &Transaction,
+    ) -> Result<Applied, EditError> {
+        // Pending requests are usually none, so the snapshot is usually free.
+        let before: HashSet<crate::AssetRequest> =
+            self.stage.asset_requests().iter().cloned().collect();
+        let mut applied = self.apply_transaction(store, txn)?;
+        applied.asset_requests = self
+            .stage
+            .asset_requests()
+            .iter()
+            .filter(|request| !before.contains(*request))
+            .cloned()
+            .collect();
+        Ok(applied)
+    }
+
+    /// [`Self::apply`] without the asset request report.
+    fn apply_transaction(
         &mut self,
         store: &mut dyn LayerStore,
         txn: &Transaction,
@@ -613,6 +641,7 @@ impl LiveStage {
                 inverse: outcome.inverse,
                 recomposed,
                 changes,
+                asset_requests: Vec::new(),
             });
         }
         // An unsupported or externally changed namespace cannot reuse its
@@ -735,6 +764,7 @@ impl LiveStage {
             inverse: outcome.inverse,
             recomposed,
             changes,
+            asset_requests: Vec::new(),
         })
     }
 

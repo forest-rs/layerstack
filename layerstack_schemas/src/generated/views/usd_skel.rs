@@ -1452,6 +1452,31 @@ impl SkelBindingApiEdit {
         self
     }
 
+    #[doc = "Adds `target` to [`Self::set_animation_source`]'s targets at `position`, editing the edit target's list op instead of replacing it: weaker layers' targets stay, and a target already in the chosen list moves. An explicit list takes it whatever the position."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdSkelBindingAPI::CreateAnimationSourceRel().AddTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn add_to_animation_source(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+        position: ::layerstack::ListPosition,
+    ) -> &Self {
+        self.add_target(edit, "skel:animationSource", target, position);
+        self
+    }
+
+    #[doc = "Removes `target` from [`Self::set_animation_source`]'s targets: it is deleted in the edit target's list op, which removes it from weaker layers' targets too, or taken out of an explicit list."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdSkelBindingAPI::CreateAnimationSourceRel().RemoveTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn remove_from_animation_source(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+    ) -> &Self {
+        self.remove_target(edit, "skel:animationSource", target);
+        self
+    }
+
     #[doc = "An array of tokens defining the order onto which blend shape weights from an animation source map onto the \\*skel:blendShapeTargets\\* rel of a binding site."]
     #[doc = ""]
     #[doc = "USD attribute `skel:blendShapes` (`token[]`, uniform)."]
@@ -1479,6 +1504,31 @@ impl SkelBindingApiEdit {
         self
     }
 
+    #[doc = "Adds `target` to [`Self::set_blend_shape_targets`]'s targets at `position`, editing the edit target's list op instead of replacing it: weaker layers' targets stay, and a target already in the chosen list moves. An explicit list takes it whatever the position."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdSkelBindingAPI::CreateBlendShapeTargetsRel().AddTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn add_to_blend_shape_targets(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+        position: ::layerstack::ListPosition,
+    ) -> &Self {
+        self.add_target(edit, "skel:blendShapeTargets", target, position);
+        self
+    }
+
+    #[doc = "Removes `target` from [`Self::set_blend_shape_targets`]'s targets: it is deleted in the edit target's list op, which removes it from weaker layers' targets too, or taken out of an explicit list."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdSkelBindingAPI::CreateBlendShapeTargetsRel().RemoveTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn remove_from_blend_shape_targets(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+    ) -> &Self {
+        self.remove_target(edit, "skel:blendShapeTargets", target);
+        self
+    }
+
     #[doc = "An (optional) array of tokens defining the list of joints to which jointIndices apply."]
     #[doc = ""]
     #[doc = "USD attribute `skel:joints` (`token[]`, uniform)."]
@@ -1503,6 +1553,31 @@ impl SkelBindingApiEdit {
         targets: &[::layerstack::TargetPath],
     ) -> &Self {
         self.write_targets(edit, "skel:skeleton", targets);
+        self
+    }
+
+    #[doc = "Adds `target` to [`Self::set_skeleton`]'s targets at `position`, editing the edit target's list op instead of replacing it: weaker layers' targets stay, and a target already in the chosen list moves. An explicit list takes it whatever the position."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdSkelBindingAPI::CreateSkeletonRel().AddTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn add_to_skeleton(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+        position: ::layerstack::ListPosition,
+    ) -> &Self {
+        self.add_target(edit, "skel:skeleton", target, position);
+        self
+    }
+
+    #[doc = "Removes `target` from [`Self::set_skeleton`]'s targets: it is deleted in the edit target's list op, which removes it from weaker layers' targets too, or taken out of an explicit list."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdSkelBindingAPI::CreateSkeletonRel().RemoveTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn remove_from_skeleton(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+    ) -> &Self {
+        self.remove_target(edit, "skel:skeleton", target);
         self
     }
 }

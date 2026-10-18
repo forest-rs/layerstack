@@ -238,6 +238,31 @@ impl RenderPassEdit {
         self
     }
 
+    #[doc = "Adds `target` to [`Self::set_input_passes`]'s targets at `position`, editing the edit target's list op instead of replacing it: weaker layers' targets stay, and a target already in the chosen list moves. An explicit list takes it whatever the position."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdRenderPass::CreateInputPassesRel().AddTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn add_to_input_passes(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+        position: ::layerstack::ListPosition,
+    ) -> &Self {
+        self.add_target(edit, "inputPasses", target, position);
+        self
+    }
+
+    #[doc = "Removes `target` from [`Self::set_input_passes`]'s targets: it is deleted in the edit target's list op, which removes it from weaker layers' targets too, or taken out of an explicit list."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdRenderPass::CreateInputPassesRel().RemoveTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn remove_from_input_passes(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+    ) -> &Self {
+        self.remove_target(edit, "inputPasses", target);
+        self
+    }
+
     #[doc = "Used to categorize different types of passes within a render pipeline."]
     #[doc = ""]
     #[doc = "USD attribute `passType` (`token`, uniform)."]
@@ -262,6 +287,31 @@ impl RenderPassEdit {
         targets: &[::layerstack::TargetPath],
     ) -> &Self {
         self.write_targets(edit, "renderSource", targets);
+        self
+    }
+
+    #[doc = "Adds `target` to [`Self::set_render_source`]'s targets at `position`, editing the edit target's list op instead of replacing it: weaker layers' targets stay, and a target already in the chosen list moves. An explicit list takes it whatever the position."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdRenderPass::CreateRenderSourceRel().AddTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn add_to_render_source(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+        position: ::layerstack::ListPosition,
+    ) -> &Self {
+        self.add_target(edit, "renderSource", target, position);
+        self
+    }
+
+    #[doc = "Removes `target` from [`Self::set_render_source`]'s targets: it is deleted in the edit target's list op, which removes it from weaker layers' targets too, or taken out of an explicit list."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdRenderPass::CreateRenderSourceRel().RemoveTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn remove_from_render_source(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+    ) -> &Self {
+        self.remove_target(edit, "renderSource", target);
         self
     }
 }
@@ -472,6 +522,31 @@ impl RenderProductEdit {
         targets: &[::layerstack::TargetPath],
     ) -> &Self {
         self.write_targets(edit, "orderedVars", targets);
+        self
+    }
+
+    #[doc = "Adds `target` to [`Self::set_ordered_vars`]'s targets at `position`, editing the edit target's list op instead of replacing it: weaker layers' targets stay, and a target already in the chosen list moves. An explicit list takes it whatever the position."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdRenderProduct::CreateOrderedVarsRel().AddTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn add_to_ordered_vars(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+        position: ::layerstack::ListPosition,
+    ) -> &Self {
+        self.add_target(edit, "orderedVars", target, position);
+        self
+    }
+
+    #[doc = "Removes `target` from [`Self::set_ordered_vars`]'s targets: it is deleted in the edit target's list op, which removes it from weaker layers' targets too, or taken out of an explicit list."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdRenderProduct::CreateOrderedVarsRel().RemoveTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn remove_from_ordered_vars(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+    ) -> &Self {
+        self.remove_target(edit, "orderedVars", target);
         self
     }
 
@@ -724,6 +799,31 @@ impl RenderSettingsEdit {
         targets: &[::layerstack::TargetPath],
     ) -> &Self {
         self.write_targets(edit, "products", targets);
+        self
+    }
+
+    #[doc = "Adds `target` to [`Self::set_products`]'s targets at `position`, editing the edit target's list op instead of replacing it: weaker layers' targets stay, and a target already in the chosen list moves. An explicit list takes it whatever the position."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdRenderSettings::CreateProductsRel().AddTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn add_to_products(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+        position: ::layerstack::ListPosition,
+    ) -> &Self {
+        self.add_target(edit, "products", target, position);
+        self
+    }
+
+    #[doc = "Removes `target` from [`Self::set_products`]'s targets: it is deleted in the edit target's list op, which removes it from weaker layers' targets too, or taken out of an explicit list."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdRenderSettings::CreateProductsRel().RemoveTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn remove_from_products(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+    ) -> &Self {
+        self.remove_target(edit, "products", target);
         self
     }
 
@@ -1031,6 +1131,31 @@ impl RenderSettingsBaseEdit {
         targets: &[::layerstack::TargetPath],
     ) -> &Self {
         self.write_targets(edit, "camera", targets);
+        self
+    }
+
+    #[doc = "Adds `target` to [`Self::set_camera`]'s targets at `position`, editing the edit target's list op instead of replacing it: weaker layers' targets stay, and a target already in the chosen list moves. An explicit list takes it whatever the position."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdRenderSettingsBase::CreateCameraRel().AddTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn add_to_camera(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+        position: ::layerstack::ListPosition,
+    ) -> &Self {
+        self.add_target(edit, "camera", target, position);
+        self
+    }
+
+    #[doc = "Removes `target` from [`Self::set_camera`]'s targets: it is deleted in the edit target's list op, which removes it from weaker layers' targets too, or taken out of an explicit list."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdRenderSettingsBase::CreateCameraRel().RemoveTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn remove_from_camera(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+    ) -> &Self {
+        self.remove_target(edit, "camera", target);
         self
     }
 

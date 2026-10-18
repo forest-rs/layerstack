@@ -301,6 +301,31 @@ impl PhysicsCollisionApiEdit {
         self.write_targets(edit, "physics:simulationOwner", targets);
         self
     }
+
+    #[doc = "Adds `target` to [`Self::set_simulation_owner`]'s targets at `position`, editing the edit target's list op instead of replacing it: weaker layers' targets stay, and a target already in the chosen list moves. An explicit list takes it whatever the position."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdPhysicsCollisionAPI::CreateSimulationOwnerRel().AddTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn add_to_simulation_owner(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+        position: ::layerstack::ListPosition,
+    ) -> &Self {
+        self.add_target(edit, "physics:simulationOwner", target, position);
+        self
+    }
+
+    #[doc = "Removes `target` from [`Self::set_simulation_owner`]'s targets: it is deleted in the edit target's list op, which removes it from weaker layers' targets too, or taken out of an explicit list."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdPhysicsCollisionAPI::CreateSimulationOwnerRel().RemoveTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn remove_from_simulation_owner(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+    ) -> &Self {
+        self.remove_target(edit, "physics:simulationOwner", target);
+        self
+    }
 }
 
 #[doc = "Defines a collision group for coarse filtering."]
@@ -480,6 +505,31 @@ impl PhysicsCollisionGroupEdit {
         targets: &[::layerstack::TargetPath],
     ) -> &Self {
         self.write_targets(edit, "physics:filteredGroups", targets);
+        self
+    }
+
+    #[doc = "Adds `target` to [`Self::set_filtered_groups`]'s targets at `position`, editing the edit target's list op instead of replacing it: weaker layers' targets stay, and a target already in the chosen list moves. An explicit list takes it whatever the position."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdPhysicsCollisionGroup::CreateFilteredGroupsRel().AddTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn add_to_filtered_groups(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+        position: ::layerstack::ListPosition,
+    ) -> &Self {
+        self.add_target(edit, "physics:filteredGroups", target, position);
+        self
+    }
+
+    #[doc = "Removes `target` from [`Self::set_filtered_groups`]'s targets: it is deleted in the edit target's list op, which removes it from weaker layers' targets too, or taken out of an explicit list."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdPhysicsCollisionGroup::CreateFilteredGroupsRel().RemoveTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn remove_from_filtered_groups(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+    ) -> &Self {
+        self.remove_target(edit, "physics:filteredGroups", target);
         self
     }
 
@@ -1317,6 +1367,31 @@ impl PhysicsFilteredPairsApiEdit {
         self.write_targets(edit, "physics:filteredPairs", targets);
         self
     }
+
+    #[doc = "Adds `target` to [`Self::set_filtered_pairs`]'s targets at `position`, editing the edit target's list op instead of replacing it: weaker layers' targets stay, and a target already in the chosen list moves. An explicit list takes it whatever the position."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdPhysicsFilteredPairsAPI::CreateFilteredPairsRel().AddTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn add_to_filtered_pairs(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+        position: ::layerstack::ListPosition,
+    ) -> &Self {
+        self.add_target(edit, "physics:filteredPairs", target, position);
+        self
+    }
+
+    #[doc = "Removes `target` from [`Self::set_filtered_pairs`]'s targets: it is deleted in the edit target's list op, which removes it from weaker layers' targets too, or taken out of an explicit list."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdPhysicsFilteredPairsAPI::CreateFilteredPairsRel().RemoveTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn remove_from_filtered_pairs(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+    ) -> &Self {
+        self.remove_target(edit, "physics:filteredPairs", target);
+        self
+    }
 }
 
 #[doc = "Predefined fixed joint type (All degrees of freedom are removed.)."]
@@ -1770,6 +1845,31 @@ impl PhysicsJointEdit {
         self
     }
 
+    #[doc = "Adds `target` to [`Self::set_body0`]'s targets at `position`, editing the edit target's list op instead of replacing it: weaker layers' targets stay, and a target already in the chosen list moves. An explicit list takes it whatever the position."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdPhysicsJoint::CreateBody0Rel().AddTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn add_to_body0(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+        position: ::layerstack::ListPosition,
+    ) -> &Self {
+        self.add_target(edit, "physics:body0", target, position);
+        self
+    }
+
+    #[doc = "Removes `target` from [`Self::set_body0`]'s targets: it is deleted in the edit target's list op, which removes it from weaker layers' targets too, or taken out of an explicit list."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdPhysicsJoint::CreateBody0Rel().RemoveTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn remove_from_body0(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+    ) -> &Self {
+        self.remove_target(edit, "physics:body0", target);
+        self
+    }
+
     #[doc = "Relationship to any UsdGeomXformable."]
     #[doc = ""]
     #[doc = "USD relationship `physics:body1` (`rel`)."]
@@ -1782,6 +1882,31 @@ impl PhysicsJointEdit {
         targets: &[::layerstack::TargetPath],
     ) -> &Self {
         self.write_targets(edit, "physics:body1", targets);
+        self
+    }
+
+    #[doc = "Adds `target` to [`Self::set_body1`]'s targets at `position`, editing the edit target's list op instead of replacing it: weaker layers' targets stay, and a target already in the chosen list moves. An explicit list takes it whatever the position."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdPhysicsJoint::CreateBody1Rel().AddTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn add_to_body1(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+        position: ::layerstack::ListPosition,
+    ) -> &Self {
+        self.add_target(edit, "physics:body1", target, position);
+        self
+    }
+
+    #[doc = "Removes `target` from [`Self::set_body1`]'s targets: it is deleted in the edit target's list op, which removes it from weaker layers' targets too, or taken out of an explicit list."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdPhysicsJoint::CreateBody1Rel().RemoveTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn remove_from_body1(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+    ) -> &Self {
+        self.remove_target(edit, "physics:body1", target);
         self
     }
 
@@ -3867,6 +3992,31 @@ impl PhysicsRigidBodyApiEdit {
         targets: &[::layerstack::TargetPath],
     ) -> &Self {
         self.write_targets(edit, "physics:simulationOwner", targets);
+        self
+    }
+
+    #[doc = "Adds `target` to [`Self::set_simulation_owner`]'s targets at `position`, editing the edit target's list op instead of replacing it: weaker layers' targets stay, and a target already in the chosen list moves. An explicit list takes it whatever the position."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdPhysicsRigidBodyAPI::CreateSimulationOwnerRel().AddTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn add_to_simulation_owner(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+        position: ::layerstack::ListPosition,
+    ) -> &Self {
+        self.add_target(edit, "physics:simulationOwner", target, position);
+        self
+    }
+
+    #[doc = "Removes `target` from [`Self::set_simulation_owner`]'s targets: it is deleted in the edit target's list op, which removes it from weaker layers' targets too, or taken out of an explicit list."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdPhysicsRigidBodyAPI::CreateSimulationOwnerRel().RemoveTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn remove_from_simulation_owner(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+    ) -> &Self {
+        self.remove_target(edit, "physics:simulationOwner", target);
         self
     }
 

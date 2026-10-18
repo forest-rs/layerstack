@@ -350,6 +350,36 @@ impl CollectionApiEdit {
         self
     }
 
+    #[doc = "Adds `target` to [`Self::set_excludes`]'s targets at `position`, editing the edit target's list op instead of replacing it: weaker layers' targets stay, and a target already in the chosen list moves. An explicit list takes it whatever the position."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdCollectionAPI::CreateExcludesRel().AddTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn add_to_excludes(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+        position: ::layerstack::ListPosition,
+    ) -> &Self {
+        self.add_target(
+            edit,
+            "collection:__INSTANCE_NAME__:excludes",
+            target,
+            position,
+        );
+        self
+    }
+
+    #[doc = "Removes `target` from [`Self::set_excludes`]'s targets: it is deleted in the edit target's list op, which removes it from weaker layers' targets too, or taken out of an explicit list."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdCollectionAPI::CreateExcludesRel().RemoveTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn remove_from_excludes(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+    ) -> &Self {
+        self.remove_target(edit, "collection:__INSTANCE_NAME__:excludes", target);
+        self
+    }
+
     #[doc = "Specifies how the paths that are included in the collection must be expanded to determine its members."]
     #[doc = ""]
     #[doc = "USD attribute `collection:<instance>:expansionRule` (`token`, uniform; fallback `\"expandPrims\"`)."]
@@ -400,6 +430,36 @@ impl CollectionApiEdit {
         targets: &[::layerstack::TargetPath],
     ) -> &Self {
         self.write_targets(edit, "collection:__INSTANCE_NAME__:includes", targets);
+        self
+    }
+
+    #[doc = "Adds `target` to [`Self::set_includes`]'s targets at `position`, editing the edit target's list op instead of replacing it: weaker layers' targets stay, and a target already in the chosen list moves. An explicit list takes it whatever the position."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdCollectionAPI::CreateIncludesRel().AddTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn add_to_includes(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+        position: ::layerstack::ListPosition,
+    ) -> &Self {
+        self.add_target(
+            edit,
+            "collection:__INSTANCE_NAME__:includes",
+            target,
+            position,
+        );
+        self
+    }
+
+    #[doc = "Removes `target` from [`Self::set_includes`]'s targets: it is deleted in the edit target's list op, which removes it from weaker layers' targets too, or taken out of an explicit list."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdCollectionAPI::CreateIncludesRel().RemoveTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn remove_from_includes(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+    ) -> &Self {
+        self.remove_target(edit, "collection:__INSTANCE_NAME__:includes", target);
         self
     }
 

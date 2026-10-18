@@ -50,6 +50,8 @@ const RESERVED: &[&str] = &[
     "read_targets",
     "write_value",
     "write_targets",
+    "add_target",
+    "remove_target",
 ];
 
 /// The Rust type of a schema (`CollectionAPI` → `CollectionApi`,
@@ -615,6 +617,10 @@ fn method_names<'m>(
         let name = method_name(&schema.name, property);
         out.push((name.clone(), Some(property)));
         out.push((format!("set_{name}"), Some(property)));
+        if property.kind == PropertyKind::Relationship {
+            out.push((format!("add_to_{name}"), Some(property)));
+            out.push((format!("remove_from_{name}"), Some(property)));
+        }
         if property
             .value_type
             .as_ref()
@@ -912,6 +918,18 @@ fn accessors(
         docs.push_str(&alias);
     }
     let alias = cpp_method_alias(schema, &create, "    ");
+    // How C++ makes a relationship call: through the schema's `Create*Rel`
+    // when it declares one, else on the relationship itself.
+    let rel_call = |call: &str| match &schema.cpp {
+        Some((class, _)) if !alias.is_empty() => {
+            format!(
+                "C++ authoring: `{class}::{create}().{call}()`; changes are queued in `SchemaEdit` until its transaction is applied."
+            )
+        }
+        _ => format!(
+            "C++ authoring: `UsdRelationship::{call}()`; changes are queued in `SchemaEdit` until its transaction is applied."
+        ),
+    };
     if !alias.is_empty() {
         let class = &schema.cpp.as_ref().expect("verified native method").0;
         setter_docs.push_str(&doc_attrs("    ", &[format!("C++ authoring: `{class}::{create}().{}`; changes are queued in `SchemaEdit` until its transaction is applied.", if property.kind == PropertyKind::Relationship { "SetTargets()" } else { "Set()" })]));
@@ -945,7 +963,32 @@ fn accessors(
             setters: format!(
                 "{setter_docs}    pub fn set_{name}(\n        &self,\n        \
                  edit: &mut SchemaEdit<'_>,\n        targets: &[::layerstack::TargetPath],\n    \
-                 ) -> &Self {{\n        self.write_targets(edit, {usd:?}, targets);\n        self\n    }}\n\n"
+                 ) -> &Self {{\n        self.write_targets(edit, {usd:?}, targets);\n        self\n    }}\n\n\
+                 {add_docs}    pub fn add_to_{name}(\n        &self,\n        \
+                 edit: &mut SchemaEdit<'_>,\n        target: ::layerstack::TargetPath,\n        \
+                 position: ::layerstack::ListPosition,\n    \
+                 ) -> &Self {{\n        self.add_target(edit, {usd:?}, target, position);\n        self\n    }}\n\n\
+                 {remove_docs}    pub fn remove_from_{name}(\n        &self,\n        \
+                 edit: &mut SchemaEdit<'_>,\n        target: ::layerstack::TargetPath,\n    \
+                 ) -> &Self {{\n        self.remove_target(edit, {usd:?}, target);\n        self\n    }}\n\n",
+                add_docs = doc_attrs(
+                    "    ",
+                    &[
+                        format!(
+                            "Adds `target` to [`Self::set_{name}`]'s targets at `position`, editing the edit target's list op instead of replacing it: weaker layers' targets stay, and a target already in the chosen list moves. An explicit list takes it whatever the position."
+                        ),
+                        rel_call("AddTarget"),
+                    ],
+                ),
+                remove_docs = doc_attrs(
+                    "    ",
+                    &[
+                        format!(
+                            "Removes `target` from [`Self::set_{name}`]'s targets: it is deleted in the edit target's list op, which removes it from weaker layers' targets too, or taken out of an explicit list."
+                        ),
+                        rel_call("RemoveTarget"),
+                    ],
+                ),
             ),
             enums,
         });

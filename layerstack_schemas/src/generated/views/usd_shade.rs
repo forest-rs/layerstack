@@ -178,6 +178,31 @@ impl CoordSysApiEdit {
         self.write_targets(edit, "coordSys:__INSTANCE_NAME__:binding", targets);
         self
     }
+
+    #[doc = "Adds `target` to [`Self::set_binding`]'s targets at `position`, editing the edit target's list op instead of replacing it: weaker layers' targets stay, and a target already in the chosen list moves. An explicit list takes it whatever the position."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdShadeCoordSysAPI::CreateBindingRel().AddTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn add_to_binding(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+        position: ::layerstack::ListPosition,
+    ) -> &Self {
+        self.add_target(edit, "coordSys:__INSTANCE_NAME__:binding", target, position);
+        self
+    }
+
+    #[doc = "Removes `target` from [`Self::set_binding`]'s targets: it is deleted in the edit target's list op, which removes it from weaker layers' targets too, or taken out of an explicit list."]
+    #[doc = ""]
+    #[doc = "C++ authoring: `UsdShadeCoordSysAPI::CreateBindingRel().RemoveTarget()`; changes are queued in `SchemaEdit` until its transaction is applied."]
+    pub fn remove_from_binding(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: ::layerstack::TargetPath,
+    ) -> &Self {
+        self.remove_target(edit, "coordSys:__INSTANCE_NAME__:binding", target);
+        self
+    }
 }
 
 #[doc = "A Material provides a container into which multiple \"render contexts\" can add data that defines a \"shading material\" for a renderer."]

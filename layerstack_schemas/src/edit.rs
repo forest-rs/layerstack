@@ -9,9 +9,9 @@ use alloc::{string::String, vec::Vec};
 
 use layerstack::edit::{EditTarget, Transaction};
 use layerstack::{
-    CannotApply, LayerStore, ListOp, PathId, PropertyDeclaration, PropertyDefinition, PropertyKind,
-    PropertyPath, PropertySpec, PropertyType, ResolvedValue, Specifier, Stage, TargetPath, TokenId,
-    TokenInterner, Value,
+    CannotApply, LayerStore, ListOp, ListPosition, PathId, PropertyDeclaration, PropertyDefinition,
+    PropertyKind, PropertyPath, PropertySpec, PropertyType, ResolvedValue, Specifier, Stage,
+    TargetPath, TokenId, TokenInterner, Value,
 };
 
 /// Collects schema edits into a [`Transaction`] for one [`EditTarget`].
@@ -971,6 +971,30 @@ impl<'s> SchemaEdit<'s> {
         let at = self.target.property(PropertyPath::new(path, token));
         self.transaction
             .set_targets(at, ListOp::explicit(targets.to_vec()));
+    }
+
+    /// Adds `target` to the targets of the relationship `name` at
+    /// `position`, editing the edit target's list op.
+    pub(crate) fn add_target(
+        &mut self,
+        path: PathId,
+        name: &str,
+        target: TargetPath,
+        position: ListPosition,
+    ) {
+        let token = self.store.tokens_mut().intern(name);
+        self.define_relationship(path, token);
+        let at = self.target.property(PropertyPath::new(path, token));
+        self.transaction.add_target(at, target, position);
+    }
+
+    /// Removes `target` from the targets of the relationship `name`,
+    /// deleting it in the edit target's list op.
+    pub(crate) fn remove_target(&mut self, path: PathId, name: &str, target: TargetPath) {
+        let token = self.store.tokens_mut().intern(name);
+        self.define_relationship(path, token);
+        let at = self.target.property(PropertyPath::new(path, token));
+        self.transaction.remove_target(at, target);
     }
 
     /// Applies the applied schema `schema` (with `instance` for a

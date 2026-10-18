@@ -61,7 +61,7 @@ fn arrays(c: &mut Criterion) {
             store.insert_layer(layer);
             let options = StageOptions {
                 schemas: Some(std::sync::Arc::new(layerstack_schemas::openusd(
-                    &mut store.tokens,
+                    &store.tokens,
                 ))),
                 ..StageOptions::default()
             };
@@ -112,7 +112,7 @@ fn arrays(c: &mut Criterion) {
             store.insert_layer(stronger);
             let options = StageOptions {
                 schemas: Some(std::sync::Arc::new(layerstack_schemas::openusd(
-                    &mut store.tokens,
+                    &store.tokens,
                 ))),
                 ..StageOptions::default()
             };

@@ -22,8 +22,8 @@ pub(crate) fn directory() -> PathBuf {
     directory
 }
 pub(crate) fn create(directory: &std::path::Path, name: &str) -> Document {
-    let mut store = InMemoryStore::default();
-    let schemas = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+    let store = InMemoryStore::default();
+    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
     StageDocument::create_in(
         Filesystem::new(directory, []).unwrap(),
         store,

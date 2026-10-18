@@ -103,7 +103,7 @@ impl SchemaKind {
 /// ```
 /// use layerstack::{PropertyDefinition, PropertyType, TokenInterner, Value};
 ///
-/// let mut tokens = TokenInterner::default();
+/// let tokens = TokenInterner::default();
 /// let width = PropertyDefinition::attribute(tokens.intern("width"))
 ///     .with_type(PropertyType::parse("float").unwrap())
 ///     .with_fallback(Value::Float(1.0));
@@ -223,7 +223,7 @@ impl PropertyDefinition {
 /// ```
 /// use layerstack::{PropertyDefinition, SchemaDefinition, SchemaKind, TokenInterner, Value};
 ///
-/// let mut tokens = TokenInterner::default();
+/// let tokens = TokenInterner::default();
 /// let shape = SchemaDefinition::new(tokens.intern("Shape"), SchemaKind::AbstractTyped)
 ///     .with_property(PropertyDefinition::attribute(tokens.intern("sides")).with_fallback(3));
 /// let tile = SchemaDefinition::typed(tokens.intern("Tile"))
@@ -467,7 +467,7 @@ pub enum SchemaIssue {
 /// ```
 /// use layerstack::{PropertyDefinition, SchemaDefinition, SchemaRegistry, TokenInterner};
 ///
-/// let mut tokens = TokenInterner::default();
+/// let tokens = TokenInterner::default();
 /// let (tile, label, text) = (tokens.intern("Tile"), tokens.intern("LabelAPI"), tokens.intern("text"));
 /// let mut builder = SchemaRegistry::builder();
 /// builder
@@ -475,7 +475,7 @@ pub enum SchemaIssue {
 ///     .register(SchemaDefinition::api(label).with_property(
 ///         PropertyDefinition::attribute(text).with_fallback("untitled"),
 ///     ));
-/// let registry = builder.build(&mut tokens);
+/// let registry = builder.build(&tokens);
 ///
 /// let definition = registry.prim_definition(Some(tile), &[], &tokens);
 /// assert!(definition.is_a(tile));
@@ -540,7 +540,7 @@ impl SchemaRegistryBuilder {
     /// §13.3.2.3). Names are interned in `tokens`, the interner of the
     /// store whose stages will use the registry.
     #[must_use]
-    pub fn build(self, tokens: &mut TokenInterner) -> SchemaRegistry {
+    pub fn build(self, tokens: &TokenInterner) -> SchemaRegistry {
         let mut schemas = HashMap::new();
         for schema in self.schemas {
             schemas.insert(schema.name, schema);
@@ -847,7 +847,7 @@ impl SchemaRegistry {
     ///
     /// Spec: AOUSD Core §13.3.2 (a multiple-apply schema's property names are
     /// formed from the instance name).
-    pub fn intern_instance_names(&self, applied: &[TokenId], tokens: &mut TokenInterner) {
+    pub fn intern_instance_names(&self, applied: &[TokenId], tokens: &TokenInterner) {
         for &name in applied {
             let Some((schema, Some(instance))) = self
                 .applied(name, tokens)
@@ -1024,7 +1024,7 @@ trait Names {
 }
 
 /// [`Names`] that interns what it forms.
-struct Intern<'t>(&'t mut TokenInterner);
+struct Intern<'t>(&'t TokenInterner);
 
 impl Names for Intern<'_> {
     fn name(&mut self, text: &str) -> Option<TokenId> {
@@ -1059,7 +1059,7 @@ impl Names for Lookup<'_> {
 /// The state of one [`SchemaRegistryBuilder::build`].
 struct Build<'a> {
     schemas: &'a HashMap<TokenId, SchemaDefinition>,
-    tokens: &'a mut TokenInterner,
+    tokens: &'a TokenInterner,
     placeholder: TokenId,
     /// Each typed schema and its ancestors, nearest first.
     chains: HashMap<TokenId, Vec<TokenId>>,
@@ -1135,7 +1135,7 @@ impl<'a> Build<'a> {
                 }
             }
         }
-        let tokens = &*self.tokens;
+        let tokens = self.tokens;
         for list in self.auto_applied.values_mut() {
             list.sort_by(|a, b| {
                 crate::stage::dictionary_cmp(tokens.resolve(*b), tokens.resolve(*a))
@@ -1251,7 +1251,7 @@ impl<'a> Build<'a> {
             }
             let (weaker, weaker_complete) = self.api_definition(target, building);
             complete &= weaker_complete;
-            definition.compose_weaker(&weaker, instance, &mut Intern(&mut *self.tokens));
+            definition.compose_weaker(&weaker, instance, &mut Intern(self.tokens));
         }
         building.pop();
 
@@ -1299,7 +1299,7 @@ impl<'a> Build<'a> {
         for included in inclusions {
             if let Some((target, instance)) = self.inclusion(schema, included) {
                 let (weaker, _) = self.api_definition(target, &mut Vec::new());
-                definition.compose_weaker(&weaker, instance, &mut Intern(&mut *self.tokens));
+                definition.compose_weaker(&weaker, instance, &mut Intern(self.tokens));
             }
         }
         let mut overridden = HashSet::new();

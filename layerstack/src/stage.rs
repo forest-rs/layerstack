@@ -3712,7 +3712,7 @@ impl Stage {
     ///     PropertyDefinition::attribute(width).with_fallback(1.0_f32),
     /// ));
     /// let options = StageOptions {
-    ///     schemas: Some(Arc::new(builder.build(&mut store.tokens))),
+    ///     schemas: Some(Arc::new(builder.build(&store.tokens))),
     ///     ..StageOptions::default()
     /// };
     /// let stage = Stage::compose(&mut store, LayerId(1), options);
@@ -4141,7 +4141,7 @@ mod tests {
             SchemaDefinition::api(api)
                 .with_property(PropertyDefinition::attribute(field).with_fallback(7)),
         );
-        let registry = Arc::new(builder.build(&mut store.tokens));
+        let registry = Arc::new(builder.build(&store.tokens));
         let mut layer = Layer::new(LayerId(1));
         layer.insert_prim(a, PrimSpec::def().with_type_name(ty));
         layer.insert_prim(b, PrimSpec::def().with_type_name(ty));
@@ -4244,7 +4244,7 @@ mod tests {
         let mut layer = Layer::new(LayerId(1));
         layer.insert_prim(path, PrimSpec::def().with_type_name(a));
         store.insert_layer(layer);
-        let registry = Arc::new(builder.build(&mut store.tokens));
+        let registry = Arc::new(builder.build(&store.tokens));
         let mut live = LiveStage::compose(
             &mut store,
             LayerId(1),
@@ -4595,7 +4595,7 @@ mod tests {
             crate::schema::SchemaDefinition::typed(mesh)
                 .with_property(PropertyDefinition::attribute(field).with_fallback(fallback)),
         );
-        let registry = builder.build(&mut store.tokens);
+        let registry = builder.build(&store.tokens);
 
         let mut index = PrimIndex::default();
         let key = test_key(LayerId(1), prim);

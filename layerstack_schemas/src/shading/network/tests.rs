@@ -36,7 +36,7 @@ fn port(
 }
 fn fixture() -> (InMemoryStore, LiveStage, PathId) {
     let mut store = InMemoryStore::default();
-    let schemas = Arc::new(crate::openusd(&mut store.tokens));
+    let schemas = Arc::new(crate::openusd(&store.tokens));
     let mut weak = Layer::new(LayerId(2));
     for (path, ty, id) in [
         ("/Library", "Material", None),
@@ -819,7 +819,7 @@ fn expired_notices_and_new_incoming_interfaces_refresh_without_false_hits() {
     assert_eq!(recovered.network.primvars, vec!["incomingUv"]);
     assert_ne!(recovered.revisions.topology, first.revisions.topology);
     let mut other = store.snapshot();
-    let schemas = Arc::new(crate::openusd(&mut other.tokens));
+    let schemas = Arc::new(crate::openusd(&other.tokens));
     let other_live = LiveStage::compose(
         &mut other,
         LayerId(1),

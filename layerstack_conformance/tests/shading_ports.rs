@@ -28,7 +28,7 @@ fn layered_connections_match_cpp_and_undo_authored_absence() {
     store.insert_layer(Layer::new(LayerId(2)));
     let material = store.path("/Material");
     let shader = store.path("/Material/Shader");
-    let schemas = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
     let mut live = LiveStage::compose(
         &mut store,
         LayerId(1),
@@ -147,7 +147,7 @@ fn port_preflight_rejects_invalid_names_relationships_and_types_without_edits() 
             .with_property(relationship, layerstack::PropertySpec::relationship()),
     );
     store.insert_layer(layer);
-    let schemas = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
     let live = LiveStage::compose(
         &mut store,
         LayerId(1),

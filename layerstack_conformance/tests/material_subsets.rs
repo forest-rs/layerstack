@@ -185,7 +185,7 @@ fn snapshot_subset_query_does_not_decode_unselected_topology_samples() {
         ]
         .into(),
     );
-    let schemas = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
     let live = layerstack::LiveStage::compose(
         &mut store,
         LayerId(1),
@@ -257,7 +257,7 @@ fn material_subsets_preserve_decode_failure_paths() {
             } else {
                 attribute.time_samples = Some(vec![(1., value.clone()), (2., value)].into());
             }
-            let schemas = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+            let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
             let live = layerstack::LiveStage::compose(
                 &mut store,
                 LayerId(1),

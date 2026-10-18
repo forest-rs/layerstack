@@ -135,10 +135,10 @@ fn stage() -> (InMemoryStore, LiveStage) {
 
 #[test]
 fn each_library_registers_with_its_dependencies() {
-    let mut tokens = TokenInterner::default();
-    let labs = lab::registry(&mut tokens).expect("no metadata conflicts");
+    let tokens = TokenInterner::default();
+    let labs = lab::registry(&tokens).expect("no metadata conflicts");
     assert!(labs.issues().is_empty(), "{:?}", labs.issues());
-    let scopes = observatory::registry(&mut tokens).expect("no metadata conflicts");
+    let scopes = observatory::registry(&tokens).expect("no metadata conflicts");
     assert!(scopes.issues().is_empty(), "{:?}", scopes.issues());
     assert_eq!(lab::LIBRARY, "labInstruments");
     assert_eq!(lab::DEPENDENCIES, [Domain::Usd]);

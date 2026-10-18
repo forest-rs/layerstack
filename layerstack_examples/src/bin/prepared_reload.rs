@@ -85,8 +85,8 @@ fn validate(
     Ok(Resources { points, image })
 }
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut store = InMemoryStore::default();
-    let schemas = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+    let store = InMemoryStore::default();
+    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
     let backend = Memory(BTreeMap::from([(
         "scene.usdz".into(),
         package("(0,0,0)", &[1]),

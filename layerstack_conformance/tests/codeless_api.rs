@@ -51,13 +51,13 @@ class "PipelineSlotAPI" { float pipeline:__INSTANCE_NAME__:gain = 2 }
         SchemaDeclaration::new(slot, SchemaKind::MultipleApplyApi),
     ];
     let definitions =
-        read_generated_schema(&library, &declared, &mut store.tokens, &store.paths).unwrap();
+        read_generated_schema(&library, &declared, &store.tokens, &store.paths).unwrap();
     let mut builder = SchemaRegistry::builder();
-    layerstack_schemas::register(&mut builder, &[Domain::UsdGeom], &mut store.tokens).unwrap();
+    layerstack_schemas::register(&mut builder, &[Domain::UsdGeom], &store.tokens).unwrap();
     for definition in definitions {
         builder.register(definition);
     }
-    let schemas = Arc::new(builder.build(&mut store.tokens));
+    let schemas = Arc::new(builder.build(&store.tokens));
     assert!(
         schemas.issues().is_empty(),
         "runtime schema declarations form a valid registry"

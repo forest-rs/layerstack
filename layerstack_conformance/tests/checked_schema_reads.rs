@@ -45,7 +45,7 @@ fn checked_schema_arrays_preserve_decode_errors_at_default_and_numeric_times() {
             spec.time_samples =
                 Some(vec![(1., failed.clone()), (2., Value::from(vec![[2_f32; 3]]))].into());
         }
-        let schemas = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+        let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
         let live = layerstack::LiveStage::compose(
             &mut store,
             LayerId(1),
@@ -114,7 +114,7 @@ fn checked_schema_reads_share_native_arrays_and_keep_typed_default_selection() {
         ),
     );
     store.insert_layer(root);
-    let schemas = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
     let live = layerstack::LiveStage::compose(
         &mut store,
         LayerId(1),
@@ -152,7 +152,7 @@ fn validated_primvars_preserve_value_and_index_decode_errors() {
             .default = Some(Value::TypedArray(TypedArray::Deferred(Arc::new(Failed(
             error.clone(),
         )))));
-        let schemas = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+        let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
         let live = layerstack::LiveStage::compose(
             &mut store,
             LayerId(1),
@@ -193,7 +193,7 @@ fn checked_typed_reads_preserve_deferred_schema_fallback_failure() {
                 .with_fallback(fallback),
         ),
     );
-    let schemas = Arc::new(registry.build(&mut store.tokens));
+    let schemas = Arc::new(registry.build(&store.tokens));
     let mut layer = Layer::new(LayerId(1));
     layer.insert_prim(path, PrimSpec::def().with_type_name(ty));
     store.insert_layer(layer);
@@ -235,7 +235,7 @@ fn checked_default_retry_preserves_weaker_decode_error_before_schema_fallback() 
                     .with_fallback(Value::from(vec![[99_f32; 3]])),
             ),
         );
-        let schemas = Arc::new(registry.build(&mut store.tokens));
+        let schemas = Arc::new(registry.build(&store.tokens));
         let mut weak = Layer::new(LayerId(2));
         weak.insert_prim(
             path,

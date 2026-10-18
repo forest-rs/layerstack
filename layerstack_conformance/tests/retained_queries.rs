@@ -44,7 +44,7 @@ fn fixture() -> Fixture {
     let a = s.property_path("/Material.inputs:a");
     let b = s.property_path("/Material.inputs:b");
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&mut s.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(&s.tokens))),
         ..StageOptions::default()
     };
     Fixture {
@@ -83,7 +83,7 @@ fn assert_fresh(
     let mut store = fixture().session.into_store();
     store.layers = f.session.store().layers.clone();
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&mut store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
         ..StageOptions::default()
     };
     let stage = Stage::compose(&mut store, f.layer, options);

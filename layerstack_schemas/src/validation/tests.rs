@@ -11,7 +11,7 @@ fn setup() -> InMemoryStore {
     InMemoryStore::default()
 }
 fn stage(store: &mut InMemoryStore) -> Stage {
-    let schemas = crate::openusd(&mut store.tokens);
+    let schemas = crate::openusd(&store.tokens);
     Stage::compose(
         store,
         LayerId(1),
@@ -648,7 +648,7 @@ mod third_party {
             layer.insert_prim(path, PrimSpec::def());
         }
         store.insert_layer(layer);
-        let schemas = crate::openusd(&mut store.tokens);
+        let schemas = crate::openusd(&store.tokens);
         let stage = Stage::compose(
             &mut store,
             LayerId(1),

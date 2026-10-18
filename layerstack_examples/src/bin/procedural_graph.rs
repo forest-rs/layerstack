@@ -237,7 +237,7 @@ fn main() -> Result<(), Failure> {
     );
     store.insert_layer(layer);
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&mut store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
         ..Default::default()
     };
     let mut live = LiveStage::compose(&mut store, ROOT, options);

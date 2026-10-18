@@ -33,7 +33,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let material_path = store.path("/BaseMaterial");
     let accent_path = store.path("/AccentMaterial");
     let instance_path = store.path("/Instances");
-    let schemas = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
     let mut live = LiveStage::compose(
         &mut store,
         layer,

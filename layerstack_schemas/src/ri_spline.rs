@@ -290,7 +290,7 @@ mod tests {
                 ),
         );
         store.insert_layer(layer);
-        let schemas = crate::openusd(&mut store.tokens);
+        let schemas = crate::openusd(&store.tokens);
         let stage = Stage::compose(
             &mut store,
             LayerId(1),

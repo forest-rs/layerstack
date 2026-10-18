@@ -11,7 +11,7 @@ use std::{process::Command, sync::Arc};
 #[test]
 fn fallback_types_select_concrete_schemas_without_changing_authored_type() {
     let mut store = InMemoryStore::default();
-    let registry = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+    let registry = Arc::new(layerstack_schemas::openusd(&store.tokens));
     let future = store.tokens.intern("FutureMesh");
     let mesh = store.tokens.intern("Mesh");
     let unknown = store.tokens.intern("OtherFuture");
@@ -193,7 +193,7 @@ fn stage_metadata_edits_are_atomic_field_scoped_and_session_aware() {
 fn fallback_metadata_changes_rebuild_schema_definitions_and_undo() {
     use layerstack::{LiveStage, Transaction};
     let mut store = InMemoryStore::default();
-    let registry = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+    let registry = Arc::new(layerstack_schemas::openusd(&store.tokens));
     let name = store.tokens.intern("Future");
     let mesh = store.tokens.intern("Mesh");
     let key = store.tokens.intern("fallbackPrimTypes");
@@ -561,7 +561,7 @@ fn checked_object_queries_preserve_deferred_decode_failures_and_cache_them() {
 #[test]
 fn schema_property_kind_overrides_conflicting_authored_kind() {
     let mut store = source_store("#usda 1.0\ndef Sphere \"S\" {\n rel radius = </Other>\n}\n");
-    let registry = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+    let registry = Arc::new(layerstack_schemas::openusd(&store.tokens));
     let prim = store.path("/S");
     let stage = Stage::compose(
         &mut store,

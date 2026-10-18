@@ -46,7 +46,7 @@ fn camera(orthographic: bool) -> ComputedCamera {
     );
     store.insert_layer(layer);
     let schemas =
-        layerstack_schemas::registry(&[layerstack_schemas::Domain::UsdGeom], &mut store.tokens);
+        layerstack_schemas::registry(&[layerstack_schemas::Domain::UsdGeom], &store.tokens);
     let stage = Stage::compose(
         &mut store,
         LayerId(1),

@@ -45,7 +45,7 @@ fn shading_matches_openusd() {
         &workspace_root().join("layerstack_conformance/fixtures/shading/scene.usda"),
     );
     assert!(loaded.invalid.is_empty(), "{:?}", loaded.invalid);
-    let schemas = Arc::new(layerstack_schemas::openusd(&mut loaded.store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(&loaded.store.tokens));
     let stage = Stage::compose(
         &mut loaded.store,
         loaded.root_layer,
@@ -138,7 +138,7 @@ fn contexts_and_diagnostics_are_inspectable() {
     let multiple = loaded.store.path("/Multiple");
     let invalid = loaded.store.path("/Invalid");
     let only_ri = loaded.store.path("/OnlyRi");
-    let schemas = Arc::new(layerstack_schemas::openusd(&mut loaded.store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(&loaded.store.tokens));
     let stage = Stage::compose(
         &mut loaded.store,
         loaded.root_layer,
@@ -230,7 +230,7 @@ fn retarget_and_undo_preserve_source_and_dependency_evidence() {
     .unwrap();
     let new_output =
         PropertyPath::parse("/T.outputs:out", &loaded.store.tokens, &loaded.store.paths).unwrap();
-    let schemas = Arc::new(layerstack_schemas::openusd(&mut loaded.store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(&loaded.store.tokens));
     let mut live = LiveStage::compose(
         &mut loaded.store,
         loaded.root_layer,
@@ -274,7 +274,7 @@ fn authored_providers_are_not_evaluated_until_a_time_is_requested() {
     let mut loaded = load_entry_usda(
         &workspace_root().join("layerstack_conformance/fixtures/shading/scene.usda"),
     );
-    let schemas = Arc::new(layerstack_schemas::openusd(&mut loaded.store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(&loaded.store.tokens));
     let stage = Stage::compose(
         &mut loaded.store,
         loaded.root_layer,

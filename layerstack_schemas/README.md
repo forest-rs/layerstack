@@ -398,8 +398,8 @@ The existing `numeric_arrays/schema_points` benchmark fell from about 179 µs to
 that the improvement comes from retaining storage.
 
 ```rust
-let mut tokens = layerstack::TokenInterner::default();
-let schemas = layerstack_schemas::openusd(&mut tokens);
+let tokens = layerstack::TokenInterner::default();
+let schemas = layerstack_schemas::openusd(&tokens);
 ```
 
 [API documentation](https://docs.rs/layerstack_schemas) ·

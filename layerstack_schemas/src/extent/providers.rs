@@ -321,11 +321,11 @@ mod tests {
             let derived = store.tokens.intern("DerivedHostBoundable");
             let size = store.tokens.intern("hostSize");
             let mut builder = SchemaRegistry::builder();
-            crate::register(&mut builder, &[crate::Domain::UsdGeom], &mut store.tokens).unwrap();
+            crate::register(&mut builder, &[crate::Domain::UsdGeom], &store.tokens).unwrap();
             let boundable = store.tokens.lookup("Boundable").unwrap();
             builder.register(SchemaDefinition::typed(base).with_parent(boundable));
             builder.register(SchemaDefinition::typed(derived).with_parent(base));
-            let schemas = Arc::new(builder.build(&mut store.tokens));
+            let schemas = Arc::new(builder.build(&store.tokens));
             let mut layer = Layer::new(LayerId(1));
             layer.insert_prim(root, PrimSpec::def());
             layer.insert_prim(shape, PrimSpec::def().with_type_name(derived));

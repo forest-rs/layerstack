@@ -13,7 +13,7 @@ use std::sync::Arc;
 fn inherited_ports_compile_and_author_through_the_public_api() {
     let mut store = InMemoryStore::default();
     store.insert_layer(Layer::new(LayerId(1)));
-    let schemas = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
     let mut live = LiveStage::compose(
         &mut store,
         LayerId(1),
@@ -57,7 +57,7 @@ fn inherited_ports_compile_and_author_through_the_public_api() {
 fn selected_materialx_interfaces_author_usd_without_loading_implementations() {
     let mut store = InMemoryStore::default();
     store.insert_layer(Layer::new(LayerId(1)));
-    let schemas = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
     let mut live = LiveStage::compose(
         &mut store,
         LayerId(1),
@@ -114,7 +114,7 @@ fn user_literals_compile_and_round_trip_without_rust_path_rewriting() {
     );
     let mut store = InMemoryStore::default();
     store.insert_layer(Layer::new(LayerId(1)));
-    let schemas = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
     let mut live = LiveStage::compose(
         &mut store,
         LayerId(1),

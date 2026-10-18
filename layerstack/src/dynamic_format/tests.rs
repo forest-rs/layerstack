@@ -69,7 +69,7 @@ fn registry(store: &mut InMemoryStore) -> Arc<SchemaRegistry> {
             })
             .unwrap();
     }
-    Arc::new(builder.build(&mut store.tokens))
+    Arc::new(builder.build(&store.tokens))
 }
 
 fn dictionary(store: &InMemoryStore, keys: &[&str]) -> Value {

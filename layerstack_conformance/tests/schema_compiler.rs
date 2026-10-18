@@ -359,7 +359,7 @@ fn register_plugin(
     )
     .emitted
     .layer;
-    let definitions = read_generated_schema(&layer, &declarations, &mut store.tokens, &store.paths)
+    let definitions = read_generated_schema(&layer, &declarations, &store.tokens, &store.paths)
         .expect("every declared schema is defined");
     for definition in definitions {
         builder.register(definition);
@@ -394,13 +394,13 @@ fn fixture_registry_matches_openusd() {
             layerstack_schemas::Domain::Usd,
             layerstack_schemas::Domain::UsdGeom,
         ],
-        &mut store.tokens,
+        &store.tokens,
     )
     .expect("OpenUSD's schemas");
     for plugin in ["lab", "observatory"] {
         register_plugin(&fixture().join(plugin), &mut builder, &mut store);
     }
-    let registry = builder.build(&mut store.tokens);
+    let registry = builder.build(&store.tokens);
     assert_matches_oracle(&registry, &mut store.tokens);
 }
 
@@ -417,10 +417,10 @@ fn generated_registration_matches_openusd() {
         .chain(observatory::DEPENDENCIES)
         .copied()
         .collect();
-    layerstack_schemas::register(&mut builder, &domains, &mut tokens).expect("OpenUSD's schemas");
-    lab::register(&mut builder, &mut tokens).expect("the lab schemas");
-    observatory::register(&mut builder, &mut tokens).expect("the observatory schemas");
-    let registry = builder.build(&mut tokens);
+    layerstack_schemas::register(&mut builder, &domains, &tokens).expect("OpenUSD's schemas");
+    lab::register(&mut builder, &tokens).expect("the lab schemas");
+    observatory::register(&mut builder, &tokens).expect("the observatory schemas");
+    let registry = builder.build(&tokens);
     assert_matches_oracle(&registry, &mut tokens);
 }
 

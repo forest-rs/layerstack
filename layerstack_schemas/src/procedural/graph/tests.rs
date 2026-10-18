@@ -139,7 +139,7 @@ fn fixture() -> Fixture {
     }
     store.insert_layer(layer);
     let options = StageOptions {
-        schemas: Some(Arc::new(crate::openusd(&mut store.tokens))),
+        schemas: Some(Arc::new(crate::openusd(&store.tokens))),
         ..Default::default()
     };
     let live = LiveStage::compose(&mut store, ROOT, options);

@@ -89,7 +89,7 @@ def "Clip" {
         store.insert_layer(emitted.layer);
     }
     store.insert_asset_layer(LayerId(1), "motion.usda", LayerId(2));
-    let schemas = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
     let stage = Stage::compose(
         &mut store,
         LayerId(1),

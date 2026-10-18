@@ -49,7 +49,7 @@ fn typed_schemas_inherit_properties_and_is_a() {
                 .with_property(attr(&mut t, "barprop", 1.0_f32)),
         )
         .register(SchemaDefinition::typed(baz).with_parent(foo));
-    let registry = builder.build(&mut t);
+    let registry = builder.build(&t);
 
     // Spec: AOUSD Core §13.3.1's example.
     let bar1 = registry.prim_definition(Some(bar), &[], &t);
@@ -105,7 +105,7 @@ fn inclusions_compose_right_after_their_schema() {
         .register(SchemaDefinition::api(other).with_property(attr(&mut t, "shade", "other")))
         .register(SchemaDefinition::api(auto).with_property(attr(&mut t, "text", "auto")))
         .auto_apply(auto, label);
-    let registry = builder.build(&mut t);
+    let registry = builder.build(&t);
 
     let applied = [label, other];
     let definition = registry.prim_definition(Some(tile), &applied, &t);
@@ -150,7 +150,7 @@ fn overrides_replace_fallbacks_but_not_variability() {
                     .with_fallback(12),
             ),
         );
-    let registry = builder.build(&mut t);
+    let registry = builder.build(&t);
 
     let definition = registry.prim_definition(None, &[outer], &t);
     let size = definition.property(size).expect("size");
@@ -188,10 +188,10 @@ fn multiple_apply_instances_fill_in_templates() {
                 .with_property(attr(&mut t, "pin:__INSTANCE_NAME__:offset", 0.25_f32))
                 .with_property(attr(&mut t, "__INSTANCE_NAME__:pinned", "no")),
         );
-    let registry = builder.build(&mut t);
+    let registry = builder.build(&t);
 
     let applied = [t.intern("SlotAPI:left:upper"), slot, t.intern("TileAPI")];
-    registry.intern_instance_names(&applied, &mut t);
+    registry.intern_instance_names(&applied, &t);
     let definition = registry.prim_definition(Some(tile), &applied, &t);
     assert_eq!(
         applied_names(&definition, &t),
@@ -239,7 +239,7 @@ fn multiple_apply_instances_fill_in_templates() {
 
 #[test]
 fn invalid_inclusions_are_skipped_and_reported() {
-    let mut t = TokenInterner::default();
+    let t = TokenInterner::default();
     let (single, multi) = (t.intern("SingleAPI"), t.intern("MultiAPI"));
     let (bad_single, missing) = (t.intern("SingleAPI:named"), t.intern("MissingAPI"));
     let mut builder = SchemaRegistry::builder();
@@ -250,7 +250,7 @@ fn invalid_inclusions_are_skipped_and_reported() {
                 .with_built_in(bad_single)
                 .with_built_in(missing),
         );
-    let registry = builder.build(&mut t);
+    let registry = builder.build(&t);
     let issues = registry.issues();
     assert!(issues.contains(&SchemaIssue::InvalidInclusion {
         schema: single,
@@ -284,7 +284,7 @@ fn inclusion_cycles_build_each_definition_from_the_top() {
                 .with_built_in(one)
                 .with_property(attr(&mut t, "value", 2)),
         );
-    let registry = builder.build(&mut t);
+    let registry = builder.build(&t);
     let from_one = registry.prim_definition(None, &[one], &t);
     assert_eq!(applied_names(&from_one, &t), ["OneAPI", "TwoAPI"]);
     let from_two = registry.prim_definition(None, &[two], &t);
@@ -316,7 +316,7 @@ fn auto_applies_reach_derived_types_in_reverse_dictionary_order() {
         .register(SchemaDefinition::api(second).with_property(attr(&mut t, "enabled", false)))
         .auto_apply(first, shape)
         .auto_apply(second, shape);
-    let registry = builder.build(&mut t);
+    let registry = builder.build(&t);
     let definition = registry.prim_definition(Some(tile), &[], &t);
     assert_eq!(
         applied_names(&definition, &t),
@@ -345,7 +345,7 @@ fn a_weaker_definition_of_another_type_is_ignored() {
                     .with_fallback(2.0_f32),
             ),
         );
-    let registry = builder.build(&mut t);
+    let registry = builder.build(&t);
     assert_eq!(
         fallback(&registry, None, &[strong, weak], "rank", &mut t),
         None
@@ -372,7 +372,7 @@ fn uninterned_instance_names_are_reported() {
             0,
         )),
     );
-    let registry = builder.build(&mut t);
+    let registry = builder.build(&t);
     let applied = [t.intern("SlotAPI:fresh")];
     let _ = registry.prim_definition(None, &applied, &t);
 }
@@ -402,9 +402,9 @@ fn property_lookup_matches_the_built_definition() {
                 2,
             )),
         );
-    let registry = builder.build(&mut t);
+    let registry = builder.build(&t);
     let applied = [t.intern("SlotAPI:left"), t.intern("SlotAPI:a:b")];
-    registry.intern_instance_names(&applied, &mut t);
+    registry.intern_instance_names(&applied, &t);
     let definition = registry.prim_definition(Some(tile), &applied, &t);
 
     let mut names: Vec<String> = definition
@@ -527,7 +527,7 @@ fn generated_schema_layers_read_as_definitions() {
         },
         SchemaDeclaration::new(pin, SchemaKind::MultipleApplyApi),
     ];
-    let schemas = read_generated_schema(&layer, &declared, &mut t, &paths).expect("read");
+    let schemas = read_generated_schema(&layer, &declared, &t, &paths).expect("read");
     let slot_schema = &schemas[0];
     assert_eq!(slot_schema.built_ins, [pin, t.intern("PinAPI:extra")]);
     assert_eq!(
@@ -545,7 +545,7 @@ fn generated_schema_layers_read_as_definitions() {
     for schema in schemas {
         builder.register(schema);
     }
-    let registry = builder.build(&mut t);
+    let registry = builder.build(&t);
     let applied = [t.intern("SlotAPI:a")];
     assert_eq!(
         fallback(&registry, None, &applied, "pin:a:offset", &mut t),
@@ -558,7 +558,7 @@ fn generated_schema_layers_read_as_definitions() {
 
     let missing = [SchemaDeclaration::new(tile, SchemaKind::ConcreteTyped)];
     assert_eq!(
-        read_generated_schema(&layer, &missing, &mut t, &paths),
+        read_generated_schema(&layer, &missing, &t, &paths),
         Err(GeneratedSchemaError::MissingSchema { name: tile })
     );
 }
@@ -590,7 +590,7 @@ fn can_apply_checks_instance_names_and_prim_types() {
                 .with_property(attr(&mut t, "pin:__INSTANCE_NAME__:offset", 0))
                 .with_property(attr(&mut t, "pin:__INSTANCE_NAME__", 0)),
         );
-    let registry = builder.build(&mut t);
+    let registry = builder.build(&t);
 
     assert_eq!(registry.can_apply(Some(tile), label, None, &t), Ok(()));
     assert_eq!(
@@ -630,7 +630,7 @@ fn can_apply_checks_instance_names_and_prim_types() {
             ..SchemaDefinition::new(limited, SchemaKind::MultipleApplyApi)
                 .with_can_only_apply_to(tile)
         });
-    let limits = limits.build(&mut t);
+    let limits = limits.build(&t);
     for instance in ["empty", "missing"] {
         assert_eq!(
             limits.can_only_apply_to(limited, Some(instance), &t),
@@ -692,7 +692,7 @@ fn can_apply_checks_instance_names_and_prim_types() {
 #[test]
 fn property_metadata_composes_strong_to_weak_only_for_matching_types() {
     use crate::{FieldValue, PropertyType};
-    let mut tokens = TokenInterner::default();
+    let tokens = TokenInterner::default();
     let strong = tokens.intern("StrongAPI");
     let weak = tokens.intern("WeakAPI");
     let wrong = tokens.intern("WrongAPI");
@@ -741,7 +741,7 @@ fn property_metadata_composes_strong_to_weak_only_for_matching_types() {
                 .with_metadata(only_wrong, Value::Bool(true)),
         ),
     );
-    let registry = builder.build(&mut tokens);
+    let registry = builder.build(&tokens);
     let applied = [strong, weak, wrong];
     let definition = registry.prim_definition(None, &applied, &tokens);
     let property = definition.property(name).unwrap();
@@ -773,7 +773,7 @@ fn property_metadata_composes_strong_to_weak_only_for_matching_types() {
 
 #[test]
 fn property_metadata_override_replaces_dictionary_and_preserves_variability() {
-    let mut tokens = TokenInterner::default();
+    let tokens = TokenInterner::default();
     let strong = tokens.intern("StrongAPI");
     let weak = tokens.intern("WeakAPI");
     let name = tokens.intern("size");
@@ -798,7 +798,7 @@ fn property_metadata_override_replaces_dictionary_and_preserves_variability() {
                     .with_metadata(dict, dictionary("override")),
             ),
     );
-    let registry = builder.build(&mut tokens);
+    let registry = builder.build(&tokens);
     let property = registry
         .schema_definition(strong)
         .unwrap()
@@ -843,7 +843,7 @@ fn stage_property_metadata_fallback_merges_dictionaries_and_respects_blocks() {
                     .with_metadata(settings, Value::string("fallback")),
             ),
     );
-    let registry = Arc::new(builder.build(&mut store.tokens));
+    let registry = Arc::new(builder.build(&store.tokens));
     let mut layer = Layer::new(LayerId(1));
     layer.insert_prim(
         prim,

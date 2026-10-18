@@ -43,9 +43,9 @@ const DANGLING: usize = 150;
 const EXAMPLES: usize = 8;
 
 fn open(root: &Path) -> StageDocument<Filesystem> {
-    let mut store = InMemoryStore::default();
+    let store = InMemoryStore::default();
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&mut store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
         ..StageOptions::default()
     };
     open_with(root, store, options)
@@ -120,9 +120,9 @@ fn bench_library(c: &mut Criterion) {
         group.bench_function(format.extension(), |b| {
             b.iter_batched(
                 || {
-                    let mut store = InMemoryStore::default();
+                    let store = InMemoryStore::default();
                     let options = StageOptions {
-                        schemas: Some(Arc::new(layerstack_schemas::openusd(&mut store.tokens))),
+                        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
                         ..StageOptions::default()
                     };
                     (store, options)

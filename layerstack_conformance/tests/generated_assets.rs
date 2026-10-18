@@ -771,7 +771,7 @@ def Xform "Asset" (variants = { string shape = "cube" }; prepend variantSets = "
         support::ROOT,
     );
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&mut store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
         ..Default::default()
     };
     let mut live = layerstack::LiveStage::compose(&mut store, support::ROOT, options);
@@ -831,7 +831,7 @@ def Xform "Asset" (variants = { string shape = "mesh" }; prepend variantSets = "
         support::ROOT,
     );
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&mut store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
         ..Default::default()
     };
     let mut live = layerstack::LiveStage::compose(&mut store, support::ROOT, options);
@@ -1011,7 +1011,7 @@ fn authored_layers_round_trip_in_both_formats_and_match_openusd() {
             }
         }
         let options = StageOptions {
-            schemas: Some(Arc::new(layerstack_schemas::openusd(&mut imported.tokens))),
+            schemas: Some(Arc::new(layerstack_schemas::openusd(&imported.tokens))),
             ..Default::default()
         };
         let stage = Stage::compose(&mut imported, support::ROOT, options);

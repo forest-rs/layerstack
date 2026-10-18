@@ -4844,7 +4844,7 @@ mod tests {
                 .with_property(PropertyDefinition::attribute(index).with_fallback(3)),
         );
         let options = StageOptions {
-            schemas: Some(Arc::new(builder.build(&mut store.tokens))),
+            schemas: Some(Arc::new(builder.build(&store.tokens))),
             ..StageOptions::default()
         };
         let mut live = LiveStage::compose(&mut store, LayerId(1), options);
@@ -4913,7 +4913,7 @@ mod tests {
                 .with_property(PropertyDefinition::relationship(target)),
         );
         let options = StageOptions {
-            schemas: Some(Arc::new(builder.build(&mut store.tokens))),
+            schemas: Some(Arc::new(builder.build(&store.tokens))),
             ..StageOptions::default()
         };
         let mut live = LiveStage::compose(&mut store, LayerId(1), options);

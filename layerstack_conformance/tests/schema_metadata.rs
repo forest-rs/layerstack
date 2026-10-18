@@ -73,13 +73,13 @@ fn property_metadata_and_color_precedence_match_native_fixture() {
     ]
     .map(|(name, kind)| SchemaDeclaration::new(store.tokens.intern(name), kind));
     let definitions =
-        read_generated_schema(&generated, &declared, &mut store.tokens, &store.paths).unwrap();
-    let native = layerstack_schemas::openusd(&mut store.tokens);
+        read_generated_schema(&generated, &declared, &store.tokens, &store.paths).unwrap();
+    let native = layerstack_schemas::openusd(&store.tokens);
     let mut builder = SchemaRegistry::builder();
     for definition in native.schemas().chain(definitions.iter()) {
         builder.register(definition.clone());
     }
-    let registry = builder.build(&mut store.tokens);
+    let registry = builder.build(&store.tokens);
     let layer = parse(
         include_str!("../fixtures/schema_metadata/scene.usda"),
         LayerId(1),

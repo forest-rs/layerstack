@@ -58,7 +58,7 @@ fn triangle() -> GeneratedMesh {
 fn fixture() -> (InMemoryStore, LiveStage, layerstack::PathId, GeneratedMesh) {
     let mut store = InMemoryStore::default();
     store.insert_layer(Layer::new(LayerId(1)));
-    let schemas = Arc::new(crate::openusd(&mut store.tokens));
+    let schemas = Arc::new(crate::openusd(&store.tokens));
     let mut live = LiveStage::compose(
         &mut store,
         LayerId(1),
@@ -279,7 +279,7 @@ fn native_fixture() -> (
 ) {
     use layerstack::{PrimSpec, PropertySpec, PropertyType, Reference};
     let mut store = InMemoryStore::default();
-    let schemas = Arc::new(crate::openusd(&mut store.tokens));
+    let schemas = Arc::new(crate::openusd(&store.tokens));
     let asset = store.path("/Asset");
     let geometry = store.path("/Asset/Geom");
     let tint = store.tokens.intern("primvars:tint");
@@ -596,7 +596,7 @@ fn changed_point_count_revalidates_primvars_atomically_before_retry() {
 fn unsupported_geometry_is_explicit_for_ordinary_and_native_instance_roots() {
     for native in [false, true] {
         let mut store = InMemoryStore::default();
-        let schemas = Arc::new(crate::openusd(&mut store.tokens));
+        let schemas = Arc::new(crate::openusd(&store.tokens));
         let path = store.path("/Sphere");
         let source = store.path("/Asset");
         let ty = store.tokens.intern("Sphere");
@@ -629,10 +629,7 @@ fn unsupported_geometry_is_explicit_for_ordinary_and_native_instance_roots() {
 #[test]
 fn registry_must_define_geometry_and_shading_not_merely_intern_names() {
     let mut store = InMemoryStore::default();
-    let schemas = Arc::new(crate::registry(
-        &[crate::Domain::UsdGeom],
-        &mut store.tokens,
-    ));
+    let schemas = Arc::new(crate::registry(&[crate::Domain::UsdGeom], &store.tokens));
     let material = store.tokens.intern("Material");
     let path = store.path("/Material");
     let mut layer = Layer::new(LayerId(1));
@@ -661,7 +658,7 @@ fn minimal_custom_mesh_registry_reports_missing_property_without_panicking() {
             store.tokens.intern(name),
         ));
     }
-    let schemas = Arc::new(registry.build(&mut store.tokens));
+    let schemas = Arc::new(registry.build(&store.tokens));
     let path = store.path("/Mesh");
     let mesh = store.tokens.lookup("Mesh").unwrap();
     let mut layer = Layer::new(LayerId(1));
@@ -1028,7 +1025,7 @@ fn replacement_stage_in_same_domain_reports_reset_and_retires_all_handles() {
     let (mut store, mut live, _, _) = fixture();
     let mut observer = SceneObserver::default();
     let old = update(&mut observer, &mut live, &mut store).added[0].clone();
-    let schemas = Arc::new(crate::openusd(&mut store.tokens));
+    let schemas = Arc::new(crate::openusd(&store.tokens));
     let mut replacement = LiveStage::compose(
         &mut store,
         LayerId(1),

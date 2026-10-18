@@ -79,9 +79,7 @@ fn authored_bounds_match_cpp() {
     );
     assert!(loaded.invalid.is_empty(), "{:?}", loaded.invalid);
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(
-            &mut loaded.store.tokens,
-        ))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(&loaded.store.tokens))),
         ..StageOptions::default()
     };
     let stage = Stage::compose(&mut loaded.store, loaded.root_layer, options);
@@ -163,9 +161,7 @@ fn edits_invalidate_ancestors_and_descendants_but_keep_other_branches() {
         &workspace_root().join("layerstack_conformance/fixtures/bounds/scene.usda"),
     );
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(
-            &mut loaded.store.tokens,
-        ))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(&loaded.store.tokens))),
         ..StageOptions::default()
     };
     let mut live = LiveStage::compose(&mut loaded.store, loaded.root_layer, options);
@@ -240,7 +236,7 @@ fn unsupported_geometry_reports_an_error_instead_of_an_incomplete_bound() {
     layer.insert_prim(instancer, PrimSpec::def().with_type_name(instancer_type));
     store.insert_layer(layer);
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&mut store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
         ..StageOptions::default()
     };
     let stage = Stage::compose(&mut store, LayerId(1), options);
@@ -267,9 +263,7 @@ fn invalidation_reaches_independently_queried_descendants() {
         &workspace_root().join("layerstack_conformance/fixtures/bounds/scene.usda"),
     );
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(
-            &mut loaded.store.tokens,
-        ))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(&loaded.store.tokens))),
         ..StageOptions::default()
     };
     let stage = Stage::compose(&mut loaded.store, loaded.root_layer, options);
@@ -334,7 +328,7 @@ fn excluded_children_track_visibility_type_and_deletion_changes() {
     );
     store.insert_layer(layer);
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&mut store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
         ..StageOptions::default()
     };
     let mut cache = BoundsCache::new(Time::Default, BoundsOptions::default());
@@ -439,9 +433,7 @@ fn temporal_bounds_match_fresh_queries_in_any_order() {
         &workspace_root().join("layerstack_conformance/fixtures/bounds/scene.usda"),
     );
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(
-            &mut loaded.store.tokens,
-        ))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(&loaded.store.tokens))),
         ..StageOptions::default()
     };
     let stage = Stage::compose(&mut loaded.store, loaded.root_layer, options);

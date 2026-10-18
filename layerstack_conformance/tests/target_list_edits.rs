@@ -68,9 +68,7 @@ fn load(name: &str) -> LoadedStage {
 /// author through.
 fn live_of(loaded: &mut LoadedStage) -> LiveStage {
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(
-            &mut loaded.store.tokens,
-        ))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(&loaded.store.tokens))),
         ..StageOptions::default()
     };
     LiveStage::compose(&mut loaded.store, loaded.root_layer, options)

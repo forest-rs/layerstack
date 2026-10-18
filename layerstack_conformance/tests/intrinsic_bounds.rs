@@ -41,9 +41,7 @@ fn intrinsic_extents_match_cpp_across_time_changes() {
     );
     assert!(loaded.invalid.is_empty(), "{:?}", loaded.invalid);
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(
-            &mut loaded.store.tokens,
-        ))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(&loaded.store.tokens))),
         ..StageOptions::default()
     };
     let stage = Stage::compose(&mut loaded.store, loaded.root_layer, options);
@@ -140,7 +138,7 @@ fn live_geometry_edits_switch_between_intrinsic_and_authored_extents() {
     layer.insert_prim(cube, PrimSpec::def().with_type_name(cube_type));
     store.insert_layer(layer);
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&mut store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
         ..StageOptions::default()
     };
     let mut live = LiveStage::compose(&mut store, layer_id, options);

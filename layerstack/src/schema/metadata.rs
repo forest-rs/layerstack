@@ -73,7 +73,7 @@ mod tests {
 
     #[test]
     fn identical_registration_is_idempotent_and_conflicts_preserve_the_first() {
-        let mut tokens = TokenInterner::default();
+        let tokens = TokenInterner::default();
         let name = tokens.intern("customWeight");
         let definition = MetadataDefinition {
             name,
@@ -94,7 +94,7 @@ mod tests {
             builder.register_metadata(conflicting).unwrap_err(),
             MetadataConflict { name }
         );
-        let registry = builder.build(&mut tokens);
+        let registry = builder.build(&tokens);
         assert_eq!(registry.metadata_definitions().count(), 1);
         assert_eq!(registry.metadata(name), Some(&definition));
         assert!(

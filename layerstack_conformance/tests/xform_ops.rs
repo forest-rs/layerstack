@@ -54,7 +54,7 @@ fn stage() -> (InMemoryStore, LiveStage) {
     let mut store = InMemoryStore::default();
     store.insert_layer(Layer::new(LayerId(1)));
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&mut store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
         ..StageOptions::default()
     };
     let live = LiveStage::compose(&mut store, LayerId(1), options);

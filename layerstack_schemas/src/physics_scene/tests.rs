@@ -16,7 +16,7 @@ fn setup_with_units(units: f64) -> (InMemoryStore, LiveStage) {
     let mut layer = Layer::new(LayerId(1));
     layer.set_metadata(store.tokens.intern("metersPerUnit"), Value::Double(units));
     store.insert_layer(layer);
-    let schemas = Arc::new(crate::openusd(&mut store.tokens));
+    let schemas = Arc::new(crate::openusd(&store.tokens));
     let stage = LiveStage::compose(
         &mut store,
         LayerId(1),

@@ -39,7 +39,7 @@ pub(crate) fn scene(text: &str) -> (InMemoryStore, LiveStage) {
         emitted.diagnostics
     );
     store.insert_layer(emitted.layer);
-    let schemas = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
     let live = LiveStage::compose(
         &mut store,
         LayerId(1),

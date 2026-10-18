@@ -1285,7 +1285,7 @@ mod tests {
         let purpose = store.tokens.intern("purpose");
         let render = store.tokens.intern("render");
         let proxy = store.tokens.intern("proxy");
-        let schemas = Arc::new(crate::openusd(&mut store.tokens));
+        let schemas = Arc::new(crate::openusd(&store.tokens));
         let mut cache = BoundsCache::new(
             Time::Default,
             BoundsOptions {
@@ -1372,7 +1372,7 @@ mod tests {
         }
         store.insert_layer(layer);
         let options = StageOptions {
-            schemas: Some(Arc::new(crate::openusd(&mut store.tokens))),
+            schemas: Some(Arc::new(crate::openusd(&store.tokens))),
             ..StageOptions::default()
         };
         let mut live = LiveStage::compose(&mut store, LayerId(1), options);
@@ -1521,7 +1521,7 @@ mod tests {
         );
         store.insert_layer(layer);
         let options = StageOptions {
-            schemas: Some(Arc::new(crate::openusd(&mut store.tokens))),
+            schemas: Some(Arc::new(crate::openusd(&store.tokens))),
             ..StageOptions::default()
         };
         let stage = Stage::compose(&mut store, LayerId(1), options);
@@ -1583,7 +1583,7 @@ mod tests {
         );
         store.insert_layer(layer);
         let options = StageOptions {
-            schemas: Some(Arc::new(crate::openusd(&mut store.tokens))),
+            schemas: Some(Arc::new(crate::openusd(&store.tokens))),
             ..StageOptions::default()
         };
         let stage = Stage::compose(&mut store, LayerId(1), options);

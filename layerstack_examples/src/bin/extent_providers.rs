@@ -56,9 +56,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let custom = store.tokens.intern("PaddedBox");
     let boundable = store.tokens.intern("Boundable");
     let mut builder = SchemaRegistry::builder();
-    layerstack_schemas::register(&mut builder, &[Domain::UsdGeom], &mut store.tokens)?;
+    layerstack_schemas::register(&mut builder, &[Domain::UsdGeom], &store.tokens)?;
     builder.register(SchemaDefinition::typed(custom).with_parent(boundable));
-    let schemas = Arc::new(builder.build(&mut store.tokens));
+    let schemas = Arc::new(builder.build(&store.tokens));
     assert!(schemas.issues().is_empty(), "{:?}", schemas.issues());
     let padding = Arc::new(AtomicUsize::new(0));
     let evaluations = Arc::new(AtomicUsize::new(0));

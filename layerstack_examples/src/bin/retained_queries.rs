@@ -23,7 +23,7 @@ fn main() {
     let material = store.path("/Material");
     let shader = store.path("/Material/Surface");
     let input = store.property_path("/Material/Surface.inputs:roughness");
-    let schemas = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
     let mut live = LiveStage::compose(
         &mut store,
         layer,

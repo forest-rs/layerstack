@@ -374,7 +374,7 @@ mod tests {
                     .with_property(points, PropertySpec::attribute().with_default(value)),
             );
             store.insert_layer(layer);
-            let schemas = crate::openusd(&mut store.tokens);
+            let schemas = crate::openusd(&store.tokens);
             let stage = Stage::compose(
                 &mut store,
                 LayerId(1),
@@ -393,13 +393,13 @@ mod tests {
         let mut store = InMemoryStore::default();
         let path = store.path("/Shape");
         let mut builder = layerstack::SchemaRegistry::builder();
-        crate::register(&mut builder, &[crate::Domain::UsdGeom], &mut store.tokens).unwrap();
+        crate::register(&mut builder, &[crate::Domain::UsdGeom], &store.tokens).unwrap();
         let schema = store.tokens.intern("HostPointGeometry");
         builder.register(
             layerstack::SchemaDefinition::typed(schema)
                 .with_parent(store.tokens.lookup("PointBased").unwrap()),
         );
-        let schemas = builder.build(&mut store.tokens);
+        let schemas = builder.build(&store.tokens);
         let mut layer = Layer::new(LayerId(1));
         layer.insert_prim(
             path,
@@ -457,7 +457,7 @@ mod tests {
             let mut layer = Layer::new(LayerId(1));
             layer.insert_prim(path, prim);
             store.insert_layer(layer);
-            let schemas = crate::openusd(&mut store.tokens);
+            let schemas = crate::openusd(&store.tokens);
             let stage = Stage::compose(
                 &mut store,
                 LayerId(1),

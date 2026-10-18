@@ -430,7 +430,7 @@ pub const DEPENDENCIES: &[::layerstack_schemas::Domain] = &[::layerstack_schemas
 /// A metadata declaration that conflicts with one already registered.
 pub fn register(
     builder: &mut ::layerstack::SchemaRegistryBuilder,
-    tokens: &mut ::layerstack::TokenInterner,
+    tokens: &::layerstack::TokenInterner,
 ) -> Result<(), ::layerstack::MetadataConflict> {
     TABLES.register(builder, tokens)
 }
@@ -443,7 +443,7 @@ pub fn register(
 /// A metadata declaration of the library that conflicts with one of
 /// OpenUSD's.
 pub fn registry(
-    tokens: &mut ::layerstack::TokenInterner,
+    tokens: &::layerstack::TokenInterner,
 ) -> Result<::layerstack::SchemaRegistry, ::layerstack::MetadataConflict> {
     let mut builder = ::layerstack::SchemaRegistry::builder();
     ::layerstack_schemas::register(&mut builder, DEPENDENCIES, tokens)?;

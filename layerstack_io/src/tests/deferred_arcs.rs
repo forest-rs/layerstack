@@ -452,3 +452,64 @@ fn layers_loaded_beneath_a_referenced_ancestor_count_as_used() {
     let fresh = layerstack::Stage::compose(&mut doc.store, root, StageOptions::default());
     assert_eq!(doc.stage.stage().used_layers(true), fresh.used_layers(true));
 }
+
+#[test]
+fn edit_results_name_the_assets_a_transaction_asks_for() {
+    use layerstack::{LayerOffset, ListPosition, Reference, ReferenceTarget, Specifier};
+    let backend = Memory::with(&[("a.usda", &look("a")), ("b.usda", &look("b"))]);
+    let mut doc = StageDocument::create(backend, "root.usda", StageOptions::default()).unwrap();
+    let root = doc.stage.stage().root_layer().unwrap();
+    let at = EditTarget::for_layer(root);
+    let look_prim = doc.store.path("/Look");
+    let payload = |asset: &str| {
+        Reference::deferred(
+            root,
+            asset,
+            ReferenceTarget::Prim(look_prim),
+            LayerOffset::IDENTITY,
+        )
+    };
+    let (a, b) = (doc.store.path("/A"), doc.store.path("/B"));
+
+    // Applied on the live stage alone, the payload is only asked for.
+    let mut edit = Transaction::new();
+    edit.create_prim(at.prim(a), Specifier::Def, None);
+    edit.add_payload(at.prim(a), payload("a.usda"), ListPosition::BackOfPrepend);
+    let (store, stage) = doc.parts_mut();
+    let applied = stage.apply(store, &edit).unwrap();
+    let asked = [layerstack::AssetRequest {
+        anchor: root,
+        asset_path: "a.usda".into(),
+        prim: a,
+        arc: ArcKind::Payloads,
+    }];
+    assert_eq!(applied.asset_requests, asked);
+    assert_eq!(doc.stage.stage().asset_requests(), asked);
+    assert!(!read(&doc, "a.usda"));
+
+    // A request pending before an edit is not reported again.
+    let mut edit = Transaction::new();
+    edit.create_prim(at.prim(b), Specifier::Def, None);
+    let (store, stage) = doc.parts_mut();
+    assert!(stage.apply(store, &edit).unwrap().asset_requests.is_empty());
+
+    // `StageDocument::apply` loads what is pending, its own requests and
+    // earlier ones alike.
+    let mut edit = Transaction::new();
+    edit.add_payload(at.prim(b), payload("b.usda"), ListPosition::BackOfPrepend);
+    let (applied, loaded) = doc.apply(&edit).unwrap();
+    assert_eq!(applied.asset_requests.len(), 1);
+    assert_eq!(applied.asset_requests[0].prim, b);
+    assert_eq!(loaded.layers.len(), 2);
+    assert!(doc.stage.stage().asset_requests().is_empty());
+    assert_eq!(name(&doc, "/A"), Some(Value::string("a")));
+    assert_eq!(name(&doc, "/B"), Some(Value::string("b")));
+
+    // A rejected edit applies nothing and loads nothing.
+    let mut edit = Transaction::new();
+    edit.set_default(
+        at.property(doc.store.property_path("/A.name")),
+        Value::Int(1),
+    );
+    assert!(matches!(doc.apply(&edit), Err(ApplyError::Edit(_))));
+}

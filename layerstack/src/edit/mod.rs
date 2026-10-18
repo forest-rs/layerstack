@@ -135,6 +135,19 @@ pub struct Applied {
     /// this list includes unchanged survivors after a full rebuild. In
     /// namespace order ([`crate::PathInterner::cmp_paths`]).
     pub recomposed: Vec<PathId>,
+    /// The asset requests the transaction introduced: those the stage lists
+    /// after it ([`Stage::asset_requests`](crate::Stage::asset_requests))
+    /// but did not list before, in that order.
+    ///
+    /// Each names an arc that contributes nothing until the host loads its
+    /// asset and composes again: for example a deferred payload the
+    /// transaction added ([`crate::Reference::deferred`]), a variant
+    /// selection that reaches one, or a changed input of a dynamic file
+    /// format's arguments ([`crate::dynamic_format`]). Requests pending
+    /// before the transaction are not repeated here. A document host loads
+    /// them with `layerstack_io::StageDocument::load_requested_assets`, or
+    /// applies through `StageDocument::apply`, which does both.
+    pub asset_requests: Vec<crate::AssetRequest>,
 }
 
 /// Composed changes made by one successful live transaction.

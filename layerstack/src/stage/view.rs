@@ -341,11 +341,25 @@ impl FromValue for TokenId {
 /// generic one, every element converting.
 impl<T: FromValue> FromValue for Vec<T> {
     fn from_value(value: &Value, tokens: &TokenInterner) -> Option<Self> {
+        // Sized up front: collecting an `Option` iterator would grow the
+        // vector by reallocating, the element count being unknown to it.
+        let mut out = Self::new();
         match value {
-            Value::Array(items) => items.iter().map(|v| T::from_value(v, tokens)).collect(),
-            Value::TypedArray(array) => array.values().map(|v| T::from_value(&v, tokens)).collect(),
-            _ => None,
+            Value::Array(items) => {
+                out.reserve_exact(items.len());
+                for item in items {
+                    out.push(T::from_value(item, tokens)?);
+                }
+            }
+            Value::TypedArray(array) => {
+                out.reserve_exact(array.len());
+                for item in array.values() {
+                    out.push(T::from_value(&item, tokens)?);
+                }
+            }
+            _ => return None,
         }
+        Some(out)
     }
 }
 

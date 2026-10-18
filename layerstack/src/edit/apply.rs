@@ -17,7 +17,7 @@ use hashbrown::HashMap;
 use super::{
     error::{EditError, Rejection, Slot},
     layer_fields,
-    prim_fields::{self, PrimValue},
+    prim_fields::{self, ListPosition, PrimValue},
     same::Same,
     spec::{Loc, SpecRef, conforms, spec_at, spec_at_mut},
     target::Address,
@@ -1365,6 +1365,11 @@ fn apply_op(
         }
         Op::SetDefault { at, value } => set_value(store, at, None, value, stage, journal),
         Op::SetTargets { at, targets } => set_targets(store, at, targets.as_ref(), stage, journal),
+        Op::EditTargetList {
+            at,
+            target,
+            position,
+        } => edit_target_list(store, at, *target, *position, stage, journal),
         Op::AddAppliedSchema { at, name } => add_applied_schema(store, at, *name, journal),
         Op::RemoveAppliedSchema { at, name } => {
             prim_fields::remove_applied_schema(store, at, *name, journal)
@@ -1763,22 +1768,82 @@ fn set_targets(
     stage: Option<&Stage>,
     journal: &mut Journal<'_>,
 ) -> Result<(), Rejection> {
-    let (path, loc, name) = property_address(store, at)?;
     let targets = match targets {
         None => None,
         Some(targets) => {
             let mut mapped = targets.clone();
             for list in mapped.lists_mut() {
                 for target in list.iter_mut() {
-                    *target = at
-                        .map_target(*target, store.paths_mut())
-                        .ok_or(Rejection::UnmappableTarget(*target))?;
+                    *target = map_target(store, at, *target)?;
                 }
             }
             Some(mapped)
         }
     };
-    let targets = targets.as_ref();
+    write_targets(store, at, targets.as_ref(), stage, journal)
+}
+
+/// `target` named in the layer's namespace, as the address names its
+/// paths (see [`Transaction::set_targets`]).
+fn map_target(
+    store: &mut dyn LayerStore,
+    at: &Address,
+    target: TargetPath,
+) -> Result<TargetPath, Rejection> {
+    at.map_target(target, store.paths_mut())
+        .ok_or(Rejection::UnmappableTarget(target))
+}
+
+/// Adds `target` at `position` to the targets or connections authored on
+/// the property spec at `at`, or removes it (`None`), as OpenUSD's list
+/// editors do (see [`prim_fields::edit_list`]). A missing spec is created
+/// as [`Transaction::set_targets`] creates it, so removing a target from a
+/// property this layer does not author yet authors its deletion.
+///
+/// OpenUSD: `UsdRelationship::AddTarget` (`Usd_InsertListItem`) and
+/// `RemoveTarget` (`SdfListEditorProxy::Remove`), `UsdAttribute`'s
+/// `AddConnection` and `RemoveConnection` (`pxr/usd/usd/relationship.cpp`,
+/// `attribute.cpp`, `valueUtils.h`).
+///
+/// Spec: AOUSD Core §7.6.4.2.3 (`connectionPaths`), §7.6.5.1.1
+/// (`targetPaths`), §12.4 (list ops).
+fn edit_target_list(
+    store: &mut dyn LayerStore,
+    at: &Address,
+    target: TargetPath,
+    position: Option<ListPosition>,
+    stage: Option<&Stage>,
+    journal: &mut Journal<'_>,
+) -> Result<(), Rejection> {
+    let (_, loc, name) = property_address(store, at)?;
+    let target = map_target(store, at, target)?;
+    let authored = spec_at(layer(store, at.layer())?, &loc)
+        .and_then(|spec| get_property(spec.properties(), name))
+        .and_then(|spec| spec.targets.clone())
+        .unwrap_or_default();
+    let edited = prim_fields::edit_list(authored, target, position);
+    write_targets(store, at, Some(&edited), stage, journal)
+}
+
+/// Authors `targets`, already in the layer's namespace, on the property
+/// spec at `at`, creating the spec when it is missing: from the prim's
+/// schema definition of the property, else from the stage's composed
+/// declaration, else as a `custom` relationship.
+///
+/// OpenUSD: `UsdRelationship::_CreateSpec(fallbackCustom = true)`, after
+/// `UsdStage::_CreatePropertySpecForEditing`, which stamps the definition
+/// or the strongest authored spec (`pxr/usd/usd/relationship.cpp`,
+/// `stage.cpp`).
+///
+/// Spec: AOUSD Core §7.6.3.1.1 (`custom`), §12.2.4.
+fn write_targets(
+    store: &mut dyn LayerStore,
+    at: &Address,
+    targets: Option<&ListOp<TargetPath>>,
+    stage: Option<&Stage>,
+    journal: &mut Journal<'_>,
+) -> Result<(), Rejection> {
+    let (path, loc, name) = property_address(store, at)?;
     let id = at.layer();
     let existing = spec_at(layer(store, id)?, &loc)
         .and_then(|spec| get_property(spec.properties(), name))

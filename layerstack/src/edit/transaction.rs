@@ -143,6 +143,12 @@ pub(crate) enum Op {
         at: Address,
         targets: Option<ListOp<TargetPath>>,
     },
+    /// Adds a target at a position, or removes it (`None`).
+    EditTargetList {
+        at: Address,
+        target: TargetPath,
+        position: Option<ListPosition>,
+    },
     AddAppliedSchema {
         at: Address,
         name: TokenId,
@@ -510,6 +516,63 @@ impl Transaction {
         self.push(Op::SetTargets {
             at,
             targets: Some(targets),
+        })
+    }
+
+    /// Adds `target` to the targets of the relationship, or the
+    /// connections of the attribute, at `at`, at `position` (see
+    /// [`ListPosition`]): an explicit list takes it whatever the position,
+    /// and a target already in the chosen list moves. The target is not
+    /// taken out of the deleted targets or the other list, so adding a
+    /// deleted target leaves it deleted at that strength and listed after.
+    /// A missing property spec is created as [`Transaction::set_targets`]
+    /// creates it, and `target` is mapped as it maps targets; so a property
+    /// nothing declares becomes a `custom` relationship, and an attribute
+    /// nothing declares takes connections once it is created with its type
+    /// ([`Transaction::create_property`]), as `AddConnection` fails for it.
+    ///
+    /// Each call edits the list op of the one spec the address names, so a
+    /// layer can append targets to, or delete them from, what weaker layers
+    /// author, where [`Transaction::set_targets`] with an explicit list
+    /// replaces them.
+    ///
+    /// OpenUSD: `UsdRelationship::AddTarget`, `UsdAttribute::AddConnection`,
+    /// with `Usd_InsertListItem` (`pxr/usd/usd/relationship.cpp`,
+    /// `pxr/usd/usd/valueUtils.h`).
+    ///
+    /// Spec: AOUSD Core §7.6.4.2.3 (`connectionPaths`), §7.6.5.1.1
+    /// (`targetPaths`), §12.4 (list ops).
+    pub fn add_target(
+        &mut self,
+        at: Address,
+        target: TargetPath,
+        position: ListPosition,
+    ) -> &mut Self {
+        self.push(Op::EditTargetList {
+            at,
+            target,
+            position: Some(position),
+        })
+    }
+
+    /// Removes `target` from the targets of the relationship, or the
+    /// connections of the attribute, at `at`: from the explicit list when
+    /// the spec's list op is explicit, and otherwise from its prepended,
+    /// appended and added targets, adding it to its deleted targets (once),
+    /// which removes it from weaker opinions too. A missing property spec
+    /// is created as [`Transaction::set_targets`] creates it, holding the
+    /// deletion, and `target` is mapped as it maps targets.
+    ///
+    /// OpenUSD: `UsdRelationship::RemoveTarget`,
+    /// `UsdAttribute::RemoveConnection`, with `SdfListEditorProxy::Remove`
+    /// (`pxr/usd/usd/relationship.cpp`, `pxr/usd/sdf/listEditorProxy.h`).
+    ///
+    /// Spec: AOUSD Core §7.6.4.2.3, §7.6.5.1.1, §12.4.
+    pub fn remove_target(&mut self, at: Address, target: TargetPath) -> &mut Self {
+        self.push(Op::EditTargetList {
+            at,
+            target,
+            position: None,
         })
     }
 
@@ -1178,7 +1241,7 @@ impl Op {
                 (at, Slot::Metadata(*key))
             }
             Self::SetVariantSelection { at, set, .. } => (at, Slot::VariantSelection(*set)),
-            Self::SetTargets { at, .. } => (at, Slot::Targets),
+            Self::SetTargets { at, .. } | Self::EditTargetList { at, .. } => (at, Slot::Targets),
             Self::AddAppliedSchema { at, .. } | Self::RemoveAppliedSchema { at, .. } => {
                 (at, Slot::AppliedSchemas)
             }

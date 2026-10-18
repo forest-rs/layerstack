@@ -346,7 +346,7 @@ impl super::Stage {
         roots: &[PathId],
         options: super::StageOptions,
         child_index: &crate::prim_indexing::ChildIndex,
-    ) {
+    ) -> super::BoundaryOrders {
         let within = |path: PathId| {
             roots.iter().any(|root| {
                 store
@@ -364,6 +364,10 @@ impl super::Stage {
                 .and_then(|p| store.paths().lookup(&p))
             {
                 if within(parent) {
+                    continue;
+                }
+                if partial.has_boundary_children(parent) {
+                    boundaries.insert(parent, Vec::new());
                     continue;
                 }
                 let mut children = self
@@ -403,7 +407,7 @@ impl super::Stage {
             boundaries.into_iter().collect(),
             roots,
             child_index,
-        );
+        )
     }
 }
 

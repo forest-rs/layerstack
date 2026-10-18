@@ -33,34 +33,37 @@ use crate::{
 /// `Some` requires the generation-checked `LocalNamespace` contract: one layer,
 /// no arcs, variants, relocates or instances, and complete authored ancestors.
 /// That proof permits skipping arc discovery as well as population discovery.
+/// The stage keeps the whole child list of each of `boundaries` it composes
+/// ([`Stage::boundary_children`]).
 pub(crate) fn compose_stage_with_paths(
     store: &mut dyn LayerStore,
     root: LayerId,
     options: StageOptions,
     populated: Option<BTreeSet<PathId>>,
+    boundaries: &HashSet<PathId>,
     child_index: &ChildIndex,
 ) -> Stage {
-    compose_stage_selected(store, root, options, populated, false, child_index)
+    compose_stage_retained(
+        store,
+        root,
+        options,
+        populated,
+        false,
+        boundaries,
+        child_index,
+    )
 }
 
-/// Exact masks are internal recomposition selections, not USD population masks.
-pub(crate) fn compose_stage_selected(
-    store: &mut dyn LayerStore,
-    root: LayerId,
-    options: StageOptions,
-    populated: Option<BTreeSet<PathId>>,
-    exact_mask: bool,
-    child_index: &ChildIndex,
-) -> Stage {
-    compose_stage_retained(store, root, options, populated, exact_mask, child_index)
-}
-
+/// Exact masks are internal recomposition selections, not USD population
+/// masks. The stage keeps the whole child list of each of `boundaries` it
+/// composes ([`Stage::boundary_children`]).
 pub(crate) fn compose_stage_retained(
     store: &mut dyn LayerStore,
     root: LayerId,
     options: StageOptions,
     populated: Option<BTreeSet<PathId>>,
     exact_mask: bool,
+    boundaries: &HashSet<PathId>,
     child_index: &ChildIndex,
 ) -> Stage {
     let listed: Option<HashSet<PathId>> = populated.map(|paths| paths.into_iter().collect());
@@ -70,6 +73,7 @@ pub(crate) fn compose_stage_retained(
         options,
         exact_mask,
         listed.as_ref(),
+        boundaries,
         child_index,
     )
 }
@@ -83,6 +87,7 @@ fn compose_indexed(
     options: StageOptions,
     exact_mask: bool,
     listed: Option<&HashSet<PathId>>,
+    boundaries: &HashSet<PathId>,
     child_index: &ChildIndex,
 ) -> Stage {
     let scope = match (listed, options.mask.as_ref()) {
@@ -92,8 +97,15 @@ fn compose_indexed(
         (None, Some(mask)) => crate::prim_indexing::Scope::Mask(mask),
     };
     let mut checks = Findings::default();
-    let mut composed =
-        crate::prim_indexing::compose(store, root, &options, scope, child_index, &mut checks);
+    let mut composed = crate::prim_indexing::compose(
+        store,
+        root,
+        &options,
+        scope,
+        boundaries,
+        child_index,
+        &mut checks,
+    );
     let mut errors = core::mem::take(&mut composed.errors);
     let mut prims = core::mem::take(&mut composed.prims);
     for (path, prim) in &mut prims {
@@ -142,6 +154,7 @@ fn compose_indexed(
     .with_composition_errors(store, errors)
     .with_asset_requests(asset_requests)
     .with_instances(composed.instances)
+    .with_boundary_children(composed.boundary_children)
     .with_variant_fallbacks(options.variant_fallbacks.clone())
 }
 

@@ -6,8 +6,8 @@
 use super::*;
 
 /// Index and namespace work performed by the most recent recomposition.
-/// Counts exclude dependency traversal, boundary child-list processing, and
-/// prototype regrouping; these are work evidence, not a total CPU estimate.
+/// Counts exclude dependency traversal and prototype regrouping; these are
+/// work evidence, not a total CPU estimate.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct RecompositionWork {
     /// Prim indexes constructed, including supporting ancestors and retries.
@@ -25,6 +25,14 @@ pub struct RecompositionWork {
     /// Layers whose kept child index was patched with the prim specs they
     /// added since it was last brought up to date.
     pub child_index_patches: usize,
+    /// Boundary parents, just outside the recomposed subtrees, whose child
+    /// lists the partial composition composed whole: their child names were
+    /// composed once, with the parent's index.
+    pub boundary_lists_composed: usize,
+    /// Boundary parents the partial composition did not index, whose child
+    /// lists were ordered by composing their child names again against
+    /// their retained index.
+    pub boundary_lists_reordered: usize,
 }
 
 impl LiveStage {
@@ -39,6 +47,12 @@ impl LiveStage {
             child_index_patches: index.patches - self.child_index_mark.patches,
             ..self.work
         }
+    }
+
+    /// Counts how a merge ordered its boundary parents' child lists.
+    pub(super) fn record_boundary_orders(&mut self, orders: crate::stage::BoundaryOrders) {
+        self.work.boundary_lists_composed += orders.composed;
+        self.work.boundary_lists_reordered += orders.reordered;
     }
 
     /// Starts counting the work of a new recomposition.
@@ -291,8 +305,22 @@ impl LiveStage {
                 with_dependencies: true,
                 ..self.options.clone()
             };
-            let partial =
-                Stage::compose_retained(store, self.root, options, false, &self.child_index);
+            // The parents just outside the roots are the boundaries the
+            // merge orders children of.
+            let within: HashSet<PathId> = roots.iter().copied().collect();
+            let boundaries: HashSet<PathId> = roots
+                .iter()
+                .filter_map(|root| store.paths().parent(*root))
+                .filter(|parent| !is_beneath_set(store, *parent, &within))
+                .collect();
+            let partial = Stage::compose_retained(
+                store,
+                self.root,
+                options,
+                false,
+                &boundaries,
+                &self.child_index,
+            );
             self.work.composed_prim_indexes += partial.composition_work().composed_prim_indexes;
             if partial
                 .composition_errors()
@@ -396,7 +424,7 @@ impl LiveStage {
         let deps = partial.take_deps().unwrap_or_default();
         self.expression_variables
             .extend(deps.expression_variables.clone());
-        self.stage.merge_control_subtrees(
+        let orders = self.stage.merge_control_subtrees(
             store,
             partial,
             &affected,
@@ -405,6 +433,7 @@ impl LiveStage {
             self.options.clone(),
             &self.child_index,
         );
+        self.record_boundary_orders(orders);
         self.update_prim_edges(&affected, &deps);
         for &prim in &affected {
             self.reindex_sources(prim);

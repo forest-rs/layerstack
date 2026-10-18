@@ -69,6 +69,9 @@ pub(crate) struct Composition {
     pub(crate) composed_prim_indexes: usize,
     pub(crate) reused_prim_indexes: usize,
     pub(crate) reads: VariableReads,
+    /// The whole child list of each requested boundary parent the
+    /// composition indexed, whatever its scope lists ([`compose`]).
+    pub(crate) boundary_children: HashMap<PathId, Vec<PathId>>,
     /// What each composed prim depends on, applied to `deps` at the end.
     records: HashMap<PathId, PrimRecord>,
     /// The layer stacks whose errors a prim has reported.
@@ -155,11 +158,19 @@ impl<'m> Scope<'m> {
 
 /// Composes the stage rooted at `root`, reading the child specs of layers
 /// that do not list them from `child_index`.
+///
+/// For each prim of `boundaries` it indexes, the composition also keeps
+/// the prim's whole child list, in composition order and before inactive
+/// children are pruned, though `scope` lists only some of them
+/// ([`Composition::boundary_children`]): a live stage merging a partial
+/// composition orders a boundary parent's children from it, rather than
+/// composing the parent's child names again.
 pub(crate) fn compose(
     store: &dyn LayerStore,
     root: LayerId,
     options: &StageOptions,
     scope: Scope<'_>,
+    boundaries: &HashSet<PathId>,
     child_index: &ChildIndex,
     checks: &mut crate::composition_checks::Findings,
 ) -> Composition {
@@ -204,8 +215,9 @@ pub(crate) fn compose(
         share,
         keys: ReadLock::default(),
     };
-    let work =
-        |path: PathId, added: &mut Vec<PathId>| index_prim(&ctx, &scope, &claims, path, added);
+    let work = |path: PathId, added: &mut Vec<PathId>| {
+        index_prim(&ctx, &scope, boundaries, &claims, path, added)
+    };
     crate::parallel::with_pool(options.threads, &work, |pool| {
         let mut walk = Walk {
             ctx: &ctx,
@@ -322,6 +334,8 @@ struct Indexed {
     /// The children the scope lists, and those it composes.
     children: Vec<PathId>,
     composed_children: Vec<PathId>,
+    /// Every child, for a requested boundary parent.
+    boundary_children: Option<Vec<PathId>>,
 }
 
 /// Indexes the prim at `path` from its parent's index, and adds the
@@ -336,6 +350,7 @@ struct Indexed {
 fn index_prim(
     ctx: &Ctx<'_>,
     scope: &Scope<'_>,
+    boundaries: &HashSet<PathId>,
     claims: &Claims,
     path: PathId,
     added: &mut Vec<PathId>,
@@ -363,6 +378,9 @@ fn index_prim(
     let paths = ctx.store.paths();
     let mut children = Vec::with_capacity(names.len());
     let mut composed_children = Vec::with_capacity(names.len());
+    let mut boundary_children = boundaries
+        .contains(&path)
+        .then(|| Vec::with_capacity(names.len()));
     for name in names {
         let child = paths.intern_joined(path, &[name]);
         if scope.includes(paths, child) {
@@ -370,6 +388,9 @@ fn index_prim(
         }
         if scope.lists(paths, child) {
             children.push(child);
+        }
+        if let Some(all) = boundary_children.as_mut() {
+            all.push(child);
         }
     }
     let key = (claims.share && active && graph.instanceable).then(|| instance_key(&graph));
@@ -393,6 +414,7 @@ fn index_prim(
         descended,
         children,
         composed_children,
+        boundary_children,
     }
 }
 
@@ -449,8 +471,12 @@ impl Walk<'_, '_, '_> {
             descended,
             children,
             composed_children,
+            boundary_children,
         } = prim;
         let out = &mut *self.out;
+        if let Some(all) = boundary_children {
+            out.boundary_children.insert(path, all);
+        }
         out.composed_prim_indexes += 1;
         self.checks.extend(findings);
         record(out, self.ctx, path, &graph, &index, outputs);
@@ -1135,8 +1161,10 @@ type LayerSpecEntries = (
 /// Orders `children`, child prims of the prim `index` composes, as
 /// composition orders them: by the names its contributing sites author,
 /// weakest site first ([`child_names`]); children no site names follow,
-/// by name. Live recomposition uses this to rebuild a boundary parent's
-/// list from merged children.
+/// by name. Live recomposition uses this to rebuild the list of a
+/// boundary parent its partial composition did not index; for the others
+/// it takes the whole child list that composition kept
+/// ([`Composition::boundary_children`]).
 pub(crate) fn order_children(
     store: &dyn LayerStore,
     index: &PrimIndex,

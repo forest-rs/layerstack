@@ -210,8 +210,9 @@ pub mod live_stage;
 
 pub use array_edit::{ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex, TypedArrayEdit};
 pub use asset::{
-    AssetRequest, AssetResolveError, AssetResolver, ExpressionAssetPath, ResolvedAsset,
-    expression_asset_paths, expression_asset_paths_for_stack, resolve_selected_deferred_arcs,
+    AssetRequest, AssetResolveError, AssetResolver, ExpressionAssetPath, FormatArgs,
+    FormatArgsError, ResolvedAsset, expression_asset_paths, expression_asset_paths_for_stack,
+    resolve_selected_deferred_arcs,
 };
 pub use composition_error::{
     ArcCycle, ArcCycleSite, ArcToProhibitedChild, CompositionError, ExpressionContext,
@@ -235,7 +236,7 @@ pub use dynamic_format::{
 };
 pub use edit::{
     Address, Applied, Changes, EditError, EditTarget, ListPosition, NamespaceEdit, NamespaceError,
-    PrimField, PrimPropertyChanges, PropertyChange, PropertyField, Transaction,
+    PrimField, PrimPropertyChanges, PropertyChange, PropertyField, Rejection, Slot, Transaction,
 };
 pub use interner::{TokenId, TokenInterner};
 pub use layer_stack::{LayerStack, LayerStackIdentifier};

@@ -14,8 +14,8 @@
 //! - the generations of the layers the snapshot reflects, recorded only
 //!   while nothing is pending, so a snapshot is current exactly when they
 //!   all still match the store;
-//! - for each path, the composed prims whose composition graphs reach a
-//!   site at or beneath it through an arc other than the local one;
+//! - the composed prims of each site a composition arc other than the
+//!   local one reaches, and of each namespace above such a site;
 //! - the layers each prim's opinions come from ([`Stage::prim_stack`]);
 //! - for each layer, the prim specs that author a path or a composition
 //!   arc ([`slot_names_paths`]), as of a generation of the layer.
@@ -57,6 +57,8 @@ pub(crate) struct PreparationIndex {
     stack_layer_counts: HashMap<LayerId, usize>,
     /// The site prim paths of each composed prim's non-local nodes, sorted.
     prim_node_sites: HashMap<PathId, Vec<PathId>>,
+    /// Site prim path → composed prims with a non-local node there.
+    node_sites: HashMap<PathId, HashSet<PathId>>,
     /// Path → composed prims with a non-local node at or beneath it.
     nodes_beneath: HashMap<PathId, HashSet<PathId>>,
 }
@@ -79,6 +81,7 @@ impl PreparationIndex {
             prim_stack_layers: HashMap::new(),
             stack_layer_counts: HashMap::new(),
             prim_node_sites: HashMap::new(),
+            node_sites: HashMap::new(),
             nodes_beneath: HashMap::new(),
         }
     }
@@ -181,6 +184,11 @@ impl PreparationIndex {
         self.nodes_beneath.get(&path).into_iter().flatten().copied()
     }
 
+    /// The composed prims with a non-local node at the site `path`.
+    pub(crate) fn prims_with_nodes_at(&self, path: PathId) -> impl Iterator<Item = PathId> + '_ {
+        self.node_sites.get(&path).into_iter().flatten().copied()
+    }
+
     /// Replaces `prim`'s entries with those of its composed `index`, or
     /// removes them when it is no longer composed.
     pub(crate) fn reindex(
@@ -234,11 +242,13 @@ impl PreparationIndex {
             return;
         }
         for site in old.into_iter().flatten() {
+            remove_from(&mut self.node_sites, site, prim);
             for path in at_or_above(paths, site) {
                 remove_from(&mut self.nodes_beneath, path, prim);
             }
         }
         for &site in &sites {
+            self.node_sites.entry(site).or_default().insert(prim);
             for path in at_or_above(paths, site) {
                 self.nodes_beneath.entry(path).or_default().insert(prim);
             }
@@ -256,6 +266,7 @@ impl PreparationIndex {
         assert_eq!(self.prim_stack_layers, fresh.prim_stack_layers);
         assert_eq!(self.stack_layer_counts, fresh.stack_layer_counts);
         assert_eq!(self.prim_node_sites, fresh.prim_node_sites);
+        assert_eq!(self.node_sites, fresh.node_sites);
         assert_eq!(self.nodes_beneath, fresh.nodes_beneath);
         for (id, links) in &self.links {
             if let Some(layer) = store.layer(*id) {
@@ -359,6 +370,11 @@ fn value_names_paths(value: &Value) -> bool {
 }
 
 impl Stage {
+    /// Whether the snapshot composes an instance.
+    pub(crate) fn composes_instances(&self) -> bool {
+        !self.instances.is_empty()
+    }
+
     /// The evidence a live stage retains for preparing namespace edits
     /// against this snapshot; `None` for a stage composed on its own.
     pub(crate) fn preparation(&self) -> Option<&PreparationIndex> {

@@ -7,7 +7,10 @@
 //! `UsdNamespaceEditor::_ProcessPrimEdit` / `PcpGatherDependentNamespaceEdits`.
 
 use super::*;
-use crate::{ArcKind, HashMap, HashSet, NodeId, Relocate, stage::preparation::PreparationIndex};
+use crate::{
+    ArcKind, HashMap, HashSet, NodeId, Relocate, prim_indexing::ChildIndex,
+    stage::preparation::PreparationIndex,
+};
 
 pub(super) fn prepare(
     primary: &Stage,
@@ -84,8 +87,10 @@ fn prepare_with(
     let indexes = retained.as_deref().unwrap_or_default();
     let root_layers = primary.layer_stack();
     let mut inspected = Vec::new();
+    // Whether every snapshot was proven current by its layer generations.
+    let mut current = retained.is_some();
     for (i, stage) in stages.iter().enumerate() {
-        validate_snapshot(stage, store, indexes.get(i).copied())?;
+        current &= validate_snapshot(stage, store, indexes.get(i).copied())?;
         let root = stage.root_layer().ok_or(NamespaceError::NoSuchObject)?;
         inspected.extend(match indexes.get(i) {
             Some(index) => retained::reachable_layers(store, indexes, index, root),
@@ -298,14 +303,22 @@ fn prepare_with(
         .map(|(id, slots)| (*id, retained::copy_slots(slots, &edited[id])))
         .collect();
     if retained.is_some() {
-        let mut projected = HashMap::new();
+        let mut edits = HashMap::new();
         for (id, paths) in &delta {
             let original = store.layer(*id).ok_or(NamespaceError::NoSuchObject)?;
-            if let Some(layer) = retained::project(original, &edited[id], paths) {
-                projected.insert(*id, layer);
+            if let Some(edit) = retained::layer_edit(original, &edited[id], paths) {
+                edits.insert(*id, edit);
             }
         }
-        validate_projection(store, &projected, &stages, &stage_moves)?;
+        validate_projection_retained(
+            store,
+            &edited,
+            &edits,
+            &stages,
+            &stage_moves,
+            indexes,
+            current,
+        )?;
     } else {
         validate_projection(store, &edited, &stages, &stage_moves)?;
     }
@@ -439,7 +452,7 @@ fn validate_snapshot(
     stage: &Stage,
     store: &mut dyn LayerStore,
     index: Option<&PreparationIndex>,
-) -> Result<(), NamespaceError> {
+) -> Result<bool, NamespaceError> {
     if stage.store_identity() != Some(&store.identity()) {
         return Err(NamespaceError::UnsupportedComposition(
             "dependent stages must share the store's token/path domains",
@@ -458,7 +471,7 @@ fn validate_snapshot(
         ));
     }
     if index.is_some_and(|index| index.is_current(store)) {
-        return Ok(());
+        return Ok(true);
     }
     let fresh = Stage::compose(
         store,
@@ -479,7 +492,7 @@ fn validate_snapshot(
             "namespace preparation requires current stage snapshots",
         ));
     }
-    Ok(())
+    Ok(false)
 }
 
 /// The namespace moves in `stage` that follow `source` through arcs into
@@ -884,6 +897,151 @@ impl LayerStore for Overlay<'_> {
         self.store.asset_availability(anchor, path)
     }
 }
+/// What composing only part of each projected stage needs: the stages'
+/// retained evidence, what the edit changes in each layer, and an index of
+/// the projected layers' child specs.
+struct ProjectionScope<'a> {
+    indexes: &'a [&'a PreparationIndex],
+    edits: &'a HashMap<LayerId, retained::LayerEdit>,
+    children: Option<ChildIndex>,
+}
+
+impl ProjectionScope<'_> {
+    /// The prims of `stage`, the `i`th stage, whose composition the edit
+    /// can change, with the namespace beneath them; `None` when they
+    /// cannot be told apart from the rest of the stage.
+    ///
+    /// A prim's index reads the specs at its nodes' sites, and beneath
+    /// them for its descendants, so a changed slot changes the prim at
+    /// the slot's path, the prims with a node at the slot's site, and the
+    /// namespace beneath the prims with a node at an ancestor of it. A
+    /// slot whose child list alone changes adds or removes only children
+    /// whose own slots changed. A `defaultPrim` follows the prim it names,
+    /// whose slot changes with it. Relocates and layer metadata reach
+    /// beyond the slots that author them, and instances, dynamic payloads
+    /// and value clips share or read composition elsewhere; for those the
+    /// whole stage is composed.
+    ///
+    /// Spec: AOUSD Core §10 (composition arcs and their sites), §11
+    /// (population). OpenUSD: `PcpChanges::DidChange` maps the same
+    /// significant changes to the prim indexes depending on their sites.
+    fn roots(
+        &self,
+        store: &dyn LayerStore,
+        stage: &Stage,
+        i: usize,
+        moves: &[PathMove],
+    ) -> Option<Vec<PathId>> {
+        let index = self.indexes.get(i)?;
+        if self.edits.values().any(|edit| edit.fields)
+            || stage.composes_instances()
+            || !stage.dynamic_layers().is_empty()
+            || !stage.clip_layers().is_empty()
+            || stage
+                .used_layers(false)
+                .iter()
+                .any(|id| store.layer(*id).is_some_and(|l| !l.relocates.is_empty()))
+        {
+            return None;
+        }
+        let mut roots = Vec::new();
+        for (id, edit) in self.edits {
+            let local = stage.layer_stack().contains(id);
+            for &slot in &edit.structural {
+                if local {
+                    roots.push(slot);
+                }
+                let path = store.paths().resolve(slot).clone();
+                for site in retained::at_or_above(store, slot) {
+                    let suffix = path
+                        .strip_prefix(store.paths().resolve(site))
+                        .expect("ancestor");
+                    for prim in index.prims_with_nodes_at(site) {
+                        roots.push(store.paths().intern_joined(prim, suffix));
+                    }
+                }
+            }
+        }
+        for mapping in moves {
+            roots.push(mapping.from.prim_path());
+            roots.push(mapping.to.prim_path());
+        }
+        Some(retained::minimal_roots(store, &roots))
+    }
+
+    /// The projection of `stage`, the `i`th stage, composing only the
+    /// prims [`Self::roots`] finds, the prims with arcs to them, and
+    /// their ancestors; `None` when the whole stage must be composed.
+    fn compose(
+        &self,
+        store: &mut dyn LayerStore,
+        stage: &Stage,
+        i: usize,
+        moves: &[PathMove],
+    ) -> Option<Stage> {
+        let index = self.indexes.get(i)?;
+        let mut roots = self.roots(store, stage, i, moves)?;
+        let pseudo_root = store.paths().intern(Path::root());
+        let fresh;
+        let children = match &self.children {
+            Some(children) => children,
+            None => {
+                fresh = ChildIndex::default();
+                &fresh
+            }
+        };
+        loop {
+            if roots.contains(&pseudo_root) {
+                return None;
+            }
+            let options = crate::StageOptions {
+                mask: Some(crate::PopulationMask {
+                    include: roots.clone(),
+                }),
+                with_dependencies: false,
+                ..stage.options().clone()
+            };
+            let partial = Stage::compose_retained(
+                store,
+                stage.root_layer()?,
+                options,
+                false,
+                &HashSet::new(),
+                children,
+            );
+            if partial.composes_instances() {
+                return None;
+            }
+            // Prims with arcs to the composed namespace, before or after
+            // the edit, and parents the edit leaves without children.
+            let within: HashSet<PathId> = roots.iter().copied().collect();
+            let mut more = Vec::new();
+            for &root in &roots {
+                for prim in stage.traverse_all(root).chain(partial.traverse_all(root)) {
+                    more.extend(
+                        index
+                            .prims_with_nodes_at(prim)
+                            .filter(|p| !retained::is_beneath(store, *p, &within)),
+                    );
+                }
+                if let Some(parent) = store.paths().parent(root)
+                    && parent != pseudo_root
+                    && stage.has_prim(parent)
+                    && !partial.has_prim(parent)
+                    && !retained::is_beneath(store, parent, &within)
+                {
+                    more.push(parent);
+                }
+            }
+            if more.is_empty() {
+                return Some(partial);
+            }
+            roots.extend(more);
+            roots = retained::minimal_roots(store, &roots);
+        }
+    }
+}
+
 /// Composes each stage over the edited `layers` and rejects an edit that
 /// would make its composition invalid or not map its namespace as
 /// planned.
@@ -894,12 +1052,85 @@ fn validate_projection(
     mappings: &[Vec<PathMove>],
 ) -> Result<(), NamespaceError> {
     let mut overlay = Overlay { store, layers };
-    for (stage, moves) in stages.iter().zip(mappings) {
-        let projected = Stage::compose(
-            &mut overlay,
-            stage.root_layer().unwrap(),
-            stage.options().clone(),
-        );
+    validate_projected_stages(&mut overlay, stages, mappings, None)
+}
+
+/// [`validate_projection`] for the `edits` of the working copies `edited`:
+/// the projected layers are composed in place in `store`, or copied whole
+/// when the store does not lend them, and where every snapshot is
+/// `current`, a stage whose prims the edit changes can be told apart
+/// composes only those.
+fn validate_projection_retained(
+    store: &mut dyn LayerStore,
+    edited: &HashMap<LayerId, Layer>,
+    edits: &HashMap<LayerId, retained::LayerEdit>,
+    stages: &[&Stage],
+    mappings: &[Vec<PathMove>],
+    indexes: &[&PreparationIndex],
+    current: bool,
+) -> Result<(), NamespaceError> {
+    let scope = if current {
+        let mut projected = Vec::new();
+        for (id, edit) in edits {
+            let original = store.layer(*id).ok_or(NamespaceError::NoSuchObject)?;
+            projected.push((original, &edited[id], edit.slots.as_slice()));
+        }
+        let children = indexes
+            .first()
+            .and_then(|index| index.children().projected(store, &projected));
+        Some(ProjectionScope {
+            indexes,
+            edits,
+            children,
+        })
+    } else {
+        None
+    };
+    let mut in_place = retained::InPlace::project(store, edited, edits);
+    if in_place.complete() {
+        return validate_projected_stages(in_place.store(), stages, mappings, scope.as_ref());
+    }
+    drop(in_place);
+    let mut layers = HashMap::new();
+    for (id, edit) in edits {
+        let original = store.layer(*id).ok_or(NamespaceError::NoSuchObject)?;
+        layers.insert(*id, retained::materialize(original, &edited[id], edit));
+    }
+    let mut overlay = Overlay {
+        store,
+        layers: &layers,
+    };
+    validate_projected_stages(&mut overlay, stages, mappings, scope.as_ref())
+}
+
+/// Composes each stage over the projected `store`, only in part where
+/// `scope` allows, and rejects an edit that would make its composition
+/// invalid or not map its namespace as planned.
+fn validate_projected_stages(
+    store: &mut dyn LayerStore,
+    stages: &[&Stage],
+    mappings: &[Vec<PathMove>],
+    scope: Option<&ProjectionScope<'_>>,
+) -> Result<(), NamespaceError> {
+    for (i, (stage, moves)) in stages.iter().zip(mappings).enumerate() {
+        let projected = match scope.and_then(|scope| scope.compose(store, stage, i, moves)) {
+            Some(projected) => {
+                // Every test that prepares an edit checks the part against
+                // the whole.
+                #[cfg(test)]
+                {
+                    let whole =
+                        Stage::compose(store, stage.root_layer().unwrap(), stage.options().clone());
+                    assert_eq!(
+                        projection_findings(&projected, moves),
+                        projection_findings(&whole, moves),
+                        "a partial projection finds what the whole projection finds"
+                    );
+                }
+                projected
+            }
+            None => Stage::compose(store, stage.root_layer().unwrap(), stage.options().clone()),
+        };
         if !projected.composition_errors().is_empty() {
             return Err(NamespaceError::UnsupportedComposition(
                 "prepared namespace edit would create invalid composition",
@@ -918,6 +1149,23 @@ fn validate_projection(
         }
     }
     Ok(())
+}
+
+/// What validating a projection reads from it: whether it composes
+/// without errors, and whether each move's source and destination exist.
+#[cfg(test)]
+fn projection_findings(projected: &Stage, moves: &[PathMove]) -> (bool, Vec<(bool, bool)>) {
+    let exists = |p| match p {
+        TargetPath::Prim(p) => projected.has_prim(p),
+        TargetPath::Property(p) => projected.has_property_path(p),
+    };
+    (
+        projected.composition_errors().is_empty(),
+        moves
+            .iter()
+            .map(|m| (exists(m.from), exists(m.to)))
+            .collect(),
+    )
 }
 
 #[derive(PartialEq)]

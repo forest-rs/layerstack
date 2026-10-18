@@ -39,11 +39,16 @@ use crate::{
 /// usual guarded inverse, which guards each affected prim slot in full.
 /// Preparation changes no layer (it may intern paths).
 ///
-/// Against the snapshot of a [`crate::LiveStage`], preparation proves the
-/// snapshot current from the layer generations the stage records, and finds
-/// dependent namespace and the specs to inspect from what the stage retains,
-/// without visiting the stage. Against a stage composed on its own, it
-/// composes and visits the whole stage; both find the same edit.
+/// Against the snapshot of a [`crate::LiveStage`], preparation costs about
+/// what the edit touches: the stage retains which layer generations it
+/// reflects, which prims its arcs reach each site from, and which specs
+/// author paths, so preparing proves the snapshot current, finds dependent
+/// namespace and repairs specs without visiting the stage, and composes
+/// only the prims the edit can change. While it composes them, the edited
+/// layers hold the edit in place, through [`LayerStore::layer_mut`], and
+/// get their own content back, generations unchanged, before it returns.
+/// Against a stage composed on its own, preparation composes and visits
+/// the whole stage; both find the same edit.
 ///
 /// Root-stack edits coordinate all contributing local opinions and author
 /// relocates for prim namespace introduced through ancestral arcs. Explicit
@@ -340,7 +345,8 @@ impl NamespaceEdit {
     /// remapping paths ([`NamespaceError::Unmappable`]). The object must be
     /// composed ([`NamespaceError::NoSuchObject`]) and not beneath an
     /// instance ([`NamespaceError::InstanceProxy`]). Preparation composes the
-    /// edited layers to check that the object is gone before returning.
+    /// edited layers to check that the object is gone before returning;
+    /// against a live stage's snapshot, only the object and its ancestors.
     ///
     /// OpenUSD: `UsdNamespaceEditor::DeletePrimAtPath` and
     /// `DeletePropertyAtPath`, which remove arcs to the deleted namespace
@@ -374,9 +380,13 @@ impl NamespaceEdit {
     /// mappings are rejected explicitly. Dependent mappings currently require
     /// direct, non-implied arcs from their local stack and a destination within
     /// that arc's source domain; nested arcs or a reparent leaving that domain
-    /// return an error. Preparation composes edited layer clones to verify the
-    /// proposed namespace before returning. All inspected layers receive generation
-    /// preconditions; application and its guarded inverse are atomic. Callers
+    /// return an error. Preparation composes the edited layers to verify the
+    /// proposed namespace before returning: where every snapshot is a live
+    /// stage's and current, only the prims the edit can change, unless
+    /// relocates, layer metadata, instances, dynamic payloads or value clips
+    /// are involved, which compose the whole stage. All inspected layers
+    /// receive generation preconditions; application and its guarded
+    /// inverse are atomic. Callers
     /// refresh other live stages after applying the shared transaction.
     /// AOUSD Core §8, §10.3.2.6 (relocates); OpenUSD `UsdNamespaceEditor` and
     /// `PcpGatherDependentNamespaceEdits`.

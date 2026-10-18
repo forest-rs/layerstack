@@ -101,6 +101,10 @@ pub(crate) fn drop_inconsistent_property_kinds(
 ) {
     let mut removed = Vec::new();
     for (field, range) in &index.fields {
+        // One opinion has none to differ from.
+        if range.len() < 2 {
+            continue;
+        }
         let opinions = &index.opinions[range.clone()];
         let FieldKey::Property(property) = *field else {
             continue;
@@ -361,6 +365,14 @@ pub(crate) fn drop_instance_targets(
     let prefix = |path: &Path, depth: usize| Path::root().join(&path.segments()[..depth]);
     let mut found = Vec::new();
     for (&prim, index) in prims.iter() {
+        // Only an inherits node's opinions can target an instance.
+        if !index
+            .graph
+            .nodes()
+            .any(|(_, node)| node.arc.arc_kind == ArcKind::Inherits)
+        {
+            continue;
+        }
         let prim_path = paths.resolve(prim);
         for (field, range) in &index.fields {
             let opinions = &index.opinions[range.clone()];

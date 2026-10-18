@@ -1960,12 +1960,19 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
     }
 
     /// Parses a namespaced name `foo:bar:baz`.
+    /// A property name, plain or namespaced (`a:b`). A missing name, and a
+    /// `:` without a name after it, are reported, as OpenUSD's text parser
+    /// rejects them.
+    ///
+    /// Spec: AOUSD Core §16.2.16 (property declarations).
     fn parse_namespaced_name(&mut self) {
         self.eat_trivia();
 
         // Check if this is actually a namespaced name (has colons).
         let name_start = self.current_span().start;
         if self.peek() != Some(TokenKind::Ident) {
+            let span = self.current_span();
+            self.error(span, "expected a property name");
             return;
         }
 
@@ -1986,6 +1993,9 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
                 self.bump(); // `:`
                 if self.peek() == Some(TokenKind::Ident) {
                     self.bump();
+                } else {
+                    let span = self.current_span();
+                    self.error(span, "expected a name after `:`");
                 }
             }
 
@@ -2143,6 +2153,34 @@ def Xform "Root" (
                     "{key} = {value}: {diagnostics:?}"
                 );
             }
+        }
+    }
+
+    /// A property needs a name, and each `:` of a namespaced name a name
+    /// after it, as OpenUSD 26.08 (`Sdf.Layer.ImportFromString`) accepts
+    /// property declarations.
+    #[test]
+    fn property_names_follow_openusd() {
+        for (declaration, accepted) in [
+            ("float = 1", false),
+            ("float", false),
+            ("custom float", false),
+            ("float[] = [1]", false),
+            ("rel = </P>", false),
+            ("rel", false),
+            ("float a: = 1", false),
+            ("float :a = 1", false),
+            ("double a::b = 1", false),
+            ("float a:b = 1", true),
+            ("float size = 1", true),
+        ] {
+            let src = format!("#usda 1.0\ndef \"P\"\n{{\n    {declaration}\n}}\n");
+            let diagnostics = parse(&src).diagnostics;
+            assert_eq!(
+                diagnostics.is_empty(),
+                accepted,
+                "{declaration}: {diagnostics:?}"
+            );
         }
     }
 

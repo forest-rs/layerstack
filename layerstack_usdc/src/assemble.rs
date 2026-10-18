@@ -401,11 +401,38 @@ impl<'a> AssembleCtx<'a> {
         // each branch keeps its own spec (`Layer::insert_prim`).
         //
         // Spec: AOUSD Core §7.3.6 (variant specs contain prim specs).
-        // Sorted by path, so paths intern in the same order on every read.
-        // The keys alone are sorted: moving whole prim specs costs more.
-        let mut prim_paths: Vec<&str> = prim_specs_map.keys().copied().collect();
-        prim_paths.sort_unstable();
-        for path_str in prim_paths {
+        // In the file's spec order, so paths intern in the same order on
+        // every read, and every spec outside variant branches first: a
+        // branch spec then joins the namespace spec at its path, as
+        // `Layer::insert_prim` keeps them. Inserted as one change, so the
+        // layer's map grows once.
+        let mut plain = Vec::with_capacity(prim_specs_map.len());
+        let mut branched: Vec<&str> = Vec::new();
+        for spec in &self.sections.specs {
+            if spec.form != SpecForm::Prim {
+                continue;
+            }
+            let Some((&path_str, _)) = self
+                .sections
+                .paths
+                .get(spec.path_index as usize)
+                .and_then(|path| prim_specs_map.get_key_value(path.as_str()))
+            else {
+                continue;
+            };
+            if path_str.contains('{') {
+                branched.push(path_str);
+                continue;
+            }
+            let prim = prim_specs_map.remove(path_str).expect("a key of the map");
+            if let Ok(path) = Path::parse_absolute(path_str, self.tokens) {
+                plain.push((self.paths.intern(path), prim));
+            }
+        }
+        layer.insert_prims(plain);
+        branched.sort_unstable();
+        branched.dedup();
+        for path_str in branched {
             let mut prim = prim_specs_map.remove(path_str).expect("a key of the map");
             let namespace = match split_branch_path(path_str) {
                 Some((namespace, sites)) => {
@@ -1030,34 +1057,55 @@ impl<'a> AssembleCtx<'a> {
 
     /// Builds parent-child relationships by examining prim paths.
     fn build_child_relationships(&mut self, prim_specs: &mut HashMap<&str, PrimSpec>) {
-        // Collect all prim paths, in a stable order.
-        let mut prim_paths: Vec<&str> = prim_specs.keys().copied().collect();
-        prim_paths.sort_unstable();
-
-        let mut children: HashMap<&str, Vec<TokenId>> = HashMap::new();
-        for path in prim_paths {
-            if path == "/" {
+        // Each parent's child specs, parents and children in the file's
+        // spec order, so names intern in the same order on every read.
+        let mut parents: Vec<&str> = Vec::new();
+        let mut children: HashMap<&str, Vec<(&str, TokenId)>> = HashMap::new();
+        for spec in &self.sections.specs {
+            if spec.form != SpecForm::Prim {
                 continue;
             }
-
+            let Some((&path, _)) = self
+                .sections
+                .paths
+                .get(spec.path_index as usize)
+                .and_then(|path| prim_specs.get_key_value(path.as_str()))
+            else {
+                continue;
+            };
             // Find parent path by stripping the last segment.
-            if let Some(parent_path) = parent_prim_path(path) {
-                let child_name = path.rsplit('/').next().unwrap_or("");
-                if child_name.is_empty() {
-                    continue;
-                }
-                let child_tok = self.tokens.intern(child_name);
-
-                children.entry(parent_path).or_default().push(child_tok);
+            let Some(parent_path) = parent_prim_path(path) else {
+                continue;
+            };
+            let child_name = path.rsplit('/').next().unwrap_or("");
+            if child_name.is_empty() {
+                continue;
             }
+            let child_tok = self.tokens.intern(child_name);
+            children
+                .entry(parent_path)
+                .or_insert_with(|| {
+                    parents.push(parent_path);
+                    Vec::new()
+                })
+                .push((path, child_tok));
         }
 
         // Only add to parent's authored_children if not already present
-        // (the prim's own primChildren field is authoritative).
-        for (parent_path, names) in children {
-            if let Some(parent) = prim_specs.get_mut(parent_path) {
-                append_unique(&mut parent.authored_children, names);
-            }
+        // (the prim's own primChildren field is authoritative), in path
+        // order.
+        for parent_path in parents {
+            let Some(parent) = prim_specs.get_mut(parent_path) else {
+                continue;
+            };
+            let mut named = children.remove(parent_path).unwrap_or_default();
+            let listed: HashSet<TokenId> = parent.authored_children.iter().copied().collect();
+            named.retain(|(_, name)| !listed.contains(name));
+            named.sort_unstable();
+            append_unique(
+                &mut parent.authored_children,
+                named.into_iter().map(|(_, name)| name),
+            );
         }
     }
 

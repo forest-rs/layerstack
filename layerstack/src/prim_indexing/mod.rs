@@ -129,12 +129,24 @@ impl<'m> Scope<'m> {
         }
     }
 
-    /// Whether `child` is listed among its parent's children.
-    fn lists(&self, paths: &crate::path::PathInterner, child: PathId) -> bool {
+    /// Whether the scope composes `child`, a child of an indexed prim
+    /// ([`Self::includes`]), and whether it lists it among its parent's
+    /// children: an exact scope lists every child, a listed one only the
+    /// listed prims, and the others the children they compose. Each set is
+    /// looked up once, as a wide parent asks for every child.
+    fn places(&self, paths: &crate::path::PathInterner, child: PathId) -> (bool, bool) {
         match self {
-            Self::Exact(_) => true,
-            Self::Listed { listed, .. } => listed.contains(&child),
-            _ => self.includes(paths, child),
+            Self::All => (true, true),
+            Self::Mask(mask) => {
+                let included = mask.includes(child, paths);
+                (included, included)
+            }
+            Self::Listed { listed, ancestors } => {
+                // A child is never the pseudo-root.
+                let listed = listed.contains(&child);
+                (listed || ancestors.contains(&child), listed)
+            }
+            Self::Exact(_) => (self.includes(paths, child), true),
         }
     }
 
@@ -383,10 +395,11 @@ fn index_prim(
         .then(|| Vec::with_capacity(names.len()));
     for name in names {
         let child = paths.intern_joined(path, &[name]);
-        if scope.includes(paths, child) {
+        let (included, listed) = scope.places(paths, child);
+        if included {
             composed_children.push(child);
         }
-        if scope.lists(paths, child) {
+        if listed {
             children.push(child);
         }
         if let Some(all) = boundary_children.as_mut() {

@@ -451,6 +451,10 @@ pub(crate) fn compose_child_names_in(
         let spec = spec_at(layer, site, store.paths());
         match spec.map(SpecRef::authored_children) {
             Some(authored) if !authored.is_empty() => {
+                // Reserved once: a wide parent's names would otherwise
+                // rehash the set as it grows, at every edit beneath it.
+                names.reserve(authored.len());
+                order.reserve(authored.len());
                 // A listed name with no child spec names no prim.
                 for &name in authored {
                     if has_child_spec(store, layer, site, name) && names.insert(name) {
@@ -470,6 +474,8 @@ pub(crate) fn compose_child_names_in(
                 });
             }
             _ => children.with_children(store, layer, site, |children| {
+                names.reserve(children.len());
+                order.reserve(children.len());
                 for &name in children {
                     if names.insert(name) {
                         order.push(name);

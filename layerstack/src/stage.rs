@@ -6,6 +6,7 @@
 //! Spec: AOUSD Core §11–§12 (stage population and value resolution).
 
 mod authoring;
+mod dangling;
 mod explain;
 pub use authoring::{
     AuthoringInspection, AuthoringInspectionError, AuthoringSource, AuthoringSourceKind,
@@ -15,6 +16,9 @@ mod objects;
 mod relationships;
 mod targets;
 mod view;
+pub use dangling::{
+    DanglingByName, DanglingCounts, DanglingKind, DanglingTarget, DanglingTargetReport,
+};
 pub use objects::{
     Attribute, AttributeQuery, AttributeQueryWork, Object, Prim, PrimSnapshot, Relationship,
 };

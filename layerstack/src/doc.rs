@@ -2513,6 +2513,30 @@ impl Layer {
     /// authored outside any variant branch takes the [`Layer::prims`] slot.
     pub fn insert_prim(&mut self, path: PathId, spec: PrimSpec) {
         self.record_change(true, Some(alloc::vec![path]));
+        self.place_prim(path, spec);
+    }
+
+    /// Inserts each of `specs` as [`Layer::insert_prim`] does, as one
+    /// change: the layer's generation advances once, recording every path.
+    /// A format reading a whole layer inserts its specs this way, so the
+    /// prim map grows once, to the number of specs, rather than as they
+    /// arrive, and the layer's history holds one change for the read.
+    pub fn insert_prims(&mut self, specs: impl IntoIterator<Item = (PathId, PrimSpec)>) {
+        let specs = specs.into_iter();
+        self.prims.reserve(specs.size_hint().0);
+        let mut paths = Vec::with_capacity(specs.size_hint().0);
+        for (path, spec) in specs {
+            paths.push(path);
+            self.place_prim(path, spec);
+        }
+        if !paths.is_empty() {
+            self.record_change(true, Some(paths));
+        }
+    }
+
+    /// Places `spec` at `path` as [`Layer::insert_prim`] does, recording no
+    /// change.
+    fn place_prim(&mut self, path: PathId, spec: PrimSpec) {
         let displaced = match self.prims.get(&path) {
             Some(existing) if existing.outer_variant_sites == spec.outer_variant_sites => None,
             Some(_) if !spec.outer_variant_sites.is_empty() => {
@@ -3286,6 +3310,41 @@ mod tests {
 
     fn entry(key: &str, val: Value) -> (Arc<str>, Value) {
         (Arc::from(key), val)
+    }
+
+    /// `Layer::insert_prims` places specs as `Layer::insert_prim` does each,
+    /// a branch spec beside the namespace spec at its path, as one change
+    /// naming every path.
+    #[test]
+    fn inserting_prims_together_places_them_as_one_change() {
+        let store = InMemoryStore::default();
+        let (a, b) = (store.path("/A"), store.path("/A/B"));
+        let (set, variant) = (store.tokens.intern("look"), store.tokens.intern("red"));
+        let mut branch = PrimSpec::over();
+        branch.outer_variant_sites = vec![VariantSelectionSite {
+            host_path: a,
+            set,
+            variant,
+        }];
+        let specs = || {
+            [
+                (a, PrimSpec::def()),
+                (b, branch.clone()),
+                (b, PrimSpec::def()),
+            ]
+        };
+        let mut one_by_one = Layer::new(LayerId(1));
+        for (path, spec) in specs() {
+            one_by_one.insert_prim(path, spec);
+        }
+        let mut together = Layer::new(LayerId(1));
+        together.insert_prims(specs());
+        assert_eq!(together.prims, one_by_one.prims);
+        assert_eq!(together.variant_prims, one_by_one.variant_prims);
+        assert_eq!(together.generation(), 1);
+        assert_eq!(together.changed_paths_since(0), Some(vec![a, b]));
+        together.insert_prims([]);
+        assert_eq!(together.generation(), 1, "no specs, no change");
     }
 
     #[test]

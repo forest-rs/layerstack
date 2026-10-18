@@ -9,10 +9,13 @@
 //! With the `std` feature a pool of `n` threads works on the calling thread
 //! during each [`Pool::run`], and starts up to `n - 1` workers, one each
 //! time tasks wait with none idle, which last as long as [`with_pool`]
-//! runs: a phase with one task at a time starts none. Without `std`, or
-//! with one thread, tasks run on the calling thread, depth first. Either
-//! way a phase returns every task's result; their order is not fixed when
-//! workers run.
+//! runs: a phase with one task at a time starts none. Each thread does the
+//! tasks a task adds itself, depth first, and hands the rest of its
+//! pending tasks to the pool only when another thread waits for one, so
+//! threads take the pool's lock about once per subtree they take rather
+//! than once per task. Without `std`, or with one thread, tasks run on the
+//! calling thread, depth first. Either way a phase returns every task's
+//! result; their order is not fixed when workers run.
 //!
 //! OpenUSD composes subtrees on a `WorkDispatcher`
 //! (`UsdStage::_ComposeSubtreesInParallel`).
@@ -58,13 +61,13 @@ where
             shared: std::sync::Mutex::new(Shared {
                 pending: Vec::new(),
                 busy: 0,
-                idle: 0,
                 workers: 0,
                 results: Vec::new(),
                 done: false,
             }),
             changed: std::sync::Condvar::new(),
             max_workers: threads - 1,
+            waiting: core::sync::atomic::AtomicUsize::new(0),
         };
         return std::thread::scope(|scope| {
             let spawner = Spawner {
@@ -143,6 +146,9 @@ struct Threaded<T, R> {
     /// and when the pool shuts down.
     changed: std::sync::Condvar,
     max_workers: usize,
+    /// Threads waiting for a task, read without the lock: a busy thread
+    /// takes the lock to hand over tasks only while one waits.
+    waiting: core::sync::atomic::AtomicUsize,
 }
 
 #[cfg(feature = "std")]
@@ -150,8 +156,6 @@ struct Shared<T, R> {
     pending: Vec<T>,
     /// Tasks taken but not finished.
     busy: usize,
-    /// Workers waiting for a task.
-    idle: usize,
     /// Workers started, or the most when one failed to start.
     workers: usize,
     results: Vec<R>,
@@ -178,23 +182,16 @@ impl<T: Send, R: Send> Pool<'_, T, R> {
             shared.pending.extend(tasks.into_iter().rev());
             threaded.changed.notify_all();
             loop {
-                if let Some(task) = shared.pending.pop() {
-                    // Tasks wait with no worker idle to take them: start one.
-                    if !shared.pending.is_empty()
-                        && shared.idle == 0
-                        && shared.workers < threaded.max_workers
-                    {
-                        shared.workers = if spawner.spawn_worker() {
-                            shared.workers + 1
-                        } else {
-                            threaded.max_workers
-                        };
-                    }
-                    shared = work_on(self.work, threaded, shared, task);
+                if !shared.pending.is_empty() {
+                    shared = work_on(self.work, threaded, Some(spawner), shared);
                 } else if shared.busy == 0 {
                     return core::mem::take(&mut shared.results);
                 } else {
+                    // Waiting for a task as much as for the phase to end.
+                    let waiting = &threaded.waiting;
+                    waiting.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
                     shared = wait(threaded, shared);
+                    waiting.fetch_sub(1, core::sync::atomic::Ordering::Relaxed);
                 }
             }
         }
@@ -228,25 +225,70 @@ fn wait<'s, T, R>(
         .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
-/// Does `task` without the lock, then records its result and the tasks it
-/// added.
+/// Takes a share of the pool's tasks, at least one, and does them and the
+/// tasks they add without the lock, depth first, then records their
+/// results. Pending tasks go back to the pool while a thread waits for
+/// one, all but the next: the oldest, nearest the subtree's root, hold the
+/// most work. `spawner`, the calling thread's, starts a worker to take
+/// them when none waits and the pool has room for one.
 #[cfg(feature = "std")]
 fn work_on<'s, T, R>(
     work: &Work<'_, T, R>,
     threaded: &'s Threaded<T, R>,
+    spawner: Option<&dyn Spawn>,
     mut shared: std::sync::MutexGuard<'s, Shared<T, R>>,
-    task: T,
 ) -> std::sync::MutexGuard<'s, Shared<T, R>> {
+    use core::sync::atomic::Ordering;
+    // An even share for each thread, so many small tasks, as a wide
+    // parent's childless children are, cost one lock each per share.
+    let len = shared.pending.len();
+    let share = (len / (threaded.max_workers + 1)).max(1);
+    let mut local = shared.pending.split_off(len - share);
     shared.busy += 1;
+    let mut can_spawn = spawner.is_some() && shared.workers < threaded.max_workers;
     drop(shared);
+    let mut results = Vec::new();
     let mut added = Vec::new();
-    let result = work(task, &mut added);
+    while let Some(task) = local.pop() {
+        results.push(work(task, &mut added));
+        local.extend(added.drain(..).rev());
+        if local.len() < 2 {
+            continue;
+        }
+        let waiting = threaded.waiting.load(Ordering::Relaxed);
+        if waiting == 0 && !can_spawn {
+            continue;
+        }
+        let mut shared = lock(&threaded.shared);
+        if waiting == 0
+            && let Some(spawner) = spawner
+        {
+            // Tasks wait with no thread idle to take them: start one.
+            shared.workers = if spawner.spawn_worker() {
+                shared.workers + 1
+            } else {
+                threaded.max_workers
+            };
+            can_spawn = shared.workers < threaded.max_workers;
+        }
+        let next = local.pop().expect("two tasks pending");
+        let handed = local.len();
+        // The pool's tasks are taken from its end: the oldest go there.
+        shared.pending.extend(local.drain(..).rev());
+        local.push(next);
+        drop(shared);
+        if handed >= threaded.waiting.load(Ordering::Relaxed) {
+            threaded.changed.notify_all();
+        } else {
+            for _ in 0..handed {
+                threaded.changed.notify_one();
+            }
+        }
+    }
     let mut shared = lock(&threaded.shared);
     shared.busy -= 1;
-    shared.results.push(result);
-    let finished = shared.busy == 0 && shared.pending.is_empty() && added.is_empty();
-    shared.pending.extend(added.into_iter().rev());
-    if finished || !shared.pending.is_empty() {
+    shared.results.append(&mut results);
+    if shared.busy == 0 && shared.pending.is_empty() {
         threaded.changed.notify_all();
     }
     shared
@@ -255,16 +297,17 @@ fn work_on<'s, T, R>(
 /// A worker's loop: does tasks as they come until the pool shuts down.
 #[cfg(feature = "std")]
 fn serve<T, R>(work: &Work<'_, T, R>, threaded: &Threaded<T, R>) {
+    use core::sync::atomic::Ordering;
     let mut shared = lock(&threaded.shared);
     loop {
-        if let Some(task) = shared.pending.pop() {
-            shared = work_on(work, threaded, shared, task);
+        if !shared.pending.is_empty() {
+            shared = work_on(work, threaded, None, shared);
         } else if shared.done {
             return;
         } else {
-            shared.idle += 1;
+            threaded.waiting.fetch_add(1, Ordering::Relaxed);
             shared = wait(threaded, shared);
-            shared.idle -= 1;
+            threaded.waiting.fetch_sub(1, Ordering::Relaxed);
         }
     }
 }

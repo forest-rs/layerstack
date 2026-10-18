@@ -516,6 +516,12 @@ jobs:
       - name: check variant set names oracle
         run: python layerstack_conformance/scripts/variant_set_names_oracle.py --check
 
+      # The target list edits oracle must be how OpenUSD's `AddTarget`,
+      # `RemoveTarget`, `AddConnection` and `RemoveConnection` author, call
+      # by call, and how a stack of scope sublayers composes them.
+      - name: check target list edits oracle
+        run: python layerstack_conformance/scripts/target_list_edits_oracle.py --check
+
       - name: test saved variant set names against OpenUSD
         env:
           LAYERSTACK_USD_PYTHON: python

@@ -38,7 +38,9 @@
 //! ```
 //!
 //! The registry's tokens are interned in the interner passed in, which must
-//! be the one of the store whose stages use it.
+//! be the one of the store whose stages use it: composition does not use a
+//! registry built on another interner, and reports
+//! `CompositionError::ForeignSchemaRegistry`.
 //!
 //! Pick domains with [`registry`], or add OpenUSD's schemas to a builder
 //! that also registers your own with [`register`]. A domain always brings

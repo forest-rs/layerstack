@@ -163,3 +163,42 @@ fn strict_import_rejects_registered_metadata_on_invalid_spec_targets() {
         IoErrorKind::Rejected
     );
 }
+
+#[test]
+fn opening_with_a_registry_of_another_store_fails() {
+    let files = [(
+        "rocks.usda",
+        "#usda 1.0\ndef \"Boulder\" (hostScale = 2) {}\n",
+    )];
+    let rejected = |result: Result<StageDocument<Memory>, IoError>| {
+        let error = result.expect_err("a foreign registry is rejected");
+        assert_eq!(error.kind, IoErrorKind::ForeignSchemaRegistry);
+        assert!(
+            error.to_string().contains("another token interner"),
+            "{error}"
+        );
+    };
+    // `open` makes a store no registry built beforehand belongs to.
+    let (memory, _, options) = setup(&files);
+    rejected(StageDocument::open(memory, "rocks.usda", options));
+    let (memory, _, options) = setup(&files);
+    rejected(StageDocument::open_in(
+        memory,
+        InMemoryStore::default(),
+        "rocks.usda",
+        options,
+        ImportPolicy::Strict,
+    ));
+    let (memory, _, options) = setup(&files);
+    rejected(StageDocument::create_in(
+        memory,
+        InMemoryStore::default(),
+        "lights.usda",
+        options,
+    ));
+    let (memory, store, options) = setup(&files);
+    let doc = StageDocument::open_in(memory, store, "rocks.usda", options, ImportPolicy::Strict)
+        .expect("the registry belongs to the store it was built on");
+    assert!(doc.stage.stage().composition_errors().is_empty());
+    assert!(doc.stage.stage().schemas().is_some());
+}

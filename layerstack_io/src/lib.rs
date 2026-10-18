@@ -26,8 +26,9 @@
 //! the registry using that store's tokens, then pass the same store and its
 //! registry in `StageOptions`. Its metadata declarations also type and validate
 //! USDA metadata during initial loading, explicit loads and reloads. `open`
-//! creates a fresh store and cannot share a
-//! prebuilt registry's token domain. [`Storage`] supports transports without `std`.
+//! creates a fresh store, so it rejects a registry
+//! ([`IoErrorKind::ForeignSchemaRegistry`]): no prebuilt registry belongs to
+//! that store's tokens. [`Storage`] supports transports without `std`.
 //! [`StageDocument::parts_mut`] provides explicit access for atomic authoring;
 //! saving, exporting and reloading remain separate operations.
 //!
@@ -119,6 +120,11 @@ pub enum IoErrorKind {
     MissingLayer,
     /// The document has exhausted its layer identity space.
     IdentityExhausted,
+    /// The schema registry of `StageOptions::schemas` was built on another
+    /// token interner than the document's store
+    /// ([`layerstack::SchemaRegistry::belongs_to`]), so its ids would name
+    /// other strings there and no prim would match its schemas.
+    ForeignSchemaRegistry,
 }
 /// A storage or format failure, naming the source it is about.
 #[derive(Clone, Debug)]
@@ -507,6 +513,19 @@ impl Catalog {
     }
 }
 
+/// Rejects a schema registry built on another token interner than
+/// `store`'s, before anything is read or composed with it.
+fn check_schemas(store: &InMemoryStore, options: &StageOptions) -> Result<(), IoError> {
+    match &options.schemas {
+        Some(schemas) if !schemas.belongs_to(&store.tokens) => Err(IoError::new(
+            IoErrorKind::ForeignSchemaRegistry,
+            "the schema registry was built on another token interner than the store's; \
+             build it on the store's `tokens` and open into that store with `open_in`",
+        )),
+        _ => Ok(()),
+    }
+}
+
 /// One document's store, retained stage and source catalog. Owns no transport
 /// policy beyond the supplied `Storage`. Multiple retained clients may compose
 /// against `store`; each client synchronizes independently after source changes.
@@ -545,12 +564,15 @@ impl<B: Storage> StageDocument<B> {
         Self::create_in(storage, InMemoryStore::default(), target, options)
     }
     /// Creates a persistent root alongside host-owned schemas/session layers.
+    /// The registry must be built on `store`'s tokens, as for
+    /// [`Self::open_in`].
     pub fn create_in(
         storage: B,
         mut store: InMemoryStore,
         target: &str,
         options: StageOptions,
     ) -> Result<Self, IoError> {
+        check_schemas(&store, &options)?;
         let identifier = storage.identify(target, None).map_err(|e| e.at(target))?;
         let format = identifier_format(&identifier, &FileFormats::default())?;
         if format == Format::Usdz {
@@ -590,6 +612,10 @@ impl<B: Storage> StageDocument<B> {
         })
     }
     /// Opens a stage with strict import into a new store.
+    ///
+    /// A schema registry in `options` cannot belong to the new store, so
+    /// opening with one fails ([`IoErrorKind::ForeignSchemaRegistry`]); use
+    /// [`Self::open_in`] with the store the registry was built on.
     #[doc(alias = "UsdStage::Open")]
     #[doc(alias = "Open")]
     pub fn open(storage: B, asset: &str, options: StageOptions) -> Result<Self, IoError> {
@@ -607,6 +633,12 @@ impl<B: Storage> StageDocument<B> {
     /// Opens into an existing store, allowing a host-owned session layer and
     /// schema registry. Existing identifiers remain reserved. Import is staged;
     /// failed reads never publish partially imported layers to a live stage.
+    ///
+    /// # Errors
+    ///
+    /// [`IoErrorKind::ForeignSchemaRegistry`] when `options.schemas` was not
+    /// built on `store`'s tokens; otherwise the errors of reading the root
+    /// and its dependencies.
     #[doc(alias = "UsdStage::Open")]
     #[doc(alias = "Open")]
     pub fn open_in(
@@ -628,7 +660,9 @@ impl<B: Storage> StageDocument<B> {
         )
     }
     /// Opens with host-owned schemas/session layers and an explicit load policy.
-    /// Registry tokens must belong to `store`, as for [`Self::open_in`]. Failed
+    /// The registry must be built on `store`'s tokens
+    /// ([`layerstack::SchemaRegistry::belongs_to`]), or opening fails with
+    /// [`IoErrorKind::ForeignSchemaRegistry`] before anything is read. Failed
     /// structural imports publish no layers; retained payloads are checked on demand.
     ///
     /// The dynamic sides of [`LoadOptions::formats`] ([`FileFormat::dynamic`])
@@ -641,6 +675,7 @@ impl<B: Storage> StageDocument<B> {
         mut options: StageOptions,
         loading: LoadOptions,
     ) -> Result<Self, IoError> {
+        check_schemas(&store, &options)?;
         for format in loading.formats.dynamic_formats() {
             options
                 .dynamic_formats

@@ -30,6 +30,20 @@ use crate::{
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum CompositionError {
+    /// The schema registry of [`StageOptions::schemas`] was built on
+    /// another token interner than the store's
+    /// ([`SchemaRegistry::belongs_to`]): its ids name other strings in the
+    /// store. The registry was not used, so the stage has no schemas, as if
+    /// it had been composed without one. Build the registry on the store's
+    /// `tokens`.
+    ///
+    /// This is not an error in scene description, and OpenUSD, whose
+    /// schema registry is a process-wide singleton, has no counterpart;
+    /// composition reports it here because it cannot fail.
+    ///
+    /// [`StageOptions::schemas`]: crate::StageOptions::schemas
+    /// [`SchemaRegistry::belongs_to`]: crate::SchemaRegistry::belongs_to
+    ForeignSchemaRegistry,
     /// A sublayer that would form a cycle in a layer stack. The sublayer was
     /// ignored.
     SublayerCycle(SublayerCycle),
@@ -83,7 +97,8 @@ impl CompositionError {
     #[must_use]
     pub fn prim(&self) -> Option<PathId> {
         match self {
-            Self::SublayerCycle(_)
+            Self::ForeignSchemaRegistry
+            | Self::SublayerCycle(_)
             | Self::UnresolvedSublayer(_)
             | Self::InvalidAuthoredRelocation(_)
             | Self::InvalidConflictingRelocation(_)
@@ -105,21 +120,22 @@ impl CompositionError {
     /// declared.
     fn rank(&self) -> u8 {
         match self {
-            Self::SublayerCycle(_) => 0,
-            Self::ArcCycle(_) => 1,
-            Self::UnresolvedDefaultPrim(_) => 2,
-            Self::UnresolvedPrimPath(_) => 3,
-            Self::UnresolvedAsset(_) => 4,
-            Self::UnresolvedSublayer(_) => 5,
-            Self::InvalidAuthoredRelocation(_) => 6,
-            Self::InvalidConflictingRelocation(_) => 7,
-            Self::InvalidSameTargetRelocations(_) => 8,
-            Self::OpinionAtRelocationSource(_) => 9,
-            Self::ArcToProhibitedChild(_) => 10,
-            Self::InconsistentPropertyType(_) => 11,
-            Self::InvalidExternalTargetPath(_) => 12,
-            Self::InvalidInstanceTargetPath(_) => 13,
-            Self::VariableExpressionError(_) => 14,
+            Self::ForeignSchemaRegistry => 0,
+            Self::SublayerCycle(_) => 1,
+            Self::ArcCycle(_) => 2,
+            Self::UnresolvedDefaultPrim(_) => 3,
+            Self::UnresolvedPrimPath(_) => 4,
+            Self::UnresolvedAsset(_) => 5,
+            Self::UnresolvedSublayer(_) => 6,
+            Self::InvalidAuthoredRelocation(_) => 7,
+            Self::InvalidConflictingRelocation(_) => 8,
+            Self::InvalidSameTargetRelocations(_) => 9,
+            Self::OpinionAtRelocationSource(_) => 10,
+            Self::ArcToProhibitedChild(_) => 11,
+            Self::InconsistentPropertyType(_) => 12,
+            Self::InvalidExternalTargetPath(_) => 13,
+            Self::InvalidInstanceTargetPath(_) => 14,
+            Self::VariableExpressionError(_) => 15,
         }
     }
 }

@@ -24,9 +24,15 @@ fn first_prim_and_last_prim_removal_match_empty_population() {
         .collect();
     store.paths.sort_paths(&mut created, &store.tokens);
     assert_eq!(added.changes.created, created);
+    // The pseudo-root exists before the first prim and after the last one,
+    // as `UsdStage::GetPseudoRoot` does: neither creates nor removes it.
+    let (root, rock) = (store.path("/"), store.path("/Rock"));
+    assert_eq!(before, [root]);
+    assert_eq!(added.changes.created, [rock]);
     let removed = live.apply(&mut store, &added.inverse).unwrap();
     matches_clean(&mut store, &live);
-    assert_eq!(removed.changes.removed, created);
+    assert_eq!(removed.changes.removed, [rock]);
+    assert!(live.stage().has_prim(root));
 }
 
 fn scene() -> (InMemoryStore, LiveStage) {
@@ -442,7 +448,7 @@ fn undo_restoring_variant_specs_leaves_the_local_fast_path() {
     assert!(live.local_namespace.as_ref().unwrap().current(&store));
     let restored = live.apply(&mut store, &removed.inverse).unwrap();
     assert!(live.local_namespace.is_none());
-    assert_eq!(restored.changes.resynced, [store.path("/")]);
+    assert_eq!(restored.changes.resynced, [world]);
     matches_clean(&mut store, &live);
     let removed_again = live.apply(&mut store, &restored.inverse).unwrap();
     assert!(live.local_namespace.as_ref().unwrap().current(&store));

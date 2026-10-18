@@ -276,7 +276,7 @@ pub(crate) fn compose(
             .collect();
         deps.add_relocation_layers(layers);
     }
-    finish(&mut out, root_path);
+    finish(&mut out);
     out
 }
 
@@ -1376,16 +1376,7 @@ fn record(
 /// Every composed child name is a prim, whether or not its index has
 /// specs: names come from the sites of the parent's index, or from a
 /// relocation, as OpenUSD populates them (`UsdStage::_ComposeChildren`).
-fn finish(out: &mut Composition, root: PathId) {
-    // An empty stage has no prims, not even the pseudo-root.
-    if out.children.get(&root).is_none_or(Vec::is_empty)
-        && out
-            .prims
-            .get(&root)
-            .is_some_and(|index| index.sources.is_empty())
-    {
-        out.prims.remove(&root);
-    }
+fn finish(out: &mut Composition) {
     // Inactive children are listed apart.
     let inactive = &out.inactive;
     for (parent, list) in out.children.iter_mut() {

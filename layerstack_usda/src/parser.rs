@@ -754,27 +754,41 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
         self.builder.finish_node(end);
     }
 
+    /// A name list (`variantSets`, `reorder nameChildren`, `reorder
+    /// properties`, `reorder rootPrims`): one name, or a bracketed list of
+    /// at least one. `None` and `[]` are reported, as OpenUSD's text parser
+    /// rejects them (its `NameList` rule), and parsed on to recover.
+    ///
+    /// Spec: AOUSD Core §16.2.17 (`reorder` statements), §16.2.18.
     fn parse_name_list(&mut self) {
         let start = self.current_span().start;
         self.builder.start_node(SyntaxKind::NameList, start);
 
         self.eat_trivia();
         if self.peek() == Some(TokenKind::Ident) && self.current_text() == "None" {
+            let span = self.current_span();
+            self.error(span, "expected a name or a list of names, not `None`");
             self.bump();
         } else if self.at_string() {
             // Single string.
             self.parse_string_token();
         } else {
+            let open = self.current_span();
             self.expect(TokenKind::LeftBracket);
+            let mut names = 0_usize;
             loop {
                 self.eat_trivia();
                 if self.peek() == Some(TokenKind::RightBracket) || self.current().is_none() {
                     break;
                 }
                 self.parse_string_token();
+                names += 1;
                 self.eat(TokenKind::Comma);
             }
             self.expect(TokenKind::RightBracket);
+            if names == 0 {
+                self.error(open, "expected at least one name in the list");
+            }
         }
 
         let end = self.current_span().start;
@@ -2095,6 +2109,41 @@ def Xform "Root" (
         };
         assert_eq!(b.name, "b");
         assert!(matches!(b.default, Some(Value::Int(1))));
+    }
+
+    /// Name lists take one name or a non-empty list, as OpenUSD 26.08
+    /// (`Sdf.Layer.ImportFromString`) accepts them, for every list op form
+    /// of `variantSets` and every `reorder` statement.
+    #[test]
+    fn name_lists_follow_openusd() {
+        let prim: fn(&str) -> String =
+            |field| format!("#usda 1.0\ndef \"P\" (\n    {field}\n)\n{{\n}}\n");
+        let body: fn(&str) -> String =
+            |statement| format!("#usda 1.0\ndef \"P\"\n{{\n    {statement}\n}}\n");
+        let layer: fn(&str) -> String = |statement| format!("#usda 1.0\n\n{statement}\n");
+        let mut sources = Vec::new();
+        for op in ["", "prepend ", "append ", "delete ", "add ", "reorder "] {
+            sources.push((prim, format!("{op}variantSets")));
+        }
+        sources.push((body, String::from("reorder nameChildren")));
+        sources.push((body, String::from("reorder properties")));
+        sources.push((layer, String::from("reorder rootPrims")));
+        for (wrap, key) in sources {
+            for (value, accepted) in [
+                ("\"a\"", true),
+                ("[\"a\", \"b\"]", true),
+                ("[]", false),
+                ("None", false),
+            ] {
+                let src = wrap(&format!("{key} = {value}"));
+                let diagnostics = parse(&src).diagnostics;
+                assert_eq!(
+                    diagnostics.is_empty(),
+                    accepted,
+                    "{key} = {value}: {diagnostics:?}"
+                );
+            }
+        }
     }
 
     /// Diagnostics for `int[] x = <value>`.

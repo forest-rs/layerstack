@@ -1234,15 +1234,9 @@ impl EmitCtx<'_> {
         })
     }
 
-    /// Converts an inherits or specializes list; relative paths resolve
-    /// against the prim path `anchor`, whose spec sits in the variant
-    /// branches `sites`. `arc` names the arc in OpenUSD's messages
-    /// (`Inherit` or `Specializes`).
-    ///
-    /// Spec: AOUSD Core §8 (paths; relative paths are anchored to the prim
-    /// that authors them).
-    /// Converts a `variantSets` list op, as authored: `= None` is an empty
-    /// explicit list.
+    /// Converts a `variantSets` list op, as authored. The parser reports
+    /// `None` and `[]`, which OpenUSD rejects; read past that report, they
+    /// give an empty list.
     ///
     /// Spec: AOUSD Core §7.6.2.3.5 (`variantSetNames`), §12.4 (list ops).
     fn emit_name_listop(&mut self, names: &ast::ListOp<&str>) -> ListOp<TokenId> {
@@ -1262,6 +1256,13 @@ impl EmitCtx<'_> {
         listop
     }
 
+    /// Converts an inherits or specializes list; relative paths resolve
+    /// against the prim path `anchor`, whose spec sits in the variant
+    /// branches `sites`. `arc` names the arc in OpenUSD's messages
+    /// (`Inherit` or `Specializes`).
+    ///
+    /// Spec: AOUSD Core §8 (paths; relative paths are anchored to the prim
+    /// that authors them).
     fn emit_path_listop(
         &mut self,
         paths: &ast::ListOpPaths<'_>,

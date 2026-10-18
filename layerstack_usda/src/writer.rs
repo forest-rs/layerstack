@@ -2338,7 +2338,9 @@ impl Writer<'_> {
             }
             self.out.push_str(")\n");
         }
-        if let Some(order) = &doc.prim_order {
+        if let Some(order) = &doc.prim_order
+            && !order.is_empty()
+        {
             self.out.push('\n');
             self.reorder("rootPrims", order, 0);
         }
@@ -2619,8 +2621,13 @@ impl Writer<'_> {
     }
 
     /// `reorder key = ["a", "b"]` (§16.2.17 for `nameChildren` and
-    /// `properties`, §16.2.18 for `rootPrims`).
+    /// `properties`, §16.2.18 for `rootPrims`). An empty order writes
+    /// nothing, as OpenUSD's writer leaves it out: the text format has no
+    /// spelling for it, since a name list takes at least one name.
     fn reorder(&mut self, key: &str, names: &[String], depth: usize) {
+        if names.is_empty() {
+            return;
+        }
         self.indent(depth);
         self.out.push_str("reorder ");
         self.out.push_str(key);
@@ -3942,6 +3949,24 @@ def Xform "Root"
             prims: vec![prim, Prim::new(Specifier::Over, None, "B")],
             ..Document::new()
         }
+    }
+
+    /// An empty `primOrder` or `propertyOrder` writes no `reorder`
+    /// statement, as OpenUSD's writer leaves it out: a name list takes at
+    /// least one name, so `reorder nameChildren = []` would not read back.
+    #[test]
+    fn empty_orders_write_nothing() {
+        let mut prim = Prim::def("Scope", "A");
+        prim.prim_order = Some(Vec::new());
+        prim.property_order = Some(Vec::new());
+        let doc = Document {
+            prim_order: Some(Vec::new()),
+            prims: vec![prim],
+            ..Document::new()
+        };
+        let text = doc.to_usda().unwrap();
+        assert_eq!(text, "#usda 1.0\n\ndef Scope \"A\"\n{\n}\n\n");
+        assert!(parse(&text).diagnostics.is_empty(), "{text}");
     }
 
     #[test]

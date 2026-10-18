@@ -9,7 +9,7 @@
 //! Spec: AOUSD Core uses tokens pervasively; this crate uses interning to model
 //! token identity efficiently (see AOUSD Core terminology around tokens).
 
-use alloc::{boxed::Box, sync::Arc};
+use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use core::sync::atomic::{AtomicBool, Ordering};
 
 use crate::interning::Interned;
@@ -59,6 +59,10 @@ impl TokenId {
 #[derive(Debug)]
 pub struct TokenInterner {
     pub(crate) affinity: Arc<()>,
+    /// The domains this interner is a snapshot of, directly or through
+    /// other snapshots, each with how many leading ids it shares with that
+    /// domain: ids below the count name the same strings in both.
+    ancestry: Vec<(Arc<()>, u32)>,
     strings: Interned<Box<str>>,
     /// Whether some interned string is a variable expression, so a variant
     /// selection may be one ([`crate::variable_expression::is_expression`]).
@@ -70,6 +74,7 @@ impl Default for TokenInterner {
     fn default() -> Self {
         let interner = Self {
             affinity: Arc::default(),
+            ancestry: Vec::new(),
             strings: Interned::default(),
             expressions: AtomicBool::new(false),
         };
@@ -89,11 +94,44 @@ impl TokenInterner {
 
 impl TokenInterner {
     pub(crate) fn snapshot(&self) -> Self {
+        let strings = self.strings.snapshot();
+        let shared = strings.len();
+        // An ancestor only this interner still refers to can no longer be
+        // asked about: no interner or registry of that domain is left.
+        let ancestry = self
+            .ancestry
+            .iter()
+            .filter(|(domain, _)| Arc::strong_count(domain) > 1)
+            .map(|(domain, count)| (Arc::clone(domain), (*count).min(shared)))
+            .chain([(Arc::clone(&self.affinity), shared)])
+            .collect();
         Self {
             affinity: Arc::default(),
-            strings: self.strings.snapshot(),
+            ancestry,
+            strings,
             expressions: AtomicBool::new(self.has_expressions()),
         }
+    }
+
+    /// Marks the ids interned so far, so a value holding them (a schema
+    /// registry) can later check that another interner names them alike
+    /// ([`Self::names_alike`]).
+    pub(crate) fn mark(&self) -> TokenMark {
+        TokenMark {
+            domain: Arc::clone(&self.affinity),
+            len: self.strings.len(),
+        }
+    }
+
+    /// Whether every id `mark` covers names the same string here as in the
+    /// interner that made it: this is that interner, or a snapshot of it
+    /// taken after the mark.
+    pub(crate) fn names_alike(&self, mark: &TokenMark) -> bool {
+        Arc::ptr_eq(&self.affinity, &mark.domain)
+            || self
+                .ancestry
+                .iter()
+                .any(|(domain, count)| Arc::ptr_eq(domain, &mark.domain) && *count >= mark.len)
     }
 
     /// Interns a string, returning its stable [`TokenId`].
@@ -125,6 +163,14 @@ impl TokenInterner {
     pub(crate) fn has_expressions(&self) -> bool {
         self.expressions.load(Ordering::Acquire)
     }
+}
+
+/// The ids a [`TokenInterner`] had interned at one point
+/// ([`TokenInterner::mark`]).
+#[derive(Clone, Debug)]
+pub(crate) struct TokenMark {
+    domain: Arc<()>,
+    len: u32,
 }
 
 #[cfg(test)]

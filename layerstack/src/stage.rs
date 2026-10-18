@@ -349,8 +349,11 @@ pub struct StageOptions {
     /// `None`, the default, reads no schema: every prim is typeless and
     /// defines no property.
     ///
-    /// The registry's tokens must be those of the store the stage is
-    /// composed from. Composition itself never reads schemas.
+    /// The registry must be built on the tokens of the store the stage is
+    /// composed from ([`SchemaRegistry::belongs_to`]); composition does not
+    /// use one built on another interner and reports
+    /// [`crate::CompositionError::ForeignSchemaRegistry`]. Composition itself
+    /// never reads schemas.
     ///
     /// Spec: AOUSD Core §13 (schemas), §13.3.2.3 (the prim definition).
     pub schemas: Option<Arc<SchemaRegistry>>,
@@ -543,6 +546,7 @@ impl Stage {
     ) -> Self {
         options.muted_layers.remove(&root);
         let captured = options.clone();
+        let foreign_schemas = Self::drop_foreign_schemas(&mut options, store);
         let schemas = options.schemas.clone();
         let mut controlled = loading::ControlledStore {
             inner: store,
@@ -563,10 +567,30 @@ impl Stage {
         stage.store_identity = Some(store.identity());
         stage.root_layer = Some(root);
         stage.schemas = schemas;
+        if foreign_schemas {
+            // First: an error in no layer stack, of the first kind.
+            stage
+                .errors
+                .insert(0, CompositionError::ForeignSchemaRegistry);
+        }
         stage.prepare_type_info(store);
         stage.prepare_clips(store);
         stage.prepare_prototypes(store);
         stage
+    }
+
+    /// Removes a schema registry built on another token interner than the
+    /// store's from `options` ([`SchemaRegistry::belongs_to`]), returning
+    /// whether it did, so composition never reads its ids as the store's.
+    fn drop_foreign_schemas(options: &mut StageOptions, store: &dyn LayerStore) -> bool {
+        let foreign = options
+            .schemas
+            .as_deref()
+            .is_some_and(|schemas| !schemas.belongs_to(store.tokens()));
+        if foreign {
+            options.schemas = None;
+        }
+        foreign
     }
 
     /// Composes exactly the prims `paths` (see
@@ -580,7 +604,11 @@ impl Stage {
         boundaries: &HashSet<PathId>,
         child_index: &crate::prim_indexing::ChildIndex,
     ) -> Self {
+        let mut options = options;
         let captured = options.clone();
+        // A partial composition's errors in no layer stack are not merged;
+        // the full composition reported the foreign registry.
+        Self::drop_foreign_schemas(&mut options, store);
         let schemas = options.schemas.clone();
         let mut stage = crate::compose::compose_stage_with_paths(
             store,

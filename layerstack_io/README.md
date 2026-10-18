@@ -28,8 +28,9 @@ println!("Loaded {} layers", document.load_report().layers.len());
 
 For schema fallbacks and typed views, use `StageDocument::open_in`: construct
 `layerstack_schemas::openusd` using the supplied store's tokens, then pass that
-same store and its registry in `StageOptions`. `open` creates a fresh store;
-a registry built from another store cannot share its token domain.
+same store and its registry in `StageOptions`. `open` creates a fresh store,
+so it rejects a registry (`IoErrorKind::ForeignSchemaRegistry`): no registry
+built beforehand belongs to that store's tokens.
 
 The default `std` feature provides `Filesystem`. Disable default features for
 `no_std` + `alloc` with a host implementation of `Storage`. Identifiers, transport,

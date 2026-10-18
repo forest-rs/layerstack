@@ -901,3 +901,111 @@ fn stage_property_metadata_fallback_merges_dictionaries_and_respects_blocks() {
         ResolvedValue::Scalar(Value::string("authored only"))
     );
 }
+
+/// A store with a `Rock` prim, and a registry defining `Rock` built on
+/// `tokens`.
+fn rock_scene(
+    registry_tokens: Option<&TokenInterner>,
+) -> (crate::InMemoryStore, crate::StageOptions) {
+    let mut store = crate::InMemoryStore::default();
+    let rock = store.tokens.intern("Rock");
+    let mut layer = crate::Layer::new(crate::LayerId(1));
+    let mut spec = crate::PrimSpec::def();
+    spec.type_name = Some(rock);
+    layer.insert_prim(store.path("/Boulder"), spec);
+    store.insert_layer(layer);
+    let tokens = registry_tokens.unwrap_or(&store.tokens);
+    let mut builder = SchemaRegistry::builder();
+    builder.register(
+        SchemaDefinition::typed(tokens.intern("Rock")).with_property(
+            PropertyDefinition::attribute(tokens.intern("hardness")).with_fallback(5.5),
+        ),
+    );
+    let options = crate::StageOptions {
+        schemas: Some(Arc::new(builder.build(tokens))),
+        ..crate::StageOptions::default()
+    };
+    (store, options)
+}
+
+#[test]
+fn a_registry_on_another_interner_is_reported_and_not_used() {
+    use crate::{CompositionError, LayerId, LiveStage, Stage};
+    // The foreign interner hands out the same ids for other names: `Rock`
+    // here is id 1, and `Boulder` is id 1 in the store.
+    let foreign = TokenInterner::default();
+    let (mut store, options) = rock_scene(Some(&foreign));
+    let registry = options.schemas.clone().unwrap();
+    assert!(!registry.belongs_to(&store.tokens) && registry.belongs_to(&foreign));
+    let boulder = store.path("/Boulder");
+
+    let stage = Stage::compose(&mut store, LayerId(1), options.clone());
+    assert_eq!(
+        stage.composition_errors(),
+        [CompositionError::ForeignSchemaRegistry]
+    );
+    assert!(stage.schemas().is_none(), "the registry is not used");
+    assert!(stage.options().schemas.is_some(), "the options are kept");
+    let hardness = store.tokens.intern("hardness");
+    assert!(stage.resolve_value_with_schema(boulder, hardness).is_none());
+
+    // A live stage reports it from every full composition, and keeps it
+    // across partial ones.
+    let mut live = LiveStage::compose(&mut store, LayerId(1), options);
+    assert_eq!(
+        live.stage().composition_errors(),
+        [CompositionError::ForeignSchemaRegistry]
+    );
+    let mut txn = crate::Transaction::new();
+    let at = crate::EditTarget::for_layer(LayerId(1));
+    txn.create_prim(at.prim(store.path("/Pebble")), crate::Specifier::Def, None);
+    live.apply(&mut store, &txn).unwrap();
+    assert!(!live.recomposition_work().full_rebuild);
+    assert_eq!(
+        live.stage().composition_errors(),
+        [CompositionError::ForeignSchemaRegistry]
+    );
+}
+
+#[test]
+fn a_registry_belongs_to_its_interner_and_to_snapshots_taken_after_it() {
+    use crate::{LayerId, Stage};
+    let (mut store, options) = rock_scene(None);
+    let registry = options.schemas.clone().unwrap();
+    assert!(registry.belongs_to(&store.tokens));
+    assert!(SchemaRegistry::default().belongs_to(&TokenInterner::default()));
+    let stage = Stage::compose(&mut store, LayerId(1), options.clone());
+    assert!(stage.composition_errors().is_empty());
+    let boulder = store.path("/Boulder");
+    let hardness = store.tokens.intern("hardness");
+    assert_eq!(
+        stage
+            .resolve_value_with_schema(boulder, hardness)
+            .map(|resolved| resolved.value),
+        Some(crate::ResolvedValue::Scalar(Value::Double(5.5)))
+    );
+
+    // A published snapshot keeps the registry's ids, through any number of
+    // snapshots, even once the interners in between are gone.
+    let snapshot = store.snapshot();
+    assert!(registry.belongs_to(&snapshot.tokens));
+    let again = snapshot.snapshot();
+    drop(snapshot);
+    let mut third = again.snapshot();
+    drop(again);
+    assert!(registry.belongs_to(&third.tokens));
+    assert!(
+        Stage::compose(&mut third, LayerId(1), options.clone())
+            .composition_errors()
+            .is_empty()
+    );
+
+    // A registry built after a snapshot diverged may hold ids the snapshot
+    // gives to other names.
+    let snapshot = store.snapshot();
+    let mut builder = SchemaRegistry::builder();
+    builder.register(SchemaDefinition::typed(store.tokens.intern("Fern")));
+    let later = builder.build(&store.tokens);
+    assert!(later.belongs_to(&store.tokens));
+    assert!(!later.belongs_to(&snapshot.tokens));
+}

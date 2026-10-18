@@ -577,6 +577,7 @@ impl SchemaRegistryBuilder {
             schemas,
             definitions,
             issues,
+            tokens: Some(tokens.mark()),
         }
     }
 }
@@ -594,6 +595,9 @@ pub struct SchemaRegistry {
     schemas: HashMap<TokenId, SchemaDefinition>,
     definitions: HashMap<TokenId, Arc<PrimDefinition>>,
     issues: Vec<SchemaIssue>,
+    /// The ids of the interner the registry was built on, `None` for the
+    /// empty default registry, which holds none.
+    tokens: Option<crate::interner::TokenMark>,
 }
 
 impl SchemaRegistry {
@@ -606,6 +610,34 @@ impl SchemaRegistry {
     /// Every registered metadata declaration, in no particular order.
     pub fn metadata_definitions(&self) -> impl Iterator<Item = &MetadataDefinition> {
         self.metadata.values()
+    }
+
+    /// Whether this registry's names are ids of `tokens`: it was built on
+    /// `tokens` ([`SchemaRegistryBuilder::build`]), or `tokens` is a
+    /// snapshot of that interner taken after the build, as a published
+    /// [`InMemoryStore::snapshot`](crate::InMemoryStore::snapshot) is. The
+    /// empty default registry belongs to every interner.
+    ///
+    /// A registry built on another interner names other strings with the
+    /// same ids, so a stage composed with it would match no prim to its
+    /// schemas. Composition does not use such a registry, and reports
+    /// [`CompositionError::ForeignSchemaRegistry`](crate::CompositionError::ForeignSchemaRegistry).
+    ///
+    /// ```
+    /// use layerstack::{InMemoryStore, SchemaDefinition, SchemaRegistry};
+    ///
+    /// let store = InMemoryStore::default();
+    /// let mut builder = SchemaRegistry::builder();
+    /// builder.register(SchemaDefinition::typed(store.tokens.intern("Rock")));
+    /// let registry = builder.build(&store.tokens);
+    /// assert!(registry.belongs_to(&store.tokens));
+    /// assert!(!registry.belongs_to(&InMemoryStore::default().tokens));
+    /// ```
+    #[must_use]
+    pub fn belongs_to(&self, tokens: &TokenInterner) -> bool {
+        self.tokens
+            .as_ref()
+            .is_none_or(|mark| tokens.names_alike(mark))
     }
 
     /// A builder to register schemas with.

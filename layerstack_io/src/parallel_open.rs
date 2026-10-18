@@ -24,7 +24,7 @@ use std::sync::Mutex;
 use super::{
     AssetFailure, FileFormat, FileFormats, Format, FormatArgs, Identities, ImportPolicy, IoError,
     IoErrorKind, LooseRead, Reader, Source, State, Storage, String, Vec, asset_error, read_loose,
-    source_format, source_identifier,
+    source_format, source_identifier, strict_failure, strict_rejects,
 };
 use alloc::sync::Arc;
 use layerstack::{
@@ -494,8 +494,8 @@ impl<B: Storage> Replay<'_, '_, B> {
 }
 
 /// The error a strict import rejects the layer `identifier` with: the
-/// first failure, or error diagnostic, recorded since reading it
-/// began, as `Reader::read_layer` decides.
+/// first failure other than a missing dependency, or error diagnostic,
+/// recorded since reading it began, as `Reader::read_layer` decides.
 fn strict_error<B>(
     reader: &Reader<'_, B>,
     identifier: &str,
@@ -505,11 +505,11 @@ fn strict_error<B>(
     if reader.policy != ImportPolicy::Strict {
         return None;
     }
-    if let Some(failure) = reader.failures.get(first_failure) {
+    if let Some(failure) = strict_failure(&reader.failures[first_failure..]) {
         return Some(failure.error.clone());
     }
     reader.diagnostics[first_diagnostic..]
         .iter()
-        .any(|d| d.diagnostic.is_error())
+        .any(strict_rejects)
         .then(|| crate::strict_rejection(identifier, &reader.diagnostics[first_diagnostic..]))
 }

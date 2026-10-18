@@ -1,0 +1,11 @@
+#usda 1.0
+
+# A dependency that exists but does not parse, beside a valid one.
+def "Cairn" (
+    references = [
+        @./malformed.usda@</Stone>,
+        @./plant.usda@</Plant>
+    ]
+)
+{
+}

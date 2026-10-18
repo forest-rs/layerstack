@@ -2008,22 +2008,24 @@ fn package_relative_missing_dependencies_keep_recovery_evidence() {
         );
         backend
     }
-    assert_eq!(
-        StageDocument::open(backend(), "scene.usdz", StageOptions::default())
-            .unwrap_err()
-            .kind,
-        IoErrorKind::Rejected
-    );
-    let doc = StageDocument::open_in(
-        backend(),
-        InMemoryStore::default(),
-        "scene.usdz",
-        StageOptions::default(),
-        ImportPolicy::AllowRecovery,
-    )
-    .unwrap();
-    assert!(doc.load_report().has_errors());
-    assert!(doc.load_report().diagnostics.iter().any(|d| matches!(&d.diagnostic, ImportDiagnostic::AssetResolve {asset, error: AssetResolveError::NotFound} if &**asset == "./missing.usda")));
+    // A missing member is a missing dependency, which neither policy
+    // rejects (AOUSD Core §9.7, §10.6); composition reports it.
+    for policy in [ImportPolicy::Strict, ImportPolicy::AllowRecovery] {
+        let doc = StageDocument::open_in(
+            backend(),
+            InMemoryStore::default(),
+            "scene.usdz",
+            StageOptions::default(),
+            policy,
+        )
+        .unwrap();
+        assert!(doc.load_report().has_errors());
+        assert!(doc.load_report().diagnostics.iter().any(|d| matches!(&d.diagnostic, ImportDiagnostic::AssetResolve {asset, error: AssetResolveError::NotFound} if &**asset == "./missing.usda")));
+        assert!(matches!(
+            doc.stage().stage().composition_errors(),
+            [layerstack::CompositionError::UnresolvedAsset(error)] if error.asset == "./missing.usda"
+        ));
+    }
 }
 
 #[test]
@@ -2660,22 +2662,26 @@ fn root_reload_refreshes_nested_expression_assets_and_recovers_missing_sources()
         ]
     );
     assert_eq!(doc.catalog.ids["child.usda"], child);
-    let bindings = doc.store.asset_layers.clone();
+    // A sublayer that is missing on reload is a composition error, not a
+    // rejected reload (AOUSD Core §10.3.1, §10.6).
     doc.storage.files.remove("child.usda");
-    assert_eq!(
-        doc.prepare_reload_root(ReloadPolicy::PreserveDirty)
-            .unwrap_err()
-            .kind,
-        IoErrorKind::NotFound
-    );
-    assert_eq!(doc.store.asset_layers, bindings);
-    assert_eq!(
+    let report = doc
+        .prepare_reload_root(ReloadPolicy::PreserveDirty)
+        .unwrap()
+        .commit();
+    assert!(matches!(
+        &report.asset_failures[..],
+        [failure] if failure.asset == "child.usda" && failure.is_missing()
+    ));
+    assert!(matches!(
+        doc.stage.stage().composition_errors(),
+        [layerstack::CompositionError::UnresolvedSublayer(error)] if error.asset == "child.usda"
+    ));
+    assert!(
         doc.stage
             .stage()
             .read_property(property, layerstack::Time::Default, |v| Some(v.clone()))
-            .unwrap()
-            .value,
-        Value::Int(2)
+            .is_none()
     );
     doc.storage.files.insert(
         "child.usda".into(),

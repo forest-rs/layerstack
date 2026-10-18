@@ -1200,12 +1200,11 @@ impl Deref for BasisCurvesEdit {
 }
 
 impl BasisCurvesEdit {
-    /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `BasisCurves` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`BasisCurves::define`] types it, and `BasisCurvesEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+        edit.is_a(path, BasisCurves::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -1359,12 +1358,11 @@ impl Deref for BoundableEdit {
 }
 
 impl BoundableEdit {
-    /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Boundable` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`SchemaEdit::define_prim`] with a concrete schema derived from it types it, and `BoundableEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+        edit.is_a(path, Boundable::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -2071,12 +2069,11 @@ impl Deref for CameraEdit {
 }
 
 impl CameraEdit {
-    /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Camera` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`Camera::define`] types it, and `CameraEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+        edit.is_a(path, Camera::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -2699,12 +2696,11 @@ impl Deref for CapsuleEdit {
 }
 
 impl CapsuleEdit {
-    /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Capsule` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`Capsule::define`] types it, and `CapsuleEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+        edit.is_a(path, Capsule::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -2976,12 +2972,11 @@ impl Deref for Capsule1Edit {
 }
 
 impl Capsule1Edit {
-    /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Capsule_1` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`Capsule1::define`] types it, and `Capsule1Edit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+        edit.is_a(path, Capsule1::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -3247,12 +3242,11 @@ impl Deref for ConeEdit {
 }
 
 impl ConeEdit {
-    /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Cone` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`Cone::define`] types it, and `ConeEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+        edit.is_a(path, Cone::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -3411,12 +3405,11 @@ impl Deref for CubeEdit {
 }
 
 impl CubeEdit {
-    /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Cube` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`Cube::define`] types it, and `CubeEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+        edit.is_a(path, Cube::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -3597,12 +3590,11 @@ impl Deref for CurvesEdit {
 }
 
 impl CurvesEdit {
-    /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Curves` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`SchemaEdit::define_prim`] with a concrete schema derived from it types it, and `CurvesEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+        edit.is_a(path, Curves::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -3938,12 +3930,11 @@ impl Deref for CylinderEdit {
 }
 
 impl CylinderEdit {
-    /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Cylinder` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`Cylinder::define`] types it, and `CylinderEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+        edit.is_a(path, Cylinder::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -4215,12 +4206,11 @@ impl Deref for Cylinder1Edit {
 }
 
 impl Cylinder1Edit {
-    /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Cylinder_1` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`Cylinder1::define`] types it, and `Cylinder1Edit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+        edit.is_a(path, Cylinder1::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -5234,12 +5224,11 @@ impl Deref for GeomSubsetEdit {
 }
 
 impl GeomSubsetEdit {
-    /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `GeomSubset` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`GeomSubset::define`] types it, and `GeomSubsetEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+        edit.is_a(path, GeomSubset::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -5584,12 +5573,11 @@ impl Deref for GprimEdit {
 }
 
 impl GprimEdit {
-    /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Gprim` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`SchemaEdit::define_prim`] with a concrete schema derived from it types it, and `GprimEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+        edit.is_a(path, Gprim::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -5886,12 +5874,11 @@ impl Deref for HermiteCurvesEdit {
 }
 
 impl HermiteCurvesEdit {
-    /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `HermiteCurves` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`HermiteCurves::define`] types it, and `HermiteCurvesEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+        edit.is_a(path, HermiteCurves::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -6201,12 +6188,11 @@ impl Deref for ImageableEdit {
 }
 
 impl ImageableEdit {
-    /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Imageable` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`SchemaEdit::define_prim`] with a concrete schema derived from it types it, and `ImageableEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+        edit.is_a(path, Imageable::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -7046,12 +7032,11 @@ impl Deref for MeshEdit {
 }
 
 impl MeshEdit {
-    /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Mesh` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`Mesh::define`] types it, and `MeshEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+        edit.is_a(path, Mesh::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -8216,12 +8201,11 @@ impl Deref for NurbsCurvesEdit {
 }
 
 impl NurbsCurvesEdit {
-    /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `NurbsCurves` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`NurbsCurves::define`] types it, and `NurbsCurvesEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+        edit.is_a(path, NurbsCurves::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -9242,12 +9226,11 @@ impl Deref for NurbsPatchEdit {
 }
 
 impl NurbsPatchEdit {
-    /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `NurbsPatch` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`NurbsPatch::define`] types it, and `NurbsPatchEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+        edit.is_a(path, NurbsPatch::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -10220,12 +10203,11 @@ impl Deref for PlaneEdit {
 }
 
 impl PlaneEdit {
-    /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Plane` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`Plane::define`] types it, and `PlaneEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+        edit.is_a(path, Plane::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -10517,12 +10499,11 @@ impl Deref for PointBasedEdit {
 }
 
 impl PointBasedEdit {
-    /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `PointBased` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`SchemaEdit::define_prim`] with a concrete schema derived from it types it, and `PointBasedEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+        edit.is_a(path, PointBased::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -11303,12 +11284,11 @@ impl Deref for PointInstancerEdit {
 }
 
 impl PointInstancerEdit {
-    /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `PointInstancer` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`PointInstancer::define`] types it, and `PointInstancerEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+        edit.is_a(path, PointInstancer::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -12170,12 +12150,11 @@ impl Deref for PointsEdit {
 }
 
 impl PointsEdit {
-    /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Points` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`Points::define`] types it, and `PointsEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+        edit.is_a(path, Points::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -12394,12 +12373,11 @@ impl Deref for ScopeEdit {
 }
 
 impl ScopeEdit {
-    /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Scope` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`Scope::define`] types it, and `ScopeEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+        edit.is_a(path, Scope::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -12508,12 +12486,11 @@ impl Deref for SphereEdit {
 }
 
 impl SphereEdit {
-    /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Sphere` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`Sphere::define`] types it, and `SphereEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+        edit.is_a(path, Sphere::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -12714,12 +12691,11 @@ impl Deref for TetMeshEdit {
 }
 
 impl TetMeshEdit {
-    /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `TetMesh` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`TetMesh::define`] types it, and `TetMeshEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+        edit.is_a(path, TetMesh::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -13307,12 +13283,11 @@ impl Deref for XformEdit {
 }
 
 impl XformEdit {
-    /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Xform` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`Xform::define`] types it, and `XformEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+        edit.is_a(path, Xform::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -13416,12 +13391,11 @@ impl Deref for XformableEdit {
 }
 
 impl XformableEdit {
-    /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Xformable` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`SchemaEdit::define_prim`] with a concrete schema derived from it types it, and `XformableEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
     pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+        edit.is_a(path, Xformable::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`

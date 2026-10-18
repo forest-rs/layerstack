@@ -549,12 +549,73 @@ fn missing_prims_are_not_authored() {
 
     Xform::define(&mut edit, later);
     assert!(CollectionApi::apply(&mut edit, later, "lights").is_ok());
-    assert!(MeshEdit::new(&edit, later).is_some());
+    assert!(MeshEdit::new(&edit, later).is_none(), "an Xform");
     Mesh::define(&mut edit, missing);
     assert!(
         MeshEdit::new(&edit, missing).is_some(),
         "defined in the edit"
     );
+}
+
+/// A typed edit handle by path is had for a prim of the schema, or of one
+/// derived from it, on the stage or as an earlier `define` of the same
+/// edit leaves it; not for an untyped prim, which a handle from a
+/// `PrimEdit` still authors.
+///
+/// OpenUSD: `UsdPrim::IsA`, as `UsdGeomMesh(prim)` checks it.
+#[test]
+fn typed_edit_handles_by_path_check_the_type() {
+    use layerstack::PrimSpec;
+    use layerstack_schemas::PrimEdit;
+    use layerstack_schemas::usd_geom::{
+        GprimEdit, Mesh, MeshEdit, SphereEdit, Xform, XformEdit, XformableEdit,
+    };
+
+    let mut store = InMemoryStore::default();
+    let (boulder, terrain, moss) = (
+        store.path("/Boulder"),
+        store.path("/Terrain"),
+        store.path("/Moss"),
+    );
+    let mesh = store.tokens.intern("Mesh");
+    let mut layer = Layer::new(LayerId(1));
+    layer.insert_prim(boulder, PrimSpec::def().with_type_name(mesh));
+    layer.insert_prim(terrain, PrimSpec::def());
+    store.insert_layer(layer);
+    let options = StageOptions {
+        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
+        ..StageOptions::default()
+    };
+    let live = LiveStage::compose(&mut store, LayerId(1), options);
+    let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
+
+    // On the stage: the type and the abstract schemas it derives from.
+    assert!(MeshEdit::new(&edit, boulder).is_some());
+    assert!(GprimEdit::new(&edit, boulder).is_some());
+    assert!(XformableEdit::new(&edit, boulder).is_some());
+    assert!(SphereEdit::new(&edit, boulder).is_none());
+    assert!(edit.is_a(boulder, "Gprim"));
+
+    // An untyped prim is not an Xform yet; a `PrimEdit` still reaches it.
+    assert!(XformEdit::new(&edit, terrain).is_none());
+    assert!(!edit.is_a(terrain, "Xform"));
+    let untyped = PrimEdit::new(&edit, terrain).map(XformEdit::from_prim);
+    assert!(untyped.is_some());
+
+    // Defined earlier in the edit, as the last `define` leaves it.
+    assert!(XformEdit::new(&edit, moss).is_none(), "not there yet");
+    Xform::define(&mut edit, moss);
+    assert!(XformEdit::new(&edit, moss).is_some());
+    assert!(XformableEdit::new(&edit, moss).is_some());
+    assert!(MeshEdit::new(&edit, moss).is_none());
+    Xform::define(&mut edit, terrain);
+    assert!(
+        XformEdit::new(&edit, terrain).is_some(),
+        "typed by the edit"
+    );
+    Mesh::define(&mut edit, moss);
+    assert!(MeshEdit::new(&edit, moss).is_some());
+    assert!(XformEdit::new(&edit, moss).is_none(), "a Mesh now");
 }
 
 const LOCAL_VARIANT: &str = include_str!("../fixtures/schema_views/local_variant.usda");

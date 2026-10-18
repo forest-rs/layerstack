@@ -1,0 +1,1103 @@
+{
+ "openusd_version": "26.8",
+ "types": [
+  {
+   "aliases": [],
+   "array": "asset[]",
+   "is_array": false,
+   "name": "asset",
+   "role": "",
+   "scalar": "asset",
+   "type": "SdfAssetPath"
+  },
+  {
+   "aliases": [],
+   "array": "asset[]",
+   "is_array": true,
+   "name": "asset[]",
+   "role": "",
+   "scalar": "asset",
+   "type": "VtArray<SdfAssetPath>"
+  },
+  {
+   "aliases": [],
+   "array": "bool[]",
+   "is_array": false,
+   "name": "bool",
+   "role": "",
+   "scalar": "bool",
+   "type": "bool"
+  },
+  {
+   "aliases": [],
+   "array": "bool[]",
+   "is_array": true,
+   "name": "bool[]",
+   "role": "",
+   "scalar": "bool",
+   "type": "VtArray<bool>"
+  },
+  {
+   "aliases": [
+    "Color"
+   ],
+   "array": "color3d[]",
+   "is_array": false,
+   "name": "color3d",
+   "role": "Color",
+   "scalar": "color3d",
+   "type": "GfVec3d"
+  },
+  {
+   "aliases": [
+    "Color[]"
+   ],
+   "array": "color3d[]",
+   "is_array": true,
+   "name": "color3d[]",
+   "role": "Color",
+   "scalar": "color3d",
+   "type": "VtArray<GfVec3d>"
+  },
+  {
+   "aliases": [
+    "ColorFloat"
+   ],
+   "array": "color3f[]",
+   "is_array": false,
+   "name": "color3f",
+   "role": "Color",
+   "scalar": "color3f",
+   "type": "GfVec3f"
+  },
+  {
+   "aliases": [
+    "ColorFloat[]"
+   ],
+   "array": "color3f[]",
+   "is_array": true,
+   "name": "color3f[]",
+   "role": "Color",
+   "scalar": "color3f",
+   "type": "VtArray<GfVec3f>"
+  },
+  {
+   "aliases": [],
+   "array": "color3h[]",
+   "is_array": false,
+   "name": "color3h",
+   "role": "Color",
+   "scalar": "color3h",
+   "type": "GfVec3h"
+  },
+  {
+   "aliases": [],
+   "array": "color3h[]",
+   "is_array": true,
+   "name": "color3h[]",
+   "role": "Color",
+   "scalar": "color3h",
+   "type": "VtArray<GfVec3h>"
+  },
+  {
+   "aliases": [],
+   "array": "color4d[]",
+   "is_array": false,
+   "name": "color4d",
+   "role": "Color",
+   "scalar": "color4d",
+   "type": "GfVec4d"
+  },
+  {
+   "aliases": [],
+   "array": "color4d[]",
+   "is_array": true,
+   "name": "color4d[]",
+   "role": "Color",
+   "scalar": "color4d",
+   "type": "VtArray<GfVec4d>"
+  },
+  {
+   "aliases": [],
+   "array": "color4f[]",
+   "is_array": false,
+   "name": "color4f",
+   "role": "Color",
+   "scalar": "color4f",
+   "type": "GfVec4f"
+  },
+  {
+   "aliases": [],
+   "array": "color4f[]",
+   "is_array": true,
+   "name": "color4f[]",
+   "role": "Color",
+   "scalar": "color4f",
+   "type": "VtArray<GfVec4f>"
+  },
+  {
+   "aliases": [],
+   "array": "color4h[]",
+   "is_array": false,
+   "name": "color4h",
+   "role": "Color",
+   "scalar": "color4h",
+   "type": "GfVec4h"
+  },
+  {
+   "aliases": [],
+   "array": "color4h[]",
+   "is_array": true,
+   "name": "color4h[]",
+   "role": "Color",
+   "scalar": "color4h",
+   "type": "VtArray<GfVec4h>"
+  },
+  {
+   "aliases": [],
+   "array": "double[]",
+   "is_array": false,
+   "name": "double",
+   "role": "",
+   "scalar": "double",
+   "type": "double"
+  },
+  {
+   "aliases": [
+    "Vec2d"
+   ],
+   "array": "double2[]",
+   "is_array": false,
+   "name": "double2",
+   "role": "",
+   "scalar": "double2",
+   "type": "GfVec2d"
+  },
+  {
+   "aliases": [
+    "Vec2d[]"
+   ],
+   "array": "double2[]",
+   "is_array": true,
+   "name": "double2[]",
+   "role": "",
+   "scalar": "double2",
+   "type": "VtArray<GfVec2d>"
+  },
+  {
+   "aliases": [
+    "Vec3d"
+   ],
+   "array": "double3[]",
+   "is_array": false,
+   "name": "double3",
+   "role": "",
+   "scalar": "double3",
+   "type": "GfVec3d"
+  },
+  {
+   "aliases": [
+    "Vec3d[]"
+   ],
+   "array": "double3[]",
+   "is_array": true,
+   "name": "double3[]",
+   "role": "",
+   "scalar": "double3",
+   "type": "VtArray<GfVec3d>"
+  },
+  {
+   "aliases": [
+    "Vec4d"
+   ],
+   "array": "double4[]",
+   "is_array": false,
+   "name": "double4",
+   "role": "",
+   "scalar": "double4",
+   "type": "GfVec4d"
+  },
+  {
+   "aliases": [
+    "Vec4d[]"
+   ],
+   "array": "double4[]",
+   "is_array": true,
+   "name": "double4[]",
+   "role": "",
+   "scalar": "double4",
+   "type": "VtArray<GfVec4d>"
+  },
+  {
+   "aliases": [],
+   "array": "double[]",
+   "is_array": true,
+   "name": "double[]",
+   "role": "",
+   "scalar": "double",
+   "type": "VtArray<double>"
+  },
+  {
+   "aliases": [],
+   "array": "float[]",
+   "is_array": false,
+   "name": "float",
+   "role": "",
+   "scalar": "float",
+   "type": "float"
+  },
+  {
+   "aliases": [
+    "Vec2f"
+   ],
+   "array": "float2[]",
+   "is_array": false,
+   "name": "float2",
+   "role": "",
+   "scalar": "float2",
+   "type": "GfVec2f"
+  },
+  {
+   "aliases": [
+    "Vec2f[]"
+   ],
+   "array": "float2[]",
+   "is_array": true,
+   "name": "float2[]",
+   "role": "",
+   "scalar": "float2",
+   "type": "VtArray<GfVec2f>"
+  },
+  {
+   "aliases": [
+    "Vec3f"
+   ],
+   "array": "float3[]",
+   "is_array": false,
+   "name": "float3",
+   "role": "",
+   "scalar": "float3",
+   "type": "GfVec3f"
+  },
+  {
+   "aliases": [
+    "Vec3f[]"
+   ],
+   "array": "float3[]",
+   "is_array": true,
+   "name": "float3[]",
+   "role": "",
+   "scalar": "float3",
+   "type": "VtArray<GfVec3f>"
+  },
+  {
+   "aliases": [
+    "Vec4f"
+   ],
+   "array": "float4[]",
+   "is_array": false,
+   "name": "float4",
+   "role": "",
+   "scalar": "float4",
+   "type": "GfVec4f"
+  },
+  {
+   "aliases": [
+    "Vec4f[]"
+   ],
+   "array": "float4[]",
+   "is_array": true,
+   "name": "float4[]",
+   "role": "",
+   "scalar": "float4",
+   "type": "VtArray<GfVec4f>"
+  },
+  {
+   "aliases": [],
+   "array": "float[]",
+   "is_array": true,
+   "name": "float[]",
+   "role": "",
+   "scalar": "float",
+   "type": "VtArray<float>"
+  },
+  {
+   "aliases": [
+    "Frame"
+   ],
+   "array": "frame4d[]",
+   "is_array": false,
+   "name": "frame4d",
+   "role": "Frame",
+   "scalar": "frame4d",
+   "type": "GfMatrix4d"
+  },
+  {
+   "aliases": [
+    "Frame[]"
+   ],
+   "array": "frame4d[]",
+   "is_array": true,
+   "name": "frame4d[]",
+   "role": "Frame",
+   "scalar": "frame4d",
+   "type": "VtArray<GfMatrix4d>"
+  },
+  {
+   "aliases": [],
+   "array": "",
+   "is_array": false,
+   "name": "group",
+   "role": "Group",
+   "scalar": "group",
+   "type": "SdfOpaqueValue"
+  },
+  {
+   "aliases": [],
+   "array": "half[]",
+   "is_array": false,
+   "name": "half",
+   "role": "",
+   "scalar": "half",
+   "type": "GfHalf"
+  },
+  {
+   "aliases": [
+    "Vec2h"
+   ],
+   "array": "half2[]",
+   "is_array": false,
+   "name": "half2",
+   "role": "",
+   "scalar": "half2",
+   "type": "GfVec2h"
+  },
+  {
+   "aliases": [
+    "Vec2h[]"
+   ],
+   "array": "half2[]",
+   "is_array": true,
+   "name": "half2[]",
+   "role": "",
+   "scalar": "half2",
+   "type": "VtArray<GfVec2h>"
+  },
+  {
+   "aliases": [
+    "Vec3h"
+   ],
+   "array": "half3[]",
+   "is_array": false,
+   "name": "half3",
+   "role": "",
+   "scalar": "half3",
+   "type": "GfVec3h"
+  },
+  {
+   "aliases": [
+    "Vec3h[]"
+   ],
+   "array": "half3[]",
+   "is_array": true,
+   "name": "half3[]",
+   "role": "",
+   "scalar": "half3",
+   "type": "VtArray<GfVec3h>"
+  },
+  {
+   "aliases": [
+    "Vec4h"
+   ],
+   "array": "half4[]",
+   "is_array": false,
+   "name": "half4",
+   "role": "",
+   "scalar": "half4",
+   "type": "GfVec4h"
+  },
+  {
+   "aliases": [
+    "Vec4h[]"
+   ],
+   "array": "half4[]",
+   "is_array": true,
+   "name": "half4[]",
+   "role": "",
+   "scalar": "half4",
+   "type": "VtArray<GfVec4h>"
+  },
+  {
+   "aliases": [],
+   "array": "half[]",
+   "is_array": true,
+   "name": "half[]",
+   "role": "",
+   "scalar": "half",
+   "type": "VtArray<GfHalf>"
+  },
+  {
+   "aliases": [],
+   "array": "int[]",
+   "is_array": false,
+   "name": "int",
+   "role": "",
+   "scalar": "int",
+   "type": "int"
+  },
+  {
+   "aliases": [
+    "Vec2i"
+   ],
+   "array": "int2[]",
+   "is_array": false,
+   "name": "int2",
+   "role": "",
+   "scalar": "int2",
+   "type": "GfVec2i"
+  },
+  {
+   "aliases": [
+    "Vec2i[]"
+   ],
+   "array": "int2[]",
+   "is_array": true,
+   "name": "int2[]",
+   "role": "",
+   "scalar": "int2",
+   "type": "VtArray<GfVec2i>"
+  },
+  {
+   "aliases": [
+    "Vec3i"
+   ],
+   "array": "int3[]",
+   "is_array": false,
+   "name": "int3",
+   "role": "",
+   "scalar": "int3",
+   "type": "GfVec3i"
+  },
+  {
+   "aliases": [
+    "Vec3i[]"
+   ],
+   "array": "int3[]",
+   "is_array": true,
+   "name": "int3[]",
+   "role": "",
+   "scalar": "int3",
+   "type": "VtArray<GfVec3i>"
+  },
+  {
+   "aliases": [
+    "Vec4i"
+   ],
+   "array": "int4[]",
+   "is_array": false,
+   "name": "int4",
+   "role": "",
+   "scalar": "int4",
+   "type": "GfVec4i"
+  },
+  {
+   "aliases": [
+    "Vec4i[]"
+   ],
+   "array": "int4[]",
+   "is_array": true,
+   "name": "int4[]",
+   "role": "",
+   "scalar": "int4",
+   "type": "VtArray<GfVec4i>"
+  },
+  {
+   "aliases": [],
+   "array": "int64[]",
+   "is_array": false,
+   "name": "int64",
+   "role": "",
+   "scalar": "int64",
+   "type": "int64_t"
+  },
+  {
+   "aliases": [],
+   "array": "int64[]",
+   "is_array": true,
+   "name": "int64[]",
+   "role": "",
+   "scalar": "int64",
+   "type": "VtArray<int64_t>"
+  },
+  {
+   "aliases": [],
+   "array": "int[]",
+   "is_array": true,
+   "name": "int[]",
+   "role": "",
+   "scalar": "int",
+   "type": "VtArray<int>"
+  },
+  {
+   "aliases": [
+    "Matrix2d"
+   ],
+   "array": "matrix2d[]",
+   "is_array": false,
+   "name": "matrix2d",
+   "role": "",
+   "scalar": "matrix2d",
+   "type": "GfMatrix2d"
+  },
+  {
+   "aliases": [
+    "Matrix2d[]"
+   ],
+   "array": "matrix2d[]",
+   "is_array": true,
+   "name": "matrix2d[]",
+   "role": "",
+   "scalar": "matrix2d",
+   "type": "VtArray<GfMatrix2d>"
+  },
+  {
+   "aliases": [
+    "Matrix3d"
+   ],
+   "array": "matrix3d[]",
+   "is_array": false,
+   "name": "matrix3d",
+   "role": "",
+   "scalar": "matrix3d",
+   "type": "GfMatrix3d"
+  },
+  {
+   "aliases": [
+    "Matrix3d[]"
+   ],
+   "array": "matrix3d[]",
+   "is_array": true,
+   "name": "matrix3d[]",
+   "role": "",
+   "scalar": "matrix3d",
+   "type": "VtArray<GfMatrix3d>"
+  },
+  {
+   "aliases": [
+    "Matrix4d"
+   ],
+   "array": "matrix4d[]",
+   "is_array": false,
+   "name": "matrix4d",
+   "role": "",
+   "scalar": "matrix4d",
+   "type": "GfMatrix4d"
+  },
+  {
+   "aliases": [
+    "Matrix4d[]"
+   ],
+   "array": "matrix4d[]",
+   "is_array": true,
+   "name": "matrix4d[]",
+   "role": "",
+   "scalar": "matrix4d",
+   "type": "VtArray<GfMatrix4d>"
+  },
+  {
+   "aliases": [
+    "Normal"
+   ],
+   "array": "normal3d[]",
+   "is_array": false,
+   "name": "normal3d",
+   "role": "Normal",
+   "scalar": "normal3d",
+   "type": "GfVec3d"
+  },
+  {
+   "aliases": [
+    "Normal[]"
+   ],
+   "array": "normal3d[]",
+   "is_array": true,
+   "name": "normal3d[]",
+   "role": "Normal",
+   "scalar": "normal3d",
+   "type": "VtArray<GfVec3d>"
+  },
+  {
+   "aliases": [
+    "NormalFloat"
+   ],
+   "array": "normal3f[]",
+   "is_array": false,
+   "name": "normal3f",
+   "role": "Normal",
+   "scalar": "normal3f",
+   "type": "GfVec3f"
+  },
+  {
+   "aliases": [
+    "NormalFloat[]"
+   ],
+   "array": "normal3f[]",
+   "is_array": true,
+   "name": "normal3f[]",
+   "role": "Normal",
+   "scalar": "normal3f",
+   "type": "VtArray<GfVec3f>"
+  },
+  {
+   "aliases": [],
+   "array": "normal3h[]",
+   "is_array": false,
+   "name": "normal3h",
+   "role": "Normal",
+   "scalar": "normal3h",
+   "type": "GfVec3h"
+  },
+  {
+   "aliases": [],
+   "array": "normal3h[]",
+   "is_array": true,
+   "name": "normal3h[]",
+   "role": "Normal",
+   "scalar": "normal3h",
+   "type": "VtArray<GfVec3h>"
+  },
+  {
+   "aliases": [],
+   "array": "",
+   "is_array": false,
+   "name": "opaque",
+   "role": "",
+   "scalar": "opaque",
+   "type": "SdfOpaqueValue"
+  },
+  {
+   "aliases": [],
+   "array": "pathExpression[]",
+   "is_array": false,
+   "name": "pathExpression",
+   "role": "",
+   "scalar": "pathExpression",
+   "type": "SdfPathExpression"
+  },
+  {
+   "aliases": [],
+   "array": "pathExpression[]",
+   "is_array": true,
+   "name": "pathExpression[]",
+   "role": "",
+   "scalar": "pathExpression",
+   "type": "VtArray<SdfPathExpression>"
+  },
+  {
+   "aliases": [
+    "Point"
+   ],
+   "array": "point3d[]",
+   "is_array": false,
+   "name": "point3d",
+   "role": "Point",
+   "scalar": "point3d",
+   "type": "GfVec3d"
+  },
+  {
+   "aliases": [
+    "Point[]"
+   ],
+   "array": "point3d[]",
+   "is_array": true,
+   "name": "point3d[]",
+   "role": "Point",
+   "scalar": "point3d",
+   "type": "VtArray<GfVec3d>"
+  },
+  {
+   "aliases": [
+    "PointFloat"
+   ],
+   "array": "point3f[]",
+   "is_array": false,
+   "name": "point3f",
+   "role": "Point",
+   "scalar": "point3f",
+   "type": "GfVec3f"
+  },
+  {
+   "aliases": [
+    "PointFloat[]"
+   ],
+   "array": "point3f[]",
+   "is_array": true,
+   "name": "point3f[]",
+   "role": "Point",
+   "scalar": "point3f",
+   "type": "VtArray<GfVec3f>"
+  },
+  {
+   "aliases": [],
+   "array": "point3h[]",
+   "is_array": false,
+   "name": "point3h",
+   "role": "Point",
+   "scalar": "point3h",
+   "type": "GfVec3h"
+  },
+  {
+   "aliases": [],
+   "array": "point3h[]",
+   "is_array": true,
+   "name": "point3h[]",
+   "role": "Point",
+   "scalar": "point3h",
+   "type": "VtArray<GfVec3h>"
+  },
+  {
+   "aliases": [
+    "Quatd"
+   ],
+   "array": "quatd[]",
+   "is_array": false,
+   "name": "quatd",
+   "role": "",
+   "scalar": "quatd",
+   "type": "GfQuatd"
+  },
+  {
+   "aliases": [
+    "Quatd[]"
+   ],
+   "array": "quatd[]",
+   "is_array": true,
+   "name": "quatd[]",
+   "role": "",
+   "scalar": "quatd",
+   "type": "VtArray<GfQuatd>"
+  },
+  {
+   "aliases": [
+    "Quatf"
+   ],
+   "array": "quatf[]",
+   "is_array": false,
+   "name": "quatf",
+   "role": "",
+   "scalar": "quatf",
+   "type": "GfQuatf"
+  },
+  {
+   "aliases": [
+    "Quatf[]"
+   ],
+   "array": "quatf[]",
+   "is_array": true,
+   "name": "quatf[]",
+   "role": "",
+   "scalar": "quatf",
+   "type": "VtArray<GfQuatf>"
+  },
+  {
+   "aliases": [
+    "Quath"
+   ],
+   "array": "quath[]",
+   "is_array": false,
+   "name": "quath",
+   "role": "",
+   "scalar": "quath",
+   "type": "GfQuath"
+  },
+  {
+   "aliases": [
+    "Quath[]"
+   ],
+   "array": "quath[]",
+   "is_array": true,
+   "name": "quath[]",
+   "role": "",
+   "scalar": "quath",
+   "type": "VtArray<GfQuath>"
+  },
+  {
+   "aliases": [],
+   "array": "string[]",
+   "is_array": false,
+   "name": "string",
+   "role": "",
+   "scalar": "string",
+   "type": "std::string"
+  },
+  {
+   "aliases": [],
+   "array": "string[]",
+   "is_array": true,
+   "name": "string[]",
+   "role": "",
+   "scalar": "string",
+   "type": "VtArray<std::string>"
+  },
+  {
+   "aliases": [],
+   "array": "texCoord2d[]",
+   "is_array": false,
+   "name": "texCoord2d",
+   "role": "TextureCoordinate",
+   "scalar": "texCoord2d",
+   "type": "GfVec2d"
+  },
+  {
+   "aliases": [],
+   "array": "texCoord2d[]",
+   "is_array": true,
+   "name": "texCoord2d[]",
+   "role": "TextureCoordinate",
+   "scalar": "texCoord2d",
+   "type": "VtArray<GfVec2d>"
+  },
+  {
+   "aliases": [],
+   "array": "texCoord2f[]",
+   "is_array": false,
+   "name": "texCoord2f",
+   "role": "TextureCoordinate",
+   "scalar": "texCoord2f",
+   "type": "GfVec2f"
+  },
+  {
+   "aliases": [],
+   "array": "texCoord2f[]",
+   "is_array": true,
+   "name": "texCoord2f[]",
+   "role": "TextureCoordinate",
+   "scalar": "texCoord2f",
+   "type": "VtArray<GfVec2f>"
+  },
+  {
+   "aliases": [],
+   "array": "texCoord2h[]",
+   "is_array": false,
+   "name": "texCoord2h",
+   "role": "TextureCoordinate",
+   "scalar": "texCoord2h",
+   "type": "GfVec2h"
+  },
+  {
+   "aliases": [],
+   "array": "texCoord2h[]",
+   "is_array": true,
+   "name": "texCoord2h[]",
+   "role": "TextureCoordinate",
+   "scalar": "texCoord2h",
+   "type": "VtArray<GfVec2h>"
+  },
+  {
+   "aliases": [],
+   "array": "texCoord3d[]",
+   "is_array": false,
+   "name": "texCoord3d",
+   "role": "TextureCoordinate",
+   "scalar": "texCoord3d",
+   "type": "GfVec3d"
+  },
+  {
+   "aliases": [],
+   "array": "texCoord3d[]",
+   "is_array": true,
+   "name": "texCoord3d[]",
+   "role": "TextureCoordinate",
+   "scalar": "texCoord3d",
+   "type": "VtArray<GfVec3d>"
+  },
+  {
+   "aliases": [],
+   "array": "texCoord3f[]",
+   "is_array": false,
+   "name": "texCoord3f",
+   "role": "TextureCoordinate",
+   "scalar": "texCoord3f",
+   "type": "GfVec3f"
+  },
+  {
+   "aliases": [],
+   "array": "texCoord3f[]",
+   "is_array": true,
+   "name": "texCoord3f[]",
+   "role": "TextureCoordinate",
+   "scalar": "texCoord3f",
+   "type": "VtArray<GfVec3f>"
+  },
+  {
+   "aliases": [],
+   "array": "texCoord3h[]",
+   "is_array": false,
+   "name": "texCoord3h",
+   "role": "TextureCoordinate",
+   "scalar": "texCoord3h",
+   "type": "GfVec3h"
+  },
+  {
+   "aliases": [],
+   "array": "texCoord3h[]",
+   "is_array": true,
+   "name": "texCoord3h[]",
+   "role": "TextureCoordinate",
+   "scalar": "texCoord3h",
+   "type": "VtArray<GfVec3h>"
+  },
+  {
+   "aliases": [],
+   "array": "timecode[]",
+   "is_array": false,
+   "name": "timecode",
+   "role": "",
+   "scalar": "timecode",
+   "type": "GfTimeCode"
+  },
+  {
+   "aliases": [],
+   "array": "timecode[]",
+   "is_array": true,
+   "name": "timecode[]",
+   "role": "",
+   "scalar": "timecode",
+   "type": "VtArray<GfTimeCode>"
+  },
+  {
+   "aliases": [],
+   "array": "token[]",
+   "is_array": false,
+   "name": "token",
+   "role": "",
+   "scalar": "token",
+   "type": "TfToken"
+  },
+  {
+   "aliases": [],
+   "array": "token[]",
+   "is_array": true,
+   "name": "token[]",
+   "role": "",
+   "scalar": "token",
+   "type": "VtArray<TfToken>"
+  },
+  {
+   "aliases": [],
+   "array": "uchar[]",
+   "is_array": false,
+   "name": "uchar",
+   "role": "",
+   "scalar": "uchar",
+   "type": "unsigned char"
+  },
+  {
+   "aliases": [],
+   "array": "uchar[]",
+   "is_array": true,
+   "name": "uchar[]",
+   "role": "",
+   "scalar": "uchar",
+   "type": "VtArray<unsigned char>"
+  },
+  {
+   "aliases": [],
+   "array": "uint[]",
+   "is_array": false,
+   "name": "uint",
+   "role": "",
+   "scalar": "uint",
+   "type": "unsigned int"
+  },
+  {
+   "aliases": [],
+   "array": "uint64[]",
+   "is_array": false,
+   "name": "uint64",
+   "role": "",
+   "scalar": "uint64",
+   "type": "uint64_t"
+  },
+  {
+   "aliases": [],
+   "array": "uint64[]",
+   "is_array": true,
+   "name": "uint64[]",
+   "role": "",
+   "scalar": "uint64",
+   "type": "VtArray<uint64_t>"
+  },
+  {
+   "aliases": [],
+   "array": "uint[]",
+   "is_array": true,
+   "name": "uint[]",
+   "role": "",
+   "scalar": "uint",
+   "type": "VtArray<unsigned int>"
+  },
+  {
+   "aliases": [
+    "Vector"
+   ],
+   "array": "vector3d[]",
+   "is_array": false,
+   "name": "vector3d",
+   "role": "Vector",
+   "scalar": "vector3d",
+   "type": "GfVec3d"
+  },
+  {
+   "aliases": [
+    "Vector[]"
+   ],
+   "array": "vector3d[]",
+   "is_array": true,
+   "name": "vector3d[]",
+   "role": "Vector",
+   "scalar": "vector3d",
+   "type": "VtArray<GfVec3d>"
+  },
+  {
+   "aliases": [
+    "VectorFloat"
+   ],
+   "array": "vector3f[]",
+   "is_array": false,
+   "name": "vector3f",
+   "role": "Vector",
+   "scalar": "vector3f",
+   "type": "GfVec3f"
+  },
+  {
+   "aliases": [
+    "VectorFloat[]"
+   ],
+   "array": "vector3f[]",
+   "is_array": true,
+   "name": "vector3f[]",
+   "role": "Vector",
+   "scalar": "vector3f",
+   "type": "VtArray<GfVec3f>"
+  },
+  {
+   "aliases": [],
+   "array": "vector3h[]",
+   "is_array": false,
+   "name": "vector3h",
+   "role": "Vector",
+   "scalar": "vector3h",
+   "type": "GfVec3h"
+  },
+  {
+   "aliases": [],
+   "array": "vector3h[]",
+   "is_array": true,
+   "name": "vector3h[]",
+   "role": "Vector",
+   "scalar": "vector3h",
+   "type": "VtArray<GfVec3h>"
+  }
+ ]
+}

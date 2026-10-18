@@ -592,6 +592,8 @@ pub(crate) fn run(mut args: impl Iterator<Item = String>) -> Result<String, Stri
     let mut rust = None;
     let mut check = false;
     let mut options = CompileOptions::new();
+    let mut plugin_roots = Vec::new();
+    let mut searched = false;
     while let Some(arg) = args.next() {
         let mut value = |flag: &str| {
             args.next()
@@ -605,12 +607,23 @@ pub(crate) fn run(mut args: impl Iterator<Item = String>) -> Result<String, Stri
                     args.next().ok_or("--rust requires a Rust file")?,
                 ));
             }
-            "--search" => options = options.with_search_path(value("--search")?),
-            "--openusd-source" => options = options.with_openusd_source(value("--openusd-source")?),
-            "--plugin-root" => options = options.with_plugin_root(value("--plugin-root")?),
+            "--search" => {
+                searched = true;
+                options = options.with_search_path(value("--search")?);
+            }
+            "--openusd-source" => {
+                searched = true;
+                options = options.with_openusd_source(value("--openusd-source")?);
+            }
+            "--plugin-root" => {
+                searched = true;
+                let root = value("--plugin-root")?;
+                plugin_roots.push(root.clone());
+                options = options.with_plugin_root(root);
+            }
             "--check" => check = true,
             other if other.starts_with("--") => {
-                return Err(format!("unknown argument {other}; see the crate docs"));
+                return Err(format!("unknown argument {other}; see `compile --help`"));
             }
             other if source.is_none() => source = Some(PathBuf::from(other)),
             other => return Err(format!("unexpected argument {other}")),
@@ -632,7 +645,17 @@ pub(crate) fn run(mut args: impl Iterator<Item = String>) -> Result<String, Stri
     if let Some(Ok(existing)) = plug_info_path.as_ref().map(std::fs::read_to_string) {
         options = options.with_existing_plug_info(existing);
     }
-    let compiled = compile(&source, &options).map_err(|e| e.to_string())?;
+    let compiled = compile(&source, &options).map_err(|error| match &error {
+        CompileError::UnresolvedSublayer { .. } => format!(
+            "{error}{}; name where it is with --search <dir>, --openusd-source <OpenUSD \
+             checkout> or --plugin-root <dir> (such as the usd-core wheel's pxr/pluginfo)",
+            if searched { "" } else { " (none was given)" }
+        ),
+        CompileError::Read { layer, .. } if plugin_roots.contains(layer) => {
+            format!("--plugin-root {error}: it must be a directory of schema plugins")
+        }
+        _ => error.to_string(),
+    })?;
     let installed = if install.is_some() {
         compiled
             .installed_plug_info_json()

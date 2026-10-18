@@ -36,6 +36,7 @@ use layerstack::{
     DanglingByName, DanglingCounts, DanglingKind, PayloadLoadRules, PopulationMask, Stage,
     StageOptions,
 };
+use layerstack_conformance::library_scene::{LibraryFormat, LibraryScene, LibraryShape};
 use layerstack_conformance::usda_real::{LoadedStage, load_entry_usda};
 use layerstack_conformance::workspace_root;
 use layerstack_schemas::{CollectionList, CollectionTargetProblem, DanglingReport, Scene};
@@ -264,4 +265,78 @@ fn fixture_covers_every_kind() {
     let (loaded, stage) = compose(&oracle, true);
     let report = DanglingReport::compute(&Scene::new(&stage, &loaded.store), 0);
     assert!(report.targets.total().masked > 0);
+}
+
+/// A per-test directory under Cargo's integration-test scratch space.
+///
+/// Under WASI only the crate directory and its parent are preopened (see
+/// `.cargo/config.toml`), so the path is made relative to them there.
+fn scratch_dir(name: &str) -> std::path::PathBuf {
+    let tmp = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"));
+    let base = if cfg!(target_os = "wasi") {
+        let workspace = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("crate is inside the workspace");
+        std::path::Path::new("..").join(
+            tmp.strip_prefix(workspace)
+                .expect("target directory is inside the workspace"),
+        )
+    } else {
+        tmp.to_path_buf()
+    };
+    base.join(format!("dangling-targets-{name}"))
+}
+
+/// The generated parts library's dangling knob injects exactly the paths it
+/// counts, and leaves the rest of the library as the seed made it.
+#[test]
+fn library_dangling_knob() {
+    let shape = LibraryShape {
+        dangling: 30,
+        ..LibraryShape::SMALL
+    };
+    let library = LibraryScene::generate(&shape);
+    let clean = LibraryScene::generate(&LibraryShape::SMALL);
+    let counts = library.counts;
+    assert_eq!(counts.dangling_prims + counts.dangling_properties, 30);
+    let rule_maps = counts.collections - counts.expression_collections;
+    assert_eq!(counts.dangling_collection_paths, 2 * rule_maps);
+    assert_eq!(
+        (counts.relationships, counts.prims, counts.array_cells),
+        (
+            clean.counts.relationships,
+            clean.counts.prims,
+            clean.counts.array_cells
+        )
+    );
+    assert_eq!(
+        counts.include_targets,
+        clean.counts.include_targets + rule_maps
+    );
+
+    let dir = scratch_dir("library");
+    let _ = std::fs::remove_dir_all(&dir);
+    let written = library.write(&dir, LibraryFormat::Usda).expect("writes");
+    let mut loaded = load_entry_usda(&written.root);
+    written.remove();
+    let _ = std::fs::remove_dir_all(&dir);
+    assert!(loaded.invalid.is_empty(), "{:?}", loaded.invalid);
+    let options = StageOptions {
+        schemas: Some(Arc::new(layerstack_schemas::openusd(
+            &mut loaded.store.tokens,
+        ))),
+        ..StageOptions::default()
+    };
+    let stage = Stage::compose(&mut loaded.store, loaded.root_layer, options);
+    let report = DanglingReport::compute(&Scene::new(&stage, &loaded.store), 1);
+    assert_eq!(
+        report.targets.total(),
+        DanglingCounts {
+            no_prim: counts.dangling_prims + counts.dangling_collection_paths,
+            no_property: counts.dangling_properties,
+            ..DanglingCounts::default()
+        }
+    );
+    let by_collection: usize = report.collections.iter().map(|c| c.total()).sum();
+    assert_eq!(by_collection, counts.dangling_collection_paths);
 }

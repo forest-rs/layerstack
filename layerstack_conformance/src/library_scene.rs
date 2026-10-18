@@ -21,7 +21,10 @@
 //! - collection-based material bindings (`material:binding:collection:*`,
 //!   with both `bindMaterialAs` strengths) and some direct bindings;
 //! - large `token[]` attributes (`tags`) on every leaf, slot and field
-//!   patch (`/Field/Row_00/Patch_000`).
+//!   patch (`/Field/Row_00/Patch_000`);
+//! - optionally ([`LibraryShape::dangling`]), slot relationships and
+//!   collection includes and excludes that name nothing: a leaf that does
+//!   not exist, or a property no leaf has.
 //!
 //! [`LibraryScene::write`] serializes the same layers as USDA or USDC
 //! (`library.usda` sublayering `library_overrides`, `library_sets` and
@@ -66,6 +69,13 @@ pub struct LibraryShape {
     pub patches_per_row: usize,
     /// Average `tags` array length.
     pub average_tags: usize,
+    /// Slot relationships whose target names nothing, spread evenly over
+    /// [`Self::relationships`]: alternately a leaf that does not exist
+    /// (`Granite_042_lost`) and a property no leaf has (`Granite_042.lost`).
+    /// When not zero, each rule-map collection also includes one leaf that
+    /// does not exist and excludes another. The choice is by position, not
+    /// by the seed, so the rest of the library is the same as without them.
+    pub dangling: usize,
 }
 
 impl LibraryShape {
@@ -83,6 +93,7 @@ impl LibraryShape {
         rows: 56,
         patches_per_row: 100,
         average_tags: 80,
+        dangling: 0,
     };
 
     /// A tenth of [`Self::FULL`] in each population, for debug-build tests.
@@ -98,6 +109,7 @@ impl LibraryShape {
         rows: 8,
         patches_per_row: 70,
         average_tags: 8,
+        dangling: 0,
     };
 }
 
@@ -130,6 +142,13 @@ pub struct LibraryCounts {
     pub array_cells: usize,
     /// Prims defined, the pseudo-root left out.
     pub prims: usize,
+    /// Slot relationships whose target names no prim
+    /// ([`LibraryShape::dangling`]).
+    pub dangling_prims: usize,
+    /// Slot relationships whose target names no property.
+    pub dangling_properties: usize,
+    /// Collection includes and excludes that name no prim.
+    pub dangling_collection_paths: usize,
 }
 
 /// Serialization of a [`LibraryScene`].
@@ -445,6 +464,8 @@ impl LibraryScene {
 
         let mut slots = Prim::def("Scope", "Slots");
         let slot_count = shape.beds * shape.slots_per_bed;
+        // Every `stride`th relationship dangles, from the middle of the first.
+        let stride = (shape.dangling > 0).then(|| (shape.relationships / shape.dangling).max(1));
         for b in 0..shape.beds {
             let mut bed = Prim::def("Xform", format!("Bed_{b:02}"));
             for s in 0..shape.slots_per_bed {
@@ -453,7 +474,20 @@ impl LibraryScene {
                 let mine = shape.relationships / slot_count
                     + usize::from(index < shape.relationships % slot_count);
                 for k in 0..mine {
-                    let target = leaves[rng.below(leaves.len())].clone();
+                    let mut target = leaves[rng.below(leaves.len())].clone();
+                    let at = counts.relationships;
+                    if let Some(stride) = stride
+                        && at % stride == stride / 2
+                        && counts.dangling_prims + counts.dangling_properties < shape.dangling
+                    {
+                        if (at / stride) % 2 == 0 {
+                            target.push_str("_lost");
+                            counts.dangling_prims += 1;
+                        } else {
+                            target.push_str(".lost");
+                            counts.dangling_properties += 1;
+                        }
+                    }
                     slot.push_property(Relationship::new(format!("part_{k:03}"), target));
                     counts.relationships += 1;
                 }
@@ -617,6 +651,15 @@ impl LibraryScene {
             }
             excludes.extend(rng.pick(&pool, 2).into_iter().cloned());
             counts.exclude_targets += excludes.len();
+            if shape.dangling > 0 {
+                // After every pick, so the seed's choices stay the same.
+                let lost = |path: &String| format!("{path}_lost");
+                base_includes.push(lost(&pool[i % pool.len()]));
+                excludes.push(lost(&pool[(i + 1) % pool.len()]));
+                counts.include_targets += 1;
+                counts.exclude_targets += 1;
+                counts.dangling_collection_paths += 2;
+            }
             if i == rooted {
                 base_attrs.push((
                     owner.clone(),
@@ -774,7 +817,8 @@ impl LibraryScene {
             out,
             "{} prims: {} leaves, {} slots, {} relationships, {} collections ({} by expression), \
              {} include targets ({} deleted), {} exclude targets, {} collection and {} direct \
-             bindings, {} array prims with {} cells",
+             bindings, {} array prims with {} cells, {} dangling targets ({} no prim, {} no \
+             property) and {} dangling collection paths",
             c.prims,
             c.leaves,
             c.slots,
@@ -787,7 +831,11 @@ impl LibraryScene {
             c.collection_bindings,
             c.direct_bindings,
             c.array_prims,
-            c.array_cells
+            c.array_cells,
+            c.dangling_prims + c.dangling_properties,
+            c.dangling_prims,
+            c.dangling_properties,
+            c.dangling_collection_paths
         );
         out
     }

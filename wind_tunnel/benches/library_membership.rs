@@ -4,7 +4,8 @@
 //! A generated parts library (`layerstack_conformance::library_scene`,
 //! full shape: about 10,000 prims, 4,000 leaves, 15,000 slot
 //! relationships, 40 collections list-edited across three sublayers, and
-//! 800,000 `token[]` cells), from USDA and from USDC:
+//! 800,000 `token[]` cells), with 150 slot relationships and two paths of
+//! each rule-map collection that name nothing, from USDA and from USDC:
 //!
 //! - `library_open`: open and compose through `StageDocument`, USDC with
 //!   retained arrays; the schema registry is built outside the measurement;
@@ -13,7 +14,10 @@
 //!   for every leaf, reported per prim;
 //! - `library_forward_query`: the same question without the index, asking
 //!   each of the 40 compiled `MembershipQuery`s, per prim;
-//! - `library_reverse_update`: `apply_changes` for one appended include.
+//! - `library_reverse_update`: `apply_changes` for one appended include;
+//! - `library_dangling`: `DanglingReport::compute`, every relationship
+//!   target, connection, include and exclude checked, with eight examples
+//!   of each name and collection, and `Stage::dangling_targets` alone.
 //!
 //! The scene is written once into Cargo's benchmark temporary directory
 //! and removed at the end.
@@ -30,7 +34,13 @@ use layerstack_conformance::library_scene::{
 };
 use layerstack_io::{Filesystem, LoadOptions, StageDocument, UsdcArrayLoading, UsdcReadOptions};
 use layerstack_schemas::usd::CollectionApi;
-use layerstack_schemas::{MembershipIndex, MembershipQuery, Scene};
+use layerstack_schemas::{DanglingReport, MembershipIndex, MembershipQuery, Scene};
+
+/// Dangling slot relationships: one in a hundred.
+const DANGLING: usize = 150;
+
+/// Examples kept of each relationship name and collection.
+const EXAMPLES: usize = 8;
 
 fn open(root: &Path) -> StageDocument<Filesystem> {
     let mut store = InMemoryStore::default();
@@ -75,7 +85,10 @@ fn prims(scene: &Scene<'_>) -> Vec<PathId> {
 }
 
 fn written() -> (LibraryScene, Vec<(LibraryFormat, WrittenLibrary)>, PathBuf) {
-    let scene = LibraryScene::generate(&LibraryShape::FULL);
+    let scene = LibraryScene::generate(&LibraryShape {
+        dangling: DANGLING,
+        ..LibraryShape::FULL
+    });
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join("library_membership");
     let files = [LibraryFormat::Usda, LibraryFormat::Usdc]
         .into_iter()
@@ -138,6 +151,44 @@ fn bench_library(c: &mut Criterion) {
             layers.len()
         );
     }
+
+    let mut group = c.benchmark_group("library_dangling");
+    group.sample_size(20);
+    for (format, document) in &documents {
+        let scene = Scene::new(document.stage().stage(), document.store());
+        let report = DanglingReport::compute(&scene, EXAMPLES);
+        let targets = report.targets.total();
+        let collections: usize = report.collections.iter().map(|c| c.total()).sum();
+        let counts = &library.counts;
+        assert_eq!(
+            (targets.no_prim, targets.no_property),
+            (
+                counts.dangling_prims + counts.dangling_collection_paths,
+                counts.dangling_properties
+            ),
+            "every injected target, and nothing else, dangles"
+        );
+        assert_eq!(
+            collections, counts.dangling_collection_paths,
+            "every injected collection path dangles"
+        );
+        eprintln!(
+            "library {}: {} prims, {} properties, {} targets checked; dangling {targets:?}, \
+             {collections} collection paths",
+            format.extension(),
+            report.targets.prims,
+            report.targets.properties,
+            report.targets.targets,
+        );
+        group.bench_function(format!("{}/report", format.extension()), |b| {
+            b.iter(|| black_box(DanglingReport::compute(&scene, EXAMPLES)));
+        });
+        let stage = document.stage().stage();
+        group.bench_function(format!("{}/targets", format.extension()), |b| {
+            b.iter(|| black_box(stage.dangling_targets(document.store(), EXAMPLES)));
+        });
+    }
+    group.finish();
 
     let mut group = c.benchmark_group("library_reverse_build");
     group.sample_size(20);

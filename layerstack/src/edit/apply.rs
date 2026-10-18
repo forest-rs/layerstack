@@ -91,10 +91,9 @@ pub(crate) enum Raw {
     },
     /// Stores (`Some`) or removes (`None`) the variant `variant` of the set
     /// `set` held by the spec at `host`: a prim spec, or the variant spec a
-    /// nested set belongs to. Storing creates the set, and lists it in the
-    /// holder's variant set order, if needed; removing drops the
-    /// set when `drop_set` and it is left empty, and the set's order entry
-    /// when `drop_order`.
+    /// nested set belongs to. Storing creates the set if needed; removing
+    /// drops the set when `drop_set` and it is left empty. Neither edits
+    /// the holder's `variantSetNames`.
     Variant {
         layer: LayerId,
         host: Loc,
@@ -102,7 +101,6 @@ pub(crate) enum Raw {
         variant: TokenId,
         spec: Option<VariantSpec>,
         drop_set: bool,
-        drop_order: bool,
     },
     /// Stores (`Some`) or removes (`None`) the property `name` of the spec
     /// at `loc`; a new property is inserted at `index`.
@@ -1800,22 +1798,30 @@ pub(super) fn ensure(
             let Some(holder_spec) = spec_at(layer(store, id)?, &holder) else {
                 return Err(diverged(store, &holder));
             };
-            let (drop_set, drop_order) = (
-                !holder_spec.variant_sets().contains_key(&site.set),
-                !holder_spec.variant_set_order().contains(&site.set),
-            );
+            let created_set = !holder_spec.variant_sets().contains_key(&site.set);
             journal.run(
                 store,
                 Raw::Variant {
                     layer: id,
-                    host: holder,
+                    host: holder.clone(),
                     set: site.set,
                     variant: site.variant,
                     spec: Some(VariantSpec::default()),
-                    drop_set,
-                    drop_order,
+                    drop_set: created_set,
                 },
-            )
+            )?;
+            // `_FindOrCreateVariantSpec` lists a set it creates, at the
+            // front of the holder's `variantSetNames`, with the list
+            // editor's `Prepend`; an existing set's listing is left alone.
+            //
+            // Spec: AOUSD Core §7.6.2.3.5 (`variantSetNames`). OpenUSD:
+            // `pxr/usd/sdf/primSpec.cpp`.
+            if created_set {
+                super::variant_sets::prepend_variant_set_name(
+                    store, id, holder, site.set, journal,
+                )?;
+            }
+            Ok(())
         }
     }
 }
@@ -1986,7 +1992,6 @@ pub(super) fn remove_subtree(
                 variant: site.variant,
                 spec: None,
                 drop_set: false,
-                drop_order: false,
             });
         }
     }
@@ -2124,25 +2129,20 @@ fn apply_raw(store: &mut dyn LayerStore, step: &Raw) -> Result<Raw, Rejection> {
             variant,
             spec,
             drop_set,
-            drop_order,
             ..
         } => {
             let Some(holder) = store.layer_mut(id).and_then(|l| spec_at_mut(l, host)) else {
                 return Err(diverged_at(store, host));
             };
-            let (variant_sets, variant_set_order) = holder.into_variant_sets();
+            let variant_sets = holder.into_variant_sets();
             match spec {
                 Some(spec) => {
                     let created_set = !variant_sets.contains_key(set);
-                    let listed = variant_set_order.contains(set);
                     let old = variant_sets
                         .entry(*set)
                         .or_default()
                         .variants
                         .insert(*variant, spec.clone());
-                    if !listed {
-                        variant_set_order.push(*set);
-                    }
                     Ok(Raw::Variant {
                         layer: id,
                         host: host.clone(),
@@ -2150,7 +2150,6 @@ fn apply_raw(store: &mut dyn LayerStore, step: &Raw) -> Result<Raw, Rejection> {
                         variant: *variant,
                         spec: old,
                         drop_set: created_set,
-                        drop_order: !listed,
                     })
                 }
                 None => {
@@ -2163,9 +2162,6 @@ fn apply_raw(store: &mut dyn LayerStore, step: &Raw) -> Result<Raw, Rejection> {
                     if *drop_set && set_spec.variants.is_empty() {
                         variant_sets.remove(set);
                     }
-                    if *drop_order && variant_set_order.last() == Some(set) {
-                        variant_set_order.pop();
-                    }
                     Ok(Raw::Variant {
                         layer: id,
                         host: host.clone(),
@@ -2173,7 +2169,6 @@ fn apply_raw(store: &mut dyn LayerStore, step: &Raw) -> Result<Raw, Rejection> {
                         variant: *variant,
                         spec: Some(old),
                         drop_set: false,
-                        drop_order: false,
                     })
                 }
             }

@@ -665,14 +665,16 @@ fn inherits_and_payloads_are_read_from_their_fields() {
     assert_eq!(explicit[0].asset.as_deref(), Some("./model_payload.usd"));
 }
 
-/// Variant set order comes from every item of the `variantSetNames` list op,
-/// here a `prepend` (AOUSD Core §7.6.2.3.5).
+/// The `variantSetNames` list op is read as authored, here a legacy `add`
+/// (AOUSD Core §7.6.2.3.5).
 #[test]
-fn variant_set_order_follows_variant_set_names() {
+fn variant_set_names_read_as_authored() {
     let mut layer = read_composition_asset("TrickyVariantWeakerSelection2_root", "root.usd");
     let prim = layer.prim("/_class_geotype");
+    assert!(prim.variant_set_names.explicit.is_none());
     let names: Vec<&str> = prim
-        .variant_set_order
+        .variant_set_names
+        .add
         .iter()
         .map(|name| layer.store.tokens.resolve(*name))
         .collect();

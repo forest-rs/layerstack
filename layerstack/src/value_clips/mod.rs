@@ -1471,7 +1471,7 @@ mod tests {
             ..VariantSpec::default()
         };
         owner.variant_selections.insert(mode, a);
-        owner.variant_set_order.push(mode);
+        owner.variant_set_names.prepend.push(mode);
         owner.variant_sets.insert(
             mode,
             VariantSetSpec {

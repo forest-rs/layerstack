@@ -281,7 +281,7 @@ impl Same for VariantSpec {
             payloads,
             variant_selections,
             variant_sets,
-            variant_set_order,
+            variant_set_names,
             property_order,
         } = self;
         fields.same(&other.fields)
@@ -293,7 +293,7 @@ impl Same for VariantSpec {
             && *payloads == other.payloads
             && *variant_selections == other.variant_selections
             && variant_sets.same(&other.variant_sets)
-            && *variant_set_order == other.variant_set_order
+            && *variant_set_names == other.variant_set_names
             && *property_order == other.property_order
     }
 }
@@ -316,8 +316,7 @@ impl Same for PrimSpec {
             authored_children,
             variant_selections,
             variant_sets,
-            variant_set_order,
-            deleted_variant_sets,
+            variant_set_names,
             references,
             inherits,
             specializes,
@@ -335,8 +334,7 @@ impl Same for PrimSpec {
             && *authored_children == other.authored_children
             && *variant_selections == other.variant_selections
             && variant_sets.same(&other.variant_sets)
-            && *variant_set_order == other.variant_set_order
-            && *deleted_variant_sets == other.deleted_variant_sets
+            && *variant_set_names == other.variant_set_names
             && *references == other.references
             && *inherits == other.inherits
             && *specializes == other.specializes

@@ -587,7 +587,7 @@ fn local_variant_targets_keep_paths_outside_the_branch() {
         PrimSpec::default().with_children(vec![rock_name, light_name]),
     );
     let mut rock_spec = PrimSpec::def();
-    rock_spec.variant_set_order.push(look);
+    rock_spec.variant_set_names.prepend.push(look);
     rock_spec.variant_selections.insert(look, a);
     layer.insert_prim(rock, rock_spec);
     layer.insert_prim(light, PrimSpec::def());

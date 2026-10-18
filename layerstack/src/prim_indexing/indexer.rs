@@ -557,7 +557,7 @@ impl Indexer<'_, '_, '_> {
             if !spec.inherits().is_empty() {
                 tasks = tasks.with(TaskKind::NodeInherits);
             }
-            if !spec.variant_set_order().is_empty() || !spec.variant_sets().is_empty() {
+            if !spec.variant_set_names().is_empty() {
                 tasks = tasks.with(TaskKind::VariantSets);
             }
             if !spec.references().is_empty() {
@@ -604,7 +604,7 @@ impl Indexer<'_, '_, '_> {
                 return tasks;
             }
             for (_, _, spec) in site::specs(self.ctx.store, stack, &path) {
-                if !spec.variant_set_order().is_empty() || !spec.variant_sets().is_empty() {
+                if !spec.variant_set_names().is_empty() {
                     tasks = tasks.with(TaskKind::AncestralVariantSets);
                 }
                 if !spec.payloads().is_empty() && !self.ctx.dynamic_formats.is_empty() {

@@ -1966,7 +1966,7 @@ mod tests {
                 variants: [(a, branch(1)), (b, branch(2))].into_iter().collect(),
             },
         );
-        spec.variant_set_order.push(look);
+        spec.variant_set_names.prepend.push(look);
         spec.variant_selections.insert(look, a);
         asset.insert_prim(model, spec);
         store.insert_layer(asset);
@@ -3310,7 +3310,7 @@ mod tests {
             );
         }
         model_spec.variant_sets.insert(lod, set);
-        model_spec.variant_set_order.push(lod);
+        model_spec.variant_set_names.prepend.push(lod);
         model_spec.variant_selections.insert(lod, high);
         layer.insert_prim(model, model_spec);
         for (variant, value) in [(high, 1_i64), (low, 2_i64)] {
@@ -3402,7 +3402,7 @@ mod tests {
             );
         }
         model_spec.variant_sets.insert(lod, set);
-        model_spec.variant_set_order.push(lod);
+        model_spec.variant_set_names.prepend.push(lod);
         model_spec.variant_selections.insert(lod, high);
         model_spec.authored_children.push(geom_tok);
         layer.insert_prim(model, model_spec);

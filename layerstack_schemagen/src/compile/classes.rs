@@ -855,10 +855,7 @@ impl<'s> Parser<'s> {
             ("payload", is_authored(&spec.payloads)),
             ("specializes", is_authored(&spec.specializes)),
             ("variantSelection", !spec.variant_selections.is_empty()),
-            (
-                "variantSetNames",
-                !spec.variant_set_order.is_empty() || !spec.deleted_variant_sets.is_empty(),
-            ),
+            ("variantSetNames", !spec.variant_set_names.is_empty()),
             ("active", spec.active.is_some()),
             ("instanceable", spec.instanceable.is_some()),
         ] {

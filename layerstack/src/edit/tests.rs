@@ -79,7 +79,7 @@ fn rocks() -> InMemoryStore {
     rock_spec
         .variant_sets
         .insert(shape, VariantSetSpec { variants });
-    rock_spec.variant_set_order.push(shape);
+    rock_spec.variant_set_names.prepend.push(shape);
     rock_spec.variant_selections.insert(shape, round);
     asset.insert_prim(rock, rock_spec);
     store.insert_layer(asset);
@@ -1516,7 +1516,11 @@ fn live_stage_edits_a_variant_spec_nested_in_a_branch() {
     let outer = rock_spec
         .variant_spec(&[(shape, round)])
         .expect("outer branch");
-    assert_eq!(outer.variant_set_order, [size]);
+    assert_eq!(
+        outer.variant_set_names,
+        crate::listop::ListOp::prepended(vec![size]),
+        "creating the nested set lists it, as `SdfCreatePrimInLayer` does"
+    );
     assert!(
         rock_spec
             .variant_spec(&[(shape, round), (size, big)])

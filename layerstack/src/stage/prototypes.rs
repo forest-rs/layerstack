@@ -982,6 +982,7 @@ mod early_reuse_tests {
         let selected = store.tokens.intern("selected");
         let mut spec = PrimSpec::def();
         spec.variant_selections.insert(mode, selected);
+        spec.variant_set_names.prepend.push(mode);
         spec.variant_sets.insert(
             mode,
             VariantSetSpec {

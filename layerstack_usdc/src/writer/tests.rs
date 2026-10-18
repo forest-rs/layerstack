@@ -1220,6 +1220,10 @@ fn variant_specs_round_trip() {
         over("/Root{season=winter}Snow"),
         attribute("/Root{season=winter}", "depth", Value::Double(2.0)),
         Spec::new("/Root{season=winter}", SpecForm::Variant)
+            .with_field(
+                "variantSetNames",
+                Value::StringListOp(ListOp::prepend(vec!["age".into()])),
+            )
             .with_field("variantSetChildren", tokens(&["age"]))
             .with_field("primChildren", tokens(&["Snow"]))
             .with_field("properties", tokens(&["depth"])),
@@ -1283,7 +1287,7 @@ fn variant_specs_round_trip() {
     let root_path = layerstack::path::Path::parse_absolute("/Root", &store.tokens).unwrap();
     let root_id = store.paths.lookup(&root_path).unwrap();
     let prim = &layer.prims()[&root_id];
-    assert_eq!(prim.variant_set_order, [season], "set order");
+    assert_eq!(prim.variant_set_names.prepend, [season], "set names");
     assert_eq!(prim.variant_selections.get(&season), Some(&winter));
     assert_eq!(prim.variant_selections.get(&age), Some(&old));
     let branch = &prim.variant_sets[&season].variants[&winter];
@@ -1297,7 +1301,7 @@ fn variant_specs_round_trip() {
         !prim.variant_sets.contains_key(&age),
         "not on the prim spec"
     );
-    assert_eq!(branch.variant_set_order, [age], "nested set order");
+    assert_eq!(branch.variant_set_names.prepend, [age], "nested set names");
     assert!(
         prim.variant_spec(&[(season, winter), (age, old)]).is_some(),
         "nested in its branch"

@@ -2912,10 +2912,12 @@ impl Stage {
     }
 
     /// Returns the variant sets of the composed prim `prim`, each with the
-    /// variant composition selected for it: the sets its specs declare,
-    /// those nested in the selected variants included (a set declared only
-    /// in a variant that is not selected is not one), strongest spec
-    /// first, each spec's in `variantSets` order. A selection is the one
+    /// variant composition selected for it: the sets each node of its prim
+    /// index lists, nodes in strength order, each node's in its composed
+    /// `variantSetNames` order, a set listed by several nodes once. The
+    /// node of a selected variant lists the sets nested in it (a set
+    /// listed only in a variant that is not selected is not one). A variant
+    /// set spec no list names is not one either. A selection is the one
     /// [`Stage::variant_selections`] reports, which may name a variant no
     /// layer defines; `None` when nothing selects one. Empty when `prim` is
     /// not on the stage.
@@ -2937,18 +2939,8 @@ impl Stage {
         };
         let selections = self.variant_selections(prim, store);
         let mut sets: Vec<TokenId> = Vec::new();
-        for source in &index.sources {
-            // A site inside one of the prim's own variants (`/P{v=x}`) is
-            // walked from the prim's spec, through its selections.
-            if source.spec_path.trailing_selection().is_some() {
-                continue;
-            }
-            let Some(spec) = store.layer(source.layer_id).and_then(|layer| {
-                layer.source_prim_spec(source.lookup_path, &source.spec_path, store.paths())
-            }) else {
-                continue;
-            };
-            for set in spec.selected_variant_set_order(&selections) {
+        for (_, names) in crate::compose::node_variant_set_names(store, &index.sources) {
+            for set in names {
                 if !sets.contains(&set) {
                     sets.push(set);
                 }

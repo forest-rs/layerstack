@@ -1278,10 +1278,12 @@ pub struct VariantSpec {
     /// Spec: AOUSD Core §7.3.6 (variant specs may contain variant set
     /// specs).
     pub variant_sets: HashMap<TokenId, VariantSetSpec>,
-    /// Ordered names of the variant sets this branch declares (its
-    /// `variantSets` metadata, then the sets it authors), as
-    /// [`PrimSpec::variant_set_order`] is for a prim spec.
-    pub variant_set_order: Vec<TokenId>,
+    /// The `variantSetNames` list op of this branch (`variantSets` in
+    /// USDA): the nested sets it lists, as
+    /// [`PrimSpec::variant_set_names`] is for a prim spec.
+    ///
+    /// Spec: AOUSD Core §7.6.2.3.5 (`variantSetNames`), §7.6.7.
+    pub variant_set_names: ListOp<TokenId>,
     /// Property ordering authored inside this branch (`reorder properties`).
     ///
     /// Spec: AOUSD Core §7.6.7 (variant specs contribute prim spec fields).
@@ -1550,20 +1552,19 @@ pub struct PrimSpec {
     ///
     /// Spec: AOUSD Core §7.3.6 (prim specs contain variant set specs).
     pub variant_sets: HashMap<TokenId, VariantSetSpec>,
-    /// Ordered names of the variant sets this prim spec declares (its
-    /// `variantSets` metadata, then the sets it authors).
+    /// The `variantSetNames` list op of this prim spec (`variantSets` in
+    /// USDA), as authored.
     ///
-    /// This determines the evaluation order for variant children.
-    /// Children from later variant sets appear before earlier ones.
-    pub variant_set_order: Vec<TokenId>,
-    /// Variant set names this spec's `variantSets` list op deletes: a
-    /// weaker opinion's declaration of them is removed, as a list op
-    /// removes deleted items (so composition does not evaluate their
-    /// selections there).
+    /// Composition evaluates only the sets a site lists: the list ops of
+    /// its specs applied weakest to strongest across the layer stack. A
+    /// variant set spec in [`PrimSpec::variant_sets`] that no list names
+    /// contributes nothing, and a listed set without one contributes no
+    /// opinions. The composed order is the evaluation order of the sets.
     ///
-    /// Spec: AOUSD Core §7.6.2.3.5 (`variantSetNames`), §12.4 (list ops).
-    /// OpenUSD: `PcpComposeSiteVariantSets` in `pxr/usd/pcp/composeSite.cpp`.
-    pub deleted_variant_sets: Vec<TokenId>,
+    /// Spec: AOUSD Core §7.6.2.3.5 (`variantSetNames`), §12.4 (list ops),
+    /// §10.5 (variant selection). OpenUSD: `PcpComposeSiteVariantSets` in
+    /// `pxr/usd/pcp/composeSite.cpp`.
+    pub variant_set_names: ListOp<TokenId>,
     /// References arcs (a `ListOp` chain across the layer stack).
     pub references: ListOp<Reference>,
     /// Inherits arcs (a `ListOp` chain across the layer stack).
@@ -1800,69 +1801,20 @@ impl PrimSpec {
         variant_spec_in_mut(&mut self.variant_sets, chain)
     }
 
-    /// Returns the variant sets this prim spec declares under `selections`
-    /// (set → variant), in `variantSets` order: its own, then those each
-    /// selected branch nests, visiting the branches in their sets' declared
-    /// order.
-    ///
-    /// Only selected branches count, each in turn, so two branches that
-    /// declare the same nested sets in different orders do not interfere.
-    ///
-    /// Spec: AOUSD Core §7.3.6 (variant specs may contain variant set
-    /// specs), §10.3.2.5 (variant sets are evaluated in `variantSetNames`
-    /// order).
-    pub(crate) fn selected_variant_set_order(
-        &self,
-        selections: &HashMap<TokenId, TokenId>,
-    ) -> Vec<TokenId> {
-        fn visit(
-            sets: &HashMap<TokenId, VariantSetSpec>,
-            order: &[TokenId],
-            selections: &HashMap<TokenId, TokenId>,
-            out: &mut Vec<TokenId>,
-        ) {
-            for set in order {
-                if !out.contains(set) {
-                    out.push(*set);
-                }
-            }
-            for set in order {
-                let branch = selections
-                    .get(set)
-                    .and_then(|variant| sets.get(set)?.variants.get(variant));
-                if let Some(branch) = branch {
-                    visit(
-                        &branch.variant_sets,
-                        &branch.variant_set_order,
-                        selections,
-                        out,
-                    );
-                }
-            }
-        }
-        let mut sets = Vec::new();
-        visit(
-            &self.variant_sets,
-            &self.variant_set_order,
-            selections,
-            &mut sets,
-        );
-        sets
-    }
-
-    /// Returns the variant sets declared at `chain` below this prim spec,
-    /// with their `variantSets` order: this prim spec's own for an empty
-    /// chain, otherwise those nested in the variant spec it names.
+    /// Returns the variant sets held at `chain` below this prim spec, with
+    /// the `variantSetNames` list op of the spec holding them: this prim
+    /// spec's own for an empty chain, otherwise those nested in the variant
+    /// spec it names.
     #[must_use]
     pub fn variant_sets_in(
         &self,
         chain: &[(TokenId, TokenId)],
-    ) -> Option<(&HashMap<TokenId, VariantSetSpec>, &[TokenId])> {
+    ) -> Option<(&HashMap<TokenId, VariantSetSpec>, &ListOp<TokenId>)> {
         if chain.is_empty() {
-            return Some((&self.variant_sets, &self.variant_set_order));
+            return Some((&self.variant_sets, &self.variant_set_names));
         }
         let spec = self.variant_spec(chain)?;
-        Some((&spec.variant_sets, &spec.variant_set_order))
+        Some((&spec.variant_sets, &spec.variant_set_names))
     }
 }
 
@@ -2791,7 +2743,7 @@ impl Layer {
     }
 
     /// Returns the variant sets of the prim or variant spec at the
-    /// variant-qualified `spec_path`, with their `variantSets` order: those
+    /// variant-qualified `spec_path`, with its `variantSetNames`: those
     /// of the prim spec for `/P` (or `/A{v=x}P`), those nested in the
     /// variant spec for `/P{a=x}`. `None` when this layer authors no spec
     /// there.
@@ -2804,7 +2756,7 @@ impl Layer {
         &self,
         spec_path: &SpecPath,
         paths: &PathInterner,
-    ) -> Option<(&HashMap<TokenId, VariantSetSpec>, &[TokenId])> {
+    ) -> Option<(&HashMap<TokenId, VariantSetSpec>, &ListOp<TokenId>)> {
         let chain = spec_path.variant_chain();
         self.branch_prim_spec(spec_path.prim_path(), spec_path, paths)?
             .variant_sets_in(&chain)
@@ -3635,7 +3587,9 @@ mod tests {
                 value: FieldValue::Value(Value::Int64(value)),
             });
             for (set, name, nested) in sets {
-                spec.variant_set_order.push(set);
+                if !spec.variant_set_names.prepend.contains(&set) {
+                    spec.variant_set_names.prepend.push(set);
+                }
                 spec.variant_sets
                     .entry(set)
                     .or_default()
@@ -3651,7 +3605,7 @@ mod tests {
         );
         let ay = variant(4, vec![(b, y, variant(5, vec![]))]);
         let mut prim = PrimSpec::def();
-        prim.variant_set_order.push(a);
+        prim.variant_set_names = ListOp::prepended(vec![a]);
         let set = prim.variant_sets.entry(a).or_default();
         set.variants.insert(x, ax);
         set.variants.insert(y, ay);
@@ -3676,7 +3630,7 @@ mod tests {
             let path = SpecPath::parse(path, tokens, paths).unwrap();
             layer
                 .variant_sets_at(&path, paths)
-                .map(|(_, order)| order.to_vec())
+                .map(|(_, names)| names.prepend.clone())
         };
         assert_eq!(sets_at("/P", &mut tokens, &mut paths), Some(vec![a]));
         assert_eq!(

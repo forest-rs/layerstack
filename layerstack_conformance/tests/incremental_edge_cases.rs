@@ -247,7 +247,7 @@ fn a_stronger_selection_masks_a_weaker_expression_error_after_edits() {
     let x = store.tokens.intern("x");
     let mut weak = Layer::new(LayerId(2));
     let mut spec = PrimSpec::def();
-    spec.variant_set_order.push(v);
+    spec.variant_set_names.prepend.push(v);
     spec.variant_selections.insert(v, missing);
     let branch = VariantSpec {
         properties: PrimSpec::def()

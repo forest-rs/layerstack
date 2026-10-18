@@ -175,14 +175,6 @@ impl<'a> SpecRef<'a> {
             Self::Variant(spec) => &spec.variant_sets,
         }
     }
-
-    /// The `variantSets` order of the sets this spec holds.
-    pub(crate) fn variant_set_order(self) -> &'a [TokenId] {
-        match self {
-            Self::Prim(spec) => &spec.variant_set_order,
-            Self::Variant(spec) => &spec.variant_set_order,
-        }
-    }
 }
 
 /// A prim-like spec found at a [`Loc`], mutably.
@@ -221,17 +213,11 @@ impl<'a> SpecMut<'a> {
         }
     }
 
-    /// The variant sets this spec holds and their `variantSets` order (see
-    /// [`SpecRef::variant_sets`]).
-    pub(crate) fn into_variant_sets(
-        self,
-    ) -> (
-        &'a mut HashMap<TokenId, VariantSetSpec>,
-        &'a mut Vec<TokenId>,
-    ) {
+    /// The variant sets this spec holds (see [`SpecRef::variant_sets`]).
+    pub(crate) fn into_variant_sets(self) -> &'a mut HashMap<TokenId, VariantSetSpec> {
         match self {
-            Self::Prim(spec) => (&mut spec.variant_sets, &mut spec.variant_set_order),
-            Self::Variant(spec) => (&mut spec.variant_sets, &mut spec.variant_set_order),
+            Self::Prim(spec) => &mut spec.variant_sets,
+            Self::Variant(spec) => &mut spec.variant_sets,
         }
     }
 }
@@ -258,7 +244,7 @@ pub(crate) fn spec_at_mut<'a>(layer: &'a mut Layer, loc: &Loc) -> Option<SpecMut
         Loc::Prim { path, sites } => prim_spec_mut(layer, *path, sites).map(SpecMut::Prim),
         Loc::Variant { .. } => {
             let (holder, site) = loc.variant_parts()?;
-            let (sets, _) = spec_at_mut(layer, &holder)?.into_variant_sets();
+            let sets = spec_at_mut(layer, &holder)?.into_variant_sets();
             let variant = sets.get_mut(&site.set)?.variants.get_mut(&site.variant)?;
             Some(SpecMut::Variant(variant))
         }

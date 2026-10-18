@@ -426,7 +426,7 @@ fn variant(
     strong.specializes = arc(&strong.specializes, &weak.specializes, report);
     strong.payloads = arc(&strong.payloads, &weak.payloads, report);
     map_missing(&mut strong.variant_selections, &weak.variant_selections);
-    append_unique(&mut strong.variant_set_order, &weak.variant_set_order);
+    strong.variant_set_names = arc(&strong.variant_set_names, &weak.variant_set_names, report);
     fill(&mut strong.property_order, &weak.property_order);
     variant_sets(&mut strong.variant_sets, &weak.variant_sets, tokens, report)
 }
@@ -451,15 +451,9 @@ fn prim(
     strong.specializes = arc(&strong.specializes, &weak.specializes, report);
     strong.payloads = arc(&strong.payloads, &weak.payloads, report);
     map_missing(&mut strong.variant_selections, &weak.variant_selections);
-    let names = listop(
-        &ListOp::prepended(strong.variant_set_order.clone())
-            .with_deleted(strong.deleted_variant_sets.clone()),
-        &ListOp::prepended(weak.variant_set_order.clone())
-            .with_deleted(weak.deleted_variant_sets.clone()),
-        report,
-    );
-    strong.variant_set_order = names.prepend;
-    strong.deleted_variant_sets = names.delete;
+    // AOUSD Core §7.6.2.3.5, §12.4: `variantSetNames` combines as the
+    // other list ops do.
+    strong.variant_set_names = arc(&strong.variant_set_names, &weak.variant_set_names, report);
     if children {
         append_unique(&mut strong.authored_children, &weak.authored_children);
         properties(&mut strong.properties, &weak.properties, tokens, report)?;

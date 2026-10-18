@@ -31,8 +31,7 @@ pub(crate) fn is_local_spec(spec: &PrimSpec) -> bool {
         && spec.outer_variant_sites.is_empty()
         && spec.variant_sets.is_empty()
         && spec.variant_selections.is_empty()
-        && spec.variant_set_order.is_empty()
-        && spec.deleted_variant_sets.is_empty()
+        && spec.variant_set_names.is_empty()
 }
 
 /// Returns `true` when `reference`, authored in `layer`, is internal: it

@@ -38,10 +38,10 @@ pub type VariantFallbacks = HashMap<TokenId, Vec<TokenId>>;
 /// prim whose specs are `specs`, with `fallbacks`.
 ///
 /// `selections` holds every authored selection; fallbacks only complete
-/// it. The variant sets are visited in the order the specs declare them
-/// (`variantSets`, [`PrimSpec::variant_set_order`], then that of the sets
-/// nested in selected branches, see [`PrimSpec::selected_variant_set_order`]),
-/// `specs` strongest first. For each declared set with a fallback and no
+/// it. The variant sets are visited in the order the prim's nodes list
+/// them, `listed` (each node's branch, outermost first, and the sets it
+/// lists, nodes strongest first): a node in a branch counts only while
+/// that branch is selected. For each listed set with a fallback and no
 /// selection, the first name in its fallback list that names a variant of
 /// the set in any of `specs` is selected, and the selections authored
 /// inside the selected branches are added before the next set is visited:
@@ -64,13 +64,14 @@ pub(crate) fn apply_variant_fallbacks(
     fallbacks: &VariantFallbacks,
     selections: &mut HashMap<TokenId, TokenId>,
     specs: &[(&PrimSpec, SiteContext<'_>)],
+    listed: &[ListedSets],
 ) {
     if fallbacks.is_empty() {
         return;
     }
     let mut filled: HashSet<TokenId> = HashSet::new();
     loop {
-        let next = declared_sets(specs, selections).into_iter().find(|set| {
+        let next = declared_sets(listed, selections).into_iter().find(|set| {
             !selections.contains_key(set) && fallbacks.contains_key(set) && !filled.contains(set)
         });
         let Some(set) = next else {
@@ -117,17 +118,31 @@ pub(crate) fn apply_variant_fallbacks(
     }
 }
 
-/// The variant sets `specs` declare, strongest first, in `variantSets`
-/// order (see [`PrimSpec::selected_variant_set_order`]).
-fn declared_sets(
-    specs: &[(&PrimSpec, SiteContext<'_>)],
-    selections: &HashMap<TokenId, TokenId>,
-) -> Vec<TokenId> {
+/// The variant sets one node of a prim index lists (see
+/// [`crate::compose::node_variant_set_names`]), with the branch of the
+/// prim's own variants the node lies in, outermost first: empty outside
+/// them.
+pub(crate) struct ListedSets {
+    pub(crate) branch: Vec<(TokenId, TokenId)>,
+    pub(crate) names: Vec<TokenId>,
+}
+
+/// The variant sets `listed` names under `selections`, nodes strongest
+/// first, each node's in its order, skipping the nodes in branches
+/// `selections` does not select.
+fn declared_sets(listed: &[ListedSets], selections: &HashMap<TokenId, TokenId>) -> Vec<TokenId> {
     let mut sets: Vec<TokenId> = Vec::new();
-    for (spec, _) in specs {
-        for set in spec.selected_variant_set_order(selections) {
-            if !sets.contains(&set) {
-                sets.push(set);
+    for node in listed {
+        if !node
+            .branch
+            .iter()
+            .all(|(set, variant)| selections.get(set) == Some(variant))
+        {
+            continue;
+        }
+        for set in &node.names {
+            if !sets.contains(set) {
+                sets.push(*set);
             }
         }
     }
@@ -167,7 +182,7 @@ mod tests {
             set.variants.insert(store.tokens.intern(name), variant);
         }
         spec.variant_sets.insert(shape, set);
-        spec.variant_set_order.push(shape);
+        spec.variant_set_names.prepend.push(shape);
         if let Some(name) = authored {
             spec.variant_selections
                 .insert(shape, store.tokens.intern(name));
@@ -239,11 +254,11 @@ mod tests {
         }
         spec.variant_sets.insert(shape, shapes);
         spec.variant_sets.insert(size, sizes);
-        spec.variant_set_order = if size_declared_first {
+        spec.variant_set_names = crate::listop::ListOp::prepended(if size_declared_first {
             vec![size, shape]
         } else {
             vec![shape, size]
-        };
+        });
         let mut layer = Layer::new(LayerId(1));
         layer.insert_prim(mast, spec);
         store.insert_layer(layer);

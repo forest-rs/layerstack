@@ -478,12 +478,20 @@ impl Walk<'_, '_, '_> {
             }
             return;
         }
-        let mut indexed: HashMap<PathId, Indexed> =
-            indexed.into_iter().map(|prim| (prim.path, prim)).collect();
+        // Found by place, so each prim moves once more, into its join.
+        let places: HashMap<PathId, usize> = indexed
+            .iter()
+            .enumerate()
+            .map(|(at, prim)| (prim.path, at))
+            .collect();
+        let mut indexed: Vec<Option<Indexed>> = indexed.into_iter().map(Some).collect();
         let mut pending = roots;
         pending.reverse();
         while let Some(path) = pending.pop() {
-            let prim = indexed.remove(&path).expect("indexed prim");
+            let prim = places
+                .get(&path)
+                .and_then(|&at| indexed[at].take())
+                .expect("indexed prim");
             if let Some(children) = self.join(prim) {
                 pending.extend(children.into_iter().rev());
             }

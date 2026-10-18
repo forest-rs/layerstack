@@ -1085,7 +1085,9 @@ fn index_layer(store: &dyn LayerStore, layer: &Layer) -> LayerChildren {
                 segments.len() - 1
             };
             for depth in first..segments.len() {
-                let branches = index.entry(segments[..depth].to_vec()).or_default();
+                // Keyed by value only when first listed: most parents list
+                // many specs.
+                let branches = index.entry_ref(&segments[..depth]).or_default();
                 let at = match branches.iter().position(|(sites, _)| sites == outer) {
                     Some(at) => at,
                     None => {

@@ -214,6 +214,7 @@ impl Stage {
                         .resolve(*ancestor)
                         .is_prefix_of(store.paths().resolve(prim))
                     && !index.graph.has_direct_dependency(
+                        store.paths(),
                         id,
                         u16::try_from(store.paths().resolve(*ancestor).depth()).unwrap_or(u16::MAX),
                     )

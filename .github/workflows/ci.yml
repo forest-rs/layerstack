@@ -531,6 +531,17 @@ jobs:
       - name: check value types oracle
         run: python layerstack_conformance/scripts/value_types_oracle.py --check
 
+      # These compare with OpenUSD when a Python with `pxr` is given and
+      # skip otherwise, as they do in the test jobs: flattening (instancing
+      # and prototype sharing included), layer saves, and prim field edits.
+      - name: test flatten, saves and prim field edits against OpenUSD
+        env:
+          LAYERSTACK_USD_PYTHON: python
+        run: |
+          cargo test --locked -p layerstack_conformance --test flatten
+          cargo test --locked -p layerstack_conformance --test layer_save
+          cargo test --locked -p layerstack_conformance --test prim_field_edits
+
       # The transform oracle must be what OpenUSD computes, to within the
       # rounding of the platform's trigonometry.
       - name: check transform oracle

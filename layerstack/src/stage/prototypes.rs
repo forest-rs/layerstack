@@ -202,7 +202,9 @@ impl Stage {
         let mut arcs = Vec::new();
         if let Some(index) = self.prims.get(&instance) {
             let graph = &index.graph;
-            let nodes: HashSet<NodeId> = graph.instanceable_nodes(&index.sources, depth).collect();
+            let nodes: HashSet<NodeId> = graph
+                .instanceable_nodes(store.paths(), &index.sources, depth)
+                .collect();
             // Loaded payload participation is part of the key even beneath
             // another contributing arc (OpenUSD PcpInstanceKey::_Collector).
             let has_payload = graph

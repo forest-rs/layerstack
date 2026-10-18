@@ -314,14 +314,36 @@ pub struct PrimIndexGraph {
 }
 
 impl PrimIndexGraph {
-    /// Whether a node is reached through an arc introduced at `depth`, even
-    /// when its own arc is ancestral or was propagated from another node.
-    /// Root opinions and arcs authored only above or below that site are local
-    /// to the occurrence. Callers separately require a contributing source.
+    /// Whether a node is reached through an arc introduced at `depth` of
+    /// the composed prim's namespace, even when its own arc is ancestral or
+    /// was propagated from another node. Root opinions and arcs authored
+    /// only above or below that site are local to the occurrence. Callers
+    /// separately require a contributing source.
+    ///
+    /// A node's [`PrimNode::namespace_depth`] counts in its parent's
+    /// namespace: the depth of the parent's site when the arc was authored
+    /// there. Where the parent's site has since descended with the prim
+    /// being composed, the arc was introduced as many levels above the
+    /// prim, so an arc authored inside a referenced asset, beneath the
+    /// referencing prim, is direct at that descendant's depth.
     ///
     /// AOUSD Core §11.3.3. OpenUSD: `HasTransitiveDirectDependency` and
-    /// `Pcp_ChildNodeIsInstanceable` (`pxr/usd/pcp/instancing.h`).
-    pub(crate) fn has_direct_dependency(&self, node: NodeId, depth: u16) -> bool {
+    /// `Pcp_ChildNodeIsInstanceable` (`pxr/usd/pcp/instancing.h`), with the
+    /// namespace depth `_AddArc` records from the parent node's path.
+    pub(crate) fn has_direct_dependency(
+        &self,
+        paths: &crate::path::PathInterner,
+        node: NodeId,
+        depth: u16,
+    ) -> bool {
+        let site_depth = |id: NodeId| {
+            self.node(id).map(|node| {
+                u16::try_from(paths.resolve(node.site().prim_path()).depth()).unwrap_or(u16::MAX)
+            })
+        };
+        let Some(prim_depth) = site_depth(NodeId::ROOT) else {
+            return false;
+        };
         let mut pending = Vec::new();
         let mut origins = Vec::new();
         let mut cursor = Some(node);
@@ -332,7 +354,10 @@ impl PrimIndexGraph {
             let Some(current) = self.node(id) else {
                 continue;
             };
-            if current.namespace_depth() == depth {
+            let introduced = current.parent().and_then(site_depth).map(|parent| {
+                prim_depth.saturating_sub(parent.saturating_sub(current.namespace_depth()))
+            });
+            if introduced == Some(depth) {
                 return true;
             }
             cursor = current.parent();
@@ -352,13 +377,14 @@ impl PrimIndexGraph {
     /// occurrences and layer contributions retain their original node ids.
     pub(crate) fn instanceable_nodes<'a>(
         &'a self,
+        paths: &'a crate::path::PathInterner,
         sources: &'a [OpinionKey],
         depth: u16,
     ) -> impl Iterator<Item = NodeId> + 'a {
         sources
             .iter()
             .map(|source| source.node)
-            .filter(move |&node| self.has_direct_dependency(node, depth))
+            .filter(move |&node| self.has_direct_dependency(paths, node, depth))
     }
 
     /// A graph of `nodes`, listed in strength order: each node after its
@@ -597,7 +623,7 @@ mod tests {
         NodeArc {
             arc_kind,
             layer_stack: LayerId(1).into(),
-            site: spec_path("/A"),
+            site: spec_path("/A/B/C"),
             namespace_depth,
             sibling_index,
             implied: false,
@@ -630,6 +656,14 @@ mod tests {
 
     #[test]
     fn instanceable_nodes_require_specs_and_a_transitive_direct_arc() {
+        // The prim is at depth 3, beneath an instance at depth 2, and every
+        // site is `/A/B/C`, so each arc's namespace depth is also the depth
+        // it was introduced at. `spec_path` interns each site afresh, so
+        // `/A/B/C` has the same id in this interner.
+        let paths = PathInterner::default();
+        let site =
+            paths.intern(Path::parse_absolute("/A/B/C", &TokenInterner::default()).expect("path"));
+        assert_eq!(site, spec_path("/A/B/C").prim_path());
         // A propagated specializes keeps its direct dependency through the
         // original placeholder, even when it is attached beneath the root.
         let graph = graph(vec![
@@ -652,16 +686,70 @@ mod tests {
             })
             .collect();
         assert_eq!(
-            graph.instanceable_nodes(&sources, 2).collect::<Vec<_>>(),
+            graph
+                .instanceable_nodes(&paths, &sources, 2)
+                .collect::<Vec<_>>(),
             vec![NodeId(2), NodeId(3), NodeId(7)]
         );
-        assert!(graph.has_direct_dependency(NodeId(5), 2));
+        assert!(graph.has_direct_dependency(&paths, NodeId(5), 2));
         assert!(
             !graph
-                .instanceable_nodes(&sources, 2)
+                .instanceable_nodes(&paths, &sources, 2)
                 .any(|node| node == NodeId(5)),
             "an empty dependency node cannot affect instanceability or keys"
         );
+    }
+
+    /// An arc authored inside a referenced asset, on the site the
+    /// reference has descended to, is direct at the descendant's depth:
+    /// its namespace depth counts in the referenced namespace, not the
+    /// stage's. The reference itself was introduced higher up.
+    ///
+    /// OpenUSD: `HasTransitiveDirectDependency`, with `_AddArc` taking the
+    /// namespace depth from the parent node's path.
+    #[test]
+    fn arcs_inside_a_referenced_asset_are_direct_where_they_are_authored() {
+        let tokens = TokenInterner::default();
+        let paths = PathInterner::default();
+        let site = |text: &str| {
+            SpecPath::from_prim_path(
+                paths.intern(Path::parse_absolute(text, &tokens).expect("path")),
+            )
+        };
+        let node = |site: SpecPath, namespace_depth| NodeArc {
+            site,
+            namespace_depth,
+            ..arc(ArcKind::References, namespace_depth, 0)
+        };
+        // `/Grove/Oak/Canopy/Acorn` (depth 4): `/Grove/Oak` references
+        // `/Tree`, whose `/Tree/Canopy/Acorn` references `/Acorn`.
+        let graph = PrimIndexGraph::from_ordered([
+            (
+                None,
+                None,
+                node(site("/Grove/Oak/Canopy/Acorn"), 0),
+                LayerOffset::IDENTITY,
+                Arc::default(),
+            ),
+            (
+                Some(NodeId::ROOT),
+                None,
+                node(site("/Tree/Canopy/Acorn"), 2),
+                LayerOffset::IDENTITY,
+                Arc::default(),
+            ),
+            (
+                Some(NodeId(1)),
+                None,
+                node(site("/Acorn"), 3),
+                LayerOffset::IDENTITY,
+                Arc::default(),
+            ),
+        ]);
+        assert!(!graph.has_direct_dependency(&paths, NodeId(1), 4));
+        assert!(graph.has_direct_dependency(&paths, NodeId(1), 2));
+        assert!(graph.has_direct_dependency(&paths, NodeId(2), 4));
+        assert!(!graph.has_direct_dependency(&paths, NodeId(2), 3));
     }
 
     fn key(node: NodeId, layer_strength: u16, layer_id: u64, spec_path: SpecPath) -> OpinionKey {

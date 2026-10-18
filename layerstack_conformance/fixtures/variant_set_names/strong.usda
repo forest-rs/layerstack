@@ -1,0 +1,31 @@
+#usda 1.0
+
+over "Prepends" (
+    prepend variantSets = "c"
+)
+{
+}
+
+over "Explicit" (
+    variantSets = ["b", "c"]
+)
+{
+}
+
+over "Adds" (
+    add variantSets = ["b", "a"]
+)
+{
+}
+
+over "DeleteThenAppend" (
+    delete variantSets = "a"
+)
+{
+}
+
+over "AppendsAndPrepends" (
+    prepend variantSets = "b"
+)
+{
+}

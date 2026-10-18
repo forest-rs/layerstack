@@ -1,0 +1,31 @@
+#usda 1.0
+
+def "Model" (
+    prepend variantSets = "look"
+    variants = {
+        string look = "wet"
+    }
+)
+{
+    variantSet "look" = {
+        "dry" {
+            double shine = 0.5
+        }
+        "wet" {
+            double shine = 1
+        }
+    }
+}
+
+def "Bare" (
+    variants = {
+        string look = "wet"
+    }
+)
+{
+    variantSet "look" = {
+        "wet" {
+            double shine = 1
+        }
+    }
+}

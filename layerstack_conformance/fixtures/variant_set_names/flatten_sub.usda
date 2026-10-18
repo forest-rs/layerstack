@@ -1,0 +1,32 @@
+#usda 1.0
+
+def "Prepends" (
+    prepend variantSets = ["a", "b"]
+)
+{
+}
+
+def "Explicit" (
+    variantSets = ["b", "c"]
+)
+{
+}
+
+def "Deletes" (
+    prepend variantSets = ["a", "b"]
+)
+{
+}
+
+def "WeakExplicit" (
+    variantSets = ["a", "b"]
+)
+{
+}
+
+def "WeakOnly" (
+    delete variantSets = "a"
+    prepend variantSets = "b"
+)
+{
+}

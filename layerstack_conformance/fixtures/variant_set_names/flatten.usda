@@ -1,0 +1,38 @@
+#usda 1.0
+(
+    subLayers = [
+        @flatten_sub.usda@
+    ]
+)
+
+over "Prepends" (
+    prepend variantSets = "c"
+    append variantSets = "a"
+)
+{
+}
+
+over "Explicit" (
+    prepend variantSets = "d"
+)
+{
+}
+
+over "Deletes" (
+    delete variantSets = "a"
+)
+{
+}
+
+over "WeakExplicit" (
+    delete variantSets = "b"
+    append variantSets = "c"
+)
+{
+}
+
+over "StrongOnly" (
+    append variantSets = "b"
+)
+{
+}

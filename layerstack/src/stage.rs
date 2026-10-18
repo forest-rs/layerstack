@@ -31,6 +31,7 @@ pub(crate) mod metadata;
 pub use metadata::StageMetadataError;
 mod loading;
 pub use loading::{LayerMuteError, LoadPolicy, PayloadLoadRules, PayloadRule};
+pub(crate) mod preparation;
 mod prototypes;
 pub use prototypes::{CompositionStorage, CompositionWork, Prototype, PrototypeId, PrototypePrim};
 pub mod flatten;
@@ -444,6 +445,10 @@ pub struct Stage {
     /// [`Self::merge_local_subtrees`] consumes it; every other composition
     /// leaves it empty, so a stage never keeps a stale list.
     boundary_children: HashMap<PathId, Vec<PathId>>,
+    /// What a live stage retains for preparing namespace edits against
+    /// this snapshot ([`preparation`]); `None` for a stage composed on
+    /// its own.
+    preparation: Option<alloc::boxed::Box<preparation::PreparationIndex>>,
 }
 
 /// How [`Stage::merge_local_subtrees`] ordered the boundary parents'
@@ -1415,6 +1420,7 @@ impl Stage {
             schemas: None,
             type_infos: HashMap::new(),
             boundary_children: HashMap::new(),
+            preparation: None,
         }
     }
 

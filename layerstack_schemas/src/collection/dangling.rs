@@ -56,6 +56,28 @@ pub struct DanglingCollectionTarget {
     pub problem: CollectionTargetProblem,
 }
 
+impl DanglingCollectionTarget {
+    /// The example as text, within its collection: `includes /Gone
+    /// (NoPrim)`, or `includes /Lights/Fill.collection:glare
+    /// (NoCollection)`.
+    #[must_use]
+    pub fn display(
+        &self,
+        paths: &layerstack::PathInterner,
+        tokens: &layerstack::TokenInterner,
+    ) -> alloc::string::String {
+        let list = match self.list {
+            CollectionList::Includes => "includes",
+            CollectionList::Excludes => "excludes",
+        };
+        let problem = match self.problem {
+            CollectionTargetProblem::Dangling(kind) => alloc::format!("{kind:?}"),
+            CollectionTargetProblem::NoCollection => alloc::string::String::from("NoCollection"),
+        };
+        alloc::format!("{list} {} ({problem})", self.target.display(paths, tokens))
+    }
+}
+
 /// One collection's includes and excludes, and those that name nothing.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DanglingCollection {

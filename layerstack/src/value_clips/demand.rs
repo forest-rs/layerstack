@@ -246,7 +246,7 @@ impl Catalog {
                 if strength.is_eq()
                     && (opinion.value.time_samples().is_some()
                         || opinion.value.spline().is_some()
-                        || opinion.value.default_value().is_some())
+                        || opinion.value.has_default_value())
                 {
                     masked = true;
                 }

@@ -710,7 +710,10 @@ impl Catalog {
                 set.active.clone(),
                 set.times.clone(),
                 clips,
-                manifest.default.clone(),
+                manifest
+                    .default
+                    .as_ref()
+                    .map(|value| value.materialized().clone()),
                 set.interpolate_missing,
             )
             .and_then(|prepared| {

@@ -220,10 +220,27 @@ pub enum Value {
     /// Unlike an attribute declaration, this tag survives literal-free
     /// programs and inconsistent source declarations. See [`crate::TypedArrayEdit`].
     TypedArrayEdit(Arc<crate::TypedArrayEdit>),
+    /// An authored value an adapter decodes on its first read (see
+    /// [`crate::DeferredValue`]).
+    ///
+    /// Read it with [`Self::try_materialize`] or [`Self::materialized`]:
+    /// the decoded value is what an eager read produces. Value resolution
+    /// reads through it, so composed queries never return it unless it
+    /// failed to decode, and the checked queries
+    /// ([`crate::Stage::try_resolve_property_path`]) report that failure.
+    Deferred(crate::DeferredValue),
 }
 
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
+        if matches!(self, Self::Deferred(_)) || matches!(other, Self::Deferred(_)) {
+            // A value that fails to decode equals nothing, as a failed
+            // retained array does.
+            return match (self.try_materialize(), other.try_materialize()) {
+                (Ok(a), Ok(b)) => a == b,
+                _ => false,
+            };
+        }
         if matches!(self, Self::Array(_) | Self::TypedArray(_))
             && matches!(other, Self::Array(_) | Self::TypedArray(_))
             && let (Some(a), Some(b)) = (self.array_ref(), other.array_ref())
@@ -386,6 +403,10 @@ impl fmt::Display for Value {
             }
             Self::ArrayEdit(edit) => write!(f, "edit({} ops)", edit.ops.len()),
             Self::TypedArrayEdit(edit) => write!(f, "edit({} ops)", edit.edit().ops.len()),
+            Self::Deferred(deferred) => match deferred.try_materialize() {
+                Ok(value) => write!(f, "{value}"),
+                Err(error) => write!(f, "undecodable({error})"),
+            },
         }
     }
 }
@@ -498,8 +519,37 @@ impl Value {
         match self {
             Self::Array(values) => Some(crate::ArrayRef::Values(values)),
             Self::TypedArray(values) => values.try_materialize().ok().map(crate::ArrayRef::Typed),
+            Self::Deferred(deferred) => deferred.try_materialize().ok()?.array_ref(),
             _ => None,
         }
+    }
+
+    /// Borrows this value, decoding a [`Self::Deferred`] one first.
+    ///
+    /// Every other value is returned as it is, retained numeric arrays
+    /// included (see [`crate::TypedArray::try_materialize`]). A deferred
+    /// value decodes once; later reads borrow the cached value.
+    ///
+    /// # Errors
+    ///
+    /// The cached decode failure of a deferred value.
+    pub fn try_materialize(&self) -> Result<&Self, &crate::ArrayReadError> {
+        match self {
+            Self::Deferred(deferred) => deferred.try_materialize(),
+            value => Ok(value),
+        }
+    }
+
+    /// Borrows this value, decoding a [`Self::Deferred`] one first, as
+    /// [`Self::try_materialize`] does.
+    ///
+    /// A deferred value that fails to decode is returned as it is: it is of
+    /// no value type, so a typed read of it finds nothing, as a typed read
+    /// of a failed retained array does. Use [`Self::try_materialize`] to
+    /// tell that failure from a value of another type.
+    #[must_use]
+    pub fn materialized(&self) -> &Self {
+        self.try_materialize().unwrap_or(self)
     }
 
     /// Whether two values have identical representations, including float bits.

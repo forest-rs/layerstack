@@ -154,7 +154,11 @@ pub fn read_generated_schema(
                         .cloned()
                         .collect(),
                     fallback: match entry.spec.kind {
-                        PropertyKind::Attribute => entry.spec.default.clone(),
+                        PropertyKind::Attribute => entry
+                            .spec
+                            .default
+                            .as_ref()
+                            .map(|value| value.materialized().clone()),
                         PropertyKind::Relationship => None,
                     },
                 };

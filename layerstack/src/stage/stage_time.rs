@@ -59,6 +59,17 @@ pub(crate) fn map_leaves(
             map_leaves(&Value::TypedArray(native.clone()), leaf)
         }
         Value::TypedArray(_) => None,
+        // An array of another element kind holds no time code; anything
+        // else is mapped as it decodes.
+        Value::Deferred(deferred) => {
+            if deferred
+                .element_kind()
+                .is_some_and(|kind| !matches!(kind, Value::TimeCode(_)))
+            {
+                return None;
+            }
+            map_leaves(deferred.try_materialize().ok()?, leaf)
+        }
         Value::Dictionary(entries) => {
             let mut changed = false;
             let mapped = entries
@@ -244,13 +255,19 @@ pub(crate) fn map_opinion(
 }
 
 /// Whether `value` is or holds a `timecode`, in arrays, dictionaries and
-/// the literals of sparse array edits. Reads without copying.
+/// the literals of sparse array edits. Reads without copying; decodes a
+/// deferred value only when its source cannot tell.
 fn holds_timecode(value: &Value) -> bool {
     match value {
         Value::TimeCode(_) => true,
         Value::Array(items) => items.iter().any(holds_timecode),
         Value::TypedArray(array) => matches!(array.element_kind(), Value::TimeCode(_)),
         Value::Dictionary(entries) => entries.iter().any(|(_, v)| holds_timecode(v)),
+        // Decodes only a value whose kind its source does not know.
+        Value::Deferred(deferred) => match deferred.element_kind() {
+            Some(kind) => holds_timecode(&kind),
+            None => deferred.try_materialize().is_ok_and(holds_timecode),
+        },
         Value::ArrayEdit(_) | Value::TypedArrayEdit(_) => {
             value.array_edit_ref().is_some_and(|edit| {
                 edit.ops.iter().any(|op| match op {

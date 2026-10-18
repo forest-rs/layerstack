@@ -170,7 +170,8 @@ pub enum SaveError {
     },
     /// The writers' shared validation rejects the lowered document.
     Document(WriteError),
-    /// A selected retained array could not decode; no output was written.
+    /// A retained array or deferred value could not decode; no output was
+    /// written.
     ArrayRead {
         /// Authored value location.
         path: String,
@@ -957,6 +958,16 @@ impl Lowering<'_> {
                 path,
             )?,
             L::PathExpression(text) => Value::PathExpression(String::from(&**text)),
+            // Written as the value it decodes to, as an eager read holds it.
+            L::Deferred(_) => {
+                let decoded = value
+                    .try_materialize()
+                    .map_err(|error| SaveError::ArrayRead {
+                        path: path.into(),
+                        error: error.clone(),
+                    })?;
+                return self.value(decoded, site, path);
+            }
             L::Opaque { .. } => return no("opaque"),
             L::Null => return no("null"),
         })

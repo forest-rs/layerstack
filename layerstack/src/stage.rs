@@ -1044,7 +1044,7 @@ impl Stage {
                         && op.key.layer_strength == clip.key.layer_strength
                         && (op.value.time_samples().is_some()
                             || op.value.spline().is_some()
-                            || op.value.default_value().is_some())
+                            || op.value.has_default_value())
             });
             (!masked).then_some((clip, Some(entry)))
         }));
@@ -2255,7 +2255,7 @@ impl Stage {
         let opinions: &[Opinion] = &opinions;
         let strongest_default = opinions
             .iter()
-            .find(|opinion| opinion.value.default_value().is_some());
+            .find(|opinion| opinion.value.has_default_value());
 
         // Spec: AOUSD Core §12.3 (a path expression's `%_` composes over
         // the next weaker one).
@@ -2478,7 +2478,7 @@ impl Stage {
                     provenance: opinions
                         .iter()
                         .find(|opinion| {
-                            opinion.value.default_value().is_some()
+                            opinion.value.has_default_value()
                                 || opinion
                                     .value
                                     .time_samples()
@@ -2723,18 +2723,20 @@ impl Stage {
     }
 
     /// Resolves a default and materializes its selected numeric array.
-    /// Decode failures remain distinct from an absent value or value block.
+    /// Decode failures remain distinct from an absent value or value block:
+    /// a selected retained array or [`Value::Deferred`] value that does not
+    /// decode is an error.
     pub fn try_resolve_property_path(
         &self,
         path: PropertyPath,
     ) -> Result<Option<Resolved<ResolvedValue>>, crate::ArrayReadError> {
         let mut resolved = self.resolve_property_path(path);
         if let Some(Resolved {
-            value: ResolvedValue::Scalar(Value::TypedArray(array)),
+            value: ResolvedValue::Scalar(value),
             ..
         }) = &mut resolved
         {
-            *array = array.try_materialize().map_err(Clone::clone)?.clone();
+            materialize_selected(value)?;
         }
         Ok(resolved)
     }
@@ -2747,12 +2749,8 @@ impl Stage {
         interp: InterpolationType,
     ) -> Result<Option<Resolved<Value>>, crate::ArrayReadError> {
         let mut resolved = self.resolve_property_path_at_time(path, time, interp);
-        if let Some(Resolved {
-            value: Value::TypedArray(array),
-            ..
-        }) = &mut resolved
-        {
-            *array = array.try_materialize().map_err(Clone::clone)?.clone();
+        if let Some(Resolved { value, .. }) = &mut resolved {
+            materialize_selected(value)?;
         }
         Ok(resolved)
     }
@@ -3353,9 +3351,12 @@ impl Stage {
         // their decode errors too, including conversions used by sparse folding.
         let error = core::cell::RefCell::new(None);
         let checked_read = |value: &Value| {
-            if let Value::TypedArray(array) = value
-                && let Err(failure) = array.try_materialize()
-            {
+            let failure = match value {
+                Value::TypedArray(array) => array.try_materialize().err(),
+                Value::Deferred(_) => value.try_materialize().err(),
+                _ => None,
+            };
+            if let Some(failure) = failure {
                 *error.borrow_mut() = Some(failure.clone());
                 return None;
             }
@@ -4109,6 +4110,23 @@ fn sort_asset_requests(requests: &mut [crate::AssetRequest]) {
         )
     }
     requests.sort_unstable_by(|a, b| key(a).cmp(&key(b)));
+}
+
+/// Decodes the selected value of a checked read in place: a retained numeric
+/// array into its native buffer; a [`Value::Deferred`] value that failed to
+/// decode into its error (value resolution has already read through one
+/// that decodes).
+pub(crate) fn materialize_selected(value: &mut Value) -> Result<(), crate::ArrayReadError> {
+    match value {
+        Value::TypedArray(array) => {
+            *array = array.try_materialize().map_err(Clone::clone)?.clone();
+        }
+        Value::Deferred(_) => {
+            *value = value.try_materialize().map_err(Clone::clone)?.clone();
+        }
+        _ => {}
+    }
+    Ok(())
 }
 
 #[cfg(test)]

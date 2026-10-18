@@ -46,6 +46,24 @@ pub enum EditError {
         /// Why.
         reason: Rejection,
     },
+    /// The store passed to [`LiveStage::apply`](crate::LiveStage::apply) is
+    /// not the one the stage was composed from: its token or path interner
+    /// is another, so the transaction's ids would name other names and paths
+    /// in it. Nothing was applied and the stage is unchanged.
+    ///
+    /// A store published in place of the stage's own, such as an
+    /// [`InMemoryStore::snapshot`](crate::InMemoryStore::snapshot), is
+    /// another store too: synchronize the stage against it first
+    /// ([`LiveStage::synchronize`](crate::LiveStage::synchronize)), which
+    /// rebuilds the stage on it.
+    ForeignStore {
+        /// The token and path domains the stage was composed from
+        /// ([`Stage::store_identity`](crate::Stage::store_identity)).
+        stage: crate::StoreIdentity,
+        /// The domains of the store passed in
+        /// ([`LayerStore::identity`](crate::LayerStore::identity)).
+        store: crate::StoreIdentity,
+    },
 }
 
 /// A slot of a spec that a precondition checks.
@@ -235,6 +253,12 @@ impl fmt::Display for EditError {
                 )
             }
             Self::Rejected { op, reason } => write!(f, "edit {op} rejected: {reason}"),
+            Self::ForeignStore { stage, store } => write!(
+                f,
+                "the store is not the one the stage was composed from: its {}; \
+                 synchronize the stage against it first if it replaces that store",
+                stage.differing_domains(store),
+            ),
         }
     }
 }

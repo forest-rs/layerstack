@@ -126,17 +126,10 @@ impl<'a> SpecRef<'a> {
         }
     }
 
-    pub(crate) fn variant_set_order(self) -> &'a [TokenId] {
+    pub(crate) fn variant_set_names(self) -> &'a ListOp<TokenId> {
         match self {
-            Self::Prim(spec) => &spec.variant_set_order,
-            Self::Variant(spec) => &spec.variant_set_order,
-        }
-    }
-
-    pub(crate) fn deleted_variant_sets(self) -> &'a [TokenId] {
-        match self {
-            Self::Prim(spec) => &spec.deleted_variant_sets,
-            Self::Variant(_) => &[],
+            Self::Prim(spec) => &spec.variant_set_names,
+            Self::Variant(spec) => &spec.variant_set_names,
         }
     }
 
@@ -361,34 +354,24 @@ pub(crate) fn class_arcs(
     result
 }
 
-/// The variant sets declared at `site`, in declaration order: each layer's
-/// declared names, strongest layer first, without the names a stronger
-/// layer deletes. OpenUSD: `PcpComposeSiteVariantSets`.
+/// The variant sets `site` lists, in evaluation order: the
+/// `variantSetNames` list ops of its specs applied weakest layer first. A
+/// variant set spec its list ops do not name is not one of them.
+///
+/// Spec: AOUSD Core §7.6.2.3.5 (`variantSetNames`), §12.4 (list ops).
+/// OpenUSD: `PcpComposeSiteVariantSets` in `pxr/usd/pcp/composeSite.cpp`.
 pub(crate) fn variant_sets(
     store: &dyn LayerStore,
     stack: &ComputedStack,
     site: &SpecPath,
 ) -> Vec<TokenId> {
-    let mut names: Vec<TokenId> = Vec::new();
-    let mut deleted: Vec<TokenId> = Vec::new();
-    for (_, _, spec) in specs(store, stack, site) {
-        for name in spec.variant_set_order() {
-            if !names.contains(name) && !deleted.contains(name) {
-                names.push(*name);
-            }
-        }
-        // Sets authored without a declaration (specs built in code) follow
-        // the declared ones, by name.
-        let mut undeclared: Vec<TokenId> = spec
-            .variant_sets()
-            .keys()
-            .copied()
-            .filter(|name| !names.contains(name) && !deleted.contains(name))
-            .collect();
-        let tokens = store.tokens();
-        undeclared.sort_by(|a, b| tokens.resolve(*a).cmp(tokens.resolve(*b)));
-        names.extend(undeclared);
-        deleted.extend_from_slice(spec.deleted_variant_sets());
+    let authored: Vec<&ListOp<TokenId>> = specs(store, stack, site)
+        .map(|(_, _, spec)| spec.variant_set_names())
+        .filter(|op| !op.is_empty())
+        .collect();
+    let mut names = Vec::new();
+    for op in authored.into_iter().rev() {
+        op.apply_in_place(&mut names);
     }
     names
 }
@@ -613,4 +596,75 @@ fn index_layer(store: &dyn LayerStore, layer: &Layer) -> LayerChildren {
         names.sort_by(|a, b| tokens.resolve(*a).cmp(tokens.resolve(*b)));
     }
     index
+}
+
+#[cfg(test)]
+mod tests {
+    use alloc::vec;
+
+    use crate::{
+        InMemoryStore, Layer, LayerId, ListOp, PrimSpec, PropertySpec, PropertyType, Stage,
+        StageOptions, SublayerEntry, Value, VariantSetSpec, VariantSpec,
+    };
+
+    /// A site evaluates the variant sets its layers' `variantSetNames` list
+    /// ops give, weakest first: a stronger `delete` removes a weaker
+    /// listing, so that set's selection is not evaluated, and a set spec no
+    /// list names contributes nothing.
+    ///
+    /// Spec: AOUSD Core §7.6.2.3.5 (`variantSetNames`), §12.4 (list ops).
+    /// OpenUSD: `PcpComposeSiteVariantSets`.
+    #[test]
+    fn sites_evaluate_the_sets_their_list_ops_compose() {
+        let mut store = InMemoryStore::default();
+        let [look, wet, size, big, finish, matte, shine, height, gloss] = [
+            "look", "wet", "size", "big", "finish", "matte", "shine", "height", "gloss",
+        ]
+        .map(|name| store.tokens.intern(name));
+        let rock = store.path("/Rock");
+        let double = PropertyType::new("double", false, Value::Double(0.0));
+        let branch = |name, value| VariantSpec {
+            properties: PrimSpec::def()
+                .with_property(
+                    name,
+                    PropertySpec::typed_attribute(double.clone())
+                        .with_default(Value::Double(value)),
+                )
+                .properties,
+            ..VariantSpec::default()
+        };
+        let set = |variant, spec| VariantSetSpec {
+            variants: [(variant, spec)].into_iter().collect(),
+        };
+        let mut weak = PrimSpec::def();
+        weak.variant_sets.insert(look, set(wet, branch(shine, 1.0)));
+        weak.variant_sets
+            .insert(size, set(big, branch(height, 2.0)));
+        weak.variant_sets
+            .insert(finish, set(matte, branch(gloss, 3.0)));
+        weak.variant_set_names = ListOp::prepended(vec![look, size]);
+        weak.variant_selections = [(look, wet), (size, big), (finish, matte)]
+            .into_iter()
+            .collect();
+        let mut sub = Layer::new(LayerId(2));
+        sub.insert_prim(rock, weak);
+        store.insert_layer(sub);
+        let mut strong = PrimSpec::over();
+        strong.variant_set_names = ListOp::deleted(vec![look]);
+        let mut root = Layer::new(LayerId(1));
+        root.sublayers.push(SublayerEntry::new(LayerId(2)));
+        root.insert_prim(rock, strong);
+        store.insert_layer(root);
+
+        let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+        let value = |name| {
+            stage
+                .resolve_field_path(crate::PropertyPath::new(rock, name))
+                .map(|resolved| resolved.value)
+        };
+        assert_eq!(value(shine), None, "deleted by the stronger layer");
+        assert_eq!(value(height), Some(Value::Double(2.0)));
+        assert_eq!(value(gloss), None, "never listed");
+        assert_eq!(stage.variant_sets(rock, &store), [(size, Some(big))]);
+    }
 }

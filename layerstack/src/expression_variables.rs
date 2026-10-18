@@ -766,38 +766,13 @@ pub(crate) fn read_selections(
     (errors, reads)
 }
 
-/// The variant sets some node of `index` declares: each node's `variantSets`
-/// list op composed over its sources, weakest first, so a stronger spec's
-/// `delete` removes a weaker one's declaration in that node. A variant
-/// node's sources declare the sets nested in its branch
-/// ([`crate::doc::PrimSpec::variant_sets_in`]).
-///
-/// OpenUSD: `PcpComposeSiteVariantSets` in `pxr/usd/pcp/composeSite.cpp`,
-/// called for each node by `_EvalNodeVariantSets` in
-/// `pxr/usd/pcp/primIndex.cpp`.
+/// The variant sets some node of `index` lists (see
+/// [`crate::compose::node_variant_set_names`]).
 pub(crate) fn declared_variant_sets(store: &dyn LayerStore, index: &PrimIndex) -> HashSet<TokenId> {
-    let mut per_node: HashMap<NodeId, Vec<TokenId>> = HashMap::new();
-    for source in index.sources.iter().rev() {
-        let Some(spec) = store.layer(source.layer_id).and_then(|layer| {
-            layer.source_prim_spec(source.lookup_path, &source.spec_path, store.paths())
-        }) else {
-            continue;
-        };
-        let chain = source.spec_path.variant_chain();
-        let Some((_, order)) = spec.variant_sets_in(&chain) else {
-            continue;
-        };
-        let names = per_node.entry(source.node).or_default();
-        if chain.is_empty() {
-            names.retain(|name| !spec.deleted_variant_sets.contains(name));
-        }
-        for name in order {
-            if !names.contains(name) {
-                names.push(*name);
-            }
-        }
-    }
-    per_node.into_values().flatten().collect()
+    crate::compose::node_variant_set_names(store, &index.sources)
+        .into_iter()
+        .flat_map(|(_, names)| names)
+        .collect()
 }
 
 /// Every reference and payload `layer` authors, in any spec and variant

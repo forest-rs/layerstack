@@ -378,7 +378,6 @@ impl EmitCtx<'_> {
                         prim_path,
                         outer_variant_sites,
                         &mut spec.variant_sets,
-                        &mut spec.variant_set_order,
                         layer,
                     );
                 }
@@ -452,28 +451,7 @@ impl EmitCtx<'_> {
                     }
                 }
                 ast::PrimMeta::VariantSets(listop) => {
-                    // variantSets metadata declares the ordered set of variant
-                    // set names. We store the union of all names in order,
-                    // and the names a `delete` removes apart. A `reorder`
-                    // names no new set, and is not modeled: the sets keep
-                    // the order they are declared in.
-                    if listop.kind == ast::ListOpKind::Delete {
-                        for name in listop.items.iter().flatten() {
-                            let tok = self.tokens.intern(name);
-                            if !spec.deleted_variant_sets.contains(&tok) {
-                                spec.deleted_variant_sets.push(tok);
-                            }
-                        }
-                    } else if listop.kind != ast::ListOpKind::Reorder
-                        && let Some(items) = &listop.items
-                    {
-                        for name in items {
-                            let tok = self.tokens.intern(name);
-                            if !spec.variant_set_order.contains(&tok) {
-                                spec.variant_set_order.push(tok);
-                            }
-                        }
-                    }
+                    spec.variant_set_names.merge(self.emit_name_listop(listop));
                 }
                 ast::PrimMeta::Custom(entry) if entry.key == "instanceable" => {
                     if let ast::MetadataValue::Value(ast::Value::Bool(b)) = &entry.value {
@@ -991,13 +969,12 @@ impl EmitCtx<'_> {
         prim_path: &str,
         enclosing: &[VariantSelectionSite],
         sets: &mut HashMap<TokenId, VariantSetSpec>,
-        order: &mut Vec<TokenId>,
         layer: &mut Layer,
     ) {
+        // The set spec alone: `variantSetNames` lists the sets that compose
+        // (AOUSD Core §7.6.2.3.5), and a `variantSet` block does not list
+        // its set, as OpenUSD's text parser does not.
         let set_tok = self.tokens.intern(vs.name);
-        if !order.contains(&set_tok) {
-            order.push(set_tok);
-        }
         let set_spec = sets.entry(set_tok).or_default();
 
         for branch in &vs.branches {
@@ -1043,18 +1020,12 @@ impl EmitCtx<'_> {
                         self.emit_prim(child_prim, &child_path, &branch_context, layer);
                     }
                     ast::PrimChild::VariantSet(nested_vs) => {
-                        let VariantSpec {
-                            variant_sets,
-                            variant_set_order,
-                            ..
-                        } = &mut variant_spec;
                         self.emit_variant_set(
                             nested_vs,
                             prim_path_id,
                             prim_path,
                             &branch_context,
-                            variant_sets,
-                            variant_set_order,
+                            &mut variant_spec.variant_sets,
                             layer,
                         );
                     }
@@ -1119,14 +1090,10 @@ impl EmitCtx<'_> {
                     self.emit_plain_prim_meta(meta, &mut variant_spec.fields);
                 }
                 ast::PrimMeta::VariantSets(listop) => {
-                    // The sets nested in this branch, in declared order, as
-                    // for a prim spec.
-                    for name in listop.items.iter().flatten() {
-                        let tok = self.tokens.intern(name);
-                        if !variant_spec.variant_set_order.contains(&tok) {
-                            variant_spec.variant_set_order.push(tok);
-                        }
-                    }
+                    // The sets nested in this branch, as for a prim spec.
+                    variant_spec
+                        .variant_set_names
+                        .merge(self.emit_name_listop(listop));
                 }
             }
         }
@@ -1272,6 +1239,27 @@ impl EmitCtx<'_> {
     ///
     /// Spec: AOUSD Core §8 (paths; relative paths are anchored to the prim
     /// that authors them).
+    /// Converts a `variantSets` list op, as authored: `= None` is an empty
+    /// explicit list.
+    ///
+    /// Spec: AOUSD Core §7.6.2.3.5 (`variantSetNames`), §12.4 (list ops).
+    fn emit_name_listop(&mut self, names: &ast::ListOp<&str>) -> ListOp<TokenId> {
+        let Some(items) = &names.items else {
+            return ListOp::explicit(Vec::new());
+        };
+        let items: Vec<TokenId> = items.iter().map(|name| self.tokens.intern(name)).collect();
+        let mut listop = ListOp::default();
+        match names.kind {
+            ast::ListOpKind::Explicit => listop.explicit = Some(items),
+            ast::ListOpKind::Prepend => listop.prepend = items,
+            ast::ListOpKind::Append => listop.append = items,
+            ast::ListOpKind::Add => listop.add = items,
+            ast::ListOpKind::Delete => listop.delete = items,
+            ast::ListOpKind::Reorder => listop.reorder = items,
+        }
+        listop
+    }
+
     fn emit_path_listop(
         &mut self,
         paths: &ast::ListOpPaths<'_>,
@@ -2710,12 +2698,12 @@ def Scope "D" (
 
         // The prim spec holds `standin`; `shadingVariant` is nested in the
         // `anim` branch's variant spec (`/D{standin=anim}{shadingVariant=}`).
-        assert_eq!(d_spec.variant_set_order, [standin_tok]);
+        assert_eq!(d_spec.variant_set_names.add, [standin_tok]);
         assert!(!d_spec.variant_sets.contains_key(&shading_tok));
         let anim_variant = d_spec
             .variant_spec(&[(standin_tok, anim_tok)])
             .expect("anim variant");
-        assert_eq!(anim_variant.variant_set_order, [shading_tok]);
+        assert_eq!(anim_variant.variant_set_names.add, [shading_tok]);
         let shading_vs = anim_variant
             .variant_sets
             .get(&shading_tok)
@@ -2849,7 +2837,7 @@ def Scope "D" (
                 .collect::<Vec<_>>()
         };
 
-        assert_eq!(d_spec.variant_set_order, [standin], "prim spec's sets");
+        assert_eq!(d_spec.variant_set_names.add, [standin], "prim spec's sets");
 
         // Every branch is a variant spec of its own: the inner
         // `{standin=anim}` does not merge into the outer one, and the two
@@ -2875,7 +2863,11 @@ def Scope "D" (
             ["render_default_cube"]
         );
         assert_eq!(
-            d_spec.variant_spec(&anim_spooky).unwrap().variant_set_order,
+            d_spec
+                .variant_spec(&anim_spooky)
+                .unwrap()
+                .variant_set_names
+                .add,
             [standin],
             "sets nested in the spooky branch"
         );

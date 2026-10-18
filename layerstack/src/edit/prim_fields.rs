@@ -3,7 +3,7 @@
 
 //! Prim spec fields the layer model keeps in dedicated members: the
 //! specifier, the type name, `active`, `instanceable`, child and property
-//! order, and the composition arcs.
+//! order, the composition arcs and `variantSetNames`.
 //!
 //! Each edit lowers to one [`Raw::PrimField`] step, which replaces the
 //! whole field, so an inverse restores it exactly and guards it as one
@@ -52,6 +52,11 @@ pub enum PrimField {
     Inherits,
     /// The `specializes` list op.
     Specializes,
+    /// The `variantSetNames` list op (`variantSets` in USDA), of a prim
+    /// spec or of a variant spec for the sets nested in it.
+    ///
+    /// Spec: AOUSD Core §7.6.2.3.5 (`variantSetNames`).
+    VariantSetNames,
 }
 
 /// Where an arc addition puts its item in the spec's list op.
@@ -92,6 +97,7 @@ pub(crate) enum PrimValue {
     Payloads(ListOp<Reference>),
     Inherits(ListOp<PathId>),
     Specializes(ListOp<PathId>),
+    VariantSetNames(ListOp<TokenId>),
 }
 
 impl PrimValue {
@@ -107,6 +113,7 @@ impl PrimValue {
             Self::Payloads(_) => PrimField::Payloads,
             Self::Inherits(_) => PrimField::Inherits,
             Self::Specializes(_) => PrimField::Specializes,
+            Self::VariantSetNames(_) => PrimField::VariantSetNames,
         }
     }
 
@@ -119,6 +126,7 @@ impl PrimValue {
             Self::PrimOrder(v) | Self::PropertyOrder(v) => v.is_none(),
             Self::References(v) | Self::Payloads(v) => *v == ListOp::default(),
             Self::Inherits(v) | Self::Specializes(v) => *v == ListOp::default(),
+            Self::VariantSetNames(v) => *v == ListOp::default(),
         }
     }
 
@@ -135,6 +143,7 @@ impl PrimValue {
             PrimField::Payloads => Self::Payloads(ListOp::default()),
             PrimField::Inherits => Self::Inherits(ListOp::default()),
             PrimField::Specializes => Self::Specializes(ListOp::default()),
+            PrimField::VariantSetNames => Self::VariantSetNames(ListOp::default()),
         }
     }
 }
@@ -201,6 +210,9 @@ pub(super) fn read(
         (SpecRef::Prim(spec), PrimField::Specializes) => {
             PrimValue::Specializes(spec.specializes.clone())
         }
+        (SpecRef::Prim(spec), PrimField::VariantSetNames) => {
+            PrimValue::VariantSetNames(spec.variant_set_names.clone())
+        }
         (SpecRef::Variant(spec), PrimField::Active) => {
             PrimValue::Active(variant_bool(&spec.fields, "active"))
         }
@@ -217,6 +229,9 @@ pub(super) fn read(
         (SpecRef::Variant(spec), PrimField::Inherits) => PrimValue::Inherits(spec.inherits.clone()),
         (SpecRef::Variant(spec), PrimField::Specializes) => {
             PrimValue::Specializes(spec.specializes.clone())
+        }
+        (SpecRef::Variant(spec), PrimField::VariantSetNames) => {
+            PrimValue::VariantSetNames(spec.variant_set_names.clone())
         }
         (
             SpecRef::Variant(_),
@@ -261,6 +276,9 @@ pub(crate) fn swap(spec: SpecMut<'_>, value: PrimValue) -> Result<PrimValue, Pri
         (SpecMut::Prim(spec), PrimValue::Specializes(v)) => {
             PrimValue::Specializes(replace(&mut spec.specializes, v))
         }
+        (SpecMut::Prim(spec), PrimValue::VariantSetNames(v)) => {
+            PrimValue::VariantSetNames(replace(&mut spec.variant_set_names, v))
+        }
         (SpecMut::Variant(spec), PrimValue::PropertyOrder(v)) => {
             PrimValue::PropertyOrder(replace(&mut spec.property_order, v))
         }
@@ -275,6 +293,9 @@ pub(crate) fn swap(spec: SpecMut<'_>, value: PrimValue) -> Result<PrimValue, Pri
         }
         (SpecMut::Variant(spec), PrimValue::Specializes(v)) => {
             PrimValue::Specializes(replace(&mut spec.specializes, v))
+        }
+        (SpecMut::Variant(spec), PrimValue::VariantSetNames(v)) => {
+            PrimValue::VariantSetNames(replace(&mut spec.variant_set_names, v))
         }
         (SpecMut::Variant(_), value) => return Err(value.field()),
     })

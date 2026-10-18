@@ -118,10 +118,9 @@ impl core::error::Error for LayerStackFlattenError {}
 ///
 /// Refuses missing/cyclic inputs, invalid offsets/samples, property-kind conflicts,
 /// mixed property declarations that would change composed custom/variability,
-/// historical `add`/`reorder` list operations, sparse-array edits, asset expressions,
-/// and deleted variant sets (the document model cannot retain their full list-op
-/// semantics), empty authored sample maps, and path expressions referring to a
-/// weaker opinion. Clip assets and active/times schedules are anchored and retimed;
+/// historical `add`/`reorder` list operations (`variantSetNames` among them),
+/// sparse-array edits, asset expressions, empty authored sample maps, and path
+/// expressions referring to a weaker opinion. Clip assets and active/times schedules are anchored and retimed;
 /// clip dictionaries at one spec must share a timeline. Retimed template clips
 /// are refused. Deferred timecode arrays with nonidentity offsets are refused
 /// instead of hiding decoding failures. Inputs are never modified.
@@ -557,9 +556,6 @@ impl<F: FnMut(LayerId, &str) -> Option<String>> Context<'_, F> {
         layer: LayerId,
         offset: LayerOffset,
     ) -> Result<(), LayerStackFlattenError> {
-        if !spec.deleted_variant_sets.is_empty() {
-            return Err(unsupported(layer, "deleted variant sets"));
-        }
         if spec
             .type_name
             .is_some_and(|name| self.tokens.resolve(name).is_empty())
@@ -572,6 +568,7 @@ impl<F: FnMut(LayerId, &str) -> Option<String>> Context<'_, F> {
         self.arcs(&mut spec.payloads, site, true, layer, offset)?;
         validate_list(&spec.inherits, layer)?;
         validate_list(&spec.specializes, layer)?;
+        validate_list(&spec.variant_set_names, layer)?;
         self.prepare_variants(&mut spec.variant_sets, site, layer, offset)
     }
     fn prepare_variants(
@@ -591,6 +588,7 @@ impl<F: FnMut(LayerId, &str) -> Option<String>> Context<'_, F> {
                 self.arcs(&mut spec.payloads, &site, true, layer, offset)?;
                 validate_list(&spec.inherits, layer)?;
                 validate_list(&spec.specializes, layer)?;
+                validate_list(&spec.variant_set_names, layer)?;
                 self.prepare_variants(&mut spec.variant_sets, &site, layer, offset)?;
             }
         }
@@ -834,7 +832,7 @@ fn merge_variant(a: &mut VariantSpec, b: &VariantSpec) -> Result<(), LayerStackF
     merge_fields(&mut a.fields, &b.fields);
     merge_properties(&mut a.properties, &b.properties)?;
     unique(&mut a.authored_children, &b.authored_children);
-    unique(&mut a.variant_set_order, &b.variant_set_order);
+    a.variant_set_names = list(&a.variant_set_names, &b.variant_set_names);
     a.references = list(&a.references, &b.references);
     a.payloads = list(&a.payloads, &b.payloads);
     a.inherits = list(&a.inherits, &b.inherits);
@@ -857,7 +855,7 @@ fn merge_prim(a: &mut PrimSpec, b: &PrimSpec) -> Result<(), LayerStackFlattenErr
     merge_fields(&mut a.fields, &b.fields);
     merge_properties(&mut a.properties, &b.properties)?;
     unique(&mut a.authored_children, &b.authored_children);
-    unique(&mut a.variant_set_order, &b.variant_set_order);
+    a.variant_set_names = list(&a.variant_set_names, &b.variant_set_names);
     a.references = list(&a.references, &b.references);
     a.payloads = list(&a.payloads, &b.payloads);
     a.inherits = list(&a.inherits, &b.inherits);

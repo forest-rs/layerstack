@@ -53,7 +53,7 @@ fn with_variant(store: &mut InMemoryStore, spec: PrimSpec, set: &str, variant: &
     let mut variants = HashMap::new();
     variants.insert(variant, VariantSpec::default());
     spec.variant_sets.insert(set, VariantSetSpec { variants });
-    spec.variant_set_order.push(set);
+    spec.variant_set_names.prepend.push(set);
     spec.variant_selections.insert(set, variant);
     spec
 }

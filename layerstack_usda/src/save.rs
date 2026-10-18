@@ -41,15 +41,16 @@
 //! - values of every scalar, vector, quaternion and matrix type (`half`
 //!   and the other binary16 types kept as their bit patterns), and arrays
 //!   of them;
-//! - variant selections, the `variantSets` of each prim spec (written as
-//!   `prepend`) and variant sets with their variants, each variant with
+//! - variant selections, the `variantSets` list op of each prim and
+//!   variant spec, and variant sets with their variants, each variant with
 //!   everything a prim spec holds: metadata, arcs, selections, properties,
 //!   `reorder properties`, child prims (the prim specs the layer keeps in
 //!   that branch, [`Layer::branch_prim_specs`]) and nested variant sets,
 //!   written inside the branch that encloses them.
 //!
-//! Variant sets are written in the prim spec's `variantSets` order, then by
-//! name; variants and selections by name, as OpenUSD writes them.
+//! A spec's `variantSets` list op is written as authored, apart from its
+//! variant sets, which are written in the order it first names them, then
+//! by name; variants and selections by name, as OpenUSD writes them.
 //!
 //! Arcs are written from what was authored, never from what they resolved
 //! to: a sublayer, reference or payload by its authored asset path (an arc
@@ -477,8 +478,7 @@ impl Lowering<'_> {
             layer,
             id,
             &spec.variant_sets,
-            &spec.variant_set_order,
-            &spec.deleted_variant_sets,
+            &spec.variant_set_names,
             here,
             visited,
         )?;
@@ -532,16 +532,17 @@ impl Lowering<'_> {
 
     // ── Variants ────────────────────────────────────────────────────
 
-    /// The variant sets `sets`, declared in `order`, of the prim at `host`,
-    /// held by `owner`: the prim spec, or one of its variant specs for the
-    /// sets nested there. Returns the `variantSets` list op naming every
-    /// declared set, those without variants included, and the sets.
+    /// The variant sets `sets` of the prim at `host`, held by `owner`: the
+    /// prim spec, or one of its variant specs for the sets nested there,
+    /// whose `variantSetNames` is `names`. Returns that list op as
+    /// authored (`None` when it is not) and the sets.
     ///
-    /// Sets are written in `variantSets` order, then by name, and variants
-    /// by name, as `Sdf_WriteVariantSet` sorts them. The list op is written
-    /// as `prepend`, which adds the sets to weaker opinions as composition
-    /// of the layer model does, with the set names `deleted` removes (a
-    /// prim spec's [`PrimSpec::deleted_variant_sets`]).
+    /// The list op and the set specs are written apart, as OpenUSD keeps
+    /// them (`variantSetNames` and `variantSetChildren`): a set spec the
+    /// list op does not name is written without being listed, and a listed
+    /// set without a spec is listed only. Sets are written in the order
+    /// the list op first names them, then by name, and variants by name,
+    /// as `Sdf_WriteVariantSet` sorts them.
     ///
     /// Spec: AOUSD Core §7.3.6 (variant specs may contain variant set
     /// specs), §7.6.2.3.5 (`variantSetNames`), §7.6.6–§7.6.7.
@@ -550,12 +551,16 @@ impl Lowering<'_> {
         layer: &Layer,
         host: PathId,
         sets: &HashMap<TokenId, VariantSetSpec>,
-        order: &[TokenId],
-        deleted: &[TokenId],
+        names: &LayerListOp<TokenId>,
         owner: Parent<'_>,
         visited: &mut Visited,
     ) -> Result<(Option<ListOp<String>>, Vec<VariantSet>), SaveError> {
-        let mut order: Vec<TokenId> = order.to_vec();
+        let mut order: Vec<TokenId> = Vec::new();
+        for set in names.items() {
+            if sets.contains_key(set) && !order.contains(set) {
+                order.push(*set);
+            }
+        }
         let mut unordered: Vec<TokenId> = sets
             .keys()
             .copied()
@@ -564,10 +569,8 @@ impl Lowering<'_> {
         unordered.sort_by(|a, b| self.tokens.resolve(*a).cmp(self.tokens.resolve(*b)));
         order.extend(unordered);
 
-        let mut names = Vec::new();
         let mut written = Vec::new();
         for set in order {
-            names.push(self.name(set));
             let mut here: Vec<(TokenId, &VariantSpec)> = sets
                 .get(&set)
                 .into_iter()
@@ -587,11 +590,12 @@ impl Lowering<'_> {
                 variants,
             });
         }
-        let deleted: Vec<String> = deleted.iter().map(|set| self.name(*set)).collect();
-        let names = (!names.is_empty() || !deleted.is_empty()).then(|| ListOp {
-            deleted,
-            ..ListOp::prepend(names)
-        });
+        let names = if is_authored(names) {
+            let path = format!("{}#variantSetNames", owner.shown);
+            Some(self.list_op(names, &path, |set| Ok(self.name(*set)))?)
+        } else {
+            None
+        };
         Ok((names, written))
     }
 
@@ -653,8 +657,7 @@ impl Lowering<'_> {
             layer,
             host,
             &variant.variant_sets,
-            &variant.variant_set_order,
-            &[],
+            &variant.variant_set_names,
             branch,
             visited,
         )?;
@@ -1094,8 +1097,7 @@ fn is_children_only(spec: &PrimSpec) -> bool {
         && spec.property_order.is_none()
         && spec.variant_selections.is_empty()
         && spec.variant_sets.is_empty()
-        && spec.variant_set_order.is_empty()
-        && spec.deleted_variant_sets.is_empty()
+        && !is_authored(&spec.variant_set_names)
         && !is_authored(&spec.references)
         && !is_authored(&spec.payloads)
         && !is_authored(&spec.inherits)

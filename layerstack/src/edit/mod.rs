@@ -98,6 +98,7 @@ pub(crate) mod same;
 mod spec;
 mod target;
 mod transaction;
+mod variant_sets;
 
 #[cfg(test)]
 mod namespace_tests;

@@ -427,6 +427,7 @@ fn variants_selection_is_strength_ordered() {
     );
 
     sub_spec.variant_sets.insert(set_v, set_spec);
+    sub_spec.variant_set_names.prepend.push(set_v);
     sub_layer.insert_prim(prim, sub_spec);
     store.insert_layer(sub_layer);
 

@@ -13,7 +13,7 @@ use alloc::{borrow::Cow, collections::BTreeSet, vec::Vec};
 
 use hashbrown::{HashMap, HashSet};
 
-use crate::variant_fallbacks::{VariantFallbacks, apply_variant_fallbacks};
+use crate::variant_fallbacks::{ListedSets, VariantFallbacks, apply_variant_fallbacks};
 use crate::{
     composition_checks::{
         Findings, drop_inconsistent_property_kinds, drop_instance_targets, target_error_applies,
@@ -24,7 +24,7 @@ use crate::{
     layer_stack::LayerStack,
     path::PathId,
     prim_index::{OpinionKey, PrimIndex},
-    prim_index_graph::PrimIndexGraph,
+    prim_index_graph::{NodeId, PrimIndexGraph},
     stage::{Stage, StageOptions},
 };
 
@@ -172,6 +172,9 @@ fn authored_strength_ordered_variant_selections(
     graph: &PrimIndexGraph,
     sources: &[OpinionKey],
 ) -> HashMap<TokenId, TokenId> {
+    // Each node lists its sets once, on its strongest source.
+    let mut listed: HashMap<NodeId, Vec<TokenId>> =
+        node_variant_set_names(store, sources).into_iter().collect();
     let sites: Vec<VariantSite<'_>> = sources
         .iter()
         .filter_map(|source| {
@@ -183,6 +186,7 @@ fn authored_strength_ordered_variant_selections(
                 store,
                 spec,
                 source.spec_path.variant_chain(),
+                listed.remove(&source.node).unwrap_or_default(),
                 context,
             ))
         })
@@ -207,33 +211,26 @@ struct VariantSite<'a> {
     branch: Vec<(TokenId, TokenId)>,
     /// The selections the site authors, evaluated where it is read.
     authored: Option<Cow<'a, HashMap<TokenId, TokenId>>>,
-    /// The variant sets the site declares, in `variantSets` order; `None`
-    /// for a site that declares none.
-    declared: Option<&'a [TokenId]>,
+    /// The variant sets the site's node lists, in evaluation order, on the
+    /// node's strongest site; empty on its other sites.
+    declared: Vec<TokenId>,
 }
 
 impl<'a> VariantSite<'a> {
     /// The site of `spec`, or of its variant spec at `branch` (outermost
-    /// first), read in `context`.
+    /// first), read in `context`, declaring `declared`.
     fn of_spec(
         store: &dyn LayerStore,
         spec: &'a crate::doc::PrimSpec,
         branch: Vec<(TokenId, TokenId)>,
+        declared: Vec<TokenId>,
         context: SiteContext<'_>,
     ) -> Self {
-        let (authored, declared) = if branch.is_empty() {
-            (
-                Some(&spec.variant_selections),
-                Some(spec.variant_set_order.as_slice()),
-            )
+        let authored = if branch.is_empty() {
+            Some(&spec.variant_selections)
         } else {
-            match spec.variant_spec(&branch) {
-                Some(variant) => (
-                    Some(&variant.variant_selections),
-                    Some(variant.variant_set_order.as_slice()),
-                ),
-                None => (None, None),
-            }
+            spec.variant_spec(&branch)
+                .map(|variant| &variant.variant_selections)
         };
         Self {
             branch,
@@ -249,11 +246,55 @@ impl<'a> VariantSite<'a> {
             .all(|(set, variant)| selections.get(set) == Some(variant))
     }
 
-    /// The variant sets the site declares, in `variantSets` order: those of
-    /// its prim spec, or those nested in its variant spec.
+    /// The variant sets the site declares, in evaluation order: those its
+    /// node lists, if it is the node's strongest site.
     fn declared(&self) -> impl Iterator<Item = TokenId> + '_ {
-        self.declared.into_iter().flatten().copied()
+        self.declared.iter().copied()
     }
+}
+
+/// The variant sets each node of a prim index lists, nodes in strength
+/// order: the `variantSetNames` list ops of the node's sources among
+/// `sources` (strongest first), applied weakest first. A source in one of
+/// the prim's own variants (`/P{a=x}`) reads the list op of that variant
+/// spec, which lists the sets nested in it.
+///
+/// Spec: AOUSD Core §7.6.2.3.5 (`variantSetNames`), §12.4 (list ops).
+/// OpenUSD: `PcpComposeSiteVariantSets` for each node, as
+/// `UsdVariantSets::GetNames` and `_EvalNodeVariantSets` in
+/// `pxr/usd/pcp/primIndex.cpp` call it.
+pub(crate) fn node_variant_set_names(
+    store: &dyn LayerStore,
+    sources: &[OpinionKey],
+) -> Vec<(NodeId, Vec<TokenId>)> {
+    let mut nodes: Vec<(NodeId, Vec<&crate::listop::ListOp<TokenId>>)> = Vec::new();
+    for source in sources {
+        let op = store
+            .layer(source.layer_id)
+            .and_then(|layer| {
+                layer.source_prim_spec(source.lookup_path, &source.spec_path, store.paths())
+            })
+            .and_then(|spec| spec.variant_sets_in(&source.spec_path.variant_chain()))
+            .map(|(_, names)| names);
+        let ops = match nodes.iter_mut().find(|(node, _)| *node == source.node) {
+            Some((_, ops)) => ops,
+            None => {
+                nodes.push((source.node, Vec::new()));
+                &mut nodes.last_mut().expect("just pushed").1
+            }
+        };
+        ops.extend(op.filter(|op| !op.is_empty()));
+    }
+    nodes
+        .into_iter()
+        .map(|(node, ops)| {
+            let mut names = Vec::new();
+            for op in ops.into_iter().rev() {
+                op.apply_in_place(&mut names);
+            }
+            (node, names)
+        })
+        .collect()
 }
 
 /// Resolves the authored variant selections of a composed prim from its
@@ -261,9 +302,9 @@ impl<'a> VariantSite<'a> {
 ///
 /// A branch site composes only while every branch it names is selected.
 /// The variant sets are evaluated one at a time, each once: next is the
-/// first set, in `variantSets` order, of the strongest composed site that
-/// declares a set not yet evaluated (a set nested in a branch is declared
-/// by that branch). Its selection is the one authored on the strongest
+/// first set, in its node's composed `variantSetNames` order, of the
+/// strongest composed site whose node lists a set not yet evaluated (a set
+/// nested in a branch is listed by that branch's node). Its selection is the one authored on the strongest
 /// composed site that authors one, and selecting it composes its branch
 /// sites, whose selections count for the sets evaluated after it at the
 /// strength of their place among `sites`. A set no composed site selects is
@@ -364,7 +405,18 @@ fn apply_fallbacks_at(
     });
     let specs: Vec<(&crate::doc::PrimSpec, SiteContext<'_>)> =
         source_specs.chain(site_specs).collect();
-    apply_variant_fallbacks(store, fallbacks, selections, &specs);
+    let listed: Vec<ListedSets> = node_variant_set_names(store, sources)
+        .into_iter()
+        .map(|(node, names)| ListedSets {
+            branch: sources
+                .iter()
+                .find(|source| source.node == node)
+                .map(|source| source.spec_path.variant_chain())
+                .unwrap_or_default(),
+            names,
+        })
+        .collect();
+    apply_variant_fallbacks(store, fallbacks, selections, &specs, &listed);
 }
 
 /// The variant selections `sources`, sites of the prim index whose graph
@@ -474,7 +526,7 @@ mod child_order_tests {
         };
         let mut parent = PrimSpec::def();
         parent.variant_selections.insert(mode, a);
-        parent.variant_set_order.push(mode);
+        parent.variant_set_names.prepend.push(mode);
         parent.variant_sets.insert(
             mode,
             VariantSetSpec {
@@ -1568,7 +1620,7 @@ mod deferred_arc_tests {
                     .collect(),
             },
         );
-        host.variant_set_order.push(set);
+        host.variant_set_names.prepend.push(set);
         host.variant_selections.insert(set, y);
 
         let mut root = Layer::new(ROOT);

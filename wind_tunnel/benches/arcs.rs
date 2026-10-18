@@ -70,7 +70,7 @@ fn build_forest(n: usize) -> InMemoryStore {
     tree_spec
         .variant_sets
         .insert(season, VariantSetSpec { variants });
-    tree_spec.variant_set_order.push(season);
+    tree_spec.variant_set_names.prepend.push(season);
     tree_spec.variant_selections.insert(season, summer);
     asset.insert_prim(tree, tree_spec);
     asset.insert_prim(

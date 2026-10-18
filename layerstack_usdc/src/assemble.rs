@@ -686,28 +686,7 @@ impl<'a> AssembleCtx<'a> {
                     }
                 }
                 "variantSetNames" => {
-                    // Ordered variant set names: a string list op (AOUSD
-                    // Core §7.6.2.3.5) whose items, in order, give the
-                    // variant sets' strength order.
-                    let names = match value.value() {
-                        Some(CrateValue::ListOp(listop)) => {
-                            // The names a `delete` removes are kept apart.
-                            let deleted: Vec<TokenId> = listop
-                                .deleted_items
-                                .iter()
-                                .filter_map(|item| match item {
-                                    CrateValue::Token(name) | CrateValue::String(name) => {
-                                        Some(self.tokens.intern(name))
-                                    }
-                                    _ => None,
-                                })
-                                .collect();
-                            append_unique(&mut spec.deleted_variant_sets, deleted);
-                            self.list_op_names(listop)
-                        }
-                        _ => self.extract_token_names(value),
-                    };
-                    append_unique(&mut spec.variant_set_order, names);
+                    spec.variant_set_names = self.variant_set_names(value);
                 }
                 "instanceable" if matches!(value.value(), Some(CrateValue::Bool(_))) => {
                     if let Some(CrateValue::Bool(b)) = value.value() {
@@ -888,20 +867,21 @@ impl<'a> AssembleCtx<'a> {
             };
             let prim = prim_specs.get_mut(owner).expect("owner checked above");
             let holder = if enclosing.is_empty() {
-                Some((&mut prim.variant_sets, &mut prim.variant_set_order))
+                Some(&mut prim.variant_sets)
             } else {
                 prim.variant_spec_mut(enclosing)
-                    .map(|spec| (&mut spec.variant_sets, &mut spec.variant_set_order))
+                    .map(|spec| &mut spec.variant_sets)
             };
-            let Some((sets, order)) = holder else {
+            let Some(sets) = holder else {
                 self.report(path_str, None, "variant spec has no enclosing variant spec")?;
                 continue;
             };
+            // The set spec alone: only `variantSetNames` lists a set
+            // (AOUSD Core §7.6.2.3.5).
             let set_spec = sets.entry(*set).or_default();
             if let Some(variant_spec) = variant_spec {
                 set_spec.variants.insert(*variant, variant_spec);
             }
-            append_unique(order, [*set]);
         }
 
         // Properties of variants that have no variant spec.
@@ -942,12 +922,8 @@ impl<'a> AssembleCtx<'a> {
                 // Nested variant sets are read from their own specs.
                 "variantSetChildren" => {}
                 "variantSetNames" => {
-                    // The nested sets' order, as for a prim spec.
-                    let names = match value.value() {
-                        Some(CrateValue::ListOp(listop)) => self.list_op_names(listop),
-                        _ => self.extract_token_names(value),
-                    };
-                    append_unique(&mut variant.variant_set_order, names);
+                    // The nested sets, as for a prim spec.
+                    variant.variant_set_names = self.variant_set_names(value);
                 }
                 "variantSelection" => {
                     if let Some(CrateValue::VariantSelectionMap(pairs)) = value.value() {
@@ -1791,22 +1767,16 @@ impl<'a> AssembleCtx<'a> {
     /// Returns the names a token or string list op adds, in the order it
     /// gives them over no names: its explicit, prepended, added and
     /// appended items.
-    fn list_op_names(&mut self, listop: &CrateListOp) -> Vec<TokenId> {
-        let items = listop.explicit_items.iter().flatten();
-        let listed: Vec<TokenId> = items
-            .chain(&listop.prepended_items)
-            .chain(&listop.added_items)
-            .chain(&listop.appended_items)
-            .filter_map(|item| match item {
-                CrateValue::Token(name) | CrateValue::String(name) => {
-                    Some(self.tokens.intern(name))
-                }
-                _ => None,
-            })
-            .collect();
-        let mut names = Vec::new();
-        append_unique(&mut names, listed);
-        names
+    /// The `variantSetNames` list op, as authored: a string list op, or
+    /// for a name vector, an explicit list of its names.
+    ///
+    /// Spec: AOUSD Core §7.6.2.3.5 (`variantSetNames`), §12.4 (list ops).
+    fn variant_set_names(&mut self, field: &DecodedField<'_>) -> ListOp<TokenId> {
+        match field.value() {
+            Some(CrateValue::ListOp(listop)) => self.convert_token_listop(listop),
+            Some(_) => ListOp::explicit(self.extract_token_names(field)),
+            None => ListOp::default(),
+        }
     }
 
     /// Extracts token names from a [`CrateValue`] (typically a `TokenVector`

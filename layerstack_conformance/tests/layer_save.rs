@@ -302,8 +302,8 @@ fn unresolved_arcs_are_kept_as_authored() {
     }
 }
 
-/// A `delete` in `variantSets` is kept apart from the declared sets, and
-/// saves and reads back from both formats.
+/// A `delete` in `variantSets` is kept as authored, and saves and reads
+/// back from both formats.
 ///
 /// Spec: AOUSD Core §7.6.2.3.5 (`variantSetNames`), §12.4 (list ops).
 #[test]
@@ -330,9 +330,14 @@ def "Clay" (
     };
     let (loam, clay) = (path("/Loam"), path("/Clay"));
     let spec = |layer: &Layer, path| layer.prim(path).expect("prim").clone();
-    assert_eq!(spec(&layer.layer, loam).deleted_variant_sets, [grain]);
-    assert!(spec(&layer.layer, loam).variant_set_order.is_empty());
-    assert_eq!(spec(&layer.layer, clay).variant_set_order, [grain]);
+    assert_eq!(
+        spec(&layer.layer, loam).variant_set_names,
+        ListOp::deleted(vec![grain])
+    );
+    assert_eq!(
+        spec(&layer.layer, clay).variant_set_names,
+        ListOp::prepended(vec![grain])
+    );
     let want = structure(&layer.layer);
     let usda = layer.save_usda().unwrap();
     assert!(usda.contains("delete variantSets = [\"grain\"]"), "{usda}");
@@ -421,7 +426,7 @@ fn variant_structure(variant: &VariantSpec) -> String {
         variant_selections,
         // Walked by `PrimSpec::variant_branches`.
         variant_sets: _,
-        variant_set_order,
+        variant_set_names,
         property_order,
     } = variant;
     let selections: BTreeMap<_, _> = variant_selections.iter().collect();
@@ -429,7 +434,7 @@ fn variant_structure(variant: &VariantSpec) -> String {
         "fields {fields:?}\n      properties {properties:?}\n      children \
          {authored_children:?}\n      references {}\n      payloads {}\n      inherits \
          {inherits:?}\n      specializes {specializes:?}\n      selections {selections:?}\n      \
-         variant sets {variant_set_order:?}\n      property order {property_order:?}",
+         variant sets {variant_set_names:?}\n      property order {property_order:?}",
         arc_list(references),
         arc_list(payloads),
     )
@@ -475,8 +480,7 @@ fn structure(layer: &Layer) -> String {
             variant_selections,
             // Walked by `PrimSpec::variant_branches` below.
             variant_sets: _,
-            variant_set_order,
-            deleted_variant_sets,
+            variant_set_names,
             references,
             inherits,
             specializes,
@@ -489,7 +493,7 @@ fn structure(layer: &Layer) -> String {
         let mut text = format!(
             "  {specifier:?} {type_name:?}\n  fields {fields:?}\n  properties {properties:?}\n  \
              property order {property_order:?}\n  children {authored_children:?}\n  prim order \
-             {prim_order:?}\n  selections {selections:?}\n  variant sets {variant_set_order:?} deleted {deleted_variant_sets:?}\n  \
+             {prim_order:?}\n  selections {selections:?}\n  variant sets {variant_set_names:?}\n  \
              references {}\n  payloads {}\n  inherits {inherits:?}\n  specializes \
              {specializes:?}\n  instanceable {instanceable:?} active {active:?}\n",
             arc_list(references),

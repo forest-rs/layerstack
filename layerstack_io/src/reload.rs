@@ -173,6 +173,13 @@ impl<B: Storage> StageDocument<B> {
             ));
         }
         let mut store = self.store.snapshot();
+        // A reload retries every asset recorded missing, as
+        // `PcpCache::Reload` retries every invalid asset and sublayer path:
+        // the layers read again resolve their arcs afresh, and composition
+        // asks again for the deferred arcs' assets (AOUSD Core §9, §10.6).
+        for assets in store.asset_layers.values_mut() {
+            assets.retain(|_, layer| *layer != LayerId::UNRESOLVED);
+        }
         let mut catalog = self.catalog.clone();
         catalog.reserved.extend(self.store.layers.keys().copied());
         if root_closure {

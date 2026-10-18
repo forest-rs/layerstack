@@ -21,16 +21,18 @@ cargo run -p layerstack_examples --example tutorial_stage_io -- ./tutorial-outpu
 | Example | Workflow | OpenUSD tutorial |
 | --- | --- | --- |
 | `tutorial_hello_world` | Create, type and save a sphere; inspect generic properties | [Hello World](https://openusd.org/release/tut_helloworld.html), [Generic Prims](https://openusd.org/release/tut_helloworld_redux.html), [Properties](https://openusd.org/release/tut_inspect_and_author_props.html) |
-| `tutorial_references` | Load one asset, reference it twice and override one occurrence | [Referencing Layers](https://openusd.org/release/tut_referencing_layers.html) |
+| `tutorial_references` | Reference one asset twice through a transaction, which loads it, and override one occurrence | [Referencing Layers](https://openusd.org/release/tut_referencing_layers.html) |
 | `tutorial_variants` | Clear a stronger opinion, author through variant edit targets and select a branch | [Authoring Variants](https://openusd.org/release/tut_authoring_variants.html) |
 | `tutorial_stage_io` | Traverse with pruning, retain a checked query, undo edits, export USDC and reload while preserving a private session preview | [Traversing a Stage](https://openusd.org/release/tut_traversing_stage.html), [Layer Formats](https://openusd.org/release/tut_converting_between_layer_formats.html), [Stage session layers](https://openusd.org/release/api/class_usd_stage.html#Usd_SessionLayer) |
 
 CI reopens these authored outputs with OpenUSD 26.8 and independently checks
 schema values, reference overrides, variant selection and binary export.
 The examples use `StageDocument<Filesystem>` for file workflows, `SchemaEdit`
-for typed authoring and `Transaction` for guarded edits. Composition arcs use
-layer APIs followed by explicit synchronization. Applications supply storage,
-transport, conflict handling and rendering.
+for typed authoring and `Transaction` for guarded edits. Composition arcs are
+transaction edits too (`Transaction::add_reference`, `add_payload`):
+`StageDocument::apply` applies one and loads the assets it asks for
+(`Applied::asset_requests`), so the stage reads them when it returns.
+Applications supply storage, transport, conflict handling and rendering.
 
 ## Share edits and keep private previews
 

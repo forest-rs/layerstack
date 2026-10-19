@@ -18,7 +18,7 @@ use crate::{
     DecodeBudget, UsdcError, header, section,
     section::{CrateSections, FieldDef, SpecDef},
     toc,
-    value_rep::{CrateValue, RawValueRep, decode_value_within},
+    value_rep::{CrateValue, RawValueRep, borrow_text, decode_text_indices, decode_value_within},
     value_type::SpecForm,
     version::CrateVersion,
 };
@@ -142,6 +142,61 @@ impl<'a> CrateFile<'a> {
         self.order.iter().map(|&i| self.view(i))
     }
 
+    /// Materializes only authored specs accepted by `include` into a layer.
+    ///
+    /// The immutable file keeps its tables; unselected values are not decoded
+    /// or validated. No full `Layer`, interner, or value cache is constructed
+    /// for the catalog first. Each spec is visited once to select it, then
+    /// normal assembly applies to the selected sequence in file order.
+    ///
+    /// This is an **explicit authored-data projection**, not a USD population
+    /// mask or dependency-closure algorithm. The caller must include owning
+    /// prims, wanted properties, ancestor/variant context and required layer
+    /// metadata. Missing owners are assembly diagnostics. Arcs and relationship
+    /// targets are preserved; this method does not discover omitted targets.
+    /// A host can keep the complete file read-only and materialize its own
+    /// working-set closure into a base layer beneath a separate edit layer.
+    ///
+    /// All accepted specs use the ordinary assembler and asset resolver;
+    /// inspect returned diagnostics and insert resolved dependencies as usual.
+    /// The shared budget covers selection storage and assembly, and is not
+    /// reset. AOUSD Core §7.3.6–§7.3.7 (authored specs), §16.3 (crate tables).
+    ///
+    /// # Errors
+    /// Selected encodings cannot decode, asset resolution fails, or the
+    /// caller's cumulative decode budget is exhausted.
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "same explicit assembly context as assemble"
+    )]
+    pub fn materialize_where(
+        &self,
+        layer_id: layerstack::LayerId,
+        tokens: &layerstack::TokenInterner,
+        paths: &layerstack::PathInterner,
+        resolver: &mut dyn layerstack::AssetResolver,
+        budget: &mut DecodeBudget,
+        mut include: impl FnMut(CrateSpec<'_>) -> bool,
+    ) -> Result<crate::AssembleResult, UsdcError> {
+        let mut selected = Vec::new();
+        for index in 0..self.sections.specs.len() {
+            if include(self.view(index)) {
+                budget.charge(1)?;
+                selected.push(self.sections.specs[index]);
+            }
+        }
+        crate::assemble::assemble_specs(
+            self.data,
+            &self.sections,
+            &selected,
+            layer_id,
+            tokens,
+            paths,
+            resolver,
+            budget,
+        )
+    }
+
     fn view(&self, index: usize) -> CrateSpec<'_> {
         CrateSpec {
             data: self.data,
@@ -213,6 +268,53 @@ impl<'a> CrateField<'a> {
         RawValueRep::new(self.field.value_rep)
     }
 
+    /// Borrows a `string` or `token` scalar from this file's token table.
+    ///
+    /// Returns `None` for other types, arrays and array edits. No text is
+    /// copied and no value cache is created. The returned borrow is tied to
+    /// the file; the caller can retain ownership explicitly by copying it.
+    /// This is authored data, not a composed or asset-resolved value.
+    ///
+    /// # Errors
+    /// Invalid encodings or an exhausted caller budget. As in [`Self::decode`],
+    /// a text index outside the tables reads as empty text.
+    pub fn read_text(&self, budget: &mut DecodeBudget) -> Result<Option<&'a str>, UsdcError> {
+        borrow_text(&self.representation(), self.data, self.sections, budget)
+    }
+
+    /// Reads a `string[]` or `token[]` as compact indices borrowing the text.
+    ///
+    /// Copies/decompresses only one `u32` per element, without allocating a
+    /// string or type-erased value per element. The view keeps no cache and
+    /// borrows this file's token table. Repeated calls decode again; retain
+    /// the returned view for reuse. `None` means another type or an array edit.
+    /// Counts, indices and conservative text work use the same budget as
+    /// [`Self::decode`]. Invalid table indices read as empty text, as there.
+    ///
+    /// # Errors
+    /// Malformed arrays, unknown types, or an exhausted caller budget.
+    pub fn read_text_array(
+        &self,
+        budget: &mut DecodeBudget,
+    ) -> Result<Option<CrateTextArray<'a>>, UsdcError> {
+        let rep = self.representation();
+        let kind = rep.value_type()?;
+        if !rep.is_array()
+            || rep.is_array_edit()
+            || !matches!(
+                kind,
+                crate::value_type::ValueType::String | crate::value_type::ValueType::Token
+            )
+        {
+            return Ok(None);
+        }
+        let indices = decode_text_indices(&rep, self.data, self.sections, budget)?;
+        Ok(Some(CrateTextArray {
+            indices,
+            tokens: &self.sections.tokens,
+        }))
+    }
+
     /// Decodes this field into an owned crate value using the existing decoder.
     ///
     /// Each call decodes again and charges `budget`, including repeated reads
@@ -230,6 +332,42 @@ impl<'a> CrateField<'a> {
     /// decode budget. A failed read may have consumed some of the budget.
     pub fn decode(&self, budget: &mut DecodeBudget) -> Result<CrateValue, UsdcError> {
         decode_value_within(&self.representation(), self.data, self.sections, budget)
+    }
+}
+
+/// A compact text-array read: one owned index per element and borrowed text.
+///
+/// Constructed by [`CrateField::read_text_array`]. No per-element strings,
+/// generic value objects, interners, or editable property specs are created.
+#[derive(Debug)]
+pub struct CrateTextArray<'a> {
+    indices: Vec<u32>,
+    tokens: &'a [alloc::string::String],
+}
+impl<'a> CrateTextArray<'a> {
+    /// Number of elements.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.indices.len()
+    }
+    /// Whether the array has no elements.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.indices.is_empty()
+    }
+    /// Borrow one element. An out-of-range array position is absent.
+    #[must_use]
+    pub fn get(&self, index: usize) -> Option<&'a str> {
+        self.indices.get(index).map(|&token| self.text(token))
+    }
+    /// Borrow every element in authored array order, without allocating.
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = &'a str> + DoubleEndedIterator + '_ {
+        self.indices.iter().map(|&token| self.text(token))
+    }
+    fn text(&self, token: u32) -> &'a str {
+        self.tokens
+            .get(token as usize)
+            .map_or("", alloc::string::String::as_str)
     }
 }
 

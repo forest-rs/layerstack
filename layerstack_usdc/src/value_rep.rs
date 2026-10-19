@@ -428,6 +428,36 @@ pub(crate) fn decode_text_indices(
     })
 }
 
+/// Borrow a string or token scalar from the already decoded token table.
+/// Uses the same index fallback and budget as the owned decoder.
+pub(crate) fn borrow_text<'a>(
+    rep: &RawValueRep,
+    data: &[u8],
+    sections: &'a CrateSections,
+    budget: &mut DecodeBudget,
+) -> Result<Option<&'a str>, UsdcError> {
+    let kind = rep.value_type()?;
+    if rep.is_array()
+        || rep.is_array_edit()
+        || !matches!(kind, ValueType::String | ValueType::Token)
+    {
+        return Ok(None);
+    }
+    within_value_budget(budget, |budget| {
+        let index = decode_inlined_or_offset_u32(rep, data)?;
+        let token = if kind == ValueType::String {
+            sections.strings.get(index as usize).copied()
+        } else {
+            Some(index)
+        };
+        let text = token
+            .and_then(|index| sections.tokens.get(index as usize))
+            .map_or("", String::as_str);
+        budget.charge_text(text.len())?;
+        Ok(Some(text))
+    })
+}
+
 /// The element count an array value's payload declares, read without
 /// decoding the elements; `None` when the payload cannot be read.
 #[cfg(feature = "std")]

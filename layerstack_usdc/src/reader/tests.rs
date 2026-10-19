@@ -169,3 +169,189 @@ fn opening_and_index_allocation_are_budgeted() {
         Err(UsdcError::DecodeBudgetExceeded { .. })
     ));
 }
+
+#[test]
+fn borrowed_text_and_compact_arrays_agree_with_owned_decode() {
+    for (kind, value) in [
+        ("string", Value::String("café".into())),
+        ("token", Value::Token("finish".into())),
+        ("empty", Value::String("".into())),
+        (
+            "strings",
+            Value::StringArray(vec!["灰色".into(), "".into(), "灰色".into()]),
+        ),
+        (
+            "tokens",
+            Value::TokenArray((0..64).map(|i| alloc::format!("v{}", i % 3)).collect()),
+        ),
+    ] {
+        let bytes = write_crate(&[
+            Spec::new("/", SpecForm::PseudoRoot),
+            Spec::new("/Value", SpecForm::Prim).with_field(kind, value),
+        ])
+        .unwrap();
+        let mut budget = DecodeBudget::for_input(bytes.len());
+        let file = CrateFile::open(&bytes, &mut budget).unwrap();
+        let field = file.spec("/Value").unwrap().field(kind).unwrap();
+        match field.decode(&mut budget).unwrap() {
+            CrateValue::String(value) | CrateValue::Token(value) => {
+                assert_eq!(field.read_text(&mut budget).unwrap(), Some(value.as_str()));
+                assert!(field.read_text_array(&mut budget).unwrap().is_none());
+            }
+            CrateValue::Array(values) => {
+                let view = field.read_text_array(&mut budget).unwrap().unwrap();
+                let expected: Vec<_> = values
+                    .iter()
+                    .map(|value| match value {
+                        CrateValue::String(s) | CrateValue::Token(s) => s.as_str(),
+                        _ => panic!("text"),
+                    })
+                    .collect();
+                assert_eq!(view.iter().collect::<Vec<_>>(), expected);
+                assert_eq!(
+                    view.iter().rev().collect::<Vec<_>>(),
+                    expected.iter().copied().rev().collect::<Vec<_>>()
+                );
+                assert_eq!(view.len(), expected.len());
+                assert_eq!(view.is_empty(), expected.is_empty());
+                assert_eq!(view.get(expected.len()), None);
+                assert!(field.read_text(&mut budget).unwrap().is_none());
+            }
+            _ => panic!("text fixture"),
+        }
+        assert!(
+            matches!(
+                field.read_text_array(&mut DecodeBudget::with_limit(0)),
+                Err(UsdcError::DecodeBudgetExceeded { .. })
+            ) || !field.representation().is_array()
+        );
+    }
+}
+
+#[test]
+fn selective_materialization_does_not_decode_or_own_the_other_product() {
+    struct NoAssets;
+    impl layerstack::AssetResolver for NoAssets {
+        fn resolve(
+            &mut self,
+            _: &str,
+            _: Option<layerstack::LayerId>,
+            _: &layerstack::TokenInterner,
+            _: &layerstack::PathInterner,
+        ) -> Result<layerstack::ResolvedAsset, layerstack::AssetResolveError> {
+            Err(layerstack::AssetResolveError::NotFound)
+        }
+        fn resolved_path(&self, _: layerstack::LayerId) -> Option<&str> {
+            None
+        }
+    }
+    let bytes = write_crate(&[
+        Spec::new("/", SpecForm::PseudoRoot),
+        Spec::new("/Selected", SpecForm::Prim),
+        Spec::new("/Selected.name", SpecForm::Attribute)
+            .with_field("typeName", Value::Token("string".into()))
+            .with_field("default", Value::String("Chair".into())),
+        Spec::new("/Unselected", SpecForm::Prim),
+        Spec::new("/Unselected.secret", SpecForm::Attribute)
+            .with_field("typeName", Value::Token("string".into()))
+            .with_field("default", Value::String("Unrelated".into())),
+    ])
+    .unwrap();
+    let mut budget = DecodeBudget::for_input(bytes.len());
+    let file = CrateFile::open(&bytes, &mut budget).unwrap();
+    let mut sections = file.sections;
+    let bad=sections.fields.iter().position(|field|matches!(decode_value_within(&RawValueRep::new(field.value_rep),&bytes,&sections,&mut budget),Ok(CrateValue::String(s)) if s=="Unrelated")).unwrap();
+    sections.fields[bad].value_rep[6] = 255;
+    let file = CrateFile::from_sections(&bytes, sections, &mut budget).unwrap();
+    let mut store = layerstack::InMemoryStore::default();
+    let selected = file
+        .materialize_where(
+            layerstack::LayerId(1),
+            &store.tokens,
+            &store.paths,
+            &mut NoAssets,
+            &mut budget,
+            |spec| {
+                spec.path() == "/"
+                    || spec.path() == "/Selected"
+                    || spec.path().starts_with("/Selected.")
+            },
+        )
+        .unwrap();
+    assert!(selected.diagnostics.is_empty());
+    assert_eq!(selected.layer.prims().len(), 1);
+    assert!(
+        file.materialize_where(
+            layerstack::LayerId(2),
+            &store.tokens,
+            &store.paths,
+            &mut NoAssets,
+            &mut budget,
+            |_| true
+        )
+        .is_err()
+    );
+    store.insert_layer(selected.layer);
+    let stage = layerstack::Stage::compose(
+        &mut store,
+        layerstack::LayerId(1),
+        layerstack::StageOptions::default(),
+    );
+    assert!(stage.has_prim(store.path("/Selected")));
+    assert!(!stage.has_prim(store.path("/Unselected")));
+}
+
+#[test]
+fn selecting_every_spec_preserves_the_bulk_import_including_variants() {
+    struct NoAssets;
+    impl layerstack::AssetResolver for NoAssets {
+        fn resolve(
+            &mut self,
+            _: &str,
+            _: Option<layerstack::LayerId>,
+            _: &layerstack::TokenInterner,
+            _: &layerstack::PathInterner,
+        ) -> Result<layerstack::ResolvedAsset, layerstack::AssetResolveError> {
+            Err(layerstack::AssetResolveError::NotFound)
+        }
+        fn resolved_path(&self, _: layerstack::LayerId) -> Option<&str> {
+            None
+        }
+    }
+    let bytes = fixture();
+    let mut budget = DecodeBudget::for_input(bytes.len());
+    let file = CrateFile::open(&bytes, &mut budget).unwrap();
+    let tokens = layerstack::TokenInterner::default();
+    let paths = layerstack::PathInterner::default();
+    let selected = file
+        .materialize_where(
+            layerstack::LayerId(1),
+            &tokens,
+            &paths,
+            &mut NoAssets,
+            &mut budget,
+            |_| true,
+        )
+        .unwrap();
+    let full = crate::read_usdc(
+        &bytes,
+        layerstack::LayerId(1),
+        &tokens,
+        &paths,
+        &mut NoAssets,
+    )
+    .unwrap();
+    assert_eq!(selected.layer, full.layer);
+    assert_eq!(selected.diagnostics, full.diagnostics);
+    assert!(
+        file.materialize_where(
+            layerstack::LayerId(1),
+            &tokens,
+            &paths,
+            &mut NoAssets,
+            &mut DecodeBudget::with_limit(0),
+            |_| true
+        )
+        .is_err()
+    );
+}

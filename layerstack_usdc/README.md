@@ -52,6 +52,37 @@ semantics explicitly; this is not a replacement for document validation.
 Repeated arrays and metadata dictionaries share encoded payloads, including
 nested dictionaries. Sharing preserves value types and floating-point bits.
 
+## Read an immutable catalog or asset library
+
+`CrateFile::open` borrows the encoded bytes and opens the structural tables
+without building editable prims, properties, interners, or a composed stage.
+Use `spec(path)` to inspect an authored spec and its fields. Keep one file view
+alive and share borrows; this path creates no implicit decoded-value cache.
+
+`CrateField::read_text` borrows string/token scalar text from the file's token
+table. `read_text_array` returns `CrateTextArray`: one owned `u32` index per
+element and borrowed text, including for compressed arrays. Reuse the returned
+view to avoid decoding its index buffer again. Generic `decode` still returns
+owned values when ownership or other value kinds are needed. All reads charge
+the caller's explicit cumulative `DecodeBudget` and preserve decode failures.
+These methods are additive; existing owned reads retain their contract.
+
+To create an editable working set, `CrateFile::materialize_where` accepts an
+explicit authored-spec predicate and uses the ordinary assembler only on that
+selection. It borrows the existing tables and does not assemble the full layer
+first. Keep the complete immutable file for catalog queries and put edits in a
+separate stronger layer over the materialized working set. No file mutation or
+copy-on-write of the whole catalog occurs.
+
+Selection is an authored-data projection, **not composed USD resolution** or an
+automatic dependency closure. The caller owns the selection of prim/property
+owners, ancestor and variant context, metadata and dependencies. Selected arcs
+and targets keep their meaning; omitted targets are not silently loaded by the
+selection API. Inspect the assembler's diagnostics and resolved dependencies.
+Use a composed `Stage` when inheritance, references, variants, fallbacks or
+layer strength must be resolved. An indexed raw value must never be presented
+as though those operations have already happened.
+
 ## Read a file
 
 [`read_usdc`](https://docs.rs/layerstack_usdc/latest/layerstack_usdc/fn.read_usdc.html)

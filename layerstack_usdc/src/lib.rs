@@ -81,7 +81,7 @@ use layerstack::path::PathInterner;
 
 pub use assemble::AssembleResult;
 pub use error::UsdcError;
-pub use reader::{CrateField, CrateFile, CrateSpec};
+pub use reader::{CrateField, CrateFile, CrateSpec, CrateTextArray};
 pub use value_rep::DecodeBudget;
 pub use version::CrateVersion;
 

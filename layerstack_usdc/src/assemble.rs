@@ -92,10 +92,35 @@ pub fn assemble(
     resolver: &mut dyn AssetResolver,
     budget: &mut DecodeBudget,
 ) -> Result<AssembleResult, UsdcError> {
+    assemble_specs(
+        data,
+        sections,
+        &sections.specs,
+        layer_id,
+        tokens,
+        paths,
+        resolver,
+        budget,
+    )
+}
+
+/// Assembly over an explicitly selected authored spec sequence. Tables stay
+/// borrowed; only the selected specs become editable layer structures.
+pub(crate) fn assemble_specs(
+    data: &[u8],
+    sections: &CrateSections,
+    specs: &[crate::section::SpecDef],
+    layer_id: LayerId,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
+    resolver: &mut dyn AssetResolver,
+    budget: &mut DecodeBudget,
+) -> Result<AssembleResult, UsdcError> {
     let token_ids = TokenIds::for_read(sections);
     let mut ctx = AssembleCtx {
         data,
         sections,
+        specs,
         tokens,
         token_ids,
         paths,
@@ -129,6 +154,7 @@ pub fn assemble(
 struct AssembleCtx<'a> {
     data: &'a [u8],
     sections: &'a CrateSections,
+    specs: &'a [crate::section::SpecDef],
     tokens: &'a TokenInterner,
     /// The token ids of the file's token table, by index.
     token_ids: TokenIds,
@@ -372,19 +398,19 @@ impl<'a> AssembleCtx<'a> {
         // the entire assembled layer.
         // Track visits to validate skipped/unsupported specs once at the end:
         // bulk import still checks every authored field (AOUSD Core §16.3).
-        self.budget.charge_elements(self.sections.specs.len())?;
-        let mut decoded = alloc::vec![false; self.sections.specs.len()];
+        self.budget.charge_elements(self.specs.len())?;
+        let mut decoded = alloc::vec![false; self.specs.len()];
         let mut fields = Vec::new();
 
         // Build a path-to-spec-index map grouped by prim path for child lookup.
-        let prims = self.sections.specs.iter();
+        let prims = self.specs.iter();
         let prims = prims.filter(|spec| spec.form == SpecForm::Prim).count();
         let mut prim_specs_map = PrimSpecs::new(prims, self.sections.paths.len());
         // Authored property order (`propertyChildren`) per prim path.
         let mut property_children: HashMap<&str, Vec<TokenId>> = HashMap::new();
 
         // Process PseudoRoot specs first.
-        for (i, spec) in self.sections.specs.iter().enumerate() {
+        for (i, spec) in self.specs.iter().enumerate() {
             if spec.form == SpecForm::PseudoRoot {
                 self.collect_spec_fields(i, &mut decoded, &mut fields)?;
                 self.process_pseudo_root(&fields, &mut layer)?;
@@ -392,7 +418,7 @@ impl<'a> AssembleCtx<'a> {
         }
 
         // Process Prim specs.
-        for (i, spec) in self.sections.specs.iter().enumerate() {
+        for (i, spec) in self.specs.iter().enumerate() {
             if spec.form == SpecForm::Prim {
                 let path_str = self.lookup_path(spec.path_index)?;
                 // Prims inside variant branches (`/A{v=x}B`) keep their
@@ -416,7 +442,7 @@ impl<'a> AssembleCtx<'a> {
         // Whether each prim path text properties are authored on parses, as
         // `PropertyPath::parse` requires; checked once per prim.
         let mut prim_paths_valid: HashMap<&str, bool> = HashMap::new();
-        for (i, spec) in self.sections.specs.iter().enumerate() {
+        for (i, spec) in self.specs.iter().enumerate() {
             let is_attribute = spec.form == SpecForm::Attribute;
             if !is_attribute && spec.form != SpecForm::Relationship {
                 continue;
@@ -480,7 +506,7 @@ impl<'a> AssembleCtx<'a> {
         }
 
         // Process Connection specs — add connection paths to attribute on parent.
-        for (i, spec) in self.sections.specs.iter().enumerate() {
+        for (i, spec) in self.specs.iter().enumerate() {
             if spec.form == SpecForm::Connection {
                 let path_str = self.lookup_path(spec.path_index)?;
                 if let Some((prim_path, attr_name)) =
@@ -498,7 +524,7 @@ impl<'a> AssembleCtx<'a> {
 
         // Validate fields not consumed above, including malformed paths and
         // specs the layer model does not hold, and report unsupported forms.
-        for (i, spec) in self.sections.specs.iter().enumerate() {
+        for (i, spec) in self.specs.iter().enumerate() {
             if decoded[i] {
                 continue;
             }
@@ -549,7 +575,7 @@ impl<'a> AssembleCtx<'a> {
         // layer's map grows once.
         let mut plain = Vec::with_capacity(prim_specs_map.len());
         let mut branched: Vec<&str> = Vec::new();
-        for spec in &self.sections.specs {
+        for spec in self.specs {
             if spec.form != SpecForm::Prim {
                 continue;
             }
@@ -639,7 +665,7 @@ impl<'a> AssembleCtx<'a> {
     ) -> Result<(), UsdcError> {
         debug_assert!(!decoded[index], "spec decoded twice");
         decoded[index] = true;
-        let spec = &self.sections.specs[index];
+        let spec = &self.specs[index];
         let retain_default = spec.form == SpecForm::Attribute;
         self.collect_fields(spec.fieldset_index, retain_default, fields)
     }
@@ -1032,7 +1058,7 @@ impl<'a> AssembleCtx<'a> {
     ) -> Result<(), UsdcError> {
         // Properties directly on a variant (`/P{v=x}.b`), by variant path.
         let mut variant_properties: HashMap<&str, Vec<PropertyEntry>> = HashMap::new();
-        for (i, spec) in self.sections.specs.iter().enumerate() {
+        for (i, spec) in self.specs.iter().enumerate() {
             if spec.form != SpecForm::Attribute && spec.form != SpecForm::Relationship {
                 continue;
             }
@@ -1062,7 +1088,7 @@ impl<'a> AssembleCtx<'a> {
         // Variant set and variant specs, outer before nested, and a set
         // before its variants.
         let mut specs: Vec<(usize, &str)> = Vec::new();
-        for (i, spec) in self.sections.specs.iter().enumerate() {
+        for (i, spec) in self.specs.iter().enumerate() {
             if matches!(spec.form, SpecForm::VariantSet | SpecForm::Variant) {
                 specs.push((i, self.lookup_path(spec.path_index)?));
             }
@@ -1073,7 +1099,7 @@ impl<'a> AssembleCtx<'a> {
         });
 
         for (i, path_str) in specs {
-            let is_set = self.sections.specs[i].form == SpecForm::VariantSet;
+            let is_set = self.specs[i].form == SpecForm::VariantSet;
             let placed = split_trailing_selections(path_str)
                 .filter(|(owner, _)| prim_specs.contains_key(owner))
                 .filter(|(_, chain)| {
@@ -1221,7 +1247,7 @@ impl<'a> AssembleCtx<'a> {
         // spec order, so names intern in the same order on every read.
         let mut parents: Vec<&str> = Vec::new();
         let mut children: HashMap<&str, Vec<(&str, TokenId)>> = HashMap::new();
-        for spec in &self.sections.specs {
+        for spec in self.specs {
             if spec.form != SpecForm::Prim {
                 continue;
             }

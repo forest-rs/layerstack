@@ -2441,8 +2441,9 @@ impl<'a> AssembleCtx<'a> {
     /// Found once per entry from its parent's and its element, as the
     /// text was built, rather than by parsing the text: the text is read
     /// only for an element that would not join its parent's segments as
-    /// one segment (empty, or holding a `/`), an entry beneath one that
-    /// names no prim path, or a table without its tree.
+    /// one segment (empty, or holding a `/`), a property's entry, an
+    /// entry beneath one that names no prim path, or a table without its
+    /// tree.
     fn prim_path_at(&mut self, index: u32) -> Option<PathId> {
         let sections = self.sections;
         let nodes = sections.paths.nodes();
@@ -2466,7 +2467,8 @@ impl<'a> AssembleCtx<'a> {
             let found = match nodes[at] {
                 PathNode::Root => Some(self.paths.intern(Path::root())),
                 PathNode::Unused => self.prim_path_of_text(at),
-                PathNode::Child { property: true, .. } => None,
+                // A property's text may still parse as a prim path (`/A.b`).
+                PathNode::Child { property: true, .. } => self.prim_path_of_text(at),
                 PathNode::Child { parent, token, .. } => {
                     let element = self.lookup_token(token);
                     let parent = self.prim_paths.get(parent as usize).copied();

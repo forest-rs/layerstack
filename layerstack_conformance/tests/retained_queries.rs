@@ -81,7 +81,9 @@ fn assert_fresh(
     // Rebuild an independently seeded store with identical interned identifiers,
     // then replace its authored layers with the current edited source state.
     let mut store = fixture().session.into_store();
-    store.layers = f.session.store().layers.clone();
+    for layer in f.session.store().layers() {
+        store.insert_layer(layer.clone());
+    }
     let options = StageOptions {
         schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
         ..StageOptions::default()
@@ -247,12 +249,7 @@ fn deletion_recreation_missing_providers_and_external_edits() {
     let layer = f.layer;
     let size = f.size;
     f.session.edit_sources(|store| {
-        let spec = store
-            .layers
-            .get_mut(&layer)
-            .unwrap()
-            .property_mut(size)
-            .unwrap();
+        let spec = store.layer_mut(layer).unwrap().property_mut(size).unwrap();
         spec.default = Some(Value::Double(8.0));
     });
     assert_fresh(&mut f, x, b, Time::Default);
@@ -321,8 +318,7 @@ fn interrupted_external_edit_is_refreshed_before_polling() {
     let failed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         f.session.edit_sources(|store| {
             store
-                .layers
-                .get_mut(&layer)
+                .layer_mut(layer)
                 .unwrap()
                 .property_mut(size)
                 .unwrap()
@@ -462,7 +458,7 @@ fn equal_values_from_a_new_authored_layer_change_provenance() {
     let root = f.layer;
     let weak = LayerId(999);
     f.session.edit_sources(|store| {
-        let mut source = store.layers.remove(&root).unwrap();
+        let mut source = store.remove_layer(root).unwrap();
         source.map_layer_ids(|id| if id == root { weak } else { id });
         store.insert_layer(source);
         let mut strong = layerstack::Layer::new(root);
@@ -535,7 +531,7 @@ fn prepared_transform_evidence_excludes_unused_animation_and_handles_root() {
     let child = f.reset_child;
     f.session.edit_sources(|store| {
         let unused = store.tokens.intern("xformOp:translate:unused");
-        store.layers.get_mut(&layer).unwrap().set_property(
+        store.layer_mut(layer).unwrap().set_property(
             PropertyPath::new(child, unused),
             layerstack::PropertySpec::typed_attribute(
                 layerstack::PropertyType::parse("double3").unwrap(),

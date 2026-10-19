@@ -20,7 +20,8 @@ use alloc::{
     vec::Vec,
 };
 
-use layerstack::{HashMap, PathId, PropertyPath, ResolvedValue, TargetPath, Value};
+use hashbrown::HashMap;
+use layerstack::{PathId, PropertyPath, ResolvedValue, TargetPath, Value};
 
 use crate::collection::{Membership, MembershipQuery, collection_name};
 use crate::usd::CollectionApi;

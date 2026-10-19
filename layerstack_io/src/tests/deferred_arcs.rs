@@ -107,9 +107,8 @@ fn opening_loads_branches_a_stronger_layer_selects() {
     assert!(doc.stage.stage().composition_errors().is_empty());
     let b_layer = doc
         .store
-        .layers
-        .keys()
-        .copied()
+        .layer_ids()
+        .into_iter()
         .find(|&id| doc.identifier(id) == Some("b.usda"))
         .unwrap();
     assert!(doc.load_report().layers.contains(&b_layer));
@@ -117,9 +116,8 @@ fn opening_loads_branches_a_stronger_layer_selects() {
     // Recording where the asset resolved leaves its anchor clean.
     let model = doc
         .store
-        .layers
-        .keys()
-        .copied()
+        .layer_ids()
+        .into_iter()
         .find(|&id| doc.identifier(id) == Some("model.usda"))
         .unwrap();
     assert!(!doc.is_dirty(model));
@@ -348,7 +346,7 @@ fn packages_hold_deferred_assets_and_load_their_members_on_request() {
     let mut doc = StageDocument::open(output, "out.usdz", StageOptions::default()).unwrap();
     assert_eq!(name(&doc, "/Model"), Some(Value::string("a")));
     // Localization renames the members; `b`'s is the one left unread.
-    let loaded = doc.store.layers.len();
+    let loaded = doc.store.layer_count();
     assert_eq!(loaded, 2);
     select(&mut doc, "b");
     let report = doc.load_requested_assets().unwrap();

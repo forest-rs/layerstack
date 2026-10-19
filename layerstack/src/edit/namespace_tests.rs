@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::{
-    ArcKind, InMemoryStore, Layer, LayerId, LayerStore, ListOp, LiveStage, PrimSpec, PropertyPath,
+    ArcKind, InMemoryStore, Layer, LayerId, ListOp, LiveStage, PrimSpec, PropertyPath,
     PropertySpec, PropertyType, Reference, ReferenceTarget, Stage, StageOptions, SublayerEntry,
     TargetPath, Value,
 };

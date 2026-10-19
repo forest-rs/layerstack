@@ -1009,10 +1009,10 @@ fn matrix_cell(outer: MatrixArc, inner: MatrixArc, selection: MatrixSelection) -
         // dependencies (top-level arcs also record arc edges): the layer
         // holding the selected branch's arc target must feed this prim.
         let target_layer = store
-            .layers
-            .iter()
+            .layers()
+            .map(|layer| (layer.id(), layer))
             .find(|(_, layer)| layer.prims().contains_key(&selected_source_id))
-            .map(|(id, _)| *id);
+            .map(|(id, _)| id);
         if !target_layer.is_some_and(|layer| {
             stage
                 .prims_affected_by_layer(layer, &store)

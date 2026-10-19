@@ -11,7 +11,8 @@ use crate::{
     usd_skel::{SkelRoot, Skeleton},
 };
 use alloc::{sync::Arc, vec, vec::Vec};
-use layerstack::{HashMap, PathId, Specifier};
+use hashbrown::HashMap;
+use layerstack::{PathId, Specifier};
 
 /// CPU deformation method authored by `primvars:skel:skinningMethod`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

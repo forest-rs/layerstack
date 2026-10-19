@@ -15,7 +15,7 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use layerstack::HashMap;
+use hashbrown::HashMap;
 
 use crate::{
     DecodeBudget, UsdcError, header, section,

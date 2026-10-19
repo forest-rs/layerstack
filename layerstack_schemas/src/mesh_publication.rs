@@ -701,7 +701,9 @@ mod tests {
             "equal contents in another owner are rebound explicitly"
         );
         live.apply(&mut store, &repaired.transaction).unwrap();
-        let local = store.layers[&root]
+        let local = store
+            .layer(root)
+            .unwrap()
             .property(points)
             .unwrap()
             .default

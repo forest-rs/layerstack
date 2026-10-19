@@ -109,8 +109,7 @@ fn composed_metadata_and_layer_defaults_match_cpp() {
     };
     read_defaults(&mut store);
     store
-        .layers
-        .get_mut(&LayerId(2))
+        .layer_mut(LayerId(2))
         .unwrap()
         .set_metadata(meters, Value::Double(10.0));
     read_defaults(&mut store);
@@ -134,12 +133,9 @@ fn composed_metadata_and_layer_defaults_match_cpp() {
                 ]),
             ),
     ));
-    store
-        .layers
-        .get_mut(&LayerId(2))
-        .unwrap()
-        .insert_prim(mesh, weak);
-    let root = store.layers.get_mut(&LayerId(1)).unwrap();
+    store.layer_mut(LayerId(2)).unwrap().insert_prim(mesh, weak);
+    let terminal = store.tokens.intern("terminal");
+    let root = store.layer_mut(LayerId(1)).unwrap();
     root.set_metadata(meters, Value::Double(0.5));
     let spec = root.prim_mut(mesh).unwrap();
     spec.set_field(
@@ -158,8 +154,7 @@ fn composed_metadata_and_layer_defaults_match_cpp() {
     );
     spec.properties.push(entry(
         binding,
-        PropertySpec::relationship()
-            .with_metadata(render_type, Value::Token(store.tokens.intern("terminal"))),
+        PropertySpec::relationship().with_metadata(render_type, Value::Token(terminal)),
     ));
     let stage = Stage::compose(&mut store, LayerId(1), options);
     let scene = Scene::new(&stage, &store);
@@ -245,7 +240,7 @@ fn registered_asset_array_metadata_retains_its_crate_type() {
     "#,
     );
     let bytes = layerstack_usdc::writer::save_layer(
-        &store.layers[&LayerId(1)],
+        store.layer(LayerId(1)).unwrap(),
         &store.tokens,
         &store.paths,
     )

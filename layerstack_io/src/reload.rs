@@ -177,11 +177,9 @@ impl<B: Storage> StageDocument<B> {
         // `PcpCache::Reload` retries every invalid asset and sublayer path:
         // the layers read again resolve their arcs afresh, and composition
         // asks again for the deferred arcs' assets (AOUSD Core §9, §10.6).
-        for assets in store.asset_layers.values_mut() {
-            assets.retain(|_, layer| *layer != LayerId::UNRESOLVED);
-        }
+        store.forget_missing_assets();
         let mut catalog = self.catalog.clone();
-        catalog.reserved.extend(self.store.layers.keys().copied());
+        catalog.reserved.extend(self.store.layer_ids());
         if root_closure {
             catalog.states.clear();
             #[cfg(feature = "std")]
@@ -200,9 +198,8 @@ impl<B: Storage> StageDocument<B> {
         }
         let dirty: BTreeSet<_> = if root_closure && policy == ReloadPolicy::PreserveDirty {
             self.store
-                .layers
-                .keys()
-                .copied()
+                .layer_ids()
+                .into_iter()
                 .filter(|&id| self.is_dirty(id))
                 .collect()
         } else {

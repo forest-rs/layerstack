@@ -232,7 +232,7 @@ fn probe(stage: &Stage, store: &mut InMemoryStore) -> BTreeMap<String, Probe> {
     }
     let authored = |store: &mut InMemoryStore, layer: LayerId, path: &str| {
         let path = spec(store, path);
-        match store.layers[&layer].property_at(&path) {
+        match store.layer(layer).unwrap().property_at(&path) {
             Some(spec) => spec.default.as_ref().map_or(Probe::Absent, num),
             None => Probe::Text("<absent>".into()),
         }
@@ -251,13 +251,18 @@ fn probe(stage: &Stage, store: &mut InMemoryStore) -> BTreeMap<String, Probe> {
         out.insert(key.into(), value);
     }
     let rock_a = spec(store, "/World/RockA");
-    let selection = store.layers[&SCENE].variant_selection_at(&rock_a, shape);
+    let selection = store
+        .layer(SCENE)
+        .unwrap()
+        .variant_selection_at(&rock_a, shape);
     out.insert(
         "scene:/World/RockA{shape}".into(),
         Probe::Text(selection.map_or("<absent>".into(), |v| store.tokens.resolve(v).to_string())),
     );
     let spin = spec(store, "/Rock.spin");
-    let samples = store.layers[&ROCK]
+    let samples = store
+        .layer(ROCK)
+        .unwrap()
         .property_at(&spin)
         .and_then(|p| p.time_samples.clone())
         .unwrap_or_default()
@@ -402,7 +407,7 @@ impl Session {
 fn rocks_authoring_session_matches_openusd() {
     let mut s = Session::open(SCENE_USDA, ROCK_USDA);
     s.check("initial");
-    let original_scene = s.store.layers[&SCENE].clone();
+    let original_scene = s.store.layer(SCENE).unwrap().clone();
     let (rock_a, rock_b) = (s.store.path("/World/RockA"), s.store.path("/World/RockB"));
     let prop = |s: &mut Session, p: &str| s.store.property_path(p);
     let size_a = prop(&mut s, "/World/RockA.size");
@@ -471,7 +476,7 @@ fn rocks_authoring_session_matches_openusd() {
     while let Some(inverse) = undo.pop() {
         s.apply(&inverse);
     }
-    assert_eq!(s.store.layers[&SCENE], original_scene);
+    assert_eq!(*s.store.layer(SCENE).unwrap(), original_scene);
     let rock_size = Address::spec(ROCK, spec(&mut s.store, "/Rock.size"));
     let mut edit = Transaction::new();
     edit.set_default(rock_size.clone(), Value::Double(4.0));
@@ -489,8 +494,7 @@ fn rocks_authoring_session_matches_openusd() {
     prepared.expect_unchanged(&mut s.store);
     let rock_size_path = s.store.property_path("/Rock.size");
     s.store
-        .layers
-        .get_mut(&ROCK)
+        .layer_mut(ROCK)
         .and_then(|layer| layer.property_mut(rock_size_path))
         .expect("size spec")
         .default = Some(Value::Double(7.0));
@@ -506,12 +510,12 @@ fn rocks_authoring_session_matches_openusd() {
     // g: a batch across both layers with one invalid edit leaves both
     // layers unchanged: a type mismatch, then an unmappable path.
     let before = (
-        s.store.layers[&SCENE].clone(),
-        s.store.layers[&ROCK].clone(),
+        s.store.layer(SCENE).unwrap().clone(),
+        s.store.layer(ROCK).unwrap().clone(),
     );
     let generations = (
-        s.store.layers[&SCENE].generation(),
-        s.store.layers[&ROCK].generation(),
+        s.store.layer(SCENE).unwrap().generation(),
+        s.store.layer(ROCK).unwrap().generation(),
     );
     // `/Rock.roughness` has no spec outside the variants; its composed
     // declaration is a double.
@@ -542,15 +546,15 @@ fn rocks_authoring_session_matches_openusd() {
     );
     assert_eq!(
         (
-            s.store.layers[&SCENE].clone(),
-            s.store.layers[&ROCK].clone()
+            s.store.layer(SCENE).unwrap().clone(),
+            s.store.layer(ROCK).unwrap().clone()
         ),
         before
     );
     assert_eq!(
         (
-            s.store.layers[&SCENE].generation(),
-            s.store.layers[&ROCK].generation(),
+            s.store.layer(SCENE).unwrap().generation(),
+            s.store.layer(ROCK).unwrap().generation(),
         ),
         generations
     );
@@ -567,8 +571,12 @@ fn rocks_authoring_session_matches_openusd() {
     s.apply(&edit);
     s.check("h");
     let save = |s: &Session, layer: LayerId| {
-        layerstack_usda::save::save_usda(&s.store.layers[&layer], &s.store.tokens, &s.store.paths)
-            .expect("saves")
+        layerstack_usda::save::save_usda(
+            s.store.layer(layer).unwrap(),
+            &s.store.tokens,
+            &s.store.paths,
+        )
+        .expect("saves")
     };
     let (scene_text, rock_text) = (save(&s, SCENE), save(&s, ROCK));
     let mut reopened = Session::open(&scene_text, &rock_text);

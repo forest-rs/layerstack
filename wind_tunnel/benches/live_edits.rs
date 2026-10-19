@@ -114,7 +114,7 @@ fn bench_local_structure(c: &mut Criterion) {
                     .children()
                     .map(|child| store.paths.resolve(child.path()).leaf().unwrap())
                     .collect();
-                let layer = store.layers.get_mut(&LayerId(1)).unwrap();
+                let layer = store.layer_mut(LayerId(1)).unwrap();
                 layer.prim_mut(world).unwrap().authored_children = names;
                 live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
             }

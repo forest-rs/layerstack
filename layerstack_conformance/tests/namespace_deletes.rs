@@ -92,7 +92,7 @@ fn layer_specs(loaded: &LoadedStage, layer: &Layer) -> Vec<String> {
         fn variant_paths(
             store: &layerstack::InMemoryStore,
             prefix: &str,
-            sets: &layerstack::HashMap<layerstack::TokenId, VariantSetSpec>,
+            sets: &hashbrown::HashMap<layerstack::TokenId, VariantSetSpec>,
             out: &mut Vec<String>,
         ) {
             for (set, spec) in sets {
@@ -110,7 +110,7 @@ fn layer_specs(loaded: &LoadedStage, layer: &Layer) -> Vec<String> {
     for (path, spec) in layer.prims() {
         add(*path, spec);
     }
-    for (path, branches) in layer.variant_prims() {
+    for (path, branches) in layer.variant_prims().iter() {
         for spec in branches {
             add(*path, spec);
         }
@@ -152,8 +152,8 @@ fn snapshot(loaded: &LoadedStage, stage: &Stage) -> Json {
         TargetPath::Prim(p) => path(*p),
         TargetPath::Property(p) => p.display(&store.paths, &store.tokens),
     };
-    let root_layer = &store.layers[&loaded.root_layer];
-    let sub = &store.layers[&layer_named(loaded, "sub.usda")];
+    let root_layer = &store.layer(loaded.root_layer).unwrap();
+    let sub = &store.layer(layer_named(loaded, "sub.usda")).unwrap();
     let watch_path = store
         .paths
         .lookup(&Path::parse_absolute("/Watch", &store.tokens).unwrap())
@@ -234,7 +234,7 @@ fn deletes_agree_with_openusd_namespace_editor() {
     for case in cases {
         let name = case["name"].as_str().unwrap();
         let mut loaded = load();
-        let original = loaded.store.layers.clone();
+        let original = loaded.store.layers().cloned().collect::<Vec<_>>();
         let mut live = LiveStage::compose(
             &mut loaded.store,
             loaded.root_layer,
@@ -291,8 +291,9 @@ fn deletes_agree_with_openusd_namespace_editor() {
         );
         if let Some(inverse) = inverse {
             live.apply(&mut loaded.store, &inverse).unwrap();
-            for (id, layer) in &original {
-                let now = &loaded.store.layers[id];
+            for layer in &original {
+                let id = &layer.id();
+                let now = loaded.store.layer(*id).unwrap();
                 assert_eq!(now.prims(), layer.prims(), "{name}: undo restores {id:?}");
                 assert_eq!(
                     now.relocates(),

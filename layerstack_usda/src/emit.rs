@@ -41,6 +41,7 @@ use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
+use hashbrown::HashMap;
 use layerstack::doc::{
     FieldEntry, FieldValue, Layer, LayerId, LayerOffset, PrimSpec, Reference, ReferenceSource,
     Specifier, SublayerEntry, Value, VariantSetSpec, VariantSpec, get_field_mut, set_field_vec,
@@ -54,7 +55,7 @@ use layerstack::property::{
 use layerstack::spec_path::VariantSelectionSite;
 use layerstack::variable_expression::is_expression;
 use layerstack::{
-    ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex, AssetResolver, HashMap, MetadataTarget,
+    ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex, AssetResolver, MetadataTarget,
     PropertyType, ReferenceTarget, ResolvedAsset, SchemaRegistry,
 };
 

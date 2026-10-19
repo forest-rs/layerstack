@@ -215,7 +215,9 @@ fn transaction(loaded: &mut LoadedStage, edit: &Json) -> Transaction {
 
 /// The root layer's root prim order, as the oracle records it.
 fn root_prim_order(store: &InMemoryStore, layer: LayerId, root: PathId) -> Vec<String> {
-    let order = store.layers[&layer]
+    let order = store
+        .layer(layer)
+        .unwrap()
         .prim(root)
         .and_then(|spec| spec.prim_order.as_ref());
     order
@@ -240,7 +242,7 @@ fn root_prims(live: &LiveStage, store: &InMemoryStore, root: PathId) -> Vec<Stri
 /// The layer metadata field `key` of `layer`, as the oracle records it.
 fn layer_field(store: &InMemoryStore, layer: LayerId, key: &str) -> Json {
     let key = store.tokens.lookup(key).expect("an interned key");
-    match store.layers[&layer].metadata(key) {
+    match store.layer(layer).unwrap().metadata(key) {
         None => Json::Null,
         Some(FieldValue::Value(Value::String(text))) => Json::from(&**text),
         Some(FieldValue::Value(Value::Double(number))) => Json::from(*number),
@@ -318,7 +320,7 @@ fn pseudo_root_edits_agree_with_openusd() {
         let (layer, root) = (loaded.root_layer, loaded.store.path("/"));
         let txn = transaction(&mut loaded, &case["edit"]);
         let mut live = LiveStage::compose(&mut loaded.store, layer, StageOptions::default());
-        let before = loaded.store.layers[&layer].clone();
+        let before = loaded.store.layer(layer).unwrap().clone();
         let result = live.apply(&mut loaded.store, &txn);
         let accepted = result.is_ok();
         let accepts = ACCEPTED.contains(&name);
@@ -357,7 +359,8 @@ fn pseudo_root_edits_agree_with_openusd() {
 
         let Ok(applied) = result else {
             assert_eq!(
-                loaded.store.layers[&layer], before,
+                *loaded.store.layer(layer).unwrap(),
+                before,
                 "{name}: a rejection changes nothing"
             );
             continue;
@@ -381,14 +384,14 @@ fn pseudo_root_edits_agree_with_openusd() {
         let fresh = LiveStage::compose(&mut loaded.store, layer, StageOptions::default());
         assert_eq!(root_prims(&fresh, &loaded.store, root), composed, "{name}");
         let saved = layerstack_usda::save::save_usda(
-            &loaded.store.layers[&layer],
+            loaded.store.layer(layer).unwrap(),
             &loaded.store.tokens,
             &loaded.store.paths,
         );
         assert!(saved.is_ok(), "{name}: {saved:?}");
         live.apply(&mut loaded.store, &applied.inverse).unwrap();
         assert_eq!(
-            loaded.store.layers[&layer].prims(),
+            loaded.store.layer(layer).unwrap().prims(),
             before.prims(),
             "{name}: undone"
         );

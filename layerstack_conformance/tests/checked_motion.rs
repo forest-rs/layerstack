@@ -43,8 +43,7 @@ fn point_motion_preserves_required_and_optional_decode_failures() {
                 kind: Value::Vec3f([0.; 3]),
             })));
             let spec = store
-                .layers
-                .get_mut(&LayerId(1))
+                .layer_mut(LayerId(1))
                 .unwrap()
                 .prim_mut(path)
                 .unwrap()
@@ -101,8 +100,7 @@ fn instancer_transform_and_mask_queries_preserve_decode_failures() {
                 kind: kind.clone(),
             })));
             let spec = store
-                .layers
-                .get_mut(&LayerId(1))
+                .layer_mut(LayerId(1))
                 .unwrap()
                 .prim_mut(path)
                 .unwrap()

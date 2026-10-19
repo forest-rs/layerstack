@@ -19,7 +19,8 @@ use crate::{
     xform::XformCache,
 };
 use alloc::{boxed::Box, vec, vec::Vec};
-use layerstack::{HashMap, HashSet, PathId};
+use hashbrown::{HashMap, HashSet};
+use layerstack::PathId;
 
 /// An axis-aligned double-precision range. A reversed axis denotes emptiness.
 #[derive(Clone, Copy, Debug, PartialEq)]

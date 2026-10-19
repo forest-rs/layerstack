@@ -161,7 +161,7 @@ fn incremental_clip_edits_rebuild_prototype_identity() {
     let clips = store.tokens.lookup("clips").unwrap();
     for name in ["First", "Second"] {
         let prim = store.path(&format!("/{name}"));
-        let layer = store.layers.get_mut(&root).unwrap();
+        let layer = store.layer_mut(root).unwrap();
         let mut spec = layer.prims()[&prim].clone();
         spec.fields.retain(|field| field.name != clips);
         layer.insert_prim(prim, spec);

@@ -134,7 +134,7 @@ fn unchanged_queries_skip_resolution_and_detached_work_tracks_source_and_epoch()
 
     // Bypass the LiveStage: guarded application must synchronize before checking.
     let a = store.property_path("/Inputs.a");
-    store.layers.get_mut(&ROOT).unwrap().set_property(
+    store.layer_mut(ROOT).unwrap().set_property(
         a,
         PropertySpec::typed_attribute(PropertyType::parse("int").unwrap())
             .with_default(Value::Int(9)),
@@ -155,7 +155,7 @@ fn unchanged_queries_skip_resolution_and_detached_work_tracks_source_and_epoch()
         result.evidence().apply(&mut live, &mut store, &transaction),
         Err(EvidenceApplyError::Evidence(EvidenceError::Changed { .. }))
     ));
-    assert!(store.layers[&ROOT].property(published).is_none());
+    assert!(store.layer(ROOT).unwrap().property(published).is_none());
     let fresh = binding
         .snapshot(&Scene::new(live.stage(), &store), Time::Default)
         .unwrap();

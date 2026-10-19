@@ -171,7 +171,7 @@ fn attr(stage: &Stage, store: &mut InMemoryStore, prim: &str, name: &str) -> Val
 fn declared_type(store: &mut InMemoryStore, prim: &str, name: &str) -> String {
     let prim_id = store.path(prim);
     let field = store.tokens.intern(name);
-    let layer = store.layers.get(&LayerId(1)).expect("root layer");
+    let layer = store.layer(LayerId(1)).expect("root layer");
     let entry = layer.prims()[&prim_id]
         .property(field)
         .unwrap_or_else(|| panic!("{prim}.{name} authored"));
@@ -189,7 +189,7 @@ fn assert_stage_matches_scene(store: &mut InMemoryStore) {
 
     let root_token = store.tokens.intern("Root");
     assert_eq!(
-        store.layers[&LayerId(1)].default_prim(),
+        store.layer(LayerId(1)).unwrap().default_prim(),
         Some(root_token),
         "defaultPrim"
     );

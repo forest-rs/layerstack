@@ -6,9 +6,9 @@
 #[path = "support/schema_scene.rs"]
 mod support;
 use layerstack::{
-    AssetResolveError, AssetResolver, EditTarget, Layer, LayerId, LayerOffset, LayerStore,
-    LiveStage, PathInterner, PrimSpec, PropertyPath, PropertySpec, PropertyType, ResolvedAsset,
-    StageOptions, SublayerEntry, TokenInterner, Transaction, Value,
+    AssetResolveError, AssetResolver, EditTarget, Layer, LayerId, LayerOffset, LiveStage,
+    PathInterner, PrimSpec, PropertyPath, PropertySpec, PropertyType, ResolvedAsset, StageOptions,
+    SublayerEntry, TokenInterner, Transaction, Value,
 };
 use layerstack_schemas::{
     Scene, Time,

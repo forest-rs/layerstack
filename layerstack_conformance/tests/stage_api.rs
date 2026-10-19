@@ -143,12 +143,12 @@ fn stage_metadata_edits_are_atomic_field_scoped_and_session_aware() {
     )
     .unwrap();
     live.apply(&mut store, &root_edit.inverse).unwrap();
-    assert!(store.layers[&LayerId(1)].metadata(data).is_none());
-    assert!(store.layers[&LayerId(1)].metadata(comment).is_some());
-    let generation = store.layers[&LayerId(1)].generation();
+    assert!(store.layer(LayerId(1)).unwrap().metadata(data).is_none());
+    assert!(store.layer(LayerId(1)).unwrap().metadata(comment).is_some());
+    let generation = store.layer(LayerId(1)).unwrap().generation();
     live.set_stage_metadata_dict_key(&mut store, LayerId(1), data, "absent:key", None)
         .unwrap();
-    assert_eq!(store.layers[&LayerId(1)].generation(), generation);
+    assert_eq!(store.layer(LayerId(1)).unwrap().generation(), generation);
     assert!(matches!(
         live.set_stage_metadata_dict_key(&mut store, LayerId(3), data, "key", None),
         Err(StageMetadataError::InvalidLayer(LayerId(3)))
@@ -204,9 +204,9 @@ fn stage_metadata_edits_are_atomic_field_scoped_and_session_aware() {
         Specifier::Def,
         None,
     );
-    let before = store.layers[&LayerId(1)].clone();
+    let before = store.layer(LayerId(1)).unwrap().clone();
     assert!(live.apply(&mut store, &rejected).is_err());
-    assert_eq!(store.layers[&LayerId(1)], before);
+    assert_eq!(*store.layer(LayerId(1)).unwrap(), before);
     let mut guard = Transaction::new();
     guard.expect_layer_metadata(LayerId(1), comment, None);
     guard.clear_layer_metadata(LayerId(1), comment);
@@ -554,7 +554,7 @@ fn generic_object_queries_retain_values_across_unrelated_edits_and_refresh_after
         Value::Int(1)
     );
     // A direct replacement and a fresh snapshot cannot reuse old source identity.
-    store.layers.get_mut(&LayerId(1)).unwrap().set_property(
+    store.layer_mut(LayerId(1)).unwrap().set_property(
         a_value,
         PropertySpec::attribute().with_default(Value::Int(8)),
     );

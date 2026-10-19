@@ -22,7 +22,8 @@ use alloc::{
 };
 use core::{num::NonZeroUsize, ops::Bound};
 
-use layerstack::{HashMap, Path, PathId, PropertyPath, TokenId, Value, half};
+use hashbrown::HashMap;
+use layerstack::{Path, PathId, PropertyPath, TokenId, Value, half};
 
 use crate::gf::{self, Matrix4, Rotation};
 use crate::usd_geom::{Imageable, Xformable};

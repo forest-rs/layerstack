@@ -26,6 +26,10 @@ fn main() {
     println!(
         "Composed history: {:?}; terrain history: {:?}",
         generated.live.change_history_stats(),
-        generated.store.layers[&support::TERRAIN].change_history_stats()
+        generated
+            .store
+            .layer(support::TERRAIN)
+            .unwrap()
+            .change_history_stats()
     );
 }

@@ -49,18 +49,17 @@ fn fixture() -> (LoadedStage, Stage, LayerId) {
     let dictionary = loaded.store.property_path("/WrongDictionary.value");
     loaded
         .store
-        .layers
-        .get_mut(&loaded.root_layer)
+        .layer_mut(loaded.root_layer)
         .unwrap()
         .property_mut(dictionary)
         .unwrap()
         .default = Some(Value::Dictionary(vec![("key".into(), Value::Int(1))]));
     let timecode = loaded.store.property_path("/MisdeclaredTime.value");
     let weak_marker = loaded.store.property_path("/Skip.inputs:intensity");
-    let weak = *loaded
+    let weak = loaded
         .store
-        .layers
-        .iter()
+        .layers()
+        .map(|layer| (layer.id(), layer))
         .find(|(_, layer)| {
             layer
                 .property(weak_marker)
@@ -70,8 +69,7 @@ fn fixture() -> (LoadedStage, Stage, LayerId) {
         .0;
     loaded
         .store
-        .layers
-        .get_mut(&weak)
+        .layer_mut(weak)
         .unwrap()
         .property_mut(timecode)
         .unwrap()
@@ -95,8 +93,7 @@ fn fixture() -> (LoadedStage, Stage, LayerId) {
         let property = loaded.store.property_path(path);
         loaded
             .store
-            .layers
-            .get_mut(&weak)
+            .layer_mut(weak)
             .unwrap()
             .property_mut(property)
             .unwrap()
@@ -116,8 +113,7 @@ fn fixture() -> (LoadedStage, Stage, LayerId) {
         let property = loaded.store.property_path(path);
         let spec = loaded
             .store
-            .layers
-            .get_mut(&weak)
+            .layer_mut(weak)
             .unwrap()
             .property_mut(property)
             .unwrap();
@@ -131,15 +127,17 @@ fn fixture() -> (LoadedStage, Stage, LayerId) {
         let path = loaded.store.property_path(path);
         loaded
             .store
-            .layers
-            .get_mut(&layer)
+            .layer_mut(layer)
             .unwrap()
             .property_mut(path)
             .unwrap()
             .type_name = Some(layerstack::PropertyType::parse(&format!("{name}[]")).unwrap());
     }
     let mixed = loaded.store.property_path("/SparseMixedEdits.value");
-    let wrong = loaded.store.layers[&weak]
+    let wrong = loaded
+        .store
+        .layer(weak)
+        .unwrap()
         .property(mixed)
         .unwrap()
         .default
@@ -148,8 +146,7 @@ fn fixture() -> (LoadedStage, Stage, LayerId) {
     let upper = loaded.store.property_path("/SparseWrongEditUpper.value");
     let spec = loaded
         .store
-        .layers
-        .get_mut(&weak)
+        .layer_mut(weak)
         .unwrap()
         .property_mut(upper)
         .unwrap();
@@ -326,10 +323,10 @@ fn typed_defaults_skip_incompatible_opinions_without_numeric_retry() {
             ) {
                 loaded.root_layer
             } else if matches!(prim, "/SparseMixedEdits" | "/SparseMisdeclaredWeakEdit") {
-                *loaded
+                loaded
                     .store
-                    .layers
-                    .iter()
+                    .layers()
+                    .map(|layer| (layer.id(), layer))
                     .find(|(_, layer)| {
                         layer
                             .property(layerstack::PropertyPath::new(path, field))

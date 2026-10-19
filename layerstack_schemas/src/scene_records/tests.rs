@@ -990,8 +990,7 @@ fn motion_time_change_updates_point_snapshot_without_geometry_revalidation() {
     let before_rate = now.transforms.iter().next().unwrap().matrix;
     let rate = store.tokens.intern("timeCodesPerSecond");
     store
-        .layers
-        .get_mut(&LayerId(1))
+        .layer_mut(LayerId(1))
         .unwrap()
         .set_metadata(rate, Value::Double(48.));
     let rate_change = observer

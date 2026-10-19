@@ -110,7 +110,7 @@ fn primvar_authoring_and_rejections_preserve_undo() {
     let mesh = Mesh::new(&Scene::new(live.stage(), &store), path)
         .unwrap()
         .edit();
-    let before = store.layers[&LayerId(1)].clone();
+    let before = store.layer(LayerId(1)).unwrap().clone();
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
     let var = mesh
         .create_primvar(
@@ -158,7 +158,7 @@ fn primvar_authoring_and_rejections_preserve_undo() {
         Some(vec![2., 1.])
     );
     live.apply(&mut store, &applied.inverse).unwrap();
-    assert_eq!(store.layers[&LayerId(1)], before);
+    assert_eq!(*store.layer(LayerId(1)).unwrap(), before);
 }
 
 fn query_scene() -> (InMemoryStore, LiveStage) {
@@ -232,7 +232,7 @@ fn id_targets_and_index_animation_queries_match_cpp() {
 fn id_target_authoring_is_atomic_and_undoable() {
     let (mut store, mut live) = query_scene();
     let path = store.path("/Root/Group/Mesh");
-    let base = store.layers[&LayerId(1)].clone();
+    let base = store.layer(LayerId(1)).unwrap().clone();
     let handle = Mesh::new(&Scene::new(live.stage(), &store), path)
         .unwrap()
         .edit();
@@ -263,7 +263,7 @@ fn id_target_authoring_is_atomic_and_undoable() {
         Some(Value::string("/Root/Group/Mesh"))
     );
     live.apply(&mut store, &outcome.inverse).unwrap();
-    assert_eq!(store.layers[&LayerId(1)], base);
+    assert_eq!(*store.layer(LayerId(1)).unwrap(), base);
 }
 
 #[test]
@@ -364,7 +364,7 @@ fn primvar_groups_discard_failures_and_nonindexed_authoring_masks_weaker_indices
     use layerstack::{Layer, StageOptions, SublayerEntry};
     let (mut store, _) = query_scene();
     let path = store.path("/Root/Group/Mesh");
-    let mut weak = store.layers.remove(&LayerId(1)).unwrap();
+    let mut weak = store.remove_layer(LayerId(1)).unwrap();
     weak.map_layer_ids(|id| if id == LayerId(1) { LayerId(2) } else { id });
     store.insert_layer(weak);
     let mut root = Layer::new(LayerId(1));
@@ -384,7 +384,7 @@ fn primvar_groups_discard_failures_and_nonindexed_authoring_masks_weaker_indices
         .edit();
     let ty = PropertyType::parse("float[]").unwrap();
     let values = || Value::array(vec![Value::Float(7.), Value::Float(8.)]);
-    let before = store.layers[&LayerId(1)].clone();
+    let before = store.layer(LayerId(1)).unwrap().clone();
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
     let checkpoint = edit.transaction().clone();
     assert!(
@@ -464,7 +464,7 @@ fn primvar_groups_discard_failures_and_nonindexed_authoring_masks_weaker_indices
     );
     live.apply(&mut store, &removed.inverse).unwrap();
     live.apply(&mut store, &outcome.inverse).unwrap();
-    assert_eq!(store.layers[&LayerId(1)], before);
+    assert_eq!(*store.layer(LayerId(1)).unwrap(), before);
 }
 
 #[test]
@@ -474,7 +474,7 @@ fn primvar_block_erases_local_animation_and_authors_future_indices_barrier() {
     let scene = Scene::new(live.stage(), &store);
     let animated = Primvar::new(&scene, path, "both").unwrap().edit();
     let plain = Primvar::new(&scene, path, "noIndices").unwrap().edit();
-    let before = store.layers[&LayerId(1)].clone();
+    let before = store.layer(LayerId(1)).unwrap().clone();
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
     animated.block(&mut edit).unwrap();
     plain.block(&mut edit).unwrap();
@@ -485,7 +485,7 @@ fn primvar_block_erases_local_animation_and_authors_future_indices_barrier() {
     assert!(!pv.has_authored_value() && !pv.is_indexed());
     let sidecar = store.tokens.lookup("primvars:noIndices:indices").unwrap();
     assert_eq!(
-        store.layers[&LayerId(1)].prims()[&path]
+        store.layer(LayerId(1)).unwrap().prims()[&path]
             .property(sidecar)
             .unwrap()
             .default,
@@ -501,7 +501,7 @@ fn primvar_block_erases_local_animation_and_authors_future_indices_barrier() {
         None
     );
     live.apply(&mut store, &outcome.inverse).unwrap();
-    assert_eq!(store.layers[&LayerId(1)], before);
+    assert_eq!(*store.layer(LayerId(1)).unwrap(), before);
 }
 
 #[test]
@@ -534,7 +534,7 @@ fn weaker_primvar_value_and_block_edits_can_precede_metadata() {
     for mode in ["default", "sample", "block"] {
         let (mut store, _) = support::scene("#usda 1.0\ndef Mesh \"P\" {\nfloat primvars:x = 1\n}");
         let path = store.path("/P");
-        let mut weak = store.layers.remove(&LayerId(1)).unwrap();
+        let mut weak = store.remove_layer(LayerId(1)).unwrap();
         weak.map_layer_ids(|id| if id == LayerId(1) { LayerId(2) } else { id });
         store.insert_layer(weak);
         let mut root = Layer::new(LayerId(1));
@@ -552,7 +552,7 @@ fn weaker_primvar_value_and_block_edits_can_precede_metadata() {
         let pv = Primvar::new(&Scene::new(live.stage(), &store), path, "x")
             .unwrap()
             .edit();
-        let before = store.layers[&LayerId(1)].clone();
+        let before = store.layer(LayerId(1)).unwrap().clone();
         let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
         match mode {
             "default" => {
@@ -591,7 +591,7 @@ fn weaker_primvar_value_and_block_edits_can_precede_metadata() {
             }
         );
         live.apply(&mut store, &outcome.inverse).unwrap();
-        assert_eq!(store.layers[&LayerId(1)], before);
+        assert_eq!(*store.layer(LayerId(1)).unwrap(), before);
     }
 }
 
@@ -604,7 +604,7 @@ fn removed_primvars_can_be_recreated_in_the_same_edit() {
         let scene = Scene::new(live.stage(), &store);
         let handle = Mesh::new(&scene, path).unwrap().edit();
         let pv = Primvar::new(&scene, path, "x").unwrap().edit();
-        let before = store.layers[&LayerId(1)].clone();
+        let before = store.layer(LayerId(1)).unwrap().clone();
         let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
         pv.remove(&mut edit).unwrap();
         let value = if new_type == "int" {
@@ -624,7 +624,7 @@ fn removed_primvars_can_be_recreated_in_the_same_edit() {
         assert_eq!(pv.value(Time::Default).unwrap(), Some(value));
         assert_eq!(pv.element_size(), 2);
         live.apply(&mut store, &outcome.inverse).unwrap();
-        assert_eq!(store.layers[&LayerId(1)], before);
+        assert_eq!(*store.layer(LayerId(1)).unwrap(), before);
     }
 }
 
@@ -667,7 +667,7 @@ fn removed_primvar_declarations_reveal_weaker_sources_and_group_rollback() {
     let (mut store, _) = support::scene("#usda 1.0\ndef Mesh \"P\" {\nfloat primvars:x = 1\n}");
     let path = store.path("/P");
     let name = store.tokens.lookup("primvars:x").unwrap();
-    let mut weak = store.layers.remove(&LayerId(1)).unwrap();
+    let mut weak = store.remove_layer(LayerId(1)).unwrap();
     weak.map_layer_ids(|id| if id == LayerId(1) { LayerId(2) } else { id });
     store.insert_layer(weak);
     let mut root = Layer::new(LayerId(1));
@@ -693,7 +693,7 @@ fn removed_primvar_declarations_reveal_weaker_sources_and_group_rollback() {
     let scene = Scene::new(live.stage(), &store);
     let handle = Mesh::new(&scene, path).unwrap().edit();
     let pv = Primvar::new(&scene, path, "x").unwrap().edit();
-    let before = store.layers[&LayerId(1)].clone();
+    let before = store.layer(LayerId(1)).unwrap().clone();
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
     let checkpoint = edit.transaction().clone();
     let failed: Result<(), &str> = edit.group(|child| {
@@ -733,7 +733,7 @@ fn removed_primvar_declarations_reveal_weaker_sources_and_group_rollback() {
         Some(Value::Float(3.))
     );
     live.apply(&mut store, &outcome.inverse).unwrap();
-    assert_eq!(store.layers[&LayerId(1)], before);
+    assert_eq!(*store.layer(LayerId(1)).unwrap(), before);
 }
 
 #[test]
@@ -756,7 +756,7 @@ fn removed_primvar_ui_labels_do_not_leak_into_recreated_properties() {
                 .unwrap();
             let transaction = edit.finish();
             live.apply(&mut store, &transaction).unwrap();
-            let mut weak = store.layers.remove(&LayerId(1)).unwrap();
+            let mut weak = store.remove_layer(LayerId(1)).unwrap();
             weak.map_layer_ids(|id| if id == LayerId(1) { LayerId(2) } else { id });
             store.insert_layer(weak);
             let mut root = Layer::new(LayerId(1));
@@ -779,7 +779,7 @@ fn removed_primvar_ui_labels_do_not_leak_into_recreated_properties() {
             .unwrap();
         let transaction = edit.finish();
         live.apply(&mut store, &transaction).unwrap();
-        let before = store.layers[&LayerId(1)].clone();
+        let before = store.layer(LayerId(1)).unwrap().clone();
         let scene = Scene::new(live.stage(), &store);
         let pv = Primvar::new(&scene, path, "x").unwrap().edit();
         let handle = Mesh::new(&scene, path).unwrap().edit();
@@ -815,7 +815,7 @@ fn removed_primvar_ui_labels_do_not_leak_into_recreated_properties() {
             Some(Value::Float(10.))
         );
         live.apply(&mut store, &outcome.inverse).unwrap();
-        assert_eq!(store.layers[&LayerId(1)], before);
+        assert_eq!(*store.layer(LayerId(1)).unwrap(), before);
     }
 }
 

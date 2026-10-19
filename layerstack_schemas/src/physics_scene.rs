@@ -35,8 +35,9 @@ use crate::{
 use alloc::{sync::Arc, vec::Vec};
 pub use articulation::ArticulationDescriptor;
 pub use geometry::{PhysicsAxis, ShapeGeometry, SpherePoint};
+use hashbrown::HashSet;
 pub use joints::{JointDescriptor, JointDof, JointDrive, JointKind, JointLimit, JointPose};
-use layerstack::{HashSet, PathId, TargetPath, Time, TokenInterner, Value};
+use layerstack::{PathId, TargetPath, Time, TokenInterner, Value};
 
 /// Selection of a simulation owner, including the unowned/default partition.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

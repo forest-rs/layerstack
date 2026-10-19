@@ -32,8 +32,7 @@ fn checked_schema_arrays_preserve_decode_errors_at_default_and_numeric_times() {
         let error = ArrayReadError::BudgetExceeded { limit: 7 };
         let failed = Value::TypedArray(TypedArray::Deferred(Arc::new(Failed(error.clone()))));
         let spec = store
-            .layers
-            .get_mut(&LayerId(1))
+            .layer_mut(LayerId(1))
             .unwrap()
             .prim_mut(path)
             .unwrap()
@@ -100,7 +99,7 @@ fn checked_schema_reads_share_native_arrays_and_keep_typed_default_selection() {
         None
     );
     // A wrong dense type can still be skipped at default time, as Get<T> does.
-    let mut weak = store.layers.remove(&LayerId(1)).unwrap();
+    let mut weak = store.remove_layer(LayerId(1)).unwrap();
     weak.map_layer_ids(|id| if id == LayerId(1) { LayerId(2) } else { id });
     store.insert_layer(weak);
     let mut root = layerstack::Layer::new(LayerId(1));
@@ -142,8 +141,7 @@ fn validated_primvars_preserve_value_and_index_decode_errors() {
         let token = store.tokens.lookup(name).unwrap();
         let error = ArrayReadError::InvalidData("bad retained primvar buffer".into());
         store
-            .layers
-            .get_mut(&LayerId(1))
+            .layer_mut(LayerId(1))
             .unwrap()
             .prim_mut(path)
             .unwrap()

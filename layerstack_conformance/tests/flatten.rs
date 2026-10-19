@@ -205,7 +205,16 @@ fn flatten_with(
         ..options(&mut loaded.store, case.fallbacks)
     };
     let stage = Stage::compose(&mut loaded.store, loaded.root_layer, options);
-    let id = LayerId(loaded.store.layers.keys().map(|id| id.0).max().unwrap_or(0) + 1);
+    let id = LayerId(
+        loaded
+            .store
+            .layer_ids()
+            .iter()
+            .map(|id| id.0)
+            .max()
+            .unwrap_or(0)
+            + 1,
+    );
     let directory = case_directory(case);
     let locations = Locations {
         layers: loaded

@@ -163,8 +163,7 @@ fn payload_and_external_mute_deltas_match_full_recomposition() {
         live.unload(&store, host);
         let new = store.path("/New");
         store
-            .layers
-            .get_mut(&LayerId(1))
+            .layer_mut(LayerId(1))
             .unwrap()
             .insert_prim(new, PrimSpec::def());
         live.synchronize(&mut store);
@@ -177,8 +176,7 @@ fn payload_and_external_mute_deltas_match_full_recomposition() {
 fn global_composition_errors_force_complete_diagnostic_replacement() {
     let (mut store, _) = fixture(false);
     store
-        .layers
-        .get_mut(&LayerId(2))
+        .layer_mut(LayerId(2))
         .unwrap()
         .sublayers_mut()
         .push(SublayerEntry::new(LayerId(2)));
@@ -198,7 +196,7 @@ fn global_composition_errors_force_complete_diagnostic_replacement() {
 fn control_recomposition_never_acknowledges_unincorporated_source_edits() {
     let (mut store, mut live) = fixture(false);
     let property = store.property_path("/Unrelated.weight");
-    store.layers.get_mut(&LayerId(1)).unwrap().set_property(
+    store.layer_mut(LayerId(1)).unwrap().set_property(
         property,
         layerstack::PropertySpec::typed_attribute(
             layerstack::PropertyType::parse("double").unwrap(),
@@ -227,7 +225,7 @@ fn value_transactions_consume_pending_payload_controls() {
     let (mut store, _) = fixture(false);
     let host = store.path("/Host");
     let property = store.property_path("/Host.exposure");
-    store.layers.get_mut(&LayerId(1)).unwrap().set_property(
+    store.layer_mut(LayerId(1)).unwrap().set_property(
         property,
         layerstack::PropertySpec::typed_attribute(
             layerstack::PropertyType::parse("double").unwrap(),

@@ -9,7 +9,7 @@ use super::Value;
 use crate::value_type::ValueType;
 use alloc::string::String;
 use core::hash::{BuildHasher, Hash, Hasher};
-use layerstack::HashMap;
+use hashbrown::HashMap;
 use smallvec::SmallVec;
 
 #[derive(Clone, Copy)]

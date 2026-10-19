@@ -88,7 +88,7 @@ fn controls_match_openusd_and_preserve_other_stage_snapshots() {
     );
     assert!(live.stage().is_layer_muted(overlay));
     assert!(
-        store.layers.contains_key(&overlay),
+        store.contains_layer(overlay),
         "muting never evicts host data"
     );
     actual.push(snapshot(live.stage(), &mut store));
@@ -97,7 +97,7 @@ fn controls_match_openusd_and_preserve_other_stage_snapshots() {
         original_snapshot,
         "other snapshots remain unchanged"
     );
-    store.layers.get_mut(&overlay).unwrap().touch();
+    store.layer_mut(overlay).unwrap().touch();
     assert!(
         live.notify_changed_layers(&store).is_empty(),
         "muted edits do not invalidate this stage"
@@ -402,8 +402,7 @@ print(json.dumps([[str(p.GetPath()),p.IsActive(),p.IsLoaded(),p.IsDefined(),p.Is
         eprintln!("skipped native prim flags: set LAYERSTACK_USD_PYTHON");
     }
     store
-        .layers
-        .get_mut(&LayerId(1))
+        .layer_mut(LayerId(1))
         .unwrap()
         .prim_mut(a)
         .unwrap()
@@ -476,8 +475,7 @@ fn all_children_never_restore_removed_relocation_sources() {
     let mut store = loaded.store;
     let plot = store.path("/Garden/Plot");
     store
-        .layers
-        .get_mut(&loaded.root_layer)
+        .layer_mut(loaded.root_layer)
         .unwrap()
         .prim_mut(plot)
         .unwrap()

@@ -130,7 +130,7 @@ fn incompatible_family_declarations_reject_without_touching_prior_edits() {
         let (mut store, mut live) = support::scene(&source);
         let mesh = store.path("/M");
         let family = store.tokens.lookup("subsetFamily:f:familyType").unwrap();
-        let original = store.layers[&LayerId(1)].prims()[&mesh]
+        let original = store.layer(LayerId(1)).unwrap().prims()[&mesh]
             .property(family)
             .unwrap()
             .clone();
@@ -157,7 +157,7 @@ fn incompatible_family_declarations_reject_without_touching_prior_edits() {
             "prior subset edits survive failed family authoring"
         );
         assert_eq!(
-            store.layers[&LayerId(1)].prims()[&mesh]
+            store.layer(LayerId(1)).unwrap().prims()[&mesh]
                 .property(family)
                 .unwrap(),
             &original,

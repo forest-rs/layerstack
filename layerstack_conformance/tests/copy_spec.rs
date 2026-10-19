@@ -254,7 +254,7 @@ fn copies_agree_with_openusd_copy_spec() {
         };
         let (_, from) = address(&mut loaded, &case["from"]);
         let (dst, to) = address(&mut loaded, &case["to"]);
-        let before = loaded.store.layers[&dst].clone();
+        let before = loaded.store.layer(dst).unwrap().clone();
         let mut txn = Transaction::new();
         txn.copy_spec(from, to);
         let result = txn.apply(&mut loaded.store);
@@ -265,13 +265,13 @@ fn copies_agree_with_openusd_copy_spec() {
         );
         assert_eq!(result.is_ok(), accepted, "{name}: accepted ({result:?})");
         assert_eq!(
-            dump(&loaded, &loaded.store.layers[&dst]),
+            dump(&loaded, loaded.store.layer(dst).unwrap()),
             want,
             "{name}: destination"
         );
         if let Ok(inverse) = result {
             inverse.apply(&mut loaded.store).unwrap();
-            let after = &loaded.store.layers[&dst];
+            let after = &loaded.store.layer(dst).unwrap();
             assert_eq!(after.prims(), before.prims(), "{name}: undo");
             assert_eq!(
                 after.variant_prims(),

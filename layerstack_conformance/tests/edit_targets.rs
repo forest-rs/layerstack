@@ -61,7 +61,7 @@ fn check_file(label: &str, entry: &std::path::Path, tally: &mut Tally) {
     );
     let store = &mut loaded.store;
     let specs = || {
-        store.layers.values().flat_map(|layer| {
+        store.layers().flat_map(|layer| {
             layer
                 .prims()
                 .values()

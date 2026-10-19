@@ -46,8 +46,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use layerstack::{
-    CompositionError, ExpressionContext, LayerStack, LayerStore, LiveStage, Stage, StageOptions,
-    Value,
+    CompositionError, ExpressionContext, LayerStack, LiveStage, Stage, StageOptions, Value,
     variable_expression::{ExpressionValue, VariableValue},
 };
 use layerstack_conformance::{

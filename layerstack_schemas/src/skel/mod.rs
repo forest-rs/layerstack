@@ -52,7 +52,8 @@ use alloc::{
     sync::Arc,
     vec::Vec,
 };
-use layerstack::{HashMap, PathId, PropertyPath, TargetPath, TokenInterner, Value};
+use hashbrown::HashMap;
+use layerstack::{PathId, PropertyPath, TargetPath, TokenInterner, Value};
 
 /// Invalid skeletal inputs; evaluation returns no partial result.
 #[derive(Clone, Debug, PartialEq, Eq)]

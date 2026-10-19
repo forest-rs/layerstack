@@ -34,7 +34,7 @@ fn report(
         current.decode_attempts,
         old.element_bytes,
         rss.map_or_else(|| "unavailable".into(), |n| n.to_string()),
-        document.store().layers[&root].generation()
+        document.store().layer(root).unwrap().generation()
     );
 }
 
@@ -121,13 +121,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (store, stage) = document.parts_mut();
     stage.apply(store, &edit)?;
     let mut cursor = stage.change_cursor();
-    let generation = document.store().layers[&root_layer].generation();
+    let generation = document.store().layer(root_layer).unwrap().generation();
     let started = Instant::now();
     let saved = document.save_layers(&[root_layer]);
     assert!(saved.failures.is_empty(), "{saved:?}");
     assert_eq!(saved.saved, [root_layer], "dirty root is saved");
     assert_eq!(
-        document.store().layers[&root_layer].generation(),
+        document.store().layer(root_layer).unwrap().generation(),
         generation,
         "save preserves authored generation"
     );

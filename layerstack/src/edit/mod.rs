@@ -71,7 +71,7 @@
 //!
 //! let asset_spin = store.property_path("/Rock.spin");
 //! let samples = |store: &InMemoryStore| {
-//!     store.layers[&LayerId(2)].property(asset_spin).unwrap().time_samples.clone()
+//!     store.layer(LayerId(2)).unwrap().property(asset_spin).unwrap().time_samples.clone()
 //! };
 //! assert_eq!(samples(&store), Some(vec![(4.0, Value::Double(70.0))].into()));
 //! let spin = live.view(&store).attribute(spin_path).unwrap();

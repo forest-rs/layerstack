@@ -9,7 +9,8 @@ use super::{BlendShapeContribution, DeformationInputs, DeformationRevisions, Ski
 use super::{SkelError, SkeletonDefinition, SkinningQuery, invalid, read, skin_points_in_place};
 use crate::{PrimView, Scene, Time, gf, usd_skel::Skeleton};
 use alloc::{sync::Arc, vec::Vec};
-use layerstack::{Changes, HashMap, HashSet, PathId, PropertyPath, TargetPath};
+use hashbrown::{HashMap, HashSet};
+use layerstack::{Changes, PathId, PropertyPath, TargetPath};
 
 /// Cumulative retained evaluator work counters. Clearing entries does not reset
 /// counters; use [`SkelCache::reset_stats`] to start a measurement window.

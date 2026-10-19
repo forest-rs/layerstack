@@ -105,7 +105,7 @@ use std::collections::BTreeMap;
 
 use layerstack::property::get_property_mut;
 use layerstack::{
-    CompositionError, LayerId, LayerStore, LiveStage, PathId, Relocate, Stage, StageOptions, Value,
+    CompositionError, LayerId, LiveStage, PathId, Relocate, Stage, StageOptions, Value,
 };
 use layerstack_conformance::{
     usda_real::{LoadedStage, load_entry_usda},
@@ -414,8 +414,7 @@ fn set_int(loaded: &mut LoadedStage, layer: &str, prim: &str, attr: &str, value:
     let name = loaded.store.tokens.intern(attr);
     let spec = loaded
         .store
-        .layers
-        .get_mut(&layer)
+        .layer_mut(layer)
         .and_then(|layer| layer.prim_mut(prim))
         .expect("prim spec");
     let property = get_property_mut(&mut spec.properties, name).expect("property");
@@ -552,8 +551,7 @@ fn relocates_edits_rebuild_the_stage() {
     let wrist = loaded.store.path("/Robot/Rig/Controls/Wrist");
     loaded
         .store
-        .layers
-        .get_mut(&root_layer)
+        .layer_mut(root_layer)
         .expect("root layer")
         .relocates_mut()
         .retain(|relocate| relocate.source != wrist);
@@ -571,8 +569,7 @@ fn relocates_edits_rebuild_the_stage() {
     );
     *loaded
         .store
-        .layers
-        .get_mut(&kit)
+        .layer_mut(kit)
         .expect("kit layer")
         .relocates_mut() = vec![Relocate {
         source,
@@ -626,8 +623,7 @@ fn switching_variants_applies_only_the_selected_branch_relocates() {
         let selection = loaded.store.tokens.intern(selection);
         loaded
             .store
-            .layers
-            .get_mut(&root_layer)
+            .layer_mut(root_layer)
             .and_then(|layer| layer.prim_mut(pebble))
             .expect("/Pebble spec")
             .variant_selections

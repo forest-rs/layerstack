@@ -200,7 +200,7 @@ fn assert_reads_agree(name: &str, eager: &Layer, lazy: &Layer) {
                 layer
                     .variant_prims()
                     .iter()
-                    .map(|(path, prims)| (*path, prims.as_slice())),
+                    .map(|(path, prims)| (*path, prims)),
             )
             .collect();
         prims.sort_by_key(|(path, prims)| (*path, prims.len()));
@@ -474,7 +474,7 @@ fn edits_replace_and_restore_retained_values() {
         .apply(&mut store)
         .unwrap();
     let default = |store: &InMemoryStore| {
-        store.layers[&LayerId(1)].prims()[&prim]
+        store.layer(LayerId(1)).unwrap().prims()[&prim]
             .property(entry.name)
             .unwrap()
             .default

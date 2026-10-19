@@ -54,7 +54,7 @@ fn referenced_values_and_undo_report_composed_properties() {
         undo.changes.property_changes,
         applied.changes.property_changes
     );
-    store.layers.get_mut(&LayerId(2)).unwrap().set_property(
+    store.layer_mut(LayerId(2)).unwrap().set_property(
         PropertyPath::new(source, value),
         PropertySpec::typed_attribute(layerstack::PropertyType::parse("double").unwrap())
             .with_default(Value::Double(3.0)),

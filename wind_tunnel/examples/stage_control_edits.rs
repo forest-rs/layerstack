@@ -51,7 +51,13 @@ fn main() {
     }
     let child = store.path("/Asset/New");
     for forced in [true, false] {
-        if source_edits && store.layers[&LayerId(2)].prims().contains_key(&child) {
+        if source_edits
+            && store
+                .layer(LayerId(2))
+                .unwrap()
+                .prims()
+                .contains_key(&child)
+        {
             let mut remove = Transaction::new();
             remove.remove_spec(EditTarget::for_layer(LayerId(2)).prim(child));
             remove.apply(&mut store).unwrap();

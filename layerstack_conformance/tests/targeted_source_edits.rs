@@ -126,8 +126,7 @@ fn history_expiry_unknown_writes_and_reload_require_honest_full_rebuilds() {
     for i in 0..65 {
         let child = store.path(&format!("/Asset/Child{i}"));
         store
-            .layers
-            .get_mut(&LayerId(2))
+            .layer_mut(LayerId(2))
             .unwrap()
             .insert_prim(child, PrimSpec::def());
         a.synchronize(&mut store);
@@ -136,12 +135,12 @@ fn history_expiry_unknown_writes_and_reload_require_honest_full_rebuilds() {
     b.synchronize(&mut store);
     assert!(b.recomposition_work().full_rebuild);
     assert_fresh(&mut store, &b);
-    let layer = store.layers.get_mut(&LayerId(2)).unwrap();
+    let layer = store.layer_mut(LayerId(2)).unwrap();
     layer.prims_mut().clear();
     a.synchronize(&mut store);
     assert!(a.recomposition_work().full_rebuild);
     assert_fresh(&mut store, &a);
-    let replacement = store.layers[&LayerId(2)].clone();
+    let replacement = store.layer(LayerId(2)).unwrap().clone();
     store.insert_layer(replacement);
     a.synchronize(&mut store);
     assert!(a.recomposition_work().full_rebuild);
@@ -152,7 +151,7 @@ fn empty_reference_targets_can_appear_disappear_and_return_without_global_rebuil
     let (mut store, _, _) = fixture(4);
     let source = store.path("/Library");
     let host = store.path("/External");
-    store.layers.get_mut(&LayerId(1)).unwrap().insert_prim(
+    store.layer_mut(LayerId(1)).unwrap().insert_prim(
         host,
         PrimSpec::def().with_reference(Reference::with_asset(LayerId(5), source, "library.usda")),
     );
@@ -185,7 +184,7 @@ fn shared_variants_propagate_through_references_classes_and_specializes() {
     let class = store.path("/Class");
     let inherited = store.path("/Inherited");
     let specialized = store.path("/Specialized");
-    let layer = store.layers.get_mut(&LayerId(1)).unwrap();
+    let layer = store.layer_mut(LayerId(1)).unwrap();
     layer.insert_prim(
         class,
         PrimSpec::class().with_reference(Reference::new(LayerId(1), source)),
@@ -235,7 +234,7 @@ fn shared_variants_propagate_through_references_classes_and_specializes() {
 fn precise_value_notifications_do_not_rediscover_the_wide_scene() {
     let (mut store, _, _) = fixture(1_000);
     let prop = store.property_path("/Asset.exposure");
-    store.layers.get_mut(&LayerId(1)).unwrap().set_property(
+    store.layer_mut(LayerId(1)).unwrap().set_property(
         prop,
         layerstack::PropertySpec::typed_attribute(
             layerstack::PropertyType::parse("double").unwrap(),
@@ -319,7 +318,7 @@ fn recreated_layer_with_equal_generations_does_not_reuse_departed_namespace() {
     let original_generation = original.generation();
     store.insert_layer(original);
     let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
-    store.layers.remove(&LayerId(2));
+    store.remove_layer(LayerId(2));
     live.synchronize(&mut store);
     assert!(live.recomposition_work().full_rebuild);
     assert_fresh(&mut store, &live);
@@ -367,8 +366,7 @@ fn value_transactions_consume_pending_source_deltas() {
     );
     let new = store.path("/Asset/New");
     store
-        .layers
-        .get_mut(&LayerId(2))
+        .layer_mut(LayerId(2))
         .unwrap()
         .insert_prim(new, PrimSpec::def());
     live.notify_changed_layers(&store);
@@ -405,13 +403,13 @@ fn newly_composed_stacks_receive_relocation_notifications() {
     layer.insert_prim(library_child, PrimSpec::def());
     store.insert_layer(layer);
     let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
-    store.layers.get_mut(&LayerId(1)).unwrap().insert_prim(
+    store.layer_mut(LayerId(1)).unwrap().insert_prim(
         host,
         PrimSpec::def().with_reference(Reference::with_asset(LayerId(2), asset, "asset.usda")),
     );
     live.synchronize(&mut store);
     assert!(!live.recomposition_work().full_rebuild);
-    *store.layers.get_mut(&LayerId(2)).unwrap().relocates_mut() = vec![layerstack::Relocate {
+    *store.layer_mut(LayerId(2)).unwrap().relocates_mut() = vec![layerstack::Relocate {
         source: child,
         target: Some(renamed),
     }];

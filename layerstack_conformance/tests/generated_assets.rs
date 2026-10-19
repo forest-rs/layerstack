@@ -368,7 +368,10 @@ fn material_publication_uses_owned_opinions_and_rejects_partial_updates() {
         generated.asset_generator.work().evaluations,
         evaluations + 1
     );
-    let local = generated.store.layers[&support::ASSET]
+    let local = generated
+        .store
+        .layer(support::ASSET)
+        .unwrap()
         .property(file)
         .unwrap();
     assert_eq!(
@@ -383,7 +386,10 @@ fn material_publication_uses_owned_opinions_and_rejects_partial_updates() {
             .is_none_or(|samples| samples.as_slice().is_empty())
     );
     assert_eq!(
-        generated.store.layers[&support::ROOT]
+        generated
+            .store
+            .layer(support::ROOT)
+            .unwrap()
             .property(file)
             .unwrap()
             .default,
@@ -865,7 +871,9 @@ def Xform "Asset" (variants = { string shape = "mesh" }; prepend variantSets = "
     let mapped = target.map_to_spec_path(path, &mut store.paths).unwrap();
     assert_eq!(
         store.tokens.resolve(
-            store.layers[&support::ROOT]
+            store
+                .layer(support::ROOT)
+                .unwrap()
                 .prim_at(&mapped)
                 .unwrap()
                 .type_name
@@ -996,7 +1004,7 @@ fn authored_layers_round_trip_in_both_formats_and_match_openusd() {
             (support::TERRAIN, "terrain.usd"),
             (support::ROOT, "scene.usd"),
         ] {
-            let layer = generated.store.layers.get(&id).unwrap();
+            let layer = generated.store.layer(id).unwrap();
             let bytes = if binary {
                 layerstack_usdc::writer::save_layer(
                     layer,

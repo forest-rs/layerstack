@@ -15,8 +15,8 @@ extern crate alloc;
 
 use criterion::{BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main};
 use layerstack::{
-    HashMap, InMemoryStore, Layer, LayerId, LiveStage, PrimSpec, Reference, Stage, StageOptions,
-    Value, VariantSetSpec, VariantSpec,
+    InMemoryStore, Layer, LayerId, LiveStage, PrimSpec, Reference, Stage, StageOptions, Value,
+    VariantSetSpec, VariantSpec,
 };
 
 /// Builds a store whose root layer (`LayerId(1)`) holds `n` trees under
@@ -53,7 +53,7 @@ fn build_forest(n: usize) -> InMemoryStore {
     let wood_class = store.path("/_class_Wood");
     let leaf_base = store.path("/LeafBase");
     let mut asset = Layer::new(LayerId(2));
-    let mut variants = HashMap::new();
+    let mut variants = hashbrown::HashMap::new();
     for (name, color) in [(summer, "green"), (autumn, "orange")] {
         let mut branch = VariantSpec::default();
         branch.fields.push(layerstack::FieldEntry {
@@ -156,8 +156,7 @@ fn bench_arc_edits(c: &mut Criterion) {
             b.iter(|| {
                 value = 1.0 - value;
                 store
-                    .layers
-                    .get_mut(&LayerId(3))
+                    .layer_mut(LayerId(3))
                     .unwrap()
                     .prim_mut(bark)
                     .unwrap()
@@ -184,12 +183,7 @@ fn bench_arc_payloads(c: &mut Criterion) {
                             let tree = store.path("/Tree");
                             let season = store.tokens.intern("season");
                             let winter = store.tokens.intern("winter");
-                            let spec = store
-                                .layers
-                                .get_mut(&LayerId(2))
-                                .unwrap()
-                                .prim_mut(tree)
-                                .unwrap();
+                            let spec = store.layer_mut(LayerId(2)).unwrap().prim_mut(tree).unwrap();
                             spec.variant_sets.get_mut(&season).unwrap().variants.insert(
                                 winter,
                                 VariantSpec {
@@ -203,8 +197,7 @@ fn bench_arc_payloads(c: &mut Criterion) {
                         } else {
                             let unrelated = store.path("/Unrelated");
                             store
-                                .layers
-                                .get_mut(&LayerId(1))
+                                .layer_mut(LayerId(1))
                                 .unwrap()
                                 .insert_prim(unrelated, PrimSpec::def().with_field(points, value));
                         }

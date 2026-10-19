@@ -94,7 +94,7 @@ fn list_op(op: &ListOp<TokenId>, tokens: &TokenInterner) -> Json {
 /// none) and variant sets, as the oracle records them.
 fn spec_record(
     names: &ListOp<TokenId>,
-    sets: &layerstack::HashMap<TokenId, VariantSetSpec>,
+    sets: &hashbrown::HashMap<TokenId, VariantSetSpec>,
     tokens: &TokenInterner,
 ) -> Json {
     let sets: BTreeMap<String, Vec<String>> = sets
@@ -149,7 +149,7 @@ fn spec_at<'a>(
 /// spec (`/P{v=x}C.attr`).
 fn exists(loaded: &LoadedStage, layer: LayerId, path: &str) -> bool {
     let store = &loaded.store;
-    let layer = &store.layers[&layer];
+    let layer = &store.layer(layer).unwrap();
     let (owner, property) = match path.rsplit_once('.') {
         Some((owner, property)) => (owner, Some(property)),
         None => (path, None),
@@ -501,7 +501,7 @@ fn variant_set_edits_agree_with_openusd_call_by_call() {
     for case in cases {
         let name = case["name"].as_str().unwrap();
         let mut loaded = load("edits.usda");
-        let original = loaded.store.layers.clone();
+        let original = loaded.store.layers().cloned().collect::<Vec<_>>();
         let mut live = LiveStage::compose(
             &mut loaded.store,
             loaded.root_layer,
@@ -513,7 +513,7 @@ fn variant_set_edits_agree_with_openusd_call_by_call() {
         let pseudo_root = case["prim"] == "/";
         let addressed = |loaded: &LoadedStage| {
             let path = spec_path.as_ref().filter(|_| !pseudo_root)?;
-            let layer = &loaded.store.layers[&target.layer()];
+            let layer = &loaded.store.layer(target.layer()).unwrap();
             spec_at(layer, path, &loaded.store.paths).map(|spec| spec.record(&loaded.store.tokens))
         };
         let steps = case["steps"].as_array().unwrap();
@@ -555,8 +555,9 @@ fn variant_set_edits_agree_with_openusd_call_by_call() {
             live.apply(&mut loaded.store, inverse)
                 .unwrap_or_else(|e| panic!("{name}: undo: {e}"));
         }
-        for (id, layer) in &original {
-            let now = &loaded.store.layers[id];
+        for layer in &original {
+            let id = &layer.id();
+            let now = loaded.store.layer(*id).unwrap();
             assert_eq!(now.prims(), layer.prims(), "{name}: undo restores {id:?}");
             assert_eq!(
                 now.variant_prims(),

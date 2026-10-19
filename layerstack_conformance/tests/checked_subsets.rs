@@ -259,7 +259,7 @@ fn topology_reads_skip_incompatible_defaults_but_keep_numeric_source_selection()
         let (mut store, _) = support::scene(MESH);
         let path = store.path("/M");
         let property = store.property_path("/M.faceVertexCounts");
-        let mut weak = store.layers.remove(&LayerId(1)).unwrap();
+        let mut weak = store.remove_layer(LayerId(1)).unwrap();
         weak.map_layer_ids(|id| if id == LayerId(1) { LayerId(2) } else { id });
         let error = ArrayReadError::InvalidData("failed weaker topology".into());
         if decode_failure {

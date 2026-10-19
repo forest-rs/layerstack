@@ -473,8 +473,8 @@ mod tests {
 
     use super::PreparationIndex;
     use crate::{
-        InMemoryStore, Layer, LayerId, LayerStore, ListOp, PathId, PrimSpec, PropertySpec,
-        TargetPath, prim_indexing::ChildIndex,
+        InMemoryStore, Layer, LayerId, ListOp, PathId, PrimSpec, PropertySpec, TargetPath,
+        prim_indexing::ChildIndex,
     };
 
     /// A prim spec with a relationship targeting `target`.

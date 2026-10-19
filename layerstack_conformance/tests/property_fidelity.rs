@@ -116,7 +116,7 @@ fn load_usda(path: &Path) -> InMemoryStore {
 
 fn dump(store: &InMemoryStore) -> Vec<String> {
     dump_layer(
-        &store.layers[&LayerId(1)],
+        store.layer(LayerId(1)).unwrap(),
         Names {
             tokens: &store.tokens,
             paths: &store.paths,
@@ -227,7 +227,7 @@ fn probe_keeps_every_authored_slot() {
     let constant = store.tokens.intern("constant");
     let root_a = store.target_path("/Root.a");
 
-    let layer = &store.layers[&LayerId(1)];
+    let layer = &store.layer(LayerId(1)).unwrap();
     let a_spec = layer.property(a).expect("a authored");
     assert!(a_spec.custom);
     assert_eq!(a_spec.default, Some(Value::Float(1.0)));
@@ -250,7 +250,7 @@ fn probe_keeps_every_authored_slot() {
     );
     let meters = store.tokens.intern("metersPerUnit");
     assert_eq!(
-        store.layers[&LayerId(1)].metadata(meters),
+        store.layer(LayerId(1)).unwrap().metadata(meters),
         Some(&FieldValue::Value(Value::Double(1.0)))
     );
 
@@ -276,7 +276,7 @@ fn probe_keeps_every_authored_slot() {
     );
 
     // Removing one slot leaves the others in place.
-    let layer = store.layers.get_mut(&LayerId(1)).expect("layer");
+    let layer = store.layer_mut(LayerId(1)).expect("layer");
     layer.property_mut(a).expect("a").default = None;
     layer.property_mut(b).expect("b").targets = None;
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
@@ -333,7 +333,9 @@ fn ui_hint_limits_combine_like_usdcat_flatten() {
             panic!("{key_name} is a dictionary");
         };
         let flat_key = flattened.tokens.intern(key_name);
-        let Some(FieldValue::Value(expected)) = flattened.layers[&LayerId(1)]
+        let Some(FieldValue::Value(expected)) = flattened
+            .layer(LayerId(1))
+            .unwrap()
             .property(flat_softness)
             .and_then(|spec| spec.metadata(flat_key))
         else {
@@ -427,7 +429,7 @@ fn variant_branch_specs_at_the_same_path_are_kept() {
     let purpose = store.tokens.intern("purpose");
     let proxy = store.tokens.intern("proxy");
 
-    let layer = &store.layers[&LayerId(1)];
+    let layer = &store.layer(LayerId(1)).unwrap();
     assert_eq!(layer.prim_specs(geom).count(), 2, "one `Geom` per branch");
     assert_eq!(layer.prim_specs(mesh).count(), 2, "one `Mesh` per branch");
 

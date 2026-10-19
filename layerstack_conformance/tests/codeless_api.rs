@@ -83,7 +83,7 @@ class "PipelineSlotAPI" { float pipeline:__INSTANCE_NAME__:gain = 2 }
 fn runtime_single_and_multiple_apply_publish_defaults_and_undo() {
     let (mut store, mut live) = scene();
     let path = store.path("/Cube");
-    let before = store.layers[&LayerId(1)].clone();
+    let before = store.layer(LayerId(1)).unwrap().clone();
     let tint = store.property_path("/Cube.pipeline:tint");
     let gain = store.property_path("/Cube.pipeline:main:gain");
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
@@ -92,7 +92,7 @@ fn runtime_single_and_multiple_apply_publish_defaults_and_undo() {
     edit.apply_api(path, "PipelineSlotAPI", Some("main"))
         .unwrap();
     let transaction = edit.finish();
-    assert_eq!(store.layers[&LayerId(1)], before);
+    assert_eq!(*store.layer(LayerId(1)).unwrap(), before);
     let inverse = live.apply(&mut store, &transaction).unwrap().inverse;
     let scene = layerstack_schemas::Scene::new(live.stage(), &store);
     assert!(scene.has_api(path, "PipelineTintAPI", None));
@@ -114,7 +114,7 @@ fn runtime_single_and_multiple_apply_publish_defaults_and_undo() {
         Value::Float(2.)
     );
     live.apply(&mut store, &inverse).unwrap();
-    assert_eq!(store.layers[&LayerId(1)], before);
+    assert_eq!(*store.layer(LayerId(1)).unwrap(), before);
 }
 #[test]
 fn rejected_runtime_application_adds_nothing_and_pending_definition_is_validated() {

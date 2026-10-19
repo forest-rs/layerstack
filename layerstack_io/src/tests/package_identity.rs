@@ -29,7 +29,7 @@ fn packaging_preserves_identity_without_loading_and_keeps_nested_resources() {
     )
     .unwrap();
     let root = document.stage.stage().root_layer().unwrap();
-    let original = document.store.layers[&root].clone();
+    let original = document.store.layer(root).unwrap().clone();
     let mut callbacks = Vec::new();
     let prepared = document
         .prepare_package(
@@ -94,7 +94,8 @@ fn packaging_preserves_identity_without_loading_and_keeps_nested_resources() {
         "nested resources are localized"
     );
     assert_eq!(
-        document.store.layers[&root], original,
+        *document.store.layer(root).unwrap(),
+        original,
         "preparation leaves authored source unchanged"
     );
     document.export_package("out.usdz", &prepared).unwrap();
@@ -106,7 +107,7 @@ fn packaging_preserves_identity_without_loading_and_keeps_nested_resources() {
     let mut reopened = StageDocument::open(output, "out.usdz", StageOptions::default()).unwrap();
     let reopened_root = reopened.stage.stage().root_layer().unwrap();
     let uses = extract_layer_dependencies(
-        &reopened.store.layers[&reopened_root],
+        reopened.store.layer(reopened_root).unwrap(),
         &reopened.store.paths,
         &reopened.store.tokens,
     );

@@ -6,7 +6,7 @@
 #![allow(missing_docs, reason = "integration tests")]
 
 use layerstack::{
-    ArcKind, FieldEntry, HashMap, InMemoryStore, Layer, LayerId, NodeId, PrimIndexGraph, PrimSpec,
+    ArcKind, FieldEntry, InMemoryStore, Layer, LayerId, NodeId, PrimIndexGraph, PrimSpec,
     Reference, Stage, StageOptions, Value, VariantSetSpec, VariantSpec,
 };
 
@@ -62,7 +62,7 @@ fn grove() -> (InMemoryStore, Stage) {
         .with_inherit(class)
         .with_children(vec![leaves_tok])
         .with_field(height, Value::Double(12.0));
-    let mut variants = HashMap::new();
+    let mut variants = VariantSetSpec::default().variants;
     variants.insert(
         summer,
         VariantSpec {
@@ -197,7 +197,7 @@ fn opinion_order_follows_the_graphs_strength_order() {
     for prim in stage.traverse(root).filter(|prim| *prim != root) {
         let handle = stage.prim(prim, &store).expect("composed");
         let graph = handle.composition_graph();
-        let rank: HashMap<NodeId, usize> = graph
+        let rank: std::collections::HashMap<NodeId, usize> = graph
             .strength_order()
             .into_iter()
             .enumerate()
@@ -246,8 +246,7 @@ fn variant_selections_report_the_strongest_opinion() {
     );
 
     store
-        .layers
-        .get_mut(&LayerId(1))
+        .layer_mut(LayerId(1))
         .and_then(|layer| layer.prim_mut(grove))
         .expect("grove spec")
         .variant_selections

@@ -17,7 +17,8 @@
 
 use alloc::{string::String, vec::Vec};
 
-use layerstack::{Changes, HashMap, HashSet, PathId, TargetPath};
+use hashbrown::{HashMap, HashSet};
+use layerstack::{Changes, PathId, TargetPath};
 
 use super::{
     CollectionIdentity, Membership, MembershipProblem, MembershipQuery, MembershipRule,

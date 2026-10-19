@@ -35,7 +35,7 @@ fn snapshot(
             .map(|p| p.property_names())
             .unwrap_or_default();
         names.sort_unstable();
-        let order: Vec<_> = store.layers[&root_layer].prims()[&prim]
+        let order: Vec<_> = store.layer(root_layer).unwrap().prims()[&prim]
             .property_order
             .as_deref()
             .unwrap_or_default()
@@ -88,7 +88,7 @@ fn snapshot(
     let Value::PathExpression(expression) = expression else {
         panic!("expression");
     };
-    json!({"prims":prims,"defaultPrim":store.tokens.resolve(store.layers[&root_layer].default_prim().unwrap()),"watchTargets":target_list("look"),"connections":target_list("inputs:value"),"expression":expression.as_ref(),"properties":properties,"relativeExpressions":relative})
+    json!({"prims":prims,"defaultPrim":store.tokens.resolve(store.layer(root_layer).unwrap().default_prim().unwrap()),"watchTargets":target_list("look"),"connections":target_list("inputs:value"),"expression":expression.as_ref(),"properties":properties,"relativeExpressions":relative})
 }
 
 #[test]
@@ -98,7 +98,7 @@ fn namespace_moves_match_native_usd() {
         serde_json::from_str(include_str!("../fixtures/namespace_edits/oracle.json")).unwrap();
     for (name, case) in oracle.as_object().unwrap() {
         let mut loaded = load_entry_usda(&fixtures.join(format!("{name}.usda")));
-        let before = loaded.store.layers[&loaded.root_layer].clone();
+        let before = loaded.store.layer(loaded.root_layer).unwrap().clone();
         let mut live = LiveStage::compose(
             &mut loaded.store,
             loaded.root_layer,
@@ -125,7 +125,8 @@ fn namespace_moves_match_native_usd() {
         )
         .unwrap();
         assert_eq!(
-            loaded.store.layers[&loaded.root_layer], before,
+            *loaded.store.layer(loaded.root_layer).unwrap(),
+            before,
             "{name} preview"
         );
         let applied = live.apply(&mut loaded.store, edit.transaction()).unwrap();
@@ -136,7 +137,8 @@ fn namespace_moves_match_native_usd() {
         );
         live.apply(&mut loaded.store, &applied.inverse).unwrap();
         assert_eq!(
-            loaded.store.layers[&loaded.root_layer], before,
+            *loaded.store.layer(loaded.root_layer).unwrap(),
+            before,
             "{name} undo"
         );
     }

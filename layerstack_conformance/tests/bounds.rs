@@ -295,7 +295,7 @@ fn invalidation_reaches_independently_queried_descendants() {
 
 #[test]
 fn excluded_children_track_visibility_type_and_deletion_changes() {
-    use layerstack::{InMemoryStore, Layer, LayerId, LayerStore, PrimSpec, PropertySpec, Value};
+    use layerstack::{InMemoryStore, Layer, LayerId, PrimSpec, PropertySpec, Value};
     let mut store = InMemoryStore::default();
     let root = store.path("/Root");
     let branch = store.path("/Root/Branch");

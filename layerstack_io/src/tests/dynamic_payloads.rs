@@ -420,8 +420,8 @@ pub(super) fn open<B: Storage>(storage: B, root: &str, attributes: bool) -> Stag
 pub(super) fn generated<B: Storage>(doc: &StageDocument<B>, base: &str) -> Vec<String> {
     let mut identifiers: Vec<String> = doc
         .store()
-        .layers
-        .keys()
+        .layer_ids()
+        .iter()
         .filter_map(|&id| doc.identifier(id))
         .filter(|identifier| identifier.contains(FORMAT_ARGS_DELIMITER))
         .map(|identifier| String::from(identifier.strip_prefix(base).unwrap_or(identifier)))
@@ -738,9 +738,8 @@ fn ancestral_payloads_in_variants_read_the_opinions_of_the_arcs_above_them() {
         );
         let layer = doc
             .store()
-            .layers
-            .keys()
-            .copied()
+            .layer_ids()
+            .into_iter()
             .find(|&id| doc.identifier(id) == Some(identifier.as_str()))
             .unwrap();
         let generated_prim = store
@@ -764,12 +763,11 @@ fn readers_leave_dynamic_payloads_to_composition() {
     let doc = open(lab(), "root.usda", false);
     let payloads = doc
         .store()
-        .layers
-        .keys()
-        .copied()
+        .layer_ids()
+        .into_iter()
         .find(|&id| doc.identifier(id) == Some("payloads.usda"))
         .unwrap();
-    let layer = &doc.store().layers[&payloads];
+    let layer = &doc.store().layer(payloads).unwrap();
     let mut arcs: Vec<(String, bool)> = layer
         .prims()
         .values()
@@ -809,9 +807,8 @@ pub(super) fn author<B: Storage>(
     use layerstack::{Address, PropertyPath, SpecPath, Transaction};
     let layer = doc
         .store()
-        .layers
-        .keys()
-        .copied()
+        .layer_ids()
+        .into_iter()
         .find(|&id| {
             doc.identifier(id)
                 .is_some_and(|found| found.ends_with(layer))
@@ -826,7 +823,9 @@ pub(super) fn author<B: Storage>(
             layer,
             SpecPath::from_property_path(PropertyPath::new(path, token)),
         );
-        let exists = store.layers[&layer]
+        let exists = store
+            .layer(layer)
+            .unwrap()
             .prims()
             .get(&path)
             .is_some_and(|spec| spec.property(token).is_some());

@@ -323,8 +323,7 @@ fn prerequisite_input_edits_invalidation_and_removal_retire_delayed_downstream_w
                 // Direct authored edits have not yet synchronized the stage.
                 let path = f.store.property_path("/Terrain.primvars:seed");
                 f.store
-                    .layers
-                    .get_mut(&ROOT)
+                    .layer_mut(ROOT)
                     .unwrap()
                     .set_property(path, PropertySpec::attribute().with_default(Value::Int(9)));
             }
@@ -335,7 +334,7 @@ fn prerequisite_input_edits_invalidation_and_removal_retire_delayed_downstream_w
                 assert!(f.graph.remove(f.recipes[0]));
             }
         }
-        let before = f.store.layers[&ROOT].generation();
+        let before = f.store.layer(ROOT).unwrap().generation();
         let path = f.store.property_path("/ScatterOutput.value");
         let mut delayed = Transaction::new();
         delayed.set_default(EditTarget::for_layer(ROOT).property(path), Value::Int(99));
@@ -346,7 +345,7 @@ fn prerequisite_input_edits_invalidation_and_removal_retire_delayed_downstream_w
             ),
             "upstream staleness rejects downstream work before output changes"
         );
-        assert_eq!(f.store.layers[&ROOT].generation(), before);
+        assert_eq!(f.store.layer(ROOT).unwrap().generation(), before);
         assert_eq!(authored(&f, path), Value::Int(3));
         assert!(matches!(
             initial.steps[1].verify(&Scene::new(f.live.stage(), &f.store), &resources()),
@@ -385,7 +384,7 @@ fn rejected_publication_guards_leave_all_outputs_and_acknowledgements_unchanged(
         }
     }
     let mut f = fixture();
-    let before = f.store.layers[&ROOT].generation();
+    let before = f.store.layer(ROOT).unwrap().generation();
     let mut publisher = StalePublisher {
         acknowledged: false,
     };
@@ -409,7 +408,7 @@ fn rejected_publication_guards_leave_all_outputs_and_acknowledgements_unchanged(
     ));
     assert!(failure.completed.steps.is_empty());
     assert!(!publisher.acknowledged);
-    assert_eq!(f.store.layers[&ROOT].generation(), before);
+    assert_eq!(f.store.layer(ROOT).unwrap().generation(), before);
     for site in f.outputs {
         let value = f.store.tokens.lookup("value").unwrap();
         assert_eq!(authored(&f, PropertyPath::new(site, value)), Value::Int(0));
@@ -519,7 +518,7 @@ fn failed_downstream_reports_completed_publications_and_preserves_previous_outpu
 #[test]
 fn registration_conflicts_and_preflight_failures_do_not_publish() {
     let mut f = fixture();
-    let before = f.store.layers[&ROOT].generation();
+    let before = f.store.layer(ROOT).unwrap().generation();
     let mut publisher = Publish::default();
     let failure = f
         .graph
@@ -537,7 +536,7 @@ fn registration_conflicts_and_preflight_failures_do_not_publish() {
         BuildError::Graph(GraphError::MissingResource { .. })
     ));
     assert!(failure.completed.steps.is_empty());
-    assert_eq!(f.store.layers[&ROOT].generation(), before);
+    assert_eq!(f.store.layer(ROOT).unwrap().generation(), before);
     let extra = f.store.path("/Extra");
     let evaluator = || Sum {
         sources: Vec::new(),

@@ -26,6 +26,8 @@ serde = { features = ["derive"], version = "1.0" }
 serde_json = { features = ["float_roundtrip"], version = "1.0" }
 
 [dev-dependencies]
+# The map type of a spec's variant sets, which some tests walk.
+hashbrown = { workspace = true }
 # `StageDocument`, for the import policy tests.
 layerstack_io = { features = ["std"], workspace = true }
 

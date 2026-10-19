@@ -342,7 +342,7 @@ fn main() -> Result<(), Failure> {
     if let Some(directory) = std::env::args_os().nth(1) {
         std::fs::create_dir_all(&directory)?;
         let document = layerstack_usda::save::layer_document(
-            &store.layers[&ROOT],
+            store.layer(ROOT).unwrap(),
             &store.tokens,
             &store.paths,
         )?;

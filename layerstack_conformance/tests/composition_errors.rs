@@ -391,8 +391,7 @@ fn edit_selection(
 ) -> Vec<PathId> {
     let selections = &mut loaded
         .store
-        .layers
-        .get_mut(&layer)
+        .layer_mut(layer)
         .and_then(|layer| layer.prim_mut(prim))
         .expect("prim spec")
         .variant_selections;

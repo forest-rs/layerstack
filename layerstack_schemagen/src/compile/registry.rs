@@ -12,8 +12,8 @@ use std::sync::Arc;
 
 use layerstack::stage::flatten::FlattenRequirements;
 use layerstack::{
-    EditTarget, FieldValue, Layer, LayerId, LayerStore, ListOp, Path, PathId, PrimSpec,
-    PropertyPath, Transaction, Value,
+    EditTarget, FieldValue, Layer, LayerId, ListOp, Path, PathId, PrimSpec, PropertyPath,
+    Transaction, Value,
 };
 use layerstack_usda::writer::{Metadatum, Prim, Property, Value as Text};
 
@@ -64,7 +64,12 @@ pub(crate) fn generate(
             continue;
         };
         for path in root_prims(layer, store) {
-            if store.layers[&flat].prim(path).is_none() {
+            if store
+                .layer(flat)
+                .expect("the flattened layer")
+                .prim(path)
+                .is_none()
+            {
                 continue;
             }
             let at = target.prim(path);
@@ -79,10 +84,15 @@ pub(crate) fn generate(
     }
     apply(&docs, store)?;
 
-    let briefs = briefs(&store.layers[&flat], store, &names, user_doc.as_ref());
+    let briefs = briefs(
+        store.layer(flat).expect("the flattened layer"),
+        store,
+        &names,
+        user_doc.as_ref(),
+    );
 
     let mut edit = Transaction::new();
-    let flat_layer = &store.layers[&flat];
+    let flat_layer = store.layer(flat).expect("the flattened layer");
     let flat_roots = root_prims(flat_layer, store);
     for &path in &flat_roots {
         let spec = flat_layer.prim(path).expect("a flattened root prim");
@@ -218,7 +228,7 @@ pub(crate) fn generate(
         );
     }
     apply(&edit, store)?;
-    write(&store.layers[&flat], store)
+    write(store.layer(flat).expect("the flattened layer"), store)
 }
 
 /// Interned field names.
@@ -247,7 +257,7 @@ impl Names {
 /// mangling type names.
 fn flatten(stage: &mut SchemaStage, root: LayerId) -> Result<LayerId, CompileError> {
     let (store, composed) = stage.parts_mut();
-    let id = LayerId(store.layers.keys().map(|id| id.0).max().unwrap_or(0) + 1);
+    let id = LayerId(store.layer_ids().last().map_or(0, |id| id.0) + 1);
     let flattened = composed
         .flatten(store, root, id, &FlattenRequirements::default())
         .map_err(|e| CompileError::Write {

@@ -240,7 +240,7 @@ fn authored() -> (InMemoryStore, LiveStage, Harness) {
 #[test]
 fn setters_author_the_fixture_scene() {
     let (store, _, _) = authored();
-    let layer = store.layers.get(&LayerId(1)).expect("the root layer");
+    let layer = store.layer(LayerId(1)).expect("the root layer");
     let text = layerstack_usda::save::save_usda(layer, &store.tokens, &store.paths)
         .expect("the authored layer saves");
     if text != SCENE {
@@ -354,7 +354,7 @@ const MAPPED_ASSET: &str = include_str!("../fixtures/schema_views/mapped_asset.u
 /// The root layer and the asset layer of [`referenced`].
 fn both_layers(store: &InMemoryStore) -> Vec<Layer> {
     [LayerId(1), LayerId(2)]
-        .map(|id| store.layers[&id].clone())
+        .map(|id| store.layer(id).unwrap().clone())
         .to_vec()
 }
 
@@ -449,7 +449,7 @@ fn targets_map_through_the_edit_target() {
 
     // The layers OpenUSD composes.
     let save = |id| {
-        layerstack_usda::save::save_usda(&store.layers[&id], &store.tokens, &store.paths)
+        layerstack_usda::save::save_usda(store.layer(id).unwrap(), &store.tokens, &store.paths)
             .expect("saves")
     };
     let (main, asset) = (save(LayerId(1)), save(LayerId(2)));
@@ -668,7 +668,7 @@ fn local_variant_targets_keep_paths_outside_the_branch() {
         TargetPath::Property(PropertyPath::new(light, intensity)),
         TargetPath::prim(pebble),
     ];
-    let before = store.layers[&LayerId(1)].clone();
+    let before = store.layer(LayerId(1)).unwrap().clone();
 
     let target = EditTarget::for_local_variant(LayerId(1), &variant);
     let mut edit = SchemaEdit::new(live.stage(), &mut store, target);
@@ -684,9 +684,12 @@ fn local_variant_targets_keep_paths_outside_the_branch() {
         .includes();
     assert_eq!(includes, wanted);
 
-    let text =
-        layerstack_usda::save::save_usda(&store.layers[&LayerId(1)], &store.tokens, &store.paths)
-            .expect("saves");
+    let text = layerstack_usda::save::save_usda(
+        store.layer(LayerId(1)).unwrap(),
+        &store.tokens,
+        &store.paths,
+    )
+    .expect("saves");
     if text != LOCAL_VARIANT {
         let out = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("local_variant.usda");
         std::fs::write(&out, &text).expect("writes the new layer");
@@ -707,12 +710,12 @@ fn local_variant_targets_keep_paths_outside_the_branch() {
         "OpenUSD composes the same targets"
     );
 
-    let after = store.layers[&LayerId(1)].clone();
+    let after = store.layer(LayerId(1)).unwrap().clone();
     let redo = live
         .apply(&mut store, &applied.inverse)
         .expect("undoes")
         .inverse;
-    assert_eq!(store.layers[&LayerId(1)], before);
+    assert_eq!(*store.layer(LayerId(1)).unwrap(), before);
     live.apply(&mut store, &redo).expect("redoes");
-    assert_eq!(store.layers[&LayerId(1)], after);
+    assert_eq!(*store.layer(LayerId(1)).unwrap(), after);
 }

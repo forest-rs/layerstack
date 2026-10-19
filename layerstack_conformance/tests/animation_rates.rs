@@ -120,8 +120,7 @@ fn nested_rates_match_openusd_before_and_after_source_edits() {
     let key = loaded.store.tokens.intern("timeCodesPerSecond");
     loaded
         .store
-        .layers
-        .get_mut(&loaded.root_layer)
+        .layer_mut(loaded.root_layer)
         .unwrap()
         .set_metadata(key, Value::Double(48.0));
     live.synchronize(&mut loaded.store);
@@ -139,8 +138,7 @@ fn nested_rates_match_openusd_before_and_after_source_edits() {
         .unwrap();
     loaded
         .store
-        .layers
-        .get_mut(&library)
+        .layer_mut(library)
         .unwrap()
         .set_metadata(key, Value::Double(6.0));
     live.synchronize(&mut loaded.store);

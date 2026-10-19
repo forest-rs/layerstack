@@ -595,7 +595,7 @@ fn for_each_target_spec<'l>(
     };
     let prim_specs = layer.prims().iter().chain(
         layer
-            .variant_prims()
+            .variant_prims
             .iter()
             .flat_map(|(path, specs)| specs.iter().map(move |spec| (path, spec))),
     );

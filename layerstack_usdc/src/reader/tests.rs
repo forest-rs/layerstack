@@ -88,7 +88,7 @@ fn value_errors_are_deferred_but_unrelated_fields_still_read() {
     let file = CrateFile::open(&bytes, &mut budget).unwrap();
     let mut sections = file.sections;
     for field in &mut sections.fields {
-        if sections.tokens[field.token_index as usize] == "default" {
+        if &sections.tokens[field.token_index as usize] == "default" {
             field.value_rep[6] = 255;
         }
     }
@@ -120,7 +120,7 @@ fn an_unread_value_cannot_bypass_version_checks_when_decoded() {
     let mut sections = file.sections;
     sections.version = CrateVersion::OLDEST_READABLE;
     for field in &mut sections.fields {
-        if sections.tokens[field.token_index as usize] == "default" {
+        if &sections.tokens[field.token_index as usize] == "default" {
             field.value_rep = [0, 0, 0, 0, 0, 0, ValueType::Int as u8, 0x10];
         }
     }

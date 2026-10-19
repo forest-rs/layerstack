@@ -227,7 +227,7 @@ mod tests {
                 sections
                     .fields
                     .iter()
-                    .find(|field| sections.tokens[field.token_index as usize] == name)
+                    .find(|field| &sections.tokens[field.token_index as usize] == name)
                     .unwrap()
                     .value_rep,
             )

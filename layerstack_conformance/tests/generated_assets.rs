@@ -281,7 +281,11 @@ fn invalid_missing_and_recreated_recipes_preserve_last_good_publication() {
         .unwrap();
     assert!(generated.evaluate_asset(Time::Default).is_err());
     assert!(
-        generated.live.stage().has_prim(generated.source),
+        generated
+            .live
+            .stage()
+            .prim(generated.source, &generated.store)
+            .is_some(),
         "recipe removal has an explicit output-lifecycle policy"
     );
     generated
@@ -395,10 +399,24 @@ fn shared_sources_invalidate_native_and_point_instances_and_recover_after_recrea
     let native = generated.store.path("/World/Native_0");
     let other = generated.store.path("/World/Native_1");
     let proxy = generated.store.path("/World/Native_0/Geometry");
-    assert!(generated.live.stage().is_instance(native));
+    assert!(
+        generated
+            .live
+            .stage()
+            .prim(native, &generated.store)
+            .is_some_and(|p| p.is_instance())
+    );
     assert_eq!(
-        generated.live.stage().instance_prototype(native),
-        generated.live.stage().instance_prototype(other)
+        generated
+            .live
+            .stage()
+            .prim(native, &generated.store)
+            .and_then(|p| p.prototype()),
+        generated
+            .live
+            .stage()
+            .prim(other, &generated.store)
+            .and_then(|p| p.prototype())
     );
     assert_eq!(generated.live.stage().prototypes().count(), 1);
     assert!(
@@ -476,7 +494,13 @@ fn shared_sources_invalidate_native_and_point_instances_and_recover_after_recrea
         .changes;
     let scene = Scene::new(generated.live.stage(), &generated.store);
     cache.apply_changes(&scene, &changes);
-    assert!(!generated.live.stage().has_prim(proxy));
+    assert!(
+        !generated
+            .live
+            .stage()
+            .prim(proxy, &generated.store)
+            .is_some()
+    );
     assert!(
         cache
             .world_bound(&scene, generated.scatter)
@@ -723,7 +747,7 @@ fn report(stage: &Stage, store: &InMemoryStore) -> serde_json::Value {
         .collect();
     serde_json::json!({
         "nativeInstances": stage.prototypes().flat_map(|p| p.instances().to_vec()).count(),
-        "isProxy": stage.is_instance(find("/World/Native_0")),
+        "isProxy": stage.prim(find("/World/Native_0"), store).is_some_and(|p| p.is_instance()),
         "points": &**mesh.points_at(Time::at(13.)).unwrap(),
         "counts": &**mesh.face_vertex_counts().unwrap(),
         "indices": &**mesh.face_vertex_indices().unwrap(),

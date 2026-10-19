@@ -147,11 +147,23 @@ fn common_stack_authoring_matches_cpp_and_undoes_exactly() {
         }
     }
     let undone = live.apply(&mut store, &applied.inverse).unwrap();
-    assert!(paths.iter().all(|path| !live.stage().has_prim(*path)));
+    assert!(
+        paths
+            .iter()
+            .all(|path| !live.stage().prim(*path, &store).is_some())
+    );
     assert_eq!(store.layer(LayerId(1)).unwrap(), &authored);
     let redone = live.apply(&mut store, &undone.inverse).unwrap();
-    assert!(paths.iter().all(|path| live.stage().has_prim(*path)));
+    assert!(
+        paths
+            .iter()
+            .all(|path| live.stage().prim(*path, &store).is_some())
+    );
     live.apply(&mut store, &redone.inverse).unwrap();
-    assert!(paths.iter().all(|path| !live.stage().has_prim(*path)));
+    assert!(
+        paths
+            .iter()
+            .all(|path| !live.stage().prim(*path, &store).is_some())
+    );
     assert_eq!(store.layer(LayerId(1)).unwrap(), &authored);
 }

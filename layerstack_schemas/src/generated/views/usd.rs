@@ -134,7 +134,7 @@ impl CollectionApiMode {
 
 #[doc = "A general purpose API schema used to describe a collection of prims and properties within a scene."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's multiple-apply API schema `CollectionAPI`. Get it with [`CollectionApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's multiple-apply API schema `CollectionAPI`. Get it with [`CollectionApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdCollectionAPI`."]
 #[doc(alias = "UsdCollectionAPI")]
 #[doc(alias = "CollectionAPI")]
@@ -501,7 +501,7 @@ impl CollectionApiEdit {
 
 #[doc = "UsdColorSpaceAPI is an API schema that introduces a `colorSpace` property for authoring scene referred color space opinions."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `ColorSpaceAPI`. Get it with [`ColorSpaceApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `ColorSpaceAPI`. Get it with [`ColorSpaceApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdColorSpaceAPI`."]
 #[doc(alias = "UsdColorSpaceAPI")]
 #[doc(alias = "ColorSpaceAPI")]
@@ -627,7 +627,7 @@ impl ColorSpaceApiEdit {
 
 #[doc = "UsdColorSpaceDefinitionAPI is an API schema for defining a custom color space."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's multiple-apply API schema `ColorSpaceDefinitionAPI`. Get it with [`ColorSpaceDefinitionApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's multiple-apply API schema `ColorSpaceDefinitionAPI`. Get it with [`ColorSpaceDefinitionApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdColorSpaceDefinitionAPI`."]
 #[doc(alias = "UsdColorSpaceDefinitionAPI")]
 #[doc(alias = "ColorSpaceDefinitionAPI")]
@@ -1127,7 +1127,7 @@ impl ColorSpaceDefinitionApiEdit {
 
 #[doc = "The base class for all typed schemas (those that can impart a typeName to a UsdPrim), and therefore the base class for all concrete, instantiable \"IsA\" schemas."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's abstract typed schema `Typed`. Construct it with [`Typed::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's abstract typed schema `Typed`. Construct it with [`Typed::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdTyped`."]
 #[doc(alias = "UsdTyped")]
 #[derive(Clone, Copy, Debug)]

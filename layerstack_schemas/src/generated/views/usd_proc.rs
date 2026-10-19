@@ -25,7 +25,7 @@ use layerstack::PathId;
 use crate::{PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "Represents an abstract generative procedural prim which delivers its input parameters via properties (including relationships) within the \"primvars:\" namespace."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `GenerativeProcedural`, inheriting [`crate::usd_geom::Boundable`]. Construct it with [`GenerativeProcedural::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `GenerativeProcedural`, inheriting [`crate::usd_geom::Boundable`]. Construct it with [`GenerativeProcedural::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdProcGenerativeProcedural`."]
 #[doc(alias = "UsdProcGenerativeProcedural")]
 #[derive(Clone, Copy, Debug)]

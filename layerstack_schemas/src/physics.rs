@@ -107,26 +107,18 @@ pub fn compute_collision_group_table(
     let mut pending: Vec<_> = scene.root().into_iter().collect();
     let mut groups = Vec::new();
     while let Some(path) = pending.pop() {
+        let Some(prim) = scene.prim(path) else {
+            continue;
+        };
         let root = scene.parent(path).is_none();
-        if !root
-            && (!scene.stage().is_defined(path, scene.store())
-                || scene.stage().is_abstract(path, scene.store()))
-        {
+        if !root && (!prim.is_defined() || prim.is_abstract()) {
             continue;
         }
         if let Some(group) = PhysicsCollisionGroup::new(scene, path) {
             groups.push(group);
         }
-        if !scene.stage().is_instance(path) {
-            pending.extend(
-                scene
-                    .stage()
-                    .children_of(path)
-                    .unwrap_or_default()
-                    .iter()
-                    .rev()
-                    .copied(),
-            );
+        if !prim.is_instance() {
+            pending.extend(prim.children().rev().map(|child| child.path()));
         }
     }
     let mut names: HashMap<Arc<str>, usize> = HashMap::new();
@@ -139,12 +131,12 @@ pub fn compute_collision_group_table(
         .lookup(PhysicsCollisionGroup::MERGE_GROUP_NAME);
     for (i, group) in groups.iter().enumerate() {
         indices.insert(group.path(), i);
-        let authored = key.is_some_and(|key| {
-            scene
-                .stage()
-                .authored_property_names(group.path(), scene.store())
-                .contains(&key)
-        });
+        let authored = key.is_some() && {
+            scene.prim(group.path()).is_some_and(|prim| {
+                prim.authored_property_names()
+                    .contains(&PhysicsCollisionGroup::MERGE_GROUP_NAME)
+            })
+        };
         let name = authored.then(|| group.merge_group_name().unwrap_or_else(|| Arc::from("")));
         let index = if let Some(name) = name {
             *names.entry(name).or_insert_with(|| {

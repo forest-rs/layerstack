@@ -282,8 +282,9 @@ fn reference_target_maps_all_camera_samples_and_matrix_together() {
     live.synchronize(&mut store);
     let node = live
         .stage()
-        .explain_prim_graph(path)
+        .prim(path, &store)
         .unwrap()
+        .composition_graph()
         .nodes()
         .find(|(_, node)| node.arc_kind() == layerstack::ArcKind::References)
         .unwrap()

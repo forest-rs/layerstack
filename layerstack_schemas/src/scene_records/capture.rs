@@ -17,9 +17,11 @@ pub(super) fn paths(
 ) -> Result<Vec<(PathId, SceneKind)>, SceneError> {
     let mut records = Vec::new();
     let mut namespace = Vec::new();
-    if let Some(root) = scene.store().paths().lookup(&Path::root()) {
-        for &child in scene.stage().children_of(root).unwrap_or_default() {
-            namespace.extend(scene.stage().traverse(child));
+    if let Some(root) = scene.store().paths().lookup(&Path::root())
+        && let Some(root) = scene.prim(root)
+    {
+        for child in root.children() {
+            namespace.extend(scene.stage().traverse(child.path()));
         }
     }
     // Default USD traversal stops at native instance roots. Prototype inventories
@@ -43,10 +45,10 @@ pub(super) fn paths(
             continue;
         }
         work.namespace_prims += 1;
-        if !scene.stage().is_active(path)
-            || !scene.stage().is_defined(path, scene.store())
-            || scene.stage().is_abstract(path, scene.store())
-        {
+        let Some(prim) = scene.prim(path) else {
+            continue;
+        };
+        if !prim.is_active() || !prim.is_defined() || prim.is_abstract() {
             continue;
         }
         let kind = if scene.is_a(path, "Mesh") {
@@ -56,14 +58,9 @@ pub(super) fn paths(
         } else if scene.is_a(path, "Gprim") {
             return Err(SceneError::UnsupportedGeometry {
                 prim: path,
-                type_name: scene
-                    .stage()
-                    .resolve_type_name(path)
-                    .map(|t| scene.store().tokens().resolve(t))
-                    .unwrap_or("")
-                    .into(),
+                type_name: prim.type_name().unwrap_or("").into(),
             });
-        } else if scene.stage().is_instance(path) {
+        } else if prim.is_instance() {
             Some(SceneKind::NativeInstance)
         } else {
             None

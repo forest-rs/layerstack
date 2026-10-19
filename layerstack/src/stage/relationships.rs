@@ -73,18 +73,28 @@ impl RelationshipQuery {
 }
 impl Stage {
     /// Composed authored or schema-defined property kind.
-    pub fn property_kind(&self, path: PropertyPath) -> Option<PropertyKind> {
-        self.property_definition_ref(path.prim_path(), path.property())
-            .map(|d| d.kind)
-            .or_else(|| {
-                self.resolve_property_declaration(path.prim_path(), path.property())
-                    .map(|d| d.kind)
-            })
+    ///
+    /// Every handle lookup asks this, so it reads the strongest property
+    /// spec's kind without building the whole declaration.
+    pub(crate) fn property_kind(&self, path: PropertyPath) -> Option<PropertyKind> {
+        let index = self.prims.get(&path.prim_path())?;
+        if let Some(defined) = index
+            .type_info
+            .as_ref()
+            .and_then(|info| info.definition.property(path.property()))
+        {
+            return Some(defined.kind);
+        }
+        index
+            .property_opinions(path.property())?
+            .iter()
+            .find_map(|opinion| opinion.value.as_property())
+            .map(|spec| spec.kind)
     }
     /// Ordered, deduplicated relationship targets with recursive forwarding.
     /// Cycles contribute no terminal target along the cyclic edge. Missing prim
     /// and attribute targets remain terminal paths, matching OpenUSD.
-    pub fn forwarded_relationship_targets(&self, root: PropertyPath) -> Vec<TargetPath> {
+    pub(crate) fn forwarded_relationship_targets(&self, root: PropertyPath) -> Vec<TargetPath> {
         self.forwarded_with_snapshots(root, false).0
     }
 

@@ -22,7 +22,7 @@ use alloc::{
 };
 use core::{num::NonZeroUsize, ops::Bound};
 
-use layerstack::{HashMap, Path, PathId, ResolvedValue, TokenId, Value, half};
+use layerstack::{HashMap, Path, PathId, PropertyPath, TokenId, Value, half};
 
 use crate::gf::{self, Matrix4, Rotation};
 use crate::usd_geom::{Imageable, Xformable};
@@ -567,11 +567,10 @@ impl<'a> Xformable<'a> {
     pub fn transform_might_be_time_varying(&self) -> bool {
         self.ordered_xform_ops().ops.iter().any(|op| {
             op.op_type.is_some()
-                && self.property_path(op.attribute).is_some_and(|p| {
-                    self.scene()
-                        .stage()
-                        .property_might_be_time_varying(p.prim_path(), p.property())
-                })
+                && self
+                    .property_path(op.attribute)
+                    .and_then(|p| self.scene().attribute(p))
+                    .is_some_and(layerstack::Attribute::might_be_time_varying)
         })
     }
 
@@ -591,12 +590,11 @@ impl<'a> Xformable<'a> {
             if op.op_type.is_none() {
                 continue;
             }
-            if let Some(p) = self.property_path(op.attribute) {
-                times.extend(
-                    self.scene()
-                        .stage()
-                        .property_sample_times(p.prim_path(), p.property()),
-                );
+            if let Some(attribute) = self
+                .property_path(op.attribute)
+                .and_then(|p| self.scene().attribute(p))
+            {
+                times.extend(attribute.sample_times());
             }
         }
         times.sort_by(f64::total_cmp);
@@ -789,20 +787,8 @@ impl PreparedTransform {
             },
             |i| {
                 let token = self.ops[i].attribute;
-                let value = match time {
-                    Time::Default => {
-                        match scene.stage().resolve_value_with_schema(path, token)?.value {
-                            ResolvedValue::Scalar(value) => value,
-                            _ => return None,
-                        }
-                    }
-                    Time::At { .. } => {
-                        scene
-                            .stage()
-                            .resolve_value_at_time_with_schema(path, token, time)?
-                            .value
-                    }
-                };
+                let attribute = scene.attribute(PropertyPath::new(path, token))?;
+                let value = attribute.get(time)?.value;
                 Some(Cow::Owned(value))
             },
             |i| {
@@ -1189,9 +1175,7 @@ impl XformCache {
     ///
     /// OpenUSD: `UsdGeomXformCache::GetLocalTransformation`.
     pub fn local_transform(&mut self, scene: &Scene<'_>, path: PathId) -> Option<&LocalTransform> {
-        if !scene.stage().has_prim(path) {
-            return None;
-        }
+        scene.prim(path)?;
         let slot = self.ensure_slot(scene, path);
         self.ensure_local(scene, slot);
         self.transforms[slot.get() - 1].local.as_ref()
@@ -1310,9 +1294,7 @@ impl XformCache {
     #[doc(alias = "UsdGeomXformCache::GetLocalToWorldTransform")]
     #[doc(alias = "GetLocalToWorldTransform")]
     pub fn local_to_world(&mut self, scene: &Scene<'_>, path: PathId) -> Option<[[f64; 4]; 4]> {
-        if !scene.stage().has_prim(path) {
-            return None;
-        }
+        scene.prim(path)?;
         if scene.store().paths().resolve(path).segments().is_empty() {
             return Some(gf::IDENTITY);
         }
@@ -1383,7 +1365,7 @@ impl XformCache {
         path: PathId,
         ancestor: PathId,
     ) -> Option<RelativeTransform> {
-        if !scene.stage().has_prim(path) || !scene.stage().has_prim(ancestor) {
+        if scene.prim(path).is_none() || scene.prim(ancestor).is_none() {
             return None;
         }
         let mut result = RelativeTransform {
@@ -1462,9 +1444,7 @@ impl XformCache {
     #[doc(alias = "UsdGeomXformCache::GetParentToWorldTransform")]
     #[doc(alias = "GetParentToWorldTransform")]
     pub fn parent_to_world(&mut self, scene: &Scene<'_>, path: PathId) -> Option<[[f64; 4]; 4]> {
-        if !scene.stage().has_prim(path) {
-            return None;
-        }
+        scene.prim(path)?;
         match scene.parent(path) {
             Some(parent) => self.local_to_world(scene, parent),
             None => Some(gf::IDENTITY),
@@ -1666,13 +1646,11 @@ mod cache_tests {
         for round in 0..6 {
             let mut edit = Transaction::new();
             edit.set_default(
-                EditTarget::for_layer(LayerId(1))
-                    .property(layerstack::PropertyPath::new(root, translate)),
+                EditTarget::for_layer(LayerId(1)).property(PropertyPath::new(root, translate)),
                 Value::Vec3d([round as f64, 2.0, 3.0]),
             );
             edit.set_default(
-                EditTarget::for_layer(LayerId(1))
-                    .property(layerstack::PropertyPath::new(reset, order)),
+                EditTarget::for_layer(LayerId(1)).property(PropertyPath::new(reset, order)),
                 Value::Array(if round % 2 == 0 {
                     alloc::vec![Value::Token(translate)]
                 } else {
@@ -1707,7 +1685,7 @@ mod cache_tests {
     #[test]
     fn transform_edits_reuse_locals_and_preserve_reset_worlds() {
         use alloc::vec;
-        use layerstack::PropertyPath;
+
         let (mut store, mut live, [root, normal, reset, leaf, other]) = transform_scene();
         let mut cache = XformCache::new(Time::Default);
         let scene = Scene::new(live.stage(), &store);
@@ -1820,7 +1798,7 @@ mod cache_tests {
     #[test]
     fn batched_transform_stamps_match_fresh_results() {
         use alloc::vec;
-        use layerstack::PropertyPath;
+
         let (mut store, mut live, paths) = transform_scene();
         let mut cache = XformCache::new(Time::Default);
         let translate = store.tokens.intern("xformOp:translate");
@@ -2050,8 +2028,8 @@ mod cache_tests {
     fn time_changes_retain_static_locals_and_follow_animated_ancestors() {
         let (mut store, mut live, [root, normal, reset, leaf, other]) = transform_scene();
         let translate = store.tokens.intern("xformOp:translate");
-        let address = EditTarget::for_layer(LayerId(1))
-            .property(layerstack::PropertyPath::new(root, translate));
+        let address =
+            EditTarget::for_layer(LayerId(1)).property(PropertyPath::new(root, translate));
         let mut tx = Transaction::new();
         tx.set_time_sample(address.clone(), 0.0, Value::Vec3d([10.0, 0.0, 0.0]));
         let single = live.apply(&mut store, &tx).unwrap();
@@ -2136,8 +2114,8 @@ mod cache_tests {
         let translate = store.tokens.intern("xformOp:translate");
         let mut tx = Transaction::new();
         for path in paths {
-            let address = EditTarget::for_layer(LayerId(1))
-                .property(layerstack::PropertyPath::new(path, translate));
+            let address =
+                EditTarget::for_layer(LayerId(1)).property(PropertyPath::new(path, translate));
             tx.set_time_sample(address, 0.0, Value::Vec3d([1.0; 3]));
         }
         live.apply(&mut store, &tx).unwrap();
@@ -2181,7 +2159,7 @@ mod cache_tests {
         let target = EditTarget::for_layer(LayerId(1));
         let mut tx = Transaction::new();
         tx.set_time_sample(
-            target.property(layerstack::PropertyPath::new(root, translate)),
+            target.property(PropertyPath::new(root, translate)),
             0.0,
             Value::Vec3d([10.0, 0.0, 0.0]),
         );
@@ -2204,7 +2182,7 @@ mod cache_tests {
         }
         let mut edit = Transaction::new();
         edit.set_default(
-            target.property(layerstack::PropertyPath::new(root, order)),
+            target.property(PropertyPath::new(root, order)),
             Value::Array(alloc::vec![
                 Value::Token(translate),
                 Value::Token(store.tokens.intern("!invert!xformOp:translate"))

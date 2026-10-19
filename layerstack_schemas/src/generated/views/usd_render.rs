@@ -25,7 +25,7 @@ use layerstack::PathId;
 use crate::{PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "Represents the renderer and scene configuration for a single render pass in a multi-pass rendering workflow."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `RenderPass`, inheriting [`crate::usd::Typed`]. Construct it with [`RenderPass::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `RenderPass`, inheriting [`crate::usd::Typed`]. Construct it with [`RenderPass::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdRenderPass`."]
 #[doc(alias = "UsdRenderPass")]
 #[derive(Clone, Copy, Debug)]
@@ -369,7 +369,7 @@ impl RenderProductProductType {
 
 #[doc = "A single render output artifact, such as a rendered image or other file-like artifact. Specifies one or more RenderVars combined into the output artifact."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `RenderProduct`, inheriting [`RenderSettingsBase`]. Construct it with [`RenderProduct::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `RenderProduct`, inheriting [`RenderSettingsBase`]. Construct it with [`RenderProduct::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdRenderProduct`."]
 #[doc(alias = "UsdRenderProduct")]
 #[derive(Clone, Copy, Debug)]
@@ -587,7 +587,7 @@ impl RenderProductEdit {
 
 #[doc = "All the global settings for a single invocation of a rendering of a scene. Includes configuration of what render products should be produced, and what imageable purposes should be rendered."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `RenderSettings`, inheriting [`RenderSettingsBase`]. Construct it with [`RenderSettings::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `RenderSettings`, inheriting [`RenderSettingsBase`]. Construct it with [`RenderSettings::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdRenderSettings`."]
 #[doc(alias = "UsdRenderSettings")]
 #[derive(Clone, Copy, Debug)]
@@ -910,7 +910,7 @@ impl RenderSettingsBaseAspectRatioConformPolicy {
 
 #[doc = "An abstract base class schema that defines settings common to both RenderSettings and RenderProduct."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's abstract typed schema `RenderSettingsBase`, inheriting [`crate::usd::Typed`]. Construct it with [`RenderSettingsBase::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's abstract typed schema `RenderSettingsBase`, inheriting [`crate::usd::Typed`]. Construct it with [`RenderSettingsBase::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdRenderSettingsBase`."]
 #[doc(alias = "UsdRenderSettingsBase")]
 #[derive(Clone, Copy, Debug)]
@@ -1291,7 +1291,7 @@ impl RenderVarSourceType {
 
 #[doc = "Describes a quantity or 'channel' of computed data, produced by a renderer. Examples include camera-space depth channels, material shader quantities such as color or alpha channels, light path expressions (LPEs), and renderer intrinsic quantities such as computation time per pixel."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `RenderVar`, inheriting [`crate::usd::Typed`]. Construct it with [`RenderVar::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `RenderVar`, inheriting [`crate::usd::Typed`]. Construct it with [`RenderVar::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdRenderVar`."]
 #[doc(alias = "UsdRenderVar")]
 #[derive(Clone, Copy, Debug)]

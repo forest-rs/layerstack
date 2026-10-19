@@ -762,6 +762,40 @@ mod tests {
         );
     }
 
+    /// A relationship spec where the schema defines an attribute authors no
+    /// value: the attribute reads the fallback, and its explanation says
+    /// so, as OpenUSD 26.08's `UsdAttribute::Get` and `GetResolveInfo` do.
+    #[test]
+    fn a_relationship_spec_on_a_schema_attribute_explains_the_fallback() {
+        use crate::{PropertyDefinition, SchemaDefinition, SchemaRegistry, ValueSource};
+        let mut store = InMemoryStore::default();
+        let (shape, size) = (store.tokens.intern("Shape"), store.tokens.intern("size"));
+        let world = store.path("/World");
+        let mut builder = SchemaRegistry::builder();
+        builder.register(
+            SchemaDefinition::typed(shape)
+                .with_property(PropertyDefinition::attribute(size).with_fallback(1.5_f64)),
+        );
+        let options = StageOptions {
+            schemas: Some(alloc::sync::Arc::new(builder.build(&store.tokens))),
+            ..StageOptions::default()
+        };
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(
+            world,
+            PrimSpec::def()
+                .with_type_name(shape)
+                .with_property(size, PropertySpec::relationship()),
+        );
+        store.insert_layer(layer);
+        let stage = Stage::compose(&mut store, LayerId(1), options);
+        let size = stage.view(&store).attribute("/World.size").unwrap();
+        assert_eq!(size.value::<f64>(Time::Default), Some(1.5));
+        let explained = size.explain(Time::Default).unwrap();
+        assert_eq!(explained.value, Some(Value::Double(1.5)));
+        assert_eq!(explained.source, ValueSource::Fallback);
+    }
+
     /// An explanation's value is the value the handle reads, at every time.
     #[test]
     fn explanations_explain_what_handles_read() {

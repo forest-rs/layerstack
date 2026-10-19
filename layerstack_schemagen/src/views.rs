@@ -1264,8 +1264,8 @@ fn typed_view(
                 "The view of {owner} {kind_text} typed schema `{}`{inherits}. Construct it \
                  with [`{view}::new`], which checks the prim is of the schema (`IsA`); it \
                  derefs to the view of the schema it inherits from. For anything it does not \
-                 offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) \
-                 (`Stage::resolve_value_with_schema` returns the raw resolved value).",
+                 offer, read the property by its USD name through the generic handle \
+                 ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value).",
                 schema.name,
                 owner = cx.owner,
             ),
@@ -1389,9 +1389,8 @@ fn applied_view(
             format!(
                 "The view of {owner} {kind_text} API schema `{}`. Get it with [`{view}::get`], \
                  which checks the prim has the schema applied (`HasAPI`). For anything it does \
-                 not offer, resolve the property by its USD name on \
-                 [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` \
-                 returns the raw resolved value).",
+                 not offer, read the property by its USD name through the generic handle \
+                 ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value).",
                 schema.name,
                 owner = cx.owner,
             ),

@@ -169,12 +169,7 @@ fn cache_edits_declare_unapplied_properties_and_reject_type_conflicts() {
             .unwrap()
             .is_empty()
     );
-    let names: Vec<_> = scene
-        .stage()
-        .property_names(bad, &store)
-        .into_iter()
-        .map(|n| store.tokens.resolve(n))
-        .collect();
+    let names: Vec<_> = scene.stage().prim(bad, &store).unwrap().property_names();
     assert!(names.contains(&"lightList:cacheBehavior"));
     assert!(!names.contains(&"lightList"));
 }

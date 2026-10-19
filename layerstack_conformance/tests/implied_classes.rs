@@ -123,7 +123,8 @@ fn prim_stacks_rank_implied_classes_with_their_layer_stack() {
     for prim in &oracle.prims {
         let id = loaded.store.path(&prim.path);
         let stack: Vec<(String, String)> = stage
-            .explain_prim(id)
+            .prim(id, &loaded.store)
+            .map(|p| p.sources())
             .expect("composed prim")
             .iter()
             .map(|key| {
@@ -156,7 +157,9 @@ fn values_match_openusd() {
     for (attr, expected) in &oracle.values {
         let property = loaded.store.property_path(attr);
         let value = stage
-            .resolve_field_path(property)
+            .view(&loaded.store)
+            .attribute(property)
+            .and_then(|a| a.authored_value(layerstack::Time::Default))
             .map(|resolved| resolved.value);
         if value != Some(Value::Int(*expected)) {
             mismatches.push(format!("{attr}: expected {expected}, got {value:?}"));
@@ -178,7 +181,10 @@ fn implied_classes_reached_through_an_arc_keep_their_origins() {
     let (loaded, stage) = compose(&oracle);
     for prim in ["/Shade", "/Shore"] {
         let id = loaded.store.path(prim);
-        let graph = stage.explain_prim_graph(id).expect("composed prim");
+        let graph = stage
+            .prim(id, &loaded.store)
+            .map(|p| p.composition_graph())
+            .expect("composed prim");
         let implied: Vec<_> = graph
             .nodes()
             .filter(|(_, node)| node.is_implied())
@@ -220,7 +226,8 @@ fn snapshot(loaded: &mut LoadedStage, stage: &Stage) -> Vec<String> {
         .filter(|prim| *prim != pseudo_root)
     {
         let stack: Vec<String> = stage
-            .explain_prim(prim)
+            .prim(prim, &loaded.store)
+            .map(|p| p.sources())
             .expect("composed prim")
             .iter()
             .map(|key| {
@@ -291,17 +298,18 @@ fn selection_edits_recompose_like_a_full_composition() {
     let mut live = LiveStage::compose(&mut loaded.store, loaded.root_layer, options());
     let shade = loaded.store.property_path("/Beacon.shade");
     let filter = loaded.store.path("/Beacon/Filter");
-    let resolved = |live: &LiveStage| {
-        live.stage()
-            .resolve_field_path(shade)
+    let resolved = |live: &LiveStage, store: &layerstack::InMemoryStore| {
+        live.view(store)
+            .attribute(shade)
+            .and_then(|attribute| attribute.authored_value(layerstack::Time::Default))
             .map(|resolved| resolved.value)
     };
-    assert_eq!(resolved(&live), Some(Value::Int(2)));
+    assert_eq!(resolved(&live, &loaded.store), Some(Value::Int(2)));
     let class = ("root.usda", "/_class_Beacon");
     select(&mut live, &mut loaded, class, ("lens", "clear"), false);
-    assert_eq!(resolved(&live), Some(Value::Int(1)));
-    assert!(!live.stage().has_prim(filter));
+    assert_eq!(resolved(&live, &loaded.store), Some(Value::Int(1)));
+    assert!(live.stage().prim(filter, &loaded.store).is_none());
     select(&mut live, &mut loaded, class, ("lens", "tinted"), true);
-    assert_eq!(resolved(&live), Some(Value::Int(2)));
-    assert!(live.stage().has_prim(filter));
+    assert_eq!(resolved(&live, &loaded.store), Some(Value::Int(2)));
+    assert!(live.stage().prim(filter, &loaded.store).is_some());
 }

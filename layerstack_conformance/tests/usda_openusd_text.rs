@@ -342,7 +342,10 @@ fn unresolved_sublayers_are_reported_by_both_readers() {
             "{format}"
         );
         for prim in ["/Root", "/Weak"] {
-            assert!(stage.has_prim(store.path(prim)), "{format}: {prim}");
+            assert!(
+                stage.prim(store.path(prim), &store).is_some(),
+                "{format}: {prim}"
+            );
         }
     }
 }

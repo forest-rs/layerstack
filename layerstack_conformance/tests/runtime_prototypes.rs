@@ -45,12 +45,11 @@ fn native_prototypes_preserve_occurrence_targets() {
         ] {
             let path = format!("/Grove/{instance}/{child}.{field}");
             let property = store.property_path(&path);
-            let value = stage.resolve_target_list_path(property).unwrap();
+            let value = stage.view(&store).relationship(property).unwrap().targets();
             targets.insert(
                 path,
                 json!(
                     value
-                        .value
                         .iter()
                         .map(|p| p.display(&store.paths, &store.tokens))
                         .collect::<Vec<_>>()
@@ -107,10 +106,19 @@ fn native_clip_contexts_have_distinct_prototypes_and_animation() {
         .map(|name| store.property_path(&format!("/{name}/Child.x")))
         .iter()
         .map(|path| {
-            let value = stage.resolve_property_path_at_time(*path, Time::at(5.));
+            let value = stage
+                .view(&store)
+                .attribute(*path)
+                .and_then(|a| a.authored_value(Time::at(5.)));
             assert!(
                 stage
-                    .property_sample_times(path.prim_path(), path.property())
+                    .view(&store)
+                    .attribute(layerstack::PropertyPath::new(
+                        path.prim_path(),
+                        path.property()
+                    ))
+                    .map(|a| a.sample_times())
+                    .unwrap_or_default()
                     .is_empty()
             );
             value.map(|resolved| {

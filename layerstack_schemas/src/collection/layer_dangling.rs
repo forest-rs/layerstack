@@ -302,9 +302,16 @@ impl LayerDanglingReport {
                 };
                 if entry.examples.len() < examples {
                     let composed = mapped.is_some_and(|mapped| {
-                        stage
-                            .resolve_target_list_path(target.source)
-                            .is_some_and(|list| list.value.contains(&mapped))
+                        scene.property(target.source).is_some_and(|property| {
+                            let list = match property.as_relationship() {
+                                Some(relationship) => relationship.targets(),
+                                None => property
+                                    .as_attribute()
+                                    .map(layerstack::Attribute::connections)
+                                    .unwrap_or_default(),
+                            };
+                            list.contains(&mapped)
+                        })
                     });
                     entry.examples.push(LayerDanglingTarget {
                         spec: target.spec.clone(),

@@ -15,9 +15,7 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
-use layerstack::{
-    PathId, PropertyPath, PropertyType, Provenance, ResolvedValue, TargetPath, Value,
-};
+use layerstack::{PathId, PropertyPath, PropertyType, Provenance, TargetPath, Value};
 
 /// Classification of an emitter, independent of any rendering backend.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -110,16 +108,13 @@ impl LightValue {
     }
 }
 fn default_is_blocked(scene: &Scene<'_>, path: PropertyPath) -> bool {
-    scene
-        .stage()
-        .explain_property_path(path)
-        .and_then(|opinions| {
-            opinions
-                .iter()
-                .filter_map(|o| o.value.default_value())
-                .next()
-        })
-        == Some(&Value::Blocked)
+    scene.property(path).and_then(|property| {
+        property
+            .opinions()
+            .iter()
+            .filter_map(|o| o.value.default_value())
+            .next()
+    }) == Some(&Value::Blocked)
 }
 fn capture_value(scene: &Scene<'_>, path: PropertyPath, time: Time) -> LightValue {
     // At default time a strongest authored block suppresses Get() even when
@@ -130,19 +125,10 @@ fn capture_value(scene: &Scene<'_>, path: PropertyPath, time: Time) -> LightValu
     let resolved = if default_blocked {
         None
     } else {
-        match time {
-            Time::Default => scene
-                .stage()
-                .resolve_value_with_schema(path.prim_path(), path.property())
-                .and_then(|r| match r.value {
-                    ResolvedValue::Scalar(v) => Some((v, r.provenance)),
-                    _ => None,
-                }),
-            Time::At { .. } => scene
-                .stage()
-                .resolve_value_at_time_with_schema(path.prim_path(), path.property(), time)
-                .map(|r| (r.value, r.provenance)),
-        }
+        scene
+            .attribute(path)
+            .and_then(|attribute| attribute.get(time))
+            .map(|r| (r.value, r.provenance))
     };
     let (value, mut provenance) = resolved.map_or((None, None), |(v, p)| (Some(v), p));
     // Asset anchors are semantic inputs, not optional inspector decoration.
@@ -150,9 +136,9 @@ fn capture_value(scene: &Scene<'_>, path: PropertyPath, time: Time) -> LightValu
     // provenance stage-wide. Keep malformed untyped storage inspectable.
     if matches!(value, Some(Value::Asset(_))) {
         provenance = scene
-            .stage()
-            .read_property_with_provenance(path, time, |v| {
-                matches!(v, Value::Asset(_)).then_some(())
+            .attribute(path)
+            .and_then(|attribute| {
+                attribute.read_with_provenance(time, |v| matches!(v, Value::Asset(_)).then_some(()))
             })
             .and_then(|r| r.provenance);
     }
@@ -424,7 +410,7 @@ impl LightInputs {
         contexts: &[&str],
         transforms: &mut XformCache,
     ) -> Result<Self, LightCaptureError> {
-        if !scene.stage().has_prim(light) {
+        if scene.prim(light).is_none() {
             return Err(LightCaptureError::MissingPrim(light));
         }
         let Some(api) = LightApi::get(scene, light) else {
@@ -501,7 +487,7 @@ impl LightInputs {
                 targets = crate::view::forwarded_targets(scene, property);
                 for &target in &targets {
                     let valid = if let TargetPath::Prim(path) = target {
-                        scene.stage().has_prim(path)
+                        scene.prim(path).is_some()
                             && (name != "light:filters" || scene.is_a(path, "LightFilter"))
                     } else {
                         false
@@ -528,8 +514,11 @@ impl LightInputs {
                 transform_problems.push((path, local.problems.clone()));
             }
             let view = PrimView::new(*scene, path);
-            for name in scene.stage().property_names(path, scene.store()) {
-                let name = scene.store().tokens().resolve(name);
+            let names = scene
+                .prim(path)
+                .map(layerstack::Prim::property_names)
+                .unwrap_or_default();
+            for name in names {
                 if name.starts_with("xformOp:") || name == "visibility" {
                     might_vary |= view.property_might_vary(name);
                 }
@@ -547,9 +536,9 @@ impl LightInputs {
         dependencies.sort_by(|a, b| (a.prim, &a.property).cmp(&(b.prim, &b.property)));
         dependencies.dedup();
         let type_name = scene
-            .stage()
-            .resolve_type_name(light)
-            .map_or(String::new(), |t| scene.store().tokens().resolve(t).into());
+            .prim(light)
+            .and_then(layerstack::Prim::type_name)
+            .map_or(String::new(), String::from);
         Ok(Self {
             light,
             time,
@@ -737,14 +726,22 @@ fn relationship_dependencies(
         });
         active.insert(path);
         stack.push(Work::Finish(path));
-        if let Some(targets) = scene.stage().resolve_target_list_path(path) {
-            stack.extend(targets.value.into_iter().rev().filter_map(|target| {
-                if let TargetPath::Property(p) = target {
-                    Some(Work::Visit(p))
-                } else {
-                    None
-                }
-            }));
-        }
+        let targets = match scene.property(path) {
+            Some(property) => match property.as_attribute() {
+                Some(attribute) => attribute.connections(),
+                None => property
+                    .as_relationship()
+                    .map(layerstack::Relationship::targets)
+                    .unwrap_or_default(),
+            },
+            None => Vec::new(),
+        };
+        stack.extend(targets.into_iter().rev().filter_map(|target| {
+            if let TargetPath::Property(p) = target {
+                Some(Work::Visit(p))
+            } else {
+                None
+            }
+        }));
     }
 }

@@ -52,6 +52,30 @@ use layerstack_conformance::{
 };
 use serde::Deserialize;
 
+/// Every source of the prim at `path`, strongest first; `None` when the
+/// stage does not compose it.
+fn sources<'a>(
+    stage: &'a Stage,
+    store: &'a layerstack::InMemoryStore,
+    path: layerstack::PathId,
+) -> Option<&'a [layerstack::OpinionKey]> {
+    stage.prim(path, store).map(|prim| prim.sources())
+}
+
+/// The value opinions author for the attribute at `path` at `time`,
+/// without a schema fallback.
+fn authored(
+    stage: &Stage,
+    store: &layerstack::InMemoryStore,
+    path: layerstack::PropertyPath,
+    time: layerstack::Time,
+) -> Option<layerstack::Resolved<Value>> {
+    stage
+        .view(store)
+        .attribute(path)
+        .and_then(|attribute| attribute.authored_value(time))
+}
+
 const ORACLE: &str = include_str!("../fixtures/variant_specs/oracle.json");
 
 #[derive(Deserialize)]
@@ -125,8 +149,7 @@ fn prim_stacks_hold_every_nested_variant_spec() {
     let mut mismatches = Vec::new();
     for prim in &oracle.prims {
         let id = loaded.store.path(&prim.path);
-        let stack: Vec<(String, String)> = stage
-            .explain_prim(id)
+        let stack: Vec<(String, String)> = sources(&stage, &loaded.store, id)
             .expect("composed prim")
             .iter()
             .map(|key| {
@@ -159,14 +182,11 @@ fn variant_selections_match_openusd() {
     for prim in &oracle.prims {
         let id = loaded.store.path(&prim.path);
         let selections: BTreeMap<String, String> = stage
-            .variant_selections(id, &loaded.store)
+            .prim(id, &loaded.store)
+            .map(|prim| prim.variant_selections())
+            .unwrap_or_default()
             .into_iter()
-            .map(|(set, variant)| {
-                (
-                    loaded.store.tokens.resolve(set).to_string(),
-                    loaded.store.tokens.resolve(variant).to_string(),
-                )
-            })
+            .map(|(set, variant)| (set.to_string(), variant.to_string()))
             .collect();
         if selections != prim.selections {
             mismatches.push(format!(
@@ -189,8 +209,7 @@ fn values_match_openusd() {
     let mut mismatches = Vec::new();
     for (attr, expected) in &oracle.values {
         let property = loaded.store.property_path(attr);
-        let value = stage
-            .resolve_field_path(property)
+        let value = authored(&stage, &loaded.store, property, layerstack::Time::Default)
             .map(|resolved| resolved.value);
         if value != Some(Value::Int(*expected)) {
             mismatches.push(format!("{attr}: expected {expected}, got {value:?}"));
@@ -230,8 +249,7 @@ fn nested_sets_rank_by_the_branch_declaring_them() {
         assert_eq!(oracle.values.get(attr), Some(&expected), "oracle {attr}");
         let property = loaded.store.property_path(attr);
         assert_eq!(
-            stage
-                .resolve_field_path(property)
+            authored(&stage, &loaded.store, property, layerstack::Time::Default)
                 .map(|resolved| resolved.value),
             Some(Value::Int(expected)),
             "{attr}"

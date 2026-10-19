@@ -72,22 +72,16 @@ impl AssetReference {
         property: PropertyPath,
         time: Time,
     ) -> Result<Option<Self>, AssetReadError> {
-        let stage = scene.stage();
-        let kind = stage
-            .resolve_property_declaration(property.prim_path(), property.property())
-            .map(|d| d.kind)
-            .or_else(|| {
-                stage
-                    .property_definition_ref(property.prim_path(), property.property())
-                    .map(|d| d.kind)
-            });
-        if !stage.has_prim(property.prim_path()) || kind != Some(PropertyKind::Attribute) {
+        let Some(attribute) = scene.attribute(property).filter(|attribute| {
+            attribute
+                .declaration()
+                .is_none_or(|declared| declared.kind == PropertyKind::Attribute)
+        }) else {
             return Err(AssetReadError::MissingAttribute(property));
-        }
+        };
         if time == Time::Default {
-            for value in stage
-                .explain_property_path(property)
-                .unwrap_or_default()
+            for value in attribute
+                .opinions()
                 .iter()
                 .filter_map(|o| o.value.default_value())
             {
@@ -99,7 +93,7 @@ impl AssetReference {
                 }
             }
         }
-        let resolved = stage.read_property_with_provenance(property, time, |value| match value {
+        let resolved = attribute.read_with_provenance(time, |value| match value {
             Value::Asset(path) => Some(path.to_string()),
             _ => None,
         });
@@ -109,10 +103,7 @@ impl AssetReference {
                 source: resolved.provenance,
             }));
         }
-        if stage
-            .read_property(property, time, |v| Some(v.clone()))
-            .is_some()
-        {
+        if attribute.get(time).is_some() {
             return Err(AssetReadError::InvalidValue(property));
         }
         Ok(None)

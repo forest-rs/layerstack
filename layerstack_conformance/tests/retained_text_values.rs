@@ -13,12 +13,40 @@ use std::sync::Barrier;
 use layerstack::edit::{Address, Transaction};
 use layerstack::{
     ArrayReadError, AssetResolveError, AssetResolver, FromValue, InMemoryStore, Layer, LayerId,
-    PathInterner, PropertyPath, ResolvedAsset, ResolvedValue, Stage, StageOptions, Time, TokenId,
-    TokenInterner, Value,
+    PathInterner, PropertyPath, ResolvedAsset, Stage, StageOptions, Time, TokenId, TokenInterner,
+    Value,
 };
 use layerstack_conformance::library_scene::{LibraryFormat, LibraryScene, LibraryShape};
 use layerstack_usdc::writer::{Spec, SpecForm, Specifier, Value as W, write_crate};
 use layerstack_usdc::{CrateFile, DecodeBudget, LazyReadResult, read_usdc, read_usdc_lazy};
+
+/// The opinions of the property at `path`, strongest first; `None` when
+/// none is authored.
+fn opinions<'a>(
+    stage: &'a Stage,
+    store: &'a InMemoryStore,
+    path: PropertyPath,
+) -> Option<&'a [layerstack::Opinion]> {
+    stage
+        .view(store)
+        .property(path)
+        .map(|property| property.opinions())
+        .filter(|opinions| !opinions.is_empty())
+}
+
+/// The value opinions author for the attribute at `path` at `time`,
+/// without a schema fallback.
+fn authored(
+    stage: &Stage,
+    store: &InMemoryStore,
+    path: PropertyPath,
+    time: Time,
+) -> Option<layerstack::Resolved<Value>> {
+    stage
+        .view(store)
+        .attribute(path)
+        .and_then(|attribute| attribute.authored_value(time))
+}
 
 struct NoAssets;
 impl AssetResolver for NoAssets {
@@ -267,19 +295,24 @@ fn composition_and_raw_queries_read_text_arrays_without_decoding_them() {
     let tagged: Vec<PropertyPath> = stage
         .traverse_all(root)
         .map(|prim| PropertyPath::new(prim, tags))
-        .filter(|path| stage.has_property_path(*path))
+        .filter(|path| opinions(&stage, &store, *path).is_some())
         .collect();
     let first = stage
-        .read_property(tagged[0], Time::Default, |v| {
-            Vec::<TokenId>::from_value(v, &store.tokens)
+        .view(&store)
+        .attribute(tagged[0])
+        .and_then(|attribute| {
+            attribute.read(Time::Default, |v| {
+                Vec::<TokenId>::from_value(v, &store.tokens)
+            })
         })
         .unwrap()
         .value;
     assert!(!first.is_empty());
     assert_eq!(read.values.stats().decode_attempts, 1);
     assert_eq!(read.values.stats().materialized_values, 1);
-    let ResolvedValue::Scalar(Value::Array(items)) =
-        stage.resolve_property_path(tagged[0]).unwrap().value
+    let Value::Array(items) = authored(&stage, &store, tagged[0], Time::Default)
+        .unwrap()
+        .value
     else {
         panic!("the decoded array, as an eager read holds it");
     };
@@ -310,7 +343,7 @@ fn retained_text_arrays_decode_once_across_threads() {
     let tagged: Vec<PropertyPath> = stage
         .traverse_all(root)
         .map(|prim| PropertyPath::new(prim, tags))
-        .filter(|path| stage.has_property_path(*path))
+        .filter(|path| opinions(&stage, &store, *path).is_some())
         .collect();
     const THREADS: usize = 8;
     let start = Barrier::new(THREADS);
@@ -318,16 +351,19 @@ fn retained_text_arrays_decode_once_across_threads() {
         let readers: Vec<_> = (0..THREADS)
             .map(|_| {
                 scope.spawn(|| {
+                    let view = stage.view(&store);
                     start.wait();
                     tagged
                         .iter()
-                        .map(|path| match stage.try_resolve_property_path(*path) {
-                            Ok(Some(resolved)) => match resolved.value {
-                                ResolvedValue::Scalar(Value::Array(items)) => items.len(),
-                                other => panic!("a decoded array, not {other:?}"),
+                        .map(
+                            |path| match view.attribute(*path).unwrap().try_get(Time::Default) {
+                                Ok(Some(resolved)) => match resolved.value {
+                                    Value::Array(items) => items.len(),
+                                    other => panic!("a decoded array, not {other:?}"),
+                                },
+                                other => panic!("a value, not {other:?}"),
                             },
-                            other => panic!("a value, not {other:?}"),
-                        })
+                        )
                         .sum()
                 })
             })
@@ -528,12 +564,13 @@ fn a_retained_text_array_that_does_not_decode_is_an_error_when_read() {
     store.insert_layer(read.assembled.layer);
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
     let tags = store.property_path("/Rock.tags");
-    let checked = stage.try_resolve_property_path(tags);
+    let tags_attribute = stage.view(&store).attribute(tags).unwrap();
+    let checked = tags_attribute.try_get(Time::Default);
     assert!(
         matches!(checked, Err(ArrayReadError::InvalidData(_))),
         "{checked:?}"
     );
-    let typed = stage.try_read_property(tags, Time::Default, |v| {
+    let typed = tags_attribute.try_read(Time::Default, |v| {
         Vec::<TokenId>::from_value(v, &store.tokens)
     });
     assert!(

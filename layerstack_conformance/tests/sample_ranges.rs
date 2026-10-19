@@ -67,7 +67,10 @@ fn interval_bounds_select_effective_offset_grids_without_adding_brackets() {
     ] {
         assert_eq!(
             live.stage()
-                .property_sample_times_in_range(shape, transform, bounds),
+                .view(&store)
+                .attribute(layerstack::PropertyPath::new(shape, transform))
+                .map(|attribute| attribute.sample_times_in_range(bounds))
+                .unwrap_or_default(),
             expected,
             "stage {bounds:?}"
         );

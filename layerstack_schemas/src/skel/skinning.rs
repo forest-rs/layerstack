@@ -697,8 +697,11 @@ impl<'a> SkelRoot<'a> {
         let mut pending = vec![self.path()];
         let mut result = Vec::new();
         while let Some(path) = pending.pop() {
-            if scene.stage().resolve_specifier(path, scene.store()) != Some(Specifier::Def)
-                || scene.stage().is_abstract(path, scene.store())
+            let Some(prim) = scene.prim(path) else {
+                continue;
+            };
+            if prim.specifier() != Specifier::Def
+                || prim.is_abstract()
                 || !scene.is_a(path, "Imageable")
             {
                 continue;
@@ -716,16 +719,8 @@ impl<'a> SkelRoot<'a> {
                 {
                     result.push(query);
                 }
-            } else if instance_proxies || !scene.stage().is_instance(path) {
-                pending.extend(
-                    scene
-                        .stage()
-                        .children_of(path)
-                        .unwrap_or_default()
-                        .iter()
-                        .copied()
-                        .rev(),
-                );
+            } else if instance_proxies || !prim.is_instance() {
+                pending.extend(prim.children().rev().map(|child| child.path()));
             }
         }
         Ok(result)

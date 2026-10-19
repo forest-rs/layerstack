@@ -30,7 +30,7 @@ use std::sync::Arc;
 use layerstack::stage::flatten::{FindingKind, FlattenRequirements, Instancing, Transformation};
 use layerstack::{
     AssetResolveError, AssetResolver, InMemoryStore, Layer, LayerId, ListOp, PathInterner,
-    PropertyPath, ResolvedAsset, ResolvedValue, Stage, StageOptions, Time, TokenInterner, Value,
+    ResolvedAsset, Stage, StageOptions, StageView, Time, TokenInterner, Value,
 };
 
 const GROVE: &str = r#"#usda 1.0
@@ -240,44 +240,40 @@ fn main() {
     );
     println!("verified: {:?}", verification.scope);
     let flattened = reopened;
-    let height = store.tokens.intern("height");
-    let sway = store.tokens.intern("sway");
-    let leaf_color = store.tokens.intern("leafColor");
-    let light = store.tokens.intern("light");
+    let (original, flattened) = (stage.view(&store), flattened.view(&store));
+    let value = |view: StageView<'_>, path: &str, time: Time| {
+        view.attribute(path)
+            .and_then(|attribute| attribute.get(time))
+            .map(|resolved| resolved.value)
+    };
     for tree in ["Oak", "Elm", "Ash"] {
-        let prim = store.path(&format!("/Grove/{tree}"));
-        for name in [height, leaf_color] {
-            let path = PropertyPath::new(prim, name);
+        for name in ["height", "leafColor"] {
+            let path = format!("/Grove/{tree}.{name}");
             assert_eq!(
-                flattened.resolve_property_path(path),
-                stage.resolve_property_path(path),
-                "{tree}.{}",
-                store.tokens.resolve(name)
+                value(flattened, &path, Time::Default),
+                value(original, &path, Time::Default),
+                "{tree}.{name}"
             );
         }
         for time in [0.0, 5.0, 10.0, 15.0] {
-            let path = PropertyPath::new(prim, sway);
-            let value = |stage: &Stage| {
-                stage
-                    .resolve_property_path_at_time(path, Time::at(time))
-                    .map(|resolved| resolved.value)
-            };
-            assert_eq!(value(&flattened), value(&stage), "{tree}.sway at {time}");
+            let path = format!("/Grove/{tree}.sway");
+            assert_eq!(
+                value(flattened, &path, Time::at(time)),
+                value(original, &path, Time::at(time)),
+                "{tree}.sway at {time}"
+            );
         }
-        let canopy = store.path(&format!("/Grove/{tree}/Canopy"));
-        let targets = flattened
-            .resolve_property_path(PropertyPath::new(canopy, light))
-            .map(|resolved| resolved.value);
-        assert!(
-            matches!(&targets, Some(ResolvedValue::PathList(list)) if list.len() == 1),
+        let light = flattened
+            .relationship(format!("/Grove/{tree}/Canopy.light").as_str())
+            .expect("the canopy's light");
+        assert_eq!(
+            light.targets().len(),
+            1,
             "{tree}'s canopy light is mapped into the grove"
         );
     }
-    let elm = store.property_path("/Grove/Elm.sway");
     assert_eq!(
-        flattened
-            .resolve_property_path_at_time(elm, Time::at(15.0))
-            .map(|resolved| resolved.value),
+        value(flattened, "/Grove/Elm.sway", Time::at(15.0)),
         Some(Value::Float(1.0)),
         "the retimed Elm reaches full sway at stage time 15"
     );

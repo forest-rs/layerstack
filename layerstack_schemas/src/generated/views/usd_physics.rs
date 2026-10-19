@@ -25,7 +25,7 @@ use layerstack::{CannotApply, PathId};
 use crate::{InstanceEdit, InstanceView, PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "PhysicsArticulationRootAPI can be applied to a scene graph node, and marks the subtree rooted here for inclusion in one or more reduced coordinate articulations."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `PhysicsArticulationRootAPI`. Get it with [`PhysicsArticulationRootApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `PhysicsArticulationRootAPI`. Get it with [`PhysicsArticulationRootApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdPhysicsArticulationRootAPI`."]
 #[doc(alias = "UsdPhysicsArticulationRootAPI")]
 #[doc(alias = "PhysicsArticulationRootAPI")]
@@ -125,7 +125,7 @@ impl PhysicsArticulationRootApiEdit {
 
 #[doc = "Applies collision attributes to a UsdGeomXformable prim."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `PhysicsCollisionAPI`. Get it with [`PhysicsCollisionApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `PhysicsCollisionAPI`. Get it with [`PhysicsCollisionApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdPhysicsCollisionAPI`."]
 #[doc(alias = "UsdPhysicsCollisionAPI")]
 #[doc(alias = "PhysicsCollisionAPI")]
@@ -323,7 +323,7 @@ impl PhysicsCollisionApiEdit {
 
 #[doc = "Defines a collision group for coarse filtering."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `PhysicsCollisionGroup`, inheriting [`crate::usd::Typed`]. Construct it with [`PhysicsCollisionGroup::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `PhysicsCollisionGroup`, inheriting [`crate::usd::Typed`]. Construct it with [`PhysicsCollisionGroup::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdPhysicsCollisionGroup`."]
 #[doc(alias = "UsdPhysicsCollisionGroup")]
 #[derive(Clone, Copy, Debug)]
@@ -564,7 +564,7 @@ impl PhysicsCollisionGroupEdit {
 
 #[doc = "Predefined distance joint type (Distance between rigid bodies may be limited to given minimum or maximum distance.)."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `PhysicsDistanceJoint`, inheriting [`PhysicsJoint`]. Construct it with [`PhysicsDistanceJoint::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `PhysicsDistanceJoint`, inheriting [`PhysicsJoint`]. Construct it with [`PhysicsDistanceJoint::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdPhysicsDistanceJoint`."]
 #[doc(alias = "UsdPhysicsDistanceJoint")]
 #[derive(Clone, Copy, Debug)]
@@ -787,7 +787,7 @@ impl PhysicsDriveApiDriveType {
 
 #[doc = "The PhysicsDriveAPI when applied to any joint primitive will drive the joint towards a given target."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's multiple-apply API schema `PhysicsDriveAPI`. Get it with [`PhysicsDriveApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's multiple-apply API schema `PhysicsDriveAPI`. Get it with [`PhysicsDriveApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdPhysicsDriveAPI`."]
 #[doc(alias = "UsdPhysicsDriveAPI")]
 #[doc(alias = "PhysicsDriveAPI")]
@@ -1192,7 +1192,7 @@ impl PhysicsDriveApiEdit {
 
 #[doc = "API to describe fine-grained filtering."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `PhysicsFilteredPairsAPI`. Get it with [`PhysicsFilteredPairsApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `PhysicsFilteredPairsAPI`. Get it with [`PhysicsFilteredPairsApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdPhysicsFilteredPairsAPI`."]
 #[doc(alias = "UsdPhysicsFilteredPairsAPI")]
 #[doc(alias = "PhysicsFilteredPairsAPI")]
@@ -1346,7 +1346,7 @@ impl PhysicsFilteredPairsApiEdit {
 
 #[doc = "Predefined fixed joint type (All degrees of freedom are removed.)."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `PhysicsFixedJoint`, inheriting [`PhysicsJoint`]. Construct it with [`PhysicsFixedJoint::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `PhysicsFixedJoint`, inheriting [`PhysicsJoint`]. Construct it with [`PhysicsFixedJoint::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdPhysicsFixedJoint`."]
 #[doc(alias = "UsdPhysicsFixedJoint")]
 #[derive(Clone, Copy, Debug)]
@@ -1441,7 +1441,7 @@ impl PhysicsFixedJointEdit {
 
 #[doc = "A joint constrains the movement of rigid bodies."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `PhysicsJoint`, inheriting [`crate::usd_geom::Imageable`]. Construct it with [`PhysicsJoint::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `PhysicsJoint`, inheriting [`crate::usd_geom::Imageable`]. Construct it with [`PhysicsJoint::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdPhysicsJoint`."]
 #[doc(alias = "UsdPhysicsJoint")]
 #[derive(Clone, Copy, Debug)]
@@ -2007,7 +2007,7 @@ impl PhysicsJointEdit {
 
 #[doc = "The PhysicsLimitAPI can be applied to a PhysicsJoint and will restrict the movement along an axis."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's multiple-apply API schema `PhysicsLimitAPI`. Get it with [`PhysicsLimitApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's multiple-apply API schema `PhysicsLimitAPI`. Get it with [`PhysicsLimitApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdPhysicsLimitAPI`."]
 #[doc(alias = "UsdPhysicsLimitAPI")]
 #[doc(alias = "PhysicsLimitAPI")]
@@ -2231,7 +2231,7 @@ impl PhysicsLimitApiEdit {
 
 #[doc = "Defines explicit mass properties (mass, density, inertia etc.)."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `PhysicsMassAPI`. Get it with [`PhysicsMassApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `PhysicsMassAPI`. Get it with [`PhysicsMassApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdPhysicsMassAPI`."]
 #[doc(alias = "UsdPhysicsMassAPI")]
 #[doc(alias = "PhysicsMassAPI")]
@@ -2541,7 +2541,7 @@ impl PhysicsMassApiEdit {
 
 #[doc = "Adds simulation material properties to a Material."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `PhysicsMaterialAPI`. Get it with [`PhysicsMaterialApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `PhysicsMaterialAPI`. Get it with [`PhysicsMaterialApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdPhysicsMaterialAPI`."]
 #[doc(alias = "UsdPhysicsMaterialAPI")]
 #[doc(alias = "PhysicsMaterialAPI")]
@@ -2880,7 +2880,7 @@ impl PhysicsMeshCollisionApiApproximation {
 
 #[doc = "Attributes to control how a Mesh is made into a collider."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `PhysicsMeshCollisionAPI`. Get it with [`PhysicsMeshCollisionApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `PhysicsMeshCollisionAPI`. Get it with [`PhysicsMeshCollisionApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdPhysicsMeshCollisionAPI`."]
 #[doc(alias = "UsdPhysicsMeshCollisionAPI")]
 #[doc(alias = "PhysicsMeshCollisionAPI")]
@@ -3067,7 +3067,7 @@ impl PhysicsPrismaticJointAxis {
 
 #[doc = "Predefined prismatic joint type (translation along prismatic joint axis is permitted.)."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `PhysicsPrismaticJoint`, inheriting [`PhysicsJoint`]. Construct it with [`PhysicsPrismaticJoint::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `PhysicsPrismaticJoint`, inheriting [`PhysicsJoint`]. Construct it with [`PhysicsPrismaticJoint::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdPhysicsPrismaticJoint`."]
 #[doc(alias = "UsdPhysicsPrismaticJoint")]
 #[derive(Clone, Copy, Debug)]
@@ -3320,7 +3320,7 @@ impl PhysicsRevoluteJointAxis {
 
 #[doc = "Predefined revolute joint type (rotation along revolute joint axis is permitted.)."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `PhysicsRevoluteJoint`, inheriting [`PhysicsJoint`]. Construct it with [`PhysicsRevoluteJoint::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `PhysicsRevoluteJoint`, inheriting [`PhysicsJoint`]. Construct it with [`PhysicsRevoluteJoint::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdPhysicsRevoluteJoint`."]
 #[doc(alias = "UsdPhysicsRevoluteJoint")]
 #[derive(Clone, Copy, Debug)]
@@ -3519,7 +3519,7 @@ impl PhysicsRevoluteJointEdit {
 
 #[doc = "Applies physics body attributes to any UsdGeomXformable prim and marks that prim to be driven by a simulation."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `PhysicsRigidBodyAPI`. Get it with [`PhysicsRigidBodyApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `PhysicsRigidBodyAPI`. Get it with [`PhysicsRigidBodyApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdPhysicsRigidBodyAPI`."]
 #[doc(alias = "UsdPhysicsRigidBodyAPI")]
 #[doc(alias = "PhysicsRigidBodyAPI")]
@@ -3870,7 +3870,7 @@ impl PhysicsRigidBodyApiEdit {
 
 #[doc = "General physics simulation properties, required for simulation."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `PhysicsScene`, inheriting [`crate::usd::Typed`]. Construct it with [`PhysicsScene::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `PhysicsScene`, inheriting [`crate::usd::Typed`]. Construct it with [`PhysicsScene::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdPhysicsScene`."]
 #[doc(alias = "UsdPhysicsScene")]
 #[derive(Clone, Copy, Debug)]
@@ -4107,7 +4107,7 @@ impl PhysicsSphericalJointAxis {
 
 #[doc = "Predefined spherical joint type (Removes linear degrees of freedom, cone limit may restrict the motion in a given range.) It allows two limit values, which when equal create a circular, else an elliptic cone limit around the limit axis."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `PhysicsSphericalJoint`, inheriting [`PhysicsJoint`]. Construct it with [`PhysicsSphericalJoint::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `PhysicsSphericalJoint`, inheriting [`PhysicsJoint`]. Construct it with [`PhysicsSphericalJoint::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdPhysicsSphericalJoint`."]
 #[doc(alias = "UsdPhysicsSphericalJoint")]
 #[derive(Clone, Copy, Debug)]

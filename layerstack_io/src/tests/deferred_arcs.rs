@@ -38,9 +38,9 @@ fn name(doc: &StageDocument<Memory>, prim: &str) -> Option<Value> {
         .paths
         .lookup(&layerstack::Path::root().join(&segments))?;
     let property = layerstack::PropertyPath::new(prim, doc.store.tokens.lookup("name")?);
-    doc.stage
-        .stage()
-        .resolve_field_path(property)
+    doc.view()
+        .attribute(property)
+        .and_then(|a| a.authored_value(layerstack::Time::Default))
         .map(|resolved| resolved.value)
 }
 

@@ -5,7 +5,7 @@
 //!
 //! A tree asset is referenced into a grove. The grove overrides the tree's
 //! height, and a sublayer of edits moves the top of its trunk with a sparse
-//! array edit. `Attribute::explain` and `Stage::explain_value` name every
+//! array edit. `Attribute::explain` and `Prim::explain_metadata` name every
 //! opinion each value consulted:
 //! its layer, spec, arc and layer offset, and whether it contributed, was
 //! shadowed, or was cut off.
@@ -296,9 +296,8 @@ fn main() {
     );
 
     // `customData` combines key by key across the grove and the asset.
-    let oak = view.prim("/Grove/OldOak").expect("oak").path();
-    let custom_data = store.tokens.lookup("customData").expect("authored");
-    let explained = stage.explain_value(oak, custom_data).expect("customData");
+    let oak = view.prim("/Grove/OldOak").expect("oak");
+    let explained = oak.explain_metadata("customData").expect("customData");
     print("customData", &explained, &store, &resolver);
     assert_eq!(
         explained.contributors().count(),

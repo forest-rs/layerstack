@@ -48,8 +48,8 @@ use std::sync::Arc;
 use layerstack::schema::{SchemaDeclaration, read_generated_schema};
 use layerstack::{
     AssetResolveError, AssetResolver, InMemoryStore, LayerId, PathInterner, PropertyKind,
-    ResolvedAsset, ResolvedValue, SchemaIssue, SchemaKind, SchemaRegistry, Stage, StageOptions,
-    TokenId, TokenInterner, Value, Variability,
+    ResolvedAsset, SchemaIssue, SchemaKind, SchemaRegistry, Stage, StageOptions, TokenId,
+    TokenInterner, Value, Variability,
 };
 use layerstack_conformance::{usda_real::load_entry_usda, workspace_root};
 use serde::Deserialize;
@@ -388,13 +388,14 @@ fn check_set(set: &str, failures: &mut Vec<String>) {
 
     for expected in &oracle.prims {
         let path = &expected.path;
-        let prim = store.path(path);
-        let definition = stage.prim_definition(prim).expect("prim on the stage");
+        let prim = stage
+            .prim(store.path(path), &*store)
+            .expect("prim on the stage");
+        let definition = prim.definition().expect("typed at composition");
         let tokens = &store.tokens;
-        let resolved_type = stage.resolve_type_name(prim);
         check(
             format!("{path} type name"),
-            json!(resolved_type.map_or("", |t| tokens.resolve(t))),
+            json!(prim.type_name().unwrap_or("")),
             json!(expected.type_name),
         );
         check(
@@ -433,12 +434,10 @@ fn check_set(set: &str, failures: &mut Vec<String>) {
         }
 
         for (schema, instance, can) in &expected.can_apply {
-            let ours = stage
+            let ours = prim
                 .can_apply(
-                    prim,
                     store.tokens.intern(schema),
                     (!instance.is_empty()).then_some(instance.as_str()),
-                    store,
                 )
                 .is_ok();
             check(
@@ -475,16 +474,18 @@ fn check_set(set: &str, failures: &mut Vec<String>) {
             let property = store.tokens.intern(&probe);
             check(
                 format!("{path} lookup of {probe}"),
-                json!(format!("{:?}", stage.property_definition(prim, property))),
+                json!(format!(
+                    "{:?}",
+                    prim.property(property).and_then(|p| p.definition())
+                )),
                 json!(format!("{:?}", definition.property(property))),
             );
         }
 
-        let property_names = stage.property_names(prim, store);
         let tokens = &store.tokens;
         check(
             format!("{path} property names"),
-            json!(names(tokens, &property_names)),
+            json!(prim.property_names()),
             json!(expected.property_names),
         );
 
@@ -494,7 +495,10 @@ fn check_set(set: &str, failures: &mut Vec<String>) {
                 check(what("interned"), json!(false), json!(true));
                 continue;
             };
-            let defined = stage.property_definition(prim, property);
+            let defined = prim
+                .property(property)
+                .and_then(|p| p.definition())
+                .cloned();
             check(
                 what("defined by the prim definition"),
                 json!(defined.as_ref() == definition.property(property)),
@@ -505,7 +509,7 @@ fn check_set(set: &str, failures: &mut Vec<String>) {
                 json!(defined.is_some()),
                 json!(expected.defined),
             );
-            let declaration = stage.resolve_property_declaration(prim, property);
+            let declaration = prim.property(property).and_then(|p| p.declaration());
             let (property_kind, declared_type, declared_variability) =
                 match (&defined, &declaration) {
                     (Some(d), _) => (d.kind, type_name(d.type_name.as_ref()), d.variability),
@@ -539,11 +543,14 @@ fn check_set(set: &str, failures: &mut Vec<String>) {
                 .map(|v| json(v, tokens));
             check(what("fallback"), json!(fallback), json!(expected.fallback));
 
-            let value = stage
-                .resolve_value_with_schema(prim, property)
+            let value = prim
+                .attribute(property)
+                .and_then(|attribute| attribute.get(layerstack::Time::Default))
                 .map(|resolved| match resolved.value {
-                    ResolvedValue::Scalar(value) => json(&value, tokens),
-                    other => panic!("{path}.{name} resolves to {other:?}"),
+                    Value::Dictionary(_) => {
+                        panic!("{path}.{name} resolves to {:?}", resolved.value)
+                    }
+                    value => json(&value, tokens),
                 });
             let theirs = if DEFAULT_TIME_BLOCKS.contains(&(set, path.as_str(), name.as_str())) {
                 // `default-time-block-hides-fallback`: OpenUSD resolves no

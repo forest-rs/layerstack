@@ -14,7 +14,8 @@
 //! 5. Batch edits across multiple layers in a single recompose cycle
 
 use layerstack::{
-    InMemoryStore, Layer, LayerId, LiveStage, PathId, PrimSpec, Reference, StageOptions,
+    InMemoryStore, Layer, LayerId, LiveStage, PrimSpec, Reference, Resolved, StageOptions,
+    StageView,
 };
 
 fn main() {
@@ -66,16 +67,8 @@ fn main() {
     let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
 
     println!("=== Initial State ===");
-    print_hero(
-        &live,
-        hero,
-        sword,
-        shield,
-        field_hp,
-        field_speed,
-        field_color,
-    );
-    print_enemy(&live, enemy, field_hp);
+    print_hero(live.view(&store));
+    print_enemy(live.view(&store));
 
     // -----------------------------------------------------------------------
     // Edit 1: The hero takes damage (opinion edit on base layer).
@@ -91,15 +84,7 @@ fn main() {
     live.notify_layer_edit(LayerId(1));
     let affected = live.recompose(&mut store);
     println!("Affected prims: {} (of 5 total)", affected.len());
-    print_hero(
-        &live,
-        hero,
-        sword,
-        shield,
-        field_hp,
-        field_speed,
-        field_color,
-    );
+    print_hero(live.view(&store));
 
     // -----------------------------------------------------------------------
     // Edit 2: Enchant the sword (single prim edit).
@@ -115,15 +100,7 @@ fn main() {
     live.notify_prim_edit(sword);
     let affected = live.recompose(&mut store);
     println!("Affected prims: {} (only the sword)", affected.len());
-    print_hero(
-        &live,
-        hero,
-        sword,
-        shield,
-        field_hp,
-        field_speed,
-        field_color,
-    );
+    print_hero(live.view(&store));
 
     // -----------------------------------------------------------------------
     // Edit 3: Power gem gets an upgrade (referenced layer edit).
@@ -145,15 +122,7 @@ fn main() {
     );
     // Note: hero's speed comes from the base layer (5.0) which is stronger
     // than the referenced gem layer. The reference is weaker.
-    print_hero(
-        &live,
-        hero,
-        sword,
-        shield,
-        field_hp,
-        field_speed,
-        field_color,
-    );
+    print_hero(live.view(&store));
 
     // -----------------------------------------------------------------------
     // Edit 4: Batch edit — damage the enemy AND change shield color.
@@ -175,16 +144,8 @@ fn main() {
         "Affected prims: {} (both updated in one pass)",
         affected.len()
     );
-    print_hero(
-        &live,
-        hero,
-        sword,
-        shield,
-        field_hp,
-        field_speed,
-        field_color,
-    );
-    print_enemy(&live, enemy, field_hp);
+    print_hero(live.view(&store));
+    print_enemy(live.view(&store));
 
     // -----------------------------------------------------------------------
     // Edit 5: Structural change — add a new prim.
@@ -204,7 +165,7 @@ fn main() {
     let affected = live.recompose(&mut store);
     println!("Full rebuild: {} prims recomposed", affected.len());
     assert!(
-        live.stage().has_prim(treasure),
+        live.view(&store).prim("/Treasure").is_some(),
         "new prim should exist after structural rebuild"
     );
     println!("  /Treasure is now in the stage");
@@ -218,37 +179,25 @@ fn main() {
     println!("Affected prims: {} (nothing changed)", affected.len());
 }
 
-fn print_hero(
-    live: &LiveStage,
-    hero: PathId,
-    sword: PathId,
-    shield: PathId,
-    field_hp: layerstack::TokenId,
-    field_speed: layerstack::TokenId,
-    field_color: layerstack::TokenId,
-) {
-    let stage = live.stage();
-    let hp = stage
-        .resolve_field(hero, field_hp)
-        .map_or("???".into(), |r| format!("{}", r.value));
-    let speed = stage
-        .resolve_field(hero, field_speed)
-        .map_or("???".into(), |r| format!("{}", r.value));
-    let sw_color = stage
-        .resolve_field(sword, field_color)
-        .map_or("???".into(), |r| format!("{}", r.value));
-    let sh_color = stage
-        .resolve_field(shield, field_color)
-        .map_or("???".into(), |r| format!("{}", r.value));
+/// Reads `name`, a prim metadata field, of the prim at `path`.
+fn field(view: StageView<'_>, path: &str, name: &str) -> String {
+    view.prim(path)
+        .and_then(|prim| prim.metadata(name))
+        .and_then(Resolved::into_value)
+        .map_or("???".into(), |r| format!("{}", r.value))
+}
+
+fn print_hero(view: StageView<'_>) {
+    let hp = field(view, "/Hero", "hitpoints");
+    let speed = field(view, "/Hero", "speed");
+    let sw_color = field(view, "/Hero/Sword", "color");
+    let sh_color = field(view, "/Hero/Shield", "color");
     println!("  /Hero        hp={hp}  speed={speed}");
     println!("  /Hero/Sword  color={sw_color}");
     println!("  /Hero/Shield color={sh_color}");
 }
 
-fn print_enemy(live: &LiveStage, enemy: PathId, field_hp: layerstack::TokenId) {
-    let stage = live.stage();
-    let hp = stage
-        .resolve_field(enemy, field_hp)
-        .map_or("???".into(), |r| format!("{}", r.value));
+fn print_enemy(view: StageView<'_>) {
+    let hp = field(view, "/Enemy", "hitpoints");
     println!("  /Enemy       hp={hp}");
 }

@@ -61,7 +61,7 @@ impl<'a> PrimView<'a> {
         {
             return None;
         }
-        scalar(scene.stage().resolve_value(self.path(), key)?.value)
+        scalar(self.prim()?.metadata(key)?.value)
     }
 
     /// Reads metadata on a declared or schema-defined property, of either kind.
@@ -69,23 +69,13 @@ impl<'a> PrimView<'a> {
     #[must_use]
     pub fn property_metadata(&self, name: &str) -> Option<PropertyMetadata<'a>> {
         let scene = self.scene();
-        if !scene.stage().has_prim(self.path()) {
-            return None;
-        }
-        let path = self.property_path(name)?;
-        let kind = scene
-            .stage()
-            .resolve_property_declaration(self.path(), path.property())
-            .map(|declaration| declaration.kind)
-            .or_else(|| {
-                scene
-                    .stage()
-                    .property_definition_ref(self.path(), path.property())
-                    .map(|definition| definition.kind)
-            })?;
+        let property = self.prim()?.property(name)?;
+        let kind = property
+            .declaration()
+            .map_or_else(|| property.kind(), |declaration| declaration.kind);
         Some(PropertyMetadata {
             scene,
-            path,
+            path: property.path(),
             target: match kind {
                 PropertyKind::Attribute => MetadataTarget::Attribute,
                 PropertyKind::Relationship => MetadataTarget::Relationship,
@@ -116,28 +106,22 @@ impl<'a> PropertyMetadata<'a> {
     #[must_use]
     pub fn has_authored(&self, name: &str) -> bool {
         let key = self.scene.store().tokens().lookup(name);
-        self.scene
-            .stage()
-            .explain_property_path(self.path)
-            .is_some_and(|opinions| {
-                opinions
-                    .iter()
-                    .filter_map(|o| o.value.as_property())
-                    .any(|p| match name {
-                        "typeName" => p.type_name.is_some(),
-                        "custom" | "variability" => true,
-                        "default" => p.default.is_some(),
-                        "timeSamples" => p.time_samples.is_some(),
-                        "spline" => p.spline.is_some(),
-                        "connectionPaths" => {
-                            p.kind == PropertyKind::Attribute && p.targets.is_some()
-                        }
-                        "targetPaths" => {
-                            p.kind == PropertyKind::Relationship && p.targets.is_some()
-                        }
-                        _ => key.is_some_and(|key| p.metadata(key).is_some()),
-                    })
-            })
+        self.scene.property(self.path).is_some_and(|property| {
+            property
+                .opinions()
+                .iter()
+                .filter_map(|o| o.value.as_property())
+                .any(|p| match name {
+                    "typeName" => p.type_name.is_some(),
+                    "custom" | "variability" => true,
+                    "default" => p.default.is_some(),
+                    "timeSamples" => p.time_samples.is_some(),
+                    "spline" => p.spline.is_some(),
+                    "connectionPaths" => p.kind == PropertyKind::Attribute && p.targets.is_some(),
+                    "targetPaths" => p.kind == PropertyKind::Relationship && p.targets.is_some(),
+                    _ => key.is_some_and(|key| p.metadata(key).is_some()),
+                })
+        })
     }
 
     /// A registered, applicable field's composed authored value.
@@ -158,12 +142,8 @@ impl<'a> PropertyMetadata<'a> {
         }
         scalar(
             self.scene
-                .stage()
-                .resolve_authored_property_metadata(
-                    self.path.prim_path(),
-                    self.path.property(),
-                    key,
-                )?
+                .property(self.path)?
+                .authored_metadata(key)?
                 .value,
         )
     }

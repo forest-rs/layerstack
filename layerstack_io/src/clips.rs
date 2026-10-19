@@ -51,8 +51,8 @@ impl<B: Storage> StageDocument<B> {
     ///     // retry after fixing transport or increasing the explicit budget.
     ///     println!("{prepared:?}");
     /// } else {
-    ///     let value = document.stage().stage().try_resolve_property_path_at_time(
-    ///         property, Time::at(5.))?;
+    ///     let height = document.view().attribute(property);
+    ///     let value = height.map(|height| height.try_get(Time::at(5.))).transpose()?;
     ///     println!("{value:?}"); // Complete gaps remain `None`.
     /// }
     /// # Ok(())

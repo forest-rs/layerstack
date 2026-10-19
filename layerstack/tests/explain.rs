@@ -1,18 +1,19 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! Value explanations: `Stage::explain_*` against hand-checked expectations.
+//! Value explanations (`Attribute::explain`, `Prim::explain_metadata`)
+//! against hand-checked expectations.
 
 #![allow(missing_docs, reason = "integration tests")]
 
 use std::sync::Arc;
 
 use layerstack::{
-    ArcKind, ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex, Contribution, DictionaryMerge,
-    ExplainedOpinion, IgnoreCause, InMemoryStore, InterpolationType, Layer, LayerId, LayerOffset,
-    OpinionRole, PrimSpec, PropertyDefinition, PropertySpec, PropertyType, Reference,
-    ResolvedValue, SampleUse, SchemaDefinition, SchemaRegistry, Stage, StageOptions, SublayerEntry,
-    Time, TokenId, Value, ValueSource,
+    ArcKind, ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex, Attribute, Contribution,
+    DictionaryMerge, ExplainedOpinion, IgnoreCause, InMemoryStore, InterpolationType, Layer,
+    LayerId, LayerOffset, OpinionRole, PrimSpec, PropertyDefinition, PropertyPathArg, PropertySpec,
+    PropertyType, Reference, ResolvedValue, SampleUse, SchemaDefinition, SchemaRegistry, Stage,
+    StageOptions, SublayerEntry, Time, TokenId, Value, ValueSource,
 };
 
 const VALUE: OpinionRole = OpinionRole::Contributed(Contribution::Value);
@@ -95,6 +96,18 @@ fn with_schemas(store: &mut InMemoryStore, schemas: Vec<SchemaDefinition>) -> St
     }
 }
 
+/// The composed attribute at `path` (`"/Tree.height"`).
+fn attribute_at<'a>(
+    stage: &'a Stage,
+    store: &'a InMemoryStore,
+    path: impl PropertyPathArg,
+) -> Attribute<'a> {
+    stage
+        .view(store)
+        .attribute(path)
+        .expect("composed attribute")
+}
+
 /// A varying attribute definition named `name` with `fallback`.
 fn defined(name: TokenId, fallback: impl Into<Value>) -> PropertyDefinition {
     PropertyDefinition::attribute(name).with_fallback(fallback)
@@ -113,8 +126,8 @@ fn stronger_dense_value_shadows_weaker_ones() {
     );
     let path = store.property_path("/Tree.height");
 
-    let explained = stage
-        .explain_property_value(path, Time::Default)
+    let explained = attribute_at(&stage, &store, path)
+        .explain(Time::Default)
         .expect("authored");
     assert_eq!(explained.value, Some(Value::Double(4.0)));
     assert_eq!(explained.source, ValueSource::Default);
@@ -155,8 +168,8 @@ fn block_cuts_off_weaker_opinions() {
 
     // A scalar: the strongest value wins; the block only cuts off what is
     // weaker than it.
-    let height = stage
-        .explain_property_value(store.property_path("/Tree.height"), Time::Default)
+    let height = attribute_at(&stage, &store, store.property_path("/Tree.height"))
+        .explain(Time::Default)
         .expect("authored");
     assert_eq!(height.value, Some(Value::Double(4.0)));
     assert_eq!(
@@ -170,8 +183,8 @@ fn block_cuts_off_weaker_opinions() {
 
     // A sparse array: the stronger edit composes over the empty array the
     // block leaves, and the weaker dense array is cut off.
-    let points = stage
-        .explain_property_value(store.property_path("/Tree.points"), Time::Default)
+    let points = attribute_at(&stage, &store, store.property_path("/Tree.points"))
+        .explain(Time::Default)
         .expect("authored");
     assert_eq!(points.value, Some(ints(&[])));
     assert_eq!(points.source, ValueSource::Default);
@@ -197,11 +210,14 @@ fn strongest_block_resolves_no_value() {
         ],
     );
     let path = store.property_path("/Tree.height");
-    let explained = stage
-        .explain_property_value(path, Time::Default)
+    let explained = attribute_at(&stage, &store, path)
+        .explain(Time::Default)
         .expect("authored");
     assert_eq!(explained.value, None);
-    assert_eq!(stage.resolve_property_path(path), None);
+    assert_eq!(
+        attribute_at(&stage, &store, path).authored_value(Time::Default),
+        None
+    );
     assert_eq!(explained.source, ValueSource::None);
     assert_eq!(
         roles(&explained.opinions),
@@ -227,8 +243,8 @@ fn sparse_edits_compose_over_a_dense_base_across_layers() {
         ],
     );
     let path = store.property_path("/Tree.points");
-    let explained = stage
-        .explain_property_value(path, Time::Default)
+    let explained = attribute_at(&stage, &store, path)
+        .explain(Time::Default)
         .expect("authored");
     assert_eq!(explained.value, Some(ints(&[9, 2, 8])));
     assert_eq!(explained.source, ValueSource::Default);
@@ -243,8 +259,8 @@ fn sparse_edits_compose_over_a_dense_base_across_layers() {
     );
     assert_eq!(
         explained.value,
-        stage
-            .resolve_property_path_at_time(path, Time::Default)
+        attribute_at(&stage, &store, path)
+            .authored_value(Time::Default)
             .map(|resolved| resolved.value)
     );
 }
@@ -295,11 +311,17 @@ fn dictionary_opinions_report_what_each_supplied() {
         ],
     );
     let tree = store.path("/Tree");
-    let explained = stage.explain_value(tree, custom_data).expect("authored");
+    let explained = stage
+        .prim(tree, &store)
+        .expect("composed")
+        .explain_metadata(custom_data)
+        .expect("authored");
     assert_eq!(
         explained.value,
         stage
-            .resolve_value(tree, custom_data)
+            .prim(tree, &store)
+            .expect("composed")
+            .metadata(custom_data)
             .map(|resolved| resolved.value)
     );
     assert_eq!(explained.source, ValueSource::Default);
@@ -365,8 +387,8 @@ fn time_samples_are_explained_in_stage_time_through_a_layer_offset() {
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
     let path = store.property_path("/Tree.height");
 
-    let explained = stage
-        .explain_property_value(path, Time::at(15.0))
+    let explained = attribute_at(&stage, &store, path)
+        .explain(Time::at(15.0))
         .expect("authored");
     assert_eq!(explained.value, Some(Value::Double(1.5)));
     assert_eq!(
@@ -400,8 +422,8 @@ fn time_samples_are_explained_in_stage_time_through_a_layer_offset() {
     );
 
     // Held interpolation reads the lower sample only.
-    let held = stage
-        .explain_property_value(path, Time::held(15.0))
+    let held = attribute_at(&stage, &store, path)
+        .explain(Time::held(15.0))
         .expect("authored");
     assert_eq!(held.value, Some(Value::Double(1.0)));
     assert_eq!(
@@ -472,8 +494,8 @@ fn offset_time_samples_report_stage_times() {
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
     let path = store.property_path("/Tree.points");
 
-    let explained = stage
-        .explain_property_value(path, Time::at(15.0))
+    let explained = attribute_at(&stage, &store, path)
+        .explain(Time::at(15.0))
         .expect("authored");
     assert_eq!(
         explained.value,
@@ -481,8 +503,8 @@ fn offset_time_samples_report_stage_times() {
     );
     assert_eq!(
         explained.value,
-        stage
-            .resolve_property_path_at_time(path, Time::at(15.0))
+        attribute_at(&stage, &store, path)
+            .authored_value(Time::at(15.0))
             .map(|resolved| resolved.value)
     );
     assert_eq!(
@@ -569,8 +591,8 @@ fn opinions_name_the_arc_that_reaches_them() {
     let mut store = InMemoryStore::default();
     let (stage, _, _) = grove(&mut store);
 
-    let height = stage
-        .explain_property_value(store.property_path("/Grove.height"), Time::Default)
+    let height = attribute_at(&stage, &store, store.property_path("/Grove.height"))
+        .explain(Time::Default)
         .expect("authored");
     assert_eq!(height.value, Some(Value::Double(6.0)));
     let arcs: Vec<_> = height
@@ -589,8 +611,8 @@ fn opinions_name_the_arc_that_reaches_them() {
     assert_eq!(node.site().display(&store.paths, &store.tokens), "/Tree");
     assert_eq!(node.layer_stack(), LayerId(2));
 
-    let bark = stage
-        .explain_property_value(store.property_path("/Grove.bark"), Time::Default)
+    let bark = attribute_at(&stage, &store, store.property_path("/Grove.bark"))
+        .explain(Time::Default)
         .expect("authored");
     assert_eq!(bark.value, Some(Value::string("rough")));
     assert_eq!(bark.opinions.len(), 1);
@@ -626,7 +648,10 @@ fn schema_fallback_is_explained() {
 
     // Nothing authored: the fallback alone.
     let explained = stage
-        .explain_value_with_schema(tree, height, Time::Default)
+        .prim(tree, &store)
+        .expect("composed")
+        .attribute(height)
+        .and_then(|attribute| attribute.explain(Time::Default))
         .expect("fallback");
     assert_eq!(explained.value, Some(Value::Double(1.0)));
     assert_eq!(explained.source, ValueSource::Fallback);
@@ -634,7 +659,10 @@ fn schema_fallback_is_explained() {
 
     // An authored edit composes over the fallback seed.
     let explained = stage
-        .explain_value_with_schema(tree, points, Time::Default)
+        .prim(tree, &store)
+        .expect("composed")
+        .attribute(points)
+        .and_then(|attribute| attribute.explain(Time::Default))
         .expect("authored");
     assert_eq!(explained.value, Some(ints(&[9, 2, 3])));
     assert_eq!(explained.source, ValueSource::Default);
@@ -642,7 +670,10 @@ fn schema_fallback_is_explained() {
     assert_eq!(roles(&explained.opinions), vec![(LayerId(2), EDIT)]);
 
     let at_time = stage
-        .explain_value_with_schema(tree, height, Time::at(3.0))
+        .prim(tree, &store)
+        .expect("composed")
+        .attribute(height)
+        .and_then(|attribute| attribute.explain(Time::at(3.0)))
         .expect("fallback");
     assert_eq!(at_time.value, Some(Value::Double(1.0)));
     assert_eq!(at_time.source, ValueSource::Fallback);
@@ -665,7 +696,10 @@ fn a_block_resolves_the_schema_fallback() {
     );
     let tree = store.path("/Tree");
     let explained = stage
-        .explain_value_with_schema(tree, height, Time::Default)
+        .prim(tree, &store)
+        .expect("composed")
+        .attribute(height)
+        .and_then(|attribute| attribute.explain(Time::Default))
         .expect("authored");
     assert_eq!(explained.value, Some(Value::Double(1.0)));
     assert_eq!(explained.source, ValueSource::Fallback);
@@ -697,7 +731,11 @@ fn list_ops_report_each_edit() {
         ],
     );
     let tree = store.path("/Tree");
-    let explained = stage.explain_value(tree, api_schemas).expect("authored");
+    let explained = stage
+        .prim(tree, &store)
+        .expect("composed")
+        .explain_metadata(api_schemas)
+        .expect("authored");
     assert_eq!(explained.value, Some(ResolvedValue::TokenList(vec![a, b])));
     let edit = OpinionRole::Contributed(Contribution::ListEdit);
     assert_eq!(
@@ -765,14 +803,15 @@ fn blocks_without_a_fallback_are_still_explained() {
 
     // An authored default block, at a numeric time and at the default time.
     let at_time = stage
-        .explain_value_with_schema(
-            tree,
-            height,
-            Time::At {
+        .prim(tree, &store)
+        .expect("composed")
+        .attribute(height)
+        .and_then(|attribute| {
+            attribute.explain(Time::At {
                 code: 5.0,
                 interpolation: linear,
-            },
-        )
+            })
+        })
         .expect("the authored block is explained");
     assert_eq!(at_time.value, None);
     assert_eq!(at_time.source, ValueSource::None);
@@ -781,21 +820,21 @@ fn blocks_without_a_fallback_are_still_explained() {
         vec![(LayerId(1), OpinionRole::Block)]
     );
     let default = stage
-        .explain_value_with_schema(tree, height, Time::Default)
+        .prim(tree, &store)
+        .expect("composed")
+        .attribute(height)
+        .and_then(|attribute| attribute.explain(Time::Default))
         .expect("the authored block is explained");
     assert_eq!(default.value, None);
     assert_eq!(
         roles(&default.opinions),
         vec![(LayerId(1), OpinionRole::Block)]
     );
-    let plain = stage
-        .explain_property_value(
-            store.property_path("/Tree.height"),
-            Time::At {
-                code: 5.0,
-                interpolation: linear,
-            },
-        )
+    let plain = attribute_at(&stage, &store, store.property_path("/Tree.height"))
+        .explain(Time::At {
+            code: 5.0,
+            interpolation: linear,
+        })
         .expect("authored");
     assert_eq!(plain.value, None);
     assert_eq!(
@@ -805,14 +844,15 @@ fn blocks_without_a_fallback_are_still_explained() {
 
     // A blocked sample held at the query time.
     let sampled = stage
-        .explain_value_with_schema(
-            tree,
-            width,
-            Time::At {
+        .prim(tree, &store)
+        .expect("composed")
+        .attribute(width)
+        .and_then(|attribute| {
+            attribute.explain(Time::At {
                 code: 5.0,
                 interpolation: linear,
-            },
-        )
+            })
+        })
         .expect("the blocked sample is explained");
     assert_eq!(sampled.value, None);
     assert_eq!(sampled.source, ValueSource::None);
@@ -824,19 +864,21 @@ fn blocks_without_a_fallback_are_still_explained() {
     // Nothing authored and no fallback: nothing to explain.
     assert!(
         stage
-            .explain_value_with_schema(
-                tree,
-                depth,
-                Time::At {
-                    code: 5.0,
-                    interpolation: linear
-                }
-            )
+            .prim(tree, &store)
+            .expect("composed")
+            .attribute(depth)
+            .and_then(|attribute| attribute.explain(Time::At {
+                code: 5.0,
+                interpolation: linear
+            }))
             .is_none()
     );
     assert!(
         stage
-            .explain_value_with_schema(tree, depth, Time::Default)
+            .prim(tree, &store)
+            .expect("composed")
+            .attribute(depth)
+            .and_then(|attribute| attribute.explain(Time::Default))
             .is_none()
     );
 }
@@ -863,28 +905,28 @@ fn check_mixed_samples(samples: Vec<(f64, Value)>, lower_seeded: bool) {
     let linear = InterpolationType::Linear;
 
     let explained = stage
-        .explain_value_with_schema(
-            tree,
-            points,
-            Time::At {
+        .prim(tree, &store)
+        .expect("composed")
+        .attribute(points)
+        .and_then(|attribute| {
+            attribute.explain(Time::At {
                 code: 5.0,
                 interpolation: linear,
-            },
-        )
+            })
+        })
         .expect("authored");
     // `[0, 0]` and `[30, 20]`, the fallback supplying the `20`.
     assert_eq!(explained.value, Some(floats(&[15.0, 10.0])));
     assert_eq!(
         explained.value,
         stage
-            .resolve_value_at_time_with_schema(
-                tree,
-                points,
-                Time::At {
-                    code: 5.0,
-                    interpolation: linear
-                }
-            )
+            .prim(tree, &store)
+            .expect("composed")
+            .attribute(points)
+            .and_then(|attribute| attribute.get(Time::At {
+                code: 5.0,
+                interpolation: linear
+            }))
             .map(|resolved| resolved.value)
     );
     assert!(explained.seeded_by_fallback);

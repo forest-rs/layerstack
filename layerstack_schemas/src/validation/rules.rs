@@ -48,7 +48,7 @@ pub(super) fn validate(
     let scope_root = match scope {
         ValidationScope::Stage => root,
         ValidationScope::Prim(p) | ValidationScope::Subtree(p) => {
-            if !stage.has_prim(p) {
+            if scene.prim(p).is_none() {
                 return Err(ValidationError::MissingScopePrim(p));
             }
             Some(p)
@@ -58,7 +58,7 @@ pub(super) fn validate(
         (ValidationScope::Prim(p), _) => vec![p],
         (_, Some(p)) => stage
             .traverse(p)
-            .filter(|p| Some(*p) != root && stage.has_prim(*p))
+            .filter(|p| Some(*p) != root && scene.prim(*p).is_some())
             .collect(),
         _ => Vec::new(),
     };
@@ -229,7 +229,7 @@ fn valid_default_prim(scene: &Scene<'_>) -> bool {
         .store()
         .paths()
         .lookup(&Path::root().join(&segments))
-        .is_some_and(|p| scene.stage().has_prim(p))
+        .is_some_and(|p| scene.prim(p).is_some())
 }
 fn stage_site(scene: &Scene<'_>) -> ValidationSite {
     ValidationSite {
@@ -244,9 +244,8 @@ fn stage_site(scene: &Scene<'_>) -> ValidationSite {
 #[cfg(any(feature = "usd-geom", feature = "usd-shade"))]
 fn prim_site(scene: &Scene<'_>, prim: PathId) -> ValidationSite {
     let source = scene
-        .stage()
-        .prim_stack(prim)
-        .and_then(|s| s.into_iter().next())
+        .prim(prim)
+        .and_then(|prim| prim.prim_stack().into_iter().next())
         .map(|(layer, spec)| ValidationSource {
             layer,
             spec: Some(spec),
@@ -260,9 +259,8 @@ fn prim_site(scene: &Scene<'_>, prim: PathId) -> ValidationSite {
 #[cfg(feature = "usd-shade")]
 fn property_site(scene: &Scene<'_>, prim: PathId, property: TokenId) -> ValidationSite {
     let source = scene
-        .stage()
-        .explain_property_path(PropertyPath::new(prim, property))
-        .and_then(|ops| ops.first())
+        .property(PropertyPath::new(prim, property))
+        .and_then(|property| property.opinions().first())
         .map(|op| ValidationSource {
             layer: op.key.layer_id,
             spec: Some(op.key.spec_path.clone()),
@@ -297,16 +295,14 @@ fn type_name(t: Option<&PropertyType>) -> Option<AttributeTypeName> {
         is_array: t.is_array(),
     })
 }
-fn properties(scene: &Scene<'_>, prim: PathId) -> Vec<TokenId> {
-    let mut names = scene.stage().authored_property_names(prim, scene.store());
-    names.sort_by(|a, b| {
-        scene
-            .store()
-            .tokens()
-            .resolve(*a)
-            .cmp(scene.store().tokens().resolve(*b))
-    });
-    names
+/// The properties opinions of `prim` author, by name in byte order.
+fn properties<'a>(scene: &Scene<'a>, prim: PathId) -> Vec<layerstack::Property<'a>> {
+    let mut properties = scene
+        .prim(prim)
+        .map(layerstack::Prim::authored_properties)
+        .unwrap_or_default();
+    properties.sort_unstable_by_key(|property| property.name());
+    properties
 }
 /// The tokens of a token value, or of a token array value with `true`;
 /// `None` for another type.
@@ -335,23 +331,20 @@ fn token_elements(value: &Value) -> Option<(Vec<TokenId>, bool)> {
 /// Spec: AOUSD Core §12.2.5 (property metadata), §13.3.2.3–§13.3.2.4
 /// (schema property metadata fallbacks).
 fn allowed_tokens(scene: &Scene<'_>, prim: PathId, rule: BuiltinRule, out: &mut ValidationReport) {
-    let stage = scene.stage();
     let tokens = scene.store().tokens();
     let Some(key) = tokens.lookup("allowedTokens") else {
         return;
     };
-    for property in properties(scene, prim) {
-        let Some(decl) = stage.resolve_property_declaration(prim, property) else {
+    for handle in properties(scene, prim) {
+        let property = handle.path().property();
+        let Some(decl) = handle.declaration() else {
             continue;
         };
-        let schema = stage.property_definition_ref(prim, property);
-        if schema.map_or(decl.kind, |s| s.kind) != PropertyKind::Attribute {
+        let schema = handle.definition();
+        let Some(attribute) = handle.as_attribute() else {
             continue;
-        }
-        let allowed = match stage
-            .resolve_property_metadata(prim, property, key)
-            .map(|resolved| resolved.value)
-        {
+        };
+        let allowed = match attribute.metadata(key).map(|resolved| resolved.value) {
             Some(layerstack::ResolvedValue::Scalar(value)) => {
                 token_elements(&value).map(|(list, _)| list)
             }
@@ -371,11 +364,7 @@ fn allowed_tokens(scene: &Scene<'_>, prim: PathId, rule: BuiltinRule, out: &mut 
         };
         for time in times {
             out.work.token_values += 1;
-            let Some(resolved) = stage.read_property_with_provenance(
-                PropertyPath::new(prim, property),
-                time,
-                token_elements,
-            ) else {
+            let Some(resolved) = attribute.read_with_provenance(time, token_elements) else {
                 continue;
             };
             let (elements, array) = &resolved.value;
@@ -408,47 +397,42 @@ fn allowed_tokens(scene: &Scene<'_>, prim: PathId, rule: BuiltinRule, out: &mut 
 fn prim_rule(scene: &Scene<'_>, prim: PathId, rule: BuiltinRule, out: &mut ValidationReport) {
     match rule {
         BuiltinRule::AttributeTypes => {
-            for property in properties(scene, prim) {
-                let Some(decl) = scene.stage().resolve_property_declaration(prim, property) else {
+            for handle in properties(scene, prim) {
+                let property = handle.path().property();
+                let Some(decl) = handle.declaration() else {
                     continue;
                 };
-                let schema = scene.stage().property_definition_ref(prim, property);
-                let kind = schema.map_or(decl.kind, |s| s.kind);
-                if kind != PropertyKind::Attribute {
+                let schema = handle.definition();
+                if handle.kind() != PropertyKind::Attribute {
                     continue;
                 }
                 let declared = type_name(decl.type_name.as_ref());
                 let schema_type = type_name(schema.and_then(|s| s.type_name.as_ref()));
                 let expected = schema_type.clone().or_else(|| declared.clone());
-                if let Some(ops) = scene
-                    .stage()
-                    .explain_property_path(PropertyPath::new(prim, property))
-                {
-                    for op in ops {
-                        if let Some(spec) = op.value.as_property() {
-                            out.work.property_specs += 1;
-                            let authored = type_name(spec.type_name.as_ref());
-                            if authored != expected {
-                                push(
-                                    out,
-                                    rule,
-                                    ValidationSite {
-                                        prim: Some(prim),
-                                        property: Some(property),
-                                        source: Some(ValidationSource {
-                                            layer: op.key.layer_id,
-                                            spec: Some(op.key.spec_path.clone()),
-                                        }),
-                                    },
-                                    None,
-                                    ValidationProblemKind::AttributeTypeMismatch {
-                                        expected: expected.clone(),
-                                        declared: declared.clone(),
-                                        schema: schema_type.clone(),
-                                        authored,
-                                    },
-                                );
-                            }
+                for op in handle.opinions() {
+                    if let Some(spec) = op.value.as_property() {
+                        out.work.property_specs += 1;
+                        let authored = type_name(spec.type_name.as_ref());
+                        if authored != expected {
+                            push(
+                                out,
+                                rule,
+                                ValidationSite {
+                                    prim: Some(prim),
+                                    property: Some(property),
+                                    source: Some(ValidationSource {
+                                        layer: op.key.layer_id,
+                                        spec: Some(op.key.spec_path.clone()),
+                                    }),
+                                },
+                                None,
+                                ValidationProblemKind::AttributeTypeMismatch {
+                                    expected: expected.clone(),
+                                    declared: declared.clone(),
+                                    schema: schema_type.clone(),
+                                    authored,
+                                },
+                            );
                         }
                     }
                 }
@@ -560,12 +544,10 @@ fn prim_rule(scene: &Scene<'_>, prim: PathId, rule: BuiltinRule, out: &mut Valid
 #[cfg(feature = "usd-shade")]
 fn shade(scene: &Scene<'_>, prim: PathId, rule: BuiltinRule, out: &mut ValidationReport) {
     let mut binding_rel = false;
-    for property in properties(scene, prim) {
-        let name = scene.store().tokens().resolve(property);
-        let kind = scene
-            .stage()
-            .resolve_property_declaration(prim, property)
-            .map(|d| d.kind);
+    for handle in properties(scene, prim) {
+        let property = handle.path().property();
+        let name = handle.name();
+        let kind = handle.declaration().map(|d| d.kind);
         if name.starts_with("material:binding") {
             binding_rel |= kind == Some(PropertyKind::Relationship);
             if rule == BuiltinRule::MaterialBindingPropertyKinds
@@ -594,8 +576,8 @@ fn shade(scene: &Scene<'_>, prim: PathId, rule: BuiltinRule, out: &mut Validatio
             continue;
         }
         let destination = PropertyPath::new(prim, property);
-        if let Some(targets) = scene.stage().resolve_target_list_path(destination) {
-            for source in targets.value {
+        if let Some(attribute) = handle.as_attribute() {
+            for source in attribute.connections() {
                 out.work.connections += 1;
                 let problem = match source {
                     layerstack::TargetPath::Property(source) => scene
@@ -638,14 +620,8 @@ fn material_subsets(
 ) {
     if let Some(subset) = crate::usd_geom::GeomSubset::new(scene, prim) {
         let bound = properties(scene, prim).into_iter().any(|p| {
-            scene
-                .store()
-                .tokens()
-                .resolve(p)
-                .starts_with("material:binding")
-                && scene
-                    .stage()
-                    .resolve_property_declaration(prim, p)
+            p.name().starts_with("material:binding")
+                && p.declaration()
                     .is_some_and(|d| d.kind == PropertyKind::Relationship)
         });
         // C++ checks authored presence, not equality to materialBind.

@@ -565,9 +565,9 @@ mod third_party {
                 .unwrap();
             if name.starts_with("Bad") {
                 let source = scene
-                    .stage()
-                    .prim_stack(path)
+                    .prim(path)
                     .unwrap()
+                    .prim_stack()
                     .into_iter()
                     .next()
                     .map(|(layer, spec)| ValidationSource {

@@ -63,9 +63,9 @@ clips = {{
         let prepared = document.prepare_clip_query(property, Time::at(2.), 8, 16);
         assert!(prepared.plan.is_complete(), "{prepared:?}");
         let resolved = document
-            .stage()
-            .stage()
-            .resolve_property_path_at_time(property, Time::at(2.))
+            .view()
+            .attribute(property)
+            .and_then(|a| a.authored_value(Time::at(2.)))
             .unwrap()
             .value;
         let expected = if reorder {
@@ -159,9 +159,9 @@ def "P" (clips = {
         }));
         assert_eq!(
             document
-                .stage()
-                .stage()
-                .resolve_property_path_at_time(property, Time::at(2.))
+                .view()
+                .attribute(property)
+                .and_then(|a| a.authored_value(Time::at(2.)))
                 .map(|resolved| resolved.value),
             expected
         );
@@ -231,9 +231,9 @@ def "P" (clips = { dictionary default = {
     assert!(prepared.plan.is_complete(), "{prepared:?}");
     assert_eq!(prepared.load_attempts, 0);
     let resolved = document
-        .stage()
-        .stage()
-        .try_resolve_property_path_at_time(property, Time::at(5.))
+        .view()
+        .attribute(property)
+        .map_or(Ok(None), |a| a.try_get(Time::at(5.)))
         .unwrap()
         .unwrap();
     let Value::TypedArray(TypedArray::Float(values)) = resolved.value else {
@@ -463,9 +463,9 @@ def "P" (clips = { dictionary default = {
     assert!(next.plan.is_complete(), "{next:?}");
     assert_eq!(next.load_attempts, 1);
     assert_eq!(
-        doc.stage
-            .stage()
-            .resolve_property_path_at_time(property, Time::at(5.))
+        doc.view()
+            .attribute(property)
+            .and_then(|a| a.authored_value(Time::at(5.)))
             .unwrap()
             .value,
         Value::Double(5.)
@@ -606,9 +606,9 @@ def "Root" (
     let answer = reopened.store.property_path("/Root.answer");
     assert_eq!(
         reopened
-            .stage
-            .stage()
-            .resolve_field_path(answer)
+            .view()
+            .attribute(answer)
+            .and_then(|a| a.authored_value(layerstack::Time::Default))
             .unwrap()
             .value,
         Value::Int(42)
@@ -691,9 +691,9 @@ fn package_preparation_includes_unsaved_layers_and_reports_missing_resources_wit
     let property = reopened.store.property_path("/Root.answer");
     assert_eq!(
         reopened
-            .stage
-            .stage()
-            .resolve_field_path(property)
+            .view()
+            .attribute(property)
+            .and_then(|a| a.authored_value(layerstack::Time::Default))
             .unwrap()
             .value,
         Value::Int(99)
@@ -751,9 +751,9 @@ fn nested_packages_resolve_defaults_explicit_layers_relative_dependencies_and_re
         let answer = document.store.tokens.intern("answer");
         assert_eq!(
             document
-                .stage
-                .stage()
-                .resolve_field_path(layerstack::PropertyPath::new(root, answer))
+                .view()
+                .attribute(layerstack::PropertyPath::new(root, answer))
+                .and_then(|a| a.authored_value(layerstack::Time::Default))
                 .unwrap_or_else(|| panic!(
                     "{:?} {:?} {:?}",
                     document.stage.stage().composition_errors(),
@@ -983,8 +983,9 @@ fn rejecting_a_prepared_reload_preserves_sources_bindings_and_freshness() {
         assert_eq!(
             candidate
                 .stage()
-                .stage()
-                .resolve_field_path(property)
+                .view(candidate.store())
+                .attribute(property)
+                .and_then(|a| a.authored_value(layerstack::Time::Default))
                 .unwrap()
                 .value,
             Value::Int(9)
@@ -1097,14 +1098,22 @@ fn prepared_commit_reuses_sources_and_preserves_stage_observers_and_dependencies
     );
     other.synchronize(&mut doc.store);
     assert!(
-        other.stage().has_prim(
-            doc.store
-                .paths
-                .lookup(
-                    &layerstack::Path::root().join(&[doc.store.tokens.lookup("Created").unwrap()])
-                )
-                .unwrap()
-        )
+        other
+            .stage()
+            .prim(
+                doc.store
+                    .paths
+                    .lookup(
+                        &layerstack::Path::root().join(&[doc
+                            .store
+                            .tokens
+                            .lookup("Created")
+                            .unwrap()])
+                    )
+                    .unwrap(),
+                &doc.store
+            )
+            .is_some()
     );
     set_value(&mut doc, base, 11);
     assert_eq!(value(&doc), Value::Int(11));
@@ -1451,9 +1460,9 @@ fn value(doc: &StageDocument<Memory>) -> Value {
         .lookup(&layerstack::Path::root().join(&[doc.store.tokens.lookup("Root").unwrap()]))
         .unwrap();
     let property = layerstack::PropertyPath::new(prim, doc.store.tokens.lookup("value").unwrap());
-    doc.stage
-        .stage()
-        .resolve_field_path(property)
+    doc.view()
+        .attribute(property)
+        .and_then(|a| a.authored_value(layerstack::Time::Default))
         .unwrap()
         .value
 }
@@ -1619,7 +1628,7 @@ fn repeated_references_identify_each_asset_once_per_operation() {
         ("asset.usda", "#usda 1.0\ndef \"Asset\" {}\n"),
     ]);
     let mut doc = StageDocument::open(backend, "root.usda", StageOptions::default()).unwrap();
-    assert!(doc.stage.stage().has_prim(doc.store.path("/C")));
+    assert!(doc.view().prim("/C").is_some());
     // The root and one shared asset; the three arcs share one identity.
     assert_eq!(doc.storage.identifies.get(), 2);
     // A later operation asks the transport again rather than trusting a
@@ -1663,7 +1672,13 @@ fn value_edits_in_one_variant_branch_refresh_without_recomposing_sibling_branche
     // the same layer; it keeps its slots rather than forcing composition.
     assert_eq!(applied.recomposed, [red.prim_path()]);
     assert_eq!(applied.changes.changed_info_only, [red.prim_path()]);
-    let resolved = |path| doc.stage.stage().resolve_field_path(path).unwrap().value;
+    let resolved = |path| {
+        doc.view()
+            .attribute(path)
+            .and_then(|a| a.authored_value(layerstack::Time::Default))
+            .unwrap()
+            .value
+    };
     assert_eq!(resolved(red), Value::Double(5.0));
     assert_eq!(resolved(blue), Value::Double(2.0));
 }
@@ -1681,7 +1696,7 @@ fn expression_assets_open_with_the_primary_stack_and_retained_bindings() {
     ]);
     let doc = StageDocument::open(backend, "root.usda", StageOptions::default()).unwrap();
     let child = doc.store.path("/Host/Child");
-    assert!(doc.stage.stage().has_prim(child));
+    assert!(doc.view().prim(child).is_some());
     assert!(doc.stage.stage().composition_errors().is_empty());
     assert!(!doc.is_dirty(doc.stage.stage().root_layer().unwrap()));
 }
@@ -1844,7 +1859,7 @@ fn package_expressions_use_the_archive_before_outer_transport() {
     );
     let doc = StageDocument::open(backend, "scene.usdz", StageOptions::default()).unwrap();
     let child = doc.store.path("/Host/Child");
-    assert!(doc.stage.stage().has_prim(child));
+    assert!(doc.view().prim(child).is_some());
     assert!(doc.stage.stage().composition_errors().is_empty());
 }
 #[test]
@@ -1906,7 +1921,7 @@ fn newly_created_documents_save_and_reopen_without_seed_files() {
     };
     let reopened = StageDocument::open(backend, "new.usda", StageOptions::default()).unwrap();
     let prim = reopened.store.path("/Root");
-    assert!(reopened.stage.stage().has_prim(prim));
+    assert!(reopened.view().prim(prim).is_some());
 }
 
 #[test]
@@ -2460,8 +2475,9 @@ fn root_reload_refreshes_resident_dependencies_and_protects_required_dirty_layer
     assert_eq!(
         candidate
             .stage()
-            .stage()
-            .read_property(property, layerstack::Time::Default, |v| Some(v.clone()))
+            .view(candidate.store())
+            .attribute(property)
+            .and_then(|a| a.get(layerstack::Time::Default))
             .unwrap()
             .value,
         Value::Int(2)
@@ -2547,8 +2563,8 @@ fn root_reload_renames_a_dependent_package_root_without_alias_collision() {
     assert!(doc.stage.stage().composition_errors().is_empty());
     let old_member = doc.store.path("/OldMember");
     let new_root = doc.store.path("/NewRoot");
-    assert!(doc.stage.stage().is_defined(old_member, &doc.store));
-    assert!(doc.stage.stage().is_defined(new_root, &doc.store));
+    assert!(doc.view().prim(old_member).is_some_and(|p| p.is_defined()));
+    assert!(doc.view().prim(new_root).is_some_and(|p| p.is_defined()));
 }
 
 #[test]
@@ -2575,8 +2591,9 @@ fn root_reload_refreshes_expression_dependencies_and_rejects_dirty_sources() {
         assert_eq!(
             candidate
                 .stage()
-                .stage()
-                .read_property(property, layerstack::Time::Default, |v| Some(v.clone()))
+                .view(candidate.store())
+                .attribute(property)
+                .and_then(|a| a.get(layerstack::Time::Default))
                 .unwrap()
                 .value,
             Value::Int(2)
@@ -2585,9 +2602,9 @@ fn root_reload_refreshes_expression_dependencies_and_rejects_dirty_sources() {
     }
     assert_eq!(doc.store.asset_layers, original_bindings);
     assert_eq!(
-        doc.stage
-            .stage()
-            .read_property(property, layerstack::Time::Default, |v| Some(v.clone()))
+        doc.view()
+            .attribute(property)
+            .and_then(|a| a.get(layerstack::Time::Default))
             .unwrap()
             .value,
         Value::Int(1)
@@ -2616,9 +2633,9 @@ fn root_reload_refreshes_expression_dependencies_and_rejects_dirty_sources() {
         .commit();
     assert_eq!(doc.catalog.ids["asset.usda"], asset);
     assert_eq!(
-        doc.stage
-            .stage()
-            .read_property(property, layerstack::Time::Default, |v| Some(v.clone()))
+        doc.view()
+            .attribute(property)
+            .and_then(|a| a.get(layerstack::Time::Default))
             .unwrap()
             .value,
         Value::Int(2)
@@ -2646,9 +2663,9 @@ fn root_reload_refreshes_nested_expression_assets_and_recovers_missing_sources()
         .unwrap()
         .commit();
     assert_eq!(
-        doc.stage
-            .stage()
-            .read_property(property, layerstack::Time::Default, |v| Some(v.clone()))
+        doc.view()
+            .attribute(property)
+            .and_then(|a| a.get(layerstack::Time::Default))
             .unwrap()
             .value,
         Value::Int(2)
@@ -2678,9 +2695,9 @@ fn root_reload_refreshes_nested_expression_assets_and_recovers_missing_sources()
         [layerstack::CompositionError::UnresolvedSublayer(error)] if error.asset == "child.usda"
     ));
     assert!(
-        doc.stage
-            .stage()
-            .read_property(property, layerstack::Time::Default, |v| Some(v.clone()))
+        doc.view()
+            .attribute(property)
+            .and_then(|a| a.get(layerstack::Time::Default))
             .is_none()
     );
     doc.storage.files.insert(
@@ -2691,9 +2708,9 @@ fn root_reload_refreshes_nested_expression_assets_and_recovers_missing_sources()
         .unwrap()
         .commit();
     assert_eq!(
-        doc.stage
-            .stage()
-            .read_property(property, layerstack::Time::Default, |v| Some(v.clone()))
+        doc.view()
+            .attribute(property)
+            .and_then(|a| a.get(layerstack::Time::Default))
             .unwrap()
             .value,
         Value::Int(3)

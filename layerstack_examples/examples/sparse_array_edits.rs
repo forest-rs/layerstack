@@ -130,12 +130,15 @@ over "Mesh" {
 
     let stage = Stage::compose(&mut store, LayerId(4), StageOptions::default());
 
-    // `points` and `animated` are properties, so they are queried by property
-    // path; name-based queries read prim metadata.
-    let points = store.property_path("/Mesh.points");
-    let animated = store.property_path("/Mesh.animated");
+    // `points` and `animated` are attributes: read them through their
+    // handles, at the default time or at a time code.
+    let view = stage.view(&store);
+    let points = view.attribute("/Mesh.points").expect("points attribute");
+    let animated = view
+        .attribute("/Mesh.animated")
+        .expect("animated attribute");
 
-    let resolved_points = stage.resolve_field_path(points).expect("points field");
+    let resolved_points = points.get(Time::Default).expect("points value");
     println!("Sparse override over dense array:");
     println!("  resolved points = {}", resolved_points.value);
     assert_eq!(
@@ -144,11 +147,11 @@ over "Mesh" {
         "sparse default edit should patch the dense base array in strength order"
     );
 
-    let animated_mid = stage
-        .resolve_property_path_at_time(animated, Time::held(2.5))
+    let animated_mid = animated
+        .get(Time::held(2.5))
         .expect("held sparse sample at t=2.5");
-    let animated_reset = stage
-        .resolve_property_path_at_time(animated, Time::held(3.5))
+    let animated_reset = animated
+        .get(Time::held(3.5))
         .expect("held sparse sample at t=3.5");
 
     println!("Held time-sampled sparse edits over the same dense base:");

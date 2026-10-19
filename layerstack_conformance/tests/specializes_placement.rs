@@ -91,7 +91,8 @@ fn prim_stacks_match_openusd() {
     for prim in &oracle.prims {
         let id = loaded.store.path(&prim.path);
         let stack: Vec<(String, String)> = stage
-            .prim_stack(id)
+            .prim(id, &loaded.store)
+            .map(|p| p.prim_stack())
             .expect("composed prim")
             .into_iter()
             .map(|(layer, spec)| {
@@ -128,7 +129,9 @@ fn values_match_openusd() {
     for (attr, expected) in &oracle.values {
         let property = loaded.store.property_path(attr);
         let value = stage
-            .resolve_field_path(property)
+            .view(&loaded.store)
+            .attribute(property)
+            .and_then(|a| a.authored_value(layerstack::Time::Default))
             .map(|resolved| resolved.value);
         if value != Some(Value::Int(*expected)) {
             mismatches.push(format!("{attr}: expected {expected}, got {value:?}"));

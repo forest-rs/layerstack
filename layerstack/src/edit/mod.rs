@@ -58,7 +58,7 @@
 //!
 //! // Target the reference node: edits of `/World/Rock` go to the asset's
 //! // `/Rock`, and stage frame 14 is frame 4 there.
-//! let graph = live.stage().explain_prim_graph(rock).unwrap();
+//! let graph = live.stage().prim(rock, &store).unwrap().composition_graph();
 //! let (node, _) = graph
 //!     .nodes()
 //!     .find(|(_, node)| node.arc_kind() == ArcKind::References)
@@ -74,8 +74,8 @@
 //!     store.layers[&LayerId(2)].property(asset_spin).unwrap().time_samples.clone()
 //! };
 //! assert_eq!(samples(&store), Some(vec![(4.0, Value::Double(70.0))].into()));
-//! let at_14 = live.stage().resolve_property_path_at_time(spin_path, Time::at(14.0));
-//! assert_eq!(at_14.unwrap().value, Value::Double(70.0));
+//! let spin = live.view(&store).attribute(spin_path).unwrap();
+//! assert_eq!(spin.value::<f64>(Time::at(14.0)), Some(70.0));
 //!
 //! // The inverse removes the sample it created.
 //! live.apply(&mut store, &applied.inverse).unwrap();

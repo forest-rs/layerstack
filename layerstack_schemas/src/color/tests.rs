@@ -317,14 +317,12 @@ fn schema_metadata_empty_and_block_preserve_color_precedence() {
         assert_eq!(result.name.as_ref(), name);
         assert_eq!(result.source, source);
     }
-    assert!(
+    let property = |name| {
         stage
-            .resolve_property_metadata(child, blocked_tint, color)
-            .is_none()
-    );
-    assert!(
-        stage
-            .resolve_authored_property_metadata(child, tint, color)
-            .is_none()
-    );
+            .view(&store)
+            .property(PropertyPath::new(child, name))
+            .unwrap()
+    };
+    assert!(property(blocked_tint).metadata(color).is_none());
+    assert!(property(tint).authored_metadata(color).is_none());
 }

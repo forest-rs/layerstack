@@ -191,14 +191,14 @@ fn raw_consolidation_matches_native_and_keeps_composed_stage_values() {
         for time in [Time::Default, Time::at(10.), Time::at(14.)] {
             assert_eq!(
                 original
-                    .read_property(layerstack::PropertyPath::new(prim, name), time, |value| {
-                        Some(value.clone())
-                    })
+                    .view(&store)
+                    .attribute(layerstack::PropertyPath::new(prim, name))
+                    .and_then(|attribute| attribute.get(time))
                     .map(|value| value.value),
                 flattened
-                    .read_property(layerstack::PropertyPath::new(prim, name), time, |value| {
-                        Some(value.clone())
-                    })
+                    .view(&store)
+                    .attribute(layerstack::PropertyPath::new(prim, name))
+                    .and_then(|attribute| attribute.get(time))
                     .map(|value| value.value),
                 "{} {time:?}",
                 store.tokens.resolve(name)
@@ -206,8 +206,8 @@ fn raw_consolidation_matches_native_and_keeps_composed_stage_values() {
         }
     }
     assert_eq!(
-        flattened.has_prim(store.path("/P/Inactive")),
-        original.has_prim(store.path("/P/Inactive"))
+        flattened.prim(store.path("/P/Inactive"), &store).is_some(),
+        original.prim(store.path("/P/Inactive"), &store).is_some()
     );
     let clip = store.path("/ClipPrim");
     let name = store.tokens.lookup("clipValue").unwrap();
@@ -215,7 +215,9 @@ fn raw_consolidation_matches_native_and_keeps_composed_stage_values() {
         let path = layerstack::PropertyPath::new(clip, name);
         let read = |stage: &Stage| {
             stage
-                .read_property(path, time, |value| Some(value.clone()))
+                .view(&store)
+                .attribute(path)
+                .and_then(|attribute| attribute.get(time))
                 .map(|value| value.value)
         };
         assert_eq!(read(&original), read(&flattened));

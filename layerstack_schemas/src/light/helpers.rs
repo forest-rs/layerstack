@@ -115,10 +115,11 @@ fn shader_name(base: &str, context: &str) -> String {
 // schema fallback (`UsdAttribute::Get<TfToken>`, AOUSD Core §12.3.6).
 fn shader_token<'a>(prim: &PrimView<'a>, property: &str) -> Option<&'a str> {
     let blocked = prim
-        .property_path(property)
-        .and_then(|path| prim.scene().stage().explain_property_path(path))
-        .and_then(|opinions| {
-            opinions
+        .prim()
+        .and_then(|handle| handle.property(property))
+        .and_then(|property| {
+            property
+                .opinions()
                 .iter()
                 .filter_map(|opinion| opinion.value.default_value())
                 .find(|value| matches!(value, Value::Token(_) | Value::Blocked))

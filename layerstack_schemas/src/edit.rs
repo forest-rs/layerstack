@@ -328,7 +328,18 @@ impl<'s> SchemaEdit<'s> {
     ///
     /// OpenUSD: authoring through an invalid `UsdPrim` fails.
     pub(crate) fn exists(&self, path: PathId) -> bool {
-        self.stage.has_prim(path) || self.defined.iter().any(|(p, _)| *p == path)
+        self.stage_prim(path).is_some() || self.defined.iter().any(|(p, _)| *p == path)
+    }
+
+    /// The prim at `path` on the edit's stage, as it was before this edit.
+    fn stage_prim(&self, path: PathId) -> Option<layerstack::Prim<'_>> {
+        self.stage.prim(path, &*self.store)
+    }
+
+    /// The property at `path` on the edit's stage, as it was before this
+    /// edit.
+    fn stage_property(&self, path: PropertyPath) -> Option<layerstack::Property<'_>> {
+        self.stage.view(&*self.store).property(path)
     }
 
     /// The interned prim path `path` names: text (`"/World/Rock"`) or an
@@ -363,8 +374,8 @@ impl<'s> SchemaEdit<'s> {
                 .zip(tokens.lookup(defined))
                 .is_some_and(|(registry, defined)| registry.is_a(defined, schema)),
             None => self
-                .stage
-                .prim_definition_ref(path)
+                .stage_prim(path)
+                .and_then(layerstack::Prim::definition)
                 .is_some_and(|definition| definition.is_a(schema)),
         }
     }
@@ -376,7 +387,9 @@ impl<'s> SchemaEdit<'s> {
                 let defined = defined.clone();
                 Some(self.store.tokens_mut().intern(defined))
             }
-            None => self.stage.resolve_type_name(path),
+            None => self
+                .stage_prim(path)
+                .and_then(layerstack::Prim::type_name_token),
         }
     }
 
@@ -387,13 +400,14 @@ impl<'s> SchemaEdit<'s> {
     fn definition(&mut self, path: PathId, name: TokenId) -> Option<PropertyDefinition> {
         let registry = self.stage.schemas()?;
         let type_name = self.type_name(path);
-        let mut applied: Vec<TokenId> = self
-            .store
-            .tokens()
-            .lookup("apiSchemas")
-            .and_then(|field| self.stage.resolve_token_list(path, field))
+        let mut applied: Vec<TokenId> = match self
+            .stage_prim(path)
+            .and_then(|prim| prim.metadata("apiSchemas"))
             .map(|resolved| resolved.value)
-            .unwrap_or_default();
+        {
+            Some(ResolvedValue::TokenList(applied)) => applied,
+            _ => Vec::new(),
+        };
         applied.extend(
             self.applied
                 .iter()
@@ -413,9 +427,8 @@ impl<'s> SchemaEdit<'s> {
         let token = self.store.tokens_mut().intern(name);
         let at = self.target.property(PropertyPath::new(path, token));
         let authored = self
-            .stage
-            .explain_property_path(PropertyPath::new(path, token))
-            .is_some()
+            .stage_property(PropertyPath::new(path, token))
+            .is_some_and(layerstack::Property::is_authored)
             || self
                 .created
                 .iter()
@@ -476,8 +489,8 @@ impl<'s> SchemaEdit<'s> {
                 .target
                 .map_property_to_spec_path(property, self.store.paths_mut());
             if let Some(value) = self
-                .stage
-                .explain_property_path(property)
+                .stage_property(property)
+                .map(layerstack::Property::opinions)
                 .into_iter()
                 .flatten()
                 .filter(|op| {
@@ -491,9 +504,17 @@ impl<'s> SchemaEdit<'s> {
             }
             return self.definition(path, token).and_then(|d| d.fallback);
         }
-        match self.stage.resolve_value_with_schema(path, token)?.value {
-            ResolvedValue::Scalar(value) => Some(value),
-            _ => None,
+        let attribute = self
+            .stage_property(PropertyPath::new(path, token))?
+            .as_attribute()?;
+        // A typed read leaves out an array that does not decode; the
+        // authored value keeps it, for the caller's decode to report.
+        let resolved = attribute
+            .get(layerstack::Time::Default)
+            .or_else(|| attribute.authored_value(layerstack::Time::Default))?;
+        match resolved.value {
+            Value::Dictionary(_) => None,
+            value => Some(value),
         }
     }
 
@@ -502,15 +523,16 @@ impl<'s> SchemaEdit<'s> {
     // Spec: AOUSD Core §12.2.2–§12.2.4 (declaration composition).
     fn composed_declaration(&mut self, path: PathId, name: TokenId) -> Option<PropertyDeclaration> {
         if !self.removed.contains(&(path, name)) {
-            return self.stage.resolve_property_declaration(path, name);
+            return self
+                .stage_property(PropertyPath::new(path, name))?
+                .declaration();
         }
         let property = PropertyPath::new(path, name);
         let mapped = self
             .target
             .map_property_to_spec_path(property, self.store.paths_mut());
-        let mut specs = self
-            .stage
-            .explain_property_path(property)?
+        let opinions = self.stage_property(property)?.opinions();
+        let mut specs = opinions
             .iter()
             .filter(|op| {
                 !(op.key.layer_id == self.target.layer()
@@ -712,7 +734,7 @@ impl<'s> SchemaEdit<'s> {
     pub(crate) fn ui_hint(&mut self, target: TargetPath, keys: &[&str]) -> Option<Value> {
         let key = self.store.tokens().lookup("uiHints")?;
         let resolved = match target {
-            TargetPath::Prim(path) => self.stage.resolve_value(path, key),
+            TargetPath::Prim(path) => self.stage_prim(path).and_then(|prim| prim.metadata(key)),
             TargetPath::Property(path)
                 if self.removed.contains(&(path.prim_path(), path.property())) =>
             {
@@ -720,8 +742,8 @@ impl<'s> SchemaEdit<'s> {
                     .target
                     .map_property_to_spec_path(path, self.store.paths_mut());
                 let mut values = self
-                    .stage
-                    .explain_property_path(path)
+                    .stage_property(path)
+                    .map(layerstack::Property::opinions)
                     .into_iter()
                     .flatten()
                     .filter(|op| {
@@ -761,10 +783,9 @@ impl<'s> SchemaEdit<'s> {
                 }
                 return crate::ui_hints::entry(&Value::Dictionary(dictionary), keys).cloned();
             }
-            TargetPath::Property(path) => {
-                self.stage
-                    .resolve_property_metadata(path.prim_path(), path.property(), key)
-            }
+            TargetPath::Property(path) => self
+                .stage_property(path)
+                .and_then(|property| property.metadata(key)),
         };
         let mut dictionary = match resolved.map(|r| r.value) {
             Some(ResolvedValue::Dictionary(entries)) => entries,
@@ -878,8 +899,8 @@ impl<'s> SchemaEdit<'s> {
         if !self.has_local_property(path, token) {
             let mut spec = PropertySpec::relationship();
             spec.custom = self
-                .stage
-                .resolve_property_declaration(path, token)
+                .stage_property(PropertyPath::new(path, token))
+                .and_then(layerstack::Property::declaration)
                 .map_or(custom, |declaration| declaration.custom);
             let at = self.target.property(PropertyPath::new(path, token));
             self.transaction.create_property(at, spec);
@@ -1051,11 +1072,14 @@ impl<'s> SchemaEdit<'s> {
             .stage
             .schemas()
             .ok_or(CannotApply::NotAnAppliedSchema)?;
+        let stage_type = self
+            .stage_prim(path)
+            .and_then(layerstack::Prim::type_name_token);
         let tokens = self.store.tokens_mut();
         let schema_token = tokens.intern(schema);
         let type_name = match self.defined.iter().rev().find(|(p, _)| *p == path) {
             Some((_, defined)) => Some(tokens.intern(defined)),
-            None => self.stage.resolve_type_name(path),
+            None => stage_type,
         };
         let tokens = self.store.tokens_mut();
         registry.can_apply(type_name, schema_token, instance, tokens)?;

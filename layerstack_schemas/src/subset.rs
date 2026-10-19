@@ -288,11 +288,8 @@ fn read<'a, T>(
         })
 }
 fn sample_times(prim: &PrimView<'_>, name: &str) -> Vec<f64> {
-    prim.property_path(name).map_or_else(Vec::new, |p| {
-        prim.scene()
-            .stage()
-            .property_sample_times(p.prim_path(), p.property())
-    })
+    prim.attribute(name)
+        .map_or_else(Vec::new, layerstack::Attribute::sample_times)
 }
 fn valid_geom(geom: &Imageable<'_>, element: &SubsetElementType) -> bool {
     let scene = geom.scene();
@@ -456,18 +453,15 @@ impl<'a> Imageable<'a> {
         family: Option<&str>,
     ) -> Vec<Subset<'a>> {
         let scene = self.scene();
-        scene
-            .stage()
-            .children_of(self.path())
-            .unwrap_or_default()
-            .iter()
-            .filter_map(|&path| {
-                if scene.stage().resolve_specifier(path, scene.store())
-                    != Some(layerstack::Specifier::Def)
-                    || scene.stage().is_abstract(path, scene.store())
-                {
+        let Some(prim) = scene.prim(self.path()) else {
+            return Vec::new();
+        };
+        prim.children()
+            .filter_map(|child| {
+                if child.specifier() != layerstack::Specifier::Def || child.is_abstract() {
                     return None;
                 }
+                let path = child.path();
                 let subset = Subset::new(&scene, path)?;
                 if subset.metadata_value("active") == Some(Value::Bool(false)) {
                     return None;

@@ -5,13 +5,13 @@
 //! that name nothing usable on the stage, counted by property name.
 //!
 //! A target is checked as composition left it: the list
-//! [`Stage::resolve_target_list_path`] gives, the one OpenUSD's
+//! [`Relationship::targets`](crate::Relationship::targets) gives, the one OpenUSD's
 //! `UsdRelationship::GetTargets` and `UsdAttribute::GetConnections` return.
 //! What it names is decided the way `UsdStage::GetObjectAtPath` decides it:
 //! a prim the stage populates, or a property such a prim has, authored or
 //! defined by its schemas. Paths composition dropped (outside the arc that
 //! brings their spec in, or naming an instance of the class that authors
-//! them) are not in that list; [`Stage::explain_targets`] reports them.
+//! them) are not in that list; [`Relationship::explain_targets`](crate::Relationship::explain_targets) reports them.
 //!
 //! Spec: AOUSD Core §7.3.3 (properties), §11.3 (population: inactive prims
 //! and unloaded payloads), §12.4 (target list resolution).
@@ -233,7 +233,7 @@ impl Stage {
     /// `None` when it resolves (see [`DanglingKind`]).
     ///
     /// A path is a prim on the stage, or a property of one that an opinion
-    /// declares or its schemas define ([`Stage::property_kind`]), as
+    /// declares or its schemas define ([`Property::kind`](crate::Property::kind)), as
     /// [`Stage::object`] finds them; one of an inactive prim is
     /// [`DanglingKind::Inactive`]. For a path that names nothing, the
     /// nearest prim above it that the stage populates says why: inactive,

@@ -76,15 +76,20 @@ fn colliders(scene: Scene<'_>, root: PathId) -> Vec<PathId> {
     let mut result = Vec::new();
     let mut ancestor = scene.parent(root);
     while let Some(path) = ancestor {
-        if scene.parent(path).is_some() && !scene.stage().is_defined(path, scene.store()) {
+        if scene.parent(path).is_some()
+            && !scene.prim(path).is_some_and(layerstack::Prim::is_defined)
+        {
             return result;
         }
         ancestor = scene.parent(path);
     }
     let mut pending = alloc::vec![root];
     while let Some(path) = pending.pop() {
-        if !scene.stage().is_defined(path, scene.store())
-            || scene.stage().is_abstract(path, scene.store())
+        let Some(prim) = scene.prim(path) else {
+            continue;
+        };
+        if !prim.is_defined()
+            || prim.is_abstract()
             || PrimView::new(scene, path).metadata_value("active") == Some(Value::Bool(false))
             || (path != root && scene.has_api(path, "PhysicsRigidBodyAPI", None))
         {
@@ -93,15 +98,7 @@ fn colliders(scene: Scene<'_>, root: PathId) -> Vec<PathId> {
         if scene.has_api(path, "PhysicsCollisionAPI", None) {
             result.push(path);
         }
-        pending.extend(
-            scene
-                .stage()
-                .children_of(path)
-                .unwrap_or_default()
-                .iter()
-                .rev()
-                .copied(),
-        );
+        pending.extend(prim.children().rev().map(|child| child.path()));
     }
     result
 }

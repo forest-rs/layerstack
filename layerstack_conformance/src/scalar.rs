@@ -10,7 +10,7 @@
 //!
 //! Spec: AOUSD Core §12.2 (value resolution: the strongest opinion wins).
 
-use layerstack::{PropertyPath, SpecPath, Stage, StageOptions, Value};
+use layerstack::{PropertyPath, SpecPath, Stage, StageOptions, Time, Value};
 
 use crate::usda_real::LoadedStage;
 
@@ -31,7 +31,11 @@ pub fn check_scalar_values(
     for (prop_path, value, layer_name, spec) in expected {
         let path = PropertyPath::parse(prop_path, &loaded.store.tokens, &loaded.store.paths)
             .expect("property path");
-        let Some(resolved) = stage.resolve_field_path(path) else {
+        let Some(resolved) = stage
+            .view(&loaded.store)
+            .attribute(path)
+            .and_then(|attribute| attribute.authored_value(Time::Default))
+        else {
             failures.push(format!("no resolved value for {prop_path}"));
             continue;
         };

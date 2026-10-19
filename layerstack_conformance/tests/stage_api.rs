@@ -4,7 +4,8 @@
 //! Stage APIs agree with native OpenUSD and fresh retained snapshots.
 #![allow(missing_docs, reason = "integration tests")]
 use layerstack::{
-    FieldEntry, FieldValue, InMemoryStore, Layer, LayerId, PrimSpec, Stage, StageOptions, Value,
+    FieldEntry, FieldValue, InMemoryStore, Layer, LayerId, PrimSpec, Stage, StageOptions, Time,
+    Value,
 };
 use std::{process::Command, sync::Arc};
 
@@ -46,14 +47,37 @@ fn fallback_types_select_concrete_schemas_without_changing_authored_type() {
             ..Default::default()
         },
     );
-    assert_eq!(stage.resolve_type_name(prim), Some(future));
-    assert!(stage.prim_definition_ref(prim).unwrap().is_a(mesh));
-    assert!(stage.prim_definition_ref(known).unwrap().is_a(mesh));
-    assert!(!stage.prim_definition_ref(known).unwrap().is_a(sphere));
+    assert_eq!(
+        stage.prim(prim, &store).and_then(|p| p.type_name_token()),
+        Some(future)
+    );
+    assert!(
+        stage
+            .prim(prim, &store)
+            .and_then(|p| p.definition())
+            .unwrap()
+            .is_a(mesh)
+    );
+    assert!(
+        stage
+            .prim(known, &store)
+            .and_then(|p| p.definition())
+            .unwrap()
+            .is_a(mesh)
+    );
+    assert!(
+        !stage
+            .prim(known, &store)
+            .and_then(|p| p.definition())
+            .unwrap()
+            .is_a(sphere)
+    );
     let subdivision = store.tokens.lookup("subdivisionScheme").unwrap();
     assert_eq!(
         stage
-            .resolve_field_with_schema(prim, subdivision)
+            .prim(prim, &store)
+            .and_then(|p| p.attribute(subdivision))
+            .and_then(|a| a.get(Time::Default))
             .unwrap()
             .value,
         Value::Token(store.tokens.lookup("catmullClark").unwrap())
@@ -209,7 +233,14 @@ fn fallback_metadata_changes_rebuild_schema_definitions_and_undo() {
             ..Default::default()
         },
     );
-    assert!(!live.stage().prim_definition_ref(prim).unwrap().is_a(mesh));
+    assert!(
+        !live
+            .stage()
+            .prim(prim, &store)
+            .and_then(|p| p.definition())
+            .unwrap()
+            .is_a(mesh)
+    );
     let mut edit = Transaction::new();
     edit.set_layer_metadata(
         LayerId(1),
@@ -220,9 +251,22 @@ fn fallback_metadata_changes_rebuild_schema_definitions_and_undo() {
         )])),
     );
     let inverse = live.apply(&mut store, &edit).unwrap().inverse;
-    assert!(live.stage().prim_definition_ref(prim).unwrap().is_a(mesh));
+    assert!(
+        live.stage()
+            .prim(prim, &store)
+            .and_then(|p| p.definition())
+            .unwrap()
+            .is_a(mesh)
+    );
     live.apply(&mut store, &inverse).unwrap();
-    assert!(!live.stage().prim_definition_ref(prim).unwrap().is_a(mesh));
+    assert!(
+        !live
+            .stage()
+            .prim(prim, &store)
+            .and_then(|p| p.definition())
+            .unwrap()
+            .is_a(mesh)
+    );
 }
 
 fn source_store(source: &str) -> InMemoryStore {
@@ -308,7 +352,13 @@ def "Instance" (
             .prim_range(root, &store, proxy_predicate)
             .any(|p| p == proxy)
     );
-    assert!(stage.prim_status(proxy, &store).unwrap().instance_proxy);
+    assert!(
+        stage
+            .prim(proxy, &store)
+            .map(|p| p.status())
+            .unwrap()
+            .instance_proxy
+    );
     let mut range = stage.prim_range(a, &store, PrimPredicate::DEFAULT);
     assert!(!range.prune_children());
     assert_eq!(range.next(), Some(a));
@@ -383,7 +433,7 @@ def "D" {}
             ..Default::default()
         },
     );
-    assert!(!live.stage().has_prim(b));
+    assert!(live.stage().prim(b, &store).is_none());
     let report = live.expand_population_mask_with(
         &mut store,
         PrimPredicate::DEFAULT,
@@ -392,8 +442,8 @@ def "D" {}
     );
     assert_eq!(report.added_roots, vec![b, c]);
     assert_eq!(report.changes.len(), 2);
-    assert!(live.stage().has_prim(c));
-    assert!(!live.stage().has_prim(d));
+    assert!(live.stage().prim(c, &store).is_some());
+    assert!(live.stage().prim(d, &store).is_none());
     let again = live.expand_population_mask_with(
         &mut store,
         PrimPredicate::DEFAULT,
@@ -404,7 +454,7 @@ def "D" {}
     assert!(again.changes.is_empty());
     let unfiltered = live.expand_population_mask(&mut store);
     assert_eq!(unfiltered.added_roots, vec![d]);
-    assert!(live.stage().has_prim(d));
+    assert!(live.stage().prim(d, &store).is_some());
     let python = std::env::var("LAYERSTACK_USD_PYTHON").unwrap_or_else(|_| "python3".into());
     if !Command::new(&python)
         .args(["-c", "from pxr import Usd"])
@@ -444,7 +494,7 @@ fn selected_relationships_forward_through_unselected_relationship_properties() {
         |_, _, p| p.property() == links,
         |_, _, _| false,
     );
-    assert!(live.stage().has_prim(c));
+    assert!(live.stage().prim(c, &store).is_some());
 }
 #[test]
 fn generic_object_queries_retain_values_across_unrelated_edits_and_refresh_after_changes() {

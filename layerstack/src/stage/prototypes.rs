@@ -274,7 +274,7 @@ impl Stage {
     }
 
     /// Returns the prototype of a composed instance root.
-    pub fn instance_prototype(&self, instance: PathId) -> Option<PrototypeId> {
+    pub(crate) fn instance_prototype(&self, instance: PathId) -> Option<PrototypeId> {
         self.prototypes.instances.get(&instance).copied()
     }
     /// Iterates snapshot-owned prototypes in first-instance traversal order.

@@ -993,7 +993,7 @@ impl Flattener<'_, '_> {
     }
 
     /// The variability the prim's schemas declare for `name`, when one
-    /// defines it ([`Stage::property_definition`]).
+    /// defines it ([`Property::definition`](crate::Property::definition)).
     ///
     /// Spec: AOUSD Core §13.3.2.3 (the prim definition).
     fn schema_variability(&self, prim: PathId, name: TokenId) -> Option<Variability> {

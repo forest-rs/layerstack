@@ -3,9 +3,12 @@
 
 //! Value explanations: why a property or metadata field has its value.
 //!
-//! Each `explain_*` query on [`Stage`] mirrors one `resolve_*` query and
-//! answers with the same value, plus the opinions resolution consulted and
-//! the part each one played. It is the counterpart of OpenUSD's
+//! Each explanation ([`Attribute::explain`](crate::Attribute::explain),
+//! [`Prim::explain_metadata`](crate::Prim::explain_metadata)) mirrors one
+//! read ([`Attribute::get`](crate::Attribute::get),
+//! [`Prim::metadata`](crate::Prim::metadata)) and answers with the same
+//! value, plus the opinions resolution consulted and the part each one
+//! played. It is the counterpart of OpenUSD's
 //! `UsdAttribute::GetResolveInfo` (`UsdResolveInfo`, `pxr/usd/usd/resolveInfo.h`),
 //! which names the source of an attribute's value and the node and layer it
 //! came from; a [`ValueExplanation`] additionally lists every consulted
@@ -43,7 +46,7 @@ use crate::{
     doc::{FieldValue, InterpolationType, LayerId, LayerOffset, Value, ValueDictionaries},
     interner::TokenId,
     listop::ListOp,
-    path::{PathId, PropertyPath},
+    path::PathId,
     prim_index::{ArcKind, Opinion, OpinionValue, PrimIndex},
     prim_index_graph::PrimNode,
     property::{PropertySpec, PropertyType, Time},
@@ -56,9 +59,11 @@ use crate::{
 
 /// Why a property or metadata field has its value.
 ///
-/// Returned by the `explain_*` queries of [`Stage`], each of which mirrors a
-/// `resolve_*` query: [`ValueExplanation::value`] is exactly the value that
-/// query resolves.
+/// Returned by [`Attribute::explain`](crate::Attribute::explain) and
+/// [`Prim::explain_metadata`](crate::Prim::explain_metadata), each of which
+/// mirrors a read: [`ValueExplanation::value`] is exactly the value that
+/// read resolves ([`Attribute::get`](crate::Attribute::get),
+/// [`Prim::metadata`](crate::Prim::metadata)).
 #[derive(Clone, Debug, PartialEq)]
 pub struct ValueExplanation<'s, T> {
     /// The resolved value; `None` when the query resolves no value.
@@ -168,7 +173,8 @@ pub struct ExplainedOpinion<'s> {
     /// ([`Opinion::layer_offset`]), and what it authors.
     pub opinion: &'s Opinion,
     /// The node of the prim's composition graph the opinion was read from
-    /// ([`Stage::explain_prim_graph`]): its arc kind and site.
+    /// ([`Prim::composition_graph`](crate::Prim::composition_graph)): its
+    /// arc kind and site.
     pub node: Option<&'s PrimNode>,
     /// The opinion's part in the value.
     pub role: OpinionRole,
@@ -310,7 +316,7 @@ impl Stage {
     ///
     /// Spec: AOUSD Core §12.2 (metadata resolution), §12.2.5, §12.2.6.
     #[must_use]
-    pub fn explain_value(
+    pub(crate) fn explain_value(
         &self,
         prim: PathId,
         field: TokenId,
@@ -329,9 +335,10 @@ impl Stage {
     /// then splines, then the default), §12.3.2.1 (layer offsets), §12.5
     /// (interpolation).
     #[must_use]
-    pub fn explain_property_value(
+    #[cfg(test)]
+    pub(crate) fn explain_property_value(
         &self,
-        property_path: PropertyPath,
+        property_path: crate::PropertyPath,
         time: Time,
     ) -> Option<ValueExplanation<'_, Value>> {
         match time {
@@ -345,8 +352,8 @@ impl Stage {
         }
     }
 
-    /// Explains [`Stage::resolve_value_at_time_with_schema`]: like
-    /// [`Stage::explain_property_value`], falling back to the schema.
+    /// Explains `Stage::resolve_value_at_time_with_schema`: like
+    /// `Stage::explain_property_value`, falling back to the schema.
     ///
     /// Returns `None` when no opinion authors the property and the schema
     /// has no fallback for it.
@@ -354,7 +361,7 @@ impl Stage {
     /// Spec: AOUSD Core §12.3.5 (fallback values), §12.3.6 (blocks),
     /// §13.3.2.4 (fallback value resolution).
     #[must_use]
-    pub fn explain_value_with_schema(
+    pub(crate) fn explain_value_with_schema(
         &self,
         prim: PathId,
         field: TokenId,
@@ -373,9 +380,10 @@ impl Stage {
 
     /// Why a property has its default-time value, or a relationship its
     /// targets ([`Stage::resolve_property_path`]).
+    #[cfg(test)]
     fn explain_property_default(
         &self,
-        property_path: PropertyPath,
+        property_path: crate::PropertyPath,
     ) -> Option<ValueExplanation<'_, ResolvedValue>> {
         self.explain_value_by(
             property_path.prim_path(),
@@ -385,9 +393,10 @@ impl Stage {
     }
 
     /// Why an attribute has its value at the time code `time`.
+    #[cfg(test)]
     fn explain_property_value_at_time(
         &self,
-        property_path: PropertyPath,
+        property_path: crate::PropertyPath,
         time: f64,
         interp: InterpolationType,
     ) -> Option<ValueExplanation<'_, Value>> {
@@ -401,7 +410,7 @@ impl Stage {
         Some(self.explain_property_at_time(prim, index, name, opinions, time, interp, None))
     }
 
-    /// Explains [`Stage::resolve_value_with_schema`]: the default-time
+    /// Explains `Stage::resolve_value_with_schema`: the default-time
     /// value, falling back to the schema.
     fn explain_default_with_schema(
         &self,
@@ -432,10 +441,21 @@ impl Stage {
             } else {
                 self.explain_value_by(prim, field, Lookup::Property)?
             };
-            if explanation.value.is_some() {
+            // Only a scalar or dictionary is a value: relationship specs
+            // where the schema defines an attribute author targets, not a
+            // default, so the fallback answers, as `read_property` reads it
+            // and OpenUSD's `UsdAttribute::Get` does (its resolve info names
+            // the fallback). Spec: AOUSD Core §13.3.2.4.
+            if matches!(
+                explanation.value,
+                Some(ResolvedValue::Scalar(_) | ResolvedValue::Dictionary(_))
+            ) {
                 return Some(explanation);
             }
-            explained = Some(explanation);
+            explained = Some(ValueExplanation {
+                value: None,
+                ..explanation
+            });
         }
 
         let Some(fallback) = fallback else {
@@ -624,7 +644,7 @@ impl Stage {
         }
     }
 
-    /// Mirrors [`Stage::resolve_value_at_time`] over one chain of opinions.
+    /// Mirrors `Stage::resolve_value_at_time` over one chain of opinions.
     ///
     /// Opinions read through a layer offset are explained as authored; the
     /// value is the resolved one, `timecode` values in stage time (AOUSD
@@ -840,7 +860,7 @@ impl Stage {
 
 /// Explains a composed target (or connection) list.
 ///
-/// Mirrors `Stage::resolve_target_list` and chains through
+/// Mirrors `Stage::resolve_target_list_path` and chains through
 /// [`resolve_list_chain_report`].
 ///
 /// Spec: AOUSD Core §12.2.6 (list op resolution), §12.4 (relationships and

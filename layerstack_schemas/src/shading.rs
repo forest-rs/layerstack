@@ -134,7 +134,9 @@ impl ValueSource {
         if self.kind != ValueSourceKind::AuthoredValue {
             return None;
         }
-        let resolved = scene.stage().resolve_field_path(self.attribute)?;
+        let resolved = scene
+            .attribute(self.attribute)?
+            .authored_value(layerstack::Time::Default)?;
         let value = crate::value::read_primvar_name(&resolved.value, scene.store().tokens())?;
         Some(layerstack::Resolved {
             value,
@@ -210,18 +212,12 @@ struct SourceTrace<T> {
 
 impl Scene<'_> {
     fn shading_attribute(&self, path: PropertyPath) -> bool {
-        if !self.stage().has_prim(path.prim_path()) {
-            return false;
-        }
-        self.stage()
-            .resolve_property_declaration(path.prim_path(), path.property())
-            .map(|d| d.kind)
-            .or_else(|| {
-                self.stage()
-                    .property_definition(path.prim_path(), path.property())
-                    .map(|d| d.kind)
-            })
-            == Some(PropertyKind::Attribute)
+        self.property(path).is_some_and(|property| {
+            property
+                .declaration()
+                .map_or_else(|| property.kind(), |declared| declared.kind)
+                == PropertyKind::Attribute
+        })
     }
 
     /// Reads direct composed connections, retaining invalid targets separately.
@@ -232,8 +228,15 @@ impl Scene<'_> {
         if !self.shading_attribute(attribute) {
             return result;
         }
-        if let Some(targets) = self.stage().resolve_target_list_path(attribute) {
-            for target in targets.value {
+        if let Some(property) = self.property(attribute) {
+            let targets = match property.as_attribute() {
+                Some(attribute) => attribute.connections(),
+                None => property
+                    .as_relationship()
+                    .map(layerstack::Relationship::targets)
+                    .unwrap_or_default(),
+            };
+            for target in targets {
                 if let TargetPath::Property(path) = target
                     && self.shading_attribute(path)
                     && shading_kind(self.store().tokens().resolve(path.property())).is_some()
@@ -434,8 +437,8 @@ impl Material<'_> {
             if context.is_empty()
                 && self
                     .scene()
-                    .stage()
-                    .resolve_property_declaration(path.prim_path(), path.property())
+                    .property(path)
+                    .and_then(layerstack::Property::declaration)
                     .is_none()
             {
                 break;

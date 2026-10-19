@@ -25,7 +25,7 @@ use layerstack::{CannotApply, PathId};
 use crate::{PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "\\\\deprecated Materials should use UsdShadeMaterial instead."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `RiMaterialAPI`. Get it with [`RiMaterialApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `RiMaterialAPI`. Get it with [`RiMaterialApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdRiMaterialAPI`."]
 #[doc(alias = "UsdRiMaterialAPI")]
 #[doc(alias = "RiMaterialAPI")]
@@ -230,7 +230,7 @@ impl RiMaterialApiEdit {
 
 #[doc = "\\\\deprecated This API schema will be removed in a future release."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `RiSplineAPI`. Get it with [`RiSplineApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `RiSplineAPI`. Get it with [`RiSplineApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdRiSplineAPI`."]
 #[doc(alias = "UsdRiSplineAPI")]
 #[doc(alias = "RiSplineAPI")]
@@ -327,7 +327,7 @@ impl RiSplineApiEdit {
 
 #[doc = "Container namespace schema for all renderman statements."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `StatementsAPI`. Get it with [`StatementsApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `StatementsAPI`. Get it with [`StatementsApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdRiStatementsAPI`."]
 #[doc(alias = "UsdRiStatementsAPI")]
 #[doc(alias = "StatementsAPI")]

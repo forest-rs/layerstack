@@ -8,8 +8,7 @@
 //! attribute can hold a default value, time samples, a spline and connection
 //! paths at the same time, exactly as a layer can author them. Nothing is
 //! folded at ingestion time: which slot answers a query is decided when the
-//! query runs (see [`crate::Stage::resolve_value`] for default-time queries and
-//! [`crate::Stage::resolve_value_at_time`] for numeric times).
+//! query runs (see [`crate::Attribute::get`], which reads at a [`Time`]).
 //!
 //! Spec: AOUSD Core §7.3.7 (property specs), §7.6.3 (property spec fields),
 //! §7.6.4 (attribute spec fields; §7.6.4.2.3 notes that attributes "may have a
@@ -301,7 +300,7 @@ pub struct PropertySpec {
     /// `targetPaths` for a relationship.
     ///
     /// Connections are inspected separately from attribute value resolution
-    /// (see [`crate::Stage::resolve_target_list`]).
+    /// (see [`crate::Relationship::targets`]).
     ///
     /// Spec: AOUSD Core §7.6.4.2.3 (`connectionPaths`), §7.6.5.1.1
     /// (`targetPaths`), §12.4.

@@ -240,7 +240,7 @@ fn main() {
     // -----------------------------------------------------------------------
     // Part 1: Query the timeline at various frames
     //
-    // resolve_value_at_time() does the full resolution dance:
+    // `Attribute::get` at a `Time` does the full resolution dance:
     //   1. Walk opinions strongest → weakest
     //   2. Remap the query time through each opinion's layer offset
     //   3. The first opinion that authors TimeSamples, a Spline or a Default
@@ -264,16 +264,23 @@ fn main() {
     println!("  Per spec, strongest first: TimeSamples > Spline > Default");
     println!("  So the base's timeSamples/spline answer every timed query.");
     println!();
-    let untimed = stage
-        .resolve_field(char_path, position_x)
+    let view = stage.view(&store);
+    let position = view
+        .attribute("/Character.position_x")
+        .expect("authored attribute");
+    let fade = view
+        .attribute("/Character.opacity")
+        .expect("authored attribute");
+    let untimed = position
+        .get(Time::Default)
         .map(|r| fmt_val(&r.value))
         .unwrap_or_else(|| "none".into());
     println!("  Untimed position = {untimed} (defaults only, from the defaults layer)");
     println!();
 
     for frame in [0.0, 5.0, 10.0, 15.0, 22.0, 30.0, 34.0] {
-        let pos = stage.resolve_value_at_time(char_path, position_x, Time::at(frame));
-        let opa = stage.resolve_value_at_time(char_path, opacity, Time::at(frame));
+        let pos = position.get(Time::at(frame));
+        let opa = fade.get(Time::at(frame));
 
         let pos_str = pos.as_ref().map_or("none".into(), |r| fmt_val(&r.value));
         let opa_str = opa.as_ref().map_or("none".into(), |r| fmt_val(&r.value));
@@ -305,13 +312,13 @@ fn main() {
     println!("  Base samples: frame 0 → 0.0, frame 12 → 50.0");
     println!();
 
-    let linear = stage
-        .resolve_value_at_time(char_path, position_x, Time::at(16.0))
+    let linear = position
+        .get(Time::at(16.0))
         .map(|r| fmt_val(&r.value))
         .unwrap_or_else(|| "none".into());
 
-    let held = stage
-        .resolve_value_at_time(char_path, position_x, Time::held(16.0))
+    let held = position
+        .get(Time::held(16.0))
         .map(|r| fmt_val(&r.value))
         .unwrap_or_else(|| "none".into());
 
@@ -362,7 +369,7 @@ fn main() {
     println!("  Global frame 22 → base-local frame 12 (the midpoint).");
     println!();
 
-    if let Some(r) = stage.resolve_value_at_time(char_path, position_x, Time::at(22.0)) {
+    if let Some(r) = position.get(Time::at(22.0)) {
         println!("  position at global frame 22.0 = {}", fmt_val(&r.value));
         if let Some(p) = &r.provenance {
             println!("  source: {} layer", source_name(Some(p)));

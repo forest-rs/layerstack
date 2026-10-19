@@ -109,7 +109,7 @@ pub struct AuthoredTarget {
     /// The composed property that reads the spec.
     pub source: PropertyPath,
     /// The node of `source`'s prim graph the spec is read through
-    /// ([`Stage::explain_prim_graph`]);
+    /// ([`Prim::composition_graph`](crate::Prim::composition_graph));
     /// [`EditTarget::for_node_layer`](crate::edit::EditTarget::for_node_layer)
     /// with it edits the spec through the stage's namespace.
     pub node: NodeId,

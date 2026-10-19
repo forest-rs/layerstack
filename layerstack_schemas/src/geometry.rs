@@ -464,16 +464,14 @@ impl<'a> ConstraintTarget<'a> {
     pub fn new(scene: &Scene<'a>, property: PropertyPath) -> Option<Self> {
         let name = scene.store().tokens().resolve(property.property());
         let prim = PrimView::new(*scene, property.prim_path());
-        let declared = scene
-            .stage()
-            .resolve_property_declaration(property.prim_path(), property.property());
+        let composed = scene.property(property);
+        let declared = composed.and_then(layerstack::Property::declaration);
         let ty = declared
             .as_ref()
             .and_then(|d| d.type_name.clone())
             .or_else(|| {
-                scene
-                    .stage()
-                    .property_definition_ref(property.prim_path(), property.property())
+                composed
+                    .and_then(layerstack::Property::definition)
                     .and_then(|d| d.type_name.clone())
             });
         let matrix =

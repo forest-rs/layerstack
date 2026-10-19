@@ -1,7 +1,7 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! The per-prim composition graph exposed by `Stage::explain_prim_graph`.
+//! The per-prim composition graph exposed by `Prim::composition_graph`.
 
 #![allow(missing_docs, reason = "integration tests")]
 
@@ -110,8 +110,8 @@ fn grove() -> (InMemoryStore, Stage) {
 fn sources_name_the_node_of_their_arc_path() {
     let (store, stage) = grove();
     let grove = store.path("/Grove");
-    let graph = stage.explain_prim_graph(grove).expect("graph");
-    let sources = stage.explain_prim(grove).expect("sources");
+    let prim = stage.prim(grove, &store).expect("composed");
+    let (graph, sources) = (prim.composition_graph(), prim.sources());
 
     let root = graph.root().expect("root");
     let root_node = graph.node(root).expect("root node");
@@ -171,8 +171,8 @@ fn sources_name_the_node_of_their_arc_path() {
 fn ancestral_arcs_add_nodes_to_descendants() {
     let (store, stage) = grove();
     let leaves = store.path("/Grove/Leaves");
-    let graph = stage.explain_prim_graph(leaves).expect("graph");
-    let sources = stage.explain_prim(leaves).expect("sources");
+    let prim = stage.prim(leaves, &store).expect("composed");
+    let (graph, sources) = (prim.composition_graph(), prim.sources());
     assert_eq!(sources.len(), 1, "only the referenced child has a spec");
     assert_eq!(
         arc_path(&store, graph, sources[0].node),
@@ -195,16 +195,16 @@ fn opinion_order_follows_the_graphs_strength_order() {
     let (store, stage) = grove();
     let root = store.paths.lookup(&layerstack::Path::root()).expect("root");
     for prim in stage.traverse(root).filter(|prim| *prim != root) {
-        let graph = stage.explain_prim_graph(prim).expect("graph");
+        let handle = stage.prim(prim, &store).expect("composed");
+        let graph = handle.composition_graph();
         let rank: HashMap<NodeId, usize> = graph
             .strength_order()
             .into_iter()
             .enumerate()
             .map(|(rank, node)| (node, rank))
             .collect();
-        let ranks: Vec<usize> = stage
-            .explain_prim(prim)
-            .expect("sources")
+        let ranks: Vec<usize> = handle
+            .sources()
             .iter()
             .map(|source| rank[&source.node])
             .collect();
@@ -233,11 +233,17 @@ fn variant_selections_report_the_strongest_opinion() {
     let season = store.tokens.intern("season");
     let summer = store.tokens.intern("summer");
     let winter = store.tokens.intern("winter");
-    let selections = stage.variant_selections(grove, &store);
-    assert_eq!(selections.get(&season), Some(&summer));
+    let selections = stage.prim(grove, &store).unwrap().variant_selections();
+    assert_eq!(
+        selections.get(store.tokens.resolve(season)),
+        Some(&store.tokens.resolve(summer))
+    );
     assert_eq!(selections.len(), 1, "one variant set is selected");
     let absent = store.path("/Absent");
-    assert!(stage.variant_selections(absent, &store).is_empty());
+    assert!(
+        stage.prim(absent, &store).is_none(),
+        "no prim selects nothing"
+    );
 
     store
         .layers
@@ -248,7 +254,11 @@ fn variant_selections_report_the_strongest_opinion() {
         .insert(season, winter);
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
     assert_eq!(
-        stage.variant_selections(grove, &store).get(&season),
-        Some(&winter)
+        stage
+            .prim(grove, &store)
+            .unwrap()
+            .variant_selections()
+            .get("season"),
+        Some(&store.tokens.resolve(winter))
     );
 }

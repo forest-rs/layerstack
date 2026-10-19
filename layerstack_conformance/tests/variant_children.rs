@@ -123,19 +123,17 @@ fn composed_prims(loaded: &LoadedStage, stage: &Stage) -> Vec<String> {
 
 fn children(loaded: &LoadedStage, stage: &Stage, prim: PathId) -> Vec<String> {
     stage
-        .children_of(prim)
-        .unwrap_or_default()
-        .iter()
-        .map(|child| {
-            let name = loaded.store.paths.resolve(*child).leaf().expect("child");
-            loaded.store.tokens.resolve(name).to_string()
-        })
+        .prim(prim, &loaded.store)
+        .into_iter()
+        .flat_map(|prim| prim.children())
+        .map(|child| child.name().to_string())
         .collect()
 }
 
 fn prim_stack(loaded: &LoadedStage, stage: &Stage, prim: PathId) -> Vec<(String, String)> {
     stage
-        .explain_prim(prim)
+        .prim(prim, &loaded.store)
+        .map(|p| p.sources())
         .expect("composed prim")
         .iter()
         .map(|key| {
@@ -193,7 +191,9 @@ fn values_match_openusd() {
     for (attr, expected) in &oracle.values {
         let property = loaded.store.property_path(attr);
         let value = stage
-            .resolve_field_path(property)
+            .view(&loaded.store)
+            .attribute(property)
+            .and_then(|a| a.authored_value(layerstack::Time::Default))
             .map(|resolved| resolved.value);
         if value != Some(Value::Int(*expected)) {
             mismatches.push(format!("{attr}: expected {expected}, got {value:?}"));

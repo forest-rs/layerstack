@@ -169,7 +169,8 @@ fn referenced_matrix_replacement_maps_namespace_and_stage_time_together() {
     let mut live = LiveStage::compose(&mut store, LayerId(1), options);
     let node = live
         .stage()
-        .explain_prim_graph(use_)
+        .prim(use_, &store)
+        .map(|p| p.composition_graph())
         .unwrap()
         .nodes()
         .find(|(_, node)| node.arc_kind() == layerstack::ArcKind::References)

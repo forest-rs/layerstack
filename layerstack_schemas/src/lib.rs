@@ -93,9 +93,9 @@
 //! and, for polygon geometry, `GeneratedMesh::prepare`.
 //! With `usd-geom`, [`GeneratedMesh::prepare`] validates complete polygon-mesh
 //! snapshots before collecting creation or update through an explicit edit target.
-//! For anything a view does not offer, resolve the property by its USD name
-//! on [`Scene::stage`]: `Stage::resolve_value_with_schema` returns the raw
-//! resolved value with its provenance.
+//! For anything a view does not offer, read the property by its USD name
+//! through the generic handle (`PrimView::prim`, then `Prim::attribute`):
+//! `Attribute::get` returns the raw resolved value with its provenance.
 //!
 //! Every view has an edit handle (`MeshEdit`) whose setters author through
 //! a [`SchemaEdit`], which collects a `Transaction` for one explicit edit

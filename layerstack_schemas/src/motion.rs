@@ -21,7 +21,7 @@ impl Scene<'_> {
         // OpenUSD: usdGeom/motionAPI.cpp, _ComputeInheritedMotionAttr.
         // AOUSD Core §12.3 and §12.3.6 govern authored values and blocks;
         // the schema's inheritance policy walks past unreadable opinions.
-        if !self.stage().has_prim(path) {
+        if self.prim(path).is_none() {
             return fallback;
         }
         let mut at = Some(path);

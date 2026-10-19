@@ -18,8 +18,8 @@ use std::sync::Arc;
 use layerstack::edit::{EditError, Rejection};
 use layerstack::{
     Address, ArcKind, AssetResolveError, AssetResolver, EditTarget, InMemoryStore, Layer, LayerId,
-    LiveStage, PathId, PathInterner, PropertyPath, ResolvedAsset, ResolvedValue, SpecPath, Stage,
-    StageOptions, Time, TokenInterner, Transaction, Value,
+    LiveStage, PathId, PathInterner, PropertyPath, ResolvedAsset, SpecPath, Stage, StageOptions,
+    Time, TokenInterner, Transaction, Value,
 };
 use layerstack_usda::{emit, lower, parser::parse_cst};
 
@@ -168,10 +168,15 @@ fn num(value: &Value) -> Probe {
     }
 }
 
-fn scalar(stage: &Stage, path: PropertyPath) -> Option<Value> {
-    match stage.resolve_property_path(path)?.value {
-        ResolvedValue::Scalar(value) => Some(value),
-        _ => None,
+fn scalar(stage: &Stage, store: &InMemoryStore, path: PropertyPath) -> Option<Value> {
+    match stage
+        .view(store)
+        .attribute(path)?
+        .authored_value(Time::Default)?
+        .value
+    {
+        Value::Dictionary(_) => None,
+        value => Some(value),
     }
 }
 
@@ -193,24 +198,28 @@ fn probe(stage: &Stage, store: &mut InMemoryStore) -> BTreeMap<String, Probe> {
         let spin = prop(store, "spin");
         let color = prop(store, "primvars:color");
         for (key, path) in [("size", size), ("roughness", roughness)] {
-            let value = scalar(stage, path).map_or(Probe::Absent, |v| num(&v));
+            let value = scalar(stage, store, path).map_or(Probe::Absent, |v| num(&v));
             out.insert(format!("{name}.{key}"), value);
         }
-        let selection = stage.variant_selections(prim, store).get(&shape).copied();
+        let selection = stage.prim(prim, &*store).and_then(|prim| {
+            prim.variant_selections()
+                .get("shape")
+                .map(|v| v.to_string())
+        });
         out.insert(
             format!("{name}.shape"),
-            selection.map_or(Probe::Absent, |v| {
-                Probe::Text(store.tokens.resolve(v).to_string())
-            }),
+            selection.map_or(Probe::Absent, Probe::Text),
         );
         for time in [2.0, 14.0] {
             // The stage default interpolation, as `UsdAttribute::Get(time)`.
             let value = stage
-                .resolve_property_path_at_time(spin, Time::at(time))
+                .view(&*store)
+                .attribute(spin)
+                .and_then(|a| a.authored_value(Time::at(time)))
                 .map_or(Probe::Absent, |r| num(&r.value));
             out.insert(format!("{name}.spin@{time}"), value);
         }
-        let color = scalar(stage, color).map_or(Probe::Absent, |value| {
+        let color = scalar(stage, store, color).map_or(Probe::Absent, |value| {
             let items = value.array_ref().expect("color array");
             match items.get(0).as_deref() {
                 Some(Value::Vec3f(c)) => {
@@ -366,7 +375,10 @@ impl Session {
 
     fn target(&self, prim: PathId, pick: impl Fn(ArcKind, LayerId) -> bool) -> EditTarget {
         let stage = self.live.stage();
-        let graph = stage.explain_prim_graph(prim).expect("graph");
+        let graph = stage
+            .prim(prim, &self.store)
+            .expect("graph")
+            .composition_graph();
         let node = graph
             .depth_first()
             .into_iter()

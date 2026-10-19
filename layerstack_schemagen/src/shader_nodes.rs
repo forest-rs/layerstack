@@ -6,8 +6,8 @@
 
 use crate::model::Model;
 use layerstack::{
-    InMemoryStore, PropertyKind, PropertyPath, PropertyType, Stage, StageOptions, TokenInterner,
-    Value, Variability,
+    InMemoryStore, PropertyKind, PropertyType, Stage, StageOptions, Time, TokenInterner, Value,
+    Variability,
 };
 use std::fmt::Write as _;
 use std::path::Path;
@@ -53,46 +53,38 @@ pub(crate) fn read_store(
             stage.composition_errors()
         ));
     }
-    let mut pending = stage.children_of(store.path("/")).unwrap_or(&[]).to_vec();
+    let view = stage.view(&*store);
+    let mut pending: Vec<_> = view.pseudo_root().into_iter().collect();
     let mut prims = Vec::new();
-    while let Some(path) = pending.pop() {
-        pending.extend_from_slice(stage.children_of(path).unwrap_or(&[]));
-        if stage.is_defined(path, store)
-            && !stage.is_abstract(path, store)
-            && stage
-                .resolve_type_name(path)
-                .is_some_and(|name| store.tokens.resolve(name) == "Shader")
-        {
-            prims.push(path);
+    while let Some(prim) = pending.pop() {
+        pending.extend(prim.children());
+        if prim.is_defined() && !prim.is_abstract() && prim.type_name() == Some("Shader") {
+            prims.push(prim);
         }
     }
-    let id_key = store.tokens.intern("info:id");
-    let doc_key = store.tokens.intern("doc");
     let mut nodes = Vec::new();
     for prim in prims {
-        let Some(Value::Token(id)) = stage
-            .resolve_field_path(PropertyPath::new(prim, id_key))
+        let Some(Value::Token(id)) = prim
+            .attribute("info:id")
+            .and_then(|id| id.authored_value(Time::Default))
             .map(|value| value.value)
         else {
             return Err("shader definition has no token info:id".into());
         };
         let id = store.tokens.resolve(id).to_owned();
         let mut ports = Vec::new();
-        for property in stage.property_names(prim, store) {
-            let name = store.tokens.resolve(property).to_owned();
+        for property in prim.properties() {
+            let name = property.name().to_owned();
             if !name.starts_with("inputs:") && !name.starts_with("outputs:") {
                 continue;
             }
-            let declared = stage
-                .resolve_property_declaration(prim, property)
+            let declared = property
+                .declaration()
                 .ok_or("shader port has no declaration")?;
             if declared.kind != PropertyKind::Attribute {
                 return Err(format!("{id}.{name}: shader port is not an attribute"));
             }
-            let doc = match stage
-                .resolve_property_metadata(prim, property, doc_key)
-                .map(|value| value.value)
-            {
+            let doc = match property.metadata("doc").map(|value| value.value) {
                 Some(layerstack::ResolvedValue::Scalar(Value::String(text))) => text.to_string(),
                 _ => String::new(),
             };
@@ -100,8 +92,9 @@ pub(crate) fn read_store(
                 name,
                 ty: declared.type_name.ok_or("shader port has no type")?,
                 variability: declared.variability,
-                default: stage
-                    .resolve_field_path(PropertyPath::new(prim, property))
+                default: property
+                    .as_attribute()
+                    .and_then(|attribute| attribute.authored_value(Time::Default))
                     .map(|value| value.value),
                 doc,
             });

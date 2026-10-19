@@ -109,10 +109,10 @@ fn bench_local_structure(c: &mut Criterion) {
                 let world = store.path("/World");
                 let names = live
                     .stage()
-                    .children_of(world)
+                    .prim(world, &store)
                     .unwrap()
-                    .iter()
-                    .map(|path| store.paths.resolve(*path).leaf().unwrap())
+                    .children()
+                    .map(|child| store.paths.resolve(child.path()).leaf().unwrap())
                     .collect();
                 let layer = store.layers.get_mut(&LayerId(1)).unwrap();
                 layer.prim_mut(world).unwrap().authored_children = names;

@@ -228,8 +228,8 @@ impl Capture<'_, '_> {
                 result.text = text(&value.value, self.scene);
                 result.provenance = self
                     .scene
-                    .stage()
-                    .read_property_with_provenance(property, self.time, |_| Some(()))
+                    .attribute(property)
+                    .and_then(|attribute| attribute.read_with_provenance(self.time, |_| Some(())))
                     .and_then(|r| r.provenance);
                 result.value = Some(value.value);
             }
@@ -247,9 +247,8 @@ impl Capture<'_, '_> {
         if self.time == Time::Default
             && self
                 .scene
-                .stage()
-                .explain_property_path(property)
-                .and_then(|o| o.iter().find_map(|o| o.value.default_value()))
+                .property(property)
+                .and_then(|p| p.opinions().iter().find_map(|o| o.value.default_value()))
                 == Some(&Value::Blocked)
         {
             result = MaterialValue::default();
@@ -327,8 +326,8 @@ impl Capture<'_, '_> {
 }
 fn blocked(scene: &Scene<'_>, property: PropertyPath, time: Time) -> bool {
     let opinions = scene
-        .stage()
-        .explain_property_path(property)
+        .property(property)
+        .map(layerstack::Property::opinions)
         .unwrap_or_default();
     let default_blocked =
         opinions.iter().find_map(|o| o.value.default_value()) == Some(&Value::Blocked);
@@ -426,7 +425,7 @@ impl MaterialNetwork {
         let mut visited = BTreeSet::new();
         let mut nodes = Vec::new();
         while let Some(path) = pending.pop() {
-            if !visited.insert(path) || !scene.stage().has_prim(path) {
+            if !visited.insert(path) || scene.prim(path).is_none() {
                 continue;
             }
             let view = PrimView::new(*scene, path);

@@ -18,7 +18,7 @@ use ::layerstack_schemas::table::{Property, Schema, SchemaTables, ValueType, fal
 use ::layerstack_schemas::{PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "What an instrument is mounted on."]
 #[doc = ""]
-#[doc = "The view of the `observatory` library's single-apply API schema `MountedOnAPI`. Get it with [`MountedOnApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of the `observatory` library's single-apply API schema `MountedOnAPI`. Get it with [`MountedOnApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc(alias = "MountedOnAPI")]
 #[allow(
     clippy::doc_markdown,
@@ -226,7 +226,7 @@ impl TelescopeTelescopeMount {
 
 #[doc = "A telescope, placed on its pier."]
 #[doc = ""]
-#[doc = "The view of the `observatory` library's concrete typed schema `Telescope`, inheriting [`::layerstack_schemas::usd_geom::Xformable`]. Construct it with [`Telescope::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of the `observatory` library's concrete typed schema `Telescope`, inheriting [`::layerstack_schemas::usd_geom::Xformable`]. Construct it with [`Telescope::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[allow(
     clippy::doc_markdown,
     clippy::too_long_first_doc_paragraph,

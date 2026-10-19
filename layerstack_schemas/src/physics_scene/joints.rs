@@ -162,7 +162,7 @@ fn limit(lower: f32, upper: f32, both: bool) -> JointLimit {
 fn target(prim: &PrimView<'_>, name: &str) -> Result<Option<PathId>, PhysicsSceneError> {
     match prim.read_targets(name).first() {
         None => Ok(None),
-        Some(TargetPath::Prim(path)) if prim.scene().stage().has_prim(*path) => Ok(Some(*path)),
+        Some(TargetPath::Prim(path)) if prim.scene().prim(*path).is_some() => Ok(Some(*path)),
         _ => Err(PhysicsSceneError::InvalidJointTarget),
     }
 }

@@ -8,8 +8,7 @@ use std::hint::black_box;
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use layerstack::{
     ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex, InMemoryStore, Layer, LayerId, PrimSpec,
-    PropertyPath, PropertySpec, PropertyType, ResolvedValue, Stage, StageOptions, SublayerEntry,
-    Time, Value,
+    PropertyPath, PropertySpec, PropertyType, Stage, StageOptions, SublayerEntry, Time, Value,
 };
 use layerstack_schemas::{Scene, usd_geom::Mesh};
 
@@ -67,12 +66,13 @@ fn arrays(c: &mut Criterion) {
             };
             let stage = Stage::compose(&mut store, LayerId(1), options);
             let property = PropertyPath::new(prim, name);
+            let points = stage.view(&store).attribute(property).unwrap();
             group.bench_function(BenchmarkId::new("resolve_scan", len), |b| {
                 b.iter(|| {
-                    let resolved = stage.resolve_property_path(black_box(property)).unwrap();
-                    let ResolvedValue::Scalar(value) = resolved.value else {
-                        panic!("points value");
-                    };
+                    let value = black_box(points)
+                        .authored_value(Time::Default)
+                        .unwrap()
+                        .value;
                     let array = value.array_ref().unwrap();
                     let points = array
                         .typed()

@@ -89,7 +89,12 @@ fn nested_writer_defaults_explicit_layers_and_resources_match_native_openusd() {
         );
         let property = loaded.store.property_path("/Root.answer");
         assert_eq!(
-            stage.resolve_field_path(property).unwrap().value,
+            stage
+                .view(&loaded.store)
+                .attribute(property)
+                .and_then(|a| a.authored_value(layerstack::Time::Default))
+                .unwrap()
+                .value,
             Value::Int(42)
         );
         if native {
@@ -229,8 +234,9 @@ fn mismatches(case: &Case) -> Vec<String> {
 
     for prim in &case.prims {
         let id = loaded.store.path(&prim.path);
-        let stack: Vec<(String, String)> = stage
-            .explain_prim(id)
+        let handle = stage.prim(id, &loaded.store);
+        let stack: Vec<(String, String)> = handle
+            .map(|prim| prim.sources())
             .unwrap_or_default()
             .iter()
             .map(|key| {
@@ -251,14 +257,10 @@ fn mismatches(case: &Case) -> Vec<String> {
                 prim.path, prim.prim_stack
             ));
         }
-        let children: Vec<String> = stage
-            .children_of(id)
-            .unwrap_or_default()
-            .iter()
-            .map(|child| {
-                let name = loaded.store.paths.resolve(*child).leaf().expect("child");
-                loaded.store.tokens.resolve(name).to_string()
-            })
+        let children: Vec<String> = handle
+            .into_iter()
+            .flat_map(|prim| prim.children())
+            .map(|child| child.name().to_string())
             .collect();
         if children != prim.children {
             out.push(format!(
@@ -271,7 +273,9 @@ fn mismatches(case: &Case) -> Vec<String> {
     for (attr, expected) in &case.values {
         let property = loaded.store.property_path(attr);
         let value = stage
-            .resolve_field_path(property)
+            .view(&loaded.store)
+            .attribute(property)
+            .and_then(|a| a.authored_value(layerstack::Time::Default))
             .map(|resolved| resolved.value);
         let expected = expected.map(Value::Double);
         if value != expected {

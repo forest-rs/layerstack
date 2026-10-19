@@ -25,7 +25,7 @@ use layerstack::{CannotApply, PathId};
 use crate::{PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "AssetPreviewsAPI supports providing thumbnail previews for assets."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `AssetPreviewsAPI`. Get it with [`AssetPreviewsApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `AssetPreviewsAPI`. Get it with [`AssetPreviewsApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdMediaAssetPreviewsAPI`."]
 #[doc(alias = "UsdMediaAssetPreviewsAPI")]
 #[doc(alias = "AssetPreviewsAPI")]
@@ -243,7 +243,7 @@ impl SpatialAudioPlaybackMode {
 
 #[doc = "Defines the properties that enable audio playback in the scene."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `SpatialAudio`, inheriting [`crate::usd_geom::Xformable`]. Construct it with [`SpatialAudio::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `SpatialAudio`, inheriting [`crate::usd_geom::Xformable`]. Construct it with [`SpatialAudio::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdMediaSpatialAudio`."]
 #[doc(alias = "UsdMediaSpatialAudio")]
 #[derive(Clone, Copy, Debug)]

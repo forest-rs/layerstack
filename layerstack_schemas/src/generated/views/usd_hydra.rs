@@ -25,7 +25,7 @@ use layerstack::{CannotApply, PathId};
 use crate::{PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "This API extends and configures the core UsdProcGenerativeProcedural schema defined within usdProc for use with hydra generative procedurals as defined within hdGp."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `HydraGenerativeProceduralAPI`. Get it with [`HydraGenerativeProceduralApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `HydraGenerativeProceduralAPI`. Get it with [`HydraGenerativeProceduralApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdHydraGenerativeProceduralAPI`."]
 #[doc(alias = "UsdHydraGenerativeProceduralAPI")]
 #[doc(alias = "HydraGenerativeProceduralAPI")]
@@ -217,7 +217,7 @@ impl HydraGenerativeProceduralApiEdit {
 
 #[doc = "Provides Hydra-specific properties for UsdRenderPass."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `HydraRenderPassAPI`. Get it with [`HydraRenderPassApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `HydraRenderPassAPI`. Get it with [`HydraRenderPassApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdHydraRenderPassAPI`."]
 #[doc(alias = "UsdHydraRenderPassAPI")]
 #[doc(alias = "HydraRenderPassAPI")]

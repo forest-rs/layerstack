@@ -175,8 +175,12 @@ fn collection_membership_matches_openusd() {
     let mut paths: Vec<TargetPath> = vec![TargetPath::Prim(root)];
     for prim in &prims {
         paths.push(TargetPath::Prim(*prim));
-        for name in stage.property_names(*prim, store) {
-            paths.push(TargetPath::Property(PropertyPath::new(*prim, name)));
+        let properties = stage
+            .prim(*prim, store)
+            .map(|prim| prim.properties())
+            .unwrap_or_default();
+        for property in properties {
+            paths.push(TargetPath::Property(property.path()));
         }
     }
     let display = |path: TargetPath| path.display(&store.paths, &store.tokens);

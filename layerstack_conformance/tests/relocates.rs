@@ -186,8 +186,9 @@ fn layer_id(loaded: &LoadedStage, name: &str) -> LayerId {
 
 fn prim_stack(loaded: &LoadedStage, stage: &Stage, prim: PathId) -> Vec<(String, String)> {
     stage
-        .explain_prim(prim)
+        .prim(prim, &loaded.store)
         .expect("composed prim")
+        .sources()
         .iter()
         .map(|key| {
             (
@@ -208,10 +209,10 @@ fn composed(loaded: &mut LoadedStage, stage: &Stage) -> Vec<(String, Vec<(String
         .filter(|prim| *prim != pseudo_root)
         .map(|prim| {
             let children: Vec<String> = stage
-                .children_of(prim)
-                .unwrap_or_default()
-                .iter()
-                .map(|child| loaded.store.paths.display(*child, &loaded.store.tokens))
+                .prim(prim, &loaded.store)
+                .into_iter()
+                .flat_map(|prim| prim.children())
+                .map(|child| child.to_string())
                 .collect();
             let path = loaded.store.paths.display(prim, &loaded.store.tokens);
             let mut stack = prim_stack(loaded, stage, prim);
@@ -262,7 +263,9 @@ fn values_match_openusd() {
     for (attr, expected) in &oracle.values {
         let property = loaded.store.property_path(attr);
         let value = stage
-            .resolve_field_path(property)
+            .view(&loaded.store)
+            .attribute(property)
+            .and_then(|a| a.authored_value(layerstack::Time::Default))
             .map(|resolved| resolved.value);
         if value != Some(Value::Int(*expected)) {
             mismatches.push(format!("{attr}: expected {expected}, got {value:?}"));
@@ -286,8 +289,9 @@ fn relationship_targets_map_through_relocates() {
     for (rel, expected) in &oracle.targets {
         let property = loaded.store.property_path(rel);
         let targets: Vec<String> = stage
-            .resolve_target_list_path(property)
-            .map(|resolved| resolved.value)
+            .view(&loaded.store)
+            .relationship(property)
+            .map(|relationship| relationship.targets())
             .unwrap_or_default()
             .iter()
             .map(|target| target.display(&loaded.store.paths, &loaded.store.tokens))
@@ -383,10 +387,14 @@ fn assert_matches_full(live: &mut LiveStage, loaded: &mut LoadedStage, oracle: &
         let property = loaded.store.property_path(attr);
         assert_eq!(
             live.stage()
-                .resolve_field_path(property)
+                .view(&loaded.store)
+                .attribute(property)
+                .and_then(|a| a.authored_value(layerstack::Time::Default))
                 .map(|resolved| resolved.value),
             fresh
-                .resolve_field_path(property)
+                .view(&loaded.store)
+                .attribute(property)
+                .and_then(|a| a.authored_value(layerstack::Time::Default))
                 .map(|resolved| resolved.value),
             "{attr}"
         );
@@ -521,7 +529,9 @@ fn opinion_edits_at_relocation_targets_and_sources_recompose_in_scope() {
         let attr = loaded.store.property_path(attr);
         assert_eq!(
             live.stage()
-                .resolve_field_path(attr)
+                .view(&loaded.store)
+                .attribute(attr)
+                .and_then(|a| a.authored_value(layerstack::Time::Default))
                 .map(|resolved| resolved.value),
             Some(Value::Int(42))
         );
@@ -550,7 +560,7 @@ fn relocates_edits_rebuild_the_stage() {
     live.notify_relocates_edit(root_layer);
     let updated = live.recompose(&mut loaded.store);
     assert!(updated.contains(&wrist));
-    assert!(live.stage().has_prim(wrist));
+    assert!(live.stage().prim(wrist, &loaded.store).is_some());
     assert_matches_full(&mut live, &mut loaded, &oracle);
 
     // Move the kit's gear somewhere else, through the reference.
@@ -571,7 +581,7 @@ fn relocates_edits_rebuild_the_stage() {
     live.notify_relocates_edit(kit);
     live.recompose(&mut loaded.store);
     let cog = loaded.store.path("/Crate/Cog");
-    assert!(live.stage().has_prim(cog));
+    assert!(live.stage().prim(cog, &loaded.store).is_some());
     assert_matches_full(&mut live, &mut loaded, &oracle);
 
     // A layer no composed layer stack holds relocates nothing here.
@@ -609,8 +619,8 @@ fn switching_variants_applies_only_the_selected_branch_relocates() {
     let chip = loaded.store.path("/Pebble/Chip");
     let flake = loaded.store.path("/Pebble/Flake");
     let cut = loaded.store.tokens.intern("cut");
-    assert!(live.stage().has_prim(chip));
-    assert!(!live.stage().has_prim(flake));
+    assert!(live.stage().prim(chip, &loaded.store).is_some());
+    assert!(!live.stage().prim(flake, &loaded.store).is_some());
 
     for (selection, present, absent) in [("moved", flake, chip), ("plain", chip, flake)] {
         let selection = loaded.store.tokens.intern(selection);
@@ -624,8 +634,8 @@ fn switching_variants_applies_only_the_selected_branch_relocates() {
             .insert(cut, selection);
         live.notify_layer_prim_edits(root_layer, &[pebble]);
         live.recompose(&mut loaded.store);
-        assert!(live.stage().has_prim(present));
-        assert!(!live.stage().has_prim(absent));
+        assert!(live.stage().prim(present, &loaded.store).is_some());
+        assert!(!live.stage().prim(absent, &loaded.store).is_some());
         assert_matches_full(&mut live, &mut loaded, &oracle);
     }
 }

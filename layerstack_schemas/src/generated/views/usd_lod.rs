@@ -25,7 +25,7 @@ use layerstack::{CannotApply, PathId};
 use crate::{PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "This LOD heuristic selects LOD children on the basis of distance from the view point to the LOD root."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `LODDistanceHeuristic`, inheriting [`LODHeuristic`]. Construct it with [`LODDistanceHeuristic::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `LODDistanceHeuristic`, inheriting [`LODHeuristic`]. Construct it with [`LODDistanceHeuristic::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLodDistanceHeuristic`."]
 #[doc(alias = "UsdLodDistanceHeuristic")]
 #[derive(Clone, Copy, Debug)]
@@ -339,7 +339,7 @@ impl LODDistanceHeuristicEdit {
 
 #[doc = "Base class for LOD Heuristics."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's abstract typed schema `LODHeuristic`, inheriting [`crate::usd::Typed`]. Construct it with [`LODHeuristic::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's abstract typed schema `LODHeuristic`, inheriting [`crate::usd::Typed`]. Construct it with [`LODHeuristic::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLodHeuristic`."]
 #[doc(alias = "UsdLodHeuristic")]
 #[derive(Clone, Copy, Debug)]
@@ -512,7 +512,7 @@ impl LODOverrideApiLodOverrideMode {
 
 #[doc = "API for overriding Level of Detail (LOD) choices."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `LODOverrideAPI`. Get it with [`LODOverrideApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `LODOverrideAPI`. Get it with [`LODOverrideApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLodOverrideAPI`."]
 #[doc(alias = "UsdLodOverrideAPI")]
 #[doc(alias = "LODOverrideAPI")]
@@ -711,7 +711,7 @@ impl LODOverrideApiEdit {
 
 #[doc = "API for configuring Level of Detail (LOD) facilities on a prim."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `LODRootAPI`. Get it with [`LODRootApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `LODRootAPI`. Get it with [`LODRootApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLodRootAPI`."]
 #[doc(alias = "UsdLodRootAPI")]
 #[doc(alias = "LODRootAPI")]
@@ -956,7 +956,7 @@ impl LODScreenSizeHeuristicProjectionMethod {
 
 #[doc = "This LOD heuristic selects LOD children on the basis of the fraction of the viewplane would be covered by the extent."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `LODScreenSizeHeuristic`, inheriting [`LODHeuristic`]. Construct it with [`LODScreenSizeHeuristic::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `LODScreenSizeHeuristic`, inheriting [`LODHeuristic`]. Construct it with [`LODScreenSizeHeuristic::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLodScreenSizeHeuristic`."]
 #[doc(alias = "UsdLodScreenSizeHeuristic")]
 #[derive(Clone, Copy, Debug)]

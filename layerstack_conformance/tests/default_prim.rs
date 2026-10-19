@@ -28,6 +28,28 @@ use layerstack_conformance::{
 };
 use serde::Deserialize;
 
+/// The composed (active) children of the prim at `path`.
+fn children_of(stage: &Stage, store: &layerstack::InMemoryStore, path: PathId) -> Vec<PathId> {
+    stage
+        .prim(path, store)
+        .map(|prim| prim.children().map(|child| child.path()).collect())
+        .unwrap_or_default()
+}
+
+/// The value opinions author for the attribute at `path` at `time`,
+/// without a schema fallback.
+fn authored(
+    stage: &Stage,
+    store: &layerstack::InMemoryStore,
+    path: PropertyPath,
+    time: layerstack::Time,
+) -> Option<layerstack::Resolved<Value>> {
+    stage
+        .view(store)
+        .attribute(path)
+        .and_then(|attribute| attribute.authored_value(time))
+}
+
 const VECTORS: &str = include_str!("data/default_prim.json");
 
 #[derive(Deserialize)]
@@ -165,9 +187,7 @@ fn default_prim_arcs_match_openusd() {
 
         for prim in &vectors.prims {
             let id = loaded.store.path(&prim.path);
-            let children: Vec<String> = stage
-                .children_of(id)
-                .unwrap_or(&[])
+            let children: Vec<String> = children_of(&stage, &loaded.store, id)
                 .iter()
                 .map(|child| {
                     let leaf = loaded.store.paths.resolve(*child).leaf().expect("name");
@@ -180,7 +200,8 @@ fn default_prim_arcs_match_openusd() {
                 prim.path
             );
             let prim_stack: Vec<(String, String)> = stage
-                .prim_stack(id)
+                .prim(id, &loaded.store)
+                .map(|prim| prim.prim_stack())
                 .expect("composed prim")
                 .into_iter()
                 .map(|(layer, spec)| {
@@ -199,8 +220,7 @@ fn default_prim_arcs_match_openusd() {
 
         for (attr, expected) in &vectors.values {
             let property = loaded.store.property_path(attr);
-            let value = stage
-                .resolve_field_path(property)
+            let value = authored(&stage, &loaded.store, property, layerstack::Time::Default)
                 .map(|resolved| resolved.value);
             assert_eq!(
                 value,
@@ -258,11 +278,15 @@ fn placements_do_not_copy_other_root_prims() {
             "/PlacementA/Model",
         ] {
             let id = loaded.store.path(path);
-            assert!(!stage.has_prim(id), "{format}: {path} is not composed");
+            assert!(
+                stage.prim(id, &loaded.store).is_none(),
+                "{format}: {path} is not composed"
+            );
         }
         let placement = loaded.store.path("/PlacementA");
         let sources: Vec<String> = stage
-            .prim_stack(placement)
+            .prim(placement, &loaded.store)
+            .map(|prim| prim.prim_stack())
             .expect("composed")
             .into_iter()
             .map(|(layer, spec)| {
@@ -290,7 +314,9 @@ fn values_resolve_through_the_selected_default_prim() {
     };
     let a = size(&mut loaded, "/PlacementA");
     let b = size(&mut loaded, "/PlacementB");
-    let resolved = |property| stage.resolve_field_path(property).map(|r| r.value);
+    let resolved = |property| {
+        authored(&stage, &loaded.store, property, layerstack::Time::Default).map(|r| r.value)
+    };
     assert_eq!(resolved(a), Some(Value::Double(2.0)), "from the asset");
     assert_eq!(resolved(b), Some(Value::Double(3.0)), "local opinion wins");
 }

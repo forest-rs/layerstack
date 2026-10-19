@@ -29,7 +29,7 @@ fn snapshot(stage: &Stage, store: &mut InMemoryStore) -> Json {
     json!({"prims": names(stage.traverse_all(root).filter(|p| *p != root), store),
         "loadable": names(stage.loadable_paths(root, store), store),
         "loaded": names(stage.loaded_payload_paths(store), store),
-        "tint": stage.resolve_field_path(tint).map(|r| match r.value {layerstack::Value::Int(i)=>i,_=>panic!("int tint")})})
+        "tint": stage.view(&*store).attribute(tint).and_then(|a| a.authored_value(layerstack::Time::Default)).map(|r| match r.value {layerstack::Value::Int(i)=>i,_=>panic!("int tint")})})
 }
 #[test]
 fn controls_match_openusd_and_preserve_other_stage_snapshots() {
@@ -59,12 +59,17 @@ fn controls_match_openusd_and_preserve_other_stage_snapshots() {
     let other_child = store.path("/Other/Child");
     let reference = store.path("/Reference");
     let mut actual = vec![snapshot(live.stage(), &mut store)];
-    assert!(!live.stage().has_prim(nested));
+    assert!(live.stage().prim(nested, &store).is_none());
     live.load(&store, world, LoadPolicy::WithoutDescendants);
     live.synchronize(&mut store);
     actual.push(snapshot(live.stage(), &mut store));
-    assert!(live.stage().has_prim(nested));
-    assert!(!live.stage().has_prim(store.path("/World/Nested/Leaf")));
+    assert!(live.stage().prim(nested, &store).is_some());
+    assert!(
+        !live
+            .stage()
+            .prim(store.path("/World/Nested/Leaf"), &store)
+            .is_some()
+    );
     live.load(&store, nested, LoadPolicy::WithDescendants);
     live.synchronize(&mut store);
     actual.push(snapshot(live.stage(), &mut store));
@@ -188,12 +193,14 @@ fn population_masks_select_subtrees_ancestors_and_empty_namespace() {
             ..StageOptions::default()
         },
     );
-    assert!(stage.has_prim(geometry));
+    assert!(stage.prim(geometry, &store).is_some());
     assert!(
-        stage.has_prim(store.path("/World/Nested/Leaf")),
+        stage
+            .prim(store.path("/World/Nested/Leaf"), &store)
+            .is_some(),
         "all descendants selected"
     );
-    assert!(!stage.has_prim(store.path("/Other")));
+    assert!(stage.prim(store.path("/Other"), &store).is_none());
     let empty = Stage::compose(
         &mut store,
         loaded.root_layer,
@@ -213,7 +220,10 @@ fn population_masks_select_subtrees_ancestors_and_empty_namespace() {
             ..StageOptions::default()
         },
     );
-    assert!(all.has_prim(store.path("/Reference/Nested/Leaf")));
+    assert!(
+        all.prim(store.path("/Reference/Nested/Leaf"), &store)
+            .is_some()
+    );
 }
 
 #[test]
@@ -274,12 +284,17 @@ fn inactive_roots_remain_inspectable_and_stage_inventories_ignore_host_residency
     store.insert_layer(layerstack::Layer::new(LayerId(99)));
     let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
     let stage = live.stage();
-    assert!(stage.has_prim(a));
-    assert!(!stage.is_active(a));
-    assert!(!stage.has_prim(child));
-    assert!(!stage.is_loaded(a, &store.paths));
+    assert!(stage.prim(a, &store).is_some());
+    assert!(!stage.prim(a, &store).is_some_and(|p| p.is_active()));
+    assert!(stage.prim(child, &store).is_none());
+    assert!(!stage.prim(a, &store).is_some_and(|p| p.is_loaded()));
     assert_eq!(
-        stage.resolve_field(a, value).unwrap().value,
+        stage
+            .prim(a, &store)
+            .and_then(|p| p.metadata(value))
+            .and_then(layerstack::Resolved::into_value)
+            .unwrap()
+            .value,
         layerstack::Value::Int(17)
     );
     assert_eq!(
@@ -299,11 +314,29 @@ fn inactive_roots_remain_inspectable_and_stage_inventories_ignore_host_residency
         vec!["/", "/B", "/Class", "/Class/Child", "/Over", "/Over/Child"]
     );
     assert_eq!(
-        names(stage.traverse_default(root, &store), &store),
+        names(
+            stage.prim_range(
+                root,
+                &store,
+                layerstack::PrimPredicate {
+                    instance_proxies: true,
+                    ..layerstack::PrimPredicate::DEFAULT
+                }
+            ),
+            &store
+        ),
         vec!["/", "/B"]
     );
-    assert!(!stage.is_defined(undef_child, &store));
-    assert!(stage.is_abstract(abstract_child, &store));
+    assert!(
+        !stage
+            .prim(undef_child, &store)
+            .is_some_and(|p| p.is_defined())
+    );
+    assert!(
+        stage
+            .prim(abstract_child, &store)
+            .is_some_and(|p| p.is_abstract())
+    );
     assert_eq!(stage.traverse(store.path("/Missing")).count(), 0);
     assert_eq!(stage.layer_stack(), &[LayerId(1)]);
     assert_eq!(stage.used_layers(false), [LayerId(1)].into_iter().collect());
@@ -315,10 +348,10 @@ fn inactive_roots_remain_inspectable_and_stage_inventories_ignore_host_residency
         .map(|p| {
             json!([
                 store.paths.resolve(p).display(&store.tokens),
-                stage.is_active(p),
-                stage.is_loaded(p, &store.paths),
-                stage.is_defined(p, &store),
-                stage.is_abstract(p, &store),
+                stage.prim(p, &store).is_some_and(|p| p.is_active()),
+                stage.prim(p, &store).is_some_and(|p| p.is_loaded()),
+                stage.prim(p, &store).is_some_and(|p| p.is_defined()),
+                stage.prim(p, &store).is_some_and(|p| p.is_abstract()),
             ])
         })
         .collect();
@@ -377,8 +410,8 @@ print(json.dumps([[str(p.GetPath()),p.IsActive(),p.IsLoaded(),p.IsDefined(),p.Is
         .active = Some(true);
     live.notify_structural_change();
     live.synchronize(&mut store);
-    assert!(live.stage().has_prim(child));
-    assert!(live.stage().is_active(a));
+    assert!(live.stage().prim(child, &store).is_some());
+    assert!(live.stage().prim(a, &store).is_some_and(|p| p.is_active()));
 }
 
 #[test]
@@ -398,9 +431,9 @@ fn inactive_payload_is_inspectable_but_not_loadable() {
                 ..StageOptions::default()
             },
         );
-        assert!(stage.has_prim(a));
-        assert!(!stage.is_active(a));
-        assert!(!stage.is_loaded(a, &store.paths));
+        assert!(stage.prim(a, &store).is_some());
+        assert!(!stage.prim(a, &store).is_some_and(|p| p.is_active()));
+        assert!(!stage.prim(a, &store).is_some_and(|p| p.is_loaded()));
         assert!(stage.loadable_paths(root, &store).is_empty());
         assert_eq!(
             stage.loaded_payload_paths(&store),
@@ -450,12 +483,18 @@ fn all_children_never_restore_removed_relocation_sources() {
         .unwrap()
         .active = Some(false);
     let stage = Stage::compose(&mut store, loaded.root_layer, StageOptions::default());
-    assert!(stage.has_prim(plot));
-    assert!(!stage.is_active(plot));
+    assert!(stage.prim(plot, &store).is_some());
+    assert!(!stage.prim(plot, &store).is_some_and(|p| p.is_active()));
     for parent in stage.traverse_all(store.paths.lookup(&Path::root()).unwrap()) {
-        for child in stage.all_children_of(parent).unwrap_or(&[]) {
+        let children: Vec<_> = stage
+            .prim(parent, &store)
+            .into_iter()
+            .flat_map(|p| p.all_children())
+            .map(|c| c.path())
+            .collect();
+        for child in &children {
             assert!(
-                stage.has_prim(*child),
+                stage.prim(*child, &store).is_some(),
                 "all children includes absent {} under {}",
                 store.paths.resolve(*child).display(&store.tokens),
                 store.paths.resolve(parent).display(&store.tokens)

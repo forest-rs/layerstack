@@ -71,7 +71,7 @@ impl ArcKind {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct OpinionKey {
     /// The node of the prim's [`PrimIndexGraph`] this opinion belongs to
-    /// (see [`crate::Stage::explain_prim_graph`]).
+    /// (see [`crate::Prim::composition_graph`]).
     pub node: NodeId,
     /// Strength position within the node's layer stack (0 is strongest).
     pub layer_strength: u16,

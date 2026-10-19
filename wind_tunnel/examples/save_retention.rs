@@ -81,34 +81,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "phase,wall_us,encoded_bytes,cached_native_bytes,decode_attempts,old_cached_native_bytes,rss_kib,generation"
     );
     report(&document, root_layer, &old, "open", started);
-    let properties: Vec<_> = document
+    let view = document.view();
+    let properties: Vec<PropertyPath> = document
         .stage()
         .stage()
         .traverse_all(root)
-        .flat_map(|prim| {
-            document
-                .stage()
-                .stage()
-                .property_names(prim, document.store())
-                .into_iter()
-                .map(move |name| PropertyPath::new(prim, name))
-        })
-        .filter(|p| {
-            document
-                .stage()
-                .stage()
-                .resolve_property_declaration(p.prim_path(), p.property())
+        .filter_map(|prim| view.prim(prim))
+        .flat_map(|prim| prim.properties())
+        .filter(|property| {
+            property
+                .declaration()
                 .is_some_and(|d| d.type_name.is_some_and(|t| t.is_array()))
         })
+        .map(|property| property.path())
+        .collect();
+    let attributes: Vec<_> = properties
+        .iter()
+        .filter_map(|property| view.attribute(*property))
         .collect();
     let started = Instant::now();
-    for &property in &properties {
-        black_box(
-            document
-                .stage()
-                .stage()
-                .try_resolve_property_path_at_time(property, Time::at(5.))?,
-        );
+    for attribute in &attributes {
+        black_box(attribute.try_read(Time::at(5.), |_| Some(()))?);
     }
     report(&document, root_layer, &old, "warm_all", started);
     let mut snapshot = keep_snapshot.then(|| document.store().snapshot());
@@ -176,14 +169,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "document releases old numeric sources"
         );
     }
+    let view = document.view();
+    let attributes: Vec<_> = properties
+        .iter()
+        .filter_map(|property| view.attribute(*property))
+        .collect();
     let started = Instant::now();
-    for &property in &properties {
-        black_box(
-            document
-                .stage()
-                .stage()
-                .try_resolve_property_path_at_time(property, Time::at(5.))?,
-        );
+    for attribute in &attributes {
+        black_box(attribute.try_read(Time::at(5.), |_| Some(()))?);
     }
     report(&document, root_layer, &old, "requery_all", started);
     let started = Instant::now();

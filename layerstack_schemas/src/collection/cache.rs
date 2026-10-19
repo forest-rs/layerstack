@@ -187,7 +187,7 @@ impl MembershipCache {
         {
             return Err(MembershipCacheError::InvalidName(key.name.clone()));
         }
-        if !scene.stage().has_prim(key.owner) {
+        if scene.prim(key.owner).is_none() {
             self.held.remove(key);
             return Err(MembershipCacheError::MissingPrim(key.owner));
         }
@@ -286,7 +286,7 @@ impl MembershipCache {
         let tokens = scene.store().tokens();
         self.held.retain(|key, held| {
             self.stats.routed += 1;
-            if structural && !scene.stage().has_prim(key.owner) {
+            if structural && scene.prim(key.owner).is_none() {
                 return false;
             }
             let was_dirty = held.query_dirty || held.decisions_dirty;

@@ -39,12 +39,13 @@ fn graph_storage(c: &mut Criterion) {
             stage.composition_errors().is_empty(),
             "fixture composes completely"
         );
+        let target_prim = stage.prim(target, &store).unwrap();
         assert_eq!(
-            stage.children_of(target).unwrap().len(),
+            target_prim.children().len(),
             128,
             "all sparse children are populated"
         );
-        let graph = stage.explain_prim_graph(target).unwrap();
+        let graph = target_prim.composition_graph();
         assert_eq!(
             graph.len(),
             arcs + 1,
@@ -158,7 +159,9 @@ fn layer_dependencies(c: &mut Criterion) {
                     "sharing preserves every dependency edge"
                 );
                 assert_eq!(
-                    stage.authored_property_names(paths[0], &store).len(),
+                    stage
+                        .prim(paths[0], &store)
+                        .map_or(0, |prim| prim.authored_property_names().len()),
                     properties,
                     "every transform property composes"
                 );

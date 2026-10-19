@@ -160,7 +160,8 @@ fn prim_stacks(loaded: &mut LoadedStage, stage: &Stage) -> BTreeMap<String, Vec<
         .filter(|prim| *prim != pseudo_root)
         .map(|prim| {
             let stack = stage
-                .explain_prim(prim)
+                .prim(prim, &loaded.store)
+                .map(|p| p.sources())
                 .expect("composed prim")
                 .iter()
                 .map(|key| {
@@ -213,7 +214,9 @@ fn values_match_openusd() {
     for (attr, expected) in &oracle.values {
         let property = loaded.store.property_path(attr);
         let value = stage
-            .resolve_field_path(property)
+            .view(&loaded.store)
+            .attribute(property)
+            .and_then(|a| a.authored_value(layerstack::Time::Default))
             .map(|resolved| resolved.value);
         if value != Some(Value::Int(*expected)) {
             mismatches.push(format!("{attr}: expected {expected}, got {value:?}"));
@@ -361,7 +364,9 @@ fn live_stage_recomposes_edited_variables() {
     let meadow = loaded.store.property_path("/Meadow.bloom");
     assert_eq!(
         live.stage()
-            .resolve_field_path(meadow)
+            .view(&loaded.store)
+            .attribute(meadow)
+            .and_then(|a| a.authored_value(layerstack::Time::Default))
             .map(|resolved| resolved.value),
         Some(Value::Int(0))
     );
@@ -477,12 +482,14 @@ fn live_stage_recomposes_referenced_sublayers() {
     let root = loaded.root_layer;
     let mut live = LiveStage::compose(&mut loaded.store, root, options());
     let shade = loaded.store.property_path("/Canvas.shade");
-    let value = |stage: &Stage| {
+    let value = |stage: &Stage, store: &layerstack::InMemoryStore| {
         stage
-            .resolve_field_path(shade)
+            .view(store)
+            .attribute(shade)
+            .and_then(|a| a.authored_value(layerstack::Time::Default))
             .map(|resolved| resolved.value)
     };
-    assert_eq!(value(live.stage()), Some(Value::Int(2)));
+    assert_eq!(value(live.stage(), &loaded.store), Some(Value::Int(2)));
 
     // The project now sets COLOR to red, as the asset does.
     let field = loaded.store.tokens.intern("expressionVariables");
@@ -517,8 +524,8 @@ fn live_stage_recomposes_referenced_sublayers() {
     live.notify_expression_variables_edit(&loaded.store, root);
     assert!(!live.recompose(&mut loaded.store).is_empty());
     let full = Stage::compose(&mut loaded.store, root, options());
-    assert_eq!(value(live.stage()), Some(Value::Int(1)));
-    assert_eq!(value(&full), Some(Value::Int(1)));
+    assert_eq!(value(live.stage(), &loaded.store), Some(Value::Int(1)));
+    assert_eq!(value(&full, &loaded.store), Some(Value::Int(1)));
     assert_eq!(
         prim_stacks(&mut loaded, live.stage()),
         prim_stacks(&mut loaded, &full)

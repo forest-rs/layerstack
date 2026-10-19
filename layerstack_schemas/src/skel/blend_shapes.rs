@@ -205,8 +205,11 @@ impl BlendShapeQuery {
                     .unwrap_or_default(),
                 },
             ];
-            for token in scene.stage().authored_property_names(path, scene.store()) {
-                let name = scene.store().tokens().resolve(token);
+            let names = scene
+                .prim(path)
+                .map(layerstack::Prim::authored_property_names)
+                .unwrap_or_default();
+            for name in names {
                 if !name.starts_with("inbetweens:") || name.ends_with(":normalOffsets") {
                     continue;
                 }

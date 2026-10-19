@@ -9,8 +9,8 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use layerstack::{
-    FieldValue, LayerId, LayerStore, ListOp, Path, PathId, PrimSpec, PropertyKind, PropertyPath,
-    PropertySpec, Specifier, TokenId, Value,
+    FieldValue, LayerId, LayerStore, ListOp, Path, PathId, PrimSpec, PropertyKind, PropertySpec,
+    Specifier, TokenId, Value,
 };
 
 use super::names::{
@@ -363,7 +363,7 @@ impl<'s> Parser<'s> {
         let direct = inherits.apply_to(&[]);
         all.extend(direct.iter().copied());
         for base in direct {
-            if self.stage.stage().has_prim(base) {
+            if self.stage.view().prim(base).is_some() {
                 self.collect_inherits(base, all, seen);
             }
         }
@@ -425,7 +425,7 @@ impl<'s> Parser<'s> {
         let Some(spec) = self.spec(layer, path) else {
             return Ok(None);
         };
-        if spec.specifier != Some(Specifier::Class) || !self.stage.stage().has_prim(path) {
+        if spec.specifier != Some(Specifier::Class) || self.stage.view().prim(path).is_none() {
             return Ok(None);
         }
         let shown = self.display(path);
@@ -479,18 +479,18 @@ impl<'s> Parser<'s> {
         {
             return Err(schema_error(Rule::ApiSchemasNotPrepended));
         }
-        let mut all_applied_api_schemas: Vec<String> = self
+        let mut all_applied_api_schemas: Vec<String> = match self
             .stage
-            .stage()
-            .resolve_token_list(path, self.api_schemas)
-            .map(|resolved| {
-                resolved
-                    .value
-                    .iter()
-                    .map(|&t| self.text(t).to_owned())
-                    .collect()
-            })
-            .unwrap_or_default();
+            .view()
+            .prim(path)
+            .and_then(|prim| prim.metadata(self.api_schemas))
+            .map(|resolved| resolved.value)
+        {
+            Some(layerstack::ResolvedValue::TokenList(applied)) => {
+                applied.iter().map(|&t| self.text(t).to_owned()).collect()
+            }
+            _ => Vec::new(),
+        };
 
         // A class does not inherit its parent's type name.
         let mut type_name = type_name;
@@ -783,14 +783,19 @@ impl<'s> Parser<'s> {
     /// strongest spec is an API schema override, which every weaker spec
     /// must also be.
     fn override_names(&self, class: &ClassInfo) -> Result<Vec<String>, CompileError> {
-        let stage = self.stage.stage();
         let mut names = Vec::new();
-        for property in stage.authored_property_names(class.path, self.store) {
-            let path = PropertyPath::new(class.path, property);
-            let Some(opinions) = stage.explain_property_path(path) else {
-                continue;
-            };
-            let mut specs = opinions.iter().filter_map(|op| op.value.as_property());
+        let properties = self
+            .stage
+            .view()
+            .prim(class.path)
+            .map(layerstack::Prim::authored_properties)
+            .unwrap_or_default();
+        for handle in properties {
+            let (path, property) = (handle.path(), handle.path().property());
+            let mut specs = handle
+                .opinions()
+                .iter()
+                .filter_map(|op| op.value.as_property());
             let is_override = |spec: &PropertySpec| match spec.metadata(self.custom_data) {
                 Some(FieldValue::Value(Value::Dictionary(entries))) => {
                     dict_get(entries, "apiSchemaOverride")

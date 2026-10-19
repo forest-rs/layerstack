@@ -51,18 +51,23 @@ fn assert_fresh(store: &mut InMemoryStore, live: &LiveStage) {
     );
     for p in actual {
         assert_eq!(
-            live.stage().children_of(p),
-            full.children_of(p),
+            live.stage()
+                .prim(p, &*store)
+                .map(|p| p.children().map(|c| c.path()).collect::<Vec<_>>()),
+            full.prim(p, &*store)
+                .map(|p| p.children().map(|c| c.path()).collect::<Vec<_>>()),
             "children at {p:?}"
         );
         assert_eq!(
-            live.stage().variant_selections(p, store),
-            full.variant_selections(p, store),
+            live.stage()
+                .prim(p, &*store)
+                .map(|prim| prim.variant_selections()),
+            full.prim(p, &*store).map(|prim| prim.variant_selections()),
             "selections at {p:?}"
         );
         assert_eq!(
-            live.stage().prim_stack(p),
-            full.prim_stack(p),
+            live.stage().prim(p, &*store).map(|p| p.prim_stack()),
+            full.prim(p, &*store).map(|p| p.prim_stack()),
             "source provenance at {p:?}"
         );
     }
@@ -92,8 +97,8 @@ fn clients_consume_shared_structure_independently_and_discovery_stays_bounded() 
     let mut cursor_b = b.change_cursor();
     let applied = a.apply(&mut store, &edit).unwrap();
     assert!(!a.recomposition_work().full_rebuild);
-    assert!(a.stage().has_prim(child) && a.stage().has_prim(copy));
-    assert!(!b.stage().has_prim(child));
+    assert!(a.stage().prim(child, &store).is_some() && a.stage().prim(copy, &store).is_some());
+    assert!(!b.stage().prim(child, &store).is_some());
     b.synchronize(&mut store);
     assert!(!b.recomposition_work().full_rebuild);
     for live in [&a, &b] {
@@ -106,7 +111,7 @@ fn clients_consume_shared_structure_independently_and_discovery_stays_bounded() 
     a.apply(&mut store, &applied.inverse).unwrap();
     b.synchronize(&mut store);
     assert!(!a.recomposition_work().full_rebuild && !b.recomposition_work().full_rebuild);
-    assert!(!a.stage().has_prim(child) && !b.stage().has_prim(copy));
+    assert!(!a.stage().prim(child, &store).is_some() && !b.stage().prim(copy, &store).is_some());
     assert_fresh(&mut store, &a);
     assert_fresh(&mut store, &b);
     b.synchronize(&mut store);
@@ -215,7 +220,10 @@ fn shared_variants_propagate_through_references_classes_and_specializes() {
         "/Inherited/VariantChild",
         "/Specialized/VariantChild",
     ] {
-        assert!(live.stage().has_prim(store.path(path)), "{path}");
+        assert!(
+            live.stage().prim(store.path(path), &store).is_some(),
+            "{path}"
+        );
     }
     inverse.apply(&mut store).unwrap();
     live.synchronize(&mut store);
@@ -256,7 +264,12 @@ fn precise_value_notifications_do_not_rediscover_the_wide_scene() {
     );
     let copy = store.property_path("/Copy.exposure");
     assert_eq!(
-        live.stage().resolve_field_path(copy).unwrap().value,
+        live.stage()
+            .view(&store)
+            .attribute(copy)
+            .and_then(|a| a.authored_value(layerstack::Time::Default))
+            .unwrap()
+            .value,
         layerstack::Value::Double(2.0)
     );
     assert_fresh(&mut store, &live);
@@ -281,10 +294,10 @@ fn deleting_descendants_prunes_only_empty_implicit_ancestors() {
         live.synchronize(&mut store);
         assert!(!live.recomposition_work().full_rebuild);
         assert_fresh(&mut store, &live);
-        assert!(live.stage().has_prim(unrelated));
+        assert!(live.stage().prim(unrelated, &store).is_some());
     }
-    assert!(!live.stage().has_prim(store.path("/A")));
-    assert!(!live.stage().has_prim(store.path("/A/B")));
+    assert!(!live.stage().prim(store.path("/A"), &store).is_some());
+    assert!(!live.stage().prim(store.path("/A/B"), &store).is_some());
 }
 
 #[test]
@@ -317,8 +330,8 @@ fn recreated_layer_with_equal_generations_does_not_reuse_departed_namespace() {
     store.insert_layer(replacement);
     live.synchronize(&mut store);
     assert!(live.recomposition_work().full_rebuild);
-    assert!(live.stage().has_prim(store.path("/Host/New")));
-    assert!(!live.stage().has_prim(store.path("/Host/Old")));
+    assert!(live.stage().prim(store.path("/Host/New"), &store).is_some());
+    assert!(!live.stage().prim(store.path("/Host/Old"), &store).is_some());
     assert_fresh(&mut store, &live);
 }
 
@@ -360,7 +373,7 @@ fn value_transactions_consume_pending_source_deltas() {
         .insert_prim(new, PrimSpec::def());
     live.notify_changed_layers(&store);
     live.apply(&mut store, &edit).unwrap();
-    assert!(live.stage().has_prim(store.path("/Host/New")));
+    assert!(live.stage().prim(store.path("/Host/New"), &store).is_some());
     assert_fresh(&mut store, &live);
     live.apply(&mut store, &edit).unwrap();
     assert_eq!(
@@ -405,7 +418,16 @@ fn newly_composed_stacks_receive_relocation_notifications() {
     live.notify_relocates_edit(LayerId(2));
     live.recompose(&mut store);
     assert!(live.recomposition_work().full_rebuild);
-    assert!(live.stage().has_prim(store.path("/Host/Renamed")));
-    assert!(!live.stage().has_prim(store.path("/Host/Child")));
+    assert!(
+        live.stage()
+            .prim(store.path("/Host/Renamed"), &store)
+            .is_some()
+    );
+    assert!(
+        !live
+            .stage()
+            .prim(store.path("/Host/Child"), &store)
+            .is_some()
+    );
     assert_fresh(&mut store, &live);
 }

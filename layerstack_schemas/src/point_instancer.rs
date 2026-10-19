@@ -646,7 +646,7 @@ impl PointInstancer<'_> {
                 let TargetPath::Prim(path) = target else {
                     return Err(PointInstancerError::InvalidPrototypes);
                 };
-                if !self.scene().stage().has_prim(path) {
+                if self.scene().prim(path).is_none() {
                     return Err(PointInstancerError::InvalidPrototype(path));
                 }
                 let transform = crate::usd_geom::Xformable::new(&self.scene(), path)

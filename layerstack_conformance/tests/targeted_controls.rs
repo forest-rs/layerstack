@@ -64,18 +64,24 @@ fn assert_full(store: &mut InMemoryStore, live: &LiveStage) {
     );
     for p in paths(&full) {
         assert_eq!(
-            live.stage().children_of(p),
-            full.children_of(p),
+            live.stage()
+                .prim(p, &*store)
+                .map(|p| p.children().map(|c| c.path()).collect::<Vec<_>>()),
+            full.prim(p, &*store)
+                .map(|p| p.children().map(|c| c.path()).collect::<Vec<_>>()),
             "active child order at {p:?}"
         );
         assert_eq!(
-            live.stage().all_children_of(p),
-            full.all_children_of(p),
+            live.stage()
+                .prim(p, &*store)
+                .map(|p| p.all_children().map(|c| c.path()).collect::<Vec<_>>()),
+            full.prim(p, &*store)
+                .map(|p| p.all_children().map(|c| c.path()).collect::<Vec<_>>()),
             "all child order at {p:?}"
         );
         assert_eq!(
-            live.stage().is_loaded(p, &store.paths),
-            full.is_loaded(p, &store.paths),
+            live.stage().prim(p, &*store).is_some_and(|p| p.is_loaded()),
+            full.prim(p, &*store).is_some_and(|p| p.is_loaded()),
             "effective loading at {p:?}"
         );
     }
@@ -140,7 +146,7 @@ fn payload_and_external_mute_deltas_match_full_recomposition() {
             );
             assert!(!changes.resynced.contains(&unrelated));
             assert!(!changes.created.contains(&unrelated));
-            assert!(live.stage().has_prim(copy));
+            assert!(live.stage().prim(copy, &store).is_some());
             assert_full(&mut store, &live);
         }
         live.unload(&store, host);
@@ -204,7 +210,12 @@ fn control_recomposition_never_acknowledges_unincorporated_source_edits() {
     live.recompose_changes(&mut store); // Deliberately did not notify first.
     assert!(live.recomposition_work().full_rebuild);
     assert_eq!(
-        live.stage().resolve_field_path(property).unwrap().value,
+        live.stage()
+            .view(&store)
+            .attribute(property)
+            .and_then(|a| a.authored_value(layerstack::Time::Default))
+            .unwrap()
+            .value,
         layerstack::Value::Double(7.0)
     );
     assert!(live.notify_changed_layers(&store).is_empty());

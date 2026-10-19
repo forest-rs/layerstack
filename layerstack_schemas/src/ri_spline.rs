@@ -133,7 +133,7 @@ impl<'a> RiSpline<'a> {
         if name.is_empty() || !name.split(':').all(layerstack::ident::is_identifier) {
             return Err(RiSplineError::InvalidName(name.into()));
         }
-        if !scene.stage().has_prim(path) {
+        if scene.prim(path).is_none() {
             return Err(RiSplineError::MissingPrim(path));
         }
         Ok(Self {
@@ -154,12 +154,9 @@ impl<'a> RiSpline<'a> {
             .tokens()
             .lookup(name)
             .ok_or_else(|| RiSplineError::MissingAttribute(name.into()))?;
-        let declaration = scene
-            .stage()
-            .resolve_property_declaration(self.prim.path(), token);
-        let definition = scene
-            .stage()
-            .property_definition_ref(self.prim.path(), token);
+        let property = scene.property(layerstack::PropertyPath::new(self.prim.path(), token));
+        let declaration = property.and_then(layerstack::Property::declaration);
+        let definition = property.and_then(layerstack::Property::definition);
         let kind = declaration
             .as_ref()
             .map(|d| d.kind)

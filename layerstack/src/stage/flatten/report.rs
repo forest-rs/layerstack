@@ -497,7 +497,7 @@ pub enum Transformation {
     },
     /// A property the prim's schemas define, written as they declare it:
     /// not `custom`, and an attribute with the schema's variability
-    /// ([`Stage::property_definition`](crate::Stage::property_definition)).
+    /// ([`Property::definition`](crate::Property::definition)).
     ///
     /// Spec: AOUSD Core §12.2.3 (variability), §12.2.4 (`custom`), §13.3
     /// (schema properties).

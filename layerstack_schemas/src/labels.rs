@@ -195,11 +195,10 @@ impl<'a> LabelsQuery<'a> {
                 let name = alloc::format!("semantics:labels:{}", self.taxonomy);
                 let prim = PrimView::new(self.scene, path);
                 let mut times = Vec::new();
-                if let Some(property) = prim.property_path(&name) {
+                if let Some(attribute) = prim.attribute(&name) {
                     times.extend(
-                        self.scene
-                            .stage()
-                            .property_sample_times(property.prim_path(), property.property())
+                        attribute
+                            .sample_times()
                             .into_iter()
                             .filter(|t| interval.contains(*t)),
                     );
@@ -241,7 +240,7 @@ impl<'a> LabelsQuery<'a> {
     /// The sorted unique union of labels on this prim and its ancestors.
     /// A path absent from the stage yields an empty set.
     pub fn inherited_labels(&mut self, path: PathId) -> Vec<&'a str> {
-        if !self.scene.stage().has_prim(path) {
+        if self.scene.prim(path).is_none() {
             return Vec::new();
         }
         let mut labels = Vec::new();
@@ -264,7 +263,7 @@ impl<'a> LabelsQuery<'a> {
 
     /// Whether the prim or an ancestor has `label` in this taxonomy.
     pub fn has_inherited_label(&mut self, path: PathId, label: &str) -> bool {
-        if !self.scene.stage().has_prim(path) {
+        if self.scene.prim(path).is_none() {
             return false;
         }
         let mut at = Some(path);
@@ -294,7 +293,7 @@ impl<'a> Scene<'a> {
     /// OpenUSD: `UsdSemanticsLabelsAPI::ComputeInheritedTaxonomies`.
     #[must_use]
     pub fn inherited_taxonomies(&self, path: PathId) -> Vec<&'a str> {
-        if !self.stage().has_prim(path) {
+        if self.prim(path).is_none() {
             return Vec::new();
         }
         let mut result = Vec::new();

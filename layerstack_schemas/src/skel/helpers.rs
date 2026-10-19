@@ -22,16 +22,9 @@ fn sample_info(prim: &PrimView<'_>, names: &[&str]) -> (Vec<f64>, bool) {
     let mut result = Vec::new();
     let mut varying = false;
     for name in names {
-        if let Some(p) = prim.property_path(name) {
-            result.extend(
-                prim.scene()
-                    .stage()
-                    .property_sample_times(p.prim_path(), p.property()),
-            );
-            varying |= prim
-                .scene()
-                .stage()
-                .property_might_be_time_varying(p.prim_path(), p.property());
+        if let Some(attribute) = prim.attribute(name) {
+            result.extend(attribute.sample_times());
+            varying |= attribute.might_be_time_varying();
         }
     }
     result.sort_by(f64::total_cmp);

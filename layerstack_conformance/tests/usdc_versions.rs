@@ -20,12 +20,33 @@ use layerstack::interner::TokenInterner;
 use layerstack::path::{Path, PathInterner};
 use layerstack::{
     ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex, AssetResolveError, AssetResolver,
-    PropertyPath, PropertySpec, ResolvedAsset, ResolvedValue, Stage, StageOptions,
+    PropertyPath, PropertySpec, ResolvedAsset, Stage, StageOptions,
 };
 use layerstack_conformance::usdc::load_entry_usdc;
 use layerstack_conformance::workspace_root;
 use layerstack_usdc::{CrateVersion, UsdcError};
 use serde_json::Value as Json;
+
+/// The value opinions author for the attribute at `path` at `time`,
+/// without a schema fallback.
+fn authored_value(
+    stage: &Stage,
+    store: &layerstack::InMemoryStore,
+    path: PropertyPath,
+    time: Time,
+) -> Option<layerstack::Resolved<Value>> {
+    stage
+        .view(store)
+        .attribute(path)
+        .and_then(|attribute| attribute.authored_value(time))
+}
+
+/// A resolved default that is not a dictionary.
+fn scalar(resolved: Option<layerstack::Resolved<Value>>) -> Option<Value> {
+    resolved
+        .map(|resolved| resolved.value)
+        .filter(|value| !matches!(value, Value::Dictionary(_)))
+}
 
 fn fixtures_dir() -> PathBuf {
     workspace_root().join("layerstack_conformance/fixtures/usdc_versions")
@@ -169,12 +190,12 @@ fn compare_file_with_openusd(root: &std::path::Path, expected: &Json) -> Vec<Mis
             let field = store.tokens.intern(name);
             let attribute = format!("{prim_path}.{name}");
 
-            let default = stage
-                .resolve_property_path(PropertyPath::new(prim, field))
-                .and_then(|resolved| match resolved.value {
-                    ResolvedValue::Scalar(value) => Some(value),
-                    _ => None,
-                });
+            let default = scalar(authored_value(
+                &stage,
+                store,
+                PropertyPath::new(prim, field),
+                Time::Default,
+            ));
             let openusd = &record["default"];
             let matches = match &default {
                 Some(value) => value_matches(value, openusd, &store.tokens),
@@ -192,9 +213,13 @@ fn compare_file_with_openusd(root: &std::path::Path, expected: &Json) -> Vec<Mis
             for sample in record["times"].as_array().into_iter().flatten() {
                 let time = sample[0].as_f64().expect("time");
                 let openusd = &sample[1];
-                let value = stage
-                    .resolve_property_path_at_time(PropertyPath::new(prim, field), Time::at(time))
-                    .map(|resolved| resolved.value);
+                let value = authored_value(
+                    &stage,
+                    store,
+                    PropertyPath::new(prim, field),
+                    Time::at(time),
+                )
+                .map(|resolved| resolved.value);
                 let matches = match &value {
                     Some(value) => value_matches(value, openusd, &store.tokens),
                     None => openusd.is_null(),
@@ -710,15 +735,19 @@ fn failing_vectors(vectors: &[Vector]) -> Vec<String> {
         let path = Path::parse_absolute(prim, &store.tokens).expect("prim path");
         let prim_id = store.paths.intern(path);
         let value = match time {
-            None => stage
-                .resolve_property_path(PropertyPath::new(prim_id, field))
-                .and_then(|resolved| match resolved.value {
-                    ResolvedValue::Scalar(value) => Some(value),
-                    _ => None,
-                }),
-            Some(time) => stage
-                .resolve_property_path_at_time(PropertyPath::new(prim_id, field), Time::at(time))
-                .map(|resolved| resolved.value),
+            None => scalar(authored_value(
+                &stage,
+                store,
+                PropertyPath::new(prim_id, field),
+                Time::Default,
+            )),
+            Some(time) => authored_value(
+                &stage,
+                store,
+                PropertyPath::new(prim_id, field),
+                Time::at(time),
+            )
+            .map(|resolved| resolved.value),
         };
         let json: Json = serde_json::from_str(expected).expect("vector");
         if !value.is_some_and(|value| value_matches(&value, &json, &store.tokens)) {

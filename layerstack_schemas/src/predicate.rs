@@ -280,7 +280,7 @@ impl Predicates for CollectionPredicates<'_> {
                 }))
             }
             Bound::Specifier { def, over, class } => {
-                let specifier = scene.stage().resolve_specifier(prim, scene.store());
+                let specifier = scene.prim(prim).map(layerstack::Prim::specifier);
                 MatchResult::varying(match specifier {
                     Some(Specifier::Def) => *def,
                     Some(Specifier::Over) => *over,
@@ -325,7 +325,7 @@ impl Predicates for CollectionPredicates<'_> {
 /// abstract or unknown type has none, as `UsdPrimTypeInfo::GetSchemaType`
 /// has none).
 fn concrete_type(scene: &Scene<'_>, prim: PathId) -> Option<layerstack::TokenId> {
-    let type_name = scene.stage().resolve_type_name(prim)?;
+    let type_name = scene.prim(prim)?.type_name_token()?;
     let registry = scene.stage().schemas()?;
     registry
         .schema(type_name)
@@ -344,17 +344,17 @@ fn ancestry<'s>(scene: &'s Scene<'_>, prim: PathId) -> impl Iterator<Item = Path
 /// OpenUSD: `UsdPrim::IsAbstract`. Spec: AOUSD Core §11.5.
 pub(crate) fn is_abstract(scene: &Scene<'_>, prim: PathId) -> bool {
     ancestry(scene, prim)
-        .any(|p| scene.stage().resolve_specifier(p, scene.store()) == Some(Specifier::Class))
+        .any(|p| scene.prim(p).map(layerstack::Prim::specifier) == Some(Specifier::Class))
 }
 
 /// Whether the prim and every ancestor define it (`def` or `class`).
 ///
 /// OpenUSD: `UsdPrim::IsDefined`. Spec: AOUSD Core §11.5.
 pub(crate) fn is_defined(scene: &Scene<'_>, prim: PathId) -> bool {
-    scene.stage().has_prim(prim)
+    scene.prim(prim).is_some()
         && ancestry(scene, prim).all(|p| {
             matches!(
-                scene.stage().resolve_specifier(p, scene.store()),
+                scene.prim(p).map(layerstack::Prim::specifier),
                 Some(Specifier::Def | Specifier::Class)
             )
         })
@@ -369,13 +369,13 @@ pub(crate) fn is_defined(scene: &Scene<'_>, prim: PathId) -> bool {
 /// arcs of the prim index (Pcp adds one for every variant set with a
 /// selection, even of a variant no layer defines).
 fn variant_selection(scene: &Scene<'_>, prim: PathId, set: &str) -> String {
-    let store = scene.store();
-    let tokens = store.tokens();
     scene
-        .stage()
-        .variant_sets(prim, store)
-        .into_iter()
-        .find(|(name, _)| tokens.resolve(*name) == set)
-        .and_then(|(_, selection)| selection)
-        .map_or_else(String::new, |variant| tokens.resolve(variant).into())
+        .prim(prim)
+        .and_then(|prim| {
+            prim.variant_sets()
+                .into_iter()
+                .find(|(name, _)| *name == set)
+                .and_then(|(_, selection)| selection)
+        })
+        .map_or_else(String::new, String::from)
 }

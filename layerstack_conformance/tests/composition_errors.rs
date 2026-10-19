@@ -233,7 +233,8 @@ fn stacks_targets_and_values_match_openusd() {
                 )
             };
             let stack: Vec<(String, String)> = stage
-                .explain_prim(id)
+                .prim(id, &loaded.store)
+                .map(|p| p.sources())
                 .expect("composed prim")
                 .iter()
                 .map(|key| site(&loaded, key.layer_id, &key.spec_path))
@@ -249,7 +250,9 @@ fn stacks_targets_and_values_match_openusd() {
                 let path = PropertyPath::new(id, name);
                 let label = format!("{}.{}", prim.path, property.name);
                 let stack: Vec<(String, String)> = stage
-                    .explain_property_path(path)
+                    .view(&loaded.store)
+                    .property(path)
+                    .map(|p| p.opinions())
                     .unwrap_or_default()
                     .iter()
                     .map(|opinion| site(&loaded, opinion.key.layer_id, &opinion.key.spec_path))
@@ -260,7 +263,12 @@ fn stacks_targets_and_values_match_openusd() {
                         property.stack
                     ));
                 }
-                let kind = match stage.resolve_property_declaration(id, name).map(|d| d.kind) {
+                let kind = match stage
+                    .view(&loaded.store)
+                    .property(path)
+                    .and_then(|p| p.declaration())
+                    .map(|d| d.kind)
+                {
                     Some(PropertyKind::Relationship) => "relationship",
                     Some(PropertyKind::Attribute) => "attribute",
                     None => "none",
@@ -269,8 +277,12 @@ fn stacks_targets_and_values_match_openusd() {
                     mismatches.push(format!("{label}: kind {kind}, expected {}", property.kind));
                 }
                 let targets: Vec<String> = stage
-                    .resolve_target_list_path(path)
-                    .map(|resolved| resolved.value)
+                    .view(&loaded.store)
+                    .property(path)
+                    .map(|p| match p.as_attribute() {
+                        Some(a) => a.connections(),
+                        None => p.as_relationship().map(|r| r.targets()).unwrap_or_default(),
+                    })
                     .unwrap_or_default()
                     .into_iter()
                     .map(|target: TargetPath| {
@@ -285,7 +297,9 @@ fn stacks_targets_and_values_match_openusd() {
                 }
                 if let Some(expected) = property.value {
                     let value = stage
-                        .resolve_field_path(path)
+                        .view(&loaded.store)
+                        .attribute(path)
+                        .and_then(|a| a.authored_value(layerstack::Time::Default))
                         .map(|resolved| resolved.value);
                     if value != Some(Value::Int(expected)) {
                         mismatches.push(format!("{label}: expected {expected}, got {value:?}"));
@@ -334,7 +348,8 @@ fn selection_snapshot(loaded: &LoadedStage, stage: &Stage) -> Vec<String> {
         .filter(|prim| *prim != pseudo_root)
         .map(|prim| {
             let stack: Vec<(String, String)> = stage
-                .explain_prim(prim)
+                .prim(prim, &loaded.store)
+                .map(|p| p.sources())
                 .expect("composed prim")
                 .iter()
                 .map(|key| {
@@ -349,7 +364,9 @@ fn selection_snapshot(loaded: &LoadedStage, stage: &Stage) -> Vec<String> {
                 .iter()
                 .map(|name| {
                     stage
-                        .resolve_field_path(PropertyPath::new(prim, *name))
+                        .view(&loaded.store)
+                        .attribute(PropertyPath::new(prim, *name))
+                        .and_then(|a| a.authored_value(layerstack::Time::Default))
                         .map(|resolved| resolved.value)
                 })
                 .collect();
@@ -436,7 +453,9 @@ fn selection_edits_recompose_like_a_full_compose() {
         assert!(!updated.contains(&hull), "{updated:?}");
         assert_eq!(
             live.stage()
-                .resolve_field_path(PropertyPath::new(mast, scale))
+                .view(&loaded.store)
+                .attribute(PropertyPath::new(mast, scale))
+                .and_then(|a| a.authored_value(layerstack::Time::Default))
                 .map(|resolved| resolved.value),
             Some(Value::Int(expected))
         );

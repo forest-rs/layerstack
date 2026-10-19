@@ -433,11 +433,12 @@ fn authored_ops_read_and_add_as_in_openusd() {
                 .iter()
                 .map(|op| {
                     let ty = scene
-                        .stage()
-                        .resolve_property_declaration(
+                        .view()
+                        .property(layerstack::PropertyPath::new(
                             paths[text.as_str()],
                             store.tokens.lookup(op.attribute).expect("interned"),
-                        )
+                        ))
+                        .and_then(|p| p.declaration())
                         .and_then(|d| d.type_name)
                         .expect("a typed attribute");
                     OpRecord {

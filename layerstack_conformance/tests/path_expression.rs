@@ -40,7 +40,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 
 use layerstack::path_expression::PathExpression;
-use layerstack::{PathId, PropertyPath, Stage, StageOptions, TargetPath, Value};
+use layerstack::{PathId, Stage, StageOptions, TargetPath, Value};
 use layerstack_conformance::usda_real::{LoadedStage, load_entry_usda};
 use layerstack_conformance::workspace_root;
 use layerstack_schemas::usd::CollectionApi;
@@ -141,8 +141,12 @@ fn collection_expressions_match_openusd() {
         if display(TargetPath::Prim(*prim)) == "/Expressions" {
             continue;
         }
-        for name in stage.property_names(*prim, store) {
-            universe.push(TargetPath::Property(PropertyPath::new(*prim, name)));
+        let properties = stage
+            .prim(*prim, store)
+            .map(|prim| prim.properties())
+            .unwrap_or_default();
+        for property in properties {
+            universe.push(TargetPath::Property(property.path()));
         }
     }
     let by_text: HashMap<String, TargetPath> = universe
@@ -180,9 +184,10 @@ fn collection_expressions_match_openusd() {
                     "collection:{}:membershipExpression",
                     collection.instance()
                 ))
-                .and_then(|property| stage.resolve_value_with_schema(*prim, property.property()))
+                .and_then(|property| scene.view().attribute(property))
+                .and_then(|attribute| attribute.get(layerstack::Time::Default))
                 .and_then(|resolved| match resolved.value {
-                    layerstack::ResolvedValue::Scalar(Value::PathExpression(text)) => {
+                    Value::PathExpression(text) => {
                         PathExpression::parse(&text).ok().map(|e| e.text())
                     }
                     _ => None,

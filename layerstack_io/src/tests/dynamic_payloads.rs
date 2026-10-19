@@ -484,15 +484,16 @@ pub(super) fn verify<B: Storage>(
     expected.sort_unstable();
     for path in paths {
         let prim = lookup(path).unwrap_or_else(|| panic!("{path} is not composed"));
-        assert!(stage.has_prim(prim), "{path} is not composed");
+        let handle = doc.view().prim(prim);
+        assert!(handle.is_some(), "{path} is not composed");
         let errors: Vec<_> = stage
             .composition_errors()
             .iter()
             .filter(|error| error.prim() == Some(prim))
             .collect();
         assert!(errors.is_empty(), "{path}: {errors:?}");
-        let dependency = stage
-            .dynamic_dependency(prim)
+        let dependency = handle
+            .and_then(|prim| prim.dynamic_dependency())
             .unwrap_or_else(|| panic!("{path} composes no dynamic arguments"));
         let relevant: Vec<&str> = if attributes {
             dependency.relevant_attributes().collect()
@@ -501,8 +502,12 @@ pub(super) fn verify<B: Storage>(
         };
         assert_eq!(relevant, expected, "{path}");
         let geom = lookup(&format!("{path}/geom")).unwrap();
-        assert!(stage.has_prim(geom), "{path}/geom is not composed");
-        assert!(stage.dynamic_dependency(geom).is_none(), "{path}/geom");
+        let geom = doc.view().prim(geom);
+        assert!(geom.is_some(), "{path}/geom is not composed");
+        assert!(
+            geom.and_then(|prim| prim.dynamic_dependency()).is_none(),
+            "{path}/geom"
+        );
     }
 }
 
@@ -743,9 +748,10 @@ fn ancestral_payloads_in_variants_read_the_opinions_of_the_arcs_above_them() {
             .lookup(&layerstack::Path::parse_absolute("/Root/Xform__2_1", &store.tokens).unwrap())
             .unwrap();
         assert!(
-            stage
-                .prim_stack(prim)
+            doc.view()
+                .prim(prim)
                 .unwrap()
+                .prim_stack()
                 .iter()
                 .any(|(source, path)| *source == layer && path.prim_path() == generated_prim),
             "/SubrootVariant does not read {identifier}"
@@ -1041,7 +1047,11 @@ fn argument_inputs_read_beyond_a_prims_own_specs_recompose_it() {
             .filter(|error| error.prim() == Some(subroot))
             .collect();
         assert!(errors.is_empty(), "{errors:?}");
-        let dependency = stage.dynamic_dependency(subroot).unwrap();
+        let dependency = doc
+            .view()
+            .prim(subroot)
+            .and_then(|prim| prim.dynamic_dependency())
+            .unwrap();
         assert!(dependency.relevant_fields().len() + dependency.relevant_attributes().len() > 0);
     }
 }

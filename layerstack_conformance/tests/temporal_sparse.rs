@@ -13,10 +13,10 @@
 //! OpenUSD does not. Any other difference is a failure.
 //!
 //! Cases with a `schema` rely on a prim type's attribute fallbacks, recorded
-//! from OpenUSD's schema registry. Layerstack resolves them through its
-//! schema-aware queries, `Stage::resolve_value_at_time_with_schema` and, at
-//! the default time, `Stage::resolve_field_with_schema`, over the same
-//! fallbacks ([`schema_fallbacks`]).
+//! from OpenUSD's schema registry. Layerstack resolves them through the
+//! attribute handle's schema-aware read, `Attribute::get`, over the same
+//! fallbacks ([`schema_fallbacks`]); cases without one read the authored
+//! value alone (`Attribute::authored_value`).
 //!
 //! Where OpenUSD defines it, resolving the composed stage must also equal
 //! resolving OpenUSD's flattened layer of that stage.
@@ -418,33 +418,18 @@ impl Composed {
     fn resolve(&mut self, query: &Query) -> Option<Resolved> {
         let path = PropertyPath::parse(&query.attr, &self.store.tokens, &self.store.paths)
             .expect("attribute path");
-        let (prim, property) = (path.prim_path(), path.property());
-        let value = match (query.time, self.schema) {
-            (Some(time), false) => {
-                self.stage
-                    .resolve_property_path_at_time(
-                        path,
-                        Time::At {
-                            code: time,
-                            interpolation: query.interpolation(),
-                        },
-                    )?
-                    .value
-            }
-            (None, false) => self.stage.resolve_field_path(path)?.value,
-            (Some(time), true) => {
-                self.stage
-                    .resolve_value_at_time_with_schema(
-                        prim,
-                        property,
-                        Time::At {
-                            code: time,
-                            interpolation: query.interpolation(),
-                        },
-                    )?
-                    .value
-            }
-            (None, true) => self.stage.resolve_field_with_schema(prim, property)?.value,
+        let time = match query.time {
+            Some(code) => Time::At {
+                code,
+                interpolation: query.interpolation(),
+            },
+            None => Time::Default,
+        };
+        let attribute = self.stage.view(&self.store).attribute(path)?;
+        let value = if self.schema {
+            attribute.get(time)?.value
+        } else {
+            attribute.authored_value(time)?.value
         };
         Some(Resolved::from_value(&value))
     }

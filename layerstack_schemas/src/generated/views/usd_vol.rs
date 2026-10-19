@@ -25,7 +25,7 @@ use layerstack::{CannotApply, PathId};
 use crate::{PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "Field3D field primitive."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `Field3DAsset`, inheriting [`FieldAsset`]. Construct it with [`Field3DAsset::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `Field3DAsset`, inheriting [`FieldAsset`]. Construct it with [`Field3DAsset::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolField3DAsset`."]
 #[doc(alias = "UsdVolField3DAsset")]
 #[derive(Clone, Copy, Debug)]
@@ -159,7 +159,7 @@ impl Field3DAssetEdit {
 
 #[doc = "This schema is deprecated and VolumeFieldAsset should be used instead."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's abstract typed schema `FieldAsset`, inheriting [`VolumeFieldAsset`]. Construct it with [`FieldAsset::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's abstract typed schema `FieldAsset`, inheriting [`VolumeFieldAsset`]. Construct it with [`FieldAsset::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolFieldAsset`."]
 #[doc(alias = "UsdVolFieldAsset")]
 #[derive(Clone, Copy, Debug)]
@@ -243,7 +243,7 @@ impl FieldAssetEdit {
 
 #[doc = "This schema is deprecated and VolumeFieldBase should be used instead."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's abstract typed schema `FieldBase`, inheriting [`VolumeFieldBase`]. Construct it with [`FieldBase::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's abstract typed schema `FieldBase`, inheriting [`VolumeFieldBase`]. Construct it with [`FieldBase::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolFieldBase`."]
 #[doc(alias = "UsdVolFieldBase")]
 #[derive(Clone, Copy, Debug)]
@@ -385,7 +385,7 @@ impl OpenVDBAssetFieldClass {
 
 #[doc = "OpenVDB field primitive."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `OpenVDBAsset`, inheriting [`FieldAsset`]. Construct it with [`OpenVDBAsset::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `OpenVDBAsset`, inheriting [`FieldAsset`]. Construct it with [`OpenVDBAsset::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolOpenVDBAsset`."]
 #[doc(alias = "UsdVolOpenVDBAsset")]
 #[derive(Clone, Copy, Debug)]
@@ -528,7 +528,7 @@ impl OpenVDBAssetEdit {
 
 #[doc = "The base schema to describe different types of concrete ParticleField implementations, such as 3D Gaussian Splats."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `ParticleField`, inheriting [`crate::usd_geom::Gprim`]. Construct it with [`ParticleField::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `ParticleField`, inheriting [`crate::usd_geom::Gprim`]. Construct it with [`ParticleField::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolParticleField`."]
 #[doc(alias = "UsdVolParticleField")]
 #[derive(Clone, Copy, Debug)]
@@ -727,7 +727,7 @@ impl ParticleField3DGaussianSplatSortingModeHint {
 
 #[doc = "A ParticleField that represents a 3D Gaussian splat."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `ParticleField3DGaussianSplat`, inheriting [`ParticleField`]. Construct it with [`ParticleField3DGaussianSplat::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `ParticleField3DGaussianSplat`, inheriting [`ParticleField`]. Construct it with [`ParticleField3DGaussianSplat::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolParticleField3DGaussianSplat`."]
 #[doc(alias = "UsdVolParticleField3DGaussianSplat")]
 #[derive(Clone, Copy, Debug)]
@@ -996,7 +996,7 @@ impl ParticleField3DGaussianSplatEdit {
 
 #[doc = "A base schema for ParticleField kernel spatial basis function data."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `ParticleFieldKernelBaseAPI`. Get it with [`ParticleFieldKernelBaseApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `ParticleFieldKernelBaseAPI`. Get it with [`ParticleFieldKernelBaseApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolParticleFieldKernelBaseAPI`."]
 #[doc(alias = "UsdVolParticleFieldKernelBaseAPI")]
 #[doc(alias = "ParticleFieldKernelBaseAPI")]
@@ -1096,7 +1096,7 @@ impl ParticleFieldKernelBaseApiEdit {
 
 #[doc = "Defines the constant surflet kernel for a ParticleField."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `ParticleFieldKernelConstantSurfletAPI`. Get it with [`ParticleFieldKernelConstantSurfletApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `ParticleFieldKernelConstantSurfletAPI`. Get it with [`ParticleFieldKernelConstantSurfletApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolParticleFieldKernelConstantSurfletAPI`."]
 #[doc(alias = "UsdVolParticleFieldKernelConstantSurfletAPI")]
 #[doc(alias = "ParticleFieldKernelConstantSurfletAPI")]
@@ -1198,7 +1198,7 @@ impl ParticleFieldKernelConstantSurfletApiEdit {
 
 #[doc = "Defines the Gaussian ellipsoid kernel for a ParticleField."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `ParticleFieldKernelGaussianEllipsoidAPI`. Get it with [`ParticleFieldKernelGaussianEllipsoidApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `ParticleFieldKernelGaussianEllipsoidAPI`. Get it with [`ParticleFieldKernelGaussianEllipsoidApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolParticleFieldKernelGaussianEllipsoidAPI`."]
 #[doc(alias = "UsdVolParticleFieldKernelGaussianEllipsoidAPI")]
 #[doc(alias = "ParticleFieldKernelGaussianEllipsoidAPI")]
@@ -1300,7 +1300,7 @@ impl ParticleFieldKernelGaussianEllipsoidApiEdit {
 
 #[doc = "Defines the Gaussian surflet kernel for a ParticleField."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `ParticleFieldKernelGaussianSurfletAPI`. Get it with [`ParticleFieldKernelGaussianSurfletApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `ParticleFieldKernelGaussianSurfletAPI`. Get it with [`ParticleFieldKernelGaussianSurfletApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolParticleFieldKernelGaussianSurfletAPI`."]
 #[doc(alias = "UsdVolParticleFieldKernelGaussianSurfletAPI")]
 #[doc(alias = "ParticleFieldKernelGaussianSurfletAPI")]
@@ -1402,7 +1402,7 @@ impl ParticleFieldKernelGaussianSurfletApiEdit {
 
 #[doc = "A ParticleField related applied schema that provides attributes to define the opacity of the particles."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `ParticleFieldOpacityAttributeAPI`. Get it with [`ParticleFieldOpacityAttributeApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `ParticleFieldOpacityAttributeAPI`. Get it with [`ParticleFieldOpacityAttributeApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolParticleFieldOpacityAttributeAPI`."]
 #[doc(alias = "UsdVolParticleFieldOpacityAttributeAPI")]
 #[doc(alias = "ParticleFieldOpacityAttributeAPI")]
@@ -1650,7 +1650,7 @@ impl ParticleFieldOpacityAttributeApiEdit {
 
 #[doc = "A ParticleField related applied schema that provides attributes to define the orientation of particles."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `ParticleFieldOrientationAttributeAPI`. Get it with [`ParticleFieldOrientationAttributeApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `ParticleFieldOrientationAttributeAPI`. Get it with [`ParticleFieldOrientationAttributeApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolParticleFieldOrientationAttributeAPI`."]
 #[doc(alias = "UsdVolParticleFieldOrientationAttributeAPI")]
 #[doc(alias = "ParticleFieldOrientationAttributeAPI")]
@@ -1913,7 +1913,7 @@ impl ParticleFieldOrientationAttributeApiEdit {
 
 #[doc = "A ParticleField related applied schema that provides attributes to define the positions of particles."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `ParticleFieldPositionAttributeAPI`. Get it with [`ParticleFieldPositionAttributeApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `ParticleFieldPositionAttributeAPI`. Get it with [`ParticleFieldPositionAttributeApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolParticleFieldPositionAttributeAPI`."]
 #[doc(alias = "UsdVolParticleFieldPositionAttributeAPI")]
 #[doc(alias = "ParticleFieldPositionAttributeAPI")]
@@ -2171,7 +2171,7 @@ impl ParticleFieldPositionAttributeApiEdit {
 
 #[doc = "A base schema for ParticleField position data."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `ParticleFieldPositionBaseAPI`. Get it with [`ParticleFieldPositionBaseApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `ParticleFieldPositionBaseAPI`. Get it with [`ParticleFieldPositionBaseApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolParticleFieldPositionBaseAPI`."]
 #[doc(alias = "UsdVolParticleFieldPositionBaseAPI")]
 #[doc(alias = "ParticleFieldPositionBaseAPI")]
@@ -2271,7 +2271,7 @@ impl ParticleFieldPositionBaseApiEdit {
 
 #[doc = "A base schema for ParticleField radiance definition data."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `ParticleFieldRadianceBaseAPI`. Get it with [`ParticleFieldRadianceBaseApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `ParticleFieldRadianceBaseAPI`. Get it with [`ParticleFieldRadianceBaseApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolParticleFieldRadianceBaseAPI`."]
 #[doc(alias = "UsdVolParticleFieldRadianceBaseAPI")]
 #[doc(alias = "ParticleFieldRadianceBaseAPI")]
@@ -2371,7 +2371,7 @@ impl ParticleFieldRadianceBaseApiEdit {
 
 #[doc = "A ParticleField related applied schema that provides attributes to define the linear scale factor applied to particles."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `ParticleFieldScaleAttributeAPI`. Get it with [`ParticleFieldScaleAttributeApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `ParticleFieldScaleAttributeAPI`. Get it with [`ParticleFieldScaleAttributeApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolParticleFieldScaleAttributeAPI`."]
 #[doc(alias = "UsdVolParticleFieldScaleAttributeAPI")]
 #[doc(alias = "ParticleFieldScaleAttributeAPI")]
@@ -2624,7 +2624,7 @@ impl ParticleFieldScaleAttributeApiEdit {
 
 #[doc = "Defines the spherical harmonics attributes for a ParticleField."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `ParticleFieldSphericalHarmonicsAttributeAPI`. Get it with [`ParticleFieldSphericalHarmonicsAttributeApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `ParticleFieldSphericalHarmonicsAttributeAPI`. Get it with [`ParticleFieldSphericalHarmonicsAttributeApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolParticleFieldSphericalHarmonicsAttributeAPI`."]
 #[doc(alias = "UsdVolParticleFieldSphericalHarmonicsAttributeAPI")]
 #[doc(alias = "ParticleFieldSphericalHarmonicsAttributeAPI")]
@@ -2971,7 +2971,7 @@ impl ParticleFieldSphericalHarmonicsAttributeApiEdit {
 
 #[doc = "A renderable volume containing one or more volumetric data fields, used to represent a volume effect such as smoke or fire."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `Volume`, inheriting [`crate::usd_geom::Gprim`]. Construct it with [`Volume::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `Volume`, inheriting [`crate::usd_geom::Gprim`]. Construct it with [`Volume::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolVolume`."]
 #[doc(alias = "UsdVolVolume")]
 #[derive(Clone, Copy, Debug)]
@@ -3128,7 +3128,7 @@ impl VolumeFieldAssetVectorDataRoleHint {
 
 #[doc = "The base schema class for volume field primitives defined by an external file."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's abstract typed schema `VolumeFieldAsset`, inheriting [`FieldBase`]. Construct it with [`VolumeFieldAsset::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's abstract typed schema `VolumeFieldAsset`, inheriting [`FieldBase`]. Construct it with [`VolumeFieldAsset::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolVolumeFieldAsset`."]
 #[doc(alias = "UsdVolVolumeFieldAsset")]
 #[derive(Clone, Copy, Debug)]
@@ -3431,7 +3431,7 @@ impl VolumeFieldAssetEdit {
 
 #[doc = "The base schema class for volume field primitives."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's abstract typed schema `VolumeFieldBase`, inheriting [`crate::usd_geom::Xformable`]. Construct it with [`VolumeFieldBase::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's abstract typed schema `VolumeFieldBase`, inheriting [`crate::usd_geom::Xformable`]. Construct it with [`VolumeFieldBase::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolVolumeFieldBase`."]
 #[doc(alias = "UsdVolVolumeFieldBase")]
 #[derive(Clone, Copy, Debug)]

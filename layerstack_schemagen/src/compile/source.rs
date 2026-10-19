@@ -94,6 +94,11 @@ impl SchemaStage {
         self.document.stage().stage()
     }
 
+    /// The composed stage bound to its store.
+    pub(crate) fn view(&self) -> layerstack::StageView<'_> {
+        self.document.view()
+    }
+
     /// The store holding the stage's layers.
     pub(crate) fn store(&self) -> &InMemoryStore {
         self.document.store()

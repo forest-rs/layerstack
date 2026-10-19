@@ -128,7 +128,9 @@ fn contextual_authoring_is_uniform_noncustom_and_reversible() {
     let applied = live.apply(&mut store, &transaction).unwrap();
     let declaration = live
         .stage()
-        .resolve_property_declaration(path, name)
+        .view(&store)
+        .property(layerstack::PropertyPath::new(path, name))
+        .and_then(|p| p.declaration())
         .unwrap();
     assert_eq!(declaration.variability, Variability::Uniform);
     assert!(!declaration.custom);
@@ -143,7 +145,9 @@ fn contextual_authoring_is_uniform_noncustom_and_reversible() {
     live.apply(&mut store, &applied.inverse).unwrap();
     assert!(
         live.stage()
-            .resolve_property_declaration(path, name)
+            .view(&store)
+            .property(layerstack::PropertyPath::new(path, name))
+            .and_then(|p| p.declaration())
             .is_none()
     );
 }
@@ -234,13 +238,17 @@ fn filter_context_authoring_and_existing_declarations_preserve_opinions() {
     live.apply(&mut store, &transaction).unwrap();
     let declaration = live
         .stage()
-        .resolve_property_declaration(path, existing)
+        .view(&store)
+        .property(layerstack::PropertyPath::new(path, existing))
+        .and_then(|p| p.declaration())
         .unwrap();
     assert!(declaration.custom);
     assert_eq!(declaration.variability, Variability::Varying);
     let declaration = live
         .stage()
-        .resolve_property_declaration(path, created)
+        .view(&store)
+        .property(layerstack::PropertyPath::new(path, created))
+        .and_then(|p| p.declaration())
         .unwrap();
     assert!(!declaration.custom);
     assert_eq!(declaration.variability, Variability::Uniform);

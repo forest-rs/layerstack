@@ -6,7 +6,7 @@
 //! encoded ownership/copies, directory work and numeric decode/cache storage.
 //! Run the built binary under the host memory profiler for peak allocation/RSS;
 //! phase-boundary RSS is not peak memory and is not mapped address space.
-use layerstack::{EditTarget, PrimPredicate, PropertyPath, StageOptions, Time, Transaction};
+use layerstack::{EditTarget, PrimPredicate, StageOptions, Time, Transaction};
 use layerstack_io::{Filesystem, LoadOptions, StageDocument, UsdcArrayLoading, UsdcReadOptions};
 use std::{hint::black_box, time::Instant};
 
@@ -83,25 +83,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .count();
     report(&document, "traverse", started, black_box(count));
     let started = Instant::now();
-    let properties: Vec<_> = document
-        .stage()
+    let view = document.view();
+    let properties: Vec<_> = view
         .stage()
         .traverse_all(root)
-        .flat_map(|prim| {
-            document
-                .stage()
-                .stage()
-                .property_names(prim, document.store())
-                .into_iter()
-                .map(move |field| PropertyPath::new(prim, field))
-        })
+        .filter_map(|prim| view.prim(prim))
+        .flat_map(|prim| prim.properties())
         .filter(|property| {
-            document
-                .stage()
-                .stage()
-                .resolve_property_declaration(property.prim_path(), property.property())
+            property
+                .declaration()
                 .is_some_and(|d| d.type_name.is_some_and(|t| t.is_array()))
         })
+        .map(|property| property.path())
         .collect();
     report(
         &document,
@@ -113,9 +106,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(property) = properties.first() {
         black_box(
             document
-                .stage()
-                .stage()
-                .try_resolve_property_path_at_time(*property, Time::at(5.))?,
+                .view()
+                .attribute(*property)
+                .map_or(Ok(None), |a| a.try_get(Time::at(5.)))?,
         );
     }
     report(
@@ -128,9 +121,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     for &property in &properties {
         black_box(
             document
-                .stage()
-                .stage()
-                .try_resolve_property_path_at_time(property, Time::at(5.))?,
+                .view()
+                .attribute(property)
+                .map_or(Ok(None), |a| a.try_get(Time::at(5.)))?,
         );
     }
     report(&document, "demand_all_arrays", started, properties.len());
@@ -138,9 +131,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     for &property in &properties {
         black_box(
             document
-                .stage()
-                .stage()
-                .try_resolve_property_path_at_time(property, Time::at(5.))?,
+                .view()
+                .attribute(property)
+                .map_or(Ok(None), |a| a.try_get(Time::at(5.)))?,
         );
     }
     report(&document, "demand_all_warm", started, properties.len());

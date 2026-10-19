@@ -34,7 +34,7 @@ use layerstack::property::{
 use layerstack::spec_path::VariantSelectionSite;
 use layerstack::variable_expression::is_expression;
 use layerstack::{ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex};
-use layerstack::{AssetResolver, PropertyType, ReferenceTarget, ResolvedAsset};
+use layerstack::{AssetResolver, PropertyType, ReferenceSource, ReferenceTarget, ResolvedAsset};
 
 use crate::error::UsdcError;
 use crate::numeric_array::*;
@@ -2823,14 +2823,15 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
             // as `<>` does in USDA. An asset path that cannot be resolved
             // keeps the arc unresolved; it never becomes an internal arc.
             if asset_path.is_empty() {
-                return Some(Reference {
+                let internal = ReferenceSource::Layer {
                     layer: self.layer_id,
-                    target,
                     asset: None,
-                    layer_offset,
-                    custom_data,
-                    deferred: false,
-                });
+                };
+                return Some(
+                    Reference::from_source(internal, target)
+                        .with_layer_offset(layer_offset)
+                        .with_custom_data(custom_data),
+                );
             }
             // An asset path that is a variable expression is evaluated
             // during composition, relative to this layer.
@@ -2864,14 +2865,15 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
             if let Some(layer) = resolved.layer {
                 self.resolved_layers.push(layer);
             }
-            Some(Reference {
+            let source = ReferenceSource::Layer {
                 layer: resolved.layer_id,
-                target,
-                asset: Some(asset_path),
-                layer_offset,
-                custom_data,
-                deferred: false,
-            })
+                asset: Some(&asset_path),
+            };
+            Some(
+                Reference::from_source(source, target)
+                    .with_layer_offset(layer_offset)
+                    .with_custom_data(custom_data),
+            )
         } else {
             None
         }

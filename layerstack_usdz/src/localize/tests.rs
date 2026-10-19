@@ -122,14 +122,19 @@ fn resolution_failure_and_member_collisions_leave_sources_unchanged() {
 #[test]
 fn unnamed_layer_links_are_named_and_host_expanded_udims_keep_templates() {
     let (mut store, model, file) = fixture();
-    store
+    let arc = &mut store
         .layer_mut(LayerId(1))
         .unwrap()
         .prim_mut(model)
         .unwrap()
         .references
-        .append[0]
-        .asset = None;
+        .append[0];
+    let layerstack::ReferenceSource::Layer { layer, .. } = arc.source() else {
+        panic!("the fixture's reference is resolved");
+    };
+    *arc = arc
+        .clone()
+        .with_source(layerstack::ReferenceSource::Layer { layer, asset: None });
     Arc::make_mut(
         &mut store
             .layer_mut(LayerId(2))

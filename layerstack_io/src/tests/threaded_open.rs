@@ -136,7 +136,7 @@ fn render(
             let arcs = spec.references.items().chain(spec.payloads.items());
             for arc in arcs {
                 let path = paths.display(*path, tokens);
-                writeln!(out, "  {path} {:?} {:?}", arc.layer, arc.asset).unwrap();
+                writeln!(out, "  {path} {:?}", arc.source()).unwrap();
             }
         }
     }

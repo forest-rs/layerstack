@@ -98,8 +98,8 @@ use core::fmt;
 
 use layerstack::doc::{
     FieldEntry, FieldValue, Layer, LayerOffset as LayerLayerOffset, PrimSpec,
-    Reference as LayerReference, ReferenceTarget, Specifier, Value as LayerValue, VariantSetSpec,
-    VariantSpec,
+    Reference as LayerReference, ReferenceSource, ReferenceTarget, Specifier, Value as LayerValue,
+    VariantSetSpec, VariantSpec,
 };
 use layerstack::interner::{TokenId, TokenInterner};
 use layerstack::listop::ListOp as LayerListOp;
@@ -765,9 +765,13 @@ impl Lowering<'_> {
     /// prim path or none for the `defaultPrim`, and its layer offset. An
     /// arc into `layer` itself without an asset path is internal.
     fn arc(&self, layer: &Layer, arc: &LayerReference, prim: &str) -> Result<Reference, SaveError> {
-        let asset = match &arc.asset {
-            Some(asset) => Some(asset.clone()),
-            None if arc.layer == layer.id() => None,
+        let internal = matches!(
+            arc.source(),
+            ReferenceSource::Layer { layer: id, asset: None } if id == layer.id()
+        );
+        let asset = match arc.asset_path() {
+            Some(asset) => Some(String::from(asset)),
+            None if internal => None,
             None => return invalid(prim, Invalid::ArcWithoutAsset),
         };
         let prim_path = match arc.target {

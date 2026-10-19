@@ -162,7 +162,7 @@ fn snapshot(loaded: &LoadedStage, stage: &Stage) -> Json {
     let property = |name: &str| spec.property(store.tokens.lookup(name).unwrap()).unwrap();
     let arc = |r: &Reference| {
         json!({
-            "asset": r.asset.clone().unwrap_or_default(),
+            "asset": r.asset_path().unwrap_or_default(),
             "path": match r.target { ReferenceTarget::Prim(p) => path(p), _ => String::new() },
         })
     };

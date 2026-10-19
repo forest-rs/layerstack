@@ -5,8 +5,8 @@
 #![allow(missing_docs, reason = "integration tests")]
 use layerstack::{
     AssetResolveError, AssetResolver, FieldValue, LayerId, PathInterner, PrimSpec, PropertyEntry,
-    Reference, ResolvedAsset, Stage, StageOptions, Time, TokenInterner, Value, VariantSetSpec,
-    flatten_layer_stack,
+    Reference, ReferenceSource, ResolvedAsset, Stage, StageOptions, Time, TokenInterner, Value,
+    VariantSetSpec, flatten_layer_stack,
 };
 use layerstack_conformance::{usda_real::load_entry_usda, workspace_root};
 use std::{path::Path, sync::Arc};
@@ -59,11 +59,15 @@ fn arcs(list: &mut layerstack::ListOp<Reference>, output: LayerId) {
         .chain(&mut list.append)
         .chain(&mut list.delete)
     {
-        reference.layer = if reference.asset.is_some() {
-            LayerId::UNRESOLVED
-        } else {
-            output
+        let path = reference.asset_path().map(String::from);
+        let source = match &path {
+            Some(path) => ReferenceSource::Unresolved { path },
+            None => ReferenceSource::Layer {
+                layer: output,
+                asset: None,
+            },
         };
+        *reference = reference.clone().with_source(source);
     }
 }
 fn properties(properties: &mut [PropertyEntry]) {

@@ -35,7 +35,8 @@ pub(crate) fn is_local_spec(spec: &PrimSpec) -> bool {
 }
 
 /// Returns `true` when `reference`, authored in `layer`, is internal: it
-/// names no asset, and its [`Reference::layer`] is the authoring layer.
+/// names no asset, and its layer is the authoring layer
+/// ([`crate::ReferenceSource::Layer`]).
 ///
 /// Ingestion records an internal arc (`</Prim>` or `<>`) that way.
 fn is_internal(reference: &Reference, layer: LayerId) -> bool {
@@ -47,7 +48,7 @@ fn is_internal(reference: &Reference, layer: LayerId) -> bool {
 /// assets, not spellings. The prim path and layer offset are kept, and are
 /// compared exactly.
 ///
-/// - A resolved arc is identified by its [`Reference::layer`], the asset
+/// - A resolved arc is identified by its layer, the asset
 ///   its path anchors to; its asset path is cleared to `""`.
 /// - An unresolved arc keeps its path, normalized
 ///   ([`crate::asset::normalize_asset_path`]).

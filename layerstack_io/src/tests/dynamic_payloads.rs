@@ -774,7 +774,10 @@ fn readers_leave_dynamic_payloads_to_composition() {
         .prims()
         .values()
         .flat_map(|spec| spec.payloads.items())
-        .map(|arc| (arc.asset.clone().unwrap_or_default(), arc.deferred))
+        .map(|arc| {
+            let deferred = matches!(arc.source(), layerstack::ReferenceSource::Asset { .. });
+            (String::from(arc.asset_path().unwrap_or_default()), deferred)
+        })
         .collect();
     arcs.sort();
     assert_eq!(

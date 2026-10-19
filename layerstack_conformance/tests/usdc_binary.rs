@@ -426,7 +426,7 @@ fn gen_listops_parses() {
         }))
     );
     assert_eq!(root.payloads.append.len(), 1, "{:?}", root.payloads);
-    assert_eq!(root.payloads.append[0].asset.as_deref(), Some("eggs.usda"));
+    assert_eq!(root.payloads.append[0].asset_path(), Some("eggs.usda"));
     assert_eq!(root.references.prepend.len(), 1);
     assert_eq!(root.references.prepend[0].layer_offset.offset, 10.0);
     let foo = parsed.expect_property("/root", "foo");
@@ -662,7 +662,7 @@ fn inherits_and_payloads_are_read_from_their_fields() {
     let payloads = model.prim("/Model").payloads;
     let explicit = payloads.explicit.expect("an explicit payload list");
     assert_eq!(explicit.len(), 1);
-    assert_eq!(explicit[0].asset.as_deref(), Some("./model_payload.usd"));
+    assert_eq!(explicit[0].asset_path(), Some("./model_payload.usd"));
 }
 
 /// The `variantSetNames` list op is read as authored, here a legacy `add`

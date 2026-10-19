@@ -333,7 +333,7 @@ fn map_arc_path(
 }
 
 /// Maps a reference or payload authored at `at`: an internal arc (no
-/// asset, anchored at the addressed layer; see [`Reference::layer`])
+/// asset, anchored at the addressed layer; see [`crate::ReferenceSource::Layer`])
 /// names a stage path, mapped as [`map_arc_path`] maps it. An external
 /// arc names a path in its asset and is authored as given, with its layer
 /// offset, which is relative to the authoring layer.

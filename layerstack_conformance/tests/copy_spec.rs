@@ -128,7 +128,7 @@ fn dump(loaded: &LoadedStage, layer: &Layer) -> Json {
                         ReferenceTarget::Prim(p) => store.paths.display(p, &store.tokens),
                         _ => String::new(),
                     };
-                    json!([r.asset.clone().unwrap_or_default(), target])
+                    json!([r.asset_path().unwrap_or_default(), target])
                 }),
             );
         }

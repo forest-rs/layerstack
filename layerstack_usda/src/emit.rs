@@ -42,8 +42,8 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 
 use layerstack::doc::{
-    FieldEntry, FieldValue, Layer, LayerId, LayerOffset, PrimSpec, Reference, Specifier,
-    SublayerEntry, Value, VariantSetSpec, VariantSpec, get_field_mut, set_field_vec,
+    FieldEntry, FieldValue, Layer, LayerId, LayerOffset, PrimSpec, Reference, ReferenceSource,
+    Specifier, SublayerEntry, Value, VariantSetSpec, VariantSpec, get_field_mut, set_field_vec,
 };
 use layerstack::interner::{TokenId, TokenInterner};
 use layerstack::listop::ListOp;
@@ -1182,14 +1182,15 @@ impl EmitCtx<'_> {
         // Spec: AOUSD Core §10.3.2.1 (a reference whose layer stack cannot
         // be computed is a composition error and is ignored).
         let Some(asset) = arc_ref.asset else {
-            return Some(Reference {
+            let internal = ReferenceSource::Layer {
                 layer: self.layer_id,
-                target,
                 asset: None,
-                layer_offset,
-                custom_data,
-                deferred: false,
-            });
+            };
+            return Some(
+                Reference::from_source(internal, target)
+                    .with_layer_offset(layer_offset)
+                    .with_custom_data(custom_data),
+            );
         };
         // An asset path that is a variable expression is evaluated during
         // composition, relative to this layer.
@@ -1221,14 +1222,15 @@ impl EmitCtx<'_> {
         if let Some(layer) = resolved.layer {
             self.resolved_layers.push(layer);
         }
-        Some(Reference {
+        let source = ReferenceSource::Layer {
             layer: resolved.layer_id,
-            target,
-            asset: Some(String::from(asset)),
-            layer_offset,
-            custom_data,
-            deferred: false,
-        })
+            asset: Some(asset),
+        };
+        Some(
+            Reference::from_source(source, target)
+                .with_layer_offset(layer_offset)
+                .with_custom_data(custom_data),
+        )
     }
 
     /// Converts a `variantSets` list op, as authored. The parser reports
@@ -2231,7 +2233,13 @@ def \"A\" {
         let a_id = paths.lookup(&a_path).unwrap();
         let spec = result.layer.prim(a_id).unwrap();
         assert_eq!(spec.references.prepend.len(), 1);
-        assert_eq!(spec.references.prepend[0].layer, LayerId(100));
+        assert_eq!(
+            spec.references.prepend[0].source(),
+            ReferenceSource::Layer {
+                layer: LayerId(100),
+                asset: Some("./ref.usd"),
+            }
+        );
     }
 
     #[test]
@@ -3881,9 +3889,14 @@ def "P" (
         let (a, y) = (tokens.intern("a"), tokens.intern("y"));
         let spec = result.layer.prim(p).unwrap();
         let deferred = spec.variant_spec(&[(a, y)]).unwrap().references.prepend[0].clone();
-        assert!(deferred.deferred && deferred.is_unresolved());
-        assert_eq!(deferred.layer, LayerId(1));
-        assert_eq!(deferred.asset.as_deref(), Some("ay.usda"));
+        assert!(deferred.is_unresolved());
+        assert_eq!(
+            deferred.source(),
+            ReferenceSource::Asset {
+                anchor: LayerId(1),
+                path: "ay.usda"
+            }
+        );
         let c = paths
             .lookup(&Path::parse_absolute("/P/C", &tokens).unwrap())
             .unwrap();
@@ -3891,8 +3904,10 @@ def "P" (
             .layer
             .prim_specs(c)
             .flat_map(|spec| spec.references.prepend.iter())
-            .filter(|arc| arc.deferred)
-            .map(|arc| arc.asset.clone().unwrap())
+            .filter_map(|arc| match arc.source() {
+                ReferenceSource::Asset { path, .. } => Some(String::from(path)),
+                _ => None,
+            })
             .collect();
         assert_eq!(deferred_children, ["other.usda"]);
     }

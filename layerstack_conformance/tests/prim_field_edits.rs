@@ -253,7 +253,7 @@ fn fields(loaded: &LoadedStage, spec: Spec<'_>) -> Json {
     let path = |p: &PathId| json!(store.paths.display(*p, &store.tokens));
     let reference = |r: &Reference| {
         json!({
-            "asset": r.asset.clone().unwrap_or_default(),
+            "asset": r.asset_path().unwrap_or_default(),
             "path": match r.target {
                 ReferenceTarget::Prim(p) => store.paths.display(p, &store.tokens),
                 _ => String::new(),

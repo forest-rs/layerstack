@@ -973,7 +973,7 @@ pub enum ReferenceTarget {
     ///
     /// For an external arc (`@./asset.usda@`) that is the asset's root
     /// layer; for an internal arc (`<>`) it is the root layer of the layer
-    /// stack containing the arc (see [`Reference::layer`]). When the
+    /// stack containing the arc (see [`ReferenceSource::Layer`]). When the
     /// layer has no usable `defaultPrim`, or no prim spec exists at the path
     /// it names, the arc contributes nothing and composition reports
     /// [`CompositionError::UnresolvedDefaultPrim`].
@@ -988,41 +988,92 @@ pub enum ReferenceTarget {
     DefaultPrim,
 }
 
-/// A composition reference or payload arc.
-#[derive(Clone, Debug)]
-#[doc(alias = "SdfReference")]
-pub struct Reference {
-    /// The root layer of the referenced layer stack.
+/// Where a reference or payload arc leads: the layer stack it targets, or
+/// the asset path composition resolves to find it.
+///
+/// [`Reference::source`] reads it. Each variant names the one layer it
+/// means: the layer the arc targets ([`Self::Layer`]), or the layer that
+/// authors it, which a path is resolved relative to (`anchor`).
+///
+/// Spec: AOUSD Core §9.4 (asset paths are anchored to the layer that
+/// authors them), §10.3.2.1 (references), §10.3.2.2 (payloads).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ReferenceSource<'a> {
+    /// The layer stack whose root layer is `layer`, which the store holds.
+    /// `asset` is the asset path the arc was authored with, which writers
+    /// write back; `None` for an arc made by layer id alone.
     ///
-    /// An arc with no [`Reference::asset`] whose layer is the layer that
-    /// authors it is internal (`</Prim>`, `<>`): it targets the layer stack
-    /// containing the site that authors it, not that layer alone, so an
-    /// internal arc authored in a sublayer reads every layer of the stack.
-    /// Composition anchors it to that stack's root layer.
+    /// An arc with no `asset` whose `layer` is the layer that authors it is
+    /// internal (`</Prim>`, `<>`): it targets the layer stack containing
+    /// the site that authors it, not that layer alone, so an internal arc
+    /// authored in a sublayer reads every layer of the stack. Composition
+    /// anchors it to that stack's root layer.
     ///
     /// Spec: AOUSD Core §10.3.2.1 ("the layer stack containing the
     /// reference is assumed"). OpenUSD: `_EvalRefOrPayloadArcs` in
     /// `pxr/usd/pcp/primIndex.cpp`.
-    ///
-    /// An arc whose [`Reference::asset`] is a variable expression
-    /// ([`Reference::expression`]) names no layer until composition
-    /// evaluates it; its `layer` is the layer that authors it, which the
-    /// evaluated path is anchored to. So does a deferred arc
-    /// ([`Reference::deferred`]): composition resolves its asset path
-    /// relative to `layer`.
-    pub layer: LayerId,
+    Layer {
+        /// The root layer of the targeted layer stack.
+        layer: LayerId,
+        /// The authored asset path, if the arc has one.
+        asset: Option<&'a str>,
+    },
+    /// An asset path the importer left for composition to resolve relative
+    /// to `anchor` ([`Reference::deferred`]): composition asks the store for
+    /// it ([`LayerStore::asset_availability`]) and follows the arc to the
+    /// layer the host loaded, or lists it in
+    /// [`Stage::asset_requests`](crate::Stage::asset_requests) until then.
+    Asset {
+        /// The layer that authors the arc.
+        anchor: LayerId,
+        /// The authored asset path.
+        path: &'a str,
+    },
+    /// A variable expression (`` `"./${NAME}.usd"` ``) composition evaluates
+    /// with the authoring layer stack's expression variables, then resolves
+    /// relative to `anchor` ([`Reference::expression`]).
+    Expression {
+        /// The layer that authors the arc.
+        anchor: LayerId,
+        /// The authored expression.
+        text: &'a str,
+    },
+    /// An asset path whose resolution failed ([`Reference::unresolved`]):
+    /// the arc contributes nothing, and composition reports it as
+    /// [`CompositionError::UnresolvedAsset`](crate::CompositionError::UnresolvedAsset).
+    Unresolved {
+        /// The authored asset path.
+        path: &'a str,
+    },
+}
+
+/// A composition reference or payload arc.
+///
+/// Its [`source`](Self::source) says where it leads; the constructors make
+/// each kind: [`Reference::new`] and [`Reference::to_default_prim`] (a
+/// layer by id, or an internal arc), [`Reference::with_asset`] and
+/// [`Reference::with_asset_default_prim`] (a layer and the asset path it
+/// was authored with), [`Reference::deferred`], [`Reference::expression`]
+/// and [`Reference::unresolved`].
+#[derive(Clone, Debug)]
+#[doc(alias = "SdfReference")]
+pub struct Reference {
+    /// The layer the arc's source names: the targeted layer for a resolved
+    /// arc, the authoring layer for a deferred or expression arc,
+    /// [`LayerId::UNRESOLVED`] for an unresolved one
+    /// ([`ReferenceSource`] tells them apart).
+    pub(crate) layer: LayerId,
     /// The authored target within that layer/document.
     pub target: ReferenceTarget,
-    /// Optional debug name / URI.
-    pub asset: Option<String>,
+    /// The authored asset path, or expression.
+    pub(crate) asset: Option<String>,
     /// Time offset applied across this reference boundary (§12.3.2.1).
     pub layer_offset: LayerOffset,
     /// Authored reference custom data (AOUSD Core §16.2.17.5). Payloads have none.
     pub custom_data: Vec<(Arc<str>, Value)>,
-    /// Whether the importer left [`Reference::asset`] for composition to
-    /// resolve, relative to [`Reference::layer`] (see
-    /// [`Reference::deferred`]).
-    pub deferred: bool,
+    /// Whether the importer left `asset` for composition to resolve,
+    /// relative to `layer` (see [`Reference::deferred`]).
+    pub(crate) deferred: bool,
 }
 
 // Reference list identity must be reflexive even for metadata NaNs, just as
@@ -1048,16 +1099,115 @@ impl PartialEq for Reference {
 impl Eq for Reference {}
 
 impl Reference {
+    /// Where the arc leads: the layer it targets, or the asset path or
+    /// expression composition resolves relative to the layer that authors
+    /// it (see [`ReferenceSource`]).
+    ///
+    /// ```
+    /// use layerstack::{LayerId, LayerOffset, Reference, ReferenceSource, ReferenceTarget};
+    ///
+    /// let asset = Reference::with_asset_default_prim(LayerId(2), "./rock.usda");
+    /// assert_eq!(
+    ///     asset.source(),
+    ///     ReferenceSource::Layer { layer: LayerId(2), asset: Some("./rock.usda") },
+    /// );
+    /// let deferred = Reference::deferred(
+    ///     LayerId(1), "./plant.usda", ReferenceTarget::DefaultPrim, LayerOffset::IDENTITY,
+    /// );
+    /// assert_eq!(
+    ///     deferred.source(),
+    ///     ReferenceSource::Asset { anchor: LayerId(1), path: "./plant.usda" },
+    /// );
+    /// ```
+    #[must_use]
+    pub fn source(&self) -> ReferenceSource<'_> {
+        let asset = self.asset.as_deref();
+        if self.layer == LayerId::UNRESOLVED {
+            ReferenceSource::Unresolved {
+                path: asset.unwrap_or_default(),
+            }
+        } else if self.deferred {
+            ReferenceSource::Asset {
+                anchor: self.layer,
+                path: asset.unwrap_or_default(),
+            }
+        } else if self.is_expression() {
+            ReferenceSource::Expression {
+                anchor: self.layer,
+                text: asset.unwrap_or_default(),
+            }
+        } else {
+            ReferenceSource::Layer {
+                layer: self.layer,
+                asset,
+            }
+        }
+    }
+
+    /// An arc from `source` to `target`, with no layer offset or custom
+    /// data: the constructor that takes any [`ReferenceSource`].
+    #[must_use]
+    pub fn from_source(source: ReferenceSource<'_>, target: ReferenceTarget) -> Self {
+        let (layer, asset, deferred) = match source {
+            ReferenceSource::Layer { layer, asset } => (layer, asset, false),
+            ReferenceSource::Asset { anchor, path } => (anchor, Some(path), true),
+            ReferenceSource::Expression { anchor, text } => (anchor, Some(text), false),
+            ReferenceSource::Unresolved { path } => (LayerId::UNRESOLVED, Some(path), false),
+        };
+        Self {
+            layer,
+            target,
+            asset: asset.map(String::from),
+            layer_offset: LayerOffset::IDENTITY,
+            custom_data: Vec::new(),
+            deferred,
+        }
+    }
+
+    /// The arc with its source replaced by `source`, keeping its target,
+    /// layer offset and custom data: for a tool that rewrites where arcs
+    /// lead, such as one that localizes assets.
+    #[must_use]
+    pub fn with_source(self, source: ReferenceSource<'_>) -> Self {
+        let Self {
+            target,
+            layer_offset,
+            custom_data,
+            ..
+        } = self;
+        Self {
+            layer_offset,
+            custom_data,
+            ..Self::from_source(source, target)
+        }
+    }
+
+    /// The asset path the arc was authored with, whatever its source: the
+    /// path of a resolved, deferred or unresolved arc, or the expression
+    /// text. `None` for an arc made by layer id alone, or an internal one.
+    #[must_use]
+    pub fn asset_path(&self) -> Option<&str> {
+        self.asset.as_deref()
+    }
+
+    /// Sets the layer offset applied across the arc.
+    #[must_use]
+    pub fn with_layer_offset(mut self, layer_offset: LayerOffset) -> Self {
+        self.layer_offset = layer_offset;
+        self
+    }
+
     /// Sets the authored custom data, preserving it through unresolved arcs.
     pub fn with_custom_data(mut self, custom_data: Vec<(Arc<str>, Value)>) -> Self {
         self.custom_data = custom_data;
         self
     }
 
-    /// Creates a reference with no asset path.
+    /// Creates a reference to the prim at `prim_path` in the layer stack
+    /// whose root layer is `layer`, with no asset path
+    /// ([`ReferenceSource::Layer`]).
     ///
-    /// With `layer` set to the layer that authors it, the arc is internal
-    /// (see [`Reference::layer`]).
+    /// With `layer` set to the layer that authors it, the arc is internal.
     pub fn new(layer: LayerId, prim_path: PathId) -> Self {
         Self {
             layer,
@@ -1069,7 +1219,9 @@ impl Reference {
         }
     }
 
-    /// Creates a reference with an asset path.
+    /// Creates a reference to the prim at `prim_path` in the layer stack
+    /// whose root layer is `layer`, the layer `asset` resolved to
+    /// ([`ReferenceSource::Layer`]).
     pub fn with_asset(layer: LayerId, prim_path: PathId, asset: impl Into<String>) -> Self {
         Self {
             layer,
@@ -1081,8 +1233,9 @@ impl Reference {
         }
     }
 
-    /// Creates a reference that implicitly targets the referenced layer's
-    /// `defaultPrim`.
+    /// Creates a reference to the `defaultPrim` of `layer`, with no asset
+    /// path ([`ReferenceSource::Layer`]); internal (`<>`) when `layer` is
+    /// the layer that authors it.
     pub fn to_default_prim(layer: LayerId) -> Self {
         Self {
             layer,
@@ -1094,8 +1247,8 @@ impl Reference {
         }
     }
 
-    /// Creates an asset reference that implicitly targets the asset's
-    /// `defaultPrim`.
+    /// Creates a reference to the `defaultPrim` of `layer`, the layer
+    /// `asset` resolved to ([`ReferenceSource::Layer`]).
     pub fn with_asset_default_prim(layer: LayerId, asset: impl Into<String>) -> Self {
         Self {
             layer,
@@ -1107,7 +1260,8 @@ impl Reference {
         }
     }
 
-    /// Creates a reference or payload to `asset` whose resolution failed.
+    /// Creates a reference or payload to `asset` whose resolution failed
+    /// ([`ReferenceSource::Unresolved`]).
     ///
     /// The arc keeps its authored asset path, target and offset, and its
     /// layer is [`LayerId::UNRESOLVED`]: it has no target, contributes
@@ -1134,13 +1288,14 @@ impl Reference {
         }
     }
 
-    /// Creates a reference or payload, authored in `layer`, whose asset path
-    /// `asset` is a variable expression such as `` `"./${NAME}.usd"` ``.
+    /// Creates a reference or payload, authored in `anchor`, whose asset path
+    /// `asset` is a variable expression such as `` `"./${NAME}.usd"` ``
+    /// ([`ReferenceSource::Expression`]).
     ///
     /// The arc targets no layer stack as authored
     /// ([`Reference::is_unresolved`]): composition evaluates `asset` with
     /// the expression variables of the layer stack that authors the arc,
-    /// resolves the resulting path relative to `layer`
+    /// resolves the resulting path relative to `anchor`
     /// ([`LayerStore::asset_layer`]) and follows the arc there. An
     /// expression that evaluates to nothing drops the arc; one that fails
     /// to evaluate drops it and is reported as
@@ -1152,13 +1307,13 @@ impl Reference {
     ///
     /// [`CompositionError::VariableExpressionError`]: crate::CompositionError::VariableExpressionError
     pub fn expression(
-        layer: LayerId,
+        anchor: LayerId,
         asset: impl Into<String>,
         target: ReferenceTarget,
         layer_offset: LayerOffset,
     ) -> Self {
         Self {
-            layer,
+            layer: anchor,
             target,
             asset: Some(asset.into()),
             layer_offset,
@@ -1167,14 +1322,15 @@ impl Reference {
         }
     }
 
-    /// Creates a reference or payload, authored in `layer`, whose asset path
-    /// `asset` the importer leaves for composition to resolve.
+    /// Creates a reference or payload, authored in `anchor`, whose asset path
+    /// `asset` the importer leaves for composition to resolve
+    /// ([`ReferenceSource::Asset`]).
     ///
     /// An importer may defer an arc that composition might never follow,
     /// such as one inside a variant branch, so that opening a stage reads
     /// only the layers its selections reach. The arc targets no layer stack
     /// as authored ([`Reference::is_unresolved`]): composition asks the
-    /// store for `asset` relative to `layer`
+    /// store for `asset` relative to `anchor`
     /// ([`LayerStore::asset_availability`]) and follows the arc to the layer
     /// the host loaded. An asset the host confirmed missing is reported as
     /// [`CompositionError::UnresolvedAsset`]; one the host has not examined
@@ -1189,13 +1345,13 @@ impl Reference {
     ///
     /// [`CompositionError::UnresolvedAsset`]: crate::CompositionError::UnresolvedAsset
     pub fn deferred(
-        layer: LayerId,
+        anchor: LayerId,
         asset: impl Into<String>,
         target: ReferenceTarget,
         layer_offset: LayerOffset,
     ) -> Self {
         Self {
-            layer,
+            layer: anchor,
             target,
             asset: Some(asset.into()),
             layer_offset,
@@ -1224,7 +1380,7 @@ impl Reference {
     }
 
     /// Returns the root layer of the layer stack this arc targets as the
-    /// store resolves it: [`Reference::layer`], or for a deferred arc
+    /// store resolves it: its layer, or for a deferred arc
     /// ([`Reference::deferred`]) the layer `store` records for its asset
     /// ([`LayerStore::asset_layer`]), `None` while it records none.
     pub(crate) fn stored_target_layer(&self, store: &dyn LayerStore) -> Option<LayerId> {
@@ -1236,7 +1392,7 @@ impl Reference {
     }
 
     /// Returns the prim path this arc targets in the layer stack rooted at
-    /// [`Reference::layer`]: the authored path, or the path named by that
+    /// its [`ReferenceSource::Layer`]: the authored path, or the path named by that
     /// layer's `defaultPrim` for a [`ReferenceTarget::DefaultPrim`] target.
     ///
     /// Returns `None` when the arc's asset is unresolved
@@ -3481,6 +3637,82 @@ impl LayerStore for InMemoryStore {
 mod tests {
     use super::*;
     use alloc::boxed::Box;
+
+    /// Each constructor makes the source it names, and a source makes the
+    /// arc it was read from.
+    #[test]
+    fn reference_sources_name_one_layer_each() {
+        let (scene, rock) = (LayerId(1), LayerId(2));
+        let at = |offset| LayerOffset { offset, scale: 1.0 };
+        let cases = [
+            (
+                Reference::to_default_prim(scene),
+                ReferenceSource::Layer {
+                    layer: scene,
+                    asset: None,
+                },
+            ),
+            (
+                Reference::with_asset_default_prim(rock, "./rock.usda"),
+                ReferenceSource::Layer {
+                    layer: rock,
+                    asset: Some("./rock.usda"),
+                },
+            ),
+            (
+                Reference::deferred(scene, "./plant.usda", ReferenceTarget::DefaultPrim, at(2.0)),
+                ReferenceSource::Asset {
+                    anchor: scene,
+                    path: "./plant.usda",
+                },
+            ),
+            (
+                Reference::expression(
+                    scene,
+                    "`\"./${NAME}.usda\"`",
+                    ReferenceTarget::DefaultPrim,
+                    at(3.0),
+                ),
+                ReferenceSource::Expression {
+                    anchor: scene,
+                    text: "`\"./${NAME}.usda\"`",
+                },
+            ),
+            (
+                Reference::unresolved("./moss.usda", ReferenceTarget::DefaultPrim, at(4.0)),
+                ReferenceSource::Unresolved {
+                    path: "./moss.usda",
+                },
+            ),
+        ];
+        for (reference, source) in cases {
+            assert_eq!(reference.source(), source);
+            let rebuilt = Reference::from_source(source, reference.target.clone())
+                .with_layer_offset(reference.layer_offset);
+            assert_eq!(rebuilt, reference, "{source:?}");
+            assert_eq!(
+                reference.asset_path(),
+                match source {
+                    ReferenceSource::Layer { asset, .. } => asset,
+                    ReferenceSource::Asset { path, .. } | ReferenceSource::Unresolved { path } => {
+                        Some(path)
+                    }
+                    ReferenceSource::Expression { text, .. } => Some(text),
+                }
+            );
+        }
+        // Rewriting the source keeps the target, offset and custom data.
+        let localized =
+            Reference::deferred(scene, "./plant.usda", ReferenceTarget::DefaultPrim, at(2.0))
+                .with_custom_data(vec![("note".into(), Value::Bool(true))])
+                .with_source(ReferenceSource::Layer {
+                    layer: rock,
+                    asset: Some("plant.usda"),
+                });
+        assert_eq!(localized.layer_offset, at(2.0));
+        assert_eq!(localized.custom_data.len(), 1);
+        assert!(!localized.is_unresolved());
+    }
     use alloc::format;
     use alloc::sync::Arc;
     use alloc::vec;

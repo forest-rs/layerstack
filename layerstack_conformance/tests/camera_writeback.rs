@@ -271,13 +271,14 @@ fn reference_target_maps_all_camera_samples_and_matrix_together() {
     store.insert_layer(referenced);
     store.layers.get_mut(&LayerId(1)).unwrap().insert_prim(
         path,
-        PrimSpec::def().with_reference(layerstack::Reference {
-            layer_offset: layerstack::LayerOffset {
-                offset: 10.,
-                scale: 2.,
-            },
-            ..layerstack::Reference::new(LayerId(2), asset)
-        }),
+        PrimSpec::def().with_reference(
+            layerstack::Reference::new(LayerId(2), asset).with_layer_offset(
+                layerstack::LayerOffset {
+                    offset: 10.,
+                    scale: 2.,
+                },
+            ),
+        ),
     );
     live.synchronize(&mut store);
     let node = live

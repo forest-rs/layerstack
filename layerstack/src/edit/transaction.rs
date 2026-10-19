@@ -728,7 +728,7 @@ impl Transaction {
     ///
     /// Arc paths are named as the address is: through an edit target the
     /// paths of internal arcs (no asset, anchored at the target's layer;
-    /// see [`Reference::layer`]) are stage paths, mapped to the layer's
+    /// see [`ReferenceSource::Layer`](crate::ReferenceSource::Layer)) are stage paths, mapped to the layer's
     /// namespace as relationship targets are
     /// ([`Transaction::set_targets`]), and one the target does not map
     /// rejects the edit. An external arc names a path in its asset and is

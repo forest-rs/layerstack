@@ -380,10 +380,11 @@ fn referenced() -> (InMemoryStore, LiveStage, EditTarget) {
     store.insert_layer(asset_layer);
     let mut main = Layer::new(LayerId(1));
     main.insert_prim(root, PrimSpec::default().with_children(vec![instance_name]));
-    let reference = Reference {
-        asset: Some("mapped_asset.usda".into()),
-        ..Reference::new(LayerId(2), asset)
-    };
+    let reference =
+        Reference::new(LayerId(2), asset).with_source(layerstack::ReferenceSource::Layer {
+            layer: LayerId(2),
+            asset: Some("mapped_asset.usda"),
+        });
     main.insert_prim(instance, PrimSpec::def().with_reference(reference));
     store.insert_layer(main);
     let options = StageOptions {

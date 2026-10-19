@@ -294,7 +294,7 @@ fn unresolved_arcs_are_kept_as_authored() {
             .values()
             .flat_map(|p| &p.references.prepend)
             .filter(|r| r.is_unresolved())
-            .map(|r| (r.asset.clone(), r.layer_offset.offset))
+            .map(|r| (r.asset_path().map(String::from), r.layer_offset.offset))
             .collect();
         assert_eq!(
             references,
@@ -404,7 +404,7 @@ fn arc_list(op: &ListOp<Reference>) -> String {
             .map(|r| {
                 format!(
                     "{:?} {:?} {:?} unresolved={}",
-                    r.asset,
+                    r.asset_path(),
                     r.target,
                     r.layer_offset,
                     r.is_unresolved()

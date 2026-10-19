@@ -371,9 +371,13 @@ fn leftover_arcs(layer: &Layer, store: &InMemoryStore) -> Vec<String> {
             .flatten()
             .chain(&spec.references.prepend)
             .chain(&spec.references.append);
-        let internal = references
-            .clone()
-            .all(|r| r.asset.is_none() && r.layer == layer.id());
+        let internal = references.clone().all(|r| {
+            r.source()
+                == layerstack::ReferenceSource::Layer {
+                    layer: layer.id(),
+                    asset: None,
+                }
+        });
         let prototype = references.count() <= 1
             && spec.instanceable == Some(true)
             && internal

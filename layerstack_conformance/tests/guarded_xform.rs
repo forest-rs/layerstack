@@ -147,13 +147,14 @@ fn referenced_matrix_replacement_maps_namespace_and_stage_time_together() {
     let mut root = Layer::new(LayerId(1));
     root.insert_prim(
         use_,
-        PrimSpec::def().with_reference(layerstack::Reference {
-            layer_offset: layerstack::LayerOffset {
-                offset: 10.,
-                scale: 2.,
-            },
-            ..layerstack::Reference::new(LayerId(2), asset)
-        }),
+        PrimSpec::def().with_reference(
+            layerstack::Reference::new(LayerId(2), asset).with_layer_offset(
+                layerstack::LayerOffset {
+                    offset: 10.,
+                    scale: 2.,
+                },
+            ),
+        ),
     );
     let mut referenced = Layer::new(LayerId(2));
     referenced.insert_prim(

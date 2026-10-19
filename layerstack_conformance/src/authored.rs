@@ -187,7 +187,7 @@ fn render_reference(reference: &Reference, names: Names<'_>) -> String {
     };
     format!(
         "@{}@{target} offset={} scale={}",
-        reference.asset.as_deref().unwrap_or(""),
+        reference.asset_path().unwrap_or(""),
         reference.layer_offset.offset,
         reference.layer_offset.scale
     )

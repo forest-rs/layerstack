@@ -25,7 +25,7 @@ use layerstack::{CannotApply, PathId};
 use crate::{PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "MaterialXConfigAPI is an API schema that provides an interface for storing information about the MaterialX environment."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `MaterialXConfigAPI`. Get it with [`MaterialXConfigApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `MaterialXConfigAPI`. Get it with [`MaterialXConfigApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdMtlxMaterialXConfigAPI`."]
 #[doc(alias = "UsdMtlxMaterialXConfigAPI")]
 #[doc(alias = "MaterialXConfigAPI")]

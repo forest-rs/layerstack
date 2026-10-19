@@ -65,7 +65,9 @@ fn main() {
     let start = Instant::now();
     let mut checksum = 0_i64;
     for prim in stage.traverse(root) {
-        if let Some(value) = stage.resolve_value(prim, fields[0])
+        if let Some(value) = stage
+            .prim(prim, &store)
+            .and_then(|prim| prim.metadata(fields[0]))
             && let layerstack::ResolvedValue::Scalar(Value::Int(v)) = value.value
         {
             checksum += i64::from(v);

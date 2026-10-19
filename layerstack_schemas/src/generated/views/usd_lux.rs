@@ -25,7 +25,7 @@ use layerstack::{CannotApply, PathId};
 use crate::{PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "A base class used by intrinsic lights. Not intended to be used directly."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's abstract typed schema `BoundableLightBase`, inheriting [`crate::usd_geom::Boundable`]. Construct it with [`BoundableLightBase::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's abstract typed schema `BoundableLightBase`, inheriting [`crate::usd_geom::Boundable`]. Construct it with [`BoundableLightBase::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxBoundableLightBase`."]
 #[doc(alias = "UsdLuxBoundableLightBase")]
 #[derive(Clone, Copy, Debug)]
@@ -121,7 +121,7 @@ impl BoundableLightBaseEdit {
 
 #[doc = "A light that is emitted outwards from a cylinder."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `CylinderLight`, inheriting [`BoundableLightBase`]. Construct it with [`CylinderLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `CylinderLight`, inheriting [`BoundableLightBase`]. Construct it with [`CylinderLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxCylinderLight`."]
 #[doc(alias = "UsdLuxCylinderLight")]
 #[derive(Clone, Copy, Debug)]
@@ -333,7 +333,7 @@ impl CylinderLightEdit {
 
 #[doc = "A light that emits from one side of a circular disk (along the -Z axis), centered in the XY plane."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `DiskLight`, inheriting [`BoundableLightBase`]. Construct it with [`DiskLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `DiskLight`, inheriting [`BoundableLightBase`]. Construct it with [`DiskLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxDiskLight`."]
 #[doc(alias = "UsdLuxDiskLight")]
 #[derive(Clone, Copy, Debug)]
@@ -467,7 +467,7 @@ impl DiskLightEdit {
 
 #[doc = "A light that provides light from a far distant source, along the -Z axis. Also known as a \"directional light\"."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `DistantLight`, inheriting [`NonboundableLightBase`]. Construct it with [`DistantLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `DistantLight`, inheriting [`NonboundableLightBase`]. Construct it with [`DistantLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxDistantLight`."]
 #[doc(alias = "UsdLuxDistantLight")]
 #[derive(Clone, Copy, Debug)]
@@ -669,7 +669,7 @@ impl DomeLightTextureFormat {
 
 #[doc = "A light that is emitted inwards from a distant external environment such as a sky or a light environment captured in an HDR image used for Image Based Lighting (IBL)."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `DomeLight`, inheriting [`NonboundableLightBase`]. Construct it with [`DomeLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `DomeLight`, inheriting [`NonboundableLightBase`]. Construct it with [`DomeLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxDomeLight`."]
 #[doc(alias = "UsdLuxDomeLight")]
 #[derive(Clone, Copy, Debug)]
@@ -1066,7 +1066,7 @@ impl DomeLight1PoleAxis {
 
 #[doc = "A light that is emitted inwards from a distant external environment such as a sky or a light environment captured in an HDR image used for Image Based Lighting (IBL). Provides additional control over the dome's orientation via the poleAxis property."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `DomeLight_1`, inheriting [`NonboundableLightBase`]. Construct it with [`DomeLight1::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `DomeLight_1`, inheriting [`NonboundableLightBase`]. Construct it with [`DomeLight1::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxDomeLight_1`."]
 #[doc(alias = "UsdLuxDomeLight_1")]
 #[doc(alias = "DomeLight_1")]
@@ -1368,7 +1368,7 @@ impl DomeLight1Edit {
 
 #[doc = "A light that emits outwards from a geometric prim. Deprecated, use MeshLight instead."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `GeometryLight`, inheriting [`NonboundableLightBase`]. Construct it with [`GeometryLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `GeometryLight`, inheriting [`NonboundableLightBase`]. Construct it with [`GeometryLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxGeometryLight`."]
 #[doc(alias = "UsdLuxGeometryLight")]
 #[derive(Clone, Copy, Debug)]
@@ -1575,7 +1575,7 @@ impl LightApiMaterialSyncMode {
 
 #[doc = "This schema adds light capabilities to a prim."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `LightAPI`. Get it with [`LightApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `LightAPI`. Get it with [`LightApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxLightAPI`."]
 #[doc(alias = "UsdLuxLightAPI")]
 #[doc(alias = "LightAPI")]
@@ -2108,7 +2108,7 @@ impl LightApiEdit {
 
 #[doc = "A light filter is used to modify the effect of a light."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `LightFilter`, inheriting [`crate::usd_geom::Xformable`]. Construct it with [`LightFilter::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `LightFilter`, inheriting [`crate::usd_geom::Xformable`]. Construct it with [`LightFilter::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxLightFilter`."]
 #[doc(alias = "UsdLuxLightFilter")]
 #[derive(Clone, Copy, Debug)]
@@ -2283,7 +2283,7 @@ impl LightListApiLightListCacheBehavior {
 
 #[doc = "Facilitates discovery and publishing of lights in a scene. Provides a mechanism to create and utilize a cache if needed."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `LightListAPI`. Get it with [`LightListApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `LightListAPI`. Get it with [`LightListApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxLightListAPI`."]
 #[doc(alias = "UsdLuxLightListAPI")]
 #[doc(alias = "LightListAPI")]
@@ -2546,7 +2546,7 @@ impl ListApiLightListCacheBehavior {
 
 #[doc = "Facilitates discovery and publishing of lights in a scene. This schema is deprecated and LightListAPI should be used instead."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `ListAPI`. Get it with [`ListApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `ListAPI`. Get it with [`ListApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxListAPI`."]
 #[doc(alias = "UsdLuxListAPI")]
 #[doc(alias = "ListAPI")]
@@ -2755,7 +2755,7 @@ impl ListApiEdit {
 
 #[doc = "Applies light behavior to a mesh."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `MeshLightAPI`. Get it with [`MeshLightApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `MeshLightAPI`. Get it with [`MeshLightApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxMeshLightAPI`."]
 #[doc(alias = "UsdLuxMeshLightAPI")]
 #[doc(alias = "MeshLightAPI")]
@@ -2852,7 +2852,7 @@ impl MeshLightApiEdit {
 
 #[doc = "A base class used by intrinsic lights. Not intended to be used directly."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's abstract typed schema `NonboundableLightBase`, inheriting [`crate::usd_geom::Xformable`]. Construct it with [`NonboundableLightBase::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's abstract typed schema `NonboundableLightBase`, inheriting [`crate::usd_geom::Xformable`]. Construct it with [`NonboundableLightBase::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxNonboundableLightBase`."]
 #[doc(alias = "UsdLuxNonboundableLightBase")]
 #[derive(Clone, Copy, Debug)]
@@ -2948,7 +2948,7 @@ impl NonboundableLightBaseEdit {
 
 #[doc = "A light that provides properties to allow it to identify an external Sdr shader node."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `PluginLight`, inheriting [`crate::usd_geom::Xformable`]. Construct it with [`PluginLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `PluginLight`, inheriting [`crate::usd_geom::Xformable`]. Construct it with [`PluginLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxPluginLight`."]
 #[doc(alias = "UsdLuxPluginLight")]
 #[derive(Clone, Copy, Debug)]
@@ -3067,7 +3067,7 @@ impl PluginLightEdit {
 
 #[doc = "A Light filter that provides properties that allow it to identify an external SdrShadingNode definition, through UsdShadeNodeDefAPI, that can be provided to render delegates without the need to provide a schema definition for the light filter's type."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `PluginLightFilter`, inheriting [`LightFilter`]. Construct it with [`PluginLightFilter::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `PluginLightFilter`, inheriting [`LightFilter`]. Construct it with [`PluginLightFilter::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxPluginLightFilter`."]
 #[doc(alias = "UsdLuxPluginLightFilter")]
 #[derive(Clone, Copy, Debug)]
@@ -3174,7 +3174,7 @@ impl PluginLightFilterEdit {
 
 #[doc = "A rectangular portal in the local XY plane that guides sampling of a dome light (DomeLight, DomeLight_1)."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `PortalLight`, inheriting [`BoundableLightBase`]. Construct it with [`PortalLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `PortalLight`, inheriting [`BoundableLightBase`]. Construct it with [`PortalLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxPortalLight`."]
 #[doc(alias = "UsdLuxPortalLight")]
 #[derive(Clone, Copy, Debug)]
@@ -3347,7 +3347,7 @@ impl PortalLightEdit {
 
 #[doc = "A light that emits from one side of a rectangle (along the -Z axis), centered in the XY plane."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `RectLight`, inheriting [`BoundableLightBase`]. Construct it with [`RectLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `RectLight`, inheriting [`BoundableLightBase`]. Construct it with [`RectLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxRectLight`."]
 #[doc(alias = "UsdLuxRectLight")]
 #[derive(Clone, Copy, Debug)]
@@ -3559,7 +3559,7 @@ impl RectLightEdit {
 
 #[doc = "Controls to refine a light's shadow casting behavior. These are non-physical controls."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `ShadowAPI`. Get it with [`ShadowApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `ShadowAPI`. Get it with [`ShadowApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxShadowAPI`."]
 #[doc(alias = "UsdLuxShadowAPI")]
 #[doc(alias = "ShadowAPI")]
@@ -3866,7 +3866,7 @@ impl ShadowApiEdit {
 
 #[doc = "Controls for shaping a light's emission, such as light cone angle and falloff."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `ShapingAPI`. Get it with [`ShapingApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `ShapingAPI`. Get it with [`ShapingApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxShapingAPI`."]
 #[doc(alias = "UsdLuxShapingAPI")]
 #[doc(alias = "ShapingAPI")]
@@ -4278,7 +4278,7 @@ impl ShapingApiEdit {
 
 #[doc = "A light that is emitted outwards from a sphere."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `SphereLight`, inheriting [`BoundableLightBase`]. Construct it with [`SphereLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `SphereLight`, inheriting [`BoundableLightBase`]. Construct it with [`SphereLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxSphereLight`."]
 #[doc(alias = "UsdLuxSphereLight")]
 #[derive(Clone, Copy, Debug)]
@@ -4456,7 +4456,7 @@ impl SphereLightEdit {
 
 #[doc = "Applies light behavior to a volume."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `VolumeLightAPI`. Get it with [`VolumeLightApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `VolumeLightAPI`. Get it with [`VolumeLightApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxVolumeLightAPI`."]
 #[doc(alias = "UsdLuxVolumeLightAPI")]
 #[doc(alias = "VolumeLightAPI")]

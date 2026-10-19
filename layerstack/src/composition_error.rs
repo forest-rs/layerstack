@@ -792,7 +792,7 @@ pub struct InvalidExternalTargetPath {
     /// The target path as authored, in the namespace of the arc's target.
     pub target: TargetPath,
     /// The property spec that authors the path, as the property's stack
-    /// names it ([`crate::Stage::explain_property_path`]).
+    /// names it ([`crate::Property::opinions`]).
     pub spec: SpecPath,
     /// The arc the path could not be mapped across.
     pub arc: ArcKind,
@@ -822,7 +822,7 @@ pub struct InvalidInstanceTargetPath {
     /// The target path, which names an instance of the class.
     pub target: TargetPath,
     /// The class's property spec that authors the path, as the property's
-    /// stack names it ([`crate::Stage::explain_property_path`]).
+    /// stack names it ([`crate::Property::opinions`]).
     pub spec: SpecPath,
     /// The layer of the class's property spec that authors the path.
     pub layer: LayerId,

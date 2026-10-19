@@ -5,7 +5,7 @@
 #![allow(missing_docs, reason = "integration tests")]
 use layerstack::{
     ChangeHistoryError, EditTarget, InMemoryStore, Layer, LayerId, LiveStage, PrimSpec,
-    PropertyPath, PropertySpec, PropertyType, ResolvedValue, StageOptions, Transaction, Value,
+    PropertyPath, PropertySpec, PropertyType, StageOptions, Time, Transaction, Value,
 };
 use std::sync::{Arc, Mutex};
 
@@ -42,17 +42,20 @@ fn callbacks_and_independent_cursors_observe_the_same_completed_changes() {
     let received = Arc::new(Mutex::new(Vec::new()));
     let sink = received.clone();
     let subscription = live.subscribe_changes(move |notice| {
-        let value = notice.stage.resolve_property_path(path).unwrap().value;
+        let value = notice
+            .stage
+            .view(notice.store)
+            .attribute(path)
+            .and_then(|a| a.authored_value(Time::Default))
+            .unwrap()
+            .value;
         sink.lock()
             .unwrap()
             .push((notice.revision, notice.changes.clone(), value));
     });
     let applied = live.apply(&mut store, &set(path, 2.0)).unwrap();
     assert_eq!(received.lock().unwrap()[0].1, applied.changes);
-    assert_eq!(
-        received.lock().unwrap()[0].2,
-        ResolvedValue::Scalar(Value::Double(2.0))
-    );
+    assert_eq!(received.lock().unwrap()[0].2, Value::Double(2.0));
     assert_eq!(
         live.changes_since(&mut a).unwrap().collect::<Vec<_>>(),
         [&applied.changes]
@@ -60,10 +63,7 @@ fn callbacks_and_independent_cursors_observe_the_same_completed_changes() {
     assert_eq!(live.changes_since(&mut a).unwrap().count(), 0);
     assert_eq!(live.changes_since(&mut b).unwrap().count(), 1);
     live.apply(&mut store, &applied.inverse).unwrap();
-    assert_eq!(
-        received.lock().unwrap()[1].2,
-        ResolvedValue::Scalar(Value::Double(1.0))
-    );
+    assert_eq!(received.lock().unwrap()[1].2, Value::Double(1.0));
     assert!(live.unsubscribe_changes(&subscription));
     assert!(!live.unsubscribe_changes(&subscription));
     live.apply(&mut store, &set(path, 3.0)).unwrap();
@@ -95,7 +95,7 @@ fn external_authoring_reload_and_recompose_publish_reports() {
     live.synchronize(&mut store);
     let changes = live.changes_since(&mut cursor).unwrap().next().unwrap();
     assert!(changes.removed.contains(&path.prim_path()));
-    assert!(!live.stage().has_prim(path.prim_path()));
+    assert!(live.stage().prim(path.prim_path(), &store).is_none());
 }
 
 #[test]
@@ -137,8 +137,13 @@ fn callback_panic_preserves_committed_state_and_history() {
     }));
     assert!(result.is_err());
     assert_eq!(
-        live.stage().resolve_property_path(path).unwrap().value,
-        ResolvedValue::Scalar(Value::Double(9.0))
+        live.stage()
+            .view(&store)
+            .attribute(path)
+            .and_then(|a| a.authored_value(Time::Default))
+            .unwrap()
+            .value,
+        Value::Double(9.0)
     );
     assert_eq!(live.changes_since(&mut cursor).unwrap().count(), 1);
 }

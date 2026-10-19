@@ -8,8 +8,8 @@
 #![allow(missing_docs, reason = "integration test")]
 
 use layerstack::{
-    EditTarget, InMemoryStore, LayerId, LiveStage, NamespaceEdit, PropertyKind, PropertyPath,
-    Stage, StageOptions, TargetPath, Value,
+    EditTarget, InMemoryStore, LayerId, LiveStage, NamespaceEdit, Stage, StageOptions, TargetPath,
+    Value,
 };
 use layerstack_conformance::{usda_real::load_entry_usda, workspace_root};
 use serde_json::{Value as Json, json};
@@ -27,22 +27,29 @@ fn stage_snapshot(stage: &Stage, store: &InMemoryStore) -> Json {
             continue;
         }
         prims.push(path);
-        for name in stage.property_names(prim, store) {
-            let property = PropertyPath::new(prim, name);
-            let path = property.display(&store.paths, &store.tokens);
-            if let Some(list) = stage.resolve_target_list_path(property) {
-                let list: Vec<_> = list
-                    .value
-                    .into_iter()
+        let properties = stage
+            .prim(prim, store)
+            .map(|prim| prim.properties())
+            .unwrap_or_default();
+        for property in properties {
+            let path = property.to_string();
+            let display = |list: Vec<TargetPath>| -> Vec<_> {
+                list.into_iter()
                     .map(|p| p.display(&store.paths, &store.tokens))
-                    .collect();
-                if stage.property_kind(property).unwrap() == PropertyKind::Relationship {
-                    targets.insert(path.clone(), list);
-                } else if !list.is_empty() {
+                    .collect()
+            };
+            if let Some(relationship) = property.as_relationship() {
+                targets.insert(path.clone(), display(relationship.targets()));
+            } else if let Some(attribute) = property.as_attribute() {
+                let list = display(attribute.connections());
+                if !list.is_empty() {
                     connections.insert(path.clone(), list);
                 }
             }
-            if let Some(value) = stage.resolve_field_path(property) {
+            if let Some(value) = property
+                .as_attribute()
+                .and_then(|attribute| attribute.authored_value(layerstack::Time::Default))
+            {
                 match value.value {
                     Value::Double(n) => {
                         values.insert(path, json!(n));
@@ -197,7 +204,11 @@ fn relocation_expression_map_domains_match_native_usd() {
     .unwrap();
     for (property, expected) in oracle.as_object().unwrap() {
         let path = loaded.store.property_path(property);
-        let resolved = stage.resolve_field_path(path).expect(property);
+        let resolved = stage
+            .view(&loaded.store)
+            .attribute(path)
+            .and_then(|a| a.authored_value(layerstack::Time::Default))
+            .expect(property);
         assert_eq!(
             resolved.value,
             Value::PathExpression(expected.as_str().unwrap().into()),

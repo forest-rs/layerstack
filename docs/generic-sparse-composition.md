@@ -121,9 +121,9 @@ since the proposal requires a resolved array to always be dense.
 
 ### Schema fallbacks
 
-`Stage::resolve_value_with_schema` (default time) and
-`Stage::resolve_value_at_time_with_schema` (numeric times) share one
-fallback contract (AOUSD Core §12.3.5, §13.3.2.4):
+`Attribute::get`, `Attribute::value` and `Attribute::read` share one
+fallback contract at the default time and at numeric times (AOUSD Core
+§12.3.5, §13.3.2.4):
 
 - with nothing authored at the query time, a spec without a value included,
   the fallback resolves;
@@ -134,9 +134,8 @@ fallback contract (AOUSD Core §12.3.5, §13.3.2.4):
 - otherwise authored values resolve as without a schema, and opinions hidden
   behind a dense value or block are never evaluated.
 
-`Stage::resolve_value_at_time` and `Stage::resolve_property_path_at_time` take
-no schema: they compose edits over the empty array and resolve a block to no
-value.
+`Attribute::authored_value` takes no schema: it composes edits over the
+empty array and resolves a block to no value.
 
 ## Relation To The Proposal
 
@@ -250,9 +249,9 @@ value differs from the expected one. Any other difference from OpenUSD fails
 
 ## Explanations
 
-`Attribute::explain`, `Stage::explain_property_value` (at a `Time`, default
-or numeric) and their schema-aware and metadata siblings answer "why does this
-property have this value?". Each mirrors a `resolve_*` query and returns its value, where the
+`Attribute::explain` (at a `Time`, default or numeric) and
+`Prim::explain_metadata` answer "why does this property or field have this
+value?". Each mirrors a read (`Attribute::get`, `Prim::metadata`) and returns its value, where the
 value comes from (a default, the time samples bracketing the query, a spline,
 the schema fallback, or nothing), and every consulted opinion with its layer,
 spec path, composition node and layer offset, and its part: a dense value, a

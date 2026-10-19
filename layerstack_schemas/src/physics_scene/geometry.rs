@@ -259,8 +259,8 @@ pub(super) fn materials(prim: &PrimView<'_>) -> Vec<PathId> {
     let mut material_paths = Vec::new();
     let mut candidates = Vec::new();
     if scene.is_a(prim.path(), "Mesh") {
-        for &child in scene.stage().children_of(prim.path()).unwrap_or_default() {
-            let child = PrimView::new(scene, child);
+        for child in prim.prim().into_iter().flat_map(layerstack::Prim::children) {
+            let child = PrimView::new(scene, child.path());
             if scene.is_a(child.path(), "GeomSubset")
                 && child.read_value("elementType", crate::value::read_token) == Some("face")
             {

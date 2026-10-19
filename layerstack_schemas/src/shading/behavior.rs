@@ -134,15 +134,11 @@ impl Scene<'_> {
         {
             return reject(ConnectionIssue::InvalidDestination);
         }
-        let source_kind = self
-            .stage()
-            .resolve_property_declaration(source.prim_path(), source.property())
-            .map(|d| d.kind)
-            .or_else(|| {
-                self.stage()
-                    .property_definition(source.prim_path(), source.property())
-                    .map(|d| d.kind)
-            });
+        let source_kind = self.property(source).map(|property| {
+            property
+                .declaration()
+                .map_or_else(|| property.kind(), |declared| declared.kind)
+        });
         if source_kind != Some(PropertyKind::Attribute) {
             return reject(ConnectionIssue::InvalidSource);
         }

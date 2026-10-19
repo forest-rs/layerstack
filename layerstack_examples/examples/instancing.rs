@@ -52,8 +52,8 @@
 //! root's value flows down.
 
 use layerstack::{
-    InMemoryStore, Layer, LayerId, PathId, PrimSpec, Reference, Resolved, Stage, StageOptions,
-    TokenId, Value,
+    InMemoryStore, Layer, LayerId, PathId, Prim, PrimSpec, Reference, Resolved, Stage,
+    StageOptions, TokenId, Value,
 };
 
 // ---------------------------------------------------------------------------
@@ -61,20 +61,26 @@ use layerstack::{
 // kernel. Walks up the namespace hierarchy until it finds the field.
 // ---------------------------------------------------------------------------
 
-fn resolve_primvar(
-    stage: &Stage,
-    store: &InMemoryStore,
-    mut prim: PathId,
-    field: TokenId,
-) -> Option<Value> {
+fn resolve_primvar(mut prim: Prim<'_>, field: TokenId) -> Option<Value> {
     loop {
-        if let Some(resolved) = stage.resolve_field(prim, field) {
+        if let Some(resolved) = prim.metadata(field).and_then(Resolved::into_value) {
             return Some(resolved.value);
         }
-        let path = store.paths.resolve(prim);
-        let parent = path.parent()?;
-        prim = store.paths.lookup(&parent)?;
+        prim = prim.parent()?;
     }
+}
+
+/// The composed prim metadata field `key` of the prim at `prim`.
+fn field(
+    stage: &Stage,
+    store: &InMemoryStore,
+    prim: PathId,
+    key: TokenId,
+) -> Option<Resolved<Value>> {
+    stage
+        .prim(prim, store)?
+        .metadata(key)
+        .and_then(Resolved::into_value)
 }
 
 // ---------------------------------------------------------------------------
@@ -213,7 +219,7 @@ fn main() {
         ),
         ("Hero_Coral (uninstanced)", hero_branches, false),
     ] {
-        let verts = stage.resolve_field(branches_path, f_vertices);
+        let verts = field(&stage, &store, branches_path, f_vertices);
         match &verts {
             Some(r) => {
                 let layer = r.provenance.as_ref().map(|p| p.layer.0).unwrap_or(0);
@@ -238,8 +244,7 @@ fn main() {
 
     // Hero coral keeps its local override.
     assert_eq!(
-        stage
-            .resolve_field(hero_branches, f_vertices)
+        field(&stage, &store, hero_branches, f_vertices)
             .as_ref()
             .map(Resolved::value),
         Some(&Value::Int(6000)),
@@ -253,8 +258,8 @@ fn main() {
     println!("Properties on the instance prim itself are NOT stripped.\n");
 
     for (label, path) in [("Coral_01", c01), ("Coral_02", c02), ("Hero_Coral", hero)] {
-        let color = stage.resolve_field(path, f_display_color);
-        let bleach = stage.resolve_field(path, f_bleach);
+        let color = field(&stage, &store, path, f_display_color);
+        let bleach = field(&stage, &store, path, f_bleach);
         println!(
             "  {label}: color = {}, bleach = {}",
             color
@@ -284,10 +289,12 @@ fn main() {
         ("Hero_Coral/branches", hero_branches),
     ] {
         // Direct resolve: not authored on branches.
-        let direct = stage.resolve_field(branches_path, f_display_color);
+        let direct = field(&stage, &store, branches_path, f_display_color);
 
         // Primvar resolve: walks up to the instance root.
-        let inherited = resolve_primvar(&stage, &store, branches_path, f_display_color);
+        let inherited = stage
+            .prim(branches_path, &store)
+            .and_then(|prim| resolve_primvar(prim, f_display_color));
 
         println!(
             "  {label}: direct = {}, inherited = {}",
@@ -297,7 +304,9 @@ fn main() {
     }
 
     // Coral_03 has no local displayColor — it inherits the asset default.
-    let c03_inherited = resolve_primvar(&stage, &store, c03_branches, f_display_color);
+    let c03_inherited = stage
+        .prim(c03_branches, &store)
+        .and_then(|prim| resolve_primvar(prim, f_display_color));
     assert_eq!(
         c03_inherited,
         Some(Value::string("gray")),

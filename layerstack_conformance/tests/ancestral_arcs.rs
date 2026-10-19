@@ -65,6 +65,55 @@ use layerstack_conformance::{
 };
 use serde::Deserialize;
 
+/// Whether the stage composes a prim at `path`.
+fn has_prim(stage: &Stage, store: &layerstack::InMemoryStore, path: layerstack::PathId) -> bool {
+    stage.prim(path, store).is_some()
+}
+
+/// Every source of the prim at `path`, strongest first; `None` when the
+/// stage does not compose it.
+fn sources<'a>(
+    stage: &'a Stage,
+    store: &'a layerstack::InMemoryStore,
+    path: layerstack::PathId,
+) -> Option<&'a [layerstack::OpinionKey]> {
+    stage.prim(path, store).map(|prim| prim.sources())
+}
+
+/// The value opinions author for the attribute at `path` at `time`,
+/// without a schema fallback.
+fn authored(
+    stage: &Stage,
+    store: &layerstack::InMemoryStore,
+    path: layerstack::PropertyPath,
+    time: Time,
+) -> Option<layerstack::Resolved<Value>> {
+    stage
+        .view(store)
+        .attribute(path)
+        .and_then(|attribute| attribute.authored_value(time))
+}
+
+/// The composed targets of the relationship, or connections of the
+/// attribute, at `path`: `None` when no opinion authors any, except for an
+/// authored relationship, whose list is then empty.
+fn target_list(
+    stage: &Stage,
+    store: &layerstack::InMemoryStore,
+    path: layerstack::PropertyPath,
+) -> Option<Vec<layerstack::TargetPath>> {
+    let property = stage.view(store).property(path)?;
+    let opinions = property.opinions();
+    if let Some(relationship) = property.as_relationship() {
+        return (!opinions.is_empty()).then(|| relationship.targets());
+    }
+    let attribute = property.as_attribute()?;
+    opinions
+        .iter()
+        .any(|opinion| opinion.value.targets().is_some())
+        .then(|| attribute.connections())
+}
+
 const ORACLE: &str = include_str!("../fixtures/ancestral_arcs/oracle.json");
 
 #[derive(Deserialize)]
@@ -136,8 +185,7 @@ fn prim_stacks_include_the_ancestral_arcs_of_subroot_targets() {
     let mut mismatches = Vec::new();
     for prim in &oracle.prims {
         let id = loaded.store.path(&prim.path);
-        let stack: Vec<(String, String)> = stage
-            .explain_prim(id)
+        let stack: Vec<(String, String)> = sources(&stage, &loaded.store, id)
             .expect("composed prim")
             .iter()
             .map(|key| {
@@ -169,9 +217,8 @@ fn values_match_openusd() {
     let mut mismatches = Vec::new();
     for (attr, expected) in &oracle.values {
         let property = loaded.store.property_path(attr);
-        let value = stage
-            .resolve_field_path(property)
-            .map(|resolved| resolved.value);
+        let value =
+            authored(&stage, &loaded.store, property, Time::Default).map(|resolved| resolved.value);
         if value != Some(Value::Int(*expected)) {
             mismatches.push(format!("{attr}: expected {expected}, got {value:?}"));
         }
@@ -193,9 +240,7 @@ fn targets_match_openusd() {
     let mut mismatches = Vec::new();
     for (property, expected) in &oracle.targets {
         let path = loaded.store.property_path(property);
-        let targets: Vec<String> = stage
-            .resolve_target_list_path(path)
-            .map(|resolved| resolved.value)
+        let targets: Vec<String> = target_list(&stage, &loaded.store, path)
             .unwrap_or_default()
             .iter()
             .map(|target| target.display(&loaded.store.paths, &loaded.store.tokens))
@@ -240,8 +285,7 @@ fn time_samples_compose_every_enclosing_offset() {
     for (attr, probes) in &oracle.samples {
         let property = loaded.store.property_path(attr);
         for &(time, expected) in probes {
-            let value = stage
-                .resolve_property_path_at_time(property, Time::at(time))
+            let value = authored(&stage, &loaded.store, property, Time::at(time))
                 .map(|resolved| resolved.value);
             if value != Some(Value::Double(expected)) {
                 mismatches.push(format!(
@@ -266,8 +310,7 @@ fn snapshot(loaded: &mut LoadedStage, stage: &Stage) -> Vec<String> {
         .traverse(pseudo_root)
         .filter(|prim| *prim != pseudo_root)
     {
-        let stack: Vec<String> = stage
-            .explain_prim(prim)
+        let stack: Vec<String> = sources(stage, &loaded.store, prim)
             .expect("composed prim")
             .iter()
             .map(|key| {
@@ -337,25 +380,23 @@ fn selection_edits_recompose_like_a_full_composition() {
     let (mut loaded, _) = compose(&oracle);
     let mut live = LiveStage::compose(&mut loaded.store, loaded.root_layer, options());
     let petals = loaded.store.property_path("/Vineyard/Cane/Bud.petals");
-    let resolved = |live: &LiveStage| {
-        live.stage()
-            .resolve_field_path(petals)
-            .map(|resolved| resolved.value)
+    let resolved = |live: &LiveStage, loaded: &LoadedStage| {
+        authored(live.stage(), &loaded.store, petals, Time::Default).map(|resolved| resolved.value)
     };
-    assert_eq!(resolved(&live), Some(Value::Int(5)));
+    assert_eq!(resolved(&live, &loaded), Some(Value::Int(5)));
     let petal = loaded.store.path("/Vineyard/Cane/Bud/Petal");
     // A weaker selection changes nothing.
     let cane = ("trellis.usda", "/Cane/Bud");
     select(&mut live, &mut loaded, cane, ("bloom", "open"), false);
-    assert_eq!(resolved(&live), Some(Value::Int(5)));
+    assert_eq!(resolved(&live, &loaded), Some(Value::Int(5)));
     // The strongest selection picks every site's branch.
     let bud = ("trellis.usda", "/Bud");
     select(&mut live, &mut loaded, bud, ("bloom", "dormant"), false);
-    assert_eq!(resolved(&live), Some(Value::Int(0)));
-    assert!(!live.stage().has_prim(petal));
+    assert_eq!(resolved(&live, &loaded), Some(Value::Int(0)));
+    assert!(!has_prim(live.stage(), &loaded.store, petal));
     // A stronger site selects over it.
     let vine = ("vine.usda", "/Vine/Cane/Bud");
     select(&mut live, &mut loaded, vine, ("bloom", "open"), true);
-    assert_eq!(resolved(&live), Some(Value::Int(5)));
-    assert!(live.stage().has_prim(petal));
+    assert_eq!(resolved(&live, &loaded), Some(Value::Int(5)));
+    assert!(has_prim(live.stage(), &loaded.store, petal));
 }

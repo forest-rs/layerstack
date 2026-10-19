@@ -83,9 +83,13 @@ fn weak_layer_and_retimed_assets_keep_their_actual_anchor() {
     ] {
         let raw = live
             .stage()
-            .read_property(property, time, |v| match v {
-                Value::Asset(p) => Some(p.clone()),
-                _ => None,
+            .view(&store)
+            .attribute(property)
+            .and_then(|attribute| {
+                attribute.read(time, |v| match v {
+                    Value::Asset(p) => Some(p.clone()),
+                    _ => None,
+                })
             })
             .unwrap();
         assert!(raw.provenance.is_none());
@@ -142,9 +146,13 @@ fn weak_layer_and_retimed_assets_keep_their_actual_anchor() {
     let intensity = PropertyPath::new(path, store.tokens.lookup("inputs:intensity").unwrap());
     let fallback = live
         .stage()
-        .read_property_with_provenance(intensity, Time::Default, |v| match v {
-            Value::Float(v) => Some(*v),
-            _ => None,
+        .view(&store)
+        .attribute(intensity)
+        .and_then(|attribute| {
+            attribute.read_with_provenance(Time::Default, |v| match v {
+                Value::Float(v) => Some(*v),
+                _ => None,
+            })
         })
         .unwrap();
     assert_eq!(fallback.value, 1.);

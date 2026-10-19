@@ -79,7 +79,7 @@ impl AccessibilityApiPriority {
 
 #[doc = "Specifies accessibility information for a prim, usable in tools that support accessibility features such as voice controls or screen readers."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's multiple-apply API schema `AccessibilityAPI`. Get it with [`AccessibilityApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's multiple-apply API schema `AccessibilityAPI`. Get it with [`AccessibilityApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdUIAccessibilityAPI`."]
 #[doc(alias = "UsdUIAccessibilityAPI")]
 #[doc(alias = "AccessibilityAPI")]
@@ -373,7 +373,7 @@ impl AccessibilityApiEdit {
 
 #[doc = "Backdrop is a visual indication of a grouping of nodes."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `Backdrop`, inheriting [`crate::usd::Typed`]. Construct it with [`Backdrop::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `Backdrop`, inheriting [`crate::usd::Typed`]. Construct it with [`Backdrop::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdUIBackdrop`."]
 #[doc(alias = "UsdUIBackdrop")]
 #[derive(Clone, Copy, Debug)]
@@ -548,7 +548,7 @@ impl NodeGraphNodeApiExpansionState {
 
 #[doc = "NodeGraphNodeAPI stores information about nodes within a node graph. This information includes node display UI hints (node color, icon, etc.) and layout hits (node position and size)."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `NodeGraphNodeAPI`. Get it with [`NodeGraphNodeApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `NodeGraphNodeAPI`. Get it with [`NodeGraphNodeApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdUINodeGraphNodeAPI`."]
 #[doc(alias = "UsdUINodeGraphNodeAPI")]
 #[doc(alias = "NodeGraphNodeAPI")]
@@ -831,7 +831,7 @@ impl NodeGraphNodeApiEdit {
 
 #[doc = "SceneGraphPrimAPI provides a way to add descriptive information to the node graph."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `SceneGraphPrimAPI`. Get it with [`SceneGraphPrimApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `SceneGraphPrimAPI`. Get it with [`SceneGraphPrimApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdUISceneGraphPrimAPI`."]
 #[doc(alias = "UsdUISceneGraphPrimAPI")]
 #[doc(alias = "SceneGraphPrimAPI")]

@@ -97,8 +97,18 @@ impl Dependencies {
             }
             self.add(property.prim_path(), &[]);
             self.fields.push(Field::Forwarded(property));
-            if let Some(targets) = scene.stage().resolve_target_list_path(property) {
-                pending.extend(targets.value.into_iter().filter_map(|t| match t {
+            if let Some(targets) =
+                scene
+                    .property(property)
+                    .map(|property| match property.as_relationship() {
+                        Some(relationship) => relationship.targets(),
+                        None => property
+                            .as_attribute()
+                            .map(layerstack::Attribute::connections)
+                            .unwrap_or_default(),
+                    })
+            {
+                pending.extend(targets.into_iter().filter_map(|t| match t {
                     TargetPath::Property(p) => Some(p),
                     _ => None,
                 }));
@@ -524,10 +534,12 @@ impl SkelCache {
             for &shape in shapes.targets() {
                 // Arbitrary inbetween names and weight metadata are definitions.
                 definitions.add(shape, &[]);
-                for token in scene.stage().authored_property_names(shape, scene.store()) {
-                    definitions
-                        .fields
-                        .push(Field::Forwarded(PropertyPath::new(shape, token)));
+                for property in scene
+                    .prim(shape)
+                    .map(layerstack::Prim::authored_properties)
+                    .unwrap_or_default()
+                {
+                    definitions.fields.push(Field::Forwarded(property.path()));
                 }
             }
         }

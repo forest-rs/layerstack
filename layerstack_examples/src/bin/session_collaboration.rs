@@ -12,8 +12,20 @@
 //! <https://openusd.org/release/api/class_usd_stage.html#Usd_SessionLayer>
 use layerstack::{
     EditTarget, InMemoryStore, Layer, LayerId, LiveStage, PrimSpec, PropertySpec, PropertyType,
-    Specifier, StageOptions, SublayerEntry, Transaction, Value,
+    Specifier, StageOptions, SublayerEntry, Time, Transaction, Value,
 };
+
+/// The exposure the client `live` reads.
+fn exposure(live: &LiveStage, store: &InMemoryStore) -> Option<f64> {
+    live.view(store)
+        .attribute("/World.exposure")?
+        .value::<f64>(Time::Default)
+}
+
+/// Whether the client `live` sees the shared lamp.
+fn has_lamp(live: &LiveStage, store: &InMemoryStore) -> bool {
+    live.view(store).prim("/World/SharedLamp").is_some()
+}
 
 fn main() {
     let mut store = InMemoryStore::default();
@@ -77,13 +89,13 @@ fn main() {
     a.synchronize(&mut store);
     b.synchronize(&mut store);
     assert_eq!(
-        a.stage().resolve_field_path(prop).unwrap().value,
-        Value::Double(10.0),
+        exposure(&a, &store),
+        Some(10.0),
         "private session opinion wins"
     );
     assert_eq!(
-        b.stage().resolve_field_path(prop).unwrap().value,
-        Value::Double(3.0),
+        exposure(&b, &store),
+        Some(3.0),
         "shared opinion reaches client B"
     );
     assert_eq!(
@@ -109,15 +121,15 @@ fn main() {
         None,
     );
     let added = a.apply(&mut store, &create).unwrap();
-    assert!(a.stage().has_prim(child), "A sees its committed creation");
-    assert!(!b.stage().has_prim(child), "B retains its prior snapshot");
+    assert!(has_lamp(&a, &store), "A sees its committed creation");
+    assert!(!has_lamp(&b, &store), "B retains its prior snapshot");
     println!(
         "A created SharedLamp; B sees it before synchronization: {}",
-        b.stage().has_prim(child)
+        has_lamp(&b, &store)
     );
     b.synchronize(&mut store);
     assert!(
-        b.stage().has_prim(child),
+        has_lamp(&b, &store),
         "B sees the shared creation after synchronization"
     );
     assert!(
@@ -160,12 +172,12 @@ fn main() {
     // Undo is another guarded authored batch; either client can apply it.
     b.apply(&mut store, &added.inverse).unwrap();
     assert!(
-        a.stage().has_prim(child),
+        has_lamp(&a, &store),
         "A retains its snapshot until synchronization"
     );
     a.synchronize(&mut store);
     assert!(
-        !a.stage().has_prim(child) && !b.stage().has_prim(child),
+        !has_lamp(&a, &store) && !has_lamp(&b, &store),
         "both clients incorporate the shared removal"
     );
     println!("SharedLamp removed from both clients after independent synchronization.");
@@ -174,13 +186,13 @@ fn main() {
     // copying the old composed value back into the session layer.
     a.apply(&mut store, &private_edit.inverse).unwrap();
     assert_eq!(
-        a.stage().resolve_field_path(prop).unwrap().value,
-        Value::Double(3.0),
+        exposure(&a, &store),
+        Some(3.0),
         "undoing the private override reveals the current shared value"
     );
     assert_eq!(
-        b.stage().resolve_field_path(prop).unwrap().value,
-        Value::Double(3.0),
+        exposure(&b, &store),
+        Some(3.0),
         "client B's snapshot is unaffected by A's private undo"
     );
     println!("A released its private override; both clients now read shared exposure 3.");

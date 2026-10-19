@@ -283,7 +283,7 @@ enum Lookup {
 
 /// How a composed property is declared.
 ///
-/// See [`Stage::resolve_property_declaration`].
+/// See [`Property::declaration`].
 ///
 /// Spec: AOUSD Core §12.2.2–§12.2.4.
 #[derive(Clone, Debug, PartialEq)]
@@ -373,7 +373,7 @@ pub struct StageOptions {
     pub variant_fallbacks: VariantFallbacks,
     /// The schemas that give the stage's prims their definitions: their
     /// types, applied schemas and schema-defined properties, whose fallbacks
-    /// the schema-aware queries resolve ([`Stage::resolve_value_with_schema`]).
+    /// the handles resolve ([`Attribute::get`], [`Prim::definition`]).
     /// `None`, the default, reads no schema: every prim is typeless and
     /// defines no property.
     ///
@@ -414,9 +414,13 @@ pub struct StageOptions {
 
 /// A composed stage: read-only facade over composition results.
 ///
-/// Build a `Stage` with [`Stage::compose`], then query resolved values
-/// with [`Stage::resolve_field`] or traverse the prim hierarchy with
-/// [`Stage::traverse`].
+/// Build a `Stage` with [`Stage::compose`], bind it to its store with
+/// [`Stage::view`], and read prims, attributes and relationships through
+/// the handles a [`StageView`] hands out ([`Prim`], [`Attribute`],
+/// [`Relationship`]). The stage itself answers stage-wide questions: its
+/// root layer and metadata, composition errors and asset requests,
+/// traversal ([`Stage::traverse`], [`Stage::prim_range`]), dependencies,
+/// prototypes, flattening and reports.
 ///
 /// ```
 /// use layerstack::{InMemoryStore, Layer, LayerId, PrimSpec, Stage, StageOptions, Value};
@@ -430,9 +434,9 @@ pub struct StageOptions {
 /// store.insert_layer(layer);
 ///
 /// let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
-/// assert!(stage.has_prim(prim));
+/// let sphere = stage.view(&store).prim("/Sphere").unwrap();
 ///
-/// let resolved = stage.resolve_field(prim, color).unwrap();
+/// let resolved = sphere.metadata("color").and_then(|r| r.into_value()).unwrap();
 /// assert_eq!(resolved.value, Value::string("red"));
 /// ```
 #[derive(Debug)]
@@ -1031,7 +1035,7 @@ impl Stage {
     /// Eligible gaps retain their clip source. `None` at [`Time::Default`]:
     /// clips hold time samples only.
     #[must_use]
-    pub fn property_clip_source(
+    pub(crate) fn property_clip_source(
         &self,
         prim: PathId,
         field: TokenId,
@@ -1056,7 +1060,7 @@ impl Stage {
     /// selected source. It performs no loading or mutation. `None` at
     /// [`Time::Default`], where no clip is evaluated.
     #[must_use]
-    pub fn property_clip_evaluation_error(
+    pub(crate) fn property_clip_evaluation_error(
         &self,
         prim: PathId,
         field: TokenId,
@@ -1318,7 +1322,7 @@ impl Stage {
     /// across numeric times, even when their combined sample grid has many knots.
     /// Numeric values may still differ from the default-time value.
     #[must_use]
-    pub fn property_might_be_time_varying(&self, prim: PathId, field: TokenId) -> bool {
+    pub(crate) fn property_might_be_time_varying(&self, prim: PathId, field: TokenId) -> bool {
         self.property_time_info(prim, field).1
     }
 
@@ -1328,7 +1332,7 @@ impl Stage {
     /// weaker grids. Clip times include activations and mapping discontinuities;
     /// splines have no discrete sample times. Default-time reads ignore clips.
     #[must_use]
-    pub fn property_sample_times(&self, prim: PathId, field: TokenId) -> Vec<f64> {
+    pub(crate) fn property_sample_times(&self, prim: PathId, field: TokenId) -> Vec<f64> {
         self.property_time_info(prim, field).0
     }
 
@@ -1340,7 +1344,7 @@ impl Stage {
     /// and `(Bound<f64>, Bound<f64>)` tuples implement [`core::ops::RangeBounds`].
     /// AOUSD Core §12.3.2 (effective stage-time samples and layer offsets).
     #[must_use]
-    pub fn property_sample_times_in_range(
+    pub(crate) fn property_sample_times_in_range(
         &self,
         prim: PathId,
         field: TokenId,
@@ -1620,7 +1624,7 @@ impl Stage {
     /// See [`crate::dynamic_format`]. OpenUSD:
     /// `PcpCache::GetDynamicFileFormatArgumentDependencyData`.
     #[must_use]
-    pub fn dynamic_dependency(&self, prim: PathId) -> Option<&crate::DynamicDependency> {
+    pub(crate) fn dynamic_dependency(&self, prim: PathId) -> Option<&crate::DynamicDependency> {
         self.prims.get(&prim)?.dynamic.as_deref()
     }
 
@@ -2089,9 +2093,10 @@ impl Stage {
     /// [`Stage::resolve_value`]).
     ///
     /// Returns scalar and dictionary values. For `ListOp` fields, use
-    /// [`Stage::resolve_token_list`] or [`Stage::resolve_target_list`].
+    /// [`Stage::resolve_token_list`].
     #[must_use]
-    pub fn resolve_field(&self, prim: PathId, field: TokenId) -> Option<Resolved<Value>> {
+    #[cfg(test)]
+    pub(crate) fn resolve_field(&self, prim: PathId, field: TokenId) -> Option<Resolved<Value>> {
         self.resolve_field_by(prim, field, Lookup::Metadata)
     }
 
@@ -2107,7 +2112,7 @@ impl Stage {
 
     /// Resolves a token `ListOp` prim metadata field, such as `apiSchemas`.
     #[must_use]
-    pub fn resolve_token_list(
+    pub(crate) fn resolve_token_list(
         &self,
         prim: PathId,
         field: TokenId,
@@ -2134,30 +2139,6 @@ impl Stage {
         }
     }
 
-    /// Resolves a path list-op prim metadata field. For the connections of
-    /// an attribute or the targets of a relationship, use
-    /// [`Stage::resolve_target_list_path`].
-    ///
-    /// For an attribute the composed list is its connection paths; for a
-    /// relationship, its target paths. Every opinion that authors targets contributes to the
-    /// list-op chain, independently of any value the attribute also authors:
-    /// connections never participate in attribute value resolution.
-    ///
-    /// Returns `None` when no opinion authors targets, except for a declared
-    /// relationship, whose composed target list is then empty.
-    ///
-    /// Spec: AOUSD Core §7.6.4.2.3 (attributes may have a value, a
-    /// connection, or both), §12.2.6 (list op resolution), §12.4
-    /// (relationships and attribute connections).
-    #[must_use]
-    pub fn resolve_target_list(
-        &self,
-        prim: PathId,
-        field: TokenId,
-    ) -> Option<Resolved<Vec<TargetPath>>> {
-        self.resolve_targets_by(prim, field, Lookup::Metadata)
-    }
-
     fn resolve_targets_by(
         &self,
         prim: PathId,
@@ -2181,25 +2162,11 @@ impl Stage {
         })
     }
 
-    /// Resolves a target-path `ListOp` field on a prim.
-    ///
-    /// This alias is kept for older call-sites that still think of these as
-    /// generic path lists. Prefer [`Stage::resolve_target_list`].
-    #[must_use]
-    pub fn resolve_path_list(
-        &self,
-        prim: PathId,
-        field: TokenId,
-    ) -> Option<Resolved<Vec<TargetPath>>> {
-        self.resolve_target_list(prim, field)
-    }
-
     /// Resolves a prim metadata field.
     ///
-    /// The name-based queries (this one, [`Stage::resolve_field`],
-    /// [`Stage::resolve_token_list`], [`Stage::resolve_target_list`],
-    /// [`Stage::resolve_value_at_time`], [`Stage::explain_field`] and
-    /// [`Stage::resolve_dictionary`]) read prim metadata only. Properties are
+    /// The name-based queries (this one, [`Stage::resolve_token_list`] and
+    /// [`Stage::explain_field`], behind [`Prim::metadata`] and
+    /// [`Prim::metadata_opinions`]) read prim metadata only. Properties are
     /// read through the property-path queries, such as
     /// [`Stage::resolve_property_path`]. A prim may author a metadata field
     /// and a property with the same name (`kind` or `apiSchemas`, for
@@ -2215,7 +2182,7 @@ impl Stage {
     /// - Token and path list-op fields chain their list ops.
     ///
     /// Time samples and splines never answer a default-time query; use
-    /// [`Stage::resolve_value_at_time`] for numeric times.
+    /// `Stage::resolve_value_at_time` for numeric times.
     ///
     /// Spec: AOUSD Core §7.3 (a property spec is a child of the prim spec,
     /// a metadata field a field of it).
@@ -2226,7 +2193,11 @@ impl Stage {
     /// OpenUSD reads only `default` fields at the default time
     /// (`ProcessLayerAtDefault` in `pxr/usd/usd/stage.cpp`).
     #[must_use]
-    pub fn resolve_value(&self, prim: PathId, field: TokenId) -> Option<Resolved<ResolvedValue>> {
+    pub(crate) fn resolve_value(
+        &self,
+        prim: PathId,
+        field: TokenId,
+    ) -> Option<Resolved<ResolvedValue>> {
         self.resolve_value_by(prim, field, Lookup::Metadata)
     }
 
@@ -2406,7 +2377,8 @@ impl Stage {
     /// §12.3.6 (blocked samples), §12.5 (interpolation). OpenUSD applies the
     /// same per-spec order in `ProcessLayerAtTime` (`pxr/usd/usd/stage.cpp`).
     #[must_use]
-    pub fn resolve_value_at_time(
+    #[cfg(test)]
+    pub(crate) fn resolve_value_at_time(
         &self,
         prim: PathId,
         field: TokenId,
@@ -2468,7 +2440,7 @@ impl Stage {
     }
 
     /// Resolves a chain of opinions at numeric `time`, as
-    /// [`Stage::resolve_value_at_time`] does.
+    /// `Stage::resolve_value_at_time` does.
     fn resolve_at_time_over(
         &self,
         field: TokenId,
@@ -2584,7 +2556,7 @@ impl Stage {
     ///
     /// Spec: AOUSD Core §12.2.5–§12.2.6, §13.3.2.3–§13.3.2.4.
     #[must_use]
-    pub fn resolve_property_metadata(
+    pub(crate) fn resolve_property_metadata(
         &self,
         prim: PathId,
         property: TokenId,
@@ -2604,7 +2576,7 @@ impl Stage {
     ///
     /// Spec: AOUSD Core §12.2.5–§12.2.6.
     #[must_use]
-    pub fn resolve_authored_property_metadata(
+    pub(crate) fn resolve_authored_property_metadata(
         &self,
         prim: PathId,
         property: TokenId,
@@ -2676,7 +2648,7 @@ impl Stage {
     ///
     /// Spec: AOUSD Core §12.2.2–§12.2.4.
     #[must_use]
-    pub fn resolve_property_declaration(
+    pub(crate) fn resolve_property_declaration(
         &self,
         prim: PathId,
         property: TokenId,
@@ -2708,7 +2680,7 @@ impl Stage {
     /// Spec: AOUSD Core §7.6.2.2.2 (`propertyChildren`), §12.2 (strongest
     /// opinion).
     #[must_use]
-    pub fn resolve_property_order(
+    pub(crate) fn resolve_property_order(
         &self,
         prim: PathId,
         store: &dyn LayerStore,
@@ -2736,14 +2708,14 @@ impl Stage {
     ///
     /// Spec: AOUSD Core §12 (value resolution) and §10.4 (strength ordering).
     #[must_use]
-    pub fn explain_field(&self, prim: PathId, field: TokenId) -> Option<&[Opinion]> {
+    pub(crate) fn explain_field(&self, prim: PathId, field: TokenId) -> Option<&[Opinion]> {
         self.opinions(prim, field, Lookup::Metadata)
             .map(|(_, opinions)| opinions)
     }
 
     /// Resolves a concrete property path.
     #[must_use]
-    pub fn resolve_property_path(
+    pub(crate) fn resolve_property_path(
         &self,
         property_path: PropertyPath,
     ) -> Option<Resolved<ResolvedValue>> {
@@ -2756,7 +2728,11 @@ impl Stage {
 
     /// Resolves a scalar or dictionary field via concrete [`PropertyPath`].
     #[must_use]
-    pub fn resolve_field_path(&self, property_path: PropertyPath) -> Option<Resolved<Value>> {
+    #[cfg(test)]
+    pub(crate) fn resolve_field_path(
+        &self,
+        property_path: PropertyPath,
+    ) -> Option<Resolved<Value>> {
         self.resolve_field_by(
             property_path.prim_path(),
             property_path.property(),
@@ -2766,7 +2742,7 @@ impl Stage {
 
     /// Resolves a target-list field via concrete [`PropertyPath`].
     #[must_use]
-    pub fn resolve_target_list_path(
+    pub(crate) fn resolve_target_list_path(
         &self,
         property_path: PropertyPath,
     ) -> Option<Resolved<Vec<TargetPath>>> {
@@ -2778,10 +2754,10 @@ impl Stage {
     }
 
     /// Resolves a concrete property path at `time`, as
-    /// [`Stage::resolve_value_at_time`] resolves a field: at
-    /// [`Time::Default`], its default value ([`Stage::resolve_field_path`]).
+    /// `Stage::resolve_value_at_time` resolves a field: at
+    /// [`Time::Default`], its default value (`Stage::resolve_field_path`).
     #[must_use]
-    pub fn resolve_property_path_at_time(
+    pub(crate) fn resolve_property_path_at_time(
         &self,
         property_path: PropertyPath,
         time: Time,
@@ -2803,28 +2779,10 @@ impl Stage {
         }
     }
 
-    /// Resolves a default and materializes its selected numeric array.
-    /// Decode failures remain distinct from an absent value or value block:
-    /// a selected retained array or [`Value::Deferred`] value that does not
-    /// decode is an error.
-    pub fn try_resolve_property_path(
-        &self,
-        path: PropertyPath,
-    ) -> Result<Option<Resolved<ResolvedValue>>, crate::ArrayReadError> {
-        let mut resolved = self.resolve_property_path(path);
-        if let Some(Resolved {
-            value: ResolvedValue::Scalar(value),
-            ..
-        }) = &mut resolved
-        {
-            materialize_selected(value)?;
-        }
-        Ok(resolved)
-    }
     /// Resolves at `time` and materializes only selected numeric endpoints
     /// (at [`Time::Default`], the selected default).
     /// A malformed selected endpoint is an error, never a weaker fallback.
-    pub fn try_resolve_property_path_at_time(
+    pub(crate) fn try_resolve_property_path_at_time(
         &self,
         path: PropertyPath,
         time: Time,
@@ -2838,7 +2796,7 @@ impl Stage {
 
     /// Returns the sorted opinion stack for a concrete property path.
     #[must_use]
-    pub fn explain_property_path(&self, property_path: PropertyPath) -> Option<&[Opinion]> {
+    pub(crate) fn explain_property_path(&self, property_path: PropertyPath) -> Option<&[Opinion]> {
         self.opinions(
             property_path.prim_path(),
             property_path.property(),
@@ -2849,12 +2807,12 @@ impl Stage {
 
     /// Returns `true` if the stage contains opinions for a concrete property path.
     #[must_use]
-    pub fn has_property_path(&self, property_path: PropertyPath) -> bool {
+    pub(crate) fn has_property_path(&self, property_path: PropertyPath) -> bool {
         self.explain_property_path(property_path).is_some()
     }
 
     /// Returns the names of the properties of `prim`: those any opinion
-    /// authors and those its schemas define ([`Stage::prim_definition`]),
+    /// authors and those its schemas define ([`Stage::prim_definition_ref`]),
     /// attributes and relationships together. Empty when `prim` is not on
     /// the stage.
     ///
@@ -2871,7 +2829,7 @@ impl Stage {
     /// §12 (the composed prim holds every property any opinion authors),
     /// §13.3.2.3 (and every property its prim definition defines).
     #[must_use]
-    pub fn property_names(&self, prim: PathId, store: &dyn LayerStore) -> Vec<TokenId> {
+    pub(crate) fn property_names(&self, prim: PathId, store: &dyn LayerStore) -> Vec<TokenId> {
         let mut names = self.authored_names(prim);
         if let Some(definition) = self.prim_definition_ref(prim) {
             let authored: HashSet<TokenId> = names.iter().copied().collect();
@@ -2896,7 +2854,11 @@ impl Stage {
     /// Spec: AOUSD Core §12 (the composed prim holds every property any
     /// opinion authors).
     #[must_use]
-    pub fn authored_property_names(&self, prim: PathId, store: &dyn LayerStore) -> Vec<TokenId> {
+    pub(crate) fn authored_property_names(
+        &self,
+        prim: PathId,
+        store: &dyn LayerStore,
+    ) -> Vec<TokenId> {
         let mut names = self.authored_names(prim);
         self.order_property_names(prim, &mut names, store);
         names
@@ -2935,7 +2897,7 @@ impl Stage {
     #[must_use]
     #[doc(alias = "UsdPrim::IsInstance")]
     #[doc(alias = "IsInstance")]
-    pub fn is_instance(&self, prim: PathId) -> bool {
+    pub(crate) fn is_instance(&self, prim: PathId) -> bool {
         self.instances.contains(&prim)
     }
 
@@ -2957,7 +2919,7 @@ impl Stage {
     #[must_use]
     #[doc(alias = "UsdPrim::IsActive")]
     #[doc(alias = "IsActive")]
-    pub fn is_active(&self, prim: PathId) -> bool {
+    pub(crate) fn is_active(&self, prim: PathId) -> bool {
         self.has_prim(prim) && !self.inactive.contains(&prim)
     }
 
@@ -2968,7 +2930,7 @@ impl Stage {
     #[must_use]
     #[doc(alias = "UsdPrim::IsLoaded")]
     #[doc(alias = "IsLoaded")]
-    pub fn is_loaded(&self, prim: PathId, paths: &crate::PathInterner) -> bool {
+    pub(crate) fn is_loaded(&self, prim: PathId, paths: &crate::PathInterner) -> bool {
         if !self.is_active(prim) {
             return false;
         }
@@ -2985,29 +2947,10 @@ impl Stage {
         true
     }
 
-    /// Traversal with the USD default active, loaded, defined and non-abstract
-    /// predicate. Includes the supplied root when it matches, as `traverse` does.
-    /// Use `traverse_all` for inspection and ordinary iterator filtering for
-    /// custom predicates. Spec: AOUSD Core §11; `UsdPrimDefaultPredicate`.
-    pub fn traverse_default<'a>(
-        &'a self,
-        root: PathId,
-        store: &'a dyn LayerStore,
-    ) -> impl Iterator<Item = PathId> + 'a {
-        self.prim_range(
-            root,
-            store,
-            PrimPredicate {
-                instance_proxies: true,
-                ..PrimPredicate::DEFAULT
-            },
-        )
-    }
-
     /// All direct populated children, including inactive roots, in composed
     /// order. Instance-proxy traversal follows the same policy as `children_of`.
     #[must_use]
-    pub fn all_children_of(&self, prim: PathId) -> Option<&[PathId]> {
+    pub(crate) fn all_children_of(&self, prim: PathId) -> Option<&[PathId]> {
         self.inactive_children
             .get(&prim)
             .map(|v| v.as_slice())
@@ -3019,7 +2962,7 @@ impl Stage {
     ///
     /// Spec: AOUSD Core §11 (stage population) requires deterministic traversal.
     #[must_use]
-    pub fn children_of(&self, prim: PathId) -> Option<&[PathId]> {
+    pub(crate) fn children_of(&self, prim: PathId) -> Option<&[PathId]> {
         self.children.get(&prim).map(|v| v.as_slice())
     }
 
@@ -3038,7 +2981,7 @@ impl Stage {
     ///
     /// Spec: AOUSD Core §10.4 (strength ordering).
     #[must_use]
-    pub fn explain_prim(&self, prim: PathId) -> Option<&[OpinionKey]> {
+    pub(crate) fn explain_prim(&self, prim: PathId) -> Option<&[OpinionKey]> {
         self.prims.get(&prim).map(|index| index.sources.as_slice())
     }
 
@@ -3054,7 +2997,7 @@ impl Stage {
     ///
     /// Spec: AOUSD Core §10.4 (strength ordering).
     #[must_use]
-    pub fn explain_prim_graph(&self, prim: PathId) -> Option<&PrimIndexGraph> {
+    pub(crate) fn explain_prim_graph(&self, prim: PathId) -> Option<&PrimIndexGraph> {
         self.prims.get(&prim).map(|index| &index.graph)
     }
 
@@ -3069,7 +3012,7 @@ impl Stage {
     #[must_use]
     #[doc(alias = "UsdPrim::GetPrimStack")]
     #[doc(alias = "GetPrimStack")]
-    pub fn prim_stack(&self, prim: PathId) -> Option<Vec<(LayerId, SpecPath)>> {
+    pub(crate) fn prim_stack(&self, prim: PathId) -> Option<Vec<(LayerId, SpecPath)>> {
         use hashbrown::HashSet;
 
         let index = self.prims.get(&prim)?;
@@ -3102,7 +3045,7 @@ impl Stage {
     ///
     /// Spec: AOUSD Core §10.5 (variant selection).
     #[must_use]
-    pub fn variant_selections(
+    pub(crate) fn variant_selections(
         &self,
         prim: PathId,
         store: &dyn LayerStore,
@@ -3137,7 +3080,7 @@ impl Stage {
     /// Spec: AOUSD Core §7.3.6 (variant specs may contain variant set
     /// specs), §10.5 (variant selection).
     #[must_use]
-    pub fn variant_sets(
+    pub(crate) fn variant_sets(
         &self,
         prim: PathId,
         store: &dyn LayerStore,
@@ -3161,7 +3104,7 @@ impl Stage {
 
     /// Returns `true` if the stage contains a prim at `path`.
     #[must_use]
-    pub fn has_prim(&self, path: PathId) -> bool {
+    pub(crate) fn has_prim(&self, path: PathId) -> bool {
         self.prims.contains_key(&path)
     }
 
@@ -3180,7 +3123,11 @@ impl Stage {
     ///
     /// Spec: AOUSD Core §12.2.1 (specifier resolution), §7.6.
     #[must_use]
-    pub fn resolve_specifier(&self, prim: PathId, store: &dyn LayerStore) -> Option<Specifier> {
+    pub(crate) fn resolve_specifier(
+        &self,
+        prim: PathId,
+        store: &dyn LayerStore,
+    ) -> Option<Specifier> {
         let index = self.prims.get(&prim)?;
         let depth = store.paths().resolve(prim).depth();
         // The pseudo-root is always defining (OpenUSD `UsdPrim::GetSpecifier`).
@@ -3235,7 +3182,7 @@ impl Stage {
     #[must_use]
     #[doc(alias = "UsdPrim::IsDefined")]
     #[doc(alias = "IsDefined")]
-    pub fn is_defined(&self, prim: PathId, store: &dyn LayerStore) -> bool {
+    pub(crate) fn is_defined(&self, prim: PathId, store: &dyn LayerStore) -> bool {
         if !self.has_prim(prim) {
             return false;
         }
@@ -3261,7 +3208,7 @@ impl Stage {
     #[must_use]
     #[doc(alias = "UsdPrim::IsAbstract")]
     #[doc(alias = "IsAbstract")]
-    pub fn is_abstract(&self, prim: PathId, store: &dyn LayerStore) -> bool {
+    pub(crate) fn is_abstract(&self, prim: PathId, store: &dyn LayerStore) -> bool {
         if !self.has_prim(prim) {
             return false;
         }
@@ -3287,7 +3234,7 @@ impl Stage {
     ///
     /// Spec: AOUSD Core §7.6 (typeName field), §12.2.3 (type name resolution).
     #[must_use]
-    pub fn resolve_type_name(&self, prim: PathId) -> Option<TokenId> {
+    pub(crate) fn resolve_type_name(&self, prim: PathId) -> Option<TokenId> {
         self.prims
             .get(&prim)?
             .type_info
@@ -3333,14 +3280,15 @@ impl Stage {
     /// to share its name.
     ///
     /// A strongest default block resolves the fallback (Core §12.3.6), as it
-    /// does at numeric times ([`Stage::resolve_value_at_time_with_schema`]).
+    /// does at numeric times (`Stage::resolve_value_at_time_with_schema`).
     /// OpenUSD 26.08 resolves no value at the default time there: the named
     /// divergence `default-time-block-hides-fallback`
     /// (`docs/generic-sparse-composition.md`, "Divergences From OpenUSD").
     ///
     /// Spec: AOUSD Core §13.3.2.4 (fallback value resolution).
     #[must_use]
-    pub fn resolve_value_with_schema(
+    #[cfg(test)]
+    pub(crate) fn resolve_value_with_schema(
         &self,
         prim: PathId,
         field: TokenId,
@@ -3413,7 +3361,7 @@ impl Stage {
     /// OpenUSD: `UsdAttribute::Get<T>`. Spec: AOUSD Core §12.3 (values),
     /// §12.3.2.1 (layer offsets), §13.3.2.4 (schema fallbacks).
     #[must_use]
-    pub fn read_property<T>(
+    pub(crate) fn read_property<T>(
         &self,
         property: PropertyPath,
         time: Time,
@@ -3427,7 +3375,7 @@ impl Stage {
     /// selected array returns an error rather than appearing absent or searching
     /// a weaker fallback. Conversion and source selection follow `read_property`.
     /// Spec: AOUSD Core §12.3 (value resolution), §13.3.2.4 (fallbacks).
-    pub fn try_read_property<T>(
+    pub(crate) fn try_read_property<T>(
         &self,
         property: PropertyPath,
         time: Time,
@@ -3473,7 +3421,7 @@ impl Stage {
     /// layer. Layer offsets, sparse composition and typed source selection use
     /// the ordinary resolver. AOUSD Core §9.4, §12.3, §13.3.2.4.
     #[must_use]
-    pub fn read_property_with_provenance<T>(
+    pub(crate) fn read_property_with_provenance<T>(
         &self,
         property: PropertyPath,
         time: Time,
@@ -3501,7 +3449,7 @@ impl Stage {
     ///
     /// Spec: AOUSD Core §12.3 (value resolution in strength order).
     #[must_use]
-    pub fn read_property_below<T>(
+    pub(crate) fn read_property_below<T>(
         &self,
         property: PropertyPath,
         layer: LayerId,
@@ -3585,7 +3533,7 @@ impl Stage {
     /// bases; prefer shared-buffer conversions when those buffers are large.
     /// Layer offsets still map `timecode` values into stage time.
     /// Dictionaries and path expressions retain the composition rules of
-    /// [`Stage::resolve_value_with_schema`]. Sparse array edits retain stronger
+    /// `Stage::resolve_value_with_schema`. Sparse array edits retain stronger
     /// edits while skipping incompatible dense bases. The documented
     /// block/fallback behavior of schema resolution applies here too.
     /// `read` is a conversion, not a filter on the resolved value. Validate the shape or range of a
@@ -3709,11 +3657,12 @@ impl Stage {
 
     /// Resolves a scalar property on a prim with schema fallback.
     ///
-    /// Like [`Stage::resolve_field`], but falls back to the schema registry.
+    /// Like `Stage::resolve_field`, but falls back to the schema registry.
     ///
     /// Spec: AOUSD Core §13.3.2.4 (fallback value resolution).
     #[must_use]
-    pub fn resolve_field_with_schema(
+    #[cfg(test)]
+    pub(crate) fn resolve_field_with_schema(
         &self,
         prim: PathId,
         field: TokenId,
@@ -3722,10 +3671,10 @@ impl Stage {
     }
 
     /// Resolves a property on a prim at `time` with schema fallback; at
-    /// [`Time::Default`], [`Stage::resolve_field_with_schema`].
+    /// [`Time::Default`], `Stage::resolve_field_with_schema`.
     ///
     /// At a time code, like [`Stage::resolve_property_path_at_time`], with the default-time
-    /// fallback contract of [`Stage::resolve_value_with_schema`]:
+    /// fallback contract of `Stage::resolve_value_with_schema`:
     ///
     /// - When nothing is authored at `time`, or a block is in effect there,
     ///   the schema fallback resolves. A sampled block counts like a default
@@ -3748,7 +3697,8 @@ impl Stage {
     /// values), §12.3.6 (blocked attributes), §13.3.2.4 (fallback value
     /// resolution), §16.2.16.3 (blocked time samples).
     #[must_use]
-    pub fn resolve_value_at_time_with_schema(
+    #[cfg(test)]
+    pub(crate) fn resolve_value_at_time_with_schema(
         &self,
         prim: PathId,
         field: TokenId,
@@ -3794,51 +3744,6 @@ impl Stage {
         self.property_definition_ref(prim, field)?.fallback.as_ref()
     }
 
-    /// The prim definition of `prim`: its typed schema (or none: it is
-    /// typeless), its applied schemas in strength order, and the properties
-    /// they define. Empty when the stage has no schemas
-    /// ([`StageOptions::schemas`]); `None` when `prim` is not on the stage.
-    ///
-    /// Returns an owned copy of the shared definition captured at composition.
-    /// Use [`Stage::prim_definition_ref`] to borrow it without cloning.
-    ///
-    /// ```
-    /// use std::sync::Arc;
-    ///
-    /// use layerstack::{
-    ///     InMemoryStore, Layer, LayerId, PrimSpec, PropertyDefinition, SchemaDefinition,
-    ///     SchemaRegistry, Stage, StageOptions,
-    /// };
-    ///
-    /// let mut store = InMemoryStore::default();
-    /// let (tile, width) = (store.tokens.intern("Tile"), store.tokens.intern("width"));
-    /// let prim = store.path("/Floor");
-    /// let mut layer = Layer::new(LayerId(1));
-    /// layer.insert_prim(prim, PrimSpec::def().with_type_name(tile));
-    /// store.insert_layer(layer);
-    ///
-    /// let mut builder = SchemaRegistry::builder();
-    /// builder.register(SchemaDefinition::typed(tile).with_property(
-    ///     PropertyDefinition::attribute(width).with_fallback(1.0_f32),
-    /// ));
-    /// let options = StageOptions {
-    ///     schemas: Some(Arc::new(builder.build(&store.tokens))),
-    ///     ..StageOptions::default()
-    /// };
-    /// let stage = Stage::compose(&mut store, LayerId(1), options);
-    ///
-    /// let definition = stage.prim_definition(prim).expect("on the stage");
-    /// assert!(definition.is_a(tile));
-    /// assert!(definition.property(width).is_some());
-    /// ```
-    ///
-    /// Spec: AOUSD Core §13.3.1 (typeless prims), §13.3.2.3 (the prim
-    /// definition). OpenUSD: `UsdPrim::GetPrimDefinition`.
-    #[must_use]
-    pub fn prim_definition(&self, prim: PathId) -> Option<PrimDefinition> {
-        self.prim_definition_ref(prim).cloned()
-    }
-
     /// Borrows the immutable schema definition captured when this prim was composed.
     /// Equivalent schema identities share one definition. Source schema edits
     /// become visible after recomposition, as with other composed opinions.
@@ -3846,7 +3751,7 @@ impl Stage {
     ///
     /// Spec: AOUSD Core §13.3.2.3 (the prim definition).
     #[must_use]
-    pub fn prim_definition_ref(&self, prim: PathId) -> Option<&PrimDefinition> {
+    pub(crate) fn prim_definition_ref(&self, prim: PathId) -> Option<&PrimDefinition> {
         Some(&self.prims.get(&prim)?.type_info.as_ref()?.definition)
     }
 
@@ -3855,7 +3760,7 @@ impl Stage {
     ///
     /// Spec: AOUSD Core §13.3.2.3–§13.3.2.4.
     #[must_use]
-    pub fn property_definition(
+    pub(crate) fn property_definition(
         &self,
         prim: PathId,
         property: TokenId,
@@ -3868,7 +3773,7 @@ impl Stage {
     ///
     /// Spec: AOUSD Core §13.3.2.3–§13.3.2.4.
     #[must_use]
-    pub fn property_definition_ref(
+    pub(crate) fn property_definition_ref(
         &self,
         prim: PathId,
         property: TokenId,
@@ -3887,7 +3792,7 @@ impl Stage {
     /// and otherwise what [`SchemaRegistry::can_apply`] reports.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`.
-    pub fn can_apply(
+    pub(crate) fn can_apply(
         &self,
         prim: PathId,
         schema: TokenId,
@@ -3920,31 +3825,6 @@ impl Stage {
             .and_then(|field| self.resolve_token_list(prim, field))
             .map(|resolved| resolved.value)
             .unwrap_or_default()
-    }
-
-    /// Resolves a dictionary-valued field on a prim, combining opinions.
-    ///
-    /// Returns `None` if the field does not exist or is not dictionary-valued.
-    ///
-    /// Spec: AOUSD Core §6.6.2.1 (dictionary combining), §12.2.5.
-    #[must_use]
-    #[allow(
-        clippy::type_complexity,
-        reason = "Resolved<Vec<(Arc<str>, Value)>> is the natural return type"
-    )]
-    pub fn resolve_dictionary(
-        &self,
-        prim: PathId,
-        field: TokenId,
-    ) -> Option<Resolved<Vec<(Arc<str>, Value)>>> {
-        let resolved = self.resolve_value(prim, field)?;
-        match resolved.value {
-            ResolvedValue::Dictionary(d) => Some(Resolved {
-                value: d,
-                provenance: resolved.provenance,
-            }),
-            _ => None,
-        }
     }
 
     fn provenance_for(&self, field: TokenId, strongest: &Opinion) -> Option<Provenance> {

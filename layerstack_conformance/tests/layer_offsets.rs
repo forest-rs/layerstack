@@ -42,6 +42,30 @@ use layerstack_conformance::{
 };
 use serde::Deserialize;
 
+/// Every source of the prim at `path`, strongest first; `None` when the
+/// stage does not compose it.
+fn sources<'a>(
+    stage: &'a Stage,
+    store: &'a layerstack::InMemoryStore,
+    path: layerstack::PathId,
+) -> Option<&'a [layerstack::OpinionKey]> {
+    stage.prim(path, store).map(|prim| prim.sources())
+}
+
+/// The value opinions author for the attribute at `path` at `time`,
+/// without a schema fallback.
+fn authored(
+    stage: &Stage,
+    store: &layerstack::InMemoryStore,
+    path: layerstack::PropertyPath,
+    time: Time,
+) -> Option<layerstack::Resolved<Value>> {
+    stage
+        .view(store)
+        .attribute(path)
+        .and_then(|attribute| attribute.authored_value(time))
+}
+
 const ORACLE: &str = include_str!("../fixtures/layer_offsets/oracle.json");
 
 #[derive(Deserialize)]
@@ -114,8 +138,7 @@ fn prim_stacks_and_values_match_openusd() {
     let mut mismatches = Vec::new();
     for prim in &oracle.prims {
         let id = loaded.store.path(&prim.path);
-        let stack: Vec<(String, String)> = stage
-            .explain_prim(id)
+        let stack: Vec<(String, String)> = sources(&stage, &loaded.store, id)
             .expect("composed prim")
             .iter()
             .map(|key| {
@@ -135,9 +158,8 @@ fn prim_stacks_and_values_match_openusd() {
     }
     for (attr, expected) in &oracle.values {
         let property = loaded.store.property_path(attr);
-        let value = stage
-            .resolve_field_path(property)
-            .map(|resolved| resolved.value);
+        let value =
+            authored(&stage, &loaded.store, property, Time::Default).map(|resolved| resolved.value);
         if value != Some(Value::Int(*expected)) {
             mismatches.push(format!("{attr}: expected {expected}, got {value:?}"));
         }
@@ -161,8 +183,7 @@ fn time_samples_take_the_authoring_sublayer_offset() {
     for (attr, probes) in &oracle.samples {
         let property = loaded.store.property_path(attr);
         for &(time, expected) in probes {
-            let value = stage
-                .resolve_property_path_at_time(property, Time::at(time))
+            let value = authored(&stage, &loaded.store, property, Time::at(time))
                 .map(|resolved| resolved.value);
             if value != Some(Value::Double(expected)) {
                 mismatches.push(format!(
@@ -190,7 +211,9 @@ fn explanations_report_the_combined_offset() {
         let property = loaded.store.property_path(attr);
         let (time, _) = oracle.samples[attr][0];
         let explanation = stage
-            .explain_property_value(property, Time::at(time))
+            .view(&loaded.store)
+            .attribute(property)
+            .and_then(|attribute| attribute.explain(Time::at(time)))
             .expect("explained");
         let strongest = explanation.contributors().next().expect("a contributor");
         let expected = LayerOffset { offset, scale };

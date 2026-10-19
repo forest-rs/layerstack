@@ -36,9 +36,7 @@
 
 use std::collections::BTreeMap;
 
-use layerstack::{
-    ArcKind, CompositionError, Path, PayloadLoadRules, PropertyPath, StageOptions, Value,
-};
+use layerstack::{ArcKind, CompositionError, Path, PayloadLoadRules, StageOptions, Value};
 use layerstack_conformance::workspace_root;
 use layerstack_io::{
     ImportPolicy, IoError, IoErrorKind, LoadOptions, ReloadPolicy, StageDocument, Storage,
@@ -181,9 +179,9 @@ fn record(doc: &StageDocument<Fixture>) -> Json {
     let root = store.paths.lookup(&Path::root()).unwrap();
     let mut prims = serde_json::Map::new();
     for prim in stage.traverse_all(root).filter(|prim| *prim != root) {
-        let stack: Vec<Json> = stage
-            .explain_prim(prim)
-            .unwrap_or_default()
+        let handle = stage.prim(prim, store).expect("traversed");
+        let stack: Vec<Json> = handle
+            .sources()
             .iter()
             .map(|key| {
                 json!([
@@ -193,16 +191,17 @@ fn record(doc: &StageDocument<Fixture>) -> Json {
             })
             .collect();
         let mut attributes = serde_json::Map::new();
-        for name in stage.property_names(prim, store) {
-            let value = stage
-                .resolve_field_path(PropertyPath::new(prim, name))
+        for property in handle.properties() {
+            let value = property
+                .as_attribute()
+                .and_then(|attribute| attribute.authored_value(layerstack::Time::Default))
                 .map(|resolved| resolved.value);
             let value = match value {
                 Some(Value::Int(value)) => json!(value),
                 None => Json::Null,
                 other => panic!("unexpected value {other:?}"),
             };
-            attributes.insert(store.tokens.resolve(name).to_owned(), value);
+            attributes.insert(property.name().to_owned(), value);
         }
         prims.insert(
             store.paths.display(prim, &store.tokens),

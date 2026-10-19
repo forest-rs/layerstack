@@ -227,7 +227,7 @@ pub enum Value {
     /// the decoded value is what an eager read produces. Value resolution
     /// reads through it, so composed queries never return it unless it
     /// failed to decode, and the checked queries
-    /// ([`crate::Stage::try_resolve_property_path`]) report that failure.
+    /// ([`crate::Attribute::try_get`]) report that failure.
     Deferred(crate::DeferredValue),
 }
 
@@ -497,8 +497,8 @@ impl Value {
     /// resolution shares the source buffer; this loop copies no points:
     ///
     /// ```
-    /// use layerstack::{InMemoryStore, Layer, LayerId, PrimSpec, PropertyPath,
-    ///     PropertySpec, PropertyType, ResolvedValue, Stage, StageOptions, Value};
+    /// use layerstack::{InMemoryStore, Layer, LayerId, PrimSpec, PropertySpec, PropertyType,
+    ///     Stage, StageOptions, Time, Value};
     /// let mut store = InMemoryStore::default();
     /// let prim = store.path("/Mesh");
     /// let points = store.tokens.intern("points");
@@ -508,8 +508,8 @@ impl Value {
     ///         .with_default(Value::from(vec![[1.0_f32, 2.0, 3.0]]))));
     /// store.insert_layer(layer);
     /// let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
-    /// let retained = stage.resolve_property_path(PropertyPath::new(prim, points)).unwrap();
-    /// let ResolvedValue::Scalar(value) = retained.value else { panic!("points"); };
+    /// let points = stage.view(&store).attribute("/Mesh.points").unwrap();
+    /// let value = points.get(Time::Default).unwrap().value;
     /// let array = value.array_ref().unwrap();
     /// let points = array.typed().unwrap().as_vec3f().unwrap();
     /// assert_eq!(points[0], [1.0, 2.0, 3.0]);

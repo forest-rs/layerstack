@@ -104,7 +104,7 @@ separate spec-identity layer and to reference/payload target resolution.
 ### Migration Note
 
 - Public API changes are expected in `layerstack`:
-  - `OpinionKey::spec_path` and `Stage::prim_stack()` will expose `SpecPathId`
+  - `OpinionKey::spec_path` and `Prim::prim_stack()` will expose `SpecPathId`
     instead of `PathId`.
   - `Stage` will expose composed `SpecPath` inspection helpers.
   - `Reference`/payload arc targets will move from always-concrete `PathId` to

@@ -9,7 +9,7 @@
 //! for every prim, each source of its prim stack with the arc path of the
 //! node that provides it, from the root node down. Layerstack must compose
 //! the same sources, repeats included, and each source must name a node of
-//! [`Stage::explain_prim_graph`] with the same arc path.
+//! [`Prim::composition_graph`](layerstack::Prim::composition_graph) with the same arc path.
 //!
 //! The fixture authors variant branches where they change the arc path: a
 //! variant set nested in another branch, references and payloads authored on
@@ -116,9 +116,16 @@ fn sources_name_the_nodes_openusd_provides_them_from() {
     let mut mismatches = Vec::new();
     for prim in &oracle.prims {
         let id = loaded.store.path(&prim.path);
-        let graph = stage.explain_prim_graph(id).expect("composed prim");
+        let graph = stage
+            .prim(id, &loaded.store)
+            .map(|p| p.composition_graph())
+            .expect("composed prim");
         let mut sources: Vec<Source> = Vec::new();
-        for key in stage.explain_prim(id).expect("composed prim") {
+        for key in stage
+            .prim(id, &loaded.store)
+            .map(|p| p.sources())
+            .expect("composed prim")
+        {
             let source = Source {
                 layer: layer_name(&loaded, key.layer_id),
                 site: display(&loaded, &key.spec_path),

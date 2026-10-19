@@ -295,7 +295,9 @@ def NodeGraph "Graph" {
     assert!(invalid.sources[0].primvar_name(&scene).is_none());
     assert!(matches!(
         stage
-            .resolve_field_path(sources.sources[0].attribute)
+            .view(&store)
+            .attribute(sources.sources[0].attribute)
+            .and_then(|a| a.authored_value(Time::Default))
             .unwrap()
             .value,
         Value::Token(_)

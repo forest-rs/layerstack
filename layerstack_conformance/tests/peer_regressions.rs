@@ -65,7 +65,10 @@ fn missing_internal_targets_retain_introducing_sites_and_selected_variants_resol
     );
     for name in ["/FromVariantRef", "/NestedVariantRef", "/SubPresent"] {
         let path = loaded.store.path(name);
-        assert!(stage.has_prim(path), "selected target {name} composes");
+        assert!(
+            stage.prim(path, &loaded.store).is_some(),
+            "selected target {name} composes"
+        );
     }
 }
 
@@ -114,11 +117,11 @@ fn an_explicit_identity_offset_deletes_the_omitted_identity_payload() {
     let root = loaded.store.path("/Root");
     let child = loaded.store.path("/Root/Child");
     assert!(
-        stage.stage().has_prim(root),
+        stage.view(&loaded.store).prim(root).is_some(),
         "the locally defined root remains"
     );
     assert!(
-        !stage.stage().has_prim(child),
+        stage.view(&loaded.store).prim(child).is_none(),
         "identity payload deletion removes its contribution"
     );
     assert!(
@@ -150,7 +153,7 @@ fn an_explicit_identity_offset_deletes_the_omitted_identity_payload() {
     stage.unmute_layer(weak);
     stage.synchronize(&mut loaded.store);
     assert!(
-        !stage.stage().has_prim(child),
+        stage.view(&loaded.store).prim(child).is_none(),
         "mute/unmute retains the identity deletion without a cache panic"
     );
 }

@@ -25,7 +25,7 @@ use layerstack::{CannotApply, PathId};
 use crate::{InstanceEdit, InstanceView, PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "UsdShadeCoordSysAPI provides a way to designate, name, and discover coordinate systems."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's multiple-apply API schema `CoordSysAPI`. Get it with [`CoordSysApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's multiple-apply API schema `CoordSysAPI`. Get it with [`CoordSysApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdShadeCoordSysAPI`."]
 #[doc(alias = "UsdShadeCoordSysAPI")]
 #[doc(alias = "CoordSysAPI")]
@@ -222,7 +222,7 @@ impl CoordSysApiEdit {
 
 #[doc = "A Material provides a container into which multiple \"render contexts\" can add data that defines a \"shading material\" for a renderer."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `Material`, inheriting [`NodeGraph`]. Construct it with [`Material::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `Material`, inheriting [`NodeGraph`]. Construct it with [`Material::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdShadeMaterial`."]
 #[doc(alias = "UsdShadeMaterial")]
 #[derive(Clone, Copy, Debug)]
@@ -434,7 +434,7 @@ impl MaterialEdit {
 
 #[doc = "UsdShadeMaterialBindingAPI is an API schema that provides an interface for binding materials to prims or collections of prims (represented by UsdCollectionAPI objects)."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `MaterialBindingAPI`. Get it with [`MaterialBindingApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `MaterialBindingAPI`. Get it with [`MaterialBindingApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdShadeMaterialBindingAPI`."]
 #[doc(alias = "UsdShadeMaterialBindingAPI")]
 #[doc(alias = "MaterialBindingAPI")]
@@ -588,7 +588,7 @@ impl NodeDefApiImplementationSource {
 
 #[doc = "UsdShadeNodeDefAPI is an API schema that provides attributes for a prim to select a corresponding Shader Node Definition (\"Sdr Node\"), as well as to look up a runtime entry for that shader node in the form of an SdrShaderNode."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `NodeDefAPI`. Get it with [`NodeDefApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `NodeDefAPI`. Get it with [`NodeDefApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdShadeNodeDefAPI`."]
 #[doc(alias = "UsdShadeNodeDefAPI")]
 #[doc(alias = "NodeDefAPI")]
@@ -744,7 +744,7 @@ impl NodeDefApiEdit {
 
 #[doc = "A node-graph is a container for shading nodes, as well as other node-graphs."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `NodeGraph`, inheriting [`crate::usd::Typed`]. Construct it with [`NodeGraph::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `NodeGraph`, inheriting [`crate::usd::Typed`]. Construct it with [`NodeGraph::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdShadeNodeGraph`."]
 #[doc(alias = "UsdShadeNodeGraph")]
 #[derive(Clone, Copy, Debug)]
@@ -839,7 +839,7 @@ impl NodeGraphEdit {
 
 #[doc = "Base class for all USD shaders."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `Shader`, inheriting [`crate::usd::Typed`]. Construct it with [`Shader::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `Shader`, inheriting [`crate::usd::Typed`]. Construct it with [`Shader::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdShadeShader`."]
 #[doc(alias = "UsdShadeShader")]
 #[derive(Clone, Copy, Debug)]

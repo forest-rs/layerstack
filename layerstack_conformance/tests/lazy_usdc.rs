@@ -75,27 +75,48 @@ fn retained_defaults_and_selected_endpoints_share_one_cache() {
     let a = store.property_path("/P.a");
     let b = store.property_path("/P.b");
     let anim = store.property_path("/P.anim");
-    let raw = stage.resolve_property_path(a).unwrap();
+    let view = stage.view(&store);
+    let raw = view
+        .attribute(a)
+        .and_then(|a| a.authored_value(Time::Default))
+        .unwrap();
     assert_eq!(
         read.values.stats().decode_attempts,
         0,
         "raw query returns retained data"
     );
-    let layerstack::ResolvedValue::Scalar(Value::TypedArray(TypedArray::Deferred(_))) = raw.value
-    else {
+    let Value::TypedArray(TypedArray::Deferred(_)) = raw.value else {
         panic!("retained source");
     };
-    assert!(stage.try_resolve_property_path(a).unwrap().is_some());
-    assert!(stage.try_resolve_property_path(b).unwrap().is_some());
+    assert!(
+        stage
+            .view(&store)
+            .attribute(a)
+            .map_or(Ok(None), |a| a.try_get(Time::Default))
+            .unwrap()
+            .is_some()
+    );
+    assert!(
+        stage
+            .view(&store)
+            .attribute(b)
+            .map_or(Ok(None), |a| a.try_get(Time::Default))
+            .unwrap()
+            .is_some()
+    );
     assert_eq!(read.values.stats().decode_attempts, 1);
     let held = stage
-        .try_resolve_property_path_at_time(anim, Time::held(5.))
+        .view(&store)
+        .attribute(anim)
+        .map_or(Ok(None), |a| a.try_get(Time::held(5.)))
         .unwrap()
         .unwrap();
     assert_eq!(held.value, Value::from(vec![0_f32, 2.]));
     assert_eq!(read.values.stats().decode_attempts, 2);
     let linear = stage
-        .try_resolve_property_path_at_time(anim, Time::at(5.))
+        .view(&store)
+        .attribute(anim)
+        .map_or(Ok(None), |a| a.try_get(Time::at(5.)))
         .unwrap()
         .unwrap();
     assert_eq!(linear.value, Value::from(vec![5_f32, 7.]));
@@ -242,23 +263,35 @@ fn failures_never_select_weaker_defaults_or_hold_a_good_endpoint() {
     store.insert_layer(weak);
     store.insert_layer(strong);
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
-    assert!(stage.try_resolve_property_path(a).is_err());
     assert!(
         stage
-            .read_property(a, Time::Default, |value| value
+            .view(&store)
+            .attribute(a)
+            .map_or(Ok(None), |a| a.try_get(Time::Default))
+            .is_err()
+    );
+    assert!(
+        stage
+            .view(&store)
+            .attribute(a)
+            .and_then(|a| a.read(Time::Default, |value| value
                 .array_ref()
-                .map(|array| array.len()))
+                .map(|array| array.len())))
             .is_none(),
         "typed reads must not reveal the weak array"
     );
     assert!(
         stage
-            .try_resolve_property_path_at_time(anim, Time::at(5.))
+            .view(&store)
+            .attribute(anim)
+            .map_or(Ok(None), |a| a.try_get(Time::at(5.)))
             .is_err()
     );
     assert_eq!(
         stage
-            .try_resolve_property_path_at_time(anim, Time::held(5.))
+            .view(&store)
+            .attribute(anim)
+            .map_or(Ok(None), |a| a.try_get(Time::held(5.)))
             .unwrap()
             .unwrap()
             .value,
@@ -290,7 +323,11 @@ fn failures_never_select_weaker_defaults_or_hold_a_good_endpoint() {
     store.insert_layer(edits);
     let stage = Stage::compose(&mut store, LayerId(3), StageOptions::default());
     assert!(
-        stage.try_resolve_property_path(a).is_err(),
+        stage
+            .view(&store)
+            .attribute(a)
+            .map_or(Ok(None), |a| a.try_get(Time::Default))
+            .is_err(),
         "edit over failed base preserves failure"
     );
 }
@@ -408,11 +445,12 @@ fn deferred_equality_keeps_nan_semantics_and_bitwise_authored_identity() {
     store.insert_layer(read.assembled.layer);
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
     let property = store.property_path("/P.a");
-    let layerstack::ResolvedValue::Scalar(value) =
-        stage.resolve_property_path(property).unwrap().value
-    else {
-        panic!("array");
-    };
+    let value = stage
+        .view(&store)
+        .attribute(property)
+        .and_then(|a| a.authored_value(Time::Default))
+        .unwrap()
+        .value;
     assert_eq!(read.values.stats().decode_attempts, 0);
     assert!(
         value.same_representation(&value),
@@ -478,7 +516,9 @@ fn retimed_timecode_arrays_only_demand_the_bracketing_frames() {
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
     let property = store.property_path("/P.clock");
     let held = stage
-        .try_resolve_property_path_at_time(property, Time::held(18.))
+        .view(&store)
+        .attribute(property)
+        .map_or(Ok(None), |a| a.try_get(Time::held(18.)))
         .unwrap()
         .unwrap();
     assert_eq!(
@@ -493,7 +533,9 @@ fn retimed_timecode_arrays_only_demand_the_bracketing_frames() {
     );
     assert_eq!(read.values.stats().decode_attempts, 1);
     let linear = stage
-        .try_resolve_property_path_at_time(property, Time::at(18.))
+        .view(&store)
+        .attribute(property)
+        .map_or(Ok(None), |a| a.try_get(Time::at(18.)))
         .unwrap()
         .unwrap();
     assert_eq!(
@@ -563,12 +605,17 @@ fn mixed_array_storage_holds_without_demanding_unselected_endpoints() {
         store.insert_layer(layer);
         let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
         let held = stage
-            .try_resolve_property_path_at_time(x, Time::held(5.))
+            .view(&store)
+            .attribute(x)
+            .map_or(Ok(None), |a| a.try_get(Time::held(5.)))
             .unwrap()
             .unwrap();
         assert_eq!(held.value, expected);
         assert_eq!(source.calls.load(Ordering::Relaxed), 0);
-        let linear = stage.try_resolve_property_path_at_time(x, Time::at(5.));
+        let linear = stage
+            .view(&store)
+            .attribute(x)
+            .map_or(Ok(None), |a| a.try_get(Time::at(5.)));
         if name == "double" {
             assert!(
                 linear.is_err(),

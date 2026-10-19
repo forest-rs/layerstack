@@ -243,7 +243,7 @@ pub struct LiveStage {
     /// from then on: an open that is never edited never finds them.
     sources: crate::sync::Memo<SourceIndex>,
     /// Site `(layer, prim path)` → composed prims whose dynamic payload
-    /// arguments were composed from its specs ([`Stage::dynamic_dependency`]).
+    /// arguments were composed from its specs ([`Prim::dynamic_dependency`](crate::Prim::dynamic_dependency)).
     dynamic_to_prims: HashMap<(LayerId, PathId), HashSet<PathId>>,
     /// Composed prim → sites recorded in `dynamic_to_prims`.
     prim_to_dynamic: HashMap<PathId, Vec<(LayerId, PathId)>>,
@@ -533,7 +533,7 @@ impl LiveStage {
     ///
     /// Stage addresses take the declared type of an attribute they create
     /// from this stage's composed declaration of the property
-    /// ([`crate::Stage::resolve_property_declaration`]), as
+    /// ([`crate::Property::declaration`]), as
     /// `UsdAttribute::Set` does.
     ///
     /// [`Applied::asset_requests`] lists the asset requests the transaction
@@ -1089,7 +1089,7 @@ impl LiveStage {
     /// [`notify_structural_change`](Self::notify_structural_change).
     ///
     /// A prim whose dynamic payload arguments were composed from one of the
-    /// specs is marked too ([`Stage::dynamic_dependency`]): the edit may have
+    /// specs is marked too ([`Prim::dynamic_dependency`](crate::Prim::dynamic_dependency)): the edit may have
     /// changed them, and so the layer its payload targets.
     pub fn notify_layer_prim_edits(&mut self, layer: LayerId, prims: &[PathId]) {
         self.mark_source_prims(layer, prims);
@@ -1330,7 +1330,7 @@ impl LiveStage {
     ///   returns every prim path of the new stage plus every path that the
     ///   previous stage had and the new one lacks (removed prims), in
     ///   namespace order ([`crate::PathInterner::cmp_paths`]). Removal is computed as a before/after difference; callers
-    ///   can tell removed paths apart with [`Stage::has_prim`]. Surviving
+    ///   can tell removed paths apart with [`Stage::prim`]. Surviving
     ///   paths are reported whether or not they changed: the rebuild does not
     ///   classify value, hierarchy, or asset changes per path.
     /// - If no prims are invalidated, returns an empty vec.
@@ -5302,7 +5302,7 @@ mod tests {
             Some(Value::Int(3))
         );
         let left_upper = store.tokens.lookup("left:upper").expect("instance name");
-        let definition = stage.prim_definition(prim).expect("on the stage");
+        let definition = stage.prim_definition_ref(prim).expect("on the stage");
         assert!(definition.has_api_instance(slot, left_upper));
     }
 

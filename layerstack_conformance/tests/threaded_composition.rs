@@ -71,16 +71,19 @@ fn render_store(
     let root = paths.lookup(&layerstack::Path::root()).expect("root");
     for prim in stage.traverse_all(root) {
         writeln!(out, "{}", path(prim)).unwrap();
-        for child in stage.children_of(prim).unwrap_or(&[]) {
-            writeln!(out, "  child {}", path(*child)).unwrap();
+        let Some(prim) = stage.prim(prim, store) else {
+            continue;
+        };
+        for child in prim.children() {
+            writeln!(out, "  child {child}").unwrap();
         }
-        for key in stage.explain_prim(prim).unwrap_or(&[]) {
+        for key in prim.sources() {
             let layer = layer_names.get(&key.layer_id).cloned();
             let site = key.spec_path.display(paths, tokens);
             writeln!(out, "  site {} {site}", layer.unwrap_or_default()).unwrap();
         }
-        for name in stage.property_names(prim, store) {
-            writeln!(out, "  property {}", tokens.resolve(name)).unwrap();
+        for name in prim.property_names() {
+            writeln!(out, "  property {name}").unwrap();
         }
     }
     for error in stage.composition_errors() {

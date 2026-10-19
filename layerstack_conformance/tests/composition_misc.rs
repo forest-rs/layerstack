@@ -156,7 +156,8 @@ fn prims_and_prim_stacks_match_openusd() {
     for prim in &oracle.prims {
         let id = loaded.store.path(&prim.path);
         let stack: Vec<(String, String)> = stage
-            .explain_prim(id)
+            .prim(id, &loaded.store)
+            .map(|p| p.sources())
             .expect("composed prim")
             .iter()
             .map(|key| {
@@ -189,13 +190,10 @@ fn children_are_ordered_as_in_openusd() {
     for prim in &oracle.prims {
         let id = loaded.store.path(&prim.path);
         let children: Vec<String> = stage
-            .children_of(id)
-            .unwrap_or_default()
-            .iter()
-            .map(|child| {
-                let name = loaded.store.paths.resolve(*child).leaf().expect("child");
-                loaded.store.tokens.resolve(name).to_string()
-            })
+            .prim(id, &loaded.store)
+            .into_iter()
+            .flat_map(|prim| prim.children())
+            .map(|child| child.name().to_string())
             .collect();
         if children != prim.children {
             mismatches.push(format!(
@@ -220,13 +218,17 @@ fn values_match_openusd() {
         let property = loaded.store.property_path(attr);
         let expected = expected.as_ref().map(OracleValue::to_value);
         let value = stage
-            .resolve_field_path(property)
+            .view(&loaded.store)
+            .attribute(property)
+            .and_then(|a| a.authored_value(Time::Default))
             .map(|resolved| resolved.value);
         if value != expected {
             mismatches.push(format!("{attr}: expected {expected:?}, got {value:?}"));
         }
         let explained = stage
-            .explain_property_value(property, Time::Default)
+            .view(&loaded.store)
+            .attribute(property)
+            .and_then(|a| a.explain(Time::Default))
             .and_then(|explanation| explanation.value);
         if explained != expected {
             mismatches.push(format!(
@@ -240,7 +242,9 @@ fn values_match_openusd() {
             let property = loaded.store.property_path(attr);
             let expected = expected.as_ref().map(OracleValue::to_value);
             let value = stage
-                .resolve_property_path_at_time(property, Time::held(time))
+                .view(&loaded.store)
+                .attribute(property)
+                .and_then(|a| a.authored_value(Time::held(time)))
                 .map(|resolved| resolved.value);
             if value != expected {
                 mismatches.push(format!(
@@ -248,7 +252,9 @@ fn values_match_openusd() {
                 ));
             }
             let explained = stage
-                .explain_property_value(property, Time::held(time))
+                .view(&loaded.store)
+                .attribute(property)
+                .and_then(|a| a.explain(Time::held(time)))
                 .and_then(|explanation| explanation.value);
             if explained != expected {
                 mismatches.push(format!(
@@ -260,7 +266,11 @@ fn values_match_openusd() {
     // Only the discarded local arcs of the instance descendant author these.
     for attr in ["/Grove/Leaf.vein", "/Grove/Leaf.moisture"] {
         let property = loaded.store.property_path(attr);
-        if stage.has_property_path(property) {
+        if stage
+            .view(&loaded.store)
+            .property(property)
+            .is_some_and(|p| p.is_authored())
+        {
             mismatches.push(format!("{attr}: composed, but OpenUSD discards it"));
         }
     }
@@ -287,23 +297,31 @@ fn explanations_credit_the_weaker_expressions() {
 
     let plus = loaded.store.property_path("/Part.plus");
     let explained = stage
-        .explain_property_value(plus, Time::Default)
+        .view(&loaded.store)
+        .attribute(plus)
+        .and_then(|a| a.explain(Time::Default))
         .expect("authored");
     assert_eq!(contributing(&explained.opinions), 2, "{explained:?}");
     let explained = stage
-        .explain_property_value(plus, Time::held(1.0))
+        .view(&loaded.store)
+        .attribute(plus)
+        .and_then(|a| a.explain(Time::held(1.0)))
         .expect("authored");
     assert_eq!(contributing(&explained.opinions), 2, "{explained:?}");
 
     let sampled = loaded.store.property_path("/Sets.sampled");
     let explained = stage
-        .explain_property_value(sampled, Time::held(5.0))
+        .view(&loaded.store)
+        .attribute(sampled)
+        .and_then(|a| a.explain(Time::held(5.0)))
         .expect("authored");
     assert_eq!(contributing(&explained.opinions), 2, "{explained:?}");
 
     let blocked = loaded.store.property_path("/Sets.blocked");
     let explained = stage
-        .explain_property_value(blocked, Time::Default)
+        .view(&loaded.store)
+        .attribute(blocked)
+        .and_then(|a| a.explain(Time::Default))
         .expect("authored");
     assert_eq!(explained.value, None);
     assert!(

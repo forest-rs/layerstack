@@ -227,11 +227,11 @@ fn root_prim_order(store: &InMemoryStore, layer: LayerId, root: PathId) -> Vec<S
 
 /// The composed root prims, in order.
 fn root_prims(live: &LiveStage, store: &InMemoryStore, root: PathId) -> Vec<String> {
-    let children = live.stage().children_of(root).unwrap_or_default();
+    let children = live.stage().prim(root, store).into_iter();
     children
-        .iter()
-        .map(|path| {
-            let name = store.paths.resolve(*path).leaf().unwrap();
+        .flat_map(|prim| prim.children())
+        .map(|child| {
+            let name = store.paths.resolve(child.path()).leaf().unwrap();
             store.tokens.resolve(name).to_string()
         })
         .collect()

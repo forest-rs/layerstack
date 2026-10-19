@@ -19,9 +19,38 @@ use std::path::{Path, PathBuf};
 use layerstack::interner::TokenInterner;
 use layerstack::path::PathInterner;
 use layerstack::{
-    AssetResolveError, AssetResolver, FieldValue, InMemoryStore, LayerId, PropertyPath,
-    ResolvedAsset, ResolvedValue, Stage, StageOptions, Time, Value, Variability,
+    AssetResolveError, AssetResolver, FieldValue, InMemoryStore, LayerId, PropertyPath, Resolved,
+    ResolvedAsset, ResolvedValue, Stage, StageOptions, TargetPath, Time, Value, Variability,
 };
+
+/// The value opinions author for the attribute at `path` at `time`, without
+/// a schema fallback.
+fn authored(
+    stage: &Stage,
+    store: &InMemoryStore,
+    path: PropertyPath,
+    time: Time,
+) -> Option<Resolved<Value>> {
+    stage
+        .view(store)
+        .attribute(path)
+        .and_then(|attribute| attribute.authored_value(time))
+}
+
+/// The composed connections of the attribute at `path`; `None` when no
+/// opinion authors any.
+fn connections(
+    stage: &Stage,
+    store: &InMemoryStore,
+    path: PropertyPath,
+) -> Option<Vec<TargetPath>> {
+    let attribute = stage.view(store).attribute(path)?;
+    attribute
+        .opinions()
+        .iter()
+        .any(|opinion| opinion.value.targets().is_some())
+        .then(|| attribute.connections())
+}
 use layerstack_conformance::authored::{Names, dump_layer, render_value};
 use layerstack_conformance::workspace_root;
 use layerstack_usda::emit::emit;
@@ -226,28 +255,22 @@ fn probe_keeps_every_authored_slot() {
     );
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
-    let default_of = |path: PropertyPath| stage.resolve_field_path(path).map(|r| r.value);
+    let default_of =
+        |path: PropertyPath| authored(&stage, &store, path, Time::Default).map(|r| r.value);
     assert_eq!(default_of(a), Some(Value::Float(1.0)));
     assert_eq!(default_of(b), Some(Value::Float(4.0)));
     assert_eq!(
-        stage
-            .resolve_property_path_at_time(a, Time::held(1.0))
-            .map(|r| r.value),
+        authored(&stage, &store, a, Time::held(1.0)).map(|r| r.value),
         Some(Value::Float(3.0))
     );
     assert_eq!(
-        stage
-            .resolve_property_path_at_time(b, Time::held(1.0))
-            .map(|r| r.value),
+        authored(&stage, &store, b, Time::held(1.0)).map(|r| r.value),
         Some(Value::Float(4.0)),
         "a connection does not replace the attribute's value"
     );
+    assert_eq!(connections(&stage, &store, b), Some(vec![root_a]));
     assert_eq!(
-        stage.resolve_target_list_path(b).map(|r| r.value),
-        Some(vec![root_a])
-    );
-    assert_eq!(
-        stage.resolve_target_list_path(a),
+        connections(&stage, &store, a),
         None,
         "`a` authors no connections"
     );
@@ -257,20 +280,22 @@ fn probe_keeps_every_authored_slot() {
     layer.property_mut(a).expect("a").default = None;
     layer.property_mut(b).expect("b").targets = None;
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
-    assert_eq!(stage.resolve_field_path(a), None, "no default left on `a`");
     assert_eq!(
-        stage
-            .resolve_property_path_at_time(a, Time::held(0.0))
-            .map(|r| r.value),
+        authored(&stage, &store, a, Time::Default),
+        None,
+        "no default left on `a`"
+    );
+    assert_eq!(
+        authored(&stage, &store, a, Time::held(0.0)).map(|r| r.value),
         Some(Value::Float(2.0)),
         "the samples survive removing the default"
     );
     assert_eq!(
-        stage.resolve_field_path(b).map(|r| r.value),
+        authored(&stage, &store, b, Time::Default).map(|r| r.value),
         Some(Value::Float(4.0)),
         "the default survives removing the connection"
     );
-    assert_eq!(stage.resolve_target_list_path(b), None);
+    assert_eq!(connections(&stage, &store, b), None);
 }
 
 /// Nested UI-hint `limits` metadata composes by dictionary combining: a
@@ -300,7 +325,9 @@ fn ui_hint_limits_combine_like_usdcat_flatten() {
     for key_name in ["limits", "customData"] {
         let key = loaded.store.tokens.intern(key_name);
         let resolved = stage
-            .resolve_property_metadata(prim, softness, key)
+            .view(&loaded.store)
+            .property(PropertyPath::new(prim, softness))
+            .and_then(|property| property.metadata(key))
             .unwrap_or_else(|| panic!("{key_name} resolves"));
         let ResolvedValue::Dictionary(entries) = resolved.value else {
             panic!("{key_name} is a dictionary");
@@ -329,9 +356,13 @@ fn ui_hint_limits_combine_like_usdcat_flatten() {
         assert_eq!(actual, expected, "{key_name} differs from usdcat --flatten");
     }
     assert_eq!(
-        stage
-            .resolve_field_path(PropertyPath::new(prim, softness))
-            .map(|r| r.value),
+        authored(
+            &stage,
+            &loaded.store,
+            PropertyPath::new(prim, softness),
+            Time::Default
+        )
+        .map(|r| r.value),
         Some(Value::Float(0.5)),
         "the weaker default survives the stronger declaration-only spec"
     );
@@ -351,27 +382,33 @@ fn unknown_schemas_and_uniform_namespaced_properties_survive() {
     let color = store.tokens.intern("primvars:displayColor");
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
 
-    let schemas = stage
-        .resolve_token_list(prim, api)
-        .expect("apiSchemas")
-        .value;
+    let view = stage.view(&store);
+    let root = view.prim(prim).expect("/Root");
+    let Some(ResolvedValue::TokenList(schemas)) = root.metadata(api).map(|r| r.value) else {
+        panic!("apiSchemas");
+    };
     assert!(schemas.contains(&review), "unknown applied schema kept");
 
-    let tool = stage
-        .resolve_property_declaration(prim, tool)
+    let tool = root
+        .property(tool)
+        .and_then(|property| property.declaration())
         .expect("tool");
     assert_eq!(tool.variability, Variability::Uniform);
     assert!(!tool.custom);
-    let inputs = stage
-        .resolve_property_declaration(prim, inputs)
+    let inputs = root
+        .property(inputs)
+        .and_then(|property| property.declaration())
         .expect("inputs");
     assert_eq!(inputs.variability, Variability::Uniform);
     assert!(inputs.custom);
     assert_eq!(inputs.type_name.map(|t| t.is_array()), Some(true));
 
     assert_eq!(
-        stage.resolve_property_order(prim, &store),
-        Some(vec![softness, color])
+        root.property_order(),
+        Some(vec![
+            store.tokens.resolve(softness),
+            store.tokens.resolve(color)
+        ])
     );
 }
 
@@ -396,21 +433,30 @@ fn variant_branch_specs_at_the_same_path_are_kept() {
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
     assert_eq!(
-        stage
-            .resolve_field_path(PropertyPath::new(geom, detail))
-            .map(|r| r.value),
+        authored(
+            &stage,
+            &store,
+            PropertyPath::new(geom, detail),
+            Time::Default
+        )
+        .map(|r| r.value),
         Some(Value::Int(1))
     );
     assert_eq!(
-        stage
-            .resolve_field_path(PropertyPath::new(mesh, purpose))
-            .map(|r| r.value),
+        authored(
+            &stage,
+            &store,
+            PropertyPath::new(mesh, purpose),
+            Time::Default
+        )
+        .map(|r| r.value),
         Some(Value::Token(proxy))
     );
     assert_eq!(
         stage
-            .explain_property_path(PropertyPath::new(mesh, purpose))
-            .map(<[layerstack::Opinion]>::len),
+            .view(&store)
+            .property(PropertyPath::new(mesh, purpose))
+            .map(|property| property.opinions().len()),
         Some(1),
         "the unselected branch contributes nothing"
     );
@@ -425,9 +471,13 @@ fn variant_branch_specs_compose_from_usdc() {
     let proxy = store.tokens.intern("proxy");
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
     assert_eq!(
-        stage
-            .resolve_field_path(PropertyPath::new(mesh, purpose))
-            .map(|r| r.value),
+        authored(
+            &stage,
+            &store,
+            PropertyPath::new(mesh, purpose),
+            Time::Default
+        )
+        .map(|r| r.value),
         Some(Value::Token(proxy))
     );
 }
@@ -466,8 +516,10 @@ fn int64_and_string_list_ops_match_usdcat() {
         loaded.root_layer,
         StageOptions::default(),
     );
+    let view = stage.view(&loaded.store);
+    let instancer = view.prim(prim).expect("/Instancer");
     assert_eq!(
-        stage.resolve_value(prim, inactive).map(|r| r.value),
+        instancer.metadata(inactive).map(|r| r.value),
         Some(ResolvedValue::ValueList(vec![
             Value::Int64(3),
             Value::Int64(7),
@@ -475,7 +527,7 @@ fn int64_and_string_list_ops_match_usdcat() {
         ]))
     );
     assert_eq!(
-        stage.resolve_value(prim, clip_sets).map(|r| r.value),
+        instancer.metadata(clip_sets).map(|r| r.value),
         Some(ResolvedValue::ValueList(vec![
             Value::string("walk"),
             Value::string("run"),
@@ -505,15 +557,12 @@ fn declarations_come_from_the_selected_variant_branch() {
         let xform = store.tokens.intern("Xform");
         let order = store.tokens.intern(order);
         let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
-        assert_eq!(stage.resolve_type_name(c), Some(xform), "{fixture}");
+        let prim = stage.view(&store).prim(c).expect("/P/C");
+        assert_eq!(prim.type_name_token(), Some(xform), "{fixture}");
+        assert_eq!(prim.specifier(), layerstack::Specifier::Class, "{fixture}");
         assert_eq!(
-            stage.resolve_specifier(c, &store),
-            Some(layerstack::Specifier::Class),
-            "{fixture}"
-        );
-        assert_eq!(
-            stage.resolve_property_order(c, &store),
-            Some(vec![order]),
+            prim.property_order(),
+            Some(vec![store.tokens.resolve(order)]),
             "{fixture}"
         );
     }

@@ -166,7 +166,7 @@ fn main() {
         let prims = stage.traverse(root).count();
         let instances = stage
             .traverse(root)
-            .filter(|&p| stage.is_instance(p))
+            .filter(|&p| stage.prim(p, &store).is_some_and(|prim| prim.is_instance()))
             .count();
         println!(
             "{{\"run\":{run},\"layers\":{},\"bytes\":{},\"prims\":{prims},\"instances\":{instances},\"import_ms\":{import_ms:.3},\"compose_ms\":{compose_ms:.3}}}",

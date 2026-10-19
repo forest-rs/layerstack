@@ -32,9 +32,9 @@
 //!   arcs added and removed as OpenUSD's list editors do
 //! - **Schemas** — prim definitions (type, applied schemas, defined
 //!   properties and their fallbacks) from the [`SchemaRegistry`] a stage is
-//!   composed with ([`StageOptions::schemas`], [`Stage::prim_definition`])
-//! - **Value explanations** — [`Attribute::explain`] and the stage's
-//!   `explain_*` queries say why a value is what it is: every consulted opinion with its
+//!   composed with ([`StageOptions::schemas`], [`Prim::definition`])
+//! - **Value explanations** — [`Attribute::explain`] and
+//!   [`Prim::explain_metadata`] say why a value is what it is: every consulted opinion with its
 //!   layer, spec, arc and layer offset, and whether it contributed a value, a
 //!   sparse array edit, dictionary entries or a list edit, or was shadowed,
 //!   cut off by a block or incompatible (compare OpenUSD's
@@ -98,7 +98,7 @@
 //! |------|------|
 //! | [`StageView`] / [`Prim`] / [`Attribute`] / [`Relationship`] | The way to read a stage: text paths, typed values at a [`Time`], types and explanations |
 //! | [`Layer`] / [`PrimSpec`] | Authored layer and prim opinions |
-//! | [`Stage`] | The composed snapshot: prim hierarchy, composition errors and lower-level queries |
+//! | [`Stage`] | The composed snapshot: traversal, composition errors, asset requests, dependencies and stage-wide reports |
 //! | [`LiveStage`] | Incremental edits, change reports, callbacks and change cursors |
 //! | [`InMemoryStore`] / [`LayerStore`] | Built-in storage and a host storage interface |
 //! | [`Value`] / [`FieldValue`] | Authored values and composition containers |

@@ -92,7 +92,11 @@ fn edit_target(loaded: &mut LoadedStage, live: &LiveStage, target: &Json) -> Edi
         other => panic!("no target {other}"),
     };
     let prim = loaded.store.path(target["prim"].as_str().unwrap());
-    let graph = live.stage().explain_prim_graph(prim).expect("a graph");
+    let graph = live
+        .stage()
+        .prim(prim, &loaded.store)
+        .map(|p| p.composition_graph())
+        .expect("a graph");
     let node = graph
         .depth_first()
         .into_iter()

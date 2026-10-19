@@ -80,7 +80,7 @@ impl Default for PrimPredicate {
 }
 impl Stage {
     /// Returns flags for a populated prim; absent paths return `None`.
-    pub fn prim_status(&self, prim: PathId, store: &dyn LayerStore) -> Option<PrimStatus> {
+    pub(crate) fn prim_status(&self, prim: PathId, store: &dyn LayerStore) -> Option<PrimStatus> {
         self.has_prim(prim).then(|| PrimStatus {
             active: self.is_active(prim),
             loaded: self.is_loaded(prim, store.paths()),
@@ -91,7 +91,7 @@ impl Stage {
         })
     }
     /// Whether a populated path is beneath a native instance root.
-    pub fn is_instance_proxy(&self, prim: PathId, paths: &crate::PathInterner) -> bool {
+    pub(crate) fn is_instance_proxy(&self, prim: PathId, paths: &crate::PathInterner) -> bool {
         if !self.has_prim(prim) {
             return false;
         }

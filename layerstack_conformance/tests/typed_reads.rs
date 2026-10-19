@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use layerstack::{LayerId, ResolvedValue, Stage, StageOptions, Time, Value};
+use layerstack::{LayerId, Stage, StageOptions, Time, Value};
 use layerstack_conformance::{
     usda_real::{LoadedStage, load_entry_usda},
     workspace_root,
@@ -202,16 +202,14 @@ fn typed_defaults_skip_incompatible_opinions_without_numeric_retry() {
             "/Expression" | "/ExpressionBelow" => "pathExpression",
             _ => "float",
         };
-        let default = stage.read_property(
-            layerstack::PropertyPath::new(path, field),
-            Time::Default,
-            |value| convert(value, kind),
-        );
-        let numeric = stage.read_property(
-            layerstack::PropertyPath::new(path, field),
-            Time::at(9.0),
-            |value| convert(value, kind),
-        );
+        let default = stage
+            .view(&loaded.store)
+            .attribute(layerstack::PropertyPath::new(path, field))
+            .and_then(|a| a.read(Time::Default, |value| convert(value, kind)));
+        let numeric = stage
+            .view(&loaded.store)
+            .attribute(layerstack::PropertyPath::new(path, field))
+            .and_then(|a| a.read(Time::at(9.0), |value| convert(value, kind)));
         if matches!(
             prim,
             "/SparseDeclaration"
@@ -233,27 +231,31 @@ fn typed_defaults_skip_incompatible_opinions_without_numeric_retry() {
         }
         if prim.starts_with("/Sparse") {
             let property = layerstack::PropertyPath::new(path, field);
-            let raw_default =
-                stage
-                    .resolve_property_path(property)
-                    .and_then(|resolved| match resolved.value {
-                        ResolvedValue::Scalar(value) => {
-                            convert(&value, record["rawDefaultKind"].as_str().unwrap())
-                        }
-                        _ => None,
-                    });
+            let raw_default = stage
+                .view(&loaded.store)
+                .attribute(property)
+                .and_then(|attribute| attribute.authored_value(Time::Default))
+                .and_then(|resolved| {
+                    convert(&resolved.value, record["rawDefaultKind"].as_str().unwrap())
+                });
             let raw_numeric = stage
-                .resolve_property_path_at_time(property, Time::at(9.0))
+                .view(&loaded.store)
+                .attribute(property)
+                .and_then(|a| a.authored_value(Time::at(9.0)))
                 .and_then(|resolved| {
                     convert(&resolved.value, record["rawNumericKind"].as_str().unwrap())
                 });
             let explained_default = stage
-                .explain_property_value(property, Time::Default)
+                .view(&loaded.store)
+                .attribute(property)
+                .and_then(|a| a.explain(Time::Default))
                 .unwrap()
                 .value
                 .and_then(|value| convert(&value, record["rawDefaultKind"].as_str().unwrap()));
             let explained_numeric = stage
-                .explain_property_value(property, Time::at(9.0))
+                .view(&loaded.store)
+                .attribute(property)
+                .and_then(|a| a.explain(Time::at(9.0)))
                 .unwrap()
                 .value
                 .and_then(|value| convert(&value, record["rawNumericKind"].as_str().unwrap()));
@@ -366,8 +368,12 @@ fn typed_defaults_skip_incompatible_opinions_without_numeric_retry() {
     // Typed selection does not change the raw value or its stronger source.
     let path = loaded.store.path("/Skip");
     let field = loaded.store.tokens.lookup("inputs:intensity").unwrap();
-    let raw = stage.resolve_value_with_schema(path, field).unwrap();
-    assert_eq!(raw.value, ResolvedValue::Scalar(Value::Double(2.0)));
+    let raw = stage
+        .view(&loaded.store)
+        .attribute(layerstack::PropertyPath::new(path, field))
+        .and_then(|attribute| attribute.get(Time::Default))
+        .unwrap();
+    assert_eq!(raw.value, Value::Double(2.0));
     assert_eq!(raw.provenance.unwrap().layer, loaded.root_layer);
 }
 
@@ -379,11 +385,9 @@ fn typed_numeric_sparse_composition_matches_cpp_without_weaker_retry() {
     let path = loaded.store.path("/SparseCompatibleBase");
     let field = loaded.store.tokens.lookup("value").unwrap();
     let actual = stage
-        .read_property(
-            layerstack::PropertyPath::new(path, field),
-            Time::at(9.0),
-            |value| convert(value, "float[]"),
-        )
+        .view(&loaded.store)
+        .attribute(layerstack::PropertyPath::new(path, field))
+        .and_then(|a| a.read(Time::at(9.0), |value| convert(value, "float[]")))
         .map(|resolved| resolved.value);
     // The weaker float[] base contains 1. C++ stops at the incompatible
     // stronger double[] base, then finalizes the retained append over empty:
@@ -410,7 +414,9 @@ fn typed_sparse_reads_can_omit_provenance() {
         let path = loaded.store.property_path(name);
         for time in [Time::Default, Time::at(9.0)] {
             let value = stage
-                .read_property(path, time, |value| convert(value, "float[]"))
+                .view(&loaded.store)
+                .attribute(path)
+                .and_then(|a| a.read(time, |value| convert(value, "float[]")))
                 .unwrap();
             assert!(value.provenance.is_none());
         }
@@ -424,10 +430,14 @@ fn tagged_sparse_numeric_reads_convert_only_the_final_array() {
     for time in [Time::Default, Time::at(9.0)] {
         let converted = std::cell::Cell::new(0);
         let resolved = stage
-            .read_property(property, time, |value| {
-                let values = value.array_ref()?.typed()?.as_float()?;
-                converted.set(converted.get() + values.len());
-                Some(values.to_vec())
+            .view(&loaded.store)
+            .attribute(property)
+            .and_then(|a| {
+                a.read(time, |value| {
+                    let values = value.array_ref()?.typed()?.as_float()?;
+                    converted.set(converted.get() + values.len());
+                    Some(values.to_vec())
+                })
             })
             .unwrap();
         assert_eq!(resolved.value, [1.0, 2.0, 4.0]);
@@ -452,14 +462,18 @@ fn empty_sample_maps_preserve_default_sources_when_flattened() {
     ] {
         let property = loaded.store.property_path(name);
         let explained = stage
-            .explain_property_value(property, Time::at(9.0))
+            .view(&loaded.store)
+            .attribute(property)
+            .and_then(|a| a.explain(Time::at(9.0)))
             .unwrap();
         assert!(
             matches!(explained.source, ValueSource::Default),
             "{name}: default source"
         );
         let resolved = stage
-            .resolve_property_path_at_time(property, Time::at(9.0))
+            .view(&loaded.store)
+            .attribute(property)
+            .and_then(|a| a.authored_value(Time::at(9.0)))
             .unwrap();
         assert_eq!(resolved.provenance.unwrap().layer, source);
         assert_eq!(convert(&resolved.value, "float[]"), Some(json!(expected)));

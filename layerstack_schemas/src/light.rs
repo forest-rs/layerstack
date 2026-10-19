@@ -139,7 +139,9 @@ impl<'a> LightListQuery<'a> {
 fn defined(scene: Scene<'_>, path: PathId) -> bool {
     let mut at = Some(path);
     while let Some(path) = at {
-        if scene.parent(path).is_some() && !scene.stage().is_defined(path, scene.store()) {
+        if scene.parent(path).is_some()
+            && !scene.prim(path).is_some_and(layerstack::Prim::is_defined)
+        {
             return false;
         }
         at = scene.parent(path);
@@ -153,7 +155,7 @@ fn discover(
     stats: &mut LightListStats,
 ) -> Result<Vec<TargetPath>, LightListError> {
     let paths = scene.store().paths();
-    if paths.resolve(root).depth() != 0 && !scene.stage().has_prim(root) {
+    if paths.resolve(root).depth() != 0 && scene.prim(root).is_none() {
         return Err(LightListError::MissingPrim(root));
     }
     let mut found = BTreeSet::new();
@@ -176,15 +178,13 @@ fn discover(
         if scene.has_api(path, "LightAPI", None) || scene.is_a(path, "LightFilter") {
             found.insert(TargetPath::Prim(path));
         }
-        for &child in scene
-            .stage()
-            .children_of(path)
-            .unwrap_or_default()
-            .iter()
-            .rev()
-        {
+        let Some(handle) = scene.prim(path) else {
+            continue;
+        };
+        for child_prim in handle.children().rev() {
+            let child = child_prim.path();
             if defined(scene, child)
-                && !scene.stage().is_abstract(child, scene.store())
+                && !child_prim.is_abstract()
                 && PrimView::new(scene, child).metadata_value("active") != Some(Value::Bool(false))
                 && (mode == LightListMode::IgnoreCache || scene.is_model(child))
             {

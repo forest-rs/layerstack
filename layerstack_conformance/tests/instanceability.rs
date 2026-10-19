@@ -5,7 +5,8 @@
 //! Empty class targets and inherited metadata must not discard local content.
 
 use layerstack::{
-    EditTarget, LiveStage, PrimSpec, Specifier, Stage, StageOptions, Transaction, Value,
+    EditTarget, InMemoryStore, LiveStage, PrimSpec, Specifier, Stage, StageOptions, Transaction,
+    Value,
 };
 use layerstack_conformance::{usda_real::load_entry_usda, workspace_root};
 use serde_json::json;
@@ -42,27 +43,29 @@ fn only_contributing_direct_arc_subtrees_make_instances() {
         loaded.root_layer,
         StageOptions::default(),
     );
+    let view = stage.view(&loaded.store);
     for &(name, instance, local, geo) in CASES {
-        let root = loaded.store.path(&format!("/{name}"));
-        let local_path = loaded.store.path(&format!("/{name}/Local"));
-        let geo_path = loaded.store.path(&format!("/{name}/Geo"));
+        let root = view.prim(format!("/{name}").as_str()).unwrap();
+        assert_eq!(root.is_instance(), instance, "instance status at {name}");
         assert_eq!(
-            stage.is_instance(root),
-            instance,
-            "instance status at {name}"
+            view.prim(format!("/{name}/Local").as_str()).is_some(),
+            local,
+            "local child at {name}"
         );
-        assert_eq!(stage.has_prim(local_path), local, "local child at {name}");
-        assert_eq!(stage.has_prim(geo_path), geo, "arc child at {name}");
         assert_eq!(
-            stage.instance_prototype(root).is_some(),
-            instance,
-            "prototype at {name}"
+            view.prim(format!("/{name}/Geo").as_str()).is_some(),
+            geo,
+            "arc child at {name}"
         );
+        assert_eq!(root.prototype().is_some(), instance, "prototype at {name}");
     }
-    let value = loaded.store.property_path("/VariantOnly/Geo.value");
     assert_eq!(
-        stage.resolve_property_path(value).unwrap().value,
-        layerstack::ResolvedValue::Scalar(Value::Int(1)),
+        view.attribute("/VariantOnly/Geo.value")
+            .unwrap()
+            .authored_value(layerstack::Time::Default)
+            .unwrap()
+            .value,
+        Value::Int(1),
         "local opinions below an instance do not override variant data"
     );
 }
@@ -114,17 +117,16 @@ assert s.GetPrimAtPath('/PayloadLoaded').GetPrototype() == s.GetPrimAtPath('/Pay
         loaded.root_layer,
         StageOptions::default(),
     );
+    let view = stage.view(&loaded.store);
     let actual: Vec<_> = names
         .iter()
         .map(|name| {
-            let root = loaded.store.path(&format!("/{name}"));
-            let local = loaded.store.path(&format!("/{name}/Local"));
-            let geo = loaded.store.path(&format!("/{name}/Geo"));
+            let root = view.prim(format!("/{name}").as_str());
             json!([
                 name,
-                stage.is_instance(root),
-                stage.has_prim(local),
-                stage.has_prim(geo)
+                root.is_some_and(|root| root.is_instance()),
+                view.prim(format!("/{name}/Local").as_str()).is_some(),
+                view.prim(format!("/{name}/Geo").as_str()).is_some()
             ])
         })
         .collect();
@@ -140,8 +142,14 @@ fn first_and_last_class_specs_change_instanceability_incrementally() {
     let local = loaded.store.path("/MissingTarget/Local");
     let direct_reference = loaded.store.path("/DirectReference");
     let class_and_reference = loaded.store.path("/EmptyClassAndReference");
+    let is_instance = |stage: &Stage, store: &InMemoryStore, path| {
+        stage
+            .prim(path, store)
+            .is_some_and(|prim| prim.is_instance())
+    };
+    let has_prim = |stage: &Stage, store: &InMemoryStore, path| stage.prim(path, store).is_some();
     let mut live = LiveStage::compose(&mut loaded.store, root, StageOptions::default());
-    assert!(!live.stage().is_instance(occurrence));
+    assert!(!is_instance(live.stage(), &loaded.store, occurrence));
     let mut create = Transaction::new();
     create.create_prim(
         EditTarget::for_layer(root).prim(target),
@@ -153,20 +161,23 @@ fn first_and_last_class_specs_change_instanceability_incrementally() {
         edit = edit.apply(&mut loaded.store).unwrap();
         live.synchronize(&mut loaded.store);
         let fresh = Stage::compose(&mut loaded.store, root, StageOptions::default());
-        assert_eq!(live.stage().is_instance(occurrence), expected);
-        assert_eq!(live.stage().has_prim(local), !expected);
+        let store = &loaded.store;
+        assert_eq!(is_instance(live.stage(), store, occurrence), expected);
+        assert_eq!(has_prim(live.stage(), store, local), !expected);
+        let prim_stack =
+            |stage: &Stage| stage.prim(occurrence, store).map(|prim| prim.prim_stack());
+        assert_eq!(prim_stack(live.stage()), prim_stack(&fresh));
         assert_eq!(
-            live.stage().prim_stack(occurrence),
-            fresh.prim_stack(occurrence)
+            is_instance(live.stage(), store, occurrence),
+            is_instance(&fresh, store, occurrence)
         );
         assert_eq!(
-            live.stage().is_instance(occurrence),
-            fresh.is_instance(occurrence)
+            has_prim(live.stage(), store, local),
+            has_prim(&fresh, store, local)
         );
-        assert_eq!(live.stage().has_prim(local), fresh.has_prim(local));
         let share_prototype = |stage: &Stage| {
-            stage.instance_prototype(direct_reference)
-                == stage.instance_prototype(class_and_reference)
+            let prototype = |path| stage.prim(path, store).and_then(|prim| prim.prototype());
+            prototype(direct_reference) == prototype(class_and_reference)
         };
         assert_eq!(
             share_prototype(live.stage()),
@@ -187,7 +198,7 @@ fn first_and_last_class_specs_change_instanceability_incrementally() {
         .unwrap()
         .insert_prim(target, PrimSpec::over());
     live.synchronize(&mut loaded.store);
-    assert!(live.stage().is_instance(occurrence));
+    assert!(is_instance(live.stage(), &loaded.store, occurrence));
 }
 
 #[test]
@@ -200,11 +211,14 @@ fn nested_payload_participation_separates_empty_prototypes() {
         .load_rules
         .unload(loaded.store.paths.resolve(unloaded_instance).clone());
     let mut live = LiveStage::compose(&mut loaded.store, loaded.root_layer, options);
-    assert!(live.stage().is_instance(loaded_instance));
-    assert!(live.stage().is_instance(unloaded_instance));
+    let instance = |stage: &Stage, store: &InMemoryStore, path| {
+        let prim = stage.prim(path, store).unwrap();
+        assert!(prim.is_instance());
+        prim.prototype()
+    };
     assert_ne!(
-        live.stage().instance_prototype(loaded_instance),
-        live.stage().instance_prototype(unloaded_instance),
+        instance(live.stage(), &loaded.store, loaded_instance),
+        instance(live.stage(), &loaded.store, unloaded_instance),
         "payload participation affects the key even without descendant prims"
     );
     live.load(
@@ -213,10 +227,12 @@ fn nested_payload_participation_separates_empty_prototypes() {
         layerstack::LoadPolicy::WithDescendants,
     );
     live.synchronize(&mut loaded.store);
-    assert_eq!(
-        live.stage().instance_prototype(loaded_instance),
-        live.stage().instance_prototype(unloaded_instance)
-    );
+    let prototype = |path| {
+        live.stage()
+            .prim(path, &loaded.store)
+            .and_then(|prim| prim.prototype())
+    };
+    assert_eq!(prototype(loaded_instance), prototype(unloaded_instance));
     let fresh = Stage::compose(&mut loaded.store, loaded.root_layer, live.options().clone());
     assert_eq!(
         live.stage().prototypes().count(),

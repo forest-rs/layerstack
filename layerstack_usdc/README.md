@@ -80,9 +80,9 @@ defaults of at least `MIN_RETAINED_TEXT_ARRAY` elements as `Value::Deferred`.
 Everything composition reads stays eager. Composition and raw value inspection
 can keep payloads encoded. `TypedArray::try_materialize` and
 `Value::try_materialize` borrow a cached decoded value or cached error; value
-resolution reads through deferred values, and `Stage::try_resolve_property_path`
-and its time-query counterpart materialize the selected value and report
-failures explicitly. Ordinary accessors work too, returning `None` on decode
+resolution reads through deferred values, and `Attribute::try_get` and
+`Attribute::try_read` materialize the selected value and report failures
+explicitly. Ordinary accessors work too, returning `None` on decode
 failure.
 
 The adapter owns a thread-safe, immutable cache, with one decode per distinct

@@ -136,7 +136,7 @@ impl EditTarget {
     }
 
     /// Targets the node `node` of the composed prim `prim`'s index graph
-    /// ([`Stage::explain_prim_graph`]), in the root layer of the node's
+    /// ([`Prim::composition_graph`](crate::Prim::composition_graph)), in the root layer of the node's
     /// layer stack.
     ///
     /// `prim` and its namespace descendants map to the node's site and the

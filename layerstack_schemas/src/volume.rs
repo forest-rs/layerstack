@@ -96,8 +96,11 @@ impl<'a> Volume<'a> {
     pub fn field_paths(&self) -> BTreeMap<&'a str, PathId> {
         let scene = self.scene();
         let mut fields = BTreeMap::new();
-        for token in scene.stage().property_names(self.path(), scene.store()) {
-            let name = scene.store().tokens().resolve(token);
+        let names = scene
+            .prim(self.path())
+            .map(layerstack::Prim::property_names)
+            .unwrap_or_default();
+        for name in names {
             if name.starts_with("field:")
                 && let Some(path) = self.field_path(name)
             {

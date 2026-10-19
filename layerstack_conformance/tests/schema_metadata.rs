@@ -110,7 +110,9 @@ fn property_metadata_and_color_precedence_match_native_fixture() {
         ] {
             let key = store.tokens.lookup(field).unwrap();
             let actual = stage
-                .resolve_property_metadata(prim, property, key)
+                .view(&store)
+                .property(PropertyPath::new(prim, property))
+                .and_then(|p| p.metadata(key))
                 .map(|resolved| match resolved.value {
                     ResolvedValue::Scalar(value) => json(&value, &store.tokens),
                     ResolvedValue::Dictionary(entries) => {
@@ -133,7 +135,9 @@ fn property_metadata_and_color_precedence_match_native_fixture() {
         ] {
             let key = store.tokens.lookup(field).unwrap();
             let actual = stage
-                .property_definition_ref(prim, property)
+                .view(&store)
+                .property(PropertyPath::new(prim, property))
+                .and_then(|p| p.definition())
                 .unwrap()
                 .metadata(key)
                 .map(|value| match value {
@@ -161,12 +165,16 @@ fn bundled_schema_metadata_is_visible_without_an_authored_property() {
     let key = store.tokens.lookup("allowedTokens").unwrap();
     assert!(
         live.stage()
-            .resolve_authored_property_metadata(prim, name, key)
+            .view(&store)
+            .property(PropertyPath::new(prim, name))
+            .and_then(|p| p.authored_metadata(key))
             .is_none()
     );
     let resolved = live
         .stage()
-        .resolve_property_metadata(prim, name, key)
+        .view(&store)
+        .property(PropertyPath::new(prim, name))
+        .and_then(|p| p.metadata(key))
         .unwrap();
     assert!(resolved.provenance.is_none());
     assert!(

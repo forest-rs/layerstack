@@ -219,7 +219,7 @@ impl PhysicsSceneSnapshot {
         let mut paths = Vec::new();
         let mut seen = HashSet::new();
         for &include in options.includes {
-            if !scene.stage().has_prim(include) && Some(include) != scene.root() {
+            if scene.prim(include).is_none() && Some(include) != scene.root() {
                 return Err(PhysicsSceneError::MissingInclude(include));
             }
             let mut pending = alloc::vec![include];
@@ -228,25 +228,17 @@ impl PhysicsSceneSnapshot {
                     continue;
                 }
                 let root = Some(path) == scene.root();
-                if !root
-                    && (!scene.stage().is_defined(path, scene.store())
-                        || scene.stage().is_abstract(path, scene.store()))
-                {
+                let prim = scene.prim(path);
+                if !root && !prim.is_some_and(|prim| prim.is_defined() && !prim.is_abstract()) {
                     continue;
                 }
                 if !root {
                     paths.push(path);
                 }
-                if !scene.is_a(path, "PointInstancer") {
-                    pending.extend(
-                        scene
-                            .stage()
-                            .children_of(path)
-                            .unwrap_or_default()
-                            .iter()
-                            .rev()
-                            .copied(),
-                    );
+                if let Some(prim) = prim
+                    && !scene.is_a(path, "PointInstancer")
+                {
+                    pending.extend(prim.children().rev().map(|child| child.path()));
                 }
             }
         }
@@ -266,7 +258,7 @@ impl PhysicsSceneSnapshot {
             // OpenUSD parseUtils.cpp: MaterialAPI sets its flag only before any
             // recognized physics API. Later APIs do not clear that material flag.
             let mut flags = 0_u8;
-            if let Some(definition) = scene.stage().prim_definition_ref(path) {
+            if let Some(definition) = scene.definition(path) {
                 for api in definition.applied_schemas() {
                     match scene.store().tokens().resolve(api.schema) {
                         "PhysicsRigidBodyAPI" => flags |= 1,

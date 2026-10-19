@@ -62,8 +62,9 @@ fn unique_subsets_validate_membership_and_publish_a_valid_partition() {
     assert_eq!(geom.subset_family_type("f"), "partition");
     let family = store.property_path("/M.subsetFamily:f:familyType");
     assert_eq!(
-        live.stage()
-            .resolve_property_declaration(family.prim_path(), family.property())
+        live.view(&store)
+            .property(family)
+            .and_then(|property| property.declaration())
             .unwrap()
             .variability,
         layerstack::Variability::Uniform
@@ -72,7 +73,7 @@ fn unique_subsets_validate_membership_and_publish_a_valid_partition() {
     assert!(
         expected_paths
             .iter()
-            .all(|&path| !live.stage().has_prim(path))
+            .all(|&path| live.stage().prim(path, &store).is_none())
     );
 }
 
@@ -152,7 +153,7 @@ fn incompatible_family_declarations_reject_without_touching_prior_edits() {
         let transaction = edit.finish();
         live.apply(&mut store, &transaction).unwrap();
         assert!(
-            live.stage().has_prim(subset.path()),
+            live.stage().prim(subset.path(), &store).is_some(),
             "prior subset edits survive failed family authoring"
         );
         assert_eq!(

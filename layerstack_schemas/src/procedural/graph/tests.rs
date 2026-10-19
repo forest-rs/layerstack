@@ -183,6 +183,16 @@ fn fixture() -> Fixture {
         multiplier,
     }
 }
+/// The value opinions author for `path`, at the default time.
+fn authored(f: &Fixture, path: PropertyPath) -> Value {
+    f.live
+        .stage()
+        .view(&f.store)
+        .attribute(path)
+        .and_then(|attribute| attribute.authored_value(Time::Default))
+        .unwrap()
+        .value
+}
 fn resources() -> ResourceRevisions {
     ResourceRevisions::from([("heightmap".into(), 1)])
 }
@@ -337,10 +347,7 @@ fn prerequisite_input_edits_invalidation_and_removal_retire_delayed_downstream_w
             "upstream staleness rejects downstream work before output changes"
         );
         assert_eq!(f.store.layers[&ROOT].generation(), before);
-        assert_eq!(
-            f.live.stage().resolve_field_path(path).unwrap().value,
-            Value::Int(3)
-        );
+        assert_eq!(authored(&f, path), Value::Int(3));
         assert!(matches!(
             initial.steps[1].verify(&Scene::new(f.live.stage(), &f.store), &resources()),
             Err(BuildEvidenceError::Prerequisite { .. })
@@ -405,14 +412,7 @@ fn rejected_publication_guards_leave_all_outputs_and_acknowledgements_unchanged(
     assert_eq!(f.store.layers[&ROOT].generation(), before);
     for site in f.outputs {
         let value = f.store.tokens.lookup("value").unwrap();
-        assert_eq!(
-            f.live
-                .stage()
-                .resolve_field_path(PropertyPath::new(site, value))
-                .unwrap()
-                .value,
-            Value::Int(0)
-        );
+        assert_eq!(authored(&f, PropertyPath::new(site, value)), Value::Int(0));
     }
 }
 
@@ -504,10 +504,7 @@ fn failed_downstream_reports_completed_publications_and_preserves_previous_outpu
     assert!(matches!(*failure.error, BuildError::Preparation { .. }));
     assert_eq!(publisher.acknowledged, [f.recipes[0]]);
     let path = f.store.property_path("/ScatterOutput.value");
-    assert_eq!(
-        f.live.stage().resolve_field_path(path).unwrap().value,
-        Value::Int(3)
-    );
+    assert_eq!(authored(&f, path), Value::Int(3));
     assert_eq!(
         *initial.steps[1].output(),
         3,

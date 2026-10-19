@@ -2792,7 +2792,7 @@ mod tests {
     /// fallback is `[(-1, -1, -1), (1, 1, 1)]`: time-sampled edits compose
     /// over the fallback, and so do edits above a default block. The
     /// `schema_*` cases of `layerstack_conformance/tests/temporal_sparse.rs`
-    /// check the same through `Stage::resolve_value_at_time_with_schema`;
+    /// check the same through `Attribute::get`;
     /// these run against the resolver directly.
     #[test]
     fn time_sampled_edits_compose_over_the_fallback_seed() {

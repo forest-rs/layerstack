@@ -224,7 +224,7 @@ impl BlendShapeCache {
         if self.bindings.contains_key(&path) {
             return Ok(true);
         }
-        if !scene.stage().has_prim(path) {
+        if scene.prim(path).is_none() {
             return Ok(false);
         }
         let Some(query) = BlendShapeQuery::new(scene, path)? else {

@@ -37,27 +37,17 @@ pub(crate) fn anchor(
     // generic sparse edits compose over weaker values. Only sparse opinions
     // active at this base time expose weaker sample grids. Value resolution at
     // the selected stage-time anchor still belongs to Stage, including offsets.
-    let property = prim.property_path(name);
-    let clip_selected = property.is_some_and(|p| {
-        prim.scene()
-            .stage()
-            .property_clip_source(p.prim_path(), p.property(), Time::held(code))
-            .is_some()
-    });
-    let opinions = if clip_selected {
-        &[][..]
-    } else {
-        property
-            .and_then(|p| prim.scene().stage().explain_property_path(p))
-            .unwrap_or_default()
+    let property = prim.prim().and_then(|handle| handle.property(name));
+    let attribute = property.and_then(layerstack::Property::as_attribute);
+    let clip_selected =
+        attribute.is_some_and(|attribute| attribute.clip_source(Time::held(code)).is_some());
+    let opinions = match property {
+        Some(property) if !clip_selected => property.opinions(),
+        _ => &[][..],
     };
-    let mut times = if clip_selected {
-        let p = property.expect("selected clip has a property path");
-        prim.scene()
-            .stage()
-            .property_sample_times(p.prim_path(), p.property())
-    } else {
-        Vec::new()
+    let mut times = match attribute {
+        Some(attribute) if clip_selected => attribute.sample_times(),
+        _ => Vec::new(),
     };
     for opinion in opinions {
         if let Some(samples) = opinion.value.time_samples().filter(|s| !s.is_empty()) {

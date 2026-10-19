@@ -593,7 +593,7 @@ impl BoundsCache {
         let mut child = path;
         while let Some(parent) = scene.parent(child) {
             self.stats.invalidated += usize::from(self.entries.remove(&parent).is_some());
-            let count = scene.stage().children_of(parent).map_or(0, <[PathId]>::len);
+            let count = scene.prim(parent).map_or(0, |prim| prim.children().len());
             let retained = self
                 .reductions
                 .get_mut(&parent)
@@ -723,9 +723,7 @@ impl BoundsCache {
                 break true;
             };
             self.ancestry.push(at);
-            if scene.stage().resolve_specifier(at, scene.store())
-                != Some(layerstack::Specifier::Def)
-            {
+            if scene.prim(at).map(layerstack::Prim::specifier) != Some(layerstack::Specifier::Def) {
                 break false;
             }
             at = parent;
@@ -770,7 +768,7 @@ impl BoundsCache {
         info.map_or(ImageablePurpose::Default, |info| info.purpose)
     }
     fn resolve(&mut self, scene: &Scene<'_>, path: PathId) -> Result<(), BoundsError> {
-        if !scene.stage().has_prim(path) {
+        if scene.prim(path).is_none() {
             return Err(BoundsError::MissingPrim(path));
         }
         if self.valid(path) {
@@ -799,12 +797,9 @@ impl BoundsCache {
                 let inclusion_varying = if let Some(reduction) = self.reductions.get(&current) {
                     reduction.dirty.iter().any(inclusion_varies)
                 } else {
-                    scene
-                        .stage()
-                        .children_of(current)
-                        .unwrap_or(&[])
-                        .iter()
-                        .any(inclusion_varies)
+                    scene.prim(current).is_some_and(|prim| {
+                        prim.children().any(|child| inclusion_varies(&child.path()))
+                    })
                 };
                 let (bounds, varying) = self.compute(scene, current, &children)?;
                 (bounds, varying || hint_varying || inclusion_varying)
@@ -817,7 +812,7 @@ impl BoundsCache {
                     {
                         reduction.dirty.iter().copied().collect()
                     } else {
-                        scene.stage().children_of(current).unwrap_or(&[]).to_vec()
+                        child_paths(scene, current)
                     };
                     let children: Vec<_> = candidates
                         .into_iter()
@@ -1055,14 +1050,11 @@ impl BoundsCache {
             self.resolve(scene, prototype)?;
             varying |= self.entries[&prototype].varying;
             let prim = PrimView::new(*scene, prototype);
-            varying |= scene
-                .stage()
-                .property_names(prototype, scene.store())
-                .iter()
-                .any(|&name| {
-                    let name = scene.store().tokens().resolve(name);
+            varying |= prim.prim().is_some_and(|handle| {
+                handle.property_names().into_iter().any(|name| {
                     crate::xform::transform_property(name) && prim.property_might_vary(name)
-                });
+                })
+            });
         }
         let mut range = Range3d::default();
         for instance in transforms {
@@ -1125,7 +1117,7 @@ impl BoundsCache {
         let mut reduction = retained.or_else(|| {
             self.promote
                 .contains(&path)
-                .then(|| Reduction::new(scene.stage().children_of(path).unwrap_or(&[])))
+                .then(|| Reduction::new(child_paths(scene, path)))
         });
         if let Some(reduction) = &mut reduction {
             // Leave a rebuild request behind if any later child query fails.
@@ -1146,12 +1138,8 @@ impl BoundsCache {
                         // the ordinary fold for this query. This retry cannot
                         // recurse again: both promotion and the tree are gone.
                         self.promote.remove(&path);
-                        let all: Vec<_> = scene
-                            .stage()
-                            .children_of(path)
-                            .unwrap_or(&[])
-                            .iter()
-                            .copied()
+                        let all: Vec<_> = child_paths(scene, path)
+                            .into_iter()
                             .filter(|&child| self.include_child(scene, child))
                             .collect();
                         return self.compute(scene, path, &all);
@@ -1264,6 +1252,15 @@ pub(crate) fn bounds_property(name: &str) -> bool {
                 | "timeCodesPerSecond"
                 | "framesPerSecond"
         )
+}
+
+/// The paths of the active children of the prim at `path`, in composed
+/// order; empty when the stage does not compose it.
+fn child_paths(scene: &Scene<'_>, path: PathId) -> Vec<PathId> {
+    scene
+        .prim(path)
+        .map(|prim| prim.children().map(|child| child.path()).collect())
+        .unwrap_or_default()
 }
 
 #[cfg(test)]

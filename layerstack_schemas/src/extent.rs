@@ -305,12 +305,10 @@ pub(crate) fn compute(scene: &Scene<'_>, path: PathId, time: Time) -> Option<(Ra
 // may still use it. That difference must remain a retained-cache dependency.
 #[cfg(feature = "usd-lux")]
 fn lux_dimension_blocked(prim: &PrimView<'_>, name: &str) -> bool {
-    let Some(opinions) = prim
-        .property_path(name)
-        .and_then(|path| prim.scene().stage().explain_property_path(path))
-    else {
+    let Some(property) = prim.prim().and_then(|handle| handle.property(name)) else {
         return false;
     };
+    let opinions = property.opinions();
     for value in opinions.iter().filter_map(|o| o.value.default_value()) {
         if matches!(value, Value::Blocked) {
             return true;

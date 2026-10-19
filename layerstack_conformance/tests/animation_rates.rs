@@ -5,7 +5,6 @@
 //! AOUSD Core §12.3.2.1; OpenUSD `PcpLayerStack::_BuildLayerStack` and
 //! `Pcp_BuildPrimIndex` (reference/payload TCPS scaling).
 
-use layerstack::stage::ResolvedValue;
 use layerstack::{InMemoryStore, LiveStage, Stage, StageOptions, Time, Value};
 use layerstack_conformance::{usda_real::load_entry_usda, workspace_root};
 use serde_json::{Value as Json, json};
@@ -50,22 +49,21 @@ fn snapshot(stage: &Stage, store: &mut InMemoryStore) -> Json {
     for &path in PROPERTIES {
         let property = store.property_path(path);
         let default = stage
-            .resolve_property_path(property)
-            .map_or(Json::Null, |v| {
-                let ResolvedValue::Scalar(value) = v.value else {
-                    panic!("attribute value");
-                };
-                number(&value)
-            });
+            .view(&*store)
+            .attribute(property)
+            .and_then(|attribute| attribute.authored_value(Time::Default))
+            .map_or(Json::Null, |v| number(&v.value));
         let values: Vec<_> = TIMES
             .iter()
             .map(|&time| {
                 stage
-                    .resolve_property_path_at_time(property, Time::at(time))
+                    .view(&*store)
+                    .attribute(property)
+                    .and_then(|a| a.authored_value(Time::at(time)))
                     .map_or(Json::Null, |v| number(&v.value))
             })
             .collect();
-        out.insert(path.into(), json!({"default": default, "times": stage.property_sample_times(property.prim_path(), property.property()), "values": values}));
+        out.insert(path.into(), json!({"default": default, "times": stage.view(&*store).attribute(layerstack::PropertyPath::new(property.prim_path(), property.property())).map(|a| a.sample_times()).unwrap_or_default(), "values": values}));
     }
     Json::Object(out)
 }
@@ -225,16 +223,19 @@ fn animation_block_distinguishes_weaker_defaults_and_same_site_samples() {
     ] {
         let token = loaded.store.tokens.intern(name);
         assert_eq!(
-            stage.property_sample_times(prim, token),
+            stage
+                .view(&loaded.store)
+                .attribute(layerstack::PropertyPath::new(prim, token))
+                .map(|a| a.sample_times())
+                .unwrap_or_default(),
             grid,
             "{name} sample inventory"
         );
         assert_eq!(
             stage
-                .resolve_property_path_at_time(
-                    layerstack::PropertyPath::new(prim, token),
-                    Time::at(5.)
-                )
+                .view(&loaded.store)
+                .attribute(layerstack::PropertyPath::new(prim, token))
+                .and_then(|a| a.authored_value(Time::at(5.)))
                 .map(|r| r.value),
             expected,
             "{name} numeric value"

@@ -190,7 +190,13 @@ impl Fixture {
                 ));
             }
             keep(self.compare_delete(&plain, TargetPath::Prim(prim)));
-            let mut names = plain.authored_property_names(prim, &self.store);
+            let mut names: Vec<_> = plain
+                .prim(prim, &self.store)
+                .map(|prim| prim.authored_properties())
+                .unwrap_or_default()
+                .into_iter()
+                .map(|property| property.path().property())
+                .collect();
             names.truncate(2);
             for property in names {
                 let from = TargetPath::Property(PropertyPath::new(prim, property));

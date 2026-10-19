@@ -17,8 +17,47 @@ use layerstack::{
     AssetResolveError, AssetResolver, InMemoryStore, LayerId, PathInterner, PropertyPath, Stage,
     StageOptions, TokenInterner, Value,
 };
-use layerstack::{Layer, ResolvedAsset};
+use layerstack::{Layer, Opinion, PathId, Resolved, ResolvedAsset};
 use layerstack_usda::{emit, lower, parser::parse_cst};
+
+/// Whether the stage composes a prim at `path`.
+fn has_prim(stage: &Stage, store: &InMemoryStore, path: PathId) -> bool {
+    stage.prim(path, store).is_some()
+}
+
+/// The composed (active) children of the prim at `path`.
+fn children_of(stage: &Stage, store: &InMemoryStore, path: PathId) -> Vec<PathId> {
+    stage
+        .prim(path, store)
+        .map(|prim| prim.children().map(|child| child.path()).collect())
+        .unwrap_or_default()
+}
+
+/// The opinions of the property at `path`, strongest first; `None` when
+/// none is authored.
+fn opinions<'a>(
+    stage: &'a Stage,
+    store: &'a InMemoryStore,
+    path: PropertyPath,
+) -> Option<&'a [Opinion]> {
+    stage
+        .view(store)
+        .property(path)
+        .map(|property| property.opinions())
+        .filter(|opinions| !opinions.is_empty())
+}
+
+/// The authored default of the attribute at `path`.
+fn authored_default(
+    stage: &Stage,
+    store: &InMemoryStore,
+    path: PropertyPath,
+) -> Option<Resolved<Value>> {
+    stage
+        .view(store)
+        .attribute(path)
+        .and_then(|attribute| attribute.authored_value(layerstack::Time::Default))
+}
 
 /// Resolves asset paths against an in-memory set of USDA sources.
 struct MemoryResolver {
@@ -98,12 +137,11 @@ fn load(root: &'static str, others: &[(&'static str, &'static str)]) -> InMemory
 /// opinion in its stack, strongest first.
 fn resolve(store: &mut InMemoryStore, stage: &Stage, prop: &str) -> (Value, Vec<Value>) {
     let path = PropertyPath::parse(prop, &store.tokens, &store.paths).expect("path");
-    let value = stage
-        .resolve_field_path(path)
+    let value = authored_default(stage, store, path)
         .unwrap_or_else(|| panic!("{prop} resolves"))
         .value;
     let mut stack = Vec::new();
-    for op in stage.explain_property_path(path).expect("opinions") {
+    for op in opinions(stage, store, path).expect("opinions") {
         if let Some(v) = op.value.default_value()
             && !stack.contains(v)
         {
@@ -226,10 +264,11 @@ def "SelectsA" (
         ("/SelectsA/geom.width", "/Model{y=a}geom.width", 100.0),
     ] {
         let property = PropertyPath::parse(path, &store.tokens, &store.paths).expect("path");
-        let value = stage.resolve_field_path(property).expect("resolved").value;
+        let value = authored_default(&stage, &store, property)
+            .expect("resolved")
+            .value;
         assert_eq!(value, Value::Double(expected), "{path}");
-        let stack: Vec<_> = stage
-            .explain_property_path(property)
+        let stack: Vec<_> = opinions(&stage, &store, property)
             .expect("opinions")
             .iter()
             .map(|op| {
@@ -368,8 +407,7 @@ class "ClassB"
         let p = layerstack::Path::parse_absolute(s, &store.tokens).expect("path");
         store.paths.intern(p)
     };
-    let name_of =
-        |store: &InMemoryStore, id: layerstack::PathId| store.paths.display(id, &store.tokens);
+    let name_of = |store: &InMemoryStore, id: PathId| store.paths.display(id, &store.tokens);
     let target_a = path(&mut store, "/TargetA");
     let class_a = path(&mut store, "/ClassA");
 
@@ -377,14 +415,13 @@ class "ClassB"
     for (name, arc, _, _) in models {
         for prim in [format!("/{name}"), format!("/{name}/Kid")] {
             let id = path(&mut store, &prim);
-            if !stage.has_prim(id) {
+            if !has_prim(&stage, &store, id) {
                 failures.push(format!("{prim} ({arc}): missing"));
                 continue;
             }
             let prop = PropertyPath::parse(&format!("{prim}.x"), &store.tokens, &store.paths)
                 .expect("path");
-            let stack: Vec<_> = stage
-                .explain_property_path(prop)
+            let stack: Vec<_> = opinions(&stage, &store, prop)
                 .unwrap_or(&[])
                 .iter()
                 .filter_map(|op| op.value.default_value().cloned())
@@ -394,9 +431,7 @@ class "ClassB"
                 failures.push(format!("{prim} ({arc}): x stack {stack:?}"));
             }
 
-            let kids: Vec<String> = stage
-                .children_of(id)
-                .unwrap_or(&[])
+            let kids: Vec<String> = children_of(&stage, &store, id)
                 .iter()
                 .map(|c| name_of(&store, *c))
                 .collect();
@@ -534,15 +569,13 @@ fn same_named_variant_sets_on_different_hosts_do_not_alias() {
             let prim = format!("{prefix}/{child}");
             let x = PropertyPath::parse(&format!("{prim}.x"), &store.tokens, &store.paths)
                 .expect("path");
-            assert!(stage.has_prim(x.prim_path()), "{prim} exists");
+            assert!(has_prim(stage, store, x.prim_path()), "{prim} exists");
             assert_eq!(
-                stage.explain_property_path(x).map(<[_]>::len),
+                opinions(stage, store, x).map(<[_]>::len),
                 None,
                 "{prim} has no `lod` selection, so no branch may contribute"
             );
-            let kids: Vec<String> = stage
-                .children_of(x.prim_path())
-                .unwrap_or(&[])
+            let kids: Vec<String> = children_of(stage, store, x.prim_path())
                 .iter()
                 .map(|c| store.paths.display(*c, &store.tokens))
                 .collect();
@@ -687,7 +720,7 @@ def "Target"
                 ] {
                     let path =
                         PropertyPath::parse(&prop, &store.tokens, &store.paths).expect("path");
-                    let value = stage.resolve_field_path(path).map(|r| r.value);
+                    let value = authored_default(&stage, &store, path).map(|r| r.value);
                     if value != Some(Value::Double(expected)) {
                         failures.push(format!("{arc}: {prop} = {value:?}"));
                     }
@@ -697,7 +730,7 @@ def "Target"
                     let path =
                         layerstack::Path::parse_absolute(&child, &store.tokens).expect("path");
                     let id = store.paths.intern(path);
-                    if !stage.has_prim(id) {
+                    if !has_prim(&stage, &store, id) {
                         failures.push(format!("{arc}: arc target child {child} missing"));
                     }
                 }
@@ -705,7 +738,7 @@ def "Target"
 
             let path = layerstack::Path::parse_absolute("/Default/C", &store.tokens).expect("path");
             let default_c = store.paths.intern(path);
-            if stage.has_prim(default_c) {
+            if has_prim(&stage, &store, default_c) {
                 failures.push(format!("{arc}: unselected /Default/C populated"));
             }
         }
@@ -933,7 +966,7 @@ fn matrix_cell(outer: MatrixArc, inner: MatrixArc, selection: MatrixSelection) -
     let other_source_id = path(other_source);
 
     let mut failures = Vec::new();
-    if stage.has_prim(off_prim) {
+    if has_prim(&stage, &store, off_prim) {
         failures.push(format!("unselected /R/{off} populated"));
     }
     for owner in [format!("/R/{on}"), format!("/R/{on}/G")] {
@@ -944,7 +977,7 @@ fn matrix_cell(outer: MatrixArc, inner: MatrixArc, selection: MatrixSelection) -
         // from an outer inherit/specialize of a prim that is also composed
         // on the stage are a separate, pre-existing issue.)
         let mut stack: Vec<Value> = Vec::new();
-        for op in stage.explain_property_path(prop).unwrap_or(&[]) {
+        for op in opinions(&stage, &store, prop).unwrap_or(&[]) {
             if let Some(value) = op.value.default_value()
                 && !stack.contains(value)
             {
@@ -958,7 +991,7 @@ fn matrix_cell(outer: MatrixArc, inner: MatrixArc, selection: MatrixSelection) -
         let has = |store: &mut InMemoryStore, name: &str| {
             let p = layerstack::Path::parse_absolute(&format!("{owner}/{name}"), &store.tokens)
                 .expect("path");
-            stage.has_prim(store.paths.intern(p))
+            has_prim(&stage, store, store.paths.intern(p))
         };
         if !has(&mut store, target_child) {
             failures.push(format!("{owner}/{target_child} missing"));
@@ -967,7 +1000,7 @@ fn matrix_cell(outer: MatrixArc, inner: MatrixArc, selection: MatrixSelection) -
             failures.push(format!("{owner}/{other_child} leaked"));
         }
         let owner_id = prop.prim_path();
-        let sources: Vec<layerstack::PathId> = stage
+        let sources: Vec<PathId> = stage
             .arcs_targeting(owner_id)
             .iter()
             .map(|dep| dep.source)
@@ -997,14 +1030,14 @@ fn matrix_cell(outer: MatrixArc, inner: MatrixArc, selection: MatrixSelection) -
     // an unselected branch introduced would invalidate phantom prims.
     for layer in 1..=4 {
         for prim in stage.prims_affected_by_layer(LayerId(layer), &store) {
-            if !stage.has_prim(prim) {
+            if !has_prim(&stage, &store, prim) {
                 let name = store.paths.display(prim, &store.tokens);
                 failures.push(format!("layer {layer} dependency on missing {name}"));
             }
         }
     }
     for dep in stage.arc_dependencies() {
-        if !stage.has_prim(dep.target) {
+        if !has_prim(&stage, &store, dep.target) {
             let name = store.paths.display(dep.target, &store.tokens);
             failures.push(format!("arc dependency targets missing {name}"));
         }
@@ -1125,19 +1158,17 @@ fn nested_variant_case_failures(
     };
     let mut failures = Vec::new();
     let exists = expected["exists"].as_bool().expect("exists");
-    if stage.has_prim(prim) != exists {
+    if has_prim(&stage, &store, prim) != exists {
         failures.push(format!(
             "exists: {}, expected {exists}",
-            stage.has_prim(prim)
+            has_prim(&stage, &store, prim)
         ));
     }
     if !exists {
         return failures;
     }
 
-    let children: Vec<String> = stage
-        .children_of(prim)
-        .unwrap_or(&[])
+    let children: Vec<String> = children_of(&stage, &store, prim)
         .iter()
         .map(|child| {
             let leaf = store.paths.resolve(*child).leaf().expect("child name");
@@ -1159,9 +1190,7 @@ fn nested_variant_case_failures(
     for name in attributes {
         let property = PropertyPath::parse(&format!("/P/C.{name}"), &store.tokens, &store.paths)
             .expect("property path");
-        let actual = stage
-            .resolve_field_path(property)
-            .map(|resolved| resolved.value);
+        let actual = authored_default(&stage, &store, property).map(|resolved| resolved.value);
         let wanted = match &expected["attributes"][name.as_str()] {
             serde_json::Value::Null => None,
             serde_json::Value::String(s) => Some(Value::string(s.as_str())),

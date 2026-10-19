@@ -122,13 +122,19 @@ fn bench_storage(c: &mut Criterion) {
         let field = checked.tokens.intern("parameter0");
         let prim = checked.path("/Instances/Emitter0");
         assert_eq!(
-            stage.authored_property_names(prim, &checked).len(),
+            stage
+                .prim(prim, &checked)
+                .unwrap()
+                .authored_property_names()
+                .len(),
             usize::try_from(properties).unwrap(),
             "each placement retains all typed properties"
         );
         assert!(
             stage
-                .resolve_property_declaration(prim, field)
+                .view(&checked)
+                .property(PropertyPath::new(prim, field))
+                .and_then(|p| p.declaration())
                 .unwrap()
                 .type_name
                 .is_some(),
@@ -137,7 +143,9 @@ fn bench_storage(c: &mut Criterion) {
         let property = PropertyPath::new(prim, field);
         assert_eq!(
             stage
-                .resolve_property_path_at_time(property, Time::at(23.5))
+                .view(&checked)
+                .attribute(property)
+                .and_then(|a| a.authored_value(Time::at(23.5)))
                 .unwrap()
                 .value,
             Value::Double(if samples == 0 { 0.0 } else { 23.5 }),
@@ -218,13 +226,20 @@ fn check_default_edit(references: u32, samples: u32) {
     for instance in 0..references {
         let path = store.property_path(&format!("/Instances/Emitter{instance}.parameter0"));
         assert_eq!(
-            live.stage().resolve_field_path(path).unwrap().value,
+            live.stage()
+                .view(&store)
+                .attribute(path)
+                .and_then(|a| a.authored_value(Time::Default))
+                .unwrap()
+                .value,
             Value::Double(-1.0),
             "placement reads the new default"
         );
         let sampled = live
             .stage()
-            .resolve_property_path_at_time(path, Time::at(23.5))
+            .view(&store)
+            .attribute(path)
+            .and_then(|a| a.authored_value(Time::at(23.5)))
             .unwrap()
             .value;
         assert_eq!(
@@ -232,7 +247,12 @@ fn check_default_edit(references: u32, samples: u32) {
             Value::Double(if samples == 0 { -1.0 } else { 23.5 }),
             "numeric queries retain sample precedence over the edited default"
         );
-        let opinions = live.stage().explain_property_path(path).unwrap();
+        let opinions = live
+            .stage()
+            .view(&store)
+            .property(path)
+            .map(|p| p.opinions())
+            .unwrap();
         let authored_samples = opinions[0].value.time_samples().unwrap_or(&[]);
         assert_eq!(
             authored_samples.len(),
@@ -256,7 +276,12 @@ fn check_default_edit(references: u32, samples: u32) {
     );
     let first = store.property_path("/Instances/Emitter0.parameter0");
     assert_eq!(
-        live.stage().resolve_field_path(first).unwrap().value,
+        live.stage()
+            .view(&store)
+            .attribute(first)
+            .and_then(|a| a.authored_value(Time::Default))
+            .unwrap()
+            .value,
         Value::Double(0.0),
         "undo restores the default"
     );

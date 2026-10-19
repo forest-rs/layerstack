@@ -41,8 +41,7 @@ use layerstack::path::{Path, PathInterner, PropertyPath};
 use layerstack::property::PropertyEntry;
 use layerstack::spec_path::SpecPath;
 use layerstack::{
-    AssetResolveError, AssetResolver, InMemoryStore, ResolvedAsset, ResolvedValue, Stage,
-    StageOptions, Time,
+    AssetResolveError, AssetResolver, InMemoryStore, ResolvedAsset, Stage, StageOptions, Time,
 };
 use layerstack_usda::save::{SaveError, Unsupported};
 
@@ -817,16 +816,14 @@ pub fn composed(root: Root<'_>, assets: &[(&str, &str)]) -> String {
 
     let mut out = String::new();
     let root_path = store.paths.intern(Path::root());
-    let prims: Vec<_> = stage.traverse(root_path).collect();
-    for prim in prims {
-        let shown = store.paths.display(prim, &store.tokens);
-        let type_name = stage
-            .resolve_type_name(prim)
-            .map(|t| store.tokens.resolve(t).to_string());
-        let specifier = stage.resolve_specifier(prim, &store);
+    let view = stage.view(&store);
+    for prim in stage.traverse(root_path).filter_map(|prim| view.prim(prim)) {
+        let shown = prim.to_string();
+        let type_name = prim.type_name();
+        let specifier = Some(prim.specifier());
         let _ = writeln!(out, "{shown} {specifier:?} {type_name:?}");
         let mut names = BTreeSet::new();
-        for (layer_id, spec_path) in stage.prim_stack(prim).unwrap_or_default() {
+        for (layer_id, spec_path) in prim.prim_stack() {
             let Some(properties) = stack_properties(&store, layer_id, &spec_path) else {
                 continue;
             };
@@ -837,25 +834,29 @@ pub fn composed(root: Root<'_>, assets: &[(&str, &str)]) -> String {
             );
         }
         for name in names {
-            let path = store.property_path(&format!("{shown}.{name}"));
-            let value = match stage.resolve_property_path(path).map(|r| r.value) {
-                Some(ResolvedValue::Scalar(v)) => spell(&v, &store.tokens),
-                other => format!("{other:?}"),
+            let property = view.property(format!("{shown}.{name}").as_str());
+            let attribute = property.and_then(|property| property.as_attribute());
+            let value = match attribute.and_then(|a| a.authored_value(Time::Default)) {
+                Some(resolved) => spell(&resolved.value, &store.tokens),
+                None => "None".into(),
             };
             let _ = write!(out, "  .{name} = {value}");
             for time in PROBE_TIMES {
-                let at = stage
-                    .resolve_property_path_at_time(path, Time::held(time))
+                let at = attribute
+                    .and_then(|a| a.authored_value(Time::held(time)))
                     .map(|r| spell(&r.value, &store.tokens));
                 let _ = write!(out, " @{time}: {at:?}");
             }
-            let targets: Vec<String> = stage
-                .resolve_target_list_path(path)
-                .map(|r| r.value)
-                .unwrap_or_default()
-                .iter()
-                .map(|t| t.display(&store.paths, &store.tokens))
-                .collect();
+            let targets: Vec<String> = match property {
+                Some(property) => match property.as_relationship() {
+                    Some(relationship) => relationship.targets(),
+                    None => attribute.map(|a| a.connections()).unwrap_or_default(),
+                },
+                None => Vec::new(),
+            }
+            .iter()
+            .map(|t| t.display(&store.paths, &store.tokens))
+            .collect();
             let _ = writeln!(out, " targets {targets:?}");
         }
     }

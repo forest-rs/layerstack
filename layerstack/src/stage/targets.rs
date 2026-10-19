@@ -31,7 +31,7 @@ use crate::{
 #[derive(Clone, Debug, PartialEq)]
 pub struct TargetsExplanation {
     /// The composed targets or connections, as
-    /// [`Stage::resolve_target_list_path`] gives them.
+    /// [`Relationship::targets`](crate::Relationship::targets) gives them.
     pub targets: Vec<TargetPath>,
     /// Every opinion that authors targets or connections, strongest first.
     pub opinions: Vec<TargetOpinion>,
@@ -97,7 +97,7 @@ impl Stage {
     /// The work is linear in the property's opinions and the stage's
     /// target path errors, which are filtered once.
     #[must_use]
-    pub fn explain_targets(
+    pub(crate) fn explain_targets(
         &self,
         property_path: PropertyPath,
         store: &dyn LayerStore,

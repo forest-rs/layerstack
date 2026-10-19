@@ -241,12 +241,17 @@ impl Scene<'_> {
     ) -> NamespacedSettings {
         let mut out = BTreeMap::new();
         let prim = PrimView::new(*self, path);
-        for property in self.stage().authored_property_names(path, self.store()) {
-            let name = self.store().tokens().resolve(property);
-            let Some(declaration) = self.stage().resolve_property_declaration(path, property)
-            else {
+        let Some(handle) = self.prim(path) else {
+            return out;
+        };
+        for name in handle.authored_property_names() {
+            let Some(composed) = handle.property(name) else {
                 continue;
             };
+            let Some(declaration) = composed.declaration() else {
+                continue;
+            };
+            let property = composed.path().property();
             if declaration.kind == PropertyKind::Relationship {
                 out.insert(
                     Arc::from(name),

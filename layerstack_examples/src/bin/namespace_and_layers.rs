@@ -6,8 +6,8 @@
 //! <https://openusd.org/release/user_guides/namespace_editing.html>
 //! <https://openusd.org/release/api/flatten_layer_stack_8h.html>
 use layerstack::{
-    EditTarget, InMemoryStore, Layer, LayerId, LiveStage, NamespaceEdit, PrimSpec, PropertyPath,
-    PropertySpec, PropertyType, Reference, Stage, StageOptions, SublayerEntry, TargetPath, Value,
+    EditTarget, InMemoryStore, Layer, LayerId, LiveStage, NamespaceEdit, PrimSpec, PropertySpec,
+    PropertyType, Reference, Stage, StageOptions, SublayerEntry, TargetPath, Time, Value,
     flatten_layer_stack,
 };
 
@@ -74,24 +74,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("layers to edit: {:?}", edit.layers_to_edit());
     let inverse = primary.apply(&mut store, edit.transaction())?.inverse;
     assert!(
-        dependent.stage().has_prim(used_part),
+        dependent.view(&store).prim(used_part).is_some(),
         "dependent snapshot refresh is explicit"
     );
     dependent.synchronize(&mut store);
     assert!(
-        primary.stage().has_prim(renamed),
+        primary.view(&store).prim(renamed).is_some(),
         "renamed geometry appears in the primary stage"
     );
     assert!(
-        !primary.stage().has_prim(part),
+        !primary.view(&store).prim(part).is_some(),
         "the original primary path is removed"
     );
     assert!(
-        dependent.stage().has_prim(used_renamed),
+        dependent.view(&store).prim(used_renamed).is_some(),
         "dependent geometry moves with its source"
     );
     assert!(
-        !dependent.stage().has_prim(used_part),
+        !dependent.view(&store).prim(used_part).is_some(),
         "the original dependent path is removed"
     );
     assert_eq!(
@@ -101,11 +101,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     assert_eq!(
         dependent
-            .stage()
-            .resolve_field_path(PropertyPath::new(used_renamed, size_name))
-            .unwrap()
-            .value,
-        Value::Double(3.),
+            .view(&store)
+            .attribute("/Use/Renamed.size")
+            .and_then(|size| size.value::<f64>(Time::Default)),
+        Some(3.),
         "dependent override survives the rename"
     );
 
@@ -138,10 +137,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let consolidated_stage = Stage::compose(&mut store, output, StageOptions::default());
     assert_eq!(
         consolidated_stage
-            .resolve_field_path(PropertyPath::new(renamed, size_name))
-            .unwrap()
-            .value,
-        Value::Double(2.),
+            .view(&store)
+            .attribute("/Model/Renamed.size")
+            .and_then(|size| size.value::<f64>(Time::Default)),
+        Some(2.),
         "local override survives consolidation"
     );
     println!(
@@ -158,7 +157,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
     assert!(
-        dependent.stage().has_prim(used_part),
+        dependent.view(&store).prim(used_part).is_some(),
         "undo restores the dependent path"
     );
     Ok(())

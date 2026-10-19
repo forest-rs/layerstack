@@ -16,8 +16,7 @@ use crate::{
 use alloc::{collections::BTreeMap, vec::Vec};
 use layerstack::{
     Applied, ChangeCursor, ChangeHistoryError, Changes, EditError, EditTarget, LayerId, LayerStore,
-    LiveStage, PathId, PropertyField, PropertyPath, Provenance, ResolvedValue, StageOptions,
-    Transaction, Value,
+    LiveStage, PathId, PropertyField, PropertyPath, Provenance, StageOptions, Transaction, Value,
 };
 
 /// One retained computation. Geometry queries use the session's bounds options.
@@ -826,19 +825,12 @@ fn provider_value(
     p: PropertyPath,
     time: Time,
 ) -> (Option<Value>, Option<Provenance>) {
-    let resolved = match time {
-        Time::Default => scene
-            .stage()
-            .resolve_value_with_schema(p.prim_path(), p.property())
-            .and_then(|v| match v.value {
-                ResolvedValue::Scalar(value) => Some((value, v.provenance)),
-                _ => None,
-            }),
-        Time::At { .. } => scene
-            .stage()
-            .resolve_value_at_time_with_schema(p.prim_path(), p.property(), time)
-            .map(|v| (v.value, v.provenance)),
-    };
+    // At the default time a dictionary value is not a scalar input.
+    let resolved = scene
+        .attribute(p)
+        .and_then(|attribute| attribute.get(time))
+        .filter(|v| time != Time::Default || !matches!(v.value, Value::Dictionary(_)))
+        .map(|v| (v.value, v.provenance));
     resolved.map_or((None, None), |(value, provenance)| {
         (Some(value), provenance)
     })

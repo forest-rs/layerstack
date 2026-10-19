@@ -95,8 +95,12 @@ fn all_paths(scene: &Scene<'_>) -> Vec<TargetPath> {
     let mut paths = Vec::new();
     for prim in stage.traverse_all(root(scene)) {
         paths.push(TargetPath::Prim(prim));
-        for name in stage.property_names(prim, scene.store()) {
-            paths.push(TargetPath::Property(PropertyPath::new(prim, name)));
+        for property in stage
+            .prim(prim, scene.store())
+            .map(|prim| prim.properties())
+            .unwrap_or_default()
+        {
+            paths.push(TargetPath::Property(property.path()));
         }
     }
     paths
@@ -184,8 +188,12 @@ fn forward_membership_matches_openusd() {
     let mut paths = vec![TargetPath::Prim(root(&scene))];
     for prim in stage.traverse(root(&scene)).skip(1) {
         paths.push(TargetPath::Prim(prim));
-        for name in stage.property_names(prim, store) {
-            paths.push(TargetPath::Property(PropertyPath::new(prim, name)));
+        for property in stage
+            .prim(prim, store)
+            .map(|prim| prim.properties())
+            .unwrap_or_default()
+        {
+            paths.push(TargetPath::Property(property.path()));
         }
     }
     let mut failures = Vec::new();

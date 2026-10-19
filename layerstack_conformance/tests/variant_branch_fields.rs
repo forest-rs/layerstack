@@ -23,13 +23,13 @@ fn variant_branches_author_active_and_instanceable() {
         loaded.root_layer,
         StageOptions::default(),
     );
-    let store = &mut loaded.store;
+    let store = &loaded.store;
     let (v, child, i) = (store.path("/V"), store.path("/V/Child"), store.path("/I"));
-    assert!(stage.has_prim(v));
-    assert!(!stage.is_active(v));
+    assert!(stage.prim(v, store).is_some());
+    assert!(!stage.prim(v, store).is_some_and(|p| p.is_active()));
     assert!(
-        !stage.has_prim(child),
+        stage.prim(child, store).is_none(),
         "an inactive prim's children are not composed"
     );
-    assert!(stage.is_instance(i));
+    assert!(stage.prim(i, store).is_some_and(|p| p.is_instance()));
 }

@@ -208,51 +208,39 @@ fn check(
     } else {
         InterpolationType::Linear
     };
+    let view = stage.view(&store);
+    let attribute = view.attribute(property);
+    let read = |time| {
+        attribute.and_then(|attribute| {
+            if schema {
+                attribute.get(time)
+            } else {
+                attribute.authored_value(time)
+            }
+        })
+    };
     let actual: Vec<_> = queries
         .iter()
         .map(|&t| {
             scalar(
-                if schema {
-                    stage.resolve_value_at_time_with_schema(
-                        prim,
-                        field,
-                        Time::At {
-                            code: t,
-                            interpolation,
-                        },
-                    )
-                } else {
-                    stage.resolve_property_path_at_time(
-                        property,
-                        Time::At {
-                            code: t,
-                            interpolation,
-                        },
-                    )
-                }
+                read(Time::At {
+                    code: t,
+                    interpolation,
+                })
                 .map(|r| r.value),
             )
         })
         .collect();
-    let actual_default = scalar(if schema {
-        stage
-            .resolve_field_with_schema(prim, field)
-            .map(|r| r.value)
-    } else {
-        stage
-            .resolve_property_path(property)
-            .map(|r| match r.value {
-                layerstack::ResolvedValue::Scalar(value) => value,
-                other => panic!("unexpected default {other:?}"),
-            })
-    });
+    let actual_default = scalar(read(Time::Default).map(|r| r.value));
     if schema {
+        let field = store.tokens.resolve(field);
+        let prim_handle = view.prim(prim).unwrap();
         assert!(
-            !stage.authored_property_names(prim, &store).contains(&field),
+            !prim_handle.authored_property_names().contains(&field),
             "clip layers must not introduce authored stage properties"
         );
         assert!(
-            stage.property_names(prim, &store).contains(&field),
+            prim_handle.property_names().contains(&field),
             "schema definition supplies the attribute"
         );
         let scene = layerstack_schemas::Scene::new(&stage, &store);
@@ -279,7 +267,11 @@ fn check(
             &format!("{name} schema view default"),
         );
     }
-    let actual_samples = stage.property_sample_times(prim, field);
+    let actual_samples = stage
+        .view(&store)
+        .attribute(layerstack::PropertyPath::new(prim, field))
+        .map(|a| a.sample_times())
+        .unwrap_or_default();
     if let Some(python) = python() {
         let dir = std::env::temp_dir().join(format!(
             "layerstack-runtime-clips-{}-{name}",
@@ -1157,10 +1149,17 @@ fn live(store: &mut InMemoryStore) -> layerstack::LiveStage {
         },
     )
 }
-fn at(stage: &Stage, property: layerstack::PropertyPath, time: f64) -> Option<f64> {
+fn at(
+    stage: &Stage,
+    store: &InMemoryStore,
+    property: layerstack::PropertyPath,
+    time: f64,
+) -> Option<f64> {
     scalar(
         stage
-            .resolve_property_path_at_time(property, Time::at(time))
+            .view(store)
+            .attribute(property)
+            .and_then(|a| a.authored_value(Time::at(time)))
             .map(|r| r.value),
     )
 }
@@ -1176,7 +1175,12 @@ fn clip_sources_explain_both_actual_layers_and_do_not_define_properties() {
     let (store, stage) = compose(&layers);
     let property = store.property_path("/P.x");
     let source = stage
-        .property_clip_source(property.prim_path(), property.property(), Time::at(5.))
+        .view(&store)
+        .attribute(layerstack::PropertyPath::new(
+            property.prim_path(),
+            property.property(),
+        ))
+        .and_then(|a| a.clip_source(Time::at(5.)))
         .unwrap();
     assert_eq!(source.anchor_layer, LayerId(1));
     assert_eq!(source.lower.layer, Some(LayerId(2)));
@@ -1189,11 +1193,15 @@ fn clip_sources_explain_both_actual_layers_and_do_not_define_properties() {
         layerstack::SpecPath::from_property_path(raw)
     );
     let resolved = stage
-        .resolve_property_path_at_time(property, Time::at(5.))
+        .view(&store)
+        .attribute(property)
+        .and_then(|a| a.authored_value(Time::at(5.)))
         .unwrap();
     assert_eq!(resolved.value, Value::Double(50.));
     let explanation = stage
-        .explain_property_value(property, Time::at(5.))
+        .view(&store)
+        .attribute(property)
+        .and_then(|a| a.explain(Time::at(5.)))
         .unwrap();
     assert_eq!(explanation.clip, Some(source));
     assert!(matches!(
@@ -1205,16 +1213,32 @@ fn clip_sources_explain_both_actual_layers_and_do_not_define_properties() {
     undeclared[0].1 = undeclared[0].1.replace("double x", "");
     let (store, stage) = compose(&undeclared);
     let property = store.property_path("/P.x");
-    assert!(!stage.has_property_path(property));
+    assert!(
+        !stage
+            .view(&store)
+            .property(property)
+            .is_some_and(|p| p.is_authored())
+    );
     assert!(
         stage
-            .property_sample_times(property.prim_path(), property.property())
+            .view(&store)
+            .attribute(layerstack::PropertyPath::new(
+                property.prim_path(),
+                property.property()
+            ))
+            .map(|a| a.sample_times())
+            .unwrap_or_default()
             .is_empty()
     );
-    assert_eq!(at(&stage, property, 5.), None);
+    assert_eq!(at(&stage, &store, property, 5.), None);
     assert!(
         stage
-            .property_clip_source(property.prim_path(), property.property(), Time::at(5.))
+            .view(&store)
+            .attribute(layerstack::PropertyPath::new(
+                property.prim_path(),
+                property.property()
+            ))
+            .and_then(|a| a.clip_source(Time::at(5.)))
             .is_none()
     );
 }
@@ -1239,7 +1263,7 @@ fn live_raw_clip_and_manifest_edits_refresh_descendants_but_preserve_snapshots()
     let property = store.property_path("/P/Q.x");
     let raw = store.property_path("/C/Q.x");
     let unrelated = store.path("/Unrelated");
-    assert_eq!(at(live.stage(), property, 5.), Some(5.));
+    assert_eq!(at(live.stage(), &store, property, 5.), Some(5.));
     store
         .layers
         .get_mut(&LayerId(2))
@@ -1248,12 +1272,12 @@ fn live_raw_clip_and_manifest_edits_refresh_descendants_but_preserve_snapshots()
         .unwrap()
         .time_samples = Some(vec![(0., Value::Double(0.)), (10., Value::Double(50.))].into());
     assert_eq!(
-        at(&snapshot, property, 5.),
+        at(&snapshot, &store, property, 5.),
         Some(5.),
         "prepared snapshot owns raw clip samples"
     );
     assert_eq!(
-        at(live.stage(), property, 5.),
+        at(live.stage(), &store, property, 5.),
         Some(5.),
         "live stage updates explicitly"
     );
@@ -1267,8 +1291,8 @@ fn live_raw_clip_and_manifest_edits_refresh_descendants_but_preserve_snapshots()
         !changed.contains(&unrelated),
         "unrelated prim must not be rebuilt"
     );
-    assert_eq!(at(live.stage(), property, 5.), Some(25.));
-    assert_eq!(at(&snapshot, property, 5.), Some(5.));
+    assert_eq!(at(live.stage(), &store, property, 5.), Some(25.));
+    assert_eq!(at(&snapshot, &store, property, 5.), Some(5.));
     store
         .layers
         .get_mut(&LayerId(4))
@@ -1281,11 +1305,11 @@ fn live_raw_clip_and_manifest_edits_refresh_descendants_but_preserve_snapshots()
     assert!(changed.contains(&property.prim_path()));
     assert!(!changed.contains(&unrelated));
     assert_eq!(
-        at(live.stage(), property, 5.),
+        at(live.stage(), &store, property, 5.),
         None,
         "uniform manifest no longer supplies values"
     );
-    assert_eq!(at(&snapshot, property, 5.), Some(5.));
+    assert_eq!(at(&snapshot, &store, property, 5.), Some(5.));
 }
 
 #[test]
@@ -1327,14 +1351,14 @@ fn live_anchor_metadata_retimes_and_new_asset_bindings_become_visible() {
     prim.set_field(clips_token, Value::Dictionary(sets));
     live.notify_prim_edit(property.prim_path());
     live.recompose(&mut store);
-    assert_eq!(at(live.stage(), property, 2.), Some(8.));
+    assert_eq!(at(live.stage(), &store, property, 2.), Some(8.));
 
     let mut layers = layers;
     layers[0].1 = layers[0].1.replace("@a.usda@", "@late.usda@");
     let (mut store, snapshot) = compose(&layers);
     let mut live = crate::live(&mut store);
     let property = store.property_path("/P.x");
-    assert_eq!(at(live.stage(), property, 5.), None);
+    assert_eq!(at(live.stage(), &store, property, 5.), None);
     assert!(
         live.stage()
             .clip_asset_requests()
@@ -1348,8 +1372,8 @@ fn live_anchor_metadata_retimes_and_new_asset_bindings_become_visible() {
     store.insert_asset_layer(LayerId(1), "late.usda", LayerId(3));
     assert_eq!(live.notify_changed_layers(&store), [LayerId(1)]);
     live.recompose(&mut store);
-    assert_eq!(at(live.stage(), property, 5.), Some(42.));
-    assert_eq!(at(&snapshot, property, 5.), None);
+    assert_eq!(at(live.stage(), &store, property, 5.), Some(42.));
+    assert_eq!(at(&snapshot, &store, property, 5.), None);
     assert!(
         live.stage()
             .clip_asset_requests()
@@ -1535,7 +1559,7 @@ fn live_newly_selected_resident_clip_is_watched_on_the_next_edit() {
     let (mut store, snapshot) = compose(&layers);
     let mut live = live(&mut store);
     let property = store.property_path("/P.x");
-    assert_eq!(at(live.stage(), property, 0.), Some(1.));
+    assert_eq!(at(live.stage(), &store, property, 0.), Some(1.));
     let clips_token = store.tokens.lookup("clips").unwrap();
     let prim = store
         .layers
@@ -1564,7 +1588,7 @@ fn live_newly_selected_resident_clip_is_watched_on_the_next_edit() {
     prim.set_field(clips_token, Value::Dictionary(sets));
     live.notify_prim_edit(property.prim_path());
     live.recompose(&mut store);
-    assert_eq!(at(live.stage(), property, 0.), Some(2.));
+    assert_eq!(at(live.stage(), &store, property, 0.), Some(2.));
     let raw = store.property_path("/C.x");
     store
         .layers
@@ -1581,8 +1605,8 @@ fn live_newly_selected_resident_clip_is_watched_on_the_next_edit() {
         "new dependency must be watched after partial recomposition"
     );
     live.recompose(&mut store);
-    assert_eq!(at(live.stage(), property, 0.), Some(3.));
-    assert_eq!(at(&snapshot, property, 0.), Some(1.));
+    assert_eq!(at(live.stage(), &store, property, 0.), Some(3.));
+    assert_eq!(at(&snapshot, &store, property, 0.), Some(1.));
 }
 
 #[test]
@@ -1599,9 +1623,14 @@ fn missing_clip_property_reports_manifest_default_source() {
     );
     let (store, stage) = compose(&layers);
     let property = store.property_path("/P.x");
-    assert_eq!(at(&stage, property, 0.), Some(42.));
+    assert_eq!(at(&stage, &store, property, 0.), Some(42.));
     let source = stage
-        .property_clip_source(property.prim_path(), property.property(), Time::at(0.))
+        .view(&store)
+        .attribute(layerstack::PropertyPath::new(
+            property.prim_path(),
+            property.property(),
+        ))
+        .and_then(|a| a.clip_source(Time::at(0.)))
         .unwrap();
     assert_eq!(source.lower.layer, Some(LayerId(4)));
     assert_eq!(source.upper.layer, Some(LayerId(4)));
@@ -1645,7 +1674,9 @@ fn review_sparse_anchor_keeps_authoring_provenance() {
         },
     );
     let resolved = stage
-        .resolve_property_path_at_time(property, Time::at(0.))
+        .view(&store)
+        .attribute(property)
+        .and_then(|a| a.authored_value(Time::at(0.)))
         .unwrap();
     assert_eq!(resolved.provenance.unwrap().layer, LayerId(1));
 }
@@ -1669,7 +1700,9 @@ fn review_invalid_clip_query_does_not_explain_weak_default_as_contributing() {
     let (store, stage) = compose(&layers);
     let property = store.property_path("/P.x");
     let explanation = stage
-        .explain_property_value(property, Time::at(f64::NAN))
+        .view(&store)
+        .attribute(property)
+        .and_then(|a| a.explain(Time::at(f64::NAN)))
         .unwrap();
     assert_eq!(explanation.value, None);
     assert!(
@@ -1749,7 +1782,12 @@ fn review_manifest_blocked_spline_reports_manifest_default_source() {
     let (store, stage) = compose(&layers);
     let property = store.property_path("/P.x");
     let source = stage
-        .property_clip_source(property.prim_path(), property.property(), Time::at(5.))
+        .view(&store)
+        .attribute(layerstack::PropertyPath::new(
+            property.prim_path(),
+            property.property(),
+        ))
+        .and_then(|a| a.clip_source(Time::at(5.)))
         .unwrap();
     assert_eq!(source.lower.layer, Some(LayerId(4)));
 }

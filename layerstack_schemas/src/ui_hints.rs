@@ -98,7 +98,7 @@ impl<'a> UiHints<'a> {
     /// Hints on an existing prim.
     #[must_use]
     pub fn prim(scene: &Scene<'a>, path: PathId) -> Option<Self> {
-        scene.stage().has_prim(path).then_some(Self {
+        scene.prim(path).is_some().then_some(Self {
             scene: *scene,
             target: TargetPath::Prim(path),
             kind: None,
@@ -109,16 +109,10 @@ impl<'a> UiHints<'a> {
     pub fn property(scene: &Scene<'a>, path: PropertyPath) -> Option<Self> {
         let name = scene.store().tokens().resolve(path.property());
         PrimView::new(*scene, path.prim_path()).property_metadata(name)?;
-        let kind = scene
-            .stage()
-            .resolve_property_declaration(path.prim_path(), path.property())
-            .map(|d| d.kind)
-            .or_else(|| {
-                scene
-                    .stage()
-                    .property_definition_ref(path.prim_path(), path.property())
-                    .map(|d| d.kind)
-            })?;
+        let property = scene.property(path)?;
+        let kind = property
+            .declaration()
+            .map_or_else(|| property.kind(), |d| d.kind);
         Some(Self {
             scene: *scene,
             target: TargetPath::Property(path),
@@ -135,12 +129,8 @@ impl<'a> UiHints<'a> {
         // when they are absent from the generated registered-field inventory.
         let key = self.scene.store().tokens().lookup(name)?;
         let resolved = match self.target {
-            TargetPath::Prim(path) => self.scene.stage().resolve_value(path, key),
-            TargetPath::Property(path) => {
-                self.scene
-                    .stage()
-                    .resolve_property_metadata(path.prim_path(), path.property(), key)
-            }
+            TargetPath::Prim(path) => self.scene.prim(path)?.metadata(key),
+            TargetPath::Property(path) => self.scene.property(path)?.metadata(key),
         }?;
         match resolved.value {
             layerstack::ResolvedValue::Scalar(value) => Some(value),
@@ -703,7 +693,11 @@ mod tests {
                 ..StageOptions::default()
             },
         );
-        let graph = live.stage().explain_prim_graph(instance).unwrap();
+        let graph = live
+            .stage()
+            .prim(instance, &store)
+            .unwrap()
+            .composition_graph();
         let node = graph
             .nodes()
             .find(|(_, node)| node.arc_kind() == layerstack::prim_index::ArcKind::References)

@@ -11,6 +11,30 @@ use layerstack::{
 use serde_json::json;
 use std::process::Command;
 
+/// The value opinions author for the attribute at `path` at `time`,
+/// without a schema fallback.
+fn authored(
+    stage: &Stage,
+    store: &InMemoryStore,
+    path: layerstack::PropertyPath,
+    time: layerstack::Time,
+) -> Option<layerstack::Resolved<Value>> {
+    stage
+        .view(store)
+        .attribute(path)
+        .and_then(|attribute| attribute.authored_value(time))
+}
+
+/// The composed sample times of the attribute at `path`; empty when it is
+/// not composed.
+fn sample_times(stage: &Stage, store: &InMemoryStore, path: layerstack::PropertyPath) -> Vec<f64> {
+    stage
+        .view(store)
+        .attribute(path)
+        .map(|attribute| attribute.sample_times())
+        .unwrap_or_default()
+}
+
 fn attr(value: i32) -> PropertySpec {
     PropertySpec::typed_attribute(PropertyType::parse("int").unwrap())
         .with_default(Value::Int(value))
@@ -50,10 +74,14 @@ fn fixture() -> InMemoryStore {
 fn values(stage: &Stage, store: &mut InMemoryStore) -> Vec<i32> {
     ["/Asset.x", "/Internal.x", "/External.x"]
         .map(|path| {
-            match stage
-                .resolve_field_path(store.property_path(path))
-                .unwrap()
-                .value
+            match authored(
+                stage,
+                store,
+                store.property_path(path),
+                layerstack::Time::Default,
+            )
+            .unwrap()
+            .value
             {
                 Value::Int(n) => n,
                 _ => panic!("int expected"),
@@ -237,7 +265,7 @@ fn session_time_domains_include_authoring_offsets_and_root_default_prim() {
         for path in ["/Asset", "/Internal"] {
             let prim = store.path(path);
             assert_eq!(
-                stage.property_sample_times(prim, x),
+                sample_times(&stage, &store, layerstack::PropertyPath::new(prim, x)),
                 [rate],
                 "{path} rates {root_tcps:?}/{session_tcps:?}"
             );
@@ -245,7 +273,10 @@ fn session_time_domains_include_authoring_offsets_and_root_default_prim() {
             assert_eq!(target.map_to_spec_time(rate), root_rate);
         }
         let prim = store.path("/External");
-        assert_eq!(stage.property_sample_times(prim, x), [rate]);
+        assert_eq!(
+            sample_times(&stage, &store, layerstack::PropertyPath::new(prim, x)),
+            [rate]
+        );
     }
 }
 
@@ -282,10 +313,14 @@ fn session_expression_variables_override_root_and_flow_into_external_stacks() {
     let mut live = LiveStage::compose(&mut store, LayerId(1), options);
     for path in ["/Asset", "/Internal", "/External"] {
         assert_eq!(
-            live.stage()
-                .resolve_field_path(store.property_path(&format!("{path}.tint")))
-                .unwrap()
-                .value,
+            authored(
+                live.stage(),
+                &store,
+                store.property_path(&format!("{path}.tint")),
+                layerstack::Time::Default
+            )
+            .unwrap()
+            .value,
             Value::Int(6)
         );
     }
@@ -313,10 +348,14 @@ fn session_expression_variables_override_root_and_flow_into_external_stacks() {
     live.synchronize(&mut store);
     for path in ["/Asset", "/Internal", "/External"] {
         assert_eq!(
-            live.stage()
-                .resolve_field_path(store.property_path(&format!("{path}.tint")))
-                .unwrap()
-                .value,
+            authored(
+                live.stage(),
+                &store,
+                store.property_path(&format!("{path}.tint")),
+                layerstack::Time::Default
+            )
+            .unwrap()
+            .value,
             Value::Int(5)
         );
     }

@@ -31,7 +31,7 @@ pub struct AppliedSchema {
 /// filled by weaker matching definitions and dictionary metadata merged.
 ///
 /// Built by [`crate::SchemaRegistry::prim_definition`] for a composed prim
-/// (or [`crate::Stage::prim_definition`]), and for each schema itself by
+/// (or [`crate::Prim::definition`]), and for each schema itself by
 /// [`crate::SchemaRegistry::schema_definition`].
 ///
 /// Spec: AOUSD Core §13.3.2.3 (the prim definition), §13.3.2.4 (fallback

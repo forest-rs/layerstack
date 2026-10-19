@@ -272,14 +272,12 @@ fn inherited_target_with_root(
             && let Some(token) = scene.store().tokens().lookup(name)
         {
             let property = PropertyPath::new(path, token);
-            let authored = scene
-                .stage()
-                .explain_property_path(property)
-                .is_some_and(|opinions| {
-                    opinions
-                        .iter()
-                        .any(|o| o.value.as_property().is_some_and(|p| p.targets.is_some()))
-                });
+            let authored = scene.property(property).is_some_and(|property| {
+                property
+                    .opinions()
+                    .iter()
+                    .any(|o| o.value.as_property().is_some_and(|p| p.targets.is_some()))
+            });
             let targets = crate::view::forwarded_targets(scene, property);
             if authored || !targets.is_empty() {
                 return match targets.first() {

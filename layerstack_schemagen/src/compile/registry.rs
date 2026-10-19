@@ -512,18 +512,17 @@ impl UserDoc {
         let class = store
             .paths
             .lookup(&Path::root().join(&[store.tokens.lookup(class)?]))?;
-        let stage = self.stage.stage();
-        if !stage.has_prim(class) {
-            return None;
-        }
+        let class = self.stage.view().prim(class)?;
         let resolved = match property {
-            None => stage
-                .resolve_field(class, self.custom_data)
+            None => class
+                .metadata(self.custom_data)
+                .and_then(layerstack::Resolved::into_value)
                 .map(|resolved| resolved.value),
             Some(property) => {
-                let property = store.tokens.lookup(property)?;
-                stage
-                    .resolve_property_metadata(class, property, self.custom_data)
+                store.tokens.lookup(property)?;
+                class
+                    .property(property)
+                    .and_then(|property| property.metadata(self.custom_data))
                     .and_then(|resolved| match resolved.value {
                         layerstack::ResolvedValue::Dictionary(entries) => {
                             Some(Value::Dictionary(entries))

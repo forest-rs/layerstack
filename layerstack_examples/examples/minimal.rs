@@ -3,7 +3,9 @@
 
 //! Minimal end-to-end composition example.
 
-use layerstack::{InMemoryStore, Layer, LayerId, PrimSpec, Reference, Stage, StageOptions, Value};
+use layerstack::{
+    InMemoryStore, Layer, LayerId, PrimSpec, Reference, Resolved, Stage, StageOptions, Value,
+};
 
 fn main() {
     let mut store = InMemoryStore::default();
@@ -38,7 +40,11 @@ fn main() {
         },
     );
 
-    let resolved = stage.resolve_field(p, field_title).expect("title exists");
+    let doc = stage.view(&store).prim("/Doc").expect("composed");
+    let resolved = doc
+        .metadata("title")
+        .and_then(Resolved::into_value)
+        .expect("title exists");
     let Value::String(title) = resolved.value else {
         panic!("unexpected resolved type");
     };

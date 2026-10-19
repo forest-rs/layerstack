@@ -111,7 +111,10 @@ fn edit_target(store: &mut InMemoryStore, stage: &Stage, prim: PathId, arc: &str
         "variant" => ArcKind::Variants,
         other => panic!("no arc {other}"),
     };
-    let graph = stage.explain_prim_graph(prim).expect("a graph");
+    let graph = stage
+        .prim(prim, &*store)
+        .map(|p| p.composition_graph())
+        .expect("a graph");
     let node = graph
         .depth_first()
         .into_iter()
@@ -226,8 +229,12 @@ fn edit_targets_map_as_openusd_does() {
                 Ok(undo) => {
                     let authored = authored_targets(&store, target.layer(), &spec);
                     let reads: Vec<String> = compose(&mut store)
-                        .resolve_target_list_path(at)
-                        .map(|r| r.value)
+                        .view(&store)
+                        .property(at)
+                        .map(|p| match p.as_attribute() {
+                            Some(a) => a.connections(),
+                            None => p.as_relationship().map(|r| r.targets()).unwrap_or_default(),
+                        })
                         .unwrap_or_default()
                         .iter()
                         .map(|t| t.display(&store.paths, &store.tokens))
@@ -325,8 +332,12 @@ fn authored_targets_compose_as_openusd_composes_them() {
     let recomposed = compose(&mut store);
     for (text, prim) in prims {
         let reads: Vec<String> = recomposed
-            .resolve_target_list_path(PropertyPath::new(prim, look))
-            .map(|r| r.value)
+            .view(&store)
+            .property(PropertyPath::new(prim, look))
+            .map(|p| match p.as_attribute() {
+                Some(a) => a.connections(),
+                None => p.as_relationship().map(|r| r.targets()).unwrap_or_default(),
+            })
             .unwrap_or_default()
             .iter()
             .map(|t| t.display(&store.paths, &store.tokens))

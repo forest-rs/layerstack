@@ -146,9 +146,9 @@ impl NamespaceEdit {
     /// let edit = NamespaceEdit::prepare(live.stage(), &mut store,
     ///     &EditTarget::for_layer(LayerId(1)), TargetPath::Prim(old), TargetPath::Prim(new)).unwrap();
     /// let applied = live.apply(&mut store, edit.transaction()).unwrap();
-    /// assert!(live.stage().has_prim(new));
+    /// assert!(live.view(&store).prim(new).is_some());
     /// live.apply(&mut store, &applied.inverse).unwrap();
-    /// assert!(live.stage().has_prim(old));
+    /// assert!(live.view(&store).prim(old).is_some());
     /// ```
     pub fn prepare(
         stage: &Stage,

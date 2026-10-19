@@ -15,7 +15,7 @@
 //! properties composed in; [`SchemaRegistry::prim_definition`] then composes
 //! a composed prim's definition from its type and applied schemas. A stage
 //! composed with a registry ([`crate::StageOptions::schemas`]) answers the
-//! same queries per prim ([`crate::Stage::prim_definition`]) and resolves
+//! same queries per prim ([`crate::Prim::definition`]) and resolves
 //! fallback values through it.
 //!
 //! Multiple-apply schemas are templates: their property names, and the
@@ -362,7 +362,7 @@ impl SchemaDefinition {
 }
 
 /// Why an applied schema cannot be applied to a prim
-/// ([`SchemaRegistry::can_apply`], [`crate::Stage::can_apply`]).
+/// ([`SchemaRegistry::can_apply`], [`crate::Prim::can_apply`]).
 ///
 /// OpenUSD: `UsdPrim::CanApplyAPI`, whose `whyNot` these name.
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -23,7 +23,7 @@ use std::sync::Arc;
 
 use layerstack::{
     AssetResolveError, AssetResolver, InMemoryStore, Layer, LayerId, Path, PrimSpec, Reference,
-    ResolvedAsset, Stage, StageOptions, TokenInterner, path::PathInterner,
+    Resolved, ResolvedAsset, Stage, StageOptions, TokenInterner, path::PathInterner,
 };
 
 // ---------------------------------------------------------------------------
@@ -223,13 +223,18 @@ fn main() {
         },
     );
 
-    let field_material = store.tokens.intern("material");
-    let field_joints = store.tokens.intern("joints");
-    let field_color = store.tokens.intern("color");
+    // The fields are prim metadata; read them through the prim handles.
+    let view = stage.view(&store);
+    let field = |path: &str, name: &str| {
+        view.prim(path)
+            .and_then(|prim| prim.metadata(name))
+            .and_then(Resolved::into_value)
+            .unwrap()
+    };
 
     // Robot gets its fields from the referenced asset layer.
-    let material = stage.resolve_field(robot_path, field_material).unwrap();
-    let joints = stage.resolve_field(robot_path, field_joints).unwrap();
+    let material = field("/Robot", "material");
+    let joints = field("/Robot", "joints");
     println!("/Robot");
     println!("  material = {}", material.value);
     println!("  joints   = {}", joints.value);
@@ -238,7 +243,7 @@ fn main() {
     }
 
     // Environment gets its fields from the env asset.
-    let color = stage.resolve_field(env_path, field_color).unwrap();
+    let color = field("/Environment", "color");
     println!("/Environment");
     println!("  color = {}", color.value);
 

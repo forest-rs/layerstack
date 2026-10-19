@@ -254,20 +254,7 @@ impl ExpressionSearch<'_, '_> {
 /// Whether the prim or property at `path` exists: a prim on the stage, or a
 /// property an opinion declares or its prim's schemas define.
 fn object_exists(scene: &Scene<'_>, path: TargetPath) -> bool {
-    let stage = scene.stage();
-    match path {
-        TargetPath::Prim(prim) => stage.has_prim(prim),
-        TargetPath::Property(property) => {
-            let prim = property.prim_path();
-            stage.has_prim(prim)
-                && (stage
-                    .resolve_property_declaration(prim, property.property())
-                    .is_some()
-                    || stage
-                        .property_definition(prim, property.property())
-                        .is_some())
-        }
-    }
+    scene.stage().object(path, scene.store()).is_some()
 }
 
 /// A collection's membership, computed once and queried for any path.
@@ -425,7 +412,7 @@ impl MembershipQuery {
                     .push(MembershipProblem::CircularInclusion { collection });
                 continue;
             }
-            if !scene.stage().has_prim(collection.prim_path()) {
+            if scene.prim(collection.prim_path()).is_none() {
                 self.problems
                     .push(MembershipProblem::MissingPrim { collection });
                 continue;
@@ -685,7 +672,7 @@ impl ReferenceResolver for Resolver<'_, '_> {
             from.prim_path()
         };
         let name = reference.name();
-        if !self.scene.stage().has_prim(prim)
+        if self.scene.prim(prim).is_none()
             || !self.scene.has_api(prim, CollectionApi::SCHEMA, Some(name))
         {
             return None;
@@ -729,7 +716,6 @@ impl MembershipQuery {
     }
 
     fn included_by_rule_map(&self, scene: &Scene<'_>, out: &mut Included) {
-        let stage = scene.stage();
         let has_excludes = self
             .rules
             .values()
@@ -747,7 +733,7 @@ impl MembershipQuery {
                 }
                 TargetPath::Prim(prim) => prim,
             };
-            if !stage.has_prim(prim) {
+            if scene.prim(prim).is_none() {
                 continue;
             }
             let root = scene.parent(prim).is_none();
@@ -777,8 +763,8 @@ impl MembershipQuery {
                 }
                 out.add(TargetPath::Prim(current));
                 if rule == ExpansionRule::ExpandPrimsAndProperties {
-                    for name in stage.property_names(current, scene.store()) {
-                        let property = TargetPath::Property(PropertyPath::new(current, name));
+                    for property in property_paths(scene, current) {
+                        let property = TargetPath::Property(property);
                         if self.rules.get(&property) != Some(&MembershipRule::Exclude) {
                             out.add(property);
                         }
@@ -812,11 +798,21 @@ impl Included {
 /// The children of `prim` on the stage.
 fn children<'s>(scene: &Scene<'s>, prim: PathId) -> impl DoubleEndedIterator<Item = PathId> + 's {
     scene
-        .stage()
-        .children_of(prim)
+        .prim(prim)
+        .into_iter()
+        .flat_map(layerstack::Prim::children)
+        .map(layerstack::Prim::path)
+}
+
+/// The paths of the properties of `prim` on the stage, in composed order.
+fn property_paths(scene: &Scene<'_>, prim: PathId) -> Vec<PropertyPath> {
+    scene
+        .prim(prim)
+        .map(layerstack::Prim::properties)
         .unwrap_or_default()
-        .iter()
-        .copied()
+        .into_iter()
+        .map(layerstack::Property::path)
+        .collect()
 }
 
 /// Whether a default traversal visits the prim: defined and not abstract.
@@ -849,8 +845,8 @@ fn search_from(
                 out.add(TargetPath::Prim(current));
                 if properties {
                     did_properties = true;
-                    for name in scene.stage().property_names(current, scene.store()) {
-                        out.add(TargetPath::Property(PropertyPath::new(current, name)));
+                    for property in property_paths(scene, current) {
+                        out.add(TargetPath::Property(property));
                     }
                 }
                 stack.extend(
@@ -864,8 +860,8 @@ fn search_from(
         }
     }
     if properties && !did_properties && !(result.value && !result.is_constant()) {
-        for name in scene.stage().property_names(prim, scene.store()) {
-            let property = TargetPath::Property(PropertyPath::new(prim, name));
+        for property in property_paths(scene, prim) {
+            let property = TargetPath::Property(property);
             if search.next(property).value {
                 out.add(property);
             }

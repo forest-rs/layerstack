@@ -16,7 +16,7 @@
 //!   all still match the store;
 //! - the composed prims of each site a composition arc other than the
 //!   local one reaches, and of each namespace above such a site;
-//! - the layers each prim's opinions come from ([`Stage::prim_stack`]);
+//! - the layers each prim's opinions come from ([`Prim::prim_stack`](crate::Prim::prim_stack));
 //! - for each layer, the prim specs that author a path or a composition
 //!   arc ([`slot_names_paths`]), as of a generation of the layer, found by
 //!   the first preparation that asks for them: an open that never edits

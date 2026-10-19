@@ -41,6 +41,52 @@ use layerstack_conformance::{
 };
 use serde::Deserialize;
 
+/// Every source of the prim at `path`, strongest first; `None` when the
+/// stage does not compose it.
+fn sources<'a>(
+    stage: &'a Stage,
+    store: &'a layerstack::InMemoryStore,
+    path: PathId,
+) -> Option<&'a [layerstack::OpinionKey]> {
+    stage.prim(path, store).map(|prim| prim.sources())
+}
+
+/// The opinions of the property at `path`, strongest first; `None` when
+/// none is authored.
+fn opinions<'a>(
+    stage: &'a Stage,
+    store: &'a layerstack::InMemoryStore,
+    path: layerstack::PropertyPath,
+) -> Option<&'a [layerstack::Opinion]> {
+    stage
+        .view(store)
+        .property(path)
+        .map(|property| property.opinions())
+        .filter(|opinions| !opinions.is_empty())
+}
+
+/// The value opinions author for the attribute at `path` at `time`,
+/// without a schema fallback.
+fn authored(
+    stage: &Stage,
+    store: &layerstack::InMemoryStore,
+    path: layerstack::PropertyPath,
+    time: Time,
+) -> Option<layerstack::Resolved<Value>> {
+    stage
+        .view(store)
+        .attribute(path)
+        .and_then(|attribute| attribute.authored_value(time))
+}
+
+/// The composed (active) children of the prim at `path`.
+fn children_of(stage: &Stage, store: &layerstack::InMemoryStore, path: PathId) -> Vec<PathId> {
+    stage
+        .prim(path, store)
+        .map(|prim| prim.children().map(|child| child.path()).collect())
+        .unwrap_or_default()
+}
+
 const ORACLE: &str = include_str!("../fixtures/collapsed_nodes/oracle.json");
 
 #[derive(Deserialize)]
@@ -127,8 +173,7 @@ fn prim_stacks_repeat_each_occurrence_of_a_site() {
     let mut mismatches = Vec::new();
     for prim in &oracle.prims {
         let id = loaded.store.path(&prim.path);
-        let stack: Vec<(String, String)> = stage
-            .explain_prim(id)
+        let stack: Vec<(String, String)> = sources(&stage, &loaded.store, id)
             .expect("composed prim")
             .iter()
             .map(|key| {
@@ -164,8 +209,7 @@ fn each_occurrence_keeps_its_own_layer_offset() {
     let mut mismatches = Vec::new();
     for (attr, expected) in &oracle.property_stacks {
         let property = loaded.store.property_path(attr);
-        let stack: Vec<(String, String, f64, f64)> = stage
-            .explain_property_path(property)
+        let stack: Vec<(String, String, f64, f64)> = opinions(&stage, &loaded.store, property)
             .unwrap_or_default()
             .iter()
             .map(|opinion| {
@@ -200,9 +244,8 @@ fn values_match_openusd() {
     let mut mismatches = Vec::new();
     for (attr, expected) in &oracle.values {
         let property = loaded.store.property_path(attr);
-        let value = stage
-            .resolve_field_path(property)
-            .map(|resolved| resolved.value);
+        let value =
+            authored(&stage, &loaded.store, property, Time::Default).map(|resolved| resolved.value);
         if value != Some(Value::Int(*expected)) {
             mismatches.push(format!("{attr}: expected {expected}, got {value:?}"));
         }
@@ -226,8 +269,7 @@ fn time_samples_use_the_strongest_occurrence_offset() {
     for (attr, probes) in &oracle.samples {
         let property = loaded.store.property_path(attr);
         for &(time, expected) in probes {
-            let value = stage
-                .resolve_property_path_at_time(property, Time::at(time))
+            let value = authored(&stage, &loaded.store, property, Time::at(time))
                 .map(|resolved| resolved.value);
             if value != Some(Value::Double(expected)) {
                 mismatches.push(format!(
@@ -254,14 +296,11 @@ fn snapshot(loaded: &mut LoadedStage, stage: &Stage) -> Vec<String> {
     let mut lines = Vec::new();
     for prim in prims {
         let path = loaded.store.paths.display(prim, &loaded.store.tokens);
-        let children: Vec<String> = stage
-            .children_of(prim)
-            .unwrap_or_default()
+        let children: Vec<String> = children_of(stage, &loaded.store, prim)
             .iter()
             .map(|child| loaded.store.paths.display(*child, &loaded.store.tokens))
             .collect();
-        let stack: Vec<String> = stage
-            .explain_prim(prim)
+        let stack: Vec<String> = sources(stage, &loaded.store, prim)
             .expect("composed prim")
             .iter()
             .map(|key| {
@@ -277,8 +316,7 @@ fn snapshot(loaded: &mut LoadedStage, stage: &Stage) -> Vec<String> {
     }
     for attr in ["/Junction/Tap.flow", "/Delta/Tap.flow", "/Junction.width"] {
         let property = loaded.store.property_path(attr);
-        let stack: Vec<String> = stage
-            .explain_property_path(property)
+        let stack: Vec<String> = opinions(stage, &loaded.store, property)
             .unwrap_or_default()
             .iter()
             .map(|opinion| {
@@ -289,9 +327,8 @@ fn snapshot(loaded: &mut LoadedStage, stage: &Stage) -> Vec<String> {
                 )
             })
             .collect();
-        let value = stage
-            .resolve_field_path(property)
-            .map(|resolved| resolved.value);
+        let value =
+            authored(stage, &loaded.store, property, Time::Default).map(|resolved| resolved.value);
         lines.push(format!("{attr} {stack:?} {value:?}"));
     }
     lines
@@ -338,8 +375,7 @@ fn edits_to_a_shared_site_recompose_every_occurrence() {
     for attr in ["/Junction/Tap.flow", "/Delta/Tap.flow"] {
         let property = loaded.store.property_path(attr);
         assert_eq!(
-            live.stage()
-                .resolve_field_path(property)
+            authored(live.stage(), &loaded.store, property, Time::Default)
                 .map(|resolved| resolved.value),
             Some(Value::Int(42)),
             "{attr}"
@@ -364,5 +400,8 @@ fn edits_to_a_shared_site_recompose_every_occurrence() {
         snapshot(&mut loaded, &fresh)
     );
     let tap = loaded.store.path("/Junction/Tap");
-    assert_eq!(live.stage().explain_prim(tap).map(<[_]>::len), Some(1));
+    assert_eq!(
+        sources(live.stage(), &loaded.store, tap).map(<[_]>::len),
+        Some(1)
+    );
 }

@@ -124,8 +124,12 @@ fn saved_explicit_empty_lists_block_weaker_opinions() {
             .iter()
             .map(|p| {
                 stage
-                    .resolve_target_list_path(*p)
-                    .map(|r| r.value)
+                    .view(&store)
+                    .property(*p)
+                    .map(|p| match p.as_attribute() {
+                        Some(a) => a.connections(),
+                        None => p.as_relationship().map(|r| r.targets()).unwrap_or_default(),
+                    })
                     .unwrap_or_default()
                     .iter()
                     .map(|t| t.display(&store.paths, &store.tokens))
@@ -186,8 +190,12 @@ fn saved_adds_and_reorders_compose_as_openusd() {
             .iter()
             .map(|p| {
                 stage
-                    .resolve_target_list_path(*p)
-                    .map(|r| r.value)
+                    .view(&store)
+                    .property(*p)
+                    .map(|p| match p.as_attribute() {
+                        Some(a) => a.connections(),
+                        None => p.as_relationship().map(|r| r.targets()).unwrap_or_default(),
+                    })
                     .unwrap_or_default()
                     .iter()
                     .map(|t| t.display(&store.paths, &store.tokens))
@@ -669,7 +677,9 @@ fn text_refuses_sparse_edit_kind_changes_while_binary_preserves_retiming() {
             let x = store.property_path("/P.x");
             let stage = Stage::compose(&mut store, LayerId(2), StageOptions::default());
             let resolved = stage
-                .resolve_property_path_at_time(x, Time::held(8.))
+                .view(&store)
+                .attribute(x)
+                .and_then(|a| a.authored_value(Time::held(8.)))
                 .unwrap();
             assert_eq!(
                 resolved.value, expected,

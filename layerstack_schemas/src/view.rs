@@ -13,18 +13,19 @@
 //! compatible value or schema fallback, as OpenUSD's typed `Get<T>` does.
 //! Numeric-time getters convert the selected source without retrying weaker
 //! opinions. They return `None` when no compatible value resolves. For
-//! anything a view does not offer, read the
-//! stage directly with [`PrimView::path`] and the property's USD name:
-//! [`Stage::resolve_value_with_schema`] returns the raw
-//! `Resolved<ResolvedValue>` with its provenance.
+//! anything a view does not offer, use the generic handle
+//! ([`PrimView::prim`]) and the property's USD name:
+//! [`Attribute::get`](layerstack::Attribute::get) returns the raw
+//! `Resolved<Value>` with its provenance, and
+//! [`Attribute::explain`](layerstack::Attribute::explain) says why.
 
 use core::fmt;
 
 use alloc::{string::String, vec::Vec};
 
 use layerstack::{
-    LayerStore, ListPosition, PathId, PrimPathArg, PropertyKind, PropertyPath, ResolvedValue,
-    Stage, StageView, TargetPath, Time, TokenId, TokenInterner, Value,
+    LayerStore, ListPosition, PathId, PrimPathArg, PropertyPath, Stage, StageView, TargetPath,
+    Time, TokenId, TokenInterner, Value,
 };
 
 use crate::edit::SchemaEdit;
@@ -78,8 +79,7 @@ impl<'a> Scene<'a> {
     /// Spec: AOUSD Core §7.6.2.4.4.
     #[must_use]
     pub fn kind(&self, path: PathId) -> Option<&'a str> {
-        let key = self.token("kind")?;
-        let resolved = self.stage.resolve_field(path, key)?;
+        let resolved = self.prim(path)?.metadata("kind")?.into_value()?;
         let tokens = self.store.tokens();
         let kind = match resolved.value {
             Value::Token(token) => tokens.resolve(token),
@@ -183,8 +183,7 @@ impl<'a> Scene<'a> {
     #[must_use]
     pub fn is_a(&self, path: PathId, schema: &str) -> bool {
         self.token(schema).is_some_and(|schema| {
-            self.stage
-                .prim_definition_ref(path)
+            self.definition(path)
                 .is_some_and(|definition| definition.is_a(schema))
         })
     }
@@ -198,7 +197,7 @@ impl<'a> Scene<'a> {
         let Some(schema) = self.token(schema) else {
             return false;
         };
-        let Some(definition) = self.stage.prim_definition_ref(path) else {
+        let Some(definition) = self.definition(path) else {
             return false;
         };
         match instance {
@@ -214,9 +213,7 @@ impl<'a> Scene<'a> {
     /// applies them.
     #[must_use]
     pub fn instances(&self, path: PathId, schema: &str) -> Vec<&'a str> {
-        let (Some(schema), Some(definition)) =
-            (self.token(schema), self.stage.prim_definition_ref(path))
-        else {
+        let (Some(schema), Some(definition)) = (self.token(schema), self.definition(path)) else {
             return Vec::new();
         };
         let tokens = self.store.tokens();
@@ -226,6 +223,31 @@ impl<'a> Scene<'a> {
             .filter(|applied| applied.schema == schema)
             .filter_map(|applied| applied.instance.map(|instance| tokens.resolve(instance)))
             .collect()
+    }
+
+    /// The composed prim at `path`.
+    pub(crate) fn prim(&self, path: PathId) -> Option<layerstack::Prim<'a>> {
+        self.stage.prim(path, self.store)
+    }
+
+    /// The prim definition of the composed prim at `path`.
+    pub(crate) fn definition(&self, path: PathId) -> Option<&'a layerstack::PrimDefinition> {
+        self.prim(path)?.definition()
+    }
+
+    /// The composed property at `path`, attribute or relationship.
+    pub(crate) fn property(&self, path: PropertyPath) -> Option<layerstack::Property<'a>> {
+        self.view().property(path)
+    }
+
+    /// The composed attribute at `path`.
+    pub(crate) fn attribute(&self, path: PropertyPath) -> Option<layerstack::Attribute<'a>> {
+        self.view().attribute(path)
+    }
+
+    /// The composed relationship at `path`.
+    pub(crate) fn relationship(&self, path: PropertyPath) -> Option<layerstack::Relationship<'a>> {
+        self.view().relationship(path)
     }
 
     /// The parent of the prim at `path` (`/` for a root prim), if `path` is
@@ -283,6 +305,14 @@ impl<'a> PrimView<'a> {
         self.scene.view().prim(self.path)
     }
 
+    /// The prim's attribute named `name` (its USD name), if the stage
+    /// composes one.
+    pub(crate) fn attribute(&self, name: &str) -> Option<layerstack::Attribute<'a>> {
+        // Straight to the property: a composed property implies its prim.
+        self.scene
+            .attribute(PropertyPath::new(self.path, self.scene.token(name)?))
+    }
+
     /// The prim's property named `name` (its USD name), if the store holds
     /// that name.
     #[must_use]
@@ -302,14 +332,9 @@ impl<'a> PrimView<'a> {
         name: &str,
         read: impl Fn(&Value, &'a TokenInterner) -> Option<T>,
     ) -> Option<T> {
-        let token = self.scene.token(name)?;
-        self.scene
-            .stage
-            .read_property(
-                PropertyPath::new(self.path, token),
-                Time::Default,
-                |value| read(value, self.scene.store.tokens()),
-            )
+        let tokens = self.scene.store.tokens();
+        self.attribute(name)?
+            .read(Time::Default, |value| read(value, tokens))
             .map(|resolved| resolved.value)
     }
 
@@ -325,12 +350,9 @@ impl<'a> PrimView<'a> {
         time: Time,
         read: impl Fn(&Value, &'a TokenInterner) -> Option<T>,
     ) -> Option<T> {
-        let token = self.scene.token(name)?;
-        self.scene
-            .stage
-            .read_property(PropertyPath::new(self.path, token), time, |value| {
-                read(value, self.scene.store.tokens())
-            })
+        let tokens = self.scene.store.tokens();
+        self.attribute(name)?
+            .read(time, |value| read(value, tokens))
             .map(|resolved| resolved.value)
     }
 
@@ -345,67 +367,42 @@ impl<'a> PrimView<'a> {
         time: Time,
         read: impl Fn(&Value, &'a TokenInterner) -> Option<T>,
     ) -> Result<Option<T>, layerstack::ArrayReadError> {
-        let Some(token) = self.scene.token(name) else {
+        let Some(attribute) = self.attribute(name) else {
             return Ok(None);
         };
-        self.scene
-            .stage
-            .try_read_property(PropertyPath::new(self.path, token), time, |value| {
-                read(value, self.scene.store.tokens())
-            })
+        let tokens = self.scene.store.tokens();
+        attribute
+            .try_read(time, |value| read(value, tokens))
             .map(|result| result.map(|resolved| resolved.value))
     }
 
     /// The resolved value of the attribute `name` at `time`, schema
     /// fallback included, as the stage holds it.
     pub(crate) fn raw_value(&self, name: &str, time: Time) -> Option<Value> {
-        match time {
-            Time::Default => {
-                let token = self.scene.token(name)?;
-                let resolved = self
-                    .scene
-                    .stage
-                    .resolve_value_with_schema(self.path, token)?;
-                match resolved.value {
-                    ResolvedValue::Scalar(value) => Some(value),
-                    _ => None,
-                }
-            }
-            Time::At { .. } => {
-                let token = self.scene.token(name)?;
-                self.scene
-                    .stage
-                    .resolve_value_at_time_with_schema(self.path, token, time)
-                    .map(|resolved| resolved.value)
-            }
-        }
+        self.attribute(name)?
+            .get(time)
+            .map(|resolved| resolved.value)
     }
 
     // Conservative temporal dependency, not a competing value resolver.
     // Include masked samples, splines and single samples: default time can
     // differ even when all numeric times agree (AOUSD Core §12.3, §12.5).
     pub(crate) fn property_might_vary(&self, name: &str) -> bool {
-        if self.property_path(name).is_some_and(|p| {
-            self.scene
-                .stage
-                .property_clip_source(p.prim_path(), p.property(), Time::held(0.0))
-                .is_some()
-        }) {
+        let Some(attribute) = self.attribute(name) else {
+            return false;
+        };
+        if attribute.clip_source(Time::held(0.0)).is_some() {
             return true;
         }
-        self.property_path(name)
-            .and_then(|property| self.scene.stage.explain_property_path(property))
-            .is_some_and(|opinions| {
-                opinions.iter().any(|opinion| {
-                    opinion.value.as_property().is_some_and(|spec| {
-                        spec.spline.is_some()
-                            || spec
-                                .time_samples
-                                .as_ref()
-                                .is_some_and(|samples| !samples.is_empty())
-                    })
-                })
+        attribute.opinions().iter().any(|opinion| {
+            opinion.value.as_property().is_some_and(|spec| {
+                spec.spline.is_some()
+                    || spec
+                        .time_samples
+                        .as_ref()
+                        .is_some_and(|samples| !samples.is_empty())
             })
+        })
     }
 
     /// Whether an attribute has a resolved value source, including a schema
@@ -432,30 +429,25 @@ impl<'a> PrimView<'a> {
     }
     fn namespace_attributes(&self, namespace: &str, authored: bool) -> Vec<PropertyPath> {
         let namespace = namespace.trim_end_matches(':');
-        let scene = self.scene();
-        let names = if authored {
-            scene
-                .stage()
-                .authored_property_names(self.path(), scene.store())
-        } else {
-            scene.stage().property_names(self.path(), scene.store())
+        let Some(prim) = self.prim() else {
+            return Vec::new();
         };
-        let mut names: Vec<_> = names
-            .into_iter()
-            .filter(|token| {
-                let name = scene.store().tokens().resolve(*token);
-                (namespace.is_empty()
-                    || name == namespace
-                    || name
-                        .strip_prefix(namespace)
-                        .is_some_and(|tail| tail.starts_with(':')))
-                    && self.has_attribute(name)
-            })
-            .collect();
-        names.sort_by_key(|n| scene.store().tokens().resolve(*n));
+        let mut names = if authored {
+            prim.authored_property_names()
+        } else {
+            prim.property_names()
+        };
+        names.retain(|name| {
+            namespace.is_empty()
+                || *name == namespace
+                || name
+                    .strip_prefix(namespace)
+                    .is_some_and(|tail| tail.starts_with(':'))
+        });
+        names.sort_unstable();
         names
             .into_iter()
-            .map(|n| PropertyPath::new(self.path(), n))
+            .filter_map(|name| prim.attribute(name).map(|attribute| attribute.path()))
             .collect()
     }
 
@@ -470,21 +462,20 @@ impl<'a> PrimView<'a> {
     ///
     /// Spec: AOUSD Core §12.3 (value resolution), §12.3.6 (blocks).
     pub fn has_authored_value(&self, name: &str) -> bool {
-        let Some(property) = self.property_path(name) else {
+        let Some(property) = self.prim().and_then(|prim| prim.property(name)) else {
             return false;
         };
-        if self
-            .scene
-            .stage
-            .property_clip_source(property.prim_path(), property.property(), Time::held(0.0))
-            .is_some()
+        if property
+            .as_attribute()
+            .is_some_and(|attribute| attribute.clip_source(Time::held(0.0)).is_some())
         {
             return true;
         }
-        let Some(opinions) = self.scene.stage.explain_property_path(property) else {
-            return false;
-        };
-        for spec in opinions.iter().filter_map(|o| o.value.as_property()) {
+        for spec in property
+            .opinions()
+            .iter()
+            .filter_map(|o| o.value.as_property())
+        {
             if spec.spline.is_some() || spec.time_samples.as_ref().is_some_and(|s| !s.is_empty()) {
                 return true;
             }
@@ -502,16 +493,7 @@ impl<'a> PrimView<'a> {
     ///
     /// OpenUSD: `UsdPrim::GetAttribute(name)` is valid.
     pub fn has_attribute(&self, name: &str) -> bool {
-        let Some(token) = self.scene.token(name) else {
-            return false;
-        };
-        let stage = self.scene.stage;
-        if let Some(declared) = stage.resolve_property_declaration(self.path, token) {
-            return declared.kind == PropertyKind::Attribute;
-        }
-        stage
-            .property_definition_ref(self.path, token)
-            .is_some_and(|defined| defined.kind == PropertyKind::Attribute)
+        self.attribute(name).is_some()
     }
 
     /// The composed targets of the relationship `name` (its USD name);
@@ -520,14 +502,9 @@ impl<'a> PrimView<'a> {
     /// Spec: AOUSD Core §12.4.
     #[must_use]
     pub fn read_targets(&self, name: &str) -> Vec<TargetPath> {
-        self.scene
-            .token(name)
-            .and_then(|token| {
-                self.scene
-                    .stage
-                    .resolve_target_list_path(PropertyPath::new(self.path, token))
-            })
-            .map(|resolved| resolved.value)
+        self.prim()
+            .and_then(|prim| prim.relationship(name))
+            .map(layerstack::Relationship::targets)
             .unwrap_or_default()
     }
 }
@@ -824,16 +801,7 @@ pub(crate) fn instance_name(template: &str, instance: &str) -> String {
     feature = "usd-lod"
 ))]
 pub(crate) fn is_relationship(scene: &Scene<'_>, path: PropertyPath) -> bool {
-    let stage = scene.stage();
-    if !stage.has_prim(path.prim_path()) {
-        return false;
-    }
-    if let Some(declared) = stage.resolve_property_declaration(path.prim_path(), path.property()) {
-        return declared.kind == PropertyKind::Relationship;
-    }
-    stage
-        .property_definition(path.prim_path(), path.property())
-        .is_some_and(|defined| defined.kind == PropertyKind::Relationship)
+    scene.relationship(path).is_some()
 }
 
 /// Ordered relationship targets after recursively forwarding relationship paths.
@@ -862,8 +830,8 @@ pub(crate) fn forwarded_targets(scene: &Scene<'_>, root: PropertyPath) -> Vec<Ta
             if !seen.insert(path) {
                 continue;
             }
-            if let Some(targets) = scene.stage().resolve_target_list_path(path) {
-                stack.extend(targets.value.into_iter().rev());
+            if let Some(relationship) = scene.relationship(path) {
+                stack.extend(relationship.targets().into_iter().rev());
             }
         } else if unique.insert(target) {
             out.push(target);

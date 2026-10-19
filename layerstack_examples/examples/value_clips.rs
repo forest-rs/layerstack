@@ -5,8 +5,8 @@
 //! Hosts can replace the in-memory catalog with their own asynchronous loader.
 
 use layerstack::{
-    InMemoryStore, Layer, LayerId, LayerOffset, PrimSpec, PropertyPath, PropertySpec, PropertyType,
-    Stage, StageOptions, Time, Value,
+    InMemoryStore, Layer, LayerId, LayerOffset, PrimSpec, PropertySpec, PropertyType, Stage,
+    StageOptions, Time, Value,
     clip_authoring::{ClipBundleOptions, ClipSource, stitch_clip_sequence},
     value_clips::{ClipAssetStatus, ClipAssetUnavailable},
 };
@@ -93,21 +93,19 @@ fn main() {
             .all(|request| { matches!(request.status, ClipAssetStatus::Loaded(_)) }),
         "the host must satisfy every clip asset request"
     );
-    let at_five = stage
-        .resolve_property_path_at_time(PropertyPath::new(model, height), Time::at(5.))
-        .expect("sampled height");
+    let height = stage
+        .view(&store)
+        .attribute("/Model.height")
+        .expect("the topology declares the height");
+    let at_five = height.get(Time::at(5.)).expect("sampled height");
     assert_eq!(
         at_five.value,
         Value::Double(50.),
         "linear clip interpolation"
     );
-    assert_eq!(
-        stage.property_sample_times(model, height),
-        [0., 10.],
-        "mapped clip endpoints"
-    );
-    let source = stage
-        .property_clip_source(model, height, Time::at(5.))
+    assert_eq!(height.sample_times(), [0., 10.], "mapped clip endpoints");
+    let source = height
+        .clip_source(Time::at(5.))
         .expect("clip sample provenance");
     assert_eq!(source.lower.layer, Some(clip.id()), "lower raw clip source");
     assert_eq!(source.upper.layer, Some(clip.id()), "upper raw clip source");

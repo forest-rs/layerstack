@@ -228,8 +228,8 @@ impl Input {
         let kind = self.value.kind();
         if let Some(token) = scene.store().tokens().lookup(&self.property)
             && let Some(actual) = scene
-                .stage()
-                .property_kind(PropertyPath::new(self.prim, token))
+                .property(PropertyPath::new(self.prim, token))
+                .map(layerstack::Property::kind)
             && actual != kind
         {
             return Err(ProceduralInputError::WrongKind {

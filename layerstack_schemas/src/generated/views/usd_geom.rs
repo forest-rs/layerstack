@@ -79,7 +79,7 @@ impl BackPlateApiPlateVisibility {
 
 #[doc = "This schema specifies a back plate i.e."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's multiple-apply API schema `BackPlateAPI`. Get it with [`BackPlateApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's multiple-apply API schema `BackPlateAPI`. Get it with [`BackPlateApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomBackPlateAPI`."]
 #[doc(alias = "UsdGeomBackPlateAPI")]
 #[doc(alias = "BackPlateAPI")]
@@ -985,7 +985,7 @@ impl BasisCurvesWrap {
 
 #[doc = "BasisCurves are a batched curve representation analogous to the classic RIB definition via Basis and Curves statements."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `BasisCurves`, inheriting [`Curves`]. Construct it with [`BasisCurves::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `BasisCurves`, inheriting [`Curves`]. Construct it with [`BasisCurves::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomBasisCurves`."]
 #[doc(alias = "UsdGeomBasisCurves")]
 #[derive(Clone, Copy, Debug)]
@@ -1158,7 +1158,7 @@ impl BasisCurvesEdit {
 
 #[doc = "Boundable introduces the ability for a prim to persistently cache a rectilinear, local-space, extent."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's abstract typed schema `Boundable`, inheriting [`Xformable`]. Construct it with [`Boundable::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's abstract typed schema `Boundable`, inheriting [`Xformable`]. Construct it with [`Boundable::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomBoundable`."]
 #[doc(alias = "UsdGeomBoundable")]
 #[derive(Clone, Copy, Debug)]
@@ -1447,7 +1447,7 @@ impl CameraStereoRole {
 
 #[doc = "Transformable camera."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `Camera`, inheriting [`Xformable`]. Construct it with [`Camera::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `Camera`, inheriting [`Xformable`]. Construct it with [`Camera::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomCamera`."]
 #[doc(alias = "UsdGeomCamera")]
 #[derive(Clone, Copy, Debug)]
@@ -2396,7 +2396,7 @@ impl CapsuleAxis {
 
 #[doc = "Defines a primitive capsule, i.e."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `Capsule`, inheriting [`Gprim`]. Construct it with [`Capsule::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `Capsule`, inheriting [`Gprim`]. Construct it with [`Capsule::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomCapsule`."]
 #[doc(alias = "UsdGeomCapsule")]
 #[derive(Clone, Copy, Debug)]
@@ -2649,7 +2649,7 @@ impl Capsule1Axis {
 
 #[doc = "Defines a primitive capsule, i.e."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `Capsule_1`, inheriting [`Gprim`]. Construct it with [`Capsule1::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `Capsule_1`, inheriting [`Gprim`]. Construct it with [`Capsule1::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomCapsule_1`."]
 #[doc(alias = "UsdGeomCapsule_1")]
 #[doc(alias = "Capsule_1")]
@@ -2942,7 +2942,7 @@ impl ConeAxis {
 
 #[doc = "Defines a primitive cone, centered at the origin, whose spine is along the specified axis, with the apex of the cone pointing in the direction of the positive axis."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `Cone`, inheriting [`Gprim`]. Construct it with [`Cone::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `Cone`, inheriting [`Gprim`]. Construct it with [`Cone::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomCone`."]
 #[doc(alias = "UsdGeomCone")]
 #[derive(Clone, Copy, Debug)]
@@ -3141,7 +3141,7 @@ impl ConeEdit {
 
 #[doc = "Defines a primitive rectilinear cube centered at the origin."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `Cube`, inheriting [`Gprim`]. Construct it with [`Cube::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `Cube`, inheriting [`Gprim`]. Construct it with [`Cube::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomCube`."]
 #[doc(alias = "UsdGeomCube")]
 #[derive(Clone, Copy, Debug)]
@@ -3275,7 +3275,7 @@ impl CubeEdit {
 
 #[doc = "Base class for UsdGeomBasisCurves, UsdGeomNurbsCurves, and UsdGeomHermiteCurves."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's abstract typed schema `Curves`, inheriting [`PointBased`]. Construct it with [`Curves::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's abstract typed schema `Curves`, inheriting [`PointBased`]. Construct it with [`Curves::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomCurves`."]
 #[doc(alias = "UsdGeomCurves")]
 #[derive(Clone, Copy, Debug)]
@@ -3628,7 +3628,7 @@ impl CylinderAxis {
 
 #[doc = "Defines a primitive cylinder with closed ends, centered at the origin, whose spine is along the specified axis."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `Cylinder`, inheriting [`Gprim`]. Construct it with [`Cylinder::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `Cylinder`, inheriting [`Gprim`]. Construct it with [`Cylinder::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomCylinder`."]
 #[doc(alias = "UsdGeomCylinder")]
 #[derive(Clone, Copy, Debug)]
@@ -3881,7 +3881,7 @@ impl Cylinder1Axis {
 
 #[doc = "Defines a primitive cylinder with closed ends, centered at the origin, whose spine is along the specified axis, with a pair of radii describing the size of the end points."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `Cylinder_1`, inheriting [`Gprim`]. Construct it with [`Cylinder1::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `Cylinder_1`, inheriting [`Gprim`]. Construct it with [`Cylinder1::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomCylinder_1`."]
 #[doc(alias = "UsdGeomCylinder_1")]
 #[doc(alias = "Cylinder_1")]
@@ -4291,7 +4291,7 @@ impl GeomModelApiModelDrawMode {
 
 #[doc = "UsdGeomModelAPI extends the generic UsdModelAPI schema with geometry specific concepts such as cached extents for the entire model, constraint targets, and geometry-inspired extensions to the payload lofting process."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `GeomModelAPI`. Get it with [`GeomModelApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `GeomModelAPI`. Get it with [`GeomModelApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomModelAPI`."]
 #[doc(alias = "UsdGeomModelAPI")]
 #[doc(alias = "GeomModelAPI")]
@@ -4878,7 +4878,7 @@ impl GeomSubsetElementType {
 
 #[doc = "Encodes a subset of a piece of geometry (i.e."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `GeomSubset`, inheriting [`crate::usd::Typed`]. Construct it with [`GeomSubset::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `GeomSubset`, inheriting [`crate::usd::Typed`]. Construct it with [`GeomSubset::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomSubset`."]
 #[doc(alias = "UsdGeomSubset")]
 #[derive(Clone, Copy, Debug)]
@@ -5180,7 +5180,7 @@ impl GprimOrientation {
 
 #[doc = "Base class for all geometric primitives."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's abstract typed schema `Gprim`, inheriting [`Boundable`]. Construct it with [`Gprim::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's abstract typed schema `Gprim`, inheriting [`Boundable`]. Construct it with [`Gprim::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomGprim`."]
 #[doc(alias = "UsdGeomGprim")]
 #[derive(Clone, Copy, Debug)]
@@ -5550,7 +5550,7 @@ impl GprimEdit {
 
 #[doc = "This schema specifies a cubic hermite interpolated curve batch as sometimes used for defining guides for animation."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `HermiteCurves`, inheriting [`Curves`]. Construct it with [`HermiteCurves::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `HermiteCurves`, inheriting [`Curves`]. Construct it with [`HermiteCurves::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomHermiteCurves`."]
 #[doc(alias = "UsdGeomHermiteCurves")]
 #[derive(Clone, Copy, Debug)]
@@ -5859,7 +5859,7 @@ impl ImageableVisibility {
 
 #[doc = "Base class for all prims that may require rendering or visualization of some sort."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's abstract typed schema `Imageable`, inheriting [`crate::usd::Typed`]. Construct it with [`Imageable::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's abstract typed schema `Imageable`, inheriting [`crate::usd::Typed`]. Construct it with [`Imageable::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomImageable`."]
 #[doc(alias = "UsdGeomImageable")]
 #[derive(Clone, Copy, Debug)]
@@ -6302,7 +6302,7 @@ impl MeshTriangleSubdivisionRule {
 
 #[doc = "Encodes a mesh with optional subdivision properties and features."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `Mesh`, inheriting [`PointBased`]. Construct it with [`Mesh::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `Mesh`, inheriting [`PointBased`]. Construct it with [`Mesh::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomMesh`."]
 #[doc(alias = "UsdGeomMesh")]
 #[derive(Clone, Copy, Debug)]
@@ -7471,7 +7471,7 @@ impl MeshEdit {
 
 #[doc = "UsdGeomMotionAPI encodes data that can live on any prim that may affect computations involving: - computed motion for motion blur - sampling for motion blur The \"motion:blurScale\" attribute allows artists to scale the __amount__ of motion blur to be rendered for parts of the scene without changing the recorded animation."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `MotionAPI`. Get it with [`MotionApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `MotionAPI`. Get it with [`MotionApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomMotionAPI`."]
 #[doc(alias = "UsdGeomMotionAPI")]
 #[doc(alias = "MotionAPI")]
@@ -7695,7 +7695,7 @@ impl MotionApiEdit {
 
 #[doc = "This schema is analagous to NURBS Curves in packages like Maya and Houdini, often used for interchange of rigging and modeling curves."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `NurbsCurves`, inheriting [`Curves`]. Construct it with [`NurbsCurves::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `NurbsCurves`, inheriting [`Curves`]. Construct it with [`NurbsCurves::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomNurbsCurves`."]
 #[doc(alias = "UsdGeomNurbsCurves")]
 #[derive(Clone, Copy, Debug)]
@@ -8307,7 +8307,7 @@ impl NurbsPatchVForm {
 
 #[doc = "Encodes a rational or polynomial non-uniform B-spline surface, with optional trim curves."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `NurbsPatch`, inheriting [`PointBased`]. Construct it with [`NurbsPatch::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `NurbsPatch`, inheriting [`PointBased`]. Construct it with [`NurbsPatch::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomNurbsPatch`."]
 #[doc(alias = "UsdGeomNurbsPatch")]
 #[derive(Clone, Copy, Debug)]
@@ -9737,7 +9737,7 @@ impl PlaneAxis {
 
 #[doc = "Defines a primitive plane, centered at the origin, and is defined by a cardinal axis, width, and length."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `Plane`, inheriting [`Gprim`]. Construct it with [`Plane::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `Plane`, inheriting [`Gprim`]. Construct it with [`Plane::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomPlane`."]
 #[doc(alias = "UsdGeomPlane")]
 #[derive(Clone, Copy, Debug)]
@@ -9936,7 +9936,7 @@ impl PlaneEdit {
 
 #[doc = "Base class for all UsdGeomGprims that possess points, providing common attributes such as normals and velocities."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's abstract typed schema `PointBased`, inheriting [`Gprim`]. Construct it with [`PointBased::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's abstract typed schema `PointBased`, inheriting [`Gprim`]. Construct it with [`PointBased::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomPointBased`."]
 #[doc(alias = "UsdGeomPointBased")]
 #[derive(Clone, Copy, Debug)]
@@ -10447,7 +10447,7 @@ impl PointBasedEdit {
 
 #[doc = "Encodes vectorized instancing of multiple, potentially animated, prototypes (object/instance masters), which can be arbitrary prims/subtrees on a UsdStage."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `PointInstancer`, inheriting [`Boundable`]. Construct it with [`PointInstancer::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `PointInstancer`, inheriting [`Boundable`]. Construct it with [`PointInstancer::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomPointInstancer`."]
 #[doc(alias = "UsdGeomPointInstancer")]
 #[derive(Clone, Copy, Debug)]
@@ -11604,7 +11604,7 @@ impl PointInstancerEdit {
 
 #[doc = "Points are analogous to the &lt;A `HREF=\"https://renderman.pixar.com/resources/RenderMan_20/appnote.18.html\">RiPoints` spec&lt;/A&gt;."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `Points`, inheriting [`PointBased`]. Construct it with [`Points::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `Points`, inheriting [`PointBased`]. Construct it with [`Points::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomPoints`."]
 #[doc(alias = "UsdGeomPoints")]
 #[derive(Clone, Copy, Debug)]
@@ -11897,7 +11897,7 @@ impl PointsEdit {
 
 #[doc = "Scope is the simplest grouping primitive, and does not carry the baggage of transformability."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `Scope`, inheriting [`Imageable`]. Construct it with [`Scope::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `Scope`, inheriting [`Imageable`]. Construct it with [`Scope::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomScope`."]
 #[doc(alias = "UsdGeomScope")]
 #[derive(Clone, Copy, Debug)]
@@ -11992,7 +11992,7 @@ impl ScopeEdit {
 
 #[doc = "Defines a primitive sphere centered at the origin."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `Sphere`, inheriting [`Gprim`]. Construct it with [`Sphere::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `Sphere`, inheriting [`Gprim`]. Construct it with [`Sphere::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomSphere`."]
 #[doc(alias = "UsdGeomSphere")]
 #[derive(Clone, Copy, Debug)]
@@ -12126,7 +12126,7 @@ impl SphereEdit {
 
 #[doc = "Encodes a tetrahedral mesh."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `TetMesh`, inheriting [`PointBased`]. Construct it with [`TetMesh::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `TetMesh`, inheriting [`PointBased`]. Construct it with [`TetMesh::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomTetMesh`."]
 #[doc(alias = "UsdGeomTetMesh")]
 #[derive(Clone, Copy, Debug)]
@@ -12620,7 +12620,7 @@ impl VisibilityApiRenderVisibility {
 
 #[doc = "UsdGeomVisibilityAPI introduces properties that can be used to author visibility opinions."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `VisibilityAPI`. Get it with [`VisibilityApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `VisibilityAPI`. Get it with [`VisibilityApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomVisibilityAPI`."]
 #[doc(alias = "UsdGeomVisibilityAPI")]
 #[doc(alias = "VisibilityAPI")]
@@ -12810,7 +12810,7 @@ impl VisibilityApiEdit {
 
 #[doc = "Concrete prim schema for a transform, which implements Xformable."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `Xform`, inheriting [`Xformable`]. Construct it with [`Xform::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `Xform`, inheriting [`Xformable`]. Construct it with [`Xform::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomXform`."]
 #[doc(alias = "UsdGeomXform")]
 #[derive(Clone, Copy, Debug)]
@@ -12905,7 +12905,7 @@ impl XformEdit {
 
 #[doc = "Base class for all transformable prims, which allows arbitrary sequences of component affine transformations to be encoded."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's abstract typed schema `Xformable`, inheriting [`Imageable`]. Construct it with [`Xformable::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's abstract typed schema `Xformable`, inheriting [`Imageable`]. Construct it with [`Xformable::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomXformable`."]
 #[doc(alias = "UsdGeomXformable")]
 #[derive(Clone, Copy, Debug)]

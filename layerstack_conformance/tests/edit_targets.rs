@@ -86,11 +86,16 @@ fn check_file(label: &str, entry: &std::path::Path, tally: &mut Tally) {
             .chain(fields.iter().map(|name| (*name, false)));
         for (name, is_property) in named {
             let opinions = if is_property {
-                stage.explain_property_path(PropertyPath::new(prim, name))
+                stage
+                    .view(store)
+                    .property(PropertyPath::new(prim, name))
+                    .map(|property| property.opinions().to_vec())
             } else {
-                stage.explain_field(prim, name)
+                stage
+                    .prim(prim, store)
+                    .map(|prim| prim.metadata_opinions(name).to_vec())
             };
-            for opinion in opinions.unwrap_or_default() {
+            for opinion in &opinions.unwrap_or_default() {
                 check_opinion(label, &stage, store, prim, name, opinion, tally);
             }
         }
@@ -116,7 +121,8 @@ fn check_opinion(
         key.spec_path.display(&store.paths, &store.tokens)
     );
     let node = stage
-        .explain_prim_graph(prim)
+        .prim(prim, store)
+        .map(|prim| prim.composition_graph())
         .and_then(|graph| graph.node(key.node))
         .expect("opinion node");
     let stack = LayerStack::gather(&*store, node.layer_stack());

@@ -25,7 +25,7 @@ use layerstack::{CannotApply, PathId};
 use crate::{InstanceEdit, InstanceView, PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "Application of labels for a prim for a taxonomy specified by the schema's instance name."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's multiple-apply API schema `SemanticsLabelsAPI`. Get it with [`SemanticsLabelsApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's multiple-apply API schema `SemanticsLabelsAPI`. Get it with [`SemanticsLabelsApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdSemanticsLabelsAPI`."]
 #[doc(alias = "UsdSemanticsLabelsAPI")]
 #[doc(alias = "SemanticsLabelsAPI")]

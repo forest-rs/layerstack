@@ -191,14 +191,12 @@ fn main() {
     }
 
     // --- The raw value, with provenance, for what views do not show. ---
-    let name = store
-        .tokens
-        .lookup(Gprim::DISPLAY_COLOR)
-        .expect("interned by the edits");
-    let resolved = live
-        .stage()
-        .resolve_value_with_schema(arm, name)
-        .expect("authored");
+    let display_color = live
+        .view(&store)
+        .prim(arm)
+        .and_then(|prim| prim.attribute(Gprim::DISPLAY_COLOR))
+        .expect("authored by the edits");
+    let resolved = display_color.get(Time::Default).expect("authored");
     let provenance = resolved.provenance.expect("composed with provenance");
     println!(
         "displayColor comes from layer {} (1 = shot, 2 = base)",

@@ -30,6 +30,7 @@ const LAYERS: u64 = 20;
 const POINTS: usize = 1_000;
 
 struct Scene {
+    store: InMemoryStore,
     stage: Stage,
     prim: layerstack::PathId,
     points: PropertyPath,
@@ -131,6 +132,7 @@ fn build(layers: u64, points_len: usize, instructions: usize) -> Scene {
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
     Scene {
+        store,
         stage,
         prim,
         points: PropertyPath::new(prim, points),
@@ -143,69 +145,63 @@ fn build(layers: u64, points_len: usize, instructions: usize) -> Scene {
 
 fn bench_resolve(c: &mut Criterion) {
     let scene = build(LAYERS, POINTS, 1);
-    let stage = &scene.stage;
+    // The handles are looked up once, outside the timed loops: each bench
+    // measures the resolution its handle query runs.
+    let view = scene.stage.view(&scene.store);
+    let prim = view.prim(scene.prim).expect("/P");
+    let (points, animated, size) = (
+        view.attribute(scene.points).expect("points"),
+        view.attribute(scene.animated).expect("animated"),
+        view.attribute(scene.size).expect("size"),
+    );
     let mut group = c.benchmark_group("resolve");
 
     group.bench_function("sparse_array_default", |b| {
-        b.iter(|| black_box(stage.resolve_property_path(black_box(scene.points))));
+        b.iter(|| black_box(black_box(points).authored_value(Time::Default)));
     });
     group.bench_function("sparse_array_linear", |b| {
-        b.iter(|| {
-            black_box(
-                stage.resolve_property_path_at_time(
-                    black_box(scene.animated),
-                    Time::at(black_box(2.5)),
-                ),
-            )
-        });
+        b.iter(|| black_box(black_box(animated).authored_value(Time::at(black_box(2.5)))));
     });
     group.bench_function("scalar_default", |b| {
-        b.iter(|| black_box(stage.resolve_property_path(black_box(scene.size))));
+        b.iter(|| black_box(black_box(size).authored_value(Time::Default)));
     });
     group.bench_function("scalar_at_time", |b| {
-        b.iter(|| {
-            black_box(
-                stage
-                    .resolve_property_path_at_time(black_box(scene.size), Time::at(black_box(2.5))),
-            )
-        });
+        b.iter(|| black_box(black_box(size).authored_value(Time::at(black_box(2.5)))));
     });
     group.bench_function("dictionary", |b| {
-        b.iter(|| black_box(stage.resolve_value(black_box(scene.prim), scene.custom_data)));
+        b.iter(|| black_box(black_box(prim).metadata(scene.custom_data)));
     });
     group.bench_function("token_list", |b| {
-        b.iter(|| black_box(stage.resolve_token_list(black_box(scene.prim), scene.api_schemas)));
+        b.iter(|| black_box(black_box(prim).metadata(scene.api_schemas)));
     });
 
     // Tiny arrays expose planning costs; large arrays include materialization.
     // Two layers give a dense-only series; deeper stacks add sparse opinions.
     for (layers, points) in [(2, 1), (20, 1), (100, 1), (100, 1_000)] {
         let scene = build(layers, points, 1);
+        let animated = scene
+            .stage
+            .view(&scene.store)
+            .attribute(scene.animated)
+            .expect("animated");
         group.bench_function(format!("temporal/{layers}_layers/{points}_elements"), |b| {
-            b.iter(|| {
-                black_box(scene.stage.resolve_property_path_at_time(
-                    black_box(scene.animated),
-                    Time::at(black_box(2.5)),
-                ))
-            });
+            b.iter(|| black_box(black_box(animated).authored_value(Time::at(black_box(2.5)))));
         });
     }
 
     // Multi-instruction programs separate authored-edit copying from the
     // planner's per-source costs. All writes fit in the dense array.
     let scene = build(20, 1_000, 64);
+    let view = scene.stage.view(&scene.store);
+    let (points, animated) = (
+        view.attribute(scene.points).expect("points"),
+        view.attribute(scene.animated).expect("animated"),
+    );
     group.bench_function("sparse_program_default", |b| {
-        b.iter(|| black_box(scene.stage.resolve_property_path(black_box(scene.points))));
+        b.iter(|| black_box(black_box(points).authored_value(Time::Default)));
     });
     group.bench_function("sparse_program_linear", |b| {
-        b.iter(|| {
-            black_box(
-                scene.stage.resolve_property_path_at_time(
-                    black_box(scene.animated),
-                    Time::at(black_box(2.5)),
-                ),
-            )
-        });
+        b.iter(|| black_box(black_box(animated).authored_value(Time::at(black_box(2.5)))));
     });
 
     group.finish();

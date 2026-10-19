@@ -30,11 +30,10 @@ fn snapshot(
             continue;
         }
         prims.push(path.clone());
-        let mut names: Vec<_> = stage
-            .property_names(prim, store)
-            .into_iter()
-            .map(|n| store.tokens.resolve(n))
-            .collect();
+        let mut names = stage
+            .prim(prim, store)
+            .map(|p| p.property_names())
+            .unwrap_or_default();
         names.sort_unstable();
         let order: Vec<_> = store.layers[&root_layer].prims()[&prim]
             .property_order
@@ -46,7 +45,10 @@ fn snapshot(
         properties.insert(path, json!({"names":names,"order":order}));
         if let Some(name) = store.tokens.lookup("relative") {
             let property = PropertyPath::new(prim, name);
-            if let Some(value) = stage.resolve_field_path(property)
+            if let Some(value) = stage
+                .view(store)
+                .attribute(property)
+                .and_then(|a| a.authored_value(layerstack::Time::Default))
                 && let Value::PathExpression(text) = value.value
             {
                 relative.insert(
@@ -63,18 +65,24 @@ fn snapshot(
         .unwrap();
     let target_list = |name| {
         stage
-            .resolve_target_list_path(PropertyPath::new(watch, store.tokens.lookup(name).unwrap()))
+            .view(store)
+            .property(PropertyPath::new(watch, store.tokens.lookup(name).unwrap()))
+            .map(|p| match p.as_attribute() {
+                Some(a) => a.connections(),
+                None => p.as_relationship().map(|r| r.targets()).unwrap_or_default(),
+            })
             .unwrap()
-            .value
             .into_iter()
             .map(|p| p.display(&store.paths, &store.tokens))
             .collect::<Vec<_>>()
     };
     let expression = stage
-        .resolve_field_path(PropertyPath::new(
+        .view(store)
+        .attribute(PropertyPath::new(
             watch,
             store.tokens.lookup("expression").unwrap(),
         ))
+        .and_then(|a| a.authored_value(layerstack::Time::Default))
         .unwrap()
         .value;
     let Value::PathExpression(expression) = expression else {

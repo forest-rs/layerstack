@@ -124,12 +124,20 @@ fn field_edit_results_match_cpp_and_preserve_existing_custom_qualifier() {
         let scene = Scene::new(live.stage(), &store);
         let view = Volume::new(&scene, volume).unwrap();
         assert_eq!(view.has_field_relationship(&row.name), row.exists);
-        let declaration = live.stage().resolve_property_declaration(volume, name);
+        let declaration = live
+            .stage()
+            .view(&store)
+            .property(PropertyPath::new(volume, name))
+            .and_then(|p| p.declaration());
         assert_eq!(declaration.is_some_and(|d| d.custom), row.custom);
         let targets: Vec<_> = live
             .stage()
-            .resolve_target_list_path(PropertyPath::new(volume, name))
-            .map(|r| r.value)
+            .view(&store)
+            .property(PropertyPath::new(volume, name))
+            .map(|p| match p.as_attribute() {
+                Some(a) => a.connections(),
+                None => p.as_relationship().map(|r| r.targets()).unwrap_or_default(),
+            })
             .unwrap_or_default()
             .into_iter()
             .map(|t| t.display(&store.paths, &store.tokens))
@@ -170,7 +178,7 @@ fn same_batch_definition_retarget_block_and_undo_are_coherent() {
     assert!(view.has_field_relationship("density"));
     assert_eq!(view.field_path("density"), None);
     let undone = live.apply(&mut store, &applied.inverse).unwrap();
-    assert!(!live.stage().has_prim(volume));
+    assert!(live.stage().prim(volume, &store).is_none());
     live.apply(&mut store, &undone.inverse).unwrap();
     assert!(
         Volume::new(&Scene::new(live.stage(), &store), volume)
@@ -232,7 +240,9 @@ fn weaker_custom_binding_is_blocked_without_losing_declaration_and_restored_by_u
     .unwrap();
     assert!(
         live.stage()
-            .resolve_property_declaration(path, name)
+            .view(&store)
+            .property(PropertyPath::new(path, name))
+            .and_then(|p| p.declaration())
             .unwrap()
             .custom
     );
@@ -263,7 +273,9 @@ fn variant_target_preserves_local_relationship_metadata_and_child_branch_specs()
         let name = store.tokens.intern("field:density");
         let before = live
             .stage()
-            .resolve_property_declaration(path, name)
+            .view(&store)
+            .property(PropertyPath::new(path, name))
+            .and_then(|p| p.declaration())
             .unwrap();
         let mut edit = SchemaEdit::new(live.stage(), &mut store, target);
         let handle = layerstack_schemas::usd_vol::VolumeEdit::new(&edit, path).unwrap();
@@ -282,7 +294,9 @@ fn variant_target_preserves_local_relationship_metadata_and_child_branch_specs()
         .unwrap();
         assert_eq!(
             live.stage()
-                .resolve_property_declaration(path, name)
+                .view(&store)
+                .property(PropertyPath::new(path, name))
+                .and_then(|p| p.declaration())
                 .unwrap()
                 .custom,
             before.custom
@@ -303,7 +317,11 @@ fn reference_edit_target_maps_relationship_and_target_paths_and_undo() {
     );
     let path = store.path("/Mounted");
     let field = store.path("/Mounted/Field");
-    let graph = live.stage().explain_prim_graph(path).unwrap();
+    let graph = live
+        .stage()
+        .prim(path, &store)
+        .map(|p| p.composition_graph())
+        .unwrap();
     let node = graph
         .depth_first()
         .into_iter()

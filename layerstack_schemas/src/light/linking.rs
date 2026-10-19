@@ -58,7 +58,7 @@ impl LightLinkMembership {
         light: PathId,
         targets: &[TargetPath],
     ) -> Result<Self, LightCaptureError> {
-        if !scene.stage().has_prim(light) {
+        if scene.prim(light).is_none() {
             return Err(LightCaptureError::MissingPrim(light));
         }
         let Some(api) = LightApi::get(scene, light) else {
@@ -113,7 +113,7 @@ impl MembershipCache {
         light: PathId,
         targets: &[TargetPath],
     ) -> Result<LightLinkSample<'a>, LightCaptureError> {
-        if !scene.stage().has_prim(light) {
+        if scene.prim(light).is_none() {
             return Err(LightCaptureError::MissingPrim(light));
         }
         if LightApi::get(scene, light).is_none() {

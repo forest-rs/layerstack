@@ -190,8 +190,8 @@ fn strength(scene: &Scene<'_>, relationship: PropertyPath) -> BindingStrength {
     let tokens = scene.store().tokens();
     let stronger = tokens.lookup(BIND_MATERIAL_AS).is_some_and(|key| {
         scene
-            .stage()
-            .resolve_property_metadata(relationship.prim_path(), relationship.property(), key)
+            .property(relationship)
+            .and_then(|property| property.metadata(key))
             .is_some_and(|resolved| match resolved.value {
                 ResolvedValue::Scalar(Value::Token(token)) => {
                     tokens.resolve(token) == "strongerThanDescendants"
@@ -267,11 +267,12 @@ impl BindingInputs {
         }
         let tokens = scene.store().tokens();
         let names: Vec<(&str, layerstack::TokenId)> = scene
-            .stage()
-            .authored_property_names(path, scene.store())
+            .prim(path)
+            .map(|prim| prim.authored_property_names())
+            .unwrap_or_default()
             .into_iter()
-            .map(|token| (tokens.resolve(token), token))
-            .filter(|(name, _)| name.starts_with(BINDING))
+            .filter(|name| name.starts_with(BINDING))
+            .filter_map(|name| Some((name, tokens.lookup(name)?)))
             .collect();
         if names.is_empty() {
             return out;

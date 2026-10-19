@@ -391,7 +391,11 @@ fn referenced() -> (InMemoryStore, LiveStage, EditTarget) {
         ..StageOptions::default()
     };
     let live = LiveStage::compose(&mut store, LayerId(1), options);
-    let graph = live.stage().explain_prim_graph(instance).expect("a graph");
+    let graph = live
+        .stage()
+        .prim(instance, &store)
+        .expect("a graph")
+        .composition_graph();
     let node = graph
         .depth_first()
         .into_iter()

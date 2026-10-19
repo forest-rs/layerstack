@@ -68,7 +68,11 @@ fn edit_target(loaded: &mut LoadedStage, live: &LiveStage, target: &Json) -> Edi
         other => panic!("no target {other}"),
     };
     let prim = loaded.store.path(target["prim"].as_str().unwrap());
-    let graph = live.stage().explain_prim_graph(prim).expect("a graph");
+    let graph = live
+        .stage()
+        .prim(prim, &loaded.store)
+        .map(|p| p.composition_graph())
+        .expect("a graph");
     let node = graph
         .depth_first()
         .into_iter()
@@ -364,8 +368,9 @@ fn composed(stage: &Stage, store: &InMemoryStore) -> Vec<(String, Vec<String>, b
     let root = store.paths.lookup(&Path::root()).unwrap();
     stage
         .traverse_all(root)
+        .filter_map(|prim| stage.prim(prim, store))
         .map(|prim| {
-            let stack = stage.prim_stack(prim).unwrap_or_default();
+            let stack = prim.prim_stack();
             let stack = stack
                 .iter()
                 .map(|(layer, path)| {
@@ -373,10 +378,10 @@ fn composed(stage: &Stage, store: &InMemoryStore) -> Vec<(String, Vec<String>, b
                 })
                 .collect();
             (
-                store.paths.display(prim, &store.tokens),
+                prim.to_string(),
                 stack,
-                stage.is_active(prim),
-                stage.is_instance(prim),
+                prim.is_active(),
+                prim.is_instance(),
             )
         })
         .collect()

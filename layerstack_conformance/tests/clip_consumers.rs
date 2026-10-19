@@ -184,23 +184,14 @@ fn spline_clip_variability_invalidates_retained_transforms_without_sample_knots(
 fn invalid_clip_queries_remain_masked_and_report_the_evaluation_error() {
     let (store, stage) = scene();
     let property = store.property_path("/World.xformOp:translate");
+    let translate = stage.view(&store).attribute(property).expect("translate");
     for time in [f64::INFINITY, f64::NAN] {
         assert_eq!(
-            stage.property_clip_evaluation_error(
-                property.prim_path(),
-                property.property(),
-                Time::held(time)
-            ),
+            translate.clip_evaluation_error(Time::held(time)),
             Some(layerstack::value_clips::ClipEvalError::InvalidQuery)
         );
-        assert!(
-            stage
-                .resolve_property_path_at_time(property, Time::held(time))
-                .is_none()
-        );
-        let explained = stage
-            .explain_property_value(property, Time::held(time))
-            .unwrap();
+        assert!(translate.authored_value(Time::held(time)).is_none());
+        let explained = translate.explain(Time::held(time)).unwrap();
         assert_eq!(explained.source, layerstack::ValueSource::ValueClips);
         assert!(explained.value.is_none());
     }

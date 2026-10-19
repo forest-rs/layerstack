@@ -6,9 +6,51 @@
 use std::path::{Path, PathBuf};
 
 use layerstack::{
-    ArcKind, CompositionError, LayerId, LayerStack, PropertyPath, Stage, StageOptions,
-    SublayerCycle, Value,
+    ArcKind, CompositionError, InMemoryStore, LayerId, LayerStack, Opinion, PathId, PropertyPath,
+    Stage, StageOptions, SublayerCycle, TargetPath, Value,
 };
+
+/// The composed prim at `path`.
+fn composed_prim<'a>(
+    stage: &'a Stage,
+    store: &'a InMemoryStore,
+    path: PathId,
+) -> Option<layerstack::Prim<'a>> {
+    stage.prim(path, store)
+}
+
+/// The opinions of the property at `path`; `None` when none is authored.
+fn opinions<'a>(
+    stage: &'a Stage,
+    store: &'a InMemoryStore,
+    path: PropertyPath,
+) -> Option<&'a [Opinion]> {
+    stage
+        .view(store)
+        .property(path)
+        .map(|property| property.opinions())
+        .filter(|opinions| !opinions.is_empty())
+}
+
+/// The composed targets of the relationship, or connections of the
+/// attribute, at `path`: `None` when no opinion authors any, except for
+/// an authored relationship, whose list is then empty.
+fn target_list(
+    stage: &Stage,
+    store: &InMemoryStore,
+    path: PropertyPath,
+) -> Option<Vec<TargetPath>> {
+    let property = stage.view(store).property(path)?;
+    let opinions = property.opinions();
+    if let Some(relationship) = property.as_relationship() {
+        return (!opinions.is_empty()).then(|| relationship.targets());
+    }
+    let attribute = property.as_attribute()?;
+    opinions
+        .iter()
+        .any(|opinion| opinion.value.targets().is_some())
+        .then(|| attribute.connections())
+}
 
 use layerstack_conformance::{
     pcp::load_pcp_json,
@@ -92,7 +134,10 @@ fn assert_pcp_composing_except(loaded: &mut LoadedStage, pcp_path: &Path, skippe
             .expect("pcp path")
             .clone();
         let prim_id = loaded.store.paths.intern(prim);
-        assert!(stage.has_prim(prim_id), "missing prim {prim_path}");
+        assert!(
+            composed_prim(&stage, &loaded.store, prim_id).is_some(),
+            "missing prim {prim_path}"
+        );
 
         let mut by_name = std::collections::HashMap::<String, LayerId>::new();
         for (id, name) in &loaded.layer_names {
@@ -107,14 +152,19 @@ fn assert_pcp_composing_except(loaded: &mut LoadedStage, pcp_path: &Path, skippe
                     .expect("pcp child path")
                     .clone();
                 let child_id = loaded.store.paths.intern(child);
-                assert!(stage.has_prim(child_id), "missing child prim {child_path}");
+                assert!(
+                    composed_prim(&stage, &loaded.store, child_id).is_some(),
+                    "missing child prim {child_path}"
+                );
                 child_ids.push(child_id);
             }
 
-            let actual = stage
-                .children_of(prim_id)
-                .unwrap_or_else(|| panic!("missing children list for {prim_path}"));
-            let render = |ids: &[layerstack::PathId]| {
+            let actual: Vec<PathId> = composed_prim(&stage, &loaded.store, prim_id)
+                .unwrap_or_else(|| panic!("missing children list for {prim_path}"))
+                .children()
+                .map(|child| child.path())
+                .collect();
+            let render = |ids: &[PathId]| {
                 ids.iter()
                     .map(|id| {
                         loaded
@@ -131,15 +181,15 @@ fn assert_pcp_composing_except(loaded: &mut LoadedStage, pcp_path: &Path, skippe
                 actual,
                 child_ids,
                 "child order mismatch for {prim_path} in {pcp_path:?}\n  actual: {:?}\nexpected: {:?}",
-                render(actual),
+                render(&actual),
                 render(&child_ids)
             );
         }
 
         if let Some(stack) = expectations.prim_stack {
-            let actual = stage
-                .prim_stack(prim_id)
-                .unwrap_or_else(|| panic!("missing prim stack for {prim_path}"));
+            let actual = composed_prim(&stage, &loaded.store, prim_id)
+                .unwrap_or_else(|| panic!("missing prim stack for {prim_path}"))
+                .prim_stack();
 
             for (layer_name, expected_spec) in stack {
                 let expected_layer = *by_name
@@ -179,7 +229,7 @@ fn assert_pcp_composing_except(loaded: &mut LoadedStage, pcp_path: &Path, skippe
                 // A declared property need not author a value, so ask for
                 // its opinions rather than a resolved value.
                 assert!(
-                    stage.has_property_path(PropertyPath::new(prim_id, tok)),
+                    opinions(&stage, &loaded.store, PropertyPath::new(prim_id, tok)).is_some(),
                     "missing property/field {prim_path}.{prop}"
                 );
             }
@@ -192,9 +242,11 @@ fn assert_pcp_composing_except(loaded: &mut LoadedStage, pcp_path: &Path, skippe
                     .unwrap_or_else(|| panic!("unexpected property stack key {prop_path}"));
                 let dest_field = loaded.store.tokens.intern(suffix);
 
-                let Some(opinions) =
-                    stage.explain_property_path(PropertyPath::new(prim_id, dest_field))
-                else {
+                let Some(opinions) = opinions(
+                    &stage,
+                    &loaded.store,
+                    PropertyPath::new(prim_id, dest_field),
+                ) else {
                     panic!("missing property opinions for {prop_path}");
                 };
 
@@ -228,19 +280,19 @@ fn assert_pcp_composing_except(loaded: &mut LoadedStage, pcp_path: &Path, skippe
                     .unwrap_or_else(|| panic!("unexpected relationship key {prop_path}"));
                 let field = loaded.store.tokens.intern(suffix);
 
-                let resolved = stage
-                    .resolve_target_list_path(PropertyPath::new(prim_id, field))
-                    .unwrap_or_else(|| panic!("missing relationship targets for {prop_path}"));
+                let resolved =
+                    target_list(&stage, &loaded.store, PropertyPath::new(prim_id, field))
+                        .unwrap_or_else(|| panic!("missing relationship targets for {prop_path}"));
 
                 let expected_targets: Vec<_> = expected
                     .into_iter()
                     .map(|p| {
-                        layerstack::TargetPath::parse(&p, &loaded.store.tokens, &loaded.store.paths)
+                        TargetPath::parse(&p, &loaded.store.tokens, &loaded.store.paths)
                             .expect("target path")
                     })
                     .collect();
                 assert_eq!(
-                    resolved.value, expected_targets,
+                    resolved, expected_targets,
                     "relationship target mismatch for {prop_path}"
                 );
             }
@@ -253,19 +305,19 @@ fn assert_pcp_composing_except(loaded: &mut LoadedStage, pcp_path: &Path, skippe
                     .unwrap_or_else(|| panic!("unexpected connection key {prop_path}"));
                 let field = loaded.store.tokens.intern(suffix);
 
-                let resolved = stage
-                    .resolve_target_list_path(PropertyPath::new(prim_id, field))
-                    .unwrap_or_else(|| panic!("missing attribute connections for {prop_path}"));
+                let resolved =
+                    target_list(&stage, &loaded.store, PropertyPath::new(prim_id, field))
+                        .unwrap_or_else(|| panic!("missing attribute connections for {prop_path}"));
 
                 let expected_targets: Vec<_> = expected
                     .into_iter()
                     .map(|p| {
-                        layerstack::TargetPath::parse(&p, &loaded.store.tokens, &loaded.store.paths)
+                        TargetPath::parse(&p, &loaded.store.tokens, &loaded.store.paths)
                             .expect("target path")
                     })
                     .collect();
                 assert_eq!(
-                    resolved.value, expected_targets,
+                    resolved, expected_targets,
                     "attribute connection mismatch for {prop_path}"
                 );
             }
@@ -928,9 +980,9 @@ fn assert_error_arc_cycle_root_composes(load: fn(&str) -> (LoadedStage, PathBuf)
     for (prim, stack, children) in expected {
         let path = layerstack::Path::parse_absolute(prim, &loaded.store.tokens).expect("prim path");
         let id = loaded.store.paths.intern(path);
-        let actual_stack: Vec<String> = stage
-            .prim_stack(id)
+        let actual_stack: Vec<String> = composed_prim(&stage, &loaded.store, id)
             .unwrap_or_else(|| panic!("{prim} is not composed"))
+            .prim_stack()
             .iter()
             .map(|(layer, spec)| {
                 format!(
@@ -941,9 +993,13 @@ fn assert_error_arc_cycle_root_composes(load: fn(&str) -> (LoadedStage, PathBuf)
             })
             .collect();
         assert_eq!(&actual_stack, stack, "prim stack of {prim}");
-        let actual_children: Vec<String> = stage
-            .children_of(id)
-            .unwrap_or(&[])
+        let actual_children: Vec<String> = composed_prim(&stage, &loaded.store, id)
+            .map(|prim| {
+                prim.children()
+                    .map(|child| child.path())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default()
             .iter()
             .map(|child| {
                 let leaf = loaded.store.paths.resolve(*child).leaf().expect("leaf");
@@ -966,7 +1022,7 @@ fn assert_error_arc_cycle_root_composes(load: fn(&str) -> (LoadedStage, PathBuf)
         "</RelocatedInheritOfChild/Child>: @root.usd@</RelocatedInheritOfChild/Child> CANNOT inherits @root.usd@</RelocatedInheritOfChild/Child/Class>",
         "</RelocatedInheritOfChild/Object>: @root.usd@</RelocatedInheritOfChild/Object> relocates @root.usd@</RelocatedInheritOfChild/Child> CANNOT inherits @root.usd@</RelocatedInheritOfChild/Child/Class>",
     ];
-    let display = |path: layerstack::PathId| loaded.store.paths.display(path, &loaded.store.tokens);
+    let display = |path: PathId| loaded.store.paths.display(path, &loaded.store.tokens);
     let mut actual_errors: Vec<String> = stage
         .composition_errors()
         .iter()
@@ -1108,9 +1164,7 @@ fn assert_targets_and_errors(
     );
     for (property, expected) in properties {
         let path = loaded.store.property_path(property);
-        let targets: Vec<String> = stage
-            .resolve_target_list_path(path)
-            .map(|resolved| resolved.value)
+        let targets: Vec<String> = target_list(&stage, &loaded.store, path)
             .unwrap_or_default()
             .iter()
             .map(|target| target.display(&loaded.store.paths, &loaded.store.tokens))

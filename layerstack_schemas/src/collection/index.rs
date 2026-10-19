@@ -412,14 +412,14 @@ impl MembershipIndex {
             }
         };
         for root in &subtrees {
-            if stage.has_prim(*root) {
+            if scene.prim(*root).is_some() {
                 for prim in stage.traverse_all(*root) {
                     discover(prim, &mut found);
                 }
             }
         }
         for prim in &exact {
-            if stage.has_prim(*prim) {
+            if scene.prim(*prim).is_some() {
                 discover(*prim, &mut found);
             }
         }

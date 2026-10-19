@@ -52,7 +52,7 @@ shared storage, and `PrimvarEdit::set_indices_owned` / `set_indices_shared`
 transfer their inputs. `PrimvarEdit::set(Value::TypedArray(...))` already retains
 the shared value buffer.
 
-For an immediate borrowed operation, use `Stage::read_property` with
+For an immediate borrowed operation, use `Attribute::read` with
 `value::borrow_float3_array` inside its callback. A callback's borrowed slice
 cannot escape the source's lifetime. A typed getter's shared owner can outlive
 the stage, layer and store.

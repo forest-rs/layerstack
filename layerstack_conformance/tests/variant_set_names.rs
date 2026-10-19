@@ -195,26 +195,21 @@ fn variant_sets_compose_as_openusd_composes_them() {
     assert!(records.len() >= 12);
     let mut mismatches = Vec::new();
     for (path, want) in records {
-        let prim = loaded.store.path(path);
-        let tokens = &loaded.store.tokens;
-        let sets = stage.variant_sets(prim, &loaded.store);
-        let names: Vec<&str> = sets.iter().map(|(set, _)| tokens.resolve(*set)).collect();
+        let prim = stage.prim(loaded.store.path(path), &loaded.store);
+        let sets = prim.map(|prim| prim.variant_sets()).unwrap_or_default();
+        let names: Vec<&str> = sets.iter().map(|(set, _)| *set).collect();
         let selections: BTreeMap<&str, &str> = sets
             .iter()
-            .map(|(set, variant)| {
-                (
-                    tokens.resolve(*set),
-                    variant.map_or("", |variant| tokens.resolve(variant)),
-                )
-            })
+            .map(|(set, variant)| (*set, variant.unwrap_or("")))
             .collect();
         let mut values = BTreeMap::new();
-        for name in stage.property_names(prim, &loaded.store) {
-            let property = layerstack::PropertyPath::new(prim, name);
-            if let Some(resolved) = stage.resolve_field_path(property)
+        for property in prim.map(|prim| prim.properties()).unwrap_or_default() {
+            if let Some(resolved) = property
+                .as_attribute()
+                .and_then(|attribute| attribute.authored_value(layerstack::Time::Default))
                 && let Some(value) = value(&resolved.value)
             {
-                values.insert(tokens.resolve(name).to_string(), value);
+                values.insert(property.name().to_string(), value);
             }
         }
         let got = json!({"names": names, "selections": selections, "values": values});
@@ -394,7 +389,11 @@ fn edit_target(loaded: &mut LoadedStage, live: &LiveStage, target: &Json) -> Edi
         other => panic!("no target {other}"),
     };
     let prim = loaded.store.path(target["prim"].as_str().unwrap());
-    let graph = live.stage().explain_prim_graph(prim).expect("a graph");
+    let graph = live
+        .stage()
+        .prim(prim, &loaded.store)
+        .map(|p| p.composition_graph())
+        .expect("a graph");
     let node = graph
         .depth_first()
         .into_iter()
@@ -479,7 +478,10 @@ fn composed(stage: &Stage, store: &InMemoryStore) -> Vec<(String, Vec<String>)> 
     stage
         .traverse_all(root)
         .map(|prim| {
-            let stack = stage.prim_stack(prim).unwrap_or_default();
+            let stack = stage
+                .prim(prim, store)
+                .map(|prim| prim.prim_stack())
+                .unwrap_or_default();
             let stack = stack
                 .iter()
                 .map(|(layer, path)| {

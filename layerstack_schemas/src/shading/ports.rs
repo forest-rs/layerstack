@@ -67,16 +67,11 @@ impl<'a> Port<'a> {
     /// Its composed declared type, including array and role information.
     #[must_use]
     pub fn property_type(&self) -> Option<PropertyType> {
-        self.scene
-            .stage()
-            .resolve_property_declaration(self.path.prim_path(), self.path.property())
+        let property = self.scene.property(self.path)?;
+        property
+            .declaration()
             .and_then(|d| d.type_name)
-            .or_else(|| {
-                self.scene
-                    .stage()
-                    .property_definition(self.path.prim_path(), self.path.property())
-                    .and_then(|d| d.type_name)
-            })
+            .or_else(|| property.definition().and_then(|d| d.type_name.clone()))
     }
     /// Reads this attribute's own value at `time`, without following connections.
     /// To find upstream value providers first, use [`Self::value_sources`].
@@ -143,11 +138,15 @@ impl<'a> PrimView<'a> {
     #[must_use]
     pub fn ports(&self, kind: PortKind) -> Vec<Port<'a>> {
         let scene = self.scene();
-        scene
-            .stage()
-            .property_names(self.path(), scene.store())
+        let tokens = scene.store().tokens();
+        let Some(prim) = self.prim() else {
+            return Vec::new();
+        };
+        prim.property_names()
             .into_iter()
-            .filter_map(|name| Port::get(&scene, PropertyPath::new(self.path(), name)))
+            .filter_map(|name| {
+                Port::get(&scene, PropertyPath::new(self.path(), tokens.lookup(name)?))
+            })
             .filter(|port| port.kind == kind)
             .collect()
     }

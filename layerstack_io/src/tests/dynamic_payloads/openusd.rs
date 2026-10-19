@@ -117,10 +117,10 @@ fn in_prim_stack<B: Storage>(
     path: &str,
 ) -> bool {
     let (prim, path) = (prim_id(doc, prim), prim_id(doc, path));
-    doc.stage()
-        .stage()
-        .prim_stack(prim)
+    doc.view()
+        .prim(prim)
         .unwrap()
+        .prim_stack()
         .iter()
         .any(|(source, site)| *source == layer && site.prim_path() == path)
 }
@@ -500,9 +500,9 @@ fn test_ancestral_payloads_and_variants() {
         // reads `/Variant`'s depth across the reference.
         let id = prim_id(&doc, "/SubrootReferenceAndVariant");
         let mut targets: Vec<String> = doc
-            .stage()
-            .stage()
-            .dynamic_dependency(id)
+            .view()
+            .prim(id)
+            .and_then(|prim| prim.dynamic_dependency())
             .unwrap()
             .target_layers()
             .map(|target| {
@@ -535,7 +535,8 @@ fn test_ancestral_payloads_map_function() {
         let doc = fixture_open(&dir, "root.usda", attributes);
         no_errors(&doc, "/AncestralMapFunction/Model/Inherit");
         let prim = prim_id(&doc, "/AncestralMapFunction/Model/Inherit");
-        let graph = doc.stage().stage().explain_prim_graph(prim).unwrap();
+        let view = doc.view();
+        let graph = view.prim(prim).unwrap().composition_graph();
         let root = graph.node(graph.root().unwrap()).unwrap();
         let implied = graph.node(root.children()[0]).unwrap();
         let payload = graph.node(implied.children()[0]).unwrap();
@@ -577,9 +578,9 @@ fn targets<B: Storage>(doc: &StageDocument<B>, prims: &[&str]) -> Vec<Vec<LayerI
         .iter()
         .map(|prim| {
             let id = prim_id(doc, prim);
-            doc.stage()
-                .stage()
-                .dynamic_dependency(id)
+            doc.view()
+                .prim(id)
+                .and_then(|prim| prim.dynamic_dependency())
                 .map(|dependency| dependency.target_layers().collect())
                 .unwrap_or_default()
         })

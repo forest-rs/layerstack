@@ -132,8 +132,9 @@ impl Scene {
         let id = self.path(prim);
         let stack = self
             .stage
-            .prim_stack(id)
-            .unwrap_or_else(|| panic!("{prim} is not composed"));
+            .prim(id, &self.store)
+            .unwrap_or_else(|| panic!("{prim} is not composed"))
+            .prim_stack();
         stack
             .iter()
             .map(|(layer, spec)| {
@@ -150,10 +151,10 @@ impl Scene {
     fn children(&mut self, prim: &str) -> Vec<String> {
         let id = self.path(prim);
         self.stage
-            .children_of(id)
-            .unwrap_or(&[])
-            .iter()
-            .map(|child| self.display(*child))
+            .prim(id, &self.store)
+            .into_iter()
+            .flat_map(|prim| prim.children())
+            .map(|child| self.display(child.path()))
             .collect()
     }
 

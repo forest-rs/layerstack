@@ -354,7 +354,10 @@ impl GeneratedMesh {
     ) -> Result<MeshPublication, MeshPublicationError> {
         let mut ancestor = store.paths().parent(path);
         while let Some(parent) = ancestor {
-            if stage.is_instance(parent) {
+            if stage
+                .prim(parent, &*store)
+                .is_some_and(layerstack::Prim::is_instance)
+            {
                 return Err(MeshPublicationError::InstanceProxy(path));
             }
             ancestor = store.paths().parent(parent);
@@ -370,10 +373,12 @@ impl GeneratedMesh {
         // AOUSD Core §8 (spec paths) and §10.5 (variant selection): the
         // mapped authored branch can differ from the selected composed branch.
         let local = layer.prim_at(&mapped);
-        let type_name = local
-            .and_then(|spec| spec.type_name)
-            .or_else(|| stage.resolve_type_name(path));
-        if (local.is_some() || stage.has_prim(path))
+        let type_name = local.and_then(|spec| spec.type_name).or_else(|| {
+            stage
+                .prim(path, &*store)
+                .and_then(layerstack::Prim::type_name_token)
+        });
+        if (local.is_some() || stage.prim(path, &*store).is_some())
             && type_name.map(|name| store.tokens().resolve(name)) != Some("Mesh")
         {
             return Err(MeshPublicationError::NotMesh(path));
@@ -713,7 +718,7 @@ mod tests {
             .unwrap();
         assert_eq!(recreated.work.geometry_validations, 0);
         live.apply(&mut store, &recreated.transaction).unwrap();
-        assert!(live.stage().has_prim(path));
+        assert!(live.stage().prim(path, &store).is_some());
     }
     #[test]
     fn updates_are_atomic_share_storage_and_prune_only_owned_properties() {

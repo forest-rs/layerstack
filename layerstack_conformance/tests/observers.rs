@@ -61,7 +61,8 @@ fn callbacks_and_independent_queries_observe_host_edits() {
     let received = Arc::new(Mutex::new(Vec::new()));
     let sink = received.clone();
     let subscription = live.subscribe_changes(move |notice| {
-        assert!(notice.stage.has_prim(size.prim_path()));
+        let prim = size.prim_path();
+        assert!(notice.view().prim(prim).is_some());
         sink.lock()
             .unwrap()
             .push((notice.revision, notice.changes.clone()));

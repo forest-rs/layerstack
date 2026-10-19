@@ -24,7 +24,7 @@
 //! [`crate::SchemaRegistry`] in [`crate::StageOptions::schemas`] registers
 //! ([`crate::SchemaRegistryBuilder::register_metadata`]). The fields and
 //! attributes a payload's arguments were composed from are recorded with
-//! the prim index ([`DynamicDependency`], [`crate::Stage::dynamic_dependency`])
+//! the prim index ([`DynamicDependency`], [`crate::Prim::dynamic_dependency`])
 //! so that editing them recomposes the prims that read them, and only those.
 //!
 //! References never compose dynamic arguments, as in OpenUSD.
@@ -511,7 +511,7 @@ impl PartialEq for DynamicFormats {
 /// A prim index records one for the payloads to dynamic formats its own
 /// indexing composed arguments for, including those of ancestral sites
 /// indexed for its arcs; the payloads its namespace parent composed are the
-/// parent's. Read it with [`crate::Stage::dynamic_dependency`].
+/// parent's. Read it with [`crate::Prim::dynamic_dependency`].
 ///
 /// OpenUSD: `PcpDynamicFileFormatDependencyData`, read through
 /// `PcpCache::GetDynamicFileFormatArgumentDependencyData`.

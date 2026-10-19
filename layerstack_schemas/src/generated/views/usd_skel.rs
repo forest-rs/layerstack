@@ -25,7 +25,7 @@ use layerstack::{CannotApply, PathId};
 use crate::{PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "Describes a target blend shape, possibly containing inbetween shapes."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `BlendShape`, inheriting [`crate::usd::Typed`]. Construct it with [`BlendShape::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `BlendShape`, inheriting [`crate::usd::Typed`]. Construct it with [`BlendShape::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdSkelBlendShape`."]
 #[doc(alias = "UsdSkelBlendShape")]
 #[derive(Clone, Copy, Debug)]
@@ -307,7 +307,7 @@ impl BlendShapeEdit {
 
 #[doc = "Describes a skel animation, where joint animation is stored in a vectorized form."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `SkelAnimation`, inheriting [`crate::usd::Typed`]. Construct it with [`SkelAnimation::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `SkelAnimation`, inheriting [`crate::usd::Typed`]. Construct it with [`SkelAnimation::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdSkelAnimation`."]
 #[doc(alias = "UsdSkelAnimation")]
 #[derive(Clone, Copy, Debug)]
@@ -901,7 +901,7 @@ impl SkelBindingApiSkinningMethod {
 
 #[doc = "Provides API for authoring and extracting all the skinning-related data that lives in the \"geometry hierarchy\" of prims and models that want to be skeletally deformed."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `SkelBindingAPI`. Get it with [`SkelBindingApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `SkelBindingAPI`. Get it with [`SkelBindingApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdSkelBindingAPI`."]
 #[doc(alias = "UsdSkelBindingAPI")]
 #[doc(alias = "SkelBindingAPI")]
@@ -1561,7 +1561,7 @@ impl SkelBindingApiEdit {
 
 #[doc = "Boundable prim type used to identify a scope beneath which skeletally-posed primitives are defined."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `SkelRoot`, inheriting [`crate::usd_geom::Boundable`]. Construct it with [`SkelRoot::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `SkelRoot`, inheriting [`crate::usd_geom::Boundable`]. Construct it with [`SkelRoot::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdSkelRoot`."]
 #[doc(alias = "UsdSkelRoot")]
 #[derive(Clone, Copy, Debug)]
@@ -1656,7 +1656,7 @@ impl SkelRootEdit {
 
 #[doc = "Describes a skeleton."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `Skeleton`, inheriting [`crate::usd_geom::Boundable`]. Construct it with [`Skeleton::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `Skeleton`, inheriting [`crate::usd_geom::Boundable`]. Construct it with [`Skeleton::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdSkelSkeleton`."]
 #[doc(alias = "UsdSkelSkeleton")]
 #[derive(Clone, Copy, Debug)]

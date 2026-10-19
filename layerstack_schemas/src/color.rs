@@ -226,7 +226,7 @@ impl Scene<'_> {
         &self,
         path: PathId,
     ) -> Result<ColorSpaceAssignment, ColorError> {
-        if !self.stage().has_prim(path) {
+        if self.prim(path).is_none() {
             return Err(ColorError::MissingPrim(path));
         }
         let mut current = Some(path);
@@ -265,32 +265,23 @@ impl Scene<'_> {
         &self,
         path: PropertyPath,
     ) -> Result<ColorSpaceAssignment, ColorError> {
-        let declaration = self
-            .stage()
-            .resolve_property_declaration(path.prim_path(), path.property())
-            .map(|v| v.kind)
-            .or_else(|| {
-                self.stage()
-                    .property_definition_ref(path.prim_path(), path.property())
-                    .map(|v| v.kind)
-            });
-        if declaration != Some(PropertyKind::Attribute) {
+        let property = self.property(path);
+        let declaration = property.map(|property| {
+            property
+                .declaration()
+                .map_or_else(|| property.kind(), |declared| declared.kind)
+        });
+        let (Some(property), Some(PropertyKind::Attribute)) = (property, declaration) else {
             return Err(ColorError::MissingAttribute(path));
-        }
+        };
         if let Some(key) = self.store().tokens().lookup("colorSpace")
-            && let Some(value) =
-                self.stage()
-                    .resolve_property_metadata(path.prim_path(), path.property(), key)
+            && let Some(value) = property.metadata(key)
             && let layerstack::ResolvedValue::Scalar(value) = value.value
             && let Some(name) = crate::value::read_token(&value, self.store().tokens())
         {
             return Ok(ColorSpaceAssignment {
                 name: Arc::from(name),
-                source: if self
-                    .stage()
-                    .resolve_authored_property_metadata(path.prim_path(), path.property(), key)
-                    .is_some()
-                {
+                source: if property.authored_metadata(key).is_some() {
                     ColorSpaceSource::Attribute(path)
                 } else {
                     ColorSpaceSource::Schema(path)

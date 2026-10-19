@@ -9,7 +9,7 @@
 #![allow(missing_docs, reason = "integration tests")]
 
 use layerstack::{
-    CompositionError, InMemoryStore, Layer, LayerId, LayerOffset, LiveStage, PrimSpec,
+    CompositionError, InMemoryStore, Layer, LayerId, LayerOffset, LiveStage, PathId, PrimSpec,
     PropertyPath, PropertySpec, Reference, ReferenceTarget, Relocate, Stage, StageOptions,
     SublayerEntry, Value, VariantSetSpec, VariantSpec,
 };
@@ -19,6 +19,13 @@ fn options() -> StageOptions {
         with_provenance: true,
         ..StageOptions::default()
     }
+}
+
+/// The paths of the children of the prim at `path`, if it is on `stage`.
+fn children(stage: &Stage, store: &InMemoryStore, path: PathId) -> Option<Vec<PathId>> {
+    stage
+        .prim(path, store)
+        .map(|prim| prim.children().map(|child| child.path()).collect())
 }
 
 fn assert_matches_fresh(store: &mut InMemoryStore, live: &LiveStage) {
@@ -31,25 +38,34 @@ fn assert_matches_fresh(store: &mut InMemoryStore, live: &LiveStage) {
     paths.sort_unstable();
     paths.dedup();
     let x = store.tokens.intern("x");
+    let store = &*store;
     for path in paths {
         let name = store.paths.display(path, &store.tokens);
-        assert_eq!(live.stage().has_prim(path), fresh.has_prim(path), "{name}");
         assert_eq!(
-            live.stage().children_of(path),
-            fresh.children_of(path),
+            live.stage().prim(path, store).is_some(),
+            fresh.prim(path, store).is_some(),
             "{name}"
         );
         assert_eq!(
-            live.stage().explain_prim(path),
-            fresh.explain_prim(path),
+            children(live.stage(), store, path),
+            children(&fresh, store, path),
+            "{name}"
+        );
+        assert_eq!(
+            live.stage().prim(path, store).map(|p| p.sources()),
+            fresh.prim(path, store).map(|p| p.sources()),
             "{name}"
         );
         assert_eq!(
             live.stage()
-                .resolve_field_path(PropertyPath::new(path, x))
+                .view(store)
+                .attribute(PropertyPath::new(path, x))
+                .and_then(|a| a.authored_value(layerstack::Time::Default))
                 .map(|value| value.value),
             fresh
-                .resolve_field_path(PropertyPath::new(path, x))
+                .view(store)
+                .attribute(PropertyPath::new(path, x))
+                .and_then(|a| a.authored_value(layerstack::Time::Default))
                 .map(|value| value.value),
             "{name}.x"
         );
@@ -105,8 +121,8 @@ fn replacing_an_anchored_asset_mapping_replaces_its_scene_and_provenance() {
     }
     store.insert_asset_layer(LayerId(1), "./asset.usda", LayerId(2));
     let mut live = LiveStage::compose(&mut store, LayerId(1), options());
-    assert!(live.stage().has_prim(old_destination));
-    assert!(!live.stage().has_prim(new_destination));
+    assert!(live.stage().prim(old_destination, &store).is_some());
+    assert!(live.stage().prim(new_destination, &store).is_none());
     assert_matches_fresh(&mut store, &live);
 
     for (id, expected, present, absent) in [
@@ -115,18 +131,21 @@ fn replacing_an_anchored_asset_mapping_replaces_its_scene_and_provenance() {
     ] {
         store.insert_asset_layer(LayerId(1), "./asset.usda", id);
         live.synchronize(&mut store);
-        assert!(live.stage().has_prim(present));
-        assert!(!live.stage().has_prim(absent));
+        assert!(live.stage().prim(present, &store).is_some());
+        assert!(live.stage().prim(absent, &store).is_none());
         assert_eq!(
             live.stage()
-                .resolve_field_path(PropertyPath::new(destination, x))
+                .view(&store)
+                .attribute(PropertyPath::new(destination, x))
+                .and_then(|a| a.authored_value(layerstack::Time::Default))
                 .unwrap()
                 .value,
             Value::Int(expected)
         );
         assert_eq!(
             live.stage()
-                .explain_prim(destination)
+                .prim(destination, &store)
+                .map(|p| p.sources())
                 .unwrap()
                 .last()
                 .unwrap()
@@ -217,9 +236,9 @@ fn a_new_sublayer_join_revalidates_existing_relocates() {
     store.insert_asset_layer(LayerId(1), "./join.usda", LayerId(4));
     live.synchronize(&mut store);
     assert_eq!(conflicts(live.stage()), 1);
-    assert!(live.stage().has_prim(joined_a));
-    assert!(live.stage().has_prim(joined_b));
-    assert!(!live.stage().has_prim(joined_target));
+    assert!(live.stage().prim(joined_a, &store).is_some());
+    assert!(live.stage().prim(joined_b, &store).is_some());
+    assert!(live.stage().prim(joined_target, &store).is_none());
     assert_matches_fresh(&mut store, &live);
 
     let mut join = Layer::new(LayerId(4));
@@ -228,9 +247,9 @@ fn a_new_sublayer_join_revalidates_existing_relocates() {
     live.synchronize(&mut store);
     assert_matches_fresh(&mut store, &live);
     assert_eq!(conflicts(live.stage()), 0);
-    assert!(!live.stage().has_prim(joined_a));
-    assert!(live.stage().has_prim(joined_b));
-    assert!(live.stage().has_prim(joined_target));
+    assert!(live.stage().prim(joined_a, &store).is_none());
+    assert!(live.stage().prim(joined_b, &store).is_some());
+    assert!(live.stage().prim(joined_target, &store).is_some());
 }
 
 /// Native OpenUSD 26.8 was checked for all three states: a stronger literal
@@ -284,7 +303,9 @@ fn a_stronger_selection_masks_a_weaker_expression_error_after_edits() {
         assert_eq!(errors.len(), usize::from(!selected));
         assert_eq!(
             live.stage()
-                .resolve_field_path(PropertyPath::new(prim, x))
+                .view(&store)
+                .attribute(PropertyPath::new(prim, x))
+                .and_then(|a| a.authored_value(layerstack::Time::Default))
                 .map(|value| value.value),
             selected.then_some(Value::Int(7))
         );

@@ -25,9 +25,9 @@
 //! - the root layer stack;
 //! - the populated prim namespace: every prim the oracle composes, and no
 //!   other;
-//! - each composed prim's full prim stack, [`Stage::explain_prim`], against
+//! - each composed prim's full prim stack, [`Prim::sources`](layerstack::Prim::sources), against
 //!   `PcpPrimIndex::GetPrimStack()`, repeats included;
-//! - each property stack, [`Stage::explain_property_path`], against
+//! - each property stack, [`Property::opinions`](layerstack::Property::opinions), against
 //!   `PcpPropertyIndex::GetPropertyStack()`;
 //! - each resolved scalar and its winning spec, via
 //!   [`check_scalar_values`]: the expected winner is the strongest oracle
@@ -50,7 +50,7 @@
 //! (including duplicate sublayers, cycles and time offsets), local opinions,
 //! references, payloads and inherits nested to any depth, one node per arc
 //! occurrence (a site reached twice contributes twice), ranked by walking
-//! each prim's composition graph ([`Stage::explain_prim_graph`]), inherits
+//! each prim's composition graph ([`Prim::composition_graph`](layerstack::Prim::composition_graph)), inherits
 //! implied into every stronger layer stack on the way to the root, internal
 //! references and payloads authored anywhere in a layer stack, the arcs
 //! authored on the ancestors of subroot arc targets, list-edited arcs and
@@ -405,7 +405,7 @@ fn observe(name: &str) -> Observed {
         let path = layerstack::Path::parse_absolute(&prim.path, &loaded.store.tokens)
             .expect("oracle prim path");
         let prim_id = loaded.store.paths.intern(path.clone());
-        let Some(sources) = stage.explain_prim(prim_id) else {
+        let Some(sources) = stage.prim(prim_id, &loaded.store).map(|p| p.sources()) else {
             observed.prims += 1;
             observed.diffs.insert(Diff::MissingPrim);
             observed.detail.push(format!(
@@ -433,7 +433,9 @@ fn observe(name: &str) -> Observed {
             let name = prop.property.rsplit_once('.').expect("property path").1;
             let field = loaded.store.tokens.intern(name);
             let actual: Vec<String> = stage
-                .explain_property_path(PropertyPath::new(prim_id, field))
+                .view(&loaded.store)
+                .property(PropertyPath::new(prim_id, field))
+                .map(|p| p.opinions())
                 .unwrap_or_default()
                 .iter()
                 .map(|opinion| render_site(&loaded, opinion.key.layer_id, &opinion.key.spec_path))

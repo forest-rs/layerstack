@@ -23,6 +23,26 @@ use layerstack_mesh_export::{
 };
 use layerstack_usda::ast;
 
+/// The composed targets of the relationship, or connections of the
+/// attribute, at `path`: `None` when no opinion authors any, except for an
+/// authored relationship, whose list is then empty.
+fn target_list(
+    stage: &Stage,
+    store: &InMemoryStore,
+    path: layerstack::PropertyPath,
+) -> Option<Vec<layerstack::TargetPath>> {
+    let property = stage.view(store).property(path)?;
+    let opinions = property.opinions();
+    if let Some(relationship) = property.as_relationship() {
+        return (!opinions.is_empty()).then(|| relationship.targets());
+    }
+    let attribute = property.as_attribute()?;
+    opinions
+        .iter()
+        .any(|opinion| opinion.value.targets().is_some())
+        .then(|| attribute.connections())
+}
+
 struct NoAssets;
 
 impl AssetResolver for NoAssets {
@@ -140,7 +160,9 @@ fn attr(stage: &Stage, store: &mut InMemoryStore, prim: &str, name: &str) -> Val
     let prim_id = store.path(prim);
     let field = store.tokens.intern(name);
     stage
-        .resolve_field_path(layerstack::PropertyPath::new(prim_id, field))
+        .view(store)
+        .attribute(layerstack::PropertyPath::new(prim_id, field))
+        .and_then(|attribute| attribute.authored_value(layerstack::Time::Default))
         .unwrap_or_else(|| panic!("{prim}.{name} resolves"))
         .value
 }
@@ -174,7 +196,9 @@ fn assert_stage_matches_scene(store: &mut InMemoryStore) {
     let cube_id = store.path("/Root/Cube");
     let mesh_type = store.tokens.intern("Mesh");
     assert_eq!(
-        stage.resolve_type_name(cube_id),
+        stage
+            .prim(cube_id, store)
+            .and_then(|cube| cube.type_name_token()),
         Some(mesh_type),
         "Cube is a Mesh"
     );
@@ -845,10 +869,8 @@ fn load_usdc(bytes: &[u8]) -> InMemoryStore {
 fn targets(stage: &Stage, store: &mut InMemoryStore, prim: &str, name: &str) -> Vec<String> {
     let prim_id = store.path(prim);
     let field = store.tokens.intern(name);
-    stage
-        .resolve_target_list_path(layerstack::PropertyPath::new(prim_id, field))
+    target_list(stage, store, layerstack::PropertyPath::new(prim_id, field))
         .unwrap_or_else(|| panic!("{prim}.{name} has targets"))
-        .value
         .into_iter()
         .map(|t| t.display(&store.paths, &store.tokens))
         .collect()
@@ -856,10 +878,11 @@ fn targets(stage: &Stage, store: &mut InMemoryStore, prim: &str, name: &str) -> 
 
 fn type_name(stage: &Stage, store: &mut InMemoryStore, prim: &str) -> String {
     let prim_id = store.path(prim);
-    let ty = stage
-        .resolve_type_name(prim_id)
-        .unwrap_or_else(|| panic!("{prim} is typed"));
-    store.tokens.resolve(ty).to_string()
+    stage
+        .prim(prim_id, store)
+        .and_then(|prim| prim.type_name())
+        .unwrap_or_else(|| panic!("{prim} is typed"))
+        .to_string()
 }
 
 fn token(stage: &Stage, store: &mut InMemoryStore, prim: &str, name: &str) -> String {
@@ -872,10 +895,14 @@ fn token(stage: &Stage, store: &mut InMemoryStore, prim: &str, name: &str) -> St
 fn api_schemas(stage: &Stage, store: &mut InMemoryStore, prim: &str) -> Vec<String> {
     let prim_id = store.path(prim);
     let field = store.tokens.intern("apiSchemas");
-    stage
-        .resolve_token_list(prim_id, field)
-        .unwrap_or_else(|| panic!("{prim} applies API schemas"))
-        .value
+    let Some(layerstack::ResolvedValue::TokenList(applied)) = stage
+        .prim(prim_id, store)
+        .and_then(|prim| prim.metadata(field))
+        .map(|resolved| resolved.value)
+    else {
+        panic!("{prim} applies API schemas");
+    };
+    applied
         .into_iter()
         .map(|t| store.tokens.resolve(t).to_string())
         .collect()

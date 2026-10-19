@@ -461,7 +461,12 @@ fn instanced_rigs_discover_remapped_bindings_and_refresh_shared_source_edits() {
     let a = store.path("/World/A");
     let b = store.path("/World/B");
     let anim = store.path("/Template/Animation");
-    assert!(live.stage().is_instance(a) && live.stage().is_instance(b));
+    let view = live.view(&store);
+    assert!(
+        [a, b]
+            .into_iter()
+            .all(|prim| view.prim(prim).is_some_and(|prim| prim.is_instance()))
+    );
     let scene = Scene::new(live.stage(), &store);
     let root = SkelRoot::new(&scene, root).unwrap();
     assert!(root.skinning_queries().unwrap().is_empty());

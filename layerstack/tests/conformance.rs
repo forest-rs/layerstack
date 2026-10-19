@@ -10,8 +10,9 @@ extern crate alloc;
 use layerstack::{
     ArcKind, ArrayEdit, ArrayEditOp, FieldEntry, FieldValue, InterpolationType, Layer, LayerId,
     ListOp, NodeId, PrimIndexGraph, PrimSpec, PropertyDefinition, PropertyPath, PropertySpec,
-    PropertyType, Reference, ResolvedValue, SchemaDefinition, SchemaRegistry, Stage, StageOptions,
-    SublayerEntry, TargetPath, Time, Value, VariantSetSpec, VariantSpec, doc::InMemoryStore,
+    PropertyType, Reference, Resolved, ResolvedValue, SchemaDefinition, SchemaRegistry, Stage,
+    StageOptions, SublayerEntry, TargetPath, Time, TokenId, Value, VariantSetSpec, VariantSpec,
+    doc::InMemoryStore,
 };
 
 /// The arc kinds from the root of `graph` to `node`, outermost first.
@@ -23,6 +24,40 @@ fn arc_path(graph: &PrimIndexGraph, mut node: NodeId) -> Vec<ArcKind> {
     }
     kinds.reverse();
     kinds
+}
+
+/// A resolved token list (`apiSchemas`); `None` for another kind of value.
+fn token_list(resolved: Resolved<ResolvedValue>) -> Option<Resolved<Vec<TokenId>>> {
+    match resolved.value {
+        ResolvedValue::TokenList(value) => Some(Resolved {
+            value,
+            provenance: resolved.provenance,
+        }),
+        _ => None,
+    }
+}
+
+/// A resolved path list; `None` for another kind of value.
+fn path_list(resolved: Resolved<ResolvedValue>) -> Option<Resolved<Vec<TargetPath>>> {
+    match resolved.value {
+        ResolvedValue::PathList(value) => Some(Resolved {
+            value,
+            provenance: resolved.provenance,
+        }),
+        _ => None,
+    }
+}
+
+/// A resolved dictionary; `None` for another kind of value.
+#[expect(clippy::type_complexity, reason = "the resolved dictionary's shape")]
+fn dictionary(resolved: Resolved<ResolvedValue>) -> Option<Resolved<Vec<(Arc<str>, Value)>>> {
+    match resolved.value {
+        ResolvedValue::Dictionary(value) => Some(Resolved {
+            value,
+            provenance: resolved.provenance,
+        }),
+        _ => None,
+    }
 }
 
 /// An attribute spec authoring only `samples`.
@@ -55,7 +90,11 @@ fn sublayer_strength_local_beats_sublayer() {
         },
     );
 
-    let resolved = stage.resolve_field(p, field_x).expect("field exists");
+    let resolved = stage
+        .prim(p, &store)
+        .and_then(|prim| prim.metadata(field_x))
+        .and_then(Resolved::into_value)
+        .expect("field exists");
     assert_eq!(resolved.value, Value::Int64(1));
     let prov = resolved.provenance.expect("provenance enabled");
     assert_eq!(prov.layer, LayerId(1));
@@ -78,17 +117,27 @@ fn property_path_queries_match_prim_plus_field_queries() {
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
 
-    assert!(stage.has_property_path(property_path));
-    assert_eq!(
+    assert!(
         stage
-            .resolve_property_path(property_path)
-            .expect("property exists")
-            .value,
-        ResolvedValue::Scalar(Value::Int64(7))
+            .view(&store)
+            .property(property_path)
+            .is_some_and(|property| property.is_authored())
     );
     assert_eq!(
         stage
-            .explain_property_path(property_path)
+            .view(&store)
+            .attribute(property_path)
+            .and_then(|attribute| attribute.authored_value(Time::Default))
+            .expect("property exists")
+            .value,
+        Value::Int64(7)
+    );
+    assert_eq!(
+        stage
+            .view(&store)
+            .property(property_path)
+            .map(|property| property.opinions())
+            .filter(|opinions| !opinions.is_empty())
             .expect("opinion stack exists")
             .len(),
         1
@@ -116,13 +165,17 @@ fn property_path_time_queries_read_properties_not_metadata() {
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
 
     let by_property_path = stage
-        .resolve_property_path_at_time(property_path, Time::held(2.0))
+        .view(&store)
+        .attribute(property_path)
+        .and_then(|attribute| attribute.authored_value(Time::held(2.0)))
         .expect("sampled property exists");
     assert_eq!(by_property_path.value, Value::Double(10.0));
-    // The name-based query reads prim metadata, and `/P` authors no `x`
-    // metadata.
+    // The prim's metadata query reads prim metadata only, and `/P` authors
+    // no `x` metadata.
     assert_eq!(
-        stage.resolve_value_at_time(prim, field_x, Time::held(2.0)),
+        stage
+            .prim(prim, &store)
+            .and_then(|prim| prim.metadata(field_x)),
         None
     );
 }
@@ -151,7 +204,9 @@ fn target_list_preserves_property_target_identity() {
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
     let resolved = stage
-        .resolve_path_list(material, input)
+        .prim(material, &store)
+        .and_then(|prim| prim.metadata(input))
+        .and_then(path_list)
         .expect("target list exists");
 
     assert_eq!(resolved.value, vec![TargetPath::property(shader_output)]);
@@ -189,7 +244,9 @@ fn referenced_property_targets_are_remapped_structurally() {
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
     let resolved = stage
-        .resolve_path_list(model, input)
+        .prim(model, &store)
+        .and_then(|prim| prim.metadata(input))
+        .and_then(path_list)
         .expect("remapped target list exists");
 
     assert_eq!(
@@ -231,18 +288,26 @@ fn property_path_query_helpers_cover_field_and_target_lists() {
     // `labels` is prim metadata, so property-path queries do not see it.
     assert_eq!(
         stage
-            .resolve_token_list(prim, labels)
+            .prim(prim, &store)
+            .and_then(|prim| prim.metadata(labels))
+            .and_then(token_list)
             .expect("labels")
             .value,
         vec![token_a, token_b]
     );
     let labels_path = PropertyPath::new(prim, labels);
-    assert!(!stage.has_property_path(labels_path));
+    assert!(
+        !stage
+            .view(&store)
+            .property(labels_path)
+            .is_some_and(|property| property.is_authored())
+    );
     assert_eq!(
         stage
-            .resolve_target_list_path(input_path)
-            .expect("target list")
-            .value,
+            .view(&store)
+            .attribute(input_path)
+            .expect("attribute")
+            .connections(),
         vec![TargetPath::property(shader_output)]
     );
 }
@@ -259,7 +324,9 @@ fn layer_property_helpers_author_without_manual_prim_lookup() {
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
     assert_eq!(
         stage
-            .resolve_field_path(property)
+            .view(&store)
+            .attribute(property)
+            .and_then(|attribute| attribute.authored_value(Time::Default))
             .expect("property exists")
             .value,
         Value::Int64(42)
@@ -285,14 +352,12 @@ fn layer_typed_property_helper_preserves_sparse_array_defaults() {
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
     assert_eq!(
         stage
-            .resolve_property_path(property)
+            .view(&store)
+            .attribute(property)
+            .and_then(|attribute| attribute.authored_value(Time::Default))
             .expect("property exists")
             .value,
-        ResolvedValue::Scalar(Value::Array(vec![
-            Value::Int(0),
-            Value::Int(0),
-            Value::Int(0),
-        ]))
+        Value::Array(vec![Value::Int(0), Value::Int(0), Value::Int(0)])
     );
 }
 
@@ -323,10 +388,14 @@ fn reference_opinions_are_weaker_than_local() {
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
 
     assert!(
-        stage.has_prim(p_child),
+        stage.prim(p_child, &store).is_some(),
         "reference populates descendant prims"
     );
-    let resolved = stage.resolve_field(p, field_x).expect("field exists");
+    let resolved = stage
+        .prim(p, &store)
+        .and_then(|prim| prim.metadata(field_x))
+        .and_then(Resolved::into_value)
+        .expect("field exists");
     assert_eq!(resolved.value, Value::Int64(2));
 }
 
@@ -352,7 +421,11 @@ fn omitted_reference_target_resolves_through_default_prim() {
     store.insert_layer(ref_layer);
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
-    let resolved = stage.resolve_field(p, field_x).expect("field exists");
+    let resolved = stage
+        .prim(p, &store)
+        .and_then(|prim| prim.metadata(field_x))
+        .and_then(Resolved::into_value)
+        .expect("field exists");
     assert_eq!(resolved.value, Value::Int64(7));
 }
 
@@ -378,7 +451,11 @@ fn omitted_payload_target_resolves_through_default_prim() {
     store.insert_layer(payload_layer);
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
-    let resolved = stage.resolve_field(p, field_x).expect("field exists");
+    let resolved = stage
+        .prim(p, &store)
+        .and_then(|prim| prim.metadata(field_x))
+        .and_then(Resolved::into_value)
+        .expect("field exists");
     assert_eq!(resolved.value, Value::Int64(11));
 }
 
@@ -433,7 +510,11 @@ fn variants_selection_is_strength_ordered() {
     store.insert_layer(sub_layer);
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
-    let resolved = stage.resolve_field(prim, field_x).expect("field exists");
+    let resolved = stage
+        .prim(prim, &store)
+        .and_then(|prim| prim.metadata(field_x))
+        .and_then(Resolved::into_value)
+        .expect("field exists");
     assert_eq!(resolved.value, Value::Int64(1));
 }
 
@@ -467,7 +548,9 @@ fn listop_chain_is_applied_strong_to_weak() {
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
     let resolved = stage
-        .resolve_token_list(prim, field_classes)
+        .prim(prim, &store)
+        .and_then(|prim| prim.metadata(field_classes))
+        .and_then(token_list)
         .expect("field exists");
     assert_eq!(resolved.value, vec![class_b, class_a]);
 }
@@ -499,12 +582,16 @@ fn resolve_value_distinguishes_scalar_and_list() {
         },
     );
 
-    let resolved_x = stage.resolve_value(prim, field_x).expect("field exists");
+    let resolved_x = stage
+        .prim(prim, &store)
+        .and_then(|prim| prim.metadata(field_x))
+        .expect("field exists");
     assert_eq!(resolved_x.value, ResolvedValue::Scalar(Value::Int64(123)));
     assert_eq!(resolved_x.provenance.unwrap().layer, LayerId(1));
 
     let resolved_classes = stage
-        .resolve_value(prim, field_classes)
+        .prim(prim, &store)
+        .and_then(|prim| prim.metadata(field_classes))
         .expect("field exists");
     assert_eq!(
         resolved_classes.value,
@@ -513,10 +600,21 @@ fn resolve_value_distinguishes_scalar_and_list() {
     assert_eq!(resolved_classes.provenance.unwrap().layer, LayerId(1));
 
     assert_eq!(
-        stage.resolve_field(prim, field_x).expect("scalar").value,
+        stage
+            .prim(prim, &store)
+            .and_then(|prim| prim.metadata(field_x))
+            .and_then(Resolved::into_value)
+            .expect("scalar")
+            .value,
         Value::Int64(123)
     );
-    assert!(stage.resolve_field(prim, field_classes).is_none());
+    assert!(
+        stage
+            .prim(prim, &store)
+            .and_then(|prim| prim.metadata(field_classes))
+            .and_then(Resolved::into_value)
+            .is_none()
+    );
 }
 
 #[test]
@@ -586,8 +684,13 @@ fn child_order_reorder_name_children_matches_supplemental_fixture() {
     store.insert_layer(sub2_layer);
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
-    let actual = stage.children_of(prim_a).expect("children list");
-    assert_eq!(actual, &[a_z, a_a, a_x, a_f, a_y, a_b, a_c]);
+    let actual: Vec<_> = stage
+        .prim(prim_a, &store)
+        .expect("composed")
+        .children()
+        .map(|child| child.path())
+        .collect();
+    assert_eq!(actual, [a_z, a_a, a_x, a_f, a_y, a_b, a_c]);
 }
 
 #[test]
@@ -607,7 +710,11 @@ fn explain_field_returns_sorted_opinion_stack() {
     store.insert_layer(sub_layer);
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
-    let stack = stage.explain_field(prim, field_x).expect("opinions exist");
+    let stack = stage
+        .prim(prim, &store)
+        .map(|prim| prim.metadata_opinions(field_x))
+        .filter(|opinions| !opinions.is_empty())
+        .expect("opinions exist");
     assert_eq!(stack.len(), 2);
 
     // Strongest-first means the root layer's opinion comes first.
@@ -615,7 +722,12 @@ fn explain_field_returns_sorted_opinion_stack() {
     assert_eq!(stack[1].key.layer_id, LayerId(2));
 
     assert_eq!(
-        stage.resolve_field(prim, field_x).expect("scalar").value,
+        stage
+            .prim(prim, &store)
+            .and_then(|prim| prim.metadata(field_x))
+            .and_then(Resolved::into_value)
+            .expect("scalar")
+            .value,
         Value::Int64(1)
     );
 }
@@ -650,7 +762,9 @@ fn token_listop_append_reorders_duplicates() {
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
     let resolved = stage
-        .resolve_token_list(prim, field_classes)
+        .prim(prim, &store)
+        .and_then(|prim| prim.metadata(field_classes))
+        .and_then(token_list)
         .expect("field exists");
     assert_eq!(resolved.value, vec![class_b, class_a]);
 }
@@ -710,7 +824,9 @@ fn token_listop_prepend_and_append_match_supplemental_list_editing_order() {
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
     let resolved = stage
-        .resolve_token_list(prim, field_targets)
+        .prim(prim, &store)
+        .and_then(|prim| prim.metadata(field_targets))
+        .and_then(token_list)
         .expect("field exists");
     assert_eq!(
         resolved.value,
@@ -760,7 +876,9 @@ fn token_listop_prepend_composes_before_explicit() {
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
     let resolved = stage
-        .resolve_token_list(prim, api_schemas)
+        .prim(prim, &store)
+        .and_then(|prim| prim.metadata(api_schemas))
+        .and_then(token_list)
         .expect("apiSchemas field");
     assert_eq!(
         resolved.value,
@@ -798,9 +916,20 @@ fn specifier_resolution_follows_strongest_defining() {
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
 
     // Strongest defining opinion is def from layer 2.
-    assert_eq!(stage.resolve_specifier(prim, &store), Some(Specifier::Def));
-    assert!(stage.is_defined(prim, &store));
-    assert!(!stage.is_abstract(prim, &store));
+    assert_eq!(
+        stage.prim(prim, &store).map(|prim| prim.specifier()),
+        Some(Specifier::Def)
+    );
+    assert!(
+        stage
+            .prim(prim, &store)
+            .is_some_and(|prim| prim.is_defined())
+    );
+    assert!(
+        !stage
+            .prim(prim, &store)
+            .is_some_and(|prim| prim.is_abstract())
+    );
 }
 
 #[test]
@@ -821,8 +950,15 @@ fn specifier_all_over_is_undefining() {
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
 
-    assert_eq!(stage.resolve_specifier(prim, &store), Some(Specifier::Over));
-    assert!(!stage.is_defined(prim, &store));
+    assert_eq!(
+        stage.prim(prim, &store).map(|prim| prim.specifier()),
+        Some(Specifier::Over)
+    );
+    assert!(
+        !stage
+            .prim(prim, &store)
+            .is_some_and(|prim| prim.is_defined())
+    );
 }
 
 #[test]
@@ -839,11 +975,19 @@ fn specifier_class_is_abstract() {
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
 
     assert_eq!(
-        stage.resolve_specifier(prim, &store),
+        stage.prim(prim, &store).map(|prim| prim.specifier()),
         Some(Specifier::Class)
     );
-    assert!(stage.is_defined(prim, &store));
-    assert!(stage.is_abstract(prim, &store));
+    assert!(
+        stage
+            .prim(prim, &store)
+            .is_some_and(|prim| prim.is_defined())
+    );
+    assert!(
+        stage
+            .prim(prim, &store)
+            .is_some_and(|prim| prim.is_abstract())
+    );
 }
 
 #[test]
@@ -871,8 +1015,19 @@ fn value_blocked_suppresses_weaker_opinions() {
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
 
     // Blocked suppresses weaker opinions — resolve returns None.
-    assert!(stage.resolve_field(prim, field_x).is_none());
-    assert!(stage.resolve_value(prim, field_x).is_none());
+    assert!(
+        stage
+            .prim(prim, &store)
+            .and_then(|prim| prim.metadata(field_x))
+            .and_then(Resolved::into_value)
+            .is_none()
+    );
+    assert!(
+        stage
+            .prim(prim, &store)
+            .and_then(|prim| prim.metadata(field_x))
+            .is_none()
+    );
 }
 
 #[test]
@@ -895,9 +1050,20 @@ fn value_blocked_only_affects_blocked_field() {
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
 
-    assert!(stage.resolve_field(prim, field_x).is_none());
+    assert!(
+        stage
+            .prim(prim, &store)
+            .and_then(|prim| prim.metadata(field_x))
+            .and_then(Resolved::into_value)
+            .is_none()
+    );
     assert_eq!(
-        stage.resolve_field(prim, field_y).expect("y exists").value,
+        stage
+            .prim(prim, &store)
+            .and_then(|prim| prim.metadata(field_y))
+            .and_then(Resolved::into_value)
+            .expect("y exists")
+            .value,
         Value::Int64(99)
     );
 }
@@ -926,14 +1092,18 @@ fn time_samples_held_interpolation() {
     // Exact samples.
     assert_eq!(
         stage
-            .resolve_property_path_at_time(PropertyPath::new(p, field), Time::held(1.0))
+            .view(&store)
+            .attribute(PropertyPath::new(p, field))
+            .and_then(|attribute| attribute.authored_value(Time::held(1.0)))
             .unwrap()
             .value,
         Value::Double(10.0)
     );
     assert_eq!(
         stage
-            .resolve_property_path_at_time(PropertyPath::new(p, field), Time::held(3.0))
+            .view(&store)
+            .attribute(PropertyPath::new(p, field))
+            .and_then(|attribute| attribute.authored_value(Time::held(3.0)))
             .unwrap()
             .value,
         Value::Double(30.0)
@@ -942,14 +1112,18 @@ fn time_samples_held_interpolation() {
     // Between samples: held returns earlier value.
     assert_eq!(
         stage
-            .resolve_property_path_at_time(PropertyPath::new(p, field), Time::held(2.0))
+            .view(&store)
+            .attribute(PropertyPath::new(p, field))
+            .and_then(|attribute| attribute.authored_value(Time::held(2.0)))
             .unwrap()
             .value,
         Value::Double(10.0)
     );
     assert_eq!(
         stage
-            .resolve_property_path_at_time(PropertyPath::new(p, field), Time::held(4.0))
+            .view(&store)
+            .attribute(PropertyPath::new(p, field))
+            .and_then(|attribute| attribute.authored_value(Time::held(4.0)))
             .unwrap()
             .value,
         Value::Double(30.0)
@@ -958,7 +1132,9 @@ fn time_samples_held_interpolation() {
     // Before first sample: return first value.
     assert_eq!(
         stage
-            .resolve_property_path_at_time(PropertyPath::new(p, field), Time::held(0.0))
+            .view(&store)
+            .attribute(PropertyPath::new(p, field))
+            .and_then(|attribute| attribute.authored_value(Time::held(0.0)))
             .unwrap()
             .value,
         Value::Double(10.0)
@@ -967,7 +1143,9 @@ fn time_samples_held_interpolation() {
     // After last sample: return last value.
     assert_eq!(
         stage
-            .resolve_property_path_at_time(PropertyPath::new(p, field), Time::held(100.0))
+            .view(&store)
+            .attribute(PropertyPath::new(p, field))
+            .and_then(|attribute| attribute.authored_value(Time::held(100.0)))
             .unwrap()
             .value,
         Value::Double(50.0)
@@ -997,7 +1175,9 @@ fn time_samples_linear_interpolation() {
     // Midpoint: linear interpolation.
     assert_eq!(
         stage
-            .resolve_property_path_at_time(PropertyPath::new(p, field), Time::at(5.0))
+            .view(&store)
+            .attribute(PropertyPath::new(p, field))
+            .and_then(|attribute| attribute.authored_value(Time::at(5.0)))
             .unwrap()
             .value,
         Value::Double(50.0)
@@ -1006,7 +1186,9 @@ fn time_samples_linear_interpolation() {
     // Quarter point.
     assert_eq!(
         stage
-            .resolve_property_path_at_time(PropertyPath::new(p, field), Time::at(2.5))
+            .view(&store)
+            .attribute(PropertyPath::new(p, field))
+            .and_then(|attribute| attribute.authored_value(Time::at(2.5)))
             .unwrap()
             .value,
         Value::Double(25.0)
@@ -1015,7 +1197,9 @@ fn time_samples_linear_interpolation() {
     // Exact sample.
     assert_eq!(
         stage
-            .resolve_property_path_at_time(PropertyPath::new(p, field), Time::at(0.0))
+            .view(&store)
+            .attribute(PropertyPath::new(p, field))
+            .and_then(|attribute| attribute.authored_value(Time::at(0.0)))
             .unwrap()
             .value,
         Value::Double(0.0)
@@ -1024,14 +1208,18 @@ fn time_samples_linear_interpolation() {
     // Beyond range: clamp.
     assert_eq!(
         stage
-            .resolve_property_path_at_time(PropertyPath::new(p, field), Time::at(-1.0))
+            .view(&store)
+            .attribute(PropertyPath::new(p, field))
+            .and_then(|attribute| attribute.authored_value(Time::at(-1.0)))
             .unwrap()
             .value,
         Value::Double(0.0)
     );
     assert_eq!(
         stage
-            .resolve_property_path_at_time(PropertyPath::new(p, field), Time::at(20.0))
+            .view(&store)
+            .attribute(PropertyPath::new(p, field))
+            .and_then(|attribute| attribute.authored_value(Time::at(20.0)))
             .unwrap()
             .value,
         Value::Double(100.0)
@@ -1062,7 +1250,9 @@ fn time_samples_linear_int_holds() {
     // Midpoint: the lower sample holds.
     assert_eq!(
         stage
-            .resolve_property_path_at_time(PropertyPath::new(p, field), Time::at(5.0))
+            .view(&store)
+            .attribute(PropertyPath::new(p, field))
+            .and_then(|attribute| attribute.authored_value(Time::at(5.0)))
             .unwrap()
             .value,
         Value::Int64(0)
@@ -1092,7 +1282,9 @@ fn time_samples_non_numeric_falls_back_to_held() {
     // Linear on non-numeric falls back to held (earlier value).
     assert_eq!(
         stage
-            .resolve_property_path_at_time(PropertyPath::new(p, field), Time::at(3.0))
+            .view(&store)
+            .attribute(PropertyPath::new(p, field))
+            .and_then(|attribute| attribute.authored_value(Time::at(3.0)))
             .unwrap()
             .value,
         Value::string("hello")
@@ -1117,13 +1309,14 @@ fn resolve_sampled_property(
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
     stage
-        .resolve_property_path_at_time(
-            property,
-            Time::At {
+        .view(&store)
+        .attribute(property)
+        .and_then(|attribute| {
+            attribute.authored_value(Time::At {
                 code: time,
                 interpolation: interp,
-            },
-        )
+            })
+        })
         .map(|resolved| resolved.value)
 }
 
@@ -1201,7 +1394,9 @@ fn time_samples_override_default_value() {
     // TimeSamples from stronger layer takes priority.
     assert_eq!(
         stage
-            .resolve_property_path_at_time(PropertyPath::new(p, field), Time::held(1.0))
+            .view(&store)
+            .attribute(PropertyPath::new(p, field))
+            .and_then(|attribute| attribute.authored_value(Time::held(1.0)))
             .unwrap()
             .value,
         Value::Double(10.0)
@@ -1211,7 +1406,9 @@ fn time_samples_override_default_value() {
     // default (AOUSD Core §12.3.1).
     assert_eq!(
         stage
-            .resolve_field_path(PropertyPath::new(p, field))
+            .view(&store)
+            .attribute(PropertyPath::new(p, field))
+            .and_then(|attribute| attribute.authored_value(Time::Default))
             .map(|r| r.value),
         Some(Value::Double(999.0))
     );
@@ -1244,7 +1441,9 @@ fn stronger_default_hides_weaker_time_samples() {
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
     assert_eq!(
         stage
-            .resolve_property_path_at_time(PropertyPath::new(p, field), Time::held(0.0))
+            .view(&store)
+            .attribute(PropertyPath::new(p, field))
+            .and_then(|attribute| attribute.authored_value(Time::held(0.0)))
             .map(|r| r.value),
         Some(Value::Double(1.0))
     );
@@ -1445,9 +1644,15 @@ fn deactivated_prim_retained_but_excluded_from_active_traversal() {
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
 
-    assert!(stage.has_prim(p), "active prim should be present");
-    assert!(stage.has_prim(q), "deactivated prim remains inspectable");
-    assert!(!stage.is_active(q));
+    assert!(
+        stage.prim(p, &store).is_some(),
+        "active prim should be present"
+    );
+    assert!(
+        stage.prim(q, &store).is_some(),
+        "deactivated prim remains inspectable"
+    );
+    assert!(!stage.prim(q, &store).is_some_and(|prim| prim.is_active()));
     assert!(!stage.traverse(root).any(|path| path == q));
     assert!(stage.traverse_all(root).any(|path| path == q));
 }
@@ -1483,16 +1688,20 @@ fn deactivated_prim_descendants_excluded() {
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
 
     assert!(
-        stage.has_prim(parent),
+        stage.prim(parent, &store).is_some(),
         "deactivated parent remains inspectable"
     );
-    assert!(!stage.is_active(parent));
     assert!(
-        !stage.has_prim(child),
+        !stage
+            .prim(parent, &store)
+            .is_some_and(|prim| prim.is_active())
+    );
+    assert!(
+        !stage.prim(child, &store).is_some(),
         "child of deactivated parent excluded"
     );
     assert!(
-        !stage.has_prim(grandchild),
+        !stage.prim(grandchild, &store).is_some(),
         "grandchild of deactivated parent excluded"
     );
 }
@@ -1515,7 +1724,10 @@ fn explicitly_active_prim_remains() {
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
 
-    assert!(stage.has_prim(p), "explicitly active prim should remain");
+    assert!(
+        stage.prim(p, &store).is_some(),
+        "explicitly active prim should remain"
+    );
 }
 
 /// Strongest `active` opinion wins across layers.
@@ -1548,10 +1760,14 @@ fn active_strongest_opinion_wins() {
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
 
     assert!(
-        stage.has_prim(p),
+        stage.prim(p, &store).is_some(),
         "stronger active=true should override weaker active=false"
     );
-    let resolved = stage.resolve_field(p, field_x).expect("field exists");
+    let resolved = stage
+        .prim(p, &store)
+        .and_then(|prim| prim.metadata(field_x))
+        .and_then(Resolved::into_value)
+        .expect("field exists");
     assert_eq!(resolved.value, Value::Int64(1));
 }
 
@@ -1581,9 +1797,12 @@ fn weaker_active_false_deactivates() {
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
 
-    assert!(stage.has_prim(p), "inactive root remains inspectable");
     assert!(
-        !stage.is_active(p),
+        stage.prim(p, &store).is_some(),
+        "inactive root remains inspectable"
+    );
+    assert!(
+        !stage.prim(p, &store).is_some_and(|prim| prim.is_active()),
         "weaker false remains the strongest active opinion"
     );
 }
@@ -1615,7 +1834,9 @@ fn type_name_resolved_from_strongest() {
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
 
-    let resolved = stage.resolve_type_name(p);
+    let resolved = stage
+        .prim(p, &store)
+        .and_then(|prim| prim.type_name_token());
     assert_eq!(resolved, Some(xform_tok));
 }
 
@@ -1649,7 +1870,9 @@ fn type_name_from_reference_when_local_untyped() {
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
 
-    let resolved = stage.resolve_type_name(p);
+    let resolved = stage
+        .prim(p, &store)
+        .and_then(|prim| prim.type_name_token());
     assert_eq!(resolved, Some(mesh_tok));
 }
 
@@ -1671,13 +1894,18 @@ fn type_name_none_when_untyped() {
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
 
-    assert_eq!(stage.resolve_type_name(p), None);
+    assert_eq!(
+        stage
+            .prim(p, &store)
+            .and_then(|prim| prim.type_name_token()),
+        None
+    );
 }
 
 // --- Schema fallback integration tests ---
 
 /// A varying attribute definition named `name` with `fallback`.
-fn defined(name: layerstack::TokenId, fallback: impl Into<Value>) -> PropertyDefinition {
+fn defined(name: TokenId, fallback: impl Into<Value>) -> PropertyDefinition {
     PropertyDefinition::attribute(name).with_fallback(fallback)
 }
 
@@ -1719,9 +1947,17 @@ fn schema_fallback_provides_value_when_no_opinion() {
     );
 
     // No authored opinion on "extent" → fallback from schema.
-    assert_eq!(stage.resolve_field(p, extent_tok), None);
+    assert_eq!(
+        stage
+            .prim(p, &store)
+            .and_then(|prim| prim.metadata(extent_tok))
+            .and_then(Resolved::into_value),
+        None
+    );
     let resolved = stage
-        .resolve_field_with_schema(p, extent_tok)
+        .prim(p, &store)
+        .and_then(|prim| prim.attribute(extent_tok))
+        .and_then(|attribute| attribute.get(Time::Default))
         .expect("schema fallback");
     assert_eq!(resolved.value, Value::Double(0.0));
 }
@@ -1753,7 +1989,9 @@ fn authored_opinion_beats_schema_fallback() {
 
     // Authored value wins over schema fallback.
     let resolved = stage
-        .resolve_field_with_schema(p, double_sided_tok)
+        .prim(p, &store)
+        .and_then(|prim| prim.attribute(double_sided_tok))
+        .and_then(|attribute| attribute.get(Time::Default))
         .expect("resolved");
     assert_eq!(resolved.value, Value::Bool(true));
 }
@@ -1783,7 +2021,9 @@ fn schema_isa_inheritance_fallback() {
     );
 
     let resolved = stage
-        .resolve_field_with_schema(p, visibility_tok)
+        .prim(p, &store)
+        .and_then(|prim| prim.attribute(visibility_tok))
+        .and_then(|attribute| attribute.get(Time::Default))
         .expect("inherited fallback");
     assert_eq!(resolved.value, Value::from("inherited"));
 }
@@ -1825,13 +2065,17 @@ fn schema_applied_api_provides_fallback() {
     // Without the applied schema, no fallback.
     assert!(
         stage
-            .resolve_field_with_schema(bare, includes_tok)
+            .prim(bare, &store)
+            .and_then(|prim| prim.attribute(includes_tok))
+            .and_then(|attribute| attribute.get(Time::Default))
             .is_none()
     );
 
     // With it, the applied API schema's fallback is found.
     let resolved = stage
-        .resolve_field_with_schema(p, includes_tok)
+        .prim(p, &store)
+        .and_then(|prim| prim.attribute(includes_tok))
+        .and_then(|attribute| attribute.get(Time::Default))
         .expect("api schema fallback");
     assert_eq!(resolved.value, Value::Null);
 }
@@ -1854,7 +2098,13 @@ fn schema_no_type_no_fallback() {
         [SchemaDefinition::typed(mesh_tok).with_property(defined(extent_tok, 0.0))],
     );
 
-    assert!(stage.resolve_field_with_schema(p, extent_tok).is_none());
+    assert!(
+        stage
+            .prim(p, &store)
+            .and_then(|prim| prim.attribute(extent_tok))
+            .and_then(|attribute| attribute.get(Time::Default))
+            .is_none()
+    );
 }
 
 #[test]
@@ -1882,7 +2132,9 @@ fn schema_builtin_api_fallback() {
     );
 
     let resolved = stage
-        .resolve_field_with_schema(p, api_field_tok)
+        .prim(p, &store)
+        .and_then(|prim| prim.attribute(api_field_tok))
+        .and_then(|attribute| attribute.get(Time::Default))
         .expect("built-in api fallback");
     assert_eq!(resolved.value, Value::Int(42));
 }
@@ -1928,25 +2180,16 @@ fn property_names_merge_authored_and_defined_properties() {
             .with_property(defined(index, 0)),
     ];
     let stage = compose_with_schemas(&mut store, schemas);
-    let names = |names: Vec<layerstack::TokenId>, store: &InMemoryStore| -> Vec<String> {
-        names
-            .into_iter()
-            .map(|name| store.tokens.resolve(name).to_string())
-            .collect()
-    };
-    let all = stage.property_names(p, &store);
+    let prim = stage.prim(p, &store).expect("composed");
     assert_eq!(
-        names(all, &store),
+        prim.property_names(),
         ["slot:left:upper:index", "slot:main:index", "width", "zeta"]
     );
-    let authored = stage.authored_property_names(p, &store);
-    assert_eq!(names(authored, &store), ["width", "zeta"]);
+    assert_eq!(prim.authored_property_names(), ["width", "zeta"]);
 
     let plain = Stage::compose(&mut store, LayerId(1), StageOptions::default());
-    assert_eq!(
-        plain.property_names(p, &store),
-        plain.authored_property_names(p, &store)
-    );
+    let prim = plain.prim(p, &store).expect("composed");
+    assert_eq!(prim.property_names(), prim.authored_property_names());
 }
 
 /// `reorder properties` moves the names it lists to the front, in its
@@ -1970,11 +2213,10 @@ fn property_names_apply_reorder_properties() {
     layer.insert_prim(p, spec);
     store.insert_layer(layer);
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
-    assert_eq!(stage.property_names(p, &store), [gamma, beta, alpha]);
-    assert_eq!(
-        stage.authored_property_names(p, &store),
-        [gamma, beta, alpha]
-    );
+    let prim = stage.prim(p, &store).expect("composed");
+    let ordered = [gamma, beta, alpha].map(|name| store.tokens.resolve(name));
+    assert_eq!(prim.property_names(), ordered);
+    assert_eq!(prim.authored_property_names(), ordered);
 
     let mut names = vec![alpha, beta, gamma];
     layerstack::stage::apply_property_order(&[], &mut names);
@@ -2026,7 +2268,9 @@ fn dictionary_combining_across_sublayers() {
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
     let resolved = stage
-        .resolve_dictionary(p, field)
+        .prim(p, &store)
+        .and_then(|prim| prim.metadata(field))
+        .and_then(dictionary)
         .expect("dictionary resolved");
     // a=1 (stronger wins), b=2 (weaker-only preserved).
     assert_eq!(
@@ -2079,7 +2323,9 @@ fn dictionary_nested_combining() {
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
     let resolved = stage
-        .resolve_dictionary(p, field)
+        .prim(p, &store)
+        .and_then(|prim| prim.metadata(field))
+        .and_then(dictionary)
         .expect("nested dict resolved");
     // sub.x=10 (stronger), sub.y=20 (weaker-only).
     assert_eq!(
@@ -2131,7 +2377,9 @@ fn dictionary_combining_across_reference_arc() {
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
     let resolved = stage
-        .resolve_dictionary(p, field)
+        .prim(p, &store)
+        .and_then(|prim| prim.metadata(field))
+        .and_then(dictionary)
         .expect("dict across reference");
     assert_eq!(
         resolved.value,
@@ -2168,7 +2416,10 @@ fn dictionary_blocked_value_suppresses() {
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
     // Blocked suppresses — resolve_value should return None, resolve_dictionary too.
-    let resolved = stage.resolve_dictionary(p, field);
+    let resolved = stage
+        .prim(p, &store)
+        .and_then(|prim| prim.metadata(field))
+        .and_then(dictionary);
     assert!(resolved.is_none(), "blocked should suppress dictionary");
 }
 
@@ -2190,7 +2441,10 @@ fn resolve_value_returns_dictionary_variant() {
     store.insert_layer(layer);
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
-    let resolved = stage.resolve_value(p, field).expect("dictionary resolves");
+    let resolved = stage
+        .prim(p, &store)
+        .and_then(|prim| prim.metadata(field))
+        .expect("dictionary resolves");
     match resolved.value {
         ResolvedValue::Dictionary(d) => {
             assert_eq!(d, vec![dict_entry("x", Value::Double(1.5))]);
@@ -2232,7 +2486,9 @@ fn resolve_custom_data_stack(opinions: Vec<Value>) -> Option<Vec<(Arc<str>, Valu
 
     let stage = Stage::compose(&mut store, LayerId(100), StageOptions::default());
     stage
-        .resolve_dictionary(p, field)
+        .prim(p, &store)
+        .and_then(|prim| prim.metadata(field))
+        .and_then(dictionary)
         .map(|resolved| resolved.value)
 }
 
@@ -2403,11 +2659,13 @@ fn dictionary_combines_over_schema_fallback() {
         ))],
     );
     let resolved = stage
-        .resolve_value_with_schema(p, field)
+        .prim(p, &store)
+        .and_then(|prim| prim.attribute(field))
+        .and_then(|attribute| attribute.get(Time::Default))
         .expect("customData");
     assert_eq!(
         resolved.value,
-        ResolvedValue::Dictionary(vec![
+        Value::Dictionary(vec![
             dict_entry(
                 "settings",
                 dict(&[("a", Value::Int(1)), ("c", Value::Int(3))]),
@@ -2537,7 +2795,11 @@ fn array_value_strongest_wins() {
     store.insert_layer(sub_layer);
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
-    let resolved = stage.resolve_field(p, field).expect("array resolves");
+    let resolved = stage
+        .prim(p, &store)
+        .and_then(|prim| prim.metadata(field))
+        .and_then(Resolved::into_value)
+        .expect("array resolves");
     // Strongest wins — root's 2-element array, not sublayer's 3-element array.
     assert_eq!(
         resolved.value,
@@ -2592,7 +2854,9 @@ fn nested_reference_is_weaker_than_referenced_site_opinions() {
         },
     );
     let resolved = stage
-        .resolve_field(root_child, field_x)
+        .prim(root_child, &store)
+        .and_then(|prim| prim.metadata(field_x))
+        .and_then(Resolved::into_value)
         .expect("field exists");
     assert_eq!(
         resolved.value,
@@ -2611,8 +2875,15 @@ fn nested_reference_is_weaker_than_referenced_site_opinions() {
         "winner is the referenced site, not the nested reference target"
     );
 
-    let opinions = stage.explain_field(root_child, field_x).expect("opinions");
-    let graph = stage.explain_prim_graph(root_child).expect("graph");
+    let opinions = stage
+        .prim(root_child, &store)
+        .map(|prim| prim.metadata_opinions(field_x))
+        .filter(|opinions| !opinions.is_empty())
+        .expect("opinions");
+    let graph = stage
+        .prim(root_child, &store)
+        .map(|prim| prim.composition_graph())
+        .expect("graph");
     assert_eq!(opinions.len(), 2, "both opinions participate");
     assert_eq!(
         arc_path(graph, opinions[0].key.node),
@@ -2657,10 +2928,21 @@ fn reference_nested_in_payload_is_weaker_than_payload_site() {
     store.insert_layer(lib);
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
-    let resolved = stage.resolve_field(p, field_x).expect("field exists");
+    let resolved = stage
+        .prim(p, &store)
+        .and_then(|prim| prim.metadata(field_x))
+        .and_then(Resolved::into_value)
+        .expect("field exists");
     assert_eq!(resolved.value, Value::Int64(2), "payload site must win");
-    let opinions = stage.explain_field(p, field_x).expect("opinions");
-    let graph = stage.explain_prim_graph(p).expect("graph");
+    let opinions = stage
+        .prim(p, &store)
+        .map(|prim| prim.metadata_opinions(field_x))
+        .filter(|opinions| !opinions.is_empty())
+        .expect("opinions");
+    let graph = stage
+        .prim(p, &store)
+        .map(|prim| prim.composition_graph())
+        .expect("graph");
     assert!(
         opinions
             .iter()
@@ -2712,12 +2994,16 @@ fn specializes_inside_reference_populates_class_children() {
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
     assert_eq!(
-        stage.resolve_field(r_c, field_x).map(|r| r.value),
+        stage
+            .prim(r_c, &store)
+            .and_then(|prim| prim.metadata(field_x))
+            .and_then(Resolved::into_value)
+            .map(|r| r.value),
         Some(Value::Int64(10)),
         "specialized opinions compose"
     );
     assert!(
-        stage.has_prim(r_c_child),
+        stage.prim(r_c_child, &store).is_some(),
         "specialized class children are populated"
     );
 }
@@ -2726,12 +3012,7 @@ fn specializes_inside_reference_populates_class_children() {
 /// `kind` with default 42, in one layer or split across two, and composes.
 fn metadata_property_collision(
     split: Option<bool>,
-) -> (
-    Stage,
-    InMemoryStore,
-    layerstack::PathId,
-    layerstack::TokenId,
-) {
+) -> (Stage, InMemoryStore, layerstack::PathId, TokenId) {
     let mut store = InMemoryStore::default();
     let p = store.path("/P");
     let kind = store.tokens.intern("kind");
@@ -2778,18 +3059,28 @@ fn prim_metadata_and_property_with_one_name_stay_separate() {
         let component = store.tokens.intern("component");
         let attribute = PropertyPath::new(p, kind);
         assert_eq!(
-            stage.resolve_field_path(attribute).map(|r| r.value),
+            stage
+                .view(&store)
+                .attribute(attribute)
+                .and_then(|attribute| attribute.authored_value(Time::Default))
+                .map(|r| r.value),
             Some(Value::Double(42.0)),
             "attribute query ({split:?})"
         );
         assert_eq!(
-            stage.resolve_value(p, kind).map(|r| r.value),
+            stage
+                .prim(p, &store)
+                .and_then(|prim| prim.metadata(kind))
+                .map(|r| r.value),
             Some(ResolvedValue::Scalar(Value::Token(component))),
             "metadata query ({split:?})"
         );
         assert!(
             stage
-                .explain_property_path(attribute)
+                .view(&store)
+                .property(attribute)
+                .map(|property| property.opinions())
+                .filter(|opinions| !opinions.is_empty())
                 .is_some_and(|ops| ops.iter().all(|op| op.value.as_property().is_some())),
             "the attribute's stack holds only property opinions ({split:?})"
         );
@@ -2828,17 +3119,27 @@ fn property_named_api_schemas_does_not_hide_applied_schemas() {
         [SchemaDefinition::api(test_api).with_property(defined(answer, 7))],
     );
     assert_eq!(
-        stage.resolve_field_with_schema(p, answer).map(|r| r.value),
+        stage
+            .prim(p, &store)
+            .and_then(|prim| prim.attribute(answer))
+            .and_then(|attribute| attribute.get(Time::Default))
+            .map(|r| r.value),
         Some(Value::Int(7)),
         "the applied schema's fallback survives a property named `apiSchemas`"
     );
     assert_eq!(
-        stage.resolve_token_list(p, api_schemas).map(|r| r.value),
+        stage
+            .prim(p, &store)
+            .and_then(|prim| prim.metadata(api_schemas))
+            .and_then(token_list)
+            .map(|r| r.value),
         Some(vec![test_api])
     );
     assert_eq!(
         stage
-            .resolve_field_path(PropertyPath::new(p, api_schemas))
+            .view(&store)
+            .attribute(PropertyPath::new(p, api_schemas))
+            .and_then(|attribute| attribute.authored_value(Time::Default))
             .map(|r| r.value),
         Some(Value::Double(42.0))
     );
@@ -2894,22 +3195,33 @@ fn properties_named_like_population_metadata_do_not_affect_population() {
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
     assert!(
-        stage.has_prim(p),
+        stage.prim(p, &store).is_some(),
         "a property named `active` does not deactivate"
     );
-    assert!(stage.has_prim(child));
+    assert!(stage.prim(child, &store).is_some());
     assert_eq!(
         stage
-            .resolve_field_path(PropertyPath::new(r_child, marker))
+            .view(&store)
+            .attribute(PropertyPath::new(r_child, marker))
+            .and_then(|attribute| attribute.authored_value(Time::Default))
             .map(|r| r.value),
         Some(Value::Int(1)),
         "a property named `instanceable` does not make `/R` an instance"
     );
     assert_eq!(
         stage
-            .resolve_field_path(PropertyPath::new(p, active))
+            .view(&store)
+            .attribute(PropertyPath::new(p, active))
+            .and_then(|attribute| attribute.authored_value(Time::Default))
             .map(|r| r.value),
         Some(Value::Bool(false))
     );
-    assert_eq!(stage.resolve_field(p, active), None, "no `active` metadata");
+    assert_eq!(
+        stage
+            .prim(p, &store)
+            .and_then(|prim| prim.metadata(active))
+            .and_then(Resolved::into_value),
+        None,
+        "no `active` metadata"
+    );
 }

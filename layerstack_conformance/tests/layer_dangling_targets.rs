@@ -40,6 +40,26 @@ use layerstack_conformance::workspace_root;
 use layerstack_schemas::{AuthoredTargetProblem, LayerDanglingReport, Scene};
 use serde::Deserialize;
 
+/// The composed targets of the relationship, or connections of the
+/// attribute, at `path`: `None` when no opinion authors any, except for an
+/// authored relationship, whose list is then empty.
+fn target_list(
+    stage: &Stage,
+    store: &layerstack::InMemoryStore,
+    path: layerstack::PropertyPath,
+) -> Option<Vec<layerstack::TargetPath>> {
+    let property = stage.view(store).property(path)?;
+    let opinions = property.opinions();
+    if let Some(relationship) = property.as_relationship() {
+        return (!opinions.is_empty()).then(|| relationship.targets());
+    }
+    let attribute = property.as_attribute()?;
+    opinions
+        .iter()
+        .any(|opinion| opinion.value.targets().is_some())
+        .then(|| attribute.connections())
+}
+
 const ORACLE: &str = include_str!("../fixtures/layer_dangling_targets/oracle.json");
 
 #[derive(Deserialize)]
@@ -153,9 +173,8 @@ fn reads(loaded: &LoadedStage, stage: &Stage, report: &LayerDanglingReport) -> V
                         ),
                         None => (
                             None,
-                            stage
-                                .resolve_target_list_path(target.source)
-                                .is_some_and(|list| list.value.contains(&mapped)),
+                            target_list(stage, store, target.source)
+                                .is_some_and(|list| list.contains(&mapped)),
                         ),
                     };
                     (mapped.display(paths, tokens), problem, composed)

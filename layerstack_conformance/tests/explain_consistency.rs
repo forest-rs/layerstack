@@ -3,9 +3,10 @@
 
 //! Value explanations resolve exactly what value resolution resolves.
 //!
-//! Every `Stage::explain_*` query mirrors a `resolve_*` query, and its
-//! `value` must equal that query's value. This checks the pairs over the
-//! whole corpus:
+//! Every explanation (`Attribute::explain`, `Prim::explain_metadata`)
+//! mirrors a read (`Attribute::get` or `Attribute::authored_value`,
+//! `Prim::metadata`), and its `value` must equal that read's value. This
+//! checks the pairs over the whole corpus:
 //!
 //! - every composition fixture under
 //!   `core-spec-supplemental-release_dec2025/composition/tests/assets`;
@@ -168,53 +169,52 @@ fn check_stage(label: &str, store: &mut InMemoryStore, root: LayerId, tally: &mu
         .lookup(&layerstack::Path::root())
         .expect("root path");
     let prims: Vec<PathId> = stage.traverse(root).collect();
+    let (plain, schema, other) = (
+        stage.view(store),
+        with_schemas.view(store),
+        alternate.view(store),
+    );
     for prim in prims {
         let prim_label = || format!("{label} {}", store.paths.display(prim, &store.tokens));
+        let handle = plain.prim(prim).expect("traversed");
         for &field in &names.fields {
-            if stage.explain_field(prim, field).is_none() {
+            if handle.metadata_opinions(field).is_empty() {
                 continue;
             }
             tally.check(
                 || format!("{} metadata {}", prim_label(), store.tokens.resolve(field)),
-                stage.explain_value(prim, field).and_then(|e| e.value),
-                stage.resolve_value(prim, field).map(|r| r.value),
+                handle.explain_metadata(field).and_then(|e| e.value),
+                handle.metadata(field).map(|r| r.value),
             );
         }
         for &property in names.properties.keys() {
             let path = PropertyPath::new(prim, property);
             let name = || format!("{}.{}", prim_label(), store.tokens.resolve(property));
-            let authored = stage.explain_property_path(path).is_some();
+            // The stage without schemas: what opinions author, explained
+            // and read alike.
+            let bare = plain.attribute(path);
+            let (with_fallback, other_fallback) = (schema.attribute(path), other.attribute(path));
+            let authored = bare.is_some_and(|attribute| attribute.is_authored());
             if authored {
                 tally.check(
                     || format!("{} default", name()),
-                    stage
-                        .explain_property_value(path, Time::Default)
-                        .and_then(|e| e.value),
-                    stage
-                        .resolve_property_path_at_time(path, Time::Default)
+                    explain(bare, Time::Default).and_then(|e| e.value),
+                    bare.and_then(|attribute| attribute.authored_value(Time::Default))
                         .map(|r| r.value),
                 );
             }
             tally.check(
                 || format!("{} default with schema", name()),
-                with_schemas
-                    .explain_value_with_schema(prim, property, Time::Default)
-                    .and_then(|e| e.value),
-                with_schemas
-                    .resolve_value_at_time_with_schema(prim, property, Time::Default)
-                    .map(|r| r.value),
+                explain(with_fallback, Time::Default).and_then(|e| e.value),
+                get(with_fallback, Time::Default),
             );
             // Without fallbacks, an authored property is always explained,
             // blocks included.
-            let unexplained = stage
-                .explain_value_with_schema(prim, property, Time::Default)
-                .map(|e| e.value);
+            let unexplained = explain(bare, Time::Default).map(|e| e.value);
             tally.check(
                 || format!("{} default without fallback", name()),
                 unexplained.clone().flatten(),
-                stage
-                    .resolve_value_at_time_with_schema(prim, property, Time::Default)
-                    .map(|r| r.value),
+                get(bare, Time::Default),
             );
             tally.check(
                 || format!("{} default without fallback is explained", name()),
@@ -223,17 +223,14 @@ fn check_stage(label: &str, store: &mut InMemoryStore, root: LayerId, tally: &mu
             );
             // An authored value that reports no use of the fallback is the
             // same under another fallback.
-            if let Some(explained) =
-                with_schemas.explain_value_with_schema(prim, property, Time::Default)
+            if let Some(explained) = explain(with_fallback, Time::Default)
                 && !explained.seeded_by_fallback
                 && !matches!(explained.source, ValueSource::Fallback | ValueSource::None)
             {
                 tally.check(
                     || format!("{} default independent of the fallback", name()),
                     explained.value,
-                    alternate
-                        .resolve_value_at_time_with_schema(prim, property, Time::Default)
-                        .map(|r| r.value),
+                    get(other_fallback, Time::Default),
                 );
             }
             for time in TIMES {
@@ -245,13 +242,12 @@ fn check_stage(label: &str, store: &mut InMemoryStore, root: LayerId, tally: &mu
                     if authored {
                         tally.check(
                             || format!("{} at {time} {interp:?}", name()),
-                            stage.explain_property_value(path, at).and_then(|e| e.value),
-                            stage
-                                .resolve_property_path_at_time(path, at)
+                            explain(bare, at).and_then(|e| e.value),
+                            bare.and_then(|attribute| attribute.authored_value(at))
                                 .map(|r| r.value),
                         );
                     }
-                    let explained = with_schemas.explain_value_with_schema(prim, property, at);
+                    let explained = explain(with_fallback, at);
                     let seeded = explained.as_ref().is_none_or(|e| {
                         e.seeded_by_fallback
                             || matches!(e.source, ValueSource::Fallback | ValueSource::None)
@@ -260,9 +256,7 @@ fn check_stage(label: &str, store: &mut InMemoryStore, root: LayerId, tally: &mu
                     tally.check(
                         || format!("{} at {time} {interp:?} with schema", name()),
                         value.clone(),
-                        with_schemas
-                            .resolve_value_at_time_with_schema(prim, property, at)
-                            .map(|r| r.value),
+                        get(with_fallback, at),
                     );
                     if !seeded {
                         tally.check(
@@ -273,20 +267,14 @@ fn check_stage(label: &str, store: &mut InMemoryStore, root: LayerId, tally: &mu
                                 )
                             },
                             value,
-                            alternate
-                                .resolve_value_at_time_with_schema(prim, property, at)
-                                .map(|r| r.value),
+                            get(other_fallback, at),
                         );
                     }
-                    let unexplained = stage
-                        .explain_value_with_schema(prim, property, at)
-                        .map(|e| e.value);
+                    let unexplained = explain(bare, at).map(|e| e.value);
                     tally.check(
                         || format!("{} at {time} {interp:?} without fallback", name()),
                         unexplained.clone().flatten(),
-                        stage
-                            .resolve_value_at_time_with_schema(prim, property, at)
-                            .map(|r| r.value),
+                        get(bare, at),
                     );
                     tally.check(
                         || {
@@ -302,6 +290,21 @@ fn check_stage(label: &str, store: &mut InMemoryStore, root: LayerId, tally: &mu
             }
         }
     }
+}
+
+/// Why `attribute`, if any, has its value at `at`.
+fn explain(
+    attribute: Option<layerstack::Attribute<'_>>,
+    at: Time,
+) -> Option<layerstack::ValueExplanation<'_, Value>> {
+    attribute.and_then(|attribute| attribute.explain(at))
+}
+
+/// The value `attribute`, if any, reads at `at`, its fallback included.
+fn get(attribute: Option<layerstack::Attribute<'_>>, at: Time) -> Option<Value> {
+    attribute
+        .and_then(|attribute| attribute.get(at))
+        .map(|r| r.value)
 }
 
 fn spec_assets(area: &str) -> PathBuf {

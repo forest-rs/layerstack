@@ -275,17 +275,11 @@ impl<'a> Primvar<'a> {
         crate::value::read_int_array_shared(&value, self.prim.scene().store().tokens())
     }
     fn string_type(&self) -> Option<bool> {
-        let scene = self.prim.scene();
-        let ty = scene
-            .stage()
-            .resolve_property_declaration(self.prim.path(), self.property().property())
+        let property = self.prim.scene().property(self.property())?;
+        let ty = property
+            .declaration()
             .and_then(|p| p.type_name)
-            .or_else(|| {
-                scene
-                    .stage()
-                    .property_definition_ref(self.prim.path(), self.property().property())
-                    .and_then(|p| p.type_name.clone())
-            })?;
+            .or_else(|| property.definition().and_then(|p| p.type_name.clone()))?;
         matches!(ty.default_scalar(), Value::String(_)).then_some(ty.is_array())
     }
     /// Whether a string or string-array primvar has an `:idFrom` relationship.
@@ -344,18 +338,17 @@ impl<'a> Primvar<'a> {
     #[doc(alias = "GetTimeSamples")]
     pub fn sample_times(&self) -> Vec<f64> {
         let scene = self.prim.scene();
-        let path = self.property();
-        let mut times = scene
-            .stage()
-            .property_sample_times(path.prim_path(), path.property());
+        let sample_times = |path| {
+            scene
+                .attribute(path)
+                .map(layerstack::Attribute::sample_times)
+                .unwrap_or_default()
+        };
+        let mut times = sample_times(self.property());
         if self.is_indexed()
             && let Some(indices) = self.prim.property_path(&format!("{}:indices", self.name))
         {
-            times.extend(
-                scene
-                    .stage()
-                    .property_sample_times(indices.prim_path(), indices.property()),
-            );
+            times.extend(sample_times(indices));
             times.sort_by(f64::total_cmp);
             times.dedup_by(|a, b| a.total_cmp(b).is_eq());
         }
@@ -383,19 +376,17 @@ impl<'a> Primvar<'a> {
     #[doc(alias = "ValueMightBeTimeVarying")]
     pub fn might_be_time_varying(&self) -> bool {
         let scene = self.prim.scene();
-        let path = self.property();
-        scene
-            .stage()
-            .property_might_be_time_varying(path.prim_path(), path.property())
+        let varies = |path| {
+            scene
+                .attribute(path)
+                .is_some_and(layerstack::Attribute::might_be_time_varying)
+        };
+        varies(self.property())
             || (self.is_indexed()
                 && self
                     .prim
                     .property_path(&format!("{}:indices", self.name))
-                    .is_some_and(|p| {
-                        scene
-                            .stage()
-                            .property_might_be_time_varying(p.prim_path(), p.property())
-                    }))
+                    .is_some_and(varies))
     }
     /// Captures values and optional indices, validating every index before any
     /// consumer expands vertices. No flattened array is allocated. Numeric
@@ -495,13 +486,12 @@ impl<'a> PrimView<'a> {
     #[must_use]
     pub fn primvars(&self) -> Vec<Primvar<'a>> {
         let scene = self.scene();
-        let mut result: Vec<_> = scene
-            .stage()
-            .property_names(self.path(), scene.store())
+        let mut result: Vec<_> = self
+            .prim()
+            .map(layerstack::Prim::property_names)
+            .unwrap_or_default()
             .into_iter()
-            .filter_map(|name| {
-                Primvar::new(&scene, self.path(), scene.store().tokens().resolve(name))
-            })
+            .filter_map(|name| Primvar::new(&scene, self.path(), name))
             .collect();
         result.sort_by_key(|p| p.name);
         result
@@ -513,7 +503,7 @@ impl<'a> PrimView<'a> {
     #[must_use]
     pub fn find_primvar_with_inheritance(&self, name: &str) -> Option<Primvar<'a>> {
         let scene = self.scene();
-        if !scene.stage().has_prim(self.path()) {
+        if !self.prim().is_some() {
             return None;
         }
         let local = Primvar::new(&scene, self.path(), name);
@@ -539,13 +529,12 @@ impl<'a> PrimView<'a> {
     #[must_use]
     pub fn authored_primvars(&self) -> Vec<Primvar<'a>> {
         let scene = self.scene();
-        let mut result: Vec<_> = scene
-            .stage()
-            .authored_property_names(self.path(), scene.store())
+        let mut result: Vec<_> = self
+            .prim()
+            .map(layerstack::Prim::authored_property_names)
+            .unwrap_or_default()
             .into_iter()
-            .filter_map(|name| {
-                Primvar::new(&scene, self.path(), scene.store().tokens().resolve(name))
-            })
+            .filter_map(|name| Primvar::new(&scene, self.path(), name))
             .collect();
         result.sort_by_key(|p| p.name);
         result
@@ -576,7 +565,7 @@ impl<'a> PrimView<'a> {
     /// OpenUSD: `FindInheritablePrimvars`; AOUSD Core §12.2–12.5.
     #[must_use]
     pub fn inheritable_primvars(&self) -> Vec<Primvar<'a>> {
-        if !self.scene().stage().has_prim(self.path()) {
+        if !self.prim().is_some() {
             return Vec::new();
         }
         let mut paths = Vec::new();
@@ -608,7 +597,7 @@ impl<'a> PrimView<'a> {
         &self,
         inherited: &[Primvar<'a>],
     ) -> Option<Vec<Primvar<'a>>> {
-        if !self.scene().stage().has_prim(self.path()) {
+        if !self.prim().is_some() {
             return (!inherited.is_empty()).then(Vec::new);
         }
         self.merge_inherited_primvars(inherited, false)
@@ -648,7 +637,7 @@ impl<'a> PrimView<'a> {
     /// The input must come from the parent's inheritable query in this scene.
     #[must_use]
     pub fn primvars_with_inheritance_from(&self, inherited: &[Primvar<'a>]) -> Vec<Primvar<'a>> {
-        if !self.scene().stage().has_prim(self.path()) {
+        if !self.prim().is_some() {
             return Vec::new();
         }
         self.merge_inherited_primvars(inherited, true)
@@ -663,7 +652,7 @@ impl<'a> PrimView<'a> {
         name: &str,
         inherited: &[Primvar<'a>],
     ) -> Option<Primvar<'a>> {
-        if !self.scene().stage().has_prim(self.path()) {
+        if !self.prim().is_some() {
             return None;
         }
         let local = Primvar::new(&self.scene(), self.path(), name);

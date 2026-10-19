@@ -8,8 +8,8 @@
 //! <https://openusd.org/release/tut_generating_new_schema.html>
 use layerstack::{
     AssetResolveError, AssetResolver, EditTarget, InMemoryStore, Layer, LayerId, LiveStage,
-    PathInterner, PrimSpec, ResolvedAsset, SchemaKind, SchemaRegistry, StageOptions, TokenInterner,
-    Value,
+    PathInterner, PrimSpec, ResolvedAsset, SchemaKind, SchemaRegistry, StageOptions, Time,
+    TokenInterner, Value,
     schema::{SchemaDeclaration, read_generated_schema},
 };
 use layerstack_schemas::{Domain, SchemaEdit};
@@ -102,8 +102,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "named instance is applied"
     );
     let value = live
-        .stage()
-        .resolve_field_with_schema(gain.prim_path(), gain.property())
+        .view(&store)
+        .attribute(gain)
+        .and_then(|gain| gain.get(Time::Default))
         .expect("runtime schema supplies its fallback")
         .value;
     assert_eq!(

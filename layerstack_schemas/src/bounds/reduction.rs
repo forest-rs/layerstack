@@ -20,8 +20,7 @@ pub(super) struct Reduction {
     pub(super) dirty: HashSet<PathId>,
 }
 impl Reduction {
-    pub(super) fn new(children: &[PathId]) -> Self {
-        let mut children = children.to_vec();
+    pub(super) fn new(mut children: Vec<PathId>) -> Self {
         children.sort_unstable();
         Self {
             children,
@@ -127,7 +126,7 @@ mod tests {
         let children: Vec<_> = (0..71)
             .map(|i| store.path(&alloc::format!("/P{i}")))
             .collect();
-        let mut reduction = Reduction::new(&children);
+        let mut reduction = Reduction::new(children.clone());
         let mut values = vec![(0, Range3d::default()); children.len()];
         let mut seed = 17_u32;
         for step in 0..1000 {

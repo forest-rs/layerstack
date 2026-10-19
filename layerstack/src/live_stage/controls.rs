@@ -445,7 +445,7 @@ impl LiveStage {
         }
         self.record_generations(store);
         if local_structure_changed {
-            self.local_namespace = local::LocalNamespace::build(store, self.root, &self.options);
+            self.local_namespace = local::LocalSlot::pending(store, self.root, &self.options);
         }
         if let Some(changes) = changes {
             changes.created = new.difference(&old).copied().collect();

@@ -17,16 +17,76 @@ pub(crate) struct LocalNamespace {
     children: HashMap<PathId, Vec<PathId>>,
 }
 
-impl LocalNamespace {
-    pub(crate) fn build(
+/// A [`LocalNamespace`] built when an edit first asks for it, rather than
+/// with each composition: the index serves only the local edit path, and
+/// building it walks and sorts every prim spec of the root layer.
+///
+/// A composition records the root layer's generation and whether the
+/// stage's options allow the index; the first edit builds the index from
+/// the layer as it was composed. When the layer has changed since, no index
+/// is current, as an index built with the composition would not be.
+#[derive(Debug)]
+pub(crate) enum LocalSlot {
+    /// Not built yet: the root layer's generation when composed, and
+    /// whether the composition's options allow an index.
+    Pending {
+        generation: Option<u64>,
+        allowed: bool,
+    },
+    /// Built, or found not to apply (`None`).
+    Built(Option<LocalNamespace>),
+}
+
+impl LocalSlot {
+    /// The slot a composition of `root` with `options` leaves, to be
+    /// built on first use.
+    pub(crate) fn pending(store: &dyn LayerStore, root: LayerId, options: &StageOptions) -> Self {
+        Self::Pending {
+            generation: store.layer(root).map(crate::Layer::generation),
+            allowed: options.session_layer.is_none() && options.mask.is_none(),
+        }
+    }
+
+    /// The index, built now if it is pending and the root layer is
+    /// unchanged since the composition.
+    pub(crate) fn get(
+        &mut self,
         store: &dyn LayerStore,
         root: LayerId,
-        options: &StageOptions,
-    ) -> Option<Self> {
+    ) -> Option<&mut LocalNamespace> {
+        if let Self::Pending {
+            generation,
+            allowed,
+        } = *self
+        {
+            let unchanged = generation.is_some()
+                && store.layer(root).map(crate::Layer::generation) == generation;
+            *self = Self::Built(
+                (allowed && unchanged)
+                    .then(|| LocalNamespace::build_allowed(store, root))
+                    .flatten(),
+            );
+        }
+        match self {
+            Self::Built(index) => index.as_mut(),
+            Self::Pending { .. } => None,
+        }
+    }
+
+    /// The index if built, without building it.
+    pub(crate) fn built(&self) -> Option<&LocalNamespace> {
+        match self {
+            Self::Built(index) => index.as_ref(),
+            Self::Pending { .. } => None,
+        }
+    }
+}
+
+impl LocalNamespace {
+    /// The index of `root`, for a stage whose options allow one.
+    fn build_allowed(store: &dyn LayerStore, root: LayerId) -> Option<Self> {
         let layer = store.layer(root)?;
-        if options.session_layer.is_some()
-            || options.mask.is_some()
-            || !layer.sublayers.is_empty()
+        if !layer.sublayers.is_empty()
             || !layer.relocates.is_empty()
             || !layer.variant_prims.is_empty()
             || !layer.prims.values().all(|s| supported(store, s))
@@ -38,12 +98,13 @@ impl LocalNamespace {
             generation: layer.generation(),
             children: HashMap::new(),
         };
+        let root_path = store.paths().lookup(&Path::root());
         for &path in layer.prims.keys() {
-            if let Some(parent) = store.paths().resolve(path).parent() {
-                let id = store.paths().lookup(&parent)?;
+            // The interner keeps each path's parent: no path is built.
+            if let Some(id) = store.paths().parent(path) {
                 // Implicit ancestors require additional pruning context. Leave
                 // that case to ordinary composition until it is indexed too.
-                if parent != Path::root() && !layer.prims.contains_key(&id) {
+                if Some(id) != root_path && !layer.prims.contains_key(&id) {
                     return None;
                 }
                 index.children.entry(id).or_default().push(path);

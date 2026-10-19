@@ -227,7 +227,7 @@ fn participating_layers(
 #[doc(alias = "UsdStage")]
 pub struct LiveStage {
     stage: Stage,
-    local_namespace: Option<local::LocalNamespace>,
+    local_namespace: local::LocalSlot,
     /// Tracks dependency topology and dirty prim state.
     tracker: InvalidationTracker<PathId>,
     /// Reused traversal state for lazy invalidation expansion.
@@ -302,7 +302,7 @@ impl LiveStage {
 
         let mut live = Self {
             stage,
-            local_namespace: local::LocalNamespace::build(store, root, &options),
+            local_namespace: local::LocalSlot::pending(store, root, &options),
             tracker,
             traversal_scratch: TraversalScratch::new(),
             arc_metadata: deps.arcs,
@@ -332,6 +332,14 @@ impl LiveStage {
         live.record_generations(store);
         live.publish_preparation(store);
         live
+    }
+
+    /// The local namespace index, built if pending.
+    #[cfg(test)]
+    pub(crate) fn local_index(&mut self, store: &dyn LayerStore) -> Option<&local::LocalNamespace> {
+        self.local_namespace
+            .get(store, self.root)
+            .map(|index| &*index)
     }
 
     /// Pending stage-local controls, reflected in the snapshot after
@@ -601,10 +609,10 @@ impl LiveStage {
         let local_current = !pending_recomposition
             && self
                 .local_namespace
-                .as_ref()
+                .get(store, self.root)
                 .is_some_and(|index| index.current(store));
         let namespace = local_current
-            .then_some(self.local_namespace.as_ref())
+            .then_some(self.local_namespace.built())
             .flatten()
             .map(|index| index as &dyn crate::edit::SourceNamespace);
         let outcome = crate::edit::apply(store, txn, Some(&self.stage), namespace)?;
@@ -657,8 +665,8 @@ impl LiveStage {
         // An unsupported or externally changed namespace cannot reuse its
         // source index until a full composition establishes eligibility again.
         if !local_current || outcome.structural || outcome.local_structure.is_none() {
-            self.local_namespace = None;
-        } else if let Some(index) = &mut self.local_namespace
+            self.local_namespace = local::LocalSlot::Built(None);
+        } else if let Some(index) = self.local_namespace.get(store, self.root)
             && let Some(layer) = store.layer(self.root)
         {
             index.generation = layer.generation();
@@ -800,7 +808,7 @@ impl LiveStage {
                 old.extend(self.stage.traverse(*root));
             }
         }
-        let index = self.local_namespace.as_mut()?;
+        let index = self.local_namespace.get(store, self.root)?;
         if !index.reconcile(store, paths) {
             return None;
         }
@@ -873,7 +881,7 @@ impl LiveStage {
                     Vec::new()
                 } else {
                     self.local_namespace
-                        .as_ref()
+                        .built()
                         .map_or_else(Vec::new, |index| index.children(parent).to_vec())
                 };
                 (parent, given)
@@ -1834,7 +1842,7 @@ impl LiveStage {
         self.expression_variables = deps.expression_variables;
         self.reindex_all_sources();
         self.record_generations(store);
-        self.local_namespace = local::LocalNamespace::build(store, self.root, &self.options);
+        self.local_namespace = local::LocalSlot::pending(store, self.root, &self.options);
         if let Some(changes) = changes {
             changes.created = self
                 .stage
@@ -4562,7 +4570,7 @@ mod tests {
             layer.insert_prim(root, PrimSpec::default().with_children(roots));
             store.insert_layer(layer);
             let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
-            assert_eq!(live.local_namespace.is_some(), !general);
+            assert_eq!(live.local_index(&store).is_some(), !general);
             let target = EditTarget::for_layer(LayerId(1));
             let moves = [
                 (
@@ -4634,7 +4642,7 @@ mod tests {
         );
         store.insert_layer(layer);
         let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
-        assert!(live.local_namespace.is_none());
+        assert!(live.local_index(&store).is_none());
         let target = EditTarget::for_layer(LayerId(1));
         let mut undo = Vec::new();
         for (remove, path, work, info) in [

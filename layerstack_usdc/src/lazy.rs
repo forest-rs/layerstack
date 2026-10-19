@@ -144,27 +144,32 @@ pub(crate) struct LazyPool {
 /// fields sharing one share its source: in shards, each locked alone, as
 /// the threads assembling a layer register sources at once.
 struct Registry<T> {
-    shards: [Mutex<HashMap<[u8; 8], Weak<T>>>; 64],
+    shards: alloc::boxed::Box<[Shard<T>]>,
 }
 
-impl<T> Default for Registry<T> {
-    fn default() -> Self {
-        Self {
-            shards: core::array::from_fn(|_| Mutex::default()),
-        }
-    }
-}
+/// One shard of a [`Registry`].
+type Shard<T> = Mutex<HashMap<[u8; 8], Weak<T>>>;
 
 impl<T> Registry<T> {
+    /// A registry for a file of `specs` specs: a shard for each chunk of
+    /// specs the threads may convert at once, up to 64, so that a small
+    /// file sets up one.
+    fn for_specs(specs: usize) -> Self {
+        let shards = (specs / 512).clamp(1, 64).next_power_of_two();
+        Self {
+            shards: (0..shards).map(|_| Mutex::default()).collect(),
+        }
+    }
+
     fn shard(&self, rep: &[u8; 8]) -> std::sync::MutexGuard<'_, HashMap<[u8; 8], Weak<T>>> {
         // The payload's offset differs between values: mix it into the
         // top bits, which pick the shard.
         let mixed = u64::from_le_bytes(*rep).wrapping_mul(0x9e37_79b9_7f4a_7c15);
         #[allow(
             clippy::cast_possible_truncation,
-            reason = "the top six bits pick one of 64 shards"
+            reason = "the top six bits pick one of up to 64 shards"
         )]
-        let at = (mixed >> 58) as usize;
+        let at = (mixed >> 58) as usize & (self.shards.len() - 1);
         self.shards[at]
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -497,14 +502,15 @@ pub fn read_usdc_lazy_range_within(
         &mut budget,
         threads,
     )?);
+    let specs = sections.specs.len();
     let pool = Arc::new(LazyPool {
         bytes,
         sections,
         token_ids: OnceLock::new(),
         retains_tokens: core::sync::atomic::AtomicBool::new(false),
         budget: Mutex::new(DecodeBudget::with_limit(0)),
-        arrays: Registry::default(),
-        values: Registry::default(),
+        arrays: Registry::for_specs(specs),
+        values: Registry::for_specs(specs),
         attempts: AtomicUsize::new(0),
     });
     budget.lazy = Some(Arc::clone(&pool));

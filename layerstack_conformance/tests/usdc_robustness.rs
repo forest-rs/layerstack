@@ -369,6 +369,98 @@ fn byte_mutations_read_cleanly() {
     assert_none_fail(&failures);
 }
 
+/// The files and their mutations assemble from the path tree as from the
+/// paths' text: a read naming paths through the tree reads what one
+/// reading their text does, and is charged as much.
+#[test]
+fn the_path_tree_reads_what_the_text_does() {
+    use layerstack_usdc::section::{PathTable, parse_sections};
+    let compare = |data: &[u8]| -> Result<(), String> {
+        let Ok(header) = layerstack_usdc::header::parse_header(data) else {
+            return Ok(());
+        };
+        let Ok(toc) = layerstack_usdc::toc::parse_toc(data, header.toc_offset) else {
+            return Ok(());
+        };
+        let mut budget = DecodeBudget::for_input(data.len());
+        let Ok(tree) = parse_sections(data, &toc, header.crate_version(), &mut budget) else {
+            return Ok(());
+        };
+        let mut text = tree.clone();
+        text.paths = PathTable::from_texts(tree.path_texts());
+        let (tokens, paths) = (TokenInterner::default(), PathInterner::default());
+        let read = |sections| {
+            let mut budget = DecodeBudget::for_input(data.len());
+            let read = layerstack_usdc::assemble::assemble(
+                data,
+                sections,
+                LayerId(1),
+                &tokens,
+                &paths,
+                &mut NoAssets,
+                &mut budget,
+            );
+            (
+                read.map(|read| (read.layer, read.diagnostics)),
+                budget.used(),
+            )
+        };
+        let (by_tree, by_text) = (read(&tree), read(&text));
+        // A layer holding a NaN equals no layer: those compare by their
+        // specs' debug text, in path order.
+        let same = |a: &Layer, b: &Layer| {
+            let specs = |layer: &Layer| {
+                let mut specs: Vec<String> = layer
+                    .prims()
+                    .iter()
+                    .map(|(path, spec)| format!("{path:?} {spec:?}"))
+                    .collect();
+                specs.sort();
+                specs
+            };
+            a == b || (a != a && specs(a) == specs(b))
+        };
+        match (&by_tree, &by_text) {
+            ((Ok(a), used_a), (Ok(b), used_b))
+                if same(&a.0, &b.0) && a.1 == b.1 && used_a == used_b =>
+            {
+                Ok(())
+            }
+            ((Err(a), _), (Err(b), _)) if a == b => Ok(()),
+            ((Ok(a), used_a), (Ok(b), used_b)) => Err(format!(
+                "layers equal {} diagnostics {:?} / {:?}, used {used_a} / {used_b}",
+                a.0 == b.0,
+                a.1,
+                b.1
+            )),
+            _ => Err(format!(
+                "tree {:?} text {:?}",
+                by_tree.0.as_ref().map(|r| &r.1),
+                by_text.0.as_ref().map(|r| &r.1)
+            )),
+        }
+    };
+    let mut differ = Vec::new();
+    for (seed, name) in FILES.iter().enumerate() {
+        let data = read_file(name);
+        if let Err(why) = compare(&data) {
+            differ.push(format!("{name}: {why}"));
+        }
+        let mut rng = XorShift(0x5EED ^ (seed as u64 + 1));
+        for i in 0..MUTATIONS / 4 {
+            if let Err(why) = compare(&mutate(&data, &mut rng)) {
+                differ.push(format!("{name} mutation {i}: {why}"));
+            }
+        }
+    }
+    assert!(
+        differ.is_empty(),
+        "{} differ, first: {:?}",
+        differ.len(),
+        &differ[..differ.len().min(5)]
+    );
+}
+
 /// The unmodified files hold only charged values and allocate only what
 /// they charge too, and hold values at all, so the checks above are not
 /// vacuous. A file may fail only on a feature the reader does not support

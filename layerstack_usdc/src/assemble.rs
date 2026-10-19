@@ -102,6 +102,7 @@ pub fn assemble(
         target_paths: HashMap::new(),
         prim_paths: Vec::new(),
         owners: Vec::new(),
+        property_names: Vec::new(),
         targets: Vec::new(),
         defer_variant_arcs: resolver.defers_variant_arcs(),
         in_branch: false,
@@ -143,10 +144,13 @@ struct AssembleCtx<'a> {
     /// variant branches, found from the path tree when first asked
     /// ([`Self::prim_path_at`]).
     prim_paths: Vec<PrimPathAt>,
-    /// Whether each entry of the path table, as the prim path text of a
-    /// property path, is one [`PropertyPath::split`] and
-    /// [`Path::parse_absolute`] accept: `0` unknown, `1` yes, `2` no.
-    owners: Vec<u8>,
+    /// What each entry of the path table is as the prim path text of a
+    /// property path ([`Self::property_owner`]).
+    owners: Vec<Owner>,
+    /// Whether each entry of the token table, as a property path's
+    /// element, names a property [`PropertyPath::split`] reads as one name:
+    /// `0` unknown, `1` yes, `2` no.
+    property_names: Vec<u8>,
     /// The target path each entry of the path table names, found when
     /// first asked ([`Self::target_path_at`]).
     targets: Vec<TargetAt>,
@@ -197,6 +201,20 @@ enum PropertyOwner {
     Invalid,
     /// On the prim spec at path table entry `owner`, named `name`.
     Prim { owner: u32, name: TokenId },
+}
+
+/// What one entry of the path table is as the prim path text of a property
+/// path, once found.
+#[derive(Clone, Copy)]
+enum Owner {
+    Unknown,
+    /// A variant spec's path (`/A{v=x}`).
+    Variant,
+    /// Text [`PropertyPath::split`] and [`Path::parse_absolute`] reject as
+    /// a property's prim path.
+    Invalid,
+    /// A prim spec's path, perhaps inside a variant branch.
+    Prim,
 }
 
 /// What one entry of the path table names as a target path.
@@ -2044,7 +2062,9 @@ impl<'a> AssembleCtx<'a> {
                 Some(PropertyOwner::Variant | PropertyOwner::Invalid) => None,
                 None => self.target_path(text),
             },
-            PathNode::Root | PathNode::Child { .. } if !text.contains(['.', '{']) => {
+            PathNode::Root | PathNode::Child { .. }
+                if !text.bytes().any(|byte| matches!(byte, b'.' | b'{')) =>
+            {
                 self.prim_path_at(index).map(TargetPath::Prim)
             }
             PathNode::Root | PathNode::Child { .. } | PathNode::Unused => self.target_path(text),
@@ -2390,35 +2410,56 @@ impl<'a> AssembleCtx<'a> {
         else {
             return None;
         };
-        let name = self.lookup_token(token);
-        if name.is_empty() || name.contains(['.', '/', '{', '}']) {
-            return None;
+        // Each name and each owner is checked once.
+        if self.property_names.is_empty() {
+            self.property_names = alloc::vec![0; sections.tokens.len()];
         }
-        let owner = sections.paths.get(parent as usize)?;
-        if owner.contains('{') {
-            // A property directly on a variant (`/A{v=x}.b`) belongs to
-            // the variant spec, and is placed with the variant specs; one on
-            // a prim inside a branch (`/A{v=x}B.c`) is placed here.
-            if owner.ends_with('}') {
-                return Some(PropertyOwner::Variant);
+        let named = self.property_names.get_mut(token as usize);
+        match named {
+            Some(0) => {
+                let name = &sections.tokens[token as usize];
+                let ok = !name.is_empty() && !name.contains(['.', '/', '{', '}']);
+                *named? = if ok { 1 } else { 2 };
+                if !ok {
+                    return None;
+                }
             }
-        } else {
-            if self.owners.is_empty() {
-                self.owners = alloc::vec![0; sections.paths.len()];
-            }
-            if self.owners[parent as usize] == 0 {
-                let valid = !owner.contains(['.', '}'])
-                    && owner != "/"
-                    && Path::parse_absolute(owner, self.tokens).is_ok();
-                self.owners[parent as usize] = if valid { 1 } else { 2 };
-            }
-            if self.owners[parent as usize] != 1 {
-                return Some(PropertyOwner::Invalid);
-            }
+            Some(1) => {}
+            _ => return None,
         }
-        Some(PropertyOwner::Prim {
-            owner: parent,
-            name: self.token_id(token),
+        if self.owners.is_empty() {
+            self.owners = alloc::vec![Owner::Unknown; sections.paths.len()];
+        }
+        let found = match *self.owners.get(parent as usize)? {
+            Owner::Unknown => {
+                let owner = &sections.paths[parent as usize];
+                let found = if owner.contains('{') {
+                    // A property directly on a variant (`/A{v=x}.b`)
+                    // belongs to the variant spec, and is placed with the
+                    // variant specs; one on a prim inside a branch
+                    // (`/A{v=x}B.c`) is placed here.
+                    if owner.ends_with('}') {
+                        Owner::Variant
+                    } else {
+                        Owner::Prim
+                    }
+                } else if is_property_owner(owner) {
+                    Owner::Prim
+                } else {
+                    Owner::Invalid
+                };
+                self.owners[parent as usize] = found;
+                found
+            }
+            found => found,
+        };
+        Some(match found {
+            Owner::Variant => PropertyOwner::Variant,
+            Owner::Invalid | Owner::Unknown => PropertyOwner::Invalid,
+            Owner::Prim => PropertyOwner::Prim {
+                owner: parent,
+                name: self.token_id(token),
+            },
         })
     }
 
@@ -2566,6 +2607,24 @@ fn convert_scalar_listop<T>(
         add: items(&listop.added_items)?,
         reorder: items(&listop.ordered_items)?,
     })
+}
+
+/// Whether `text`, holding no variant selection, is the prim path text of a
+/// property path that [`PropertyPath::split`] and [`Path::parse_absolute`]
+/// accept: absolute, below the root, with no empty name, and no `.` or `}`
+/// [`PropertyPath::split`] would read as part of a property.
+fn is_property_owner(text: &str) -> bool {
+    let Some((b'/', names)) = text.as_bytes().split_first() else {
+        return false;
+    };
+    let mut previous = b'/';
+    for &byte in names {
+        if matches!(byte, b'.' | b'}') || (byte == b'/' && previous == b'/') {
+            return false;
+        }
+        previous = byte;
+    }
+    previous != b'/'
 }
 
 /// Sets the property `name` of a spec's `properties` to `spec`, keeping the
@@ -2835,6 +2894,20 @@ def "Other" {}
         assert!(tree.layer == text.layer, "the same layer");
         assert_eq!(tree.diagnostics, text.diagnostics);
         assert!(tree.layer == read.emitted.layer, "the layer written");
+    }
+
+    /// A property's prim path text is checked as parsing it would check it.
+    #[test]
+    fn property_owners_are_checked_as_parsed() {
+        let tokens = TokenInterner::default();
+        for text in [
+            "/", "", "A", "/A", "/A/B", "/A//B", "/A/", "//A", "/A.b", "/A}", "/A:b", "/A/B C",
+        ] {
+            let parsed = !text.contains(['.', '}'])
+                && text != "/"
+                && Path::parse_absolute(text, &tokens).is_ok();
+            assert_eq!(is_property_owner(text), parsed, "{text:?}");
+        }
     }
 
     /// Specs sharing a fieldset are built once: prims are copies of one

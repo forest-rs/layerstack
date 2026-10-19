@@ -503,9 +503,12 @@ impl Scene {
             let fresh = LiveStage::compose(&mut self.store, root, options);
             self.primary
                 .stage()
-                .preparation()
+                .preparation(&self.store.paths)
                 .unwrap()
-                .assert_current_as(fresh.stage().preparation().unwrap(), &self.store);
+                .assert_current_as(
+                    fresh.stage().preparation(&self.store.paths).unwrap(),
+                    &self.store,
+                );
         }
         compared
     }

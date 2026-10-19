@@ -80,7 +80,10 @@ fn prepare_with(
         .collect();
     // The evidence of every stage, or of none.
     let retained: Option<Vec<&PreparationIndex>> = if use_retained {
-        stages.iter().map(|stage| stage.preparation()).collect()
+        stages
+            .iter()
+            .map(|stage| stage.preparation(store.paths()))
+            .collect()
     } else {
         None
     };

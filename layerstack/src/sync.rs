@@ -77,6 +77,11 @@ impl<T> Memo<T> {
     pub(crate) fn get_mut(&mut self) -> Option<&mut T> {
         self.0.get_mut()
     }
+
+    /// The value, if computed.
+    pub(crate) fn get(&self) -> Option<&T> {
+        self.0.get()
+    }
 }
 
 impl<T: core::fmt::Debug> core::fmt::Debug for Memo<T> {

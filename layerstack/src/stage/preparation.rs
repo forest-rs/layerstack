@@ -54,6 +54,17 @@ pub(crate) struct PreparationIndex {
     children: Arc<ChildIndex>,
     /// The prim specs of each layer that author paths, by generation.
     links: HashMap<LayerId, LayerLinks>,
+    /// What the composed prims draw on, found from the snapshot's prim
+    /// indexes when a preparation first asks ([`Stage::preparation`]) and
+    /// kept current from then on: an open that never prepares a namespace
+    /// edit never finds it.
+    composed: Memo<ComposedEvidence>,
+}
+
+/// What a snapshot's composed prims draw on, for a preparation to find the
+/// prims an edit reaches.
+#[derive(Debug, Default)]
+struct ComposedEvidence {
     /// Each composed prim's opinion layers, sorted.
     prim_stack_layers: HashMap<PathId, Vec<LayerId>>,
     /// How many composed prims draw opinions from each layer.
@@ -82,12 +93,16 @@ impl PreparationIndex {
             generations: None,
             children,
             links: HashMap::new(),
-            prim_stack_layers: HashMap::new(),
-            stack_layer_counts: HashMap::new(),
-            prim_node_sites: HashMap::new(),
-            node_sites: HashMap::new(),
-            nodes_beneath: HashMap::new(),
+            composed: Memo::default(),
         }
+    }
+
+    /// The composed evidence, which [`Stage::preparation`] finds before
+    /// lending the index.
+    fn composed(&self) -> &ComposedEvidence {
+        self.composed
+            .get()
+            .expect("found when the stage lends the index")
     }
 
     /// The live stage's child index.
@@ -182,7 +197,7 @@ impl PreparationIndex {
 
     /// Every layer some composed prim's opinions come from.
     pub(crate) fn stack_layers(&self) -> impl Iterator<Item = LayerId> + '_ {
-        self.stack_layer_counts.keys().copied()
+        self.composed().stack_layer_counts.keys().copied()
     }
 
     /// The composed prims with a non-local node at a site at or beneath
@@ -191,22 +206,44 @@ impl PreparationIndex {
         &self,
         path: PathId,
     ) -> impl Iterator<Item = PathId> + '_ {
-        self.nodes_beneath.get(&path).into_iter().flatten().copied()
+        let beneath = &self.composed().nodes_beneath;
+        beneath.get(&path).into_iter().flatten().copied()
     }
 
     /// The composed prims with a non-local node at the site `path`.
     pub(crate) fn prims_with_nodes_at(&self, path: PathId) -> impl Iterator<Item = PathId> + '_ {
-        self.node_sites.get(&path).into_iter().flatten().copied()
+        let sites = &self.composed().node_sites;
+        sites.get(&path).into_iter().flatten().copied()
     }
 
     /// Replaces `prim`'s entries with those of its composed `index`, or
-    /// removes them when it is no longer composed.
+    /// removes them when it is no longer composed, once the evidence is
+    /// found.
     pub(crate) fn reindex(
         &mut self,
         paths: &PathInterner,
         prim: PathId,
         index: Option<&PrimIndex>,
     ) {
+        if let Some(composed) = self.composed.get_mut() {
+            composed.reindex(paths, prim, index);
+        }
+    }
+}
+
+impl ComposedEvidence {
+    /// The evidence of every prim of `prims`.
+    fn of(paths: &PathInterner, prims: &HashMap<PathId, PrimIndex>) -> Self {
+        let mut composed = Self::default();
+        for (&prim, index) in prims {
+            composed.reindex(paths, prim, Some(index));
+        }
+        composed
+    }
+
+    /// Replaces `prim`'s entries with those of its composed `index`, or
+    /// removes them when it is no longer composed.
+    fn reindex(&mut self, paths: &PathInterner, prim: PathId, index: Option<&PrimIndex>) {
         let mut layers: Vec<LayerId> = index
             .map(|index| index.sources.iter().map(|key| key.layer_id).collect())
             .unwrap_or_default();
@@ -273,11 +310,12 @@ impl PreparationIndex {
     /// generations the store has.
     pub(crate) fn assert_current_as(&self, fresh: &Self, store: &dyn LayerStore) {
         assert!(self.is_current(store), "the snapshot is current");
-        assert_eq!(self.prim_stack_layers, fresh.prim_stack_layers);
-        assert_eq!(self.stack_layer_counts, fresh.stack_layer_counts);
-        assert_eq!(self.prim_node_sites, fresh.prim_node_sites);
-        assert_eq!(self.node_sites, fresh.node_sites);
-        assert_eq!(self.nodes_beneath, fresh.nodes_beneath);
+        let (ours, theirs) = (self.composed(), fresh.composed());
+        assert_eq!(ours.prim_stack_layers, theirs.prim_stack_layers);
+        assert_eq!(ours.stack_layer_counts, theirs.stack_layer_counts);
+        assert_eq!(ours.prim_node_sites, theirs.prim_node_sites);
+        assert_eq!(ours.node_sites, theirs.node_sites);
+        assert_eq!(ours.nodes_beneath, theirs.nodes_beneath);
         for (id, links) in &self.links {
             if let Some(layer) = store.layer(*id) {
                 assert_eq!(links.generation, layer.generation());
@@ -391,18 +429,18 @@ impl Stage {
 
     /// The evidence a live stage retains for preparing namespace edits
     /// against this snapshot; `None` for a stage composed on its own.
-    pub(crate) fn preparation(&self) -> Option<&PreparationIndex> {
-        self.preparation.as_deref()
+    pub(crate) fn preparation(&self, paths: &PathInterner) -> Option<&PreparationIndex> {
+        let index = self.preparation.as_deref()?;
+        index
+            .composed
+            .get_or_init(|| ComposedEvidence::of(paths, &self.prims));
+        Some(index)
     }
 
     /// Starts retaining preparation evidence, sharing `children`, for
-    /// every composed prim.
-    pub(crate) fn retain_preparation(&mut self, children: Arc<ChildIndex>, paths: &PathInterner) {
-        let mut index = PreparationIndex::new(children);
-        for (&prim, prim_index) in &self.prims {
-            index.reindex(paths, prim, Some(prim_index));
-        }
-        self.preparation = Some(alloc::boxed::Box::new(index));
+    /// every composed prim, found when first lent ([`Self::preparation`]).
+    pub(crate) fn retain_preparation(&mut self, children: Arc<ChildIndex>) {
+        self.preparation = Some(alloc::boxed::Box::new(PreparationIndex::new(children)));
     }
 
     /// Replaces `prim`'s retained preparation evidence with its current

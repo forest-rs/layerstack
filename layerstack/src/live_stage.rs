@@ -328,7 +328,7 @@ impl LiveStage {
             work: RecompositionWork::default(),
             notices: notices::Journal::default(),
         };
-        live.reindex_all_sources(store.paths());
+        live.reindex_all_sources();
         live.record_generations(store);
         live.publish_preparation(store);
         live
@@ -1832,7 +1832,7 @@ impl LiveStage {
         self.default_prim_dependents = deps.default_prim_dependents;
         self.relocation_layers = deps.relocation_layers;
         self.expression_variables = deps.expression_variables;
-        self.reindex_all_sources(store.paths());
+        self.reindex_all_sources();
         self.record_generations(store);
         self.local_namespace = local::LocalNamespace::build(store, self.root, &self.options);
         if let Some(changes) = changes {
@@ -1859,7 +1859,7 @@ impl LiveStage {
 
     /// Rebuilds the source-site index and the stage's preparation evidence
     /// from the whole stage.
-    fn reindex_all_sources(&mut self, paths: &crate::PathInterner) {
+    fn reindex_all_sources(&mut self) {
         // Found again when next asked.
         self.sources = crate::sync::Memo::default();
         self.dynamic_to_prims.clear();
@@ -1868,8 +1868,7 @@ impl LiveStage {
         for prim in prims {
             self.reindex_source_sites(prim);
         }
-        self.stage
-            .retain_preparation(Arc::clone(&self.child_index), paths);
+        self.stage.retain_preparation(Arc::clone(&self.child_index));
     }
 
     /// Replaces the source-site index entries and the stage's preparation

@@ -91,6 +91,17 @@ impl TokenTable {
         self.text.get(start..end)
     }
 
+    /// The length of the text of token `index`, found without reading it.
+    #[must_use]
+    pub fn text_len(&self, index: usize) -> Option<usize> {
+        let end = *self.ends.get(index)? as usize;
+        let start = match index.checked_sub(1) {
+            Some(before) => self.ends[before] as usize + 1,
+            None => 0,
+        };
+        Some(end - start)
+    }
+
     /// The number of tokens.
     #[must_use]
     pub fn len(&self) -> usize {

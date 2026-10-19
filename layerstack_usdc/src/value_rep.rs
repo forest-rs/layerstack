@@ -418,8 +418,8 @@ pub(crate) fn decode_text_indices(
         // all at once; an index outside the table names the empty text.
         let mut text_units = 0_usize;
         for index in &mut indices {
-            match sections.tokens.get(*index as usize) {
-                Some(text) => text_units = text_units.saturating_add(text.len() / 16),
+            match sections.tokens.text_len(*index as usize) {
+                Some(len) => text_units = text_units.saturating_add(len / 16),
                 None => *index = u32::MAX,
             }
         }
@@ -2092,9 +2092,9 @@ pub(crate) fn decode_token_vector_indices(
         read_index_vector(rep, data, 4, budget)?
             .map(|mut pos| {
                 let idx = read_u32_le(data, &mut pos)?;
-                let text = sections.tokens.get(idx as usize);
-                budget.charge_text(text.map_or(0, str::len))?;
-                Ok(if text.is_some() { idx } else { u32::MAX })
+                let len = sections.tokens.text_len(idx as usize);
+                budget.charge_text(len.unwrap_or(0))?;
+                Ok(if len.is_some() { idx } else { u32::MAX })
             })
             .collect()
     })

@@ -111,6 +111,9 @@ pub fn assemble(
         resolved_layers: Vec::new(),
         diagnostics: Vec::new(),
         budget,
+        fieldset_uses: Vec::new(),
+        shared_prims: HashMap::new(),
+        shared_properties: HashMap::new(),
     };
 
     let layer = ctx.assemble_layer()?;
@@ -161,7 +164,30 @@ struct AssembleCtx<'a> {
     diagnostics: Vec<AssembleDiagnostic>,
     /// What the read may still materialize.
     budget: &'a mut DecodeBudget,
+    /// How many specs use each fieldset, by its index in the fieldset
+    /// table, counting up to two: specs sharing a fieldset are built once.
+    fieldset_uses: Vec<u8>,
+    /// The prim spec, and its `properties` order, built for each fieldset
+    /// prim specs outside variant branches share.
+    shared_prims: HashMap<u32, Shared<SharedPrim>>,
+    /// The property spec built for each fieldset property specs share, by
+    /// the fieldset and whether the specs are attributes.
+    shared_properties: HashMap<(u32, bool), Shared<Arc<PropertySpec>>>,
 }
+
+/// A spec built from a fieldset other specs use too, for each of them to
+/// take a copy of, and the budget its fields and their conversion took,
+/// which each copy is charged again: a spec costs what it would if it were
+/// built anew. Only a spec built without a diagnostic is shared, as a
+/// diagnostic names its spec, and only one whose conversion asks nothing of
+/// the asset resolver.
+struct Shared<T> {
+    spec: T,
+    charged: u64,
+}
+
+/// A prim spec and its authored `properties` order.
+type SharedPrim = (Box<PrimSpec>, Option<Arc<[TokenId]>>);
 
 /// Where a property spec belongs, by its path ([`AssembleCtx::property_owner`]).
 enum PropertyOwner {
@@ -222,8 +248,9 @@ impl<'a> PrimSpecs<'a> {
     }
 
     /// Sets the spec at `path`, the text of path table entry `index`,
-    /// replacing any there.
-    fn insert(&mut self, index: u32, path: &'a str, spec: Box<PrimSpec>) {
+    /// replacing any there, and returns its place: the number of paths
+    /// spelled before it.
+    fn insert(&mut self, index: u32, path: &'a str, spec: Box<PrimSpec>) -> usize {
         let at = match self.by_path.get(path) {
             Some(&at) => {
                 self.specs[at] = spec;
@@ -237,9 +264,16 @@ impl<'a> PrimSpecs<'a> {
                 at
             }
         };
-        if let (Some(slot), Ok(at)) = (self.at_index.get_mut(index as usize), u32::try_from(at)) {
-            *slot = at;
+        if let (Some(slot), Ok(place)) = (self.at_index.get_mut(index as usize), u32::try_from(at))
+        {
+            *slot = place;
         }
+        at
+    }
+
+    /// The specs, in the order their paths were first spelled.
+    fn specs_mut(&mut self) -> impl Iterator<Item = &mut PrimSpec> {
+        self.specs.iter_mut().map(|spec| &mut **spec)
     }
 
     fn contains_key(&self, path: &str) -> bool {
@@ -388,8 +422,15 @@ impl<'a> AssembleCtx<'a> {
         let prims = self.sections.specs.iter();
         let prims = prims.filter(|spec| spec.form == SpecForm::Prim).count();
         let mut prim_specs_map = PrimSpecs::new(prims, self.sections.paths.len());
-        // Authored property order (`propertyChildren`) per prim path.
-        let mut property_children: HashMap<&str, Vec<TokenId>> = HashMap::new();
+        // Authored property order (`propertyChildren`) per prim spec, by
+        // its place in `prim_specs_map`.
+        let mut property_children: Vec<Option<Arc<[TokenId]>>> = Vec::with_capacity(prims);
+        self.fieldset_uses = alloc::vec![0; self.sections.fieldsets.len()];
+        for spec in &self.sections.specs {
+            if let Some(uses) = self.fieldset_uses.get_mut(spec.fieldset_index as usize) {
+                *uses = uses.saturating_add(1).min(2);
+            }
+        }
 
         // Process PseudoRoot specs first.
         for (i, spec) in self.sections.specs.iter().enumerate() {
@@ -409,12 +450,14 @@ impl<'a> AssembleCtx<'a> {
                     self.report(path_str, None, "prim spec path could not be parsed")?;
                     continue;
                 }
-                self.collect_spec_fields(i, &mut decoded, &mut fields)?;
-                let (prim, children) = self.build_prim_spec(path_str, &fields)?;
-                if let Some(children) = children {
-                    property_children.insert(path_str, children);
+                let (prim, children) = self.prim_spec(i, path_str, &mut decoded, &mut fields)?;
+                let at = prim_specs_map.insert(spec.path_index, path_str, prim);
+                if at == property_children.len() {
+                    property_children.push(None);
                 }
-                prim_specs_map.insert(spec.path_index, path_str, Box::new(prim));
+                if let Some(children) = children {
+                    property_children[at] = Some(children);
+                }
             }
         }
 
@@ -444,12 +487,9 @@ impl<'a> AssembleCtx<'a> {
                     self.report(path_str, None, "property spec has no owning prim spec")?;
                     continue;
                 };
-                self.collect_spec_fields(i, &mut decoded, &mut fields)?;
-                if is_attribute {
-                    self.apply_attribute_fields(path_str, &fields, name, prim)?;
-                } else {
-                    self.apply_relationship_fields(path_str, &fields, name, prim)?;
-                }
+                let property =
+                    self.property_spec(i, path_str, is_attribute, &mut decoded, &mut fields)?;
+                put_property(&mut prim.properties, name, property);
                 continue;
             }
             let (prim_path, name) = if path_str.contains('{') {
@@ -478,13 +518,10 @@ impl<'a> AssembleCtx<'a> {
                 self.report(path_str, None, "property spec has no owning prim spec")?;
                 continue;
             };
-            self.collect_spec_fields(i, &mut decoded, &mut fields)?;
+            let property =
+                self.property_spec(i, path_str, is_attribute, &mut decoded, &mut fields)?;
             let name = self.tokens.intern(name);
-            if is_attribute {
-                self.apply_attribute_fields(path_str, &fields, name, prim)?;
-            } else {
-                self.apply_relationship_fields(path_str, &fields, name, prim)?;
-            }
+            put_property(&mut prim.properties, name, property);
         }
 
         // Process Connection specs — add connection paths to attribute on parent.
@@ -536,8 +573,8 @@ impl<'a> AssembleCtx<'a> {
         // Keep the authored property order (`propertyChildren`).
         //
         // Spec: AOUSD Core §7.6.2.2.2 (`propertyChildren`).
-        for (path, order) in &property_children {
-            if let Some(prim) = prim_specs_map.get_mut(path) {
+        for (prim, order) in prim_specs_map.specs_mut().zip(&property_children) {
+            if let Some(order) = order {
                 sort_by_children(&mut prim.properties, order);
             }
         }
@@ -967,30 +1004,81 @@ impl<'a> AssembleCtx<'a> {
         Ok((spec, property_children))
     }
 
-    /// Adds an attribute spec to its parent prim.
-    fn apply_attribute_fields(
+    /// Builds the prim spec `index` of the spec table, at `spec_path`,
+    /// with its authored `properties` order: from its fields, or as a copy
+    /// of the spec built for a spec sharing its fieldset ([`Shared`]).
+    fn prim_spec(
         &mut self,
+        index: usize,
         spec_path: &str,
-        fields: &[(&str, DecodedField<'_>)],
-        name_tok: TokenId,
-        prim: &mut PrimSpec,
-    ) -> Result<(), UsdcError> {
-        let spec = self.build_attribute_spec(spec_path, fields)?;
-        prim.set_property(name_tok, spec);
-        Ok(())
+        decoded: &mut [bool],
+        fields: &mut Fields<'a>,
+    ) -> Result<SharedPrim, UsdcError> {
+        let fieldset = self.sections.specs[index].fieldset_index;
+        // A spec inside a variant branch converts its arcs as one.
+        let shares = self.fieldset_shared(fieldset) && !spec_path.contains('{');
+        if shares && let Some(shared) = self.shared_prims.get(&fieldset) {
+            self.budget.charge(shared.charged)?;
+            decoded[index] = true;
+            return Ok(shared.spec.clone());
+        }
+        let (used, diagnostics) = (self.budget.used(), self.diagnostics.len());
+        self.collect_spec_fields(index, decoded, fields)?;
+        let (prim, children) = self.build_prim_spec(spec_path, fields)?;
+        let built = (Box::new(prim), children.map(Arc::from));
+        let resolves = fields
+            .iter()
+            .any(|(name, _)| matches!(*name, "references" | "payload"));
+        if shares && !resolves && self.diagnostics.len() == diagnostics {
+            let charged = self.budget.used() - used;
+            let spec = built.clone();
+            self.shared_prims.insert(fieldset, Shared { spec, charged });
+        }
+        Ok(built)
     }
 
-    /// Adds a relationship spec to its parent prim.
-    fn apply_relationship_fields(
+    /// Builds the attribute or relationship spec `index` of the spec table,
+    /// at `spec_path`: from its fields, or shared with a spec sharing its
+    /// fieldset ([`Shared`]).
+    fn property_spec(
         &mut self,
+        index: usize,
         spec_path: &str,
-        fields: &[(&str, DecodedField<'_>)],
-        name_tok: TokenId,
-        prim: &mut PrimSpec,
-    ) -> Result<(), UsdcError> {
-        let spec = self.build_relationship_spec(spec_path, fields)?;
-        prim.set_property(name_tok, spec);
-        Ok(())
+        is_attribute: bool,
+        decoded: &mut [bool],
+        fields: &mut Fields<'a>,
+    ) -> Result<Arc<PropertySpec>, UsdcError> {
+        let fieldset = self.sections.specs[index].fieldset_index;
+        let shares = self.fieldset_shared(fieldset);
+        if shares && let Some(shared) = self.shared_properties.get(&(fieldset, is_attribute)) {
+            self.budget.charge(shared.charged)?;
+            decoded[index] = true;
+            return Ok(Arc::clone(&shared.spec));
+        }
+        let (used, diagnostics) = (self.budget.used(), self.diagnostics.len());
+        self.collect_spec_fields(index, decoded, fields)?;
+        let spec = Arc::new(if is_attribute {
+            self.build_attribute_spec(spec_path, fields)?
+        } else {
+            self.build_relationship_spec(spec_path, fields)?
+        });
+        if shares && self.diagnostics.len() == diagnostics {
+            let charged = self.budget.used() - used;
+            let shared = Shared {
+                spec: Arc::clone(&spec),
+                charged,
+            };
+            self.shared_properties
+                .insert((fieldset, is_attribute), shared);
+        }
+        Ok(spec)
+    }
+
+    /// Whether more than one spec uses the fieldset at `fieldset`.
+    fn fieldset_shared(&self, fieldset: u32) -> bool {
+        self.fieldset_uses
+            .get(fieldset as usize)
+            .is_some_and(|&uses| uses > 1)
     }
 
     /// Applies a connection child spec's paths to its attribute, when the
@@ -2480,6 +2568,15 @@ fn convert_scalar_listop<T>(
     })
 }
 
+/// Sets the property `name` of a spec's `properties` to `spec`, keeping the
+/// place of one already there, as [`set_property_vec`] does.
+fn put_property(properties: &mut Vec<PropertyEntry>, name: TokenId, spec: Arc<PropertySpec>) {
+    match properties.iter_mut().find(|entry| entry.name == name) {
+        Some(entry) => entry.spec = spec,
+        None => properties.push(PropertyEntry { name, spec }),
+    }
+}
+
 /// Orders `properties` by their position in `children` (`propertyChildren`),
 /// keeping properties not listed there after the listed ones, in order.
 ///
@@ -2738,6 +2835,117 @@ def "Other" {}
         assert!(tree.layer == text.layer, "the same layer");
         assert_eq!(tree.diagnostics, text.diagnostics);
         assert!(tree.layer == read.emitted.layer, "the layer written");
+    }
+
+    /// Specs sharing a fieldset are built once: prims are copies of one
+    /// spec, properties share one, and each is what reading it alone
+    /// gives; editing one leaves the others as they are.
+    #[test]
+    fn specs_sharing_a_fieldset_read_as_if_alone() {
+        let source = r#"#usda 1.0
+def Xform "A" (kind = "component") {
+    rel r = </T>
+    uniform token u = "x"
+}
+def Xform "B" (kind = "component") {
+    rel r = </T>
+    uniform token u = "x"
+}
+def "T" {}
+"#;
+        let (tokens, paths) = (TokenInterner::default(), PathInterner::default());
+        let read = layerstack_usda::read_usda(source, LayerId(1), &tokens, &paths, &mut NoAssets);
+        let bytes = crate::writer::save_layer(&read.emitted.layer, &tokens, &paths).unwrap();
+        let header = crate::header::parse_header(&bytes).unwrap();
+        let toc = crate::toc::parse_toc(&bytes, header.toc_offset).unwrap();
+        let mut budget = DecodeBudget::with_limit(u64::MAX);
+        let sections =
+            crate::section::parse_sections(&bytes, &toc, header.crate_version(), &mut budget)
+                .unwrap();
+        let fieldset = |path: &str| {
+            let spec = sections
+                .specs
+                .iter()
+                .find(|spec| sections.paths[spec.path_index as usize] == path);
+            spec.unwrap().fieldset_index
+        };
+        assert_eq!(fieldset("/A"), fieldset("/B"), "the prims share a fieldset");
+        assert_eq!(fieldset("/A.r"), fieldset("/B.r"), "the relationships do");
+        let mut budget = DecodeBudget::with_limit(u64::MAX);
+        let assembled = assemble(
+            &bytes,
+            &sections,
+            LayerId(1),
+            &tokens,
+            &paths,
+            &mut NoAssets,
+            &mut budget,
+        )
+        .unwrap();
+        assert!(
+            assembled.diagnostics.is_empty(),
+            "{:?}",
+            assembled.diagnostics
+        );
+        let mut layer = assembled.layer;
+        assert!(layer == read.emitted.layer, "the layer written");
+        let [a, b] =
+            ["/A", "/B"].map(|path| paths.intern(Path::parse_absolute(path, &tokens).unwrap()));
+        let r = tokens.intern("r");
+        let shared = |layer: &Layer| {
+            let [a, b] = [a, b].map(|prim| {
+                let spec = layer.prim(prim).unwrap();
+                spec.properties
+                    .iter()
+                    .find(|entry| entry.name == r)
+                    .unwrap()
+                    .spec
+                    .clone()
+            });
+            Arc::ptr_eq(&a, &b)
+        };
+        assert!(shared(&layer), "one relationship spec");
+        let edited = layer.prim_mut(b).unwrap().property_mut(r).unwrap();
+        edited.custom = true;
+        assert!(!shared(&layer));
+        assert!(
+            !layer.prim(a).unwrap().property(r).unwrap().custom,
+            "/A.r as read"
+        );
+    }
+
+    /// Each spec sharing a fieldset reports what reading it reports, and
+    /// is charged what reading it costs.
+    #[test]
+    fn specs_sharing_a_fieldset_each_report_and_are_charged() {
+        let n = 3;
+        let mut sections = shared_fieldset_sections(
+            n,
+            1,
+            (0..n).map(|i| alloc::format!("/P{i}")).collect(),
+            |i| i,
+        );
+        sections.tokens = alloc::vec![String::from("relocates")];
+        let mut budget = DecodeBudget::with_limit(u64::MAX);
+        let read = assemble_within(&sections, &mut budget).unwrap();
+        let reported: Vec<&str> = read
+            .diagnostics
+            .iter()
+            .map(|d| d.spec_path.as_str())
+            .collect();
+        assert_eq!(reported, ["/P0", "/P1", "/P2"]);
+
+        // Every spec sharing the fieldset costs what the first did.
+        let used = |specs: u32| {
+            let paths = (0..specs).map(|i| alloc::format!("/P{i}")).collect();
+            let sections = shared_fieldset_sections(specs, 64, paths, |i| i);
+            let mut budget = DecodeBudget::with_limit(u64::MAX);
+            assemble_within(&sections, &mut budget).unwrap();
+            budget.used()
+        };
+        let (one, two, three) = (used(1), used(2), used(3));
+        assert_eq!(three - two, two - one);
+        assert!(two - one >= 64 / 16, "charged for the shared name");
     }
 
     /// Properties follow the authored `properties` order, those it does not

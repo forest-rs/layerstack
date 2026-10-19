@@ -260,7 +260,6 @@ fn layer_report_counts_and_displays() {
     let (loaded, stage) = compose(&oracle.unloaded);
     let report = LayerDanglingReport::compute(&Scene::new(&stage, &loaded.store), 8);
     assert!(!report.is_clean());
-    let (paths, tokens) = (&loaded.store.paths, &loaded.store.tokens);
     let by_name = |name: &str| {
         report
             .layers
@@ -272,7 +271,7 @@ fn layer_report_counts_and_displays() {
         by_name(name)
             .examples
             .iter()
-            .map(|example| example.display(paths, tokens))
+            .map(|example| example.display(&loaded.store).to_string())
             .collect()
     };
     let planter = by_name("planter.usda");
@@ -379,7 +378,7 @@ fn library_report(mut loaded: LoadedStage) -> BTreeMap<String, (usize, usize, us
             let shown = layer
                 .examples
                 .iter()
-                .map(|example| example.display(&store.paths, &store.tokens))
+                .map(|example| example.display(store).to_string())
                 .collect();
             (stem, (layer.specs, layer.targets, layer.total(), shown))
         })

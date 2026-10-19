@@ -17,13 +17,11 @@
 //! Spec: AOUSD Core §10.3.2 (arcs map namespace), §12.4 (target lists),
 //! §15 (collections).
 
-use alloc::string::String;
 use alloc::vec::Vec;
 
 use layerstack::{
-    AuthoredTarget, DanglingCounts, DanglingKind, DropReason, LayerId, NodeId, PathInterner,
-    PropertyPath, SpecPath, TargetListPosition, TargetPath, TargetRead, TokenInterner,
-    UnreadTargetSpec,
+    AuthoredTarget, DanglingCounts, DanglingKind, DropReason, LayerId, NodeId, PropertyPath,
+    SpecPath, TargetListPosition, TargetPath, TargetRead, UnreadTargetSpec,
 };
 
 use super::collection_name;
@@ -87,31 +85,36 @@ impl LayerDanglingTarget {
     /// /World/A/Gone (NoPrim)` through a reference; `/Asset.shade (as
     /// /World/A.shade) explicit /Outside (OutsideArc(References))` for a
     /// path the reference drops.
+    ///
+    /// Its paths are written as text with `store`, the store the stage was
+    /// composed from, as every diagnostic's `display` writes its ids.
     #[must_use]
-    pub fn display(&self, paths: &PathInterner, tokens: &TokenInterner) -> String {
-        let mut text = self.spec.display(paths, tokens);
-        let concrete = PropertyPath::new(self.spec.prim_path(), self.source.property());
-        if self.source != concrete {
-            text.push_str(&alloc::format!(
-                " (as {})",
-                self.source.display(paths, tokens)
-            ));
-        }
-        text.push_str(&alloc::format!(
-            " {} {}",
-            self.position.as_str(),
-            self.authored.display(paths, tokens)
-        ));
-        if let Some(target) = self.target.filter(|target| *target != self.authored) {
-            text.push_str(&alloc::format!(" -> {}", target.display(paths, tokens)));
-        }
-        let problem = match self.problem {
-            AuthoredTargetProblem::Dangling(kind) => alloc::format!("{kind:?}"),
-            AuthoredTargetProblem::NoCollection => String::from("NoCollection"),
-            AuthoredTargetProblem::Dropped(reason) => alloc::format!("{reason:?}"),
-        };
-        text.push_str(&alloc::format!(" ({problem})"));
-        text
+    pub fn display<'a>(
+        &'a self,
+        store: &'a dyn layerstack::LayerStore,
+    ) -> impl core::fmt::Display + 'a {
+        crate::diagnostic::Shown(move |f: &mut core::fmt::Formatter<'_>| {
+            let (paths, tokens) = (store.paths(), store.tokens());
+            f.write_str(&self.spec.display(paths, tokens))?;
+            let concrete = PropertyPath::new(self.spec.prim_path(), self.source.property());
+            if self.source != concrete {
+                write!(f, " (as {})", self.source.display(paths, tokens))?;
+            }
+            write!(
+                f,
+                " {} {}",
+                self.position.as_str(),
+                self.authored.display(paths, tokens)
+            )?;
+            if let Some(target) = self.target.filter(|target| *target != self.authored) {
+                write!(f, " -> {}", target.display(paths, tokens))?;
+            }
+            match self.problem {
+                AuthoredTargetProblem::Dangling(kind) => write!(f, " ({kind:?})"),
+                AuthoredTargetProblem::NoCollection => f.write_str(" (NoCollection)"),
+                AuthoredTargetProblem::Dropped(reason) => write!(f, " ({reason:?})"),
+            }
+        })
     }
 }
 
@@ -202,7 +205,7 @@ impl LayerDangling {
 /// let example = &layer.examples[0];
 /// assert_eq!(example.problem, AuthoredTargetProblem::Dangling(layerstack::DanglingKind::NoPrim));
 /// assert_eq!(
-///     example.display(&store.paths, &store.tokens),
+///     example.display(&store).to_string(),
 ///     "/Lamp.shinesOn appended /Gone (NoPrim)"
 /// );
 /// assert_eq!(report.layer(LayerId(1)).unwrap().total(), 0);

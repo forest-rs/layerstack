@@ -12,11 +12,14 @@
 //! OpenUSD's `Sdf_CrateData::Has` similarly detaches a packed value only when
 //! the caller requests its contents.
 
+use alloc::string::String;
 use alloc::vec::Vec;
+
+use layerstack::HashMap;
 
 use crate::{
     DecodeBudget, UsdcError, header, section,
-    section::{CrateSections, FieldDef, SpecDef},
+    section::{CrateSections, FieldDef, OnceSlot, PathNode, SpecDef},
     toc,
     value_rep::{CrateValue, RawValueRep, decode_value_within},
     value_type::SpecForm,
@@ -50,8 +53,152 @@ use crate::{
 pub struct CrateFile<'a> {
     data: &'a [u8],
     sections: CrateSections,
-    /// Spec indexes sorted by full authored path, without copying the paths.
-    order: Vec<usize>,
+    /// Each spec's index by the identity of its path in the tree
+    /// ([`PathIdentities`]), when the tree spells every spec path one way;
+    /// `None` for a table read by its text.
+    by_identity: Option<(PathIdentities, HashMap<u32, usize>)>,
+    /// Spec indexes sorted by full authored path, without copying the
+    /// paths: found when first asked, or at open for a table read by text.
+    order: OnceSlot<Vec<usize>>,
+    /// The index of each token's text, for looking a path up through the
+    /// tree, found when first asked.
+    token_indexes: OnceSlot<HashMap<String, u32>>,
+}
+
+/// The identity of each path a file's specs name: one per text, as each
+/// path's text is its parent's followed by its element, when every
+/// element is spelled one way ([`PathIdentities::element_is_plain`]).
+#[derive(Debug, Default)]
+struct PathIdentities {
+    /// Each path table entry's identity, `UNKNOWN` until found.
+    of_entry: Vec<u32>,
+    /// The identity of each parent's child element: by the parent's
+    /// identity, the element's token and whether it is a property.
+    children: HashMap<(u32, u32, bool), u32>,
+}
+
+impl PathIdentities {
+    const UNKNOWN: u32 = u32::MAX;
+    /// The identity of the root, `/`.
+    const ROOT: u32 = 0;
+    /// The identity of an unused entry, whose text is empty.
+    const EMPTY: u32 = 1;
+
+    /// The identities of the spec paths of `sections`, or `None` when an
+    /// element of one cannot be told apart from its neighbors in the text
+    /// alone, so that two paths of one text could differ in the tree.
+    fn of(sections: &CrateSections) -> Option<Self> {
+        let nodes = sections.paths.nodes();
+        if !sections.paths.has_tree() {
+            return None;
+        }
+        let mut ids = Self {
+            of_entry: alloc::vec![Self::UNKNOWN; nodes.len()],
+            children: HashMap::new(),
+        };
+        let mut next = 2;
+        let mut pending = Vec::new();
+        for spec in &sections.specs {
+            // The entries up to the nearest whose identity is known.
+            let mut at = spec.path_index as usize;
+            while ids.of_entry[at] == Self::UNKNOWN {
+                pending.push(at);
+                match nodes[at] {
+                    PathNode::Child { parent, .. } => {
+                        at = parent as usize;
+                        if at >= nodes.len() {
+                            return None;
+                        }
+                    }
+                    PathNode::Root | PathNode::Unused => break,
+                }
+            }
+            while let Some(at) = pending.pop() {
+                let id = match nodes[at] {
+                    PathNode::Root => Self::ROOT,
+                    PathNode::Unused => Self::EMPTY,
+                    PathNode::Child {
+                        parent,
+                        token,
+                        property,
+                    } => {
+                        let parent_id = ids.of_entry[parent as usize];
+                        let parent_node = nodes[parent as usize];
+                        let element = sections.tokens.get(token as usize)?;
+                        if !Self::element_is_plain(element, property, parent_node) {
+                            return None;
+                        }
+                        *ids.children
+                            .entry((parent_id, token, property))
+                            .or_insert_with(|| {
+                                next += 1;
+                                next - 1
+                            })
+                    }
+                };
+                ids.of_entry[at] = id;
+            }
+        }
+        Some(ids)
+    }
+
+    /// Whether `element`, a child of a path at `parent`, is spelled so
+    /// that the text it joins tells it from its neighbors: a nonempty name
+    /// holding no separator, or a variant selection (`{set=variant}`) on a
+    /// prim below the root, and no element beneath a property.
+    fn element_is_plain(element: &str, property: bool, parent: PathNode) -> bool {
+        let name = !element.is_empty() && !element.contains(['/', '.', '{', '}']);
+        let below_property = matches!(parent, PathNode::Child { property: true, .. });
+        if below_property || parent == PathNode::Unused {
+            return false;
+        }
+        if property {
+            return name;
+        }
+        let selection = element
+            .strip_prefix('{')
+            .and_then(|inner| inner.strip_suffix('}'))
+            .is_some_and(|inner| !inner.contains(['{', '}', '/', '.']));
+        name || (selection && parent != PathNode::Root)
+    }
+
+    /// The identity of the path `text` spells, looking its elements up by
+    /// `token_index`; `None` when no spec path is spelled so.
+    fn of_text(&self, text: &str, token_index: impl Fn(&str) -> Option<u32>) -> Option<u32> {
+        if text.is_empty() {
+            return Some(Self::EMPTY);
+        }
+        let mut rest = text.strip_prefix('/')?;
+        let mut id = Self::ROOT;
+        if rest.is_empty() {
+            return Some(id);
+        }
+        // Each element as the text joins it: a name after `/`, or after a
+        // selection; a selection; a property after `.`, last.
+        let mut after_selection = false;
+        while !rest.is_empty() {
+            let (element, property, tail) = if let Some(property) = rest.strip_prefix('.') {
+                (property, true, "")
+            } else if rest.starts_with('{') {
+                let close = rest.find('}')?;
+                (&rest[..=close], false, &rest[close + 1..])
+            } else {
+                let name = match rest.strip_prefix('/') {
+                    Some(name) if !after_selection => name,
+                    Some(_) => return None,
+                    None if after_selection || id == Self::ROOT => rest,
+                    None => return None,
+                };
+                let end = name.find(['/', '{', '.']).unwrap_or(name.len());
+                (&name[..end], false, &name[end..])
+            };
+            after_selection = element.starts_with('{');
+            let token = token_index(element)?;
+            id = *self.children.get(&(id, token, property))?;
+            rest = tail;
+        }
+        Some(id)
+    }
 }
 
 impl<'a> CrateFile<'a> {
@@ -103,20 +250,37 @@ impl<'a> CrateFile<'a> {
             }
         }
         budget.charge(sections.specs.len() as u64)?;
-        let mut order: Vec<_> = (0..sections.specs.len()).collect();
-        let path = |i: usize| {
-            sections
-                .path(sections.specs[i].path_index as usize)
-                .unwrap_or_default()
+        // Specs are found by the identity of their paths in the tree, which
+        // two specs share exactly when their texts are equal; a table
+        // spelling a path more than one way is sorted by its text.
+        let order = OnceSlot::new();
+        let by_identity = match PathIdentities::of(&sections) {
+            Some(identities) => {
+                let mut specs = HashMap::with_capacity(sections.specs.len());
+                for (at, spec) in sections.specs.iter().enumerate() {
+                    let id = identities.of_entry[spec.path_index as usize];
+                    if specs.insert(id, at).is_some() {
+                        return Err(invalid("duplicate spec path"));
+                    }
+                }
+                Some((identities, specs))
+            }
+            None => {
+                let sorted = sorted_by_path(&sections);
+                let path = |i: usize| spec_path(&sections, i);
+                if sorted.windows(2).any(|pair| path(pair[0]) == path(pair[1])) {
+                    return Err(invalid("duplicate spec path"));
+                }
+                let _ = order.set(sorted);
+                None
+            }
         };
-        order.sort_unstable_by(|&a, &b| path(a).cmp(path(b)));
-        if order.windows(2).any(|pair| path(pair[0]) == path(pair[1])) {
-            return Err(invalid("duplicate spec path"));
-        }
         Ok(Self {
             data,
             sections,
+            by_identity,
             order,
+            token_indexes: OnceSlot::new(),
         })
     }
 
@@ -130,21 +294,39 @@ impl<'a> CrateFile<'a> {
     /// or property suffix. This does not resolve a composed scene path.
     #[must_use]
     pub fn spec(&self, path: &str) -> Option<CrateSpec<'_>> {
-        let i = self
-            .order
-            .binary_search_by(|&i| {
-                self.sections
-                    .path(self.sections.specs[i].path_index as usize)
-                    .unwrap_or_default()
-                    .cmp(path)
-            })
-            .ok()?;
-        Some(self.view(self.order[i]))
+        let at = match &self.by_identity {
+            Some((identities, specs)) => {
+                let tokens = self.token_indexes.get_or_init(|| {
+                    let mut indexes = HashMap::with_capacity(self.sections.tokens.len());
+                    for (index, token) in (0_u32..).zip(self.sections.tokens.iter()) {
+                        indexes.entry(String::from(token)).or_insert(index);
+                    }
+                    indexes
+                });
+                let id = identities.of_text(path, |element| tokens.get(element).copied())?;
+                let at = *specs.get(&id)?;
+                // The tree spells the path found as the text asked for.
+                (spec_path(&self.sections, at) == path).then_some(at)?
+            }
+            None => {
+                let order = self.order();
+                let i = order
+                    .binary_search_by(|&i| spec_path(&self.sections, i).cmp(path))
+                    .ok()?;
+                order[i]
+            }
+        };
+        Some(self.view(at))
     }
 
     /// Enumerates authored specs in bytewise path order without decoding values.
     pub fn specs(&self) -> impl ExactSizeIterator<Item = CrateSpec<'_>> + '_ {
-        self.order.iter().map(|&i| self.view(i))
+        self.order().iter().map(|&i| self.view(i))
+    }
+
+    /// The specs in bytewise path order, sorted when first asked.
+    fn order(&self) -> &[usize] {
+        self.order.get_or_init(|| sorted_by_path(&self.sections))
     }
 
     fn view(&self, index: usize) -> CrateSpec<'_> {
@@ -154,6 +336,20 @@ impl<'a> CrateFile<'a> {
             spec: &self.sections.specs[index],
         }
     }
+}
+
+/// The text of the path of spec `at`.
+fn spec_path(sections: &CrateSections, at: usize) -> &str {
+    sections
+        .path(sections.specs[at].path_index as usize)
+        .unwrap_or_default()
+}
+
+/// The indexes of the specs of `sections`, sorted by their paths' text.
+fn sorted_by_path(sections: &CrateSections) -> Vec<usize> {
+    let mut order: Vec<usize> = (0..sections.specs.len()).collect();
+    order.sort_unstable_by(|&a, &b| spec_path(sections, a).cmp(spec_path(sections, b)));
+    order
 }
 
 /// A borrowed authored spec in a [`CrateFile`].

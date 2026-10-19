@@ -151,10 +151,15 @@ impl<S: AsRef<str>> FromIterator<S> for TokenTable {
 
 /// A path's text once read ([`PathTable::text`]): shared by the threads a
 /// retained read decodes values on, with the `std` feature.
+type TextSlot = OnceSlot<Box<str>>;
+
+/// A value found once, when first read: shared between threads with the
+/// `std` feature.
 #[cfg(feature = "std")]
-type TextSlot = std::sync::OnceLock<Box<str>>;
+pub(crate) type OnceSlot<T> = std::sync::OnceLock<T>;
+/// A value found once, when first read.
 #[cfg(not(feature = "std"))]
-type TextSlot = core::cell::OnceCell<Box<str>>;
+pub(crate) type OnceSlot<T> = core::cell::OnceCell<T>;
 
 /// The PATHS section: the tree of paths it encodes, each path its parent's
 /// followed by one element, and each path's text, found from the tree

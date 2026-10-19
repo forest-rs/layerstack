@@ -523,7 +523,7 @@ impl MaterialNetwork {
                 .stage()
                 .prim(path, scene.store())
                 .and_then(|p| p.type_name())
-                .map(|t| scene.store().tokens().resolve(t).into());
+                .map(Into::into);
             nodes.push(MaterialNode {
                 path,
                 path_name: scene.store().paths().display(path, scene.store().tokens()),

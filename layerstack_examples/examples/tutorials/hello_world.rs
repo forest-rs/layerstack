@@ -17,8 +17,8 @@ fn main() {
         .prim(world, document.store())
         .unwrap();
     assert_eq!(
-        document.store().tokens.resolve(prim.type_name().unwrap()),
-        "Sphere",
+        prim.type_name(),
+        Some("Sphere"),
         "generic prim retains the authored type"
     );
     let radius = prim.attribute("radius").unwrap();
@@ -28,11 +28,5 @@ fn main() {
         "authored sphere radius"
     );
     println!("{}", directory.join("HelloWorld.usda").display());
-    println!(
-        "Sphere properties: {:?}",
-        prim.property_names()
-            .iter()
-            .map(|name| document.store().tokens.resolve(*name))
-            .collect::<Vec<_>>()
-    );
+    println!("Sphere properties: {:?}", prim.property_names());
 }

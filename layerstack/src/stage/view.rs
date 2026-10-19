@@ -382,7 +382,11 @@ impl FromValue for Arc<str> {
 
 #[cfg(test)]
 mod tests {
-    use alloc::{string::String, vec, vec::Vec};
+    use alloc::{
+        string::{String, ToString},
+        vec,
+        vec::Vec,
+    };
 
     use crate::{
         InMemoryStore, Layer, LayerId, PrimSpec, PropertySpec, PropertyType, Stage, StageOptions,
@@ -583,6 +587,57 @@ mod tests {
             <Vec<i64> as super::FromValue>::from_value(&ints, &tokens),
             None,
             "an array of another element type does not convert"
+        );
+    }
+
+    #[test]
+    fn handles_name_and_display_themselves() {
+        let (store, stage) = scene();
+        let view = stage.view(&store);
+        let world = view.prim("/World").unwrap();
+        assert_eq!(world.to_string(), "/World");
+        assert_eq!(view.pseudo_root().unwrap().to_string(), "/");
+        assert_eq!(world.property_names(), ["kind:tag", "name", "radius"]);
+        let tag = world.attribute("kind:tag").unwrap();
+        assert_eq!(
+            (tag.name(), tag.to_string().as_str()),
+            ("kind:tag", "/World.kind:tag")
+        );
+        let object = view.property("/World.radius").unwrap();
+        assert_eq!(object.to_string(), "/World.radius");
+    }
+
+    /// An explanation's value is the value the handle reads, at every time.
+    #[test]
+    fn explanations_explain_what_handles_read() {
+        let mut store = overlays();
+        let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+        let price = stage.view(&store).attribute("/Item.price").unwrap();
+        for time in [
+            Time::Default,
+            Time::at(5.0),
+            Time::held(5.0),
+            Time::at(10.0),
+            Time::at(25.0),
+        ] {
+            let explained = price.explain(time).unwrap();
+            assert_eq!(
+                explained.value,
+                price.get(time).map(|resolved| resolved.value),
+                "{time:?}"
+            );
+        }
+        let held = price.explain(Time::held(5.0)).unwrap();
+        assert!(matches!(
+            held.source,
+            crate::ValueSource::TimeSamples {
+                interpolation: crate::InterpolationType::Held,
+                ..
+            }
+        ));
+        assert_eq!(
+            price.explain(Time::Default).unwrap().source,
+            crate::ValueSource::Default
         );
     }
 

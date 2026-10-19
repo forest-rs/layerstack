@@ -63,6 +63,34 @@ impl core::fmt::Debug for Relationship<'_> {
             .finish_non_exhaustive()
     }
 }
+/// The prim's path (`/World/Arm`).
+impl core::fmt::Display for Prim<'_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(&self.store.paths().display(self.path, self.store.tokens()))
+    }
+}
+/// The attribute's path (`/World/Arm.points`).
+impl core::fmt::Display for Attribute<'_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(&self.path.display(self.store.paths(), self.store.tokens()))
+    }
+}
+/// The relationship's path (`/World/Arm.material:binding`).
+impl core::fmt::Display for Relationship<'_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(&self.path.display(self.store.paths(), self.store.tokens()))
+    }
+}
+/// The object's path.
+impl core::fmt::Display for Object<'_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Prim(prim) => prim.fmt(f),
+            Self::Attribute(attribute) => attribute.fmt(f),
+            Self::Relationship(relationship) => relationship.fmt(f),
+        }
+    }
+}
 impl Stage {
     /// Captured token/path domain affinity. Public composition always supplies
     /// this identity; internal synthetic snapshots may have no source store.
@@ -113,14 +141,15 @@ impl<'a> Prim<'a> {
             .prim_status(self.path, self.store)
             .expect("populated view")
     }
-    /// Authored type name; fallback mapping does not change it.
+    /// Authored type name (`Xform`); fallback mapping does not change it.
     #[doc(alias = "UsdPrim::GetTypeName")]
     #[doc(alias = "GetTypeName")]
-    pub fn type_name(self) -> Option<TokenId> {
-        self.stage.resolve_type_name(self.path)
+    pub fn type_name(self) -> Option<&'a str> {
+        let name = self.stage.resolve_type_name(self.path)?;
+        Some(self.store.tokens().resolve(name))
     }
     /// Effective schema type, including `fallbackPrimTypes` mapping.
-    pub fn schema_type_name(self) -> Option<TokenId> {
+    pub fn schema_type_name(self) -> Option<&'a str> {
         let identity = &self
             .stage
             .prims
@@ -128,7 +157,8 @@ impl<'a> Prim<'a> {
             .type_info
             .as_ref()?
             .identity;
-        identity.mapped_type_name.or(identity.type_name)
+        let name = identity.mapped_type_name.or(identity.type_name)?;
+        Some(self.store.tokens().resolve(name))
     }
     /// Generic attribute with this USD name, including schema-defined properties.
     #[doc(alias = "UsdPrim::GetAttribute")]
@@ -154,11 +184,17 @@ impl<'a> Prim<'a> {
             },
         )
     }
-    /// All authored and schema-defined property names in composed order.
+    /// All authored and schema-defined property names in composed order
+    /// (see [`Stage::property_names`]).
     #[doc(alias = "UsdPrim::GetPropertyNames")]
     #[doc(alias = "GetPropertyNames")]
-    pub fn property_names(self) -> Vec<TokenId> {
-        self.stage.property_names(self.path, self.store)
+    pub fn property_names(self) -> Vec<&'a str> {
+        let tokens = self.store.tokens();
+        self.stage
+            .property_names(self.path, self.store)
+            .into_iter()
+            .map(|name| tokens.resolve(name))
+            .collect()
     }
     /// Direct populated children, with an explicit instance-proxy policy.
     #[doc(alias = "UsdPrim::GetChildren")]
@@ -178,6 +214,12 @@ impl<'a> Attribute<'a> {
     /// Concrete property path.
     pub fn path(self) -> PropertyPath {
         self.path
+    }
+    /// The attribute's name (`inputs:intensity`).
+    #[doc(alias = "UsdProperty::GetName")]
+    #[doc(alias = "GetName")]
+    pub fn name(self) -> &'a str {
+        self.store.tokens().resolve(self.path.property())
     }
     /// The value type name (`float`, `color3f[]`): the type the prim's
     /// schemas define the attribute with, else the strongest type an
@@ -295,6 +337,42 @@ impl<'a> Attribute<'a> {
             .map(|r| r.value)
             .unwrap_or_default()
     }
+    /// Why the attribute has its value at `time`: the value [`Self::get`]
+    /// reads, schema fallback included, with every opinion resolution
+    /// consulted and the part it played (see [`ValueExplanation`]).
+    /// `None` when no opinion authors a value and the schema has no
+    /// fallback.
+    ///
+    /// ```
+    /// # use layerstack::{InMemoryStore, Layer, LayerId, PrimSpec, PropertySpec, PropertyType, Stage, StageOptions, Time, Value, ValueSource};
+    /// # let mut store = InMemoryStore::default();
+    /// # let (world, radius) = (store.path("/World"), store.tokens.intern("radius"));
+    /// # let double = PropertyType::parse("double").unwrap();
+    /// # let mut layer = Layer::new(LayerId(1));
+    /// # layer.insert_prim(world, PrimSpec::def().with_property(radius,
+    /// #     PropertySpec::typed_attribute(double).with_default(Value::Double(2.5))
+    /// #         .with_time_samples(vec![(1.0, Value::Double(1.0)), (3.0, Value::Double(3.0))])));
+    /// # store.insert_layer(layer);
+    /// # let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+    /// let radius = stage.view(&store).attribute("/World.radius").unwrap();
+    /// let at_two = radius.explain(Time::at(2.0)).unwrap();
+    /// assert_eq!(at_two.value, Some(Value::Double(2.0)));
+    /// assert!(matches!(at_two.source, ValueSource::TimeSamples { lower: 1.0, upper: 3.0, .. }));
+    /// let default = radius.explain(Time::Default).unwrap();
+    /// assert_eq!(default.value, Some(Value::Double(2.5)));
+    /// assert_eq!(default.contributors().count(), 1);
+    /// ```
+    ///
+    /// OpenUSD: `UsdAttribute::GetResolveInfo`, which names the source
+    /// alone.
+    ///
+    /// Spec: AOUSD Core §12.3 (value resolution), §13.3.2.4 (fallbacks).
+    #[doc(alias = "UsdAttribute::GetResolveInfo")]
+    #[doc(alias = "GetResolveInfo")]
+    pub fn explain(self, time: Time) -> Option<ValueExplanation<'a, Value>> {
+        let stage: &'a Stage = self.stage;
+        stage.explain_value_with_schema(self.path.prim_path(), self.path.property(), time)
+    }
     /// Why the connections are what they are: each opinion's paths, and
     /// those composition dropped, with why (see
     /// [`Stage::explain_targets`]).
@@ -339,10 +417,16 @@ impl<'a> Attribute<'a> {
             .property_might_be_time_varying(self.path.prim_path(), self.path.property())
     }
 }
-impl Relationship<'_> {
+impl<'a> Relationship<'a> {
     /// Concrete property path.
     pub fn path(self) -> PropertyPath {
         self.path
+    }
+    /// The relationship's name (`material:binding`).
+    #[doc(alias = "UsdProperty::GetName")]
+    #[doc(alias = "GetName")]
+    pub fn name(self) -> &'a str {
+        self.store.tokens().resolve(self.path.property())
     }
     /// Ordered composed targets without forwarding.
     #[doc(alias = "UsdRelationship::GetTargets")]

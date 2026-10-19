@@ -5,7 +5,8 @@
 //!
 //! A tree asset is referenced into a grove. The grove overrides the tree's
 //! height, and a sublayer of edits moves the top of its trunk with a sparse
-//! array edit. `Stage::explain_*` names every opinion each value consulted:
+//! array edit. `Attribute::explain` and `Stage::explain_value` name every
+//! opinion each value consulted:
 //! its layer, spec, arc and layer offset, and whether it contributed, was
 //! shadowed, or was cut off.
 //!
@@ -231,12 +232,11 @@ fn main() {
         store.insert_layer(layer);
     }
     let stage = Stage::compose(&mut store, root, StageOptions::default());
+    let view = stage.view(&store);
 
     // The grove's local height shadows the referenced tree's.
-    let height = store.property_path("/Grove/OldOak.height");
-    let explained = stage
-        .explain_property_value(height, Time::Default)
-        .expect("height");
+    let height = view.attribute("/Grove/OldOak.height").expect("height");
+    let explained = height.explain(Time::Default).expect("height");
     print("height", &explained, &store, &resolver);
     assert_eq!(
         explained.value,
@@ -251,10 +251,8 @@ fn main() {
 
     // The sparse edit from the edits sublayer composes over the asset's
     // dense points, reached through the reference.
-    let points = store.property_path("/Grove/OldOak.points");
-    let explained = stage
-        .explain_property_value(points, Time::Default)
-        .expect("points");
+    let points = view.attribute("/Grove/OldOak.points").expect("points");
+    let explained = points.explain(Time::Default).expect("points");
     print("points", &explained, &store, &resolver);
     let roles: Vec<_> = explained.opinions.iter().map(|o| o.role.clone()).collect();
     assert_eq!(
@@ -277,10 +275,8 @@ fn main() {
     );
 
     // The reference offsets the tree's samples by 10 frames.
-    let sway = store.property_path("/Grove/OldOak.sway");
-    let explained = stage
-        .explain_property_value(sway, Time::at(22.0))
-        .expect("sway");
+    let sway = view.attribute("/Grove/OldOak.sway").expect("sway");
+    let explained = sway.explain(Time::at(22.0)).expect("sway");
     print("sway at 22", &explained, &store, &resolver);
     assert_eq!(
         explained.value,
@@ -300,8 +296,8 @@ fn main() {
     );
 
     // `customData` combines key by key across the grove and the asset.
-    let oak = store.path("/Grove/OldOak");
-    let custom_data = store.tokens.intern("customData");
+    let oak = view.prim("/Grove/OldOak").expect("oak").path();
+    let custom_data = store.tokens.lookup("customData").expect("authored");
     let explained = stage.explain_value(oak, custom_data).expect("customData");
     print("customData", &explained, &store, &resolver);
     assert_eq!(
@@ -311,10 +307,8 @@ fn main() {
     );
 
     // The bark comes from the class the tree inherits.
-    let bark = store.property_path("/Grove/OldOak.bark");
-    let explained = stage
-        .explain_property_value(bark, Time::Default)
-        .expect("bark");
+    let bark = view.attribute("/Grove/OldOak.bark").expect("bark");
+    let explained = bark.explain(Time::Default).expect("bark");
     print("bark", &explained, &store, &resolver);
     assert_eq!(
         explained.opinions[0].arc_kind(),

@@ -899,7 +899,7 @@ impl<'s> Parser<'s> {
         for (key, authored) in [
             ("timeSamples", spec.time_samples.is_some()),
             ("spline", spec.spline.is_some()),
-            (targets, spec.targets.as_ref().is_some_and(is_authored)),
+            (targets, spec.targets.as_deref().is_some_and(is_authored)),
         ] {
             if authored {
                 found.push(key.into());

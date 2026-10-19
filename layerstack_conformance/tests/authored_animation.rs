@@ -46,11 +46,11 @@ const TIMES: [f64; 16] = [
 ];
 
 fn spline(layer: &mut Imported, name: &str) -> SplineData {
-    layer
+    *(layer
         .property(name)
         .spline
         .clone()
-        .expect("authored spline")
+        .expect("authored spline"))
 }
 
 #[test]
@@ -89,7 +89,7 @@ fn authored_reference_and_knot_metadata_survive_both_formats_and_retiming() {
                 assert_eq!(retimed.post_loop_boundary, Some(9.));
                 assert_eq!(retimed.knots[0].post_tan_slope, 1.);
             }
-            imported.property(name).spline = Some(retimed);
+            imported.property(name).spline = Some(Box::new(retimed));
         }
         let saved = imported.save_usda().unwrap();
         assert_eq!(

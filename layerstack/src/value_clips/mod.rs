@@ -19,7 +19,7 @@ use crate::{
     LayerStore, ListOp, Opinion, OpinionKey, OpinionValue, Path, PathId, PropertyPath,
     PropertySpec, PropertyType, SpecPath, TokenId, Value, Variability,
 };
-use alloc::{collections::BTreeMap, sync::Arc, vec::Vec};
+use alloc::{boxed::Box, collections::BTreeMap, sync::Arc, vec::Vec};
 pub use demand::{ClipDemand, ClipDemandReason, ClipQueryPlan};
 pub use eval::ClipEvalError;
 use eval::PreparedClipProperty;
@@ -1108,7 +1108,8 @@ fn auto_manifest_declaration(spec: &PropertySpec, samples: bool) -> PropertySpec
     declaration.spline = if samples {
         None
     } else {
-        spec.spline
+        (spec
+            .spline
             .as_ref()
             .map(|spline| crate::spline::SplineData {
                 pre_loop_boundary: None,
@@ -1120,7 +1121,8 @@ fn auto_manifest_declaration(spec: &PropertySpec, samples: bool) -> PropertySpec
                 post_extrapolation: crate::spline::Extrapolation::Held,
                 loop_params: None,
                 knots: Vec::new(),
-            })
+            }))
+        .map(Box::new)
     };
     declaration
 }

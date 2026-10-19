@@ -16,7 +16,7 @@
 //! preserve their bits, so a signed zero or a NaN payload is authored
 //! state an edit can change.
 
-use alloc::vec::Vec;
+use alloc::{boxed::Box, vec::Vec};
 
 use hashbrown::HashMap;
 
@@ -61,6 +61,12 @@ impl<T: Same> Same for [T] {
 impl<T: Same> Same for Vec<T> {
     fn same(&self, other: &Self) -> bool {
         self.as_slice().same(other.as_slice())
+    }
+}
+
+impl<T: Same + ?Sized> Same for Box<T> {
+    fn same(&self, other: &Self) -> bool {
+        (**self).same(other)
     }
 }
 

@@ -710,7 +710,7 @@ impl Lowering<'_> {
                     },
                     value,
                     time_samples,
-                    spline: spec.spline.clone().map(Box::new),
+                    spline: spec.spline.clone(),
                     spline_custom_data: spec
                         .spline
                         .iter()

@@ -18,7 +18,7 @@ use crate::{
     LayerStackIdentifier, LayerStore, ListOp, PathId, PrimSpec, PropertyEntry, Reference,
     Specifier, TokenId, TokenInterner, Value, VariantSetSpec, VariantSpec,
 };
-use alloc::{string::String, sync::Arc, vec::Vec};
+use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
 
 /// Evidence about a successful, exact layer-stack consolidation.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -528,7 +528,7 @@ impl<F: FnMut(LayerId, &str) -> Option<String>> Context<'_, F> {
                 }
             }
             if let Some(spline) = &mut property.spline {
-                *spline = spline
+                **spline = spline
                     .retimed(offset)
                     .ok_or(LayerStackFlattenError::InvalidOffset(layer))?;
                 if spline.knots.iter().any(|knot| !knot.time.is_finite())
@@ -816,7 +816,7 @@ fn merge_properties(
                 a.targets = Some(
                     a.targets
                         .as_ref()
-                        .map_or_else(|| targets.clone(), |strong| list(strong, targets)),
+                        .map_or_else(|| targets.clone(), |strong| Box::new(list(strong, targets))),
                 );
             }
             merge_fields(a.metadata.make_mut(), &b.metadata);
@@ -1256,7 +1256,7 @@ mod tests {
                     });
                 }
                 property.time_samples = None;
-                property.spline = Some(spline);
+                property.spline = Some(Box::new(spline));
             }
             weak.insert_prim(path, PrimSpec::over().with_property(name, property));
             store.insert_layer(strong);

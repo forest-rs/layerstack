@@ -23,6 +23,7 @@ pub mod listop_vectors;
 pub mod matrices;
 pub mod pcp;
 pub mod pcp_txt;
+pub mod registry_scene;
 pub mod save_corpus;
 pub mod scalar;
 pub mod usda_real;

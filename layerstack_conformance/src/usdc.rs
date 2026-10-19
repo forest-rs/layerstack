@@ -258,7 +258,9 @@ pub fn crate_structure(data: &[u8]) -> Result<CrateStructure, layerstack_usdc::U
             i += 1;
         }
         specs.insert(
-            s.paths[spec.path_index as usize].clone(),
+            s.path(spec.path_index as usize)
+                .unwrap_or_default()
+                .to_owned(),
             (format!("{:?}", spec.form), fields),
         );
     }

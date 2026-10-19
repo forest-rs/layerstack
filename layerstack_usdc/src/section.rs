@@ -8,6 +8,7 @@
 //!
 //! Spec: AOUSD Core §16.3.5–§16.3.8.
 
+use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
@@ -148,6 +149,217 @@ impl<S: AsRef<str>> FromIterator<S> for TokenTable {
     }
 }
 
+/// A path's text once read ([`PathTable::text`]): shared by the threads a
+/// retained read decodes values on, with the `std` feature.
+#[cfg(feature = "std")]
+type TextSlot = std::sync::OnceLock<Box<str>>;
+#[cfg(not(feature = "std"))]
+type TextSlot = core::cell::OnceCell<Box<str>>;
+
+/// The PATHS section: the tree of paths it encodes, each path its parent's
+/// followed by one element, and each path's text, found from the tree
+/// when it is first read: a reader naming paths through the tree never
+/// builds their text.
+///
+/// Spec: AOUSD Core §16.3.8 (PATHS section).
+#[derive(Clone, Debug, Default)]
+pub struct PathTable {
+    /// Where each path sits in the tree; empty for a table of texts alone
+    /// ([`PathTable::from_texts`]).
+    nodes: Vec<PathNode>,
+    /// Each path's text, once read.
+    texts: Vec<TextSlot>,
+    /// The length of each path's text.
+    lens: Vec<usize>,
+    /// What each path's text holds ([`Spelling`]).
+    spellings: Vec<Spelling>,
+}
+
+/// What a path's text holds, found with its length, so that a reader can
+/// tell without the text what it would find in it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct Spelling(u8);
+
+impl Spelling {
+    /// The text holds a `{`: it names a variant selection.
+    const SELECTION: u8 = 1;
+    /// The text holds a `.`.
+    const DOT: u8 = 2;
+    /// The text holds a `}`.
+    const CLOSE: u8 = 4;
+    /// The text ends with `}`.
+    const CLOSE_LAST: u8 = 8;
+    /// The text is `/`.
+    const ROOT: u8 = 16;
+
+    fn of(text: &str) -> Self {
+        let mut bits = 0;
+        for (flag, holds) in [
+            (Self::SELECTION, text.contains('{')),
+            (Self::DOT, text.contains('.')),
+            (Self::CLOSE, text.contains('}')),
+            (Self::CLOSE_LAST, text.ends_with('}')),
+            (Self::ROOT, text == "/"),
+        ] {
+            if holds {
+                bits |= flag;
+            }
+        }
+        Self(bits)
+    }
+
+    fn has(self, flag: u8) -> bool {
+        self.0 & flag != 0
+    }
+
+    /// Whether the text holds a `{`.
+    pub(crate) fn selection(self) -> bool {
+        self.has(Self::SELECTION)
+    }
+
+    /// Whether the text holds a `.`.
+    pub(crate) fn dot(self) -> bool {
+        self.has(Self::DOT)
+    }
+
+    /// Whether the text holds a `}`.
+    pub(crate) fn close(self) -> bool {
+        self.has(Self::CLOSE)
+    }
+
+    /// Whether the text ends with `}`.
+    pub(crate) fn ends_with_close(self) -> bool {
+        self.has(Self::CLOSE_LAST)
+    }
+
+    /// Whether the text is `/`.
+    pub(crate) fn root(self) -> bool {
+        self.has(Self::ROOT)
+    }
+}
+
+impl PathTable {
+    /// A table of `texts` without a tree, whose readers read the text.
+    pub fn from_texts<S: Into<Box<str>>>(texts: impl IntoIterator<Item = S>) -> Self {
+        let mut lens = Vec::new();
+        let mut spellings = Vec::new();
+        let texts = texts
+            .into_iter()
+            .map(|text| {
+                let text = text.into();
+                lens.push(text.len());
+                spellings.push(Spelling::of(&text));
+                let slot = TextSlot::new();
+                let _ = slot.set(text);
+                slot
+            })
+            .collect();
+        Self {
+            nodes: Vec::new(),
+            texts,
+            lens,
+            spellings,
+        }
+    }
+
+    /// The number of paths.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.texts.len()
+    }
+
+    /// Whether there are no paths.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.texts.is_empty()
+    }
+
+    /// Whether the table holds the tree: where every path sits in it.
+    #[must_use]
+    pub fn has_tree(&self) -> bool {
+        self.nodes.len() == self.texts.len()
+    }
+
+    /// Where each path sits in the tree, by index; empty for a table
+    /// without one.
+    #[must_use]
+    pub fn nodes(&self) -> &[PathNode] {
+        &self.nodes
+    }
+
+    /// The length of the text of path `index`, found without building it.
+    #[must_use]
+    pub fn text_len(&self, index: usize) -> Option<usize> {
+        self.lens.get(index).copied()
+    }
+
+    /// What the text of path `index` holds, found without building it.
+    pub(crate) fn spelling(&self, index: usize) -> Option<Spelling> {
+        self.spellings.get(index).copied()
+    }
+
+    /// The text of path `index`, its element tokens read from `tokens`,
+    /// the table the paths were read with: built from the tree when first
+    /// read, as the PATHS section's paths are spelled. An unused entry's
+    /// text is empty.
+    pub fn text<'a>(&'a self, index: usize, tokens: &TokenTable) -> Option<&'a str> {
+        let slot = self.texts.get(index)?;
+        if let Some(text) = slot.get() {
+            return Some(text);
+        }
+        // The entries up to the nearest whose text is known, nearest last.
+        // A corrupt table may name a parent outside it, whose text is
+        // empty, as it was when the text was built with the table.
+        let mut pending = Vec::new();
+        let mut at = index;
+        while self.texts.get(at).is_some_and(|slot| slot.get().is_none()) {
+            pending.push(at);
+            match self.nodes.get(at) {
+                Some(PathNode::Child { parent, .. }) => at = *parent as usize,
+                _ => break,
+            }
+        }
+        for &at in pending.iter().rev() {
+            let text: Box<str> = match self.nodes.get(at) {
+                Some(PathNode::Root) => "/".into(),
+                Some(&PathNode::Child {
+                    parent,
+                    token,
+                    property,
+                }) => {
+                    let parent = self.texts.get(parent as usize).and_then(TextSlot::get);
+                    let parent = parent.map_or("", |text| text);
+                    let element = tokens.get(token as usize).unwrap_or_default();
+                    let sep = separator(parent, element, property);
+                    let prefix = if parent == "/" { "" } else { parent };
+                    let mut text = String::with_capacity(prefix.len() + sep.len() + element.len());
+                    text.push_str(prefix);
+                    text.push_str(sep);
+                    text.push_str(element);
+                    text.into()
+                }
+                Some(PathNode::Unused) | None => "".into(),
+            };
+            let _ = self.texts[at].set(text);
+        }
+        slot.get().map(|text| &**text)
+    }
+}
+
+/// What joins a path's text to its child `element`'s: `.` before a
+/// property, nothing before a variant selection or after one, `/`
+/// otherwise; OpenUSD rebuilds paths with `SdfPath::AppendElementToken`
+/// (`pxr/usd/sdf/crateFile.cpp:4037`), so `/A{v=x}B.attr`.
+fn separator(parent: &str, element: &str, property: bool) -> &'static str {
+    if property {
+        "."
+    } else if element.starts_with('{') || parent.ends_with('}') {
+        ""
+    } else {
+        "/"
+    }
+}
+
 /// All parsed section data from a USDC file.
 ///
 /// Holds the decoded contents of all six sections ready for scene assembly.
@@ -163,13 +375,9 @@ pub struct CrateSections {
     ///
     /// Groups are delimited by negative values.
     pub fieldsets: Vec<i32>,
-    /// Reconstructed SDF path strings from the PATHS section.
-    pub paths: Vec<String>,
-    /// Where each of [`Self::paths`] sits in the tree the PATHS section
-    /// encodes, by the same index, so a reader can name a path by its
-    /// parent and element without its text; empty for sections built
-    /// without one, whose readers use the text.
-    pub path_nodes: Vec<PathNode>,
+    /// The paths of the PATHS section, as the tree it encodes; read a
+    /// path's text with [`Self::path`].
+    pub paths: PathTable,
     /// Spec definitions from the SPECS section.
     pub specs: Vec<SpecDef>,
     /// The file's format version, from the header.
@@ -221,10 +429,10 @@ pub fn parse_sections(
         vec![]
     };
 
-    let (paths, path_nodes) = if let Some(entry) = toc.paths {
+    let paths = if let Some(entry) = toc.paths {
         parse_paths(data, &entry, &tokens, budget)?
     } else {
-        (vec![], vec![])
+        PathTable::default()
     };
 
     let specs = if let Some(entry) = toc.specs {
@@ -239,10 +447,22 @@ pub fn parse_sections(
         fields,
         fieldsets,
         paths,
-        path_nodes,
         specs,
         version,
     })
+}
+
+impl CrateSections {
+    /// The text of path `index` of the path table ([`PathTable::text`]).
+    #[must_use]
+    pub fn path(&self, index: usize) -> Option<&str> {
+        self.paths.text(index, &self.tokens)
+    }
+
+    /// The text of every path of the path table, in table order.
+    pub fn path_texts(&self) -> impl ExactSizeIterator<Item = &str> + '_ {
+        (0..self.paths.len()).map(|index| self.path(index).unwrap_or_default())
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -507,7 +727,7 @@ fn parse_paths(
     entry: &SectionEntry,
     tokens: &TokenTable,
     budget: &mut DecodeBudget,
-) -> Result<(Vec<String>, Vec<PathNode>), UsdcError> {
+) -> Result<PathTable, UsdcError> {
     let section = section_slice(data, entry)?;
     if section.len() < 16 {
         return Err(UsdcError::UnexpectedEof {
@@ -549,25 +769,28 @@ fn parse_paths(
         });
     }
     budget.charge(num_paths)?;
-    let mut paths = vec![String::new(); n_paths];
     let mut nodes = vec![PathNode::Unused; n_paths];
-    build_paths(
+    let (lens, spellings) = build_paths(
         &path_indices,
         &element_token_indices,
         &jumps,
         tokens,
-        &mut paths,
         &mut nodes,
         budget,
     )?;
-
-    Ok((paths, nodes))
+    let texts = (0..n_paths).map(|_| TextSlot::new()).collect();
+    Ok(PathTable {
+        nodes,
+        texts,
+        lens,
+        spellings,
+    })
 }
 
 /// Iterative path reconstruction using an explicit stack.
 ///
 /// Mirrors the Python reference `build_decompressed_paths` but avoids
-/// recursion by using a work stack of `(start_index, parent_path)` frames.
+/// recursion by using a work stack of `(start_index, parent)` frames.
 ///
 /// The Python algorithm is a `do-while` loop that continues as long as
 /// `has_child or has_sibling`. When there are siblings but no children
@@ -575,20 +798,22 @@ fn parse_paths(
 /// still advances `start_index += 1` to process the next entry as a
 /// sibling under the same parent.
 ///
-/// Each path is a full string, and paths share their prefixes and tokens,
-/// so a small table can describe paths far longer than the file: each path's
-/// length is charged to `budget` before it is built.
+/// Each path is placed in the tree, its parent and element, without its
+/// text. Paths share their prefixes and tokens, so a small table can
+/// describe paths far longer than the file: each path's text is charged to
+/// `budget` by its length, found from its parent's, as building it would
+/// be.
 fn build_paths(
     path_indices: &[i64],
     element_token_indices: &[i64],
     jumps: &[i64],
     tokens: &TokenTable,
-    paths: &mut [String],
     nodes: &mut [PathNode],
     budget: &mut DecodeBudget,
-) -> Result<(), UsdcError> {
+) -> Result<(Vec<usize>, Vec<Spelling>), UsdcError> {
+    let mut spellings = vec![Spelling::default(); nodes.len()];
     if path_indices.is_empty() {
-        return Ok(());
+        return Ok((vec![0; nodes.len()], spellings));
     }
 
     let corrupt = UsdcError::PathReconstruction;
@@ -596,7 +821,7 @@ fn build_paths(
     // the path indexes must be in range and distinct, and the jumps must stay
     // in the table. A valid encoding visits each entry once; a corrupt one
     // whose jumps overlap could revisit entries exponentially often.
-    let mut targets = vec![false; paths.len()];
+    let mut targets = vec![false; nodes.len()];
     for &target in path_indices {
         let target = usize::try_from(target).map_err(|_| UsdcError::PathReconstruction)?;
         match targets.get_mut(target) {
@@ -605,12 +830,16 @@ fn build_paths(
         }
     }
     let mut visited = vec![false; path_indices.len()];
+    // Each path's text length, whether it ends with `}`, and whether it is
+    // `/`, as the root's is.
+    let mut texts: Vec<(usize, bool, bool)> = vec![(0, false, false); nodes.len()];
 
-    // Stack frames: (start_index, parent_path, parent's index,
-    // is_first_iteration)
-    let mut stack: Vec<(usize, String, u32, bool)> = vec![(0, String::new(), u32::MAX, true)];
+    // Stack frames: (start_index, parent's index, is_first_iteration);
+    // `NO_PARENT` before the root.
+    const NO_PARENT: u32 = u32::MAX;
+    let mut stack: Vec<(usize, u32, bool)> = vec![(0, NO_PARENT, true)];
 
-    while let Some((mut idx, mut parent, mut parent_at, mut first)) = stack.pop() {
+    while let Some((mut idx, mut parent_at, mut first)) = stack.pop() {
         // do-while: always execute at least once per stack frame,
         // then continue while has_child || has_sibling.
         loop {
@@ -627,10 +856,10 @@ fn build_paths(
             )]
             let target = path_indices[idx] as usize;
 
-            if first && parent.is_empty() {
+            if first && parent_at == NO_PARENT {
                 // Root node.
-                parent = String::from("/");
-                paths[target] = parent.clone();
+                texts[target] = (1, false, true);
+                spellings[target] = Spelling(Spelling::ROOT);
                 nodes[target] = PathNode::Root;
             } else {
                 let token_idx_raw = element_token_indices[idx];
@@ -645,25 +874,50 @@ fn build_paths(
                 else {
                     return Err(UsdcError::PathReconstruction);
                 };
-                // Variant selections attach to their prim without a separator,
-                // and so does a prim below a selection: `/A{v=x}B.attr`, as
-                // OpenUSD rebuilds paths with `SdfPath::AppendElementToken`
-                // (`pxr/usd/sdf/crateFile.cpp:4037`).
+                // A sibling of the root follows no parent: a corrupt
+                // encoding, whose paths join the empty text.
+                let (parent_len, parent_brace, parent_slash) = texts
+                    .get(parent_at as usize)
+                    .copied()
+                    .unwrap_or((0, false, false));
                 let sep = if is_property {
                     "."
-                } else if element.starts_with('{') || parent.ends_with('}') {
+                } else if element.starts_with('{') || parent_brace {
                     ""
                 } else {
                     "/"
                 };
-                budget.charge_text(parent.len() + sep.len() + element.len())?;
-                let prefix = if parent == "/" { "" } else { parent.as_str() };
-                let mut path = String::with_capacity(prefix.len() + sep.len() + element.len());
-                path.push_str(prefix);
-                path.push_str(sep);
-                path.push_str(element);
-
-                paths[target] = path;
+                budget.charge_text(parent_len + sep.len() + element.len())?;
+                // As the text is spelled: a path below `/` starts with its
+                // separator, and one with an empty element ends as its
+                // parent's text does.
+                let prefix = if parent_slash { 0 } else { parent_len };
+                let len = prefix + sep.len() + element.len();
+                let brace = if element.is_empty() {
+                    sep.is_empty() && !parent_slash && parent_brace
+                } else {
+                    element.ends_with('}')
+                };
+                texts[target] = (len, brace, len == 1 && sep == "/");
+                // Separators hold none of these but `.`, and the text
+                // holds its parent's, or `/` alone.
+                let parent = spellings
+                    .get(parent_at as usize)
+                    .copied()
+                    .unwrap_or_default();
+                let mut bits = parent.0 & !(Spelling::CLOSE_LAST | Spelling::ROOT);
+                for (flag, holds) in [
+                    (Spelling::SELECTION, element.contains('{')),
+                    (Spelling::DOT, sep == "." || element.contains('.')),
+                    (Spelling::CLOSE, element.contains('}')),
+                    (Spelling::CLOSE_LAST, brace),
+                    (Spelling::ROOT, len == 1 && sep == "/"),
+                ] {
+                    if holds {
+                        bits |= flag;
+                    }
+                }
+                spellings[target] = Spelling(bits);
                 #[allow(
                     clippy::cast_possible_truncation,
                     reason = "token indices are u32-range"
@@ -691,12 +945,11 @@ fn build_paths(
                     else {
                         return Err(UsdcError::PathReconstruction);
                     };
-                    stack.push((sibling_idx, parent.clone(), parent_at, false));
+                    stack.push((sibling_idx, parent_at, false));
                 }
 
                 // Descend into child: advance to next index with current path
                 // as new parent.
-                parent = paths[target].clone();
                 parent_at = u32::try_from(target).map_err(|_| UsdcError::PathReconstruction)?;
                 idx += 1;
             } else if has_sibling {
@@ -710,7 +963,7 @@ fn build_paths(
         }
     }
 
-    Ok(())
+    Ok((texts.into_iter().map(|(len, ..)| len).collect(), spellings))
 }
 
 // ---------------------------------------------------------------------------
@@ -819,6 +1072,40 @@ mod tests {
     /// A section's tokens are its text split at each null byte, the null
     /// ending the last token dropped, as splitting the text into strings
     /// read them.
+    /// Places the paths in the tree, as parsing does, and reads every
+    /// path's text into `paths`, checking it has the length the tree
+    /// found for it.
+    fn build_paths(
+        path_indices: &[i64],
+        element_token_indices: &[i64],
+        jumps: &[i64],
+        tokens: &TokenTable,
+        paths: &mut [String],
+        nodes: &mut [PathNode],
+        budget: &mut DecodeBudget,
+    ) -> Result<(), UsdcError> {
+        let (lens, spellings) = super::build_paths(
+            path_indices,
+            element_token_indices,
+            jumps,
+            tokens,
+            nodes,
+            budget,
+        )?;
+        let table = PathTable {
+            nodes: nodes.to_vec(),
+            texts: (0..nodes.len()).map(|_| TextSlot::new()).collect(),
+            lens,
+            spellings,
+        };
+        for (at, path) in paths.iter_mut().enumerate() {
+            *path = String::from(table.text(at, tokens).unwrap());
+            assert_eq!(table.text_len(at), Some(path.len()), "{path}");
+            assert_eq!(table.spelling(at), Some(Spelling::of(path)), "{path}");
+        }
+        Ok(())
+    }
+
     #[test]
     fn token_tables_split_the_text_at_nulls() {
         for text in ["", "a", "a\0", "a\0b", "a\0b\0", "a\0\0", "\0", "\0\0x"] {
@@ -1024,6 +1311,27 @@ mod tests {
             build(&mut DecodeBudget::with_limit(limit)).err(),
             Some(UsdcError::DecodeBudgetExceeded { limit })
         );
+    }
+
+    /// Paths a corrupt encoding places beside the root follow no parent
+    /// and join the empty text, and are charged by the lengths of the
+    /// texts they spell.
+    #[test]
+    fn build_paths_beside_the_root_spell_what_they_did() {
+        let tokens: TokenTable = ["", "a", "{v=x}"].into_iter().collect();
+        let mut paths = vec![String::new(); 5];
+        let mut nodes = vec![PathNode::Unused; 5];
+        build_paths(
+            &[0, 1, 2, 3, 4],
+            &[0, 0, 1, 2, 0],
+            &[0, -1, -1, -1, -2],
+            &tokens,
+            &mut paths,
+            &mut nodes,
+            &mut DecodeBudget::with_limit(u64::MAX),
+        )
+        .unwrap();
+        assert_eq!(paths, ["/", "/", "/a", "/a{v=x}", "/a{v=x}"]);
     }
 
     #[test]

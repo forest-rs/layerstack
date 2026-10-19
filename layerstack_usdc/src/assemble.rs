@@ -207,6 +207,31 @@ enum PropertyOwner {
     Prim { owner: u32, name: TokenId },
 }
 
+/// The path of the spec a diagnostic names: its text, or its entry of the
+/// path table, whose text is spelled only when a diagnostic names it.
+#[derive(Clone, Copy)]
+enum SpecName<'a> {
+    Text(&'a str),
+    Entry(u32),
+}
+
+impl<'a> From<&'a str> for SpecName<'a> {
+    fn from(text: &'a str) -> Self {
+        Self::Text(text)
+    }
+}
+
+/// A prim spec's key: the path its path table entry names outside variant
+/// branches, when its text parses as one, otherwise its text. Two entries
+/// spelling one text have one key, and two keys are equal only when the
+/// texts are, as a text parses as only one path and a path is spelled by
+/// only one text ([`AssembleCtx::prim_key_at`]).
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+enum PrimKey<'a> {
+    Path(PathId),
+    Text(&'a str),
+}
+
 /// What one entry of the path table is as the prim path text of a property
 /// path, once found.
 #[derive(Clone, Copy)]
@@ -238,20 +263,19 @@ enum PrimPathAt {
     Some(PathId),
 }
 
-/// The prim specs a read builds, by their path's text, and by the path
-/// table index of each spec's path, in the order their paths were first
-/// spelled. Each spec is boxed, so it stays where it was built, in the
-/// layer too ([`Layer::insert_prims`]).
+/// The prim specs a read builds, by their key ([`PrimKey`]), and by the
+/// path table index of each spec's path, in the order their paths were
+/// first spelled. Each spec is boxed, so it stays where it was built, in
+/// the layer too ([`Layer::insert_prims`]).
 #[expect(
     clippy::vec_box,
     reason = "a boxed spec moves into the layer as a pointer, without a copy"
 )]
 struct PrimSpecs<'a> {
-    by_path: HashMap<&'a str, usize>,
+    by_key: HashMap<PrimKey<'a>, usize>,
     specs: Vec<Box<PrimSpec>>,
-    /// The text and path table index each of `specs` was first placed
-    /// with.
-    placed: Vec<(&'a str, u32)>,
+    /// The path table index each of `specs` was first placed with.
+    placed: Vec<u32>,
     /// The place in `specs` of the spec at each path table index; `NONE`
     /// where no prim spec's path is.
     at_index: Vec<u32>,
@@ -262,27 +286,27 @@ impl<'a> PrimSpecs<'a> {
 
     fn new(prims: usize, paths: usize) -> Self {
         Self {
-            by_path: HashMap::with_capacity(prims),
+            by_key: HashMap::with_capacity(prims),
             specs: Vec::with_capacity(prims),
             placed: Vec::with_capacity(prims),
             at_index: alloc::vec![Self::NONE; paths],
         }
     }
 
-    /// Sets the spec at `path`, the text of path table entry `index`,
+    /// Sets the spec keyed `key`, the key of path table entry `index`,
     /// replacing any there, and returns its place: the number of paths
     /// spelled before it.
-    fn insert(&mut self, index: u32, path: &'a str, spec: Box<PrimSpec>) -> usize {
-        let at = match self.by_path.get(path) {
+    fn insert(&mut self, index: u32, key: PrimKey<'a>, spec: Box<PrimSpec>) -> usize {
+        let at = match self.by_key.get(&key) {
             Some(&at) => {
                 self.specs[at] = spec;
                 at
             }
             None => {
                 let at = self.specs.len();
-                self.by_path.insert(path, at);
+                self.by_key.insert(key, at);
                 self.specs.push(spec);
-                self.placed.push((path, index));
+                self.placed.push(index);
                 at
             }
         };
@@ -298,29 +322,37 @@ impl<'a> PrimSpecs<'a> {
         self.specs.iter_mut().map(|spec| &mut **spec)
     }
 
-    fn contains_key(&self, path: &str) -> bool {
-        self.by_path.contains_key(path)
+    fn contains_key(&self, key: PrimKey<'_>) -> bool {
+        self.by_key.contains_key(&key)
     }
 
-    fn get_mut(&mut self, path: &str) -> Option<&mut PrimSpec> {
-        let at = *self.by_path.get(path)?;
-        self.specs.get_mut(at).map(|spec| &mut **spec)
+    /// The place of the spec keyed `key`.
+    fn place(&self, key: PrimKey<'_>) -> Option<usize> {
+        self.by_key.get(&key).copied()
     }
 
-    /// The spec at path table entry `index`, whose text is `path`.
-    fn get_mut_at(&mut self, index: u32, path: &str) -> Option<&mut PrimSpec> {
+    /// The place of the spec at path table entry `index`, if a spec was
+    /// placed with it.
+    fn place_at(&self, index: u32) -> Option<usize> {
         match self.at_index.get(index as usize) {
-            Some(&at) if at != Self::NONE => {
-                self.specs.get_mut(at as usize).map(|spec| &mut **spec)
-            }
-            // Another entry may spell the same path.
-            _ => self.get_mut(path),
+            Some(&at) if at != Self::NONE => Some(at as usize),
+            _ => None,
         }
     }
 
-    /// The text and path table index each spec was first placed with, in
-    /// the order of [`PrimSpecs::into_specs`].
-    fn placed(&self) -> &[(&'a str, u32)] {
+    fn get_mut(&mut self, key: PrimKey<'_>) -> Option<&mut PrimSpec> {
+        let at = self.place(key)?;
+        self.spec_mut(at)
+    }
+
+    /// The spec at `place`.
+    fn spec_mut(&mut self, place: usize) -> Option<&mut PrimSpec> {
+        self.specs.get_mut(place).map(|spec| &mut **spec)
+    }
+
+    /// The path table index each spec was first placed with, in the order
+    /// of [`PrimSpecs::into_specs`].
+    fn placed(&self) -> &[u32] {
         &self.placed
     }
 
@@ -352,12 +384,16 @@ impl<'a> AssembleCtx<'a> {
     ///
     /// A diagnostic copies the spec path, and a spec may report once per
     /// field, so each diagnostic is charged for its text.
-    fn report(
+    fn report<'p>(
         &mut self,
-        spec_path: &str,
+        spec_path: impl Into<SpecName<'p>>,
         field: Option<&str>,
         message: impl Into<String>,
     ) -> Result<(), UsdcError> {
+        let spec_path = match spec_path.into() {
+            SpecName::Text(text) => text,
+            SpecName::Entry(index) => self.sections.path(index as usize).unwrap_or_default(),
+        };
         let message = message.into();
         self.budget.charge(1)?;
         self.budget
@@ -465,15 +501,18 @@ impl<'a> AssembleCtx<'a> {
         // Process Prim specs.
         for (i, spec) in self.sections.specs.iter().enumerate() {
             if spec.form == SpecForm::Prim {
-                let path_str = self.lookup_path(spec.path_index)?;
+                let index = spec.path_index;
+                self.charge_path(index)?;
+                let name = SpecName::Entry(index);
                 // Prims inside variant branches (`/A{v=x}B`) keep their
                 // variant-qualified key until they are placed in the layer.
-                if path_str.contains('{') && split_branch_path(path_str).is_none() {
-                    self.report(path_str, None, "prim spec path could not be parsed")?;
+                if self.in_branch_of(name) && split_branch_path(self.path_text(index)).is_none() {
+                    self.report(name, None, "prim spec path could not be parsed")?;
                     continue;
                 }
-                let (prim, children) = self.prim_spec(i, path_str, &mut decoded, &mut fields)?;
-                let at = prim_specs_map.insert(spec.path_index, path_str, prim);
+                let (prim, children) = self.prim_spec(i, name, &mut decoded, &mut fields)?;
+                let key = self.prim_key_at(index);
+                let at = prim_specs_map.insert(index, key, prim);
                 if at == property_children.len() {
                     property_children.push(None);
                 }
@@ -494,26 +533,34 @@ impl<'a> AssembleCtx<'a> {
             if !is_attribute && spec.form != SpecForm::Relationship {
                 continue;
             }
-            let path_str = self.lookup_path(spec.path_index)?;
-            if let Some(owner) = self.property_owner(spec.path_index) {
+            let index = spec.path_index;
+            self.charge_path(index)?;
+            let spec_name = SpecName::Entry(index);
+            if let Some(owner) = self.property_owner(index) {
                 let (owner, name) = match owner {
                     PropertyOwner::Variant => continue,
                     PropertyOwner::Invalid => {
-                        self.report(path_str, None, "property spec path could not be parsed")?;
+                        self.report(spec_name, None, "property spec path could not be parsed")?;
                         continue;
                     }
                     PropertyOwner::Prim { owner, name } => (owner, name),
                 };
-                let owner_path = &self.sections.paths[owner as usize];
-                let Some(prim) = prim_specs_map.get_mut_at(owner, owner_path) else {
-                    self.report(path_str, None, "property spec has no owning prim spec")?;
+                // Another entry may spell the owner's path.
+                let place = match prim_specs_map.place_at(owner) {
+                    Some(place) => Some(place),
+                    None => prim_specs_map.place(self.prim_key_at(owner)),
+                };
+                let Some(place) = place else {
+                    self.report(spec_name, None, "property spec has no owning prim spec")?;
                     continue;
                 };
                 let property =
-                    self.property_spec(i, path_str, is_attribute, &mut decoded, &mut fields)?;
+                    self.property_spec(i, spec_name, is_attribute, &mut decoded, &mut fields)?;
+                let prim = prim_specs_map.spec_mut(place).expect("a placed spec");
                 put_property(&mut prim.properties, name, property);
                 continue;
             }
+            let path_str = self.path_text(index);
             let (prim_path, name) = if path_str.contains('{') {
                 // A property directly on a variant (`/A{v=x}.b`) belongs to
                 // the variant spec and is handled with the variant specs;
@@ -536,13 +583,14 @@ impl<'a> AssembleCtx<'a> {
                 };
                 parts
             };
-            let Some(prim) = prim_specs_map.get_mut(prim_path) else {
+            let Some(place) = prim_specs_map.place(self.prim_key_of_text(prim_path)) else {
                 self.report(path_str, None, "property spec has no owning prim spec")?;
                 continue;
             };
             let property =
-                self.property_spec(i, path_str, is_attribute, &mut decoded, &mut fields)?;
+                self.property_spec(i, path_str.into(), is_attribute, &mut decoded, &mut fields)?;
             let name = self.tokens.intern(name);
+            let prim = prim_specs_map.spec_mut(place).expect("a placed spec");
             put_property(&mut prim.properties, name, property);
         }
 
@@ -552,7 +600,7 @@ impl<'a> AssembleCtx<'a> {
                 let path_str = self.lookup_path(spec.path_index)?;
                 if let Some((prim_path, attr_name)) =
                     self.split_property_path(path_str, &mut prim_paths_valid)
-                    && let Some(prim) = prim_specs_map.get_mut(prim_path)
+                    && let Some(prim) = prim_specs_map.get_mut(self.prim_key_of_text(prim_path))
                 {
                     self.collect_spec_fields(i, &mut decoded, &mut fields)?;
                     self.apply_connection_fields(&fields, attr_name, prim)?;
@@ -616,25 +664,28 @@ impl<'a> AssembleCtx<'a> {
         // layer's map grows once.
         // Each spec is taken by the first spec spelling its path, which
         // placed it, so the specs are in the file's order of those specs.
-        let placed: Vec<(&str, Option<PathId>)> = prim_specs_map
+        let placed: Vec<(u32, bool, Option<PathId>)> = prim_specs_map
             .placed()
             .iter()
-            .map(|&(path_str, index)| {
-                let path = if path_str.contains('{') {
+            .map(|&index| {
+                let branch = self.in_branch_of(SpecName::Entry(index));
+                let path = if branch {
                     None
                 } else {
                     self.prim_path_at(index)
                 };
-                (path_str, path)
+                (index, branch, path)
             })
             .collect();
         let mut branched: Vec<(&str, Box<PrimSpec>)> = Vec::new();
+        let sections = self.sections;
         let plain = prim_specs_map
             .into_specs()
             .into_iter()
             .zip(&placed)
-            .filter_map(|(prim, &(path_str, path))| {
-                if path_str.contains('{') {
+            .filter_map(|(prim, &(index, branch, path))| {
+                if branch {
+                    let path_str = sections.path(index as usize).unwrap_or_default();
                     branched.push((path_str, prim));
                     return None;
                 }
@@ -859,7 +910,7 @@ impl<'a> AssembleCtx<'a> {
                     self.report("/", Some(name), "unsupported: prim relocates are ignored")?;
                 }
                 _ => {
-                    if let Some(field_value) = self.convert_metadata("/", name, value)? {
+                    if let Some(field_value) = self.convert_metadata("/".into(), name, value)? {
                         let key = self.tokens.intern(name);
                         set_field_vec(layer.metadata_fields_mut(), key, field_value);
                     }
@@ -915,12 +966,12 @@ impl<'a> AssembleCtx<'a> {
     /// Spec: AOUSD Core §7.6.2 (prim spec fields).
     fn build_prim_spec(
         &mut self,
-        spec_path: &str,
+        spec_path: SpecName<'_>,
         fields: &[(&str, DecodedField<'_>)],
     ) -> Result<(PrimSpec, Option<Vec<TokenId>>), UsdcError> {
         let mut spec = PrimSpec::default();
         let mut property_children = None;
-        self.in_branch = spec_path.contains('{');
+        self.in_branch = self.in_branch_of(spec_path);
 
         for (name, value) in fields {
             match *name {
@@ -1034,13 +1085,13 @@ impl<'a> AssembleCtx<'a> {
     fn prim_spec(
         &mut self,
         index: usize,
-        spec_path: &str,
+        spec_path: SpecName<'_>,
         decoded: &mut [bool],
         fields: &mut Fields<'a>,
     ) -> Result<SharedPrim, UsdcError> {
         let fieldset = self.sections.specs[index].fieldset_index;
         // A spec inside a variant branch converts its arcs as one.
-        let shares = self.fieldset_shared(fieldset) && !spec_path.contains('{');
+        let shares = self.fieldset_shared(fieldset) && !self.in_branch_of(spec_path);
         if shares && let Some(shared) = self.shared_prims.get(&fieldset) {
             self.budget.charge(shared.charged)?;
             decoded[index] = true;
@@ -1067,7 +1118,7 @@ impl<'a> AssembleCtx<'a> {
     fn property_spec(
         &mut self,
         index: usize,
-        spec_path: &str,
+        spec_path: SpecName<'_>,
         is_attribute: bool,
         decoded: &mut [bool],
         fields: &mut Fields<'a>,
@@ -1154,9 +1205,27 @@ impl<'a> AssembleCtx<'a> {
             if spec.form != SpecForm::Attribute && spec.form != SpecForm::Relationship {
                 continue;
             }
-            let path_str = self.lookup_path(spec.path_index)?;
+            let index = spec.path_index;
+            self.charge_path(index)?;
             // Properties of prims inside a branch are attached with their
-            // prim.
+            // prim. A property element holding no `.` is split from its
+            // prim at its own `.`: on a variant when that prim's text ends
+            // with `}`.
+            let sections = self.sections;
+            if let Some(&PathNode::Child {
+                parent,
+                token,
+                property: true,
+            }) = sections.paths.nodes().get(index as usize)
+                && !self.lookup_token(token).contains('.')
+                && !sections
+                    .paths
+                    .spelling(parent as usize)
+                    .is_some_and(|spelling| spelling.ends_with_close())
+            {
+                continue;
+            }
+            let path_str = self.path_text(index);
             let Some((variant_path, prop_name)) = path_str
                 .rsplit_once('.')
                 .filter(|(prim, _)| prim.ends_with('}'))
@@ -1165,9 +1234,9 @@ impl<'a> AssembleCtx<'a> {
             };
             self.collect_spec_fields(i, decoded, fields)?;
             let property = if spec.form == SpecForm::Attribute {
-                self.build_attribute_spec(path_str, fields)?
+                self.build_attribute_spec(path_str.into(), fields)?
             } else {
-                self.build_relationship_spec(path_str, fields)?
+                self.build_relationship_spec(path_str.into(), fields)?
             };
             let prop_tok = self.tokens.intern(prop_name);
             set_property_vec(
@@ -1193,7 +1262,7 @@ impl<'a> AssembleCtx<'a> {
         for (i, path_str) in specs {
             let is_set = self.sections.specs[i].form == SpecForm::VariantSet;
             let placed = split_trailing_selections(path_str)
-                .filter(|(owner, _)| prim_specs.contains_key(owner))
+                .filter(|(owner, _)| prim_specs.contains_key(self.prim_key_of_text(owner)))
                 .filter(|(_, chain)| {
                     chain.split_last().is_some_and(|((_, last), enclosing)| {
                         last.is_empty() == is_set
@@ -1220,7 +1289,9 @@ impl<'a> AssembleCtx<'a> {
             } else {
                 Some(self.build_variant_spec(path_str, fields, &mut variant_properties)?)
             };
-            let prim = prim_specs.get_mut(owner).expect("owner checked above");
+            let prim = prim_specs
+                .get_mut(self.prim_key_of_text(owner))
+                .expect("owner checked above");
             let holder = if enclosing.is_empty() {
                 Some(&mut prim.variant_sets)
             } else {
@@ -1317,7 +1388,7 @@ impl<'a> AssembleCtx<'a> {
                 }
                 _ => {
                     // Generic variant field.
-                    if let Some(fv) = self.convert_metadata(path_str, name, value)? {
+                    if let Some(fv) = self.convert_metadata(path_str.into(), name, value)? {
                         let key = self.tokens.intern(name);
                         set_field_vec(&mut variant.fields, key, fv);
                     }
@@ -1334,52 +1405,79 @@ impl<'a> AssembleCtx<'a> {
     }
 
     /// Builds parent-child relationships by examining prim paths.
-    fn build_child_relationships(&mut self, prim_specs: &mut PrimSpecs<'_>) {
+    fn build_child_relationships(&mut self, prim_specs: &mut PrimSpecs<'a>) {
         // Each parent's child specs, parents and children in the file's
-        // spec order, so names intern in the same order on every read.
-        let mut parents: Vec<&str> = Vec::new();
-        let mut children: HashMap<&str, Vec<(&str, TokenId)>> = HashMap::new();
+        // spec order, so names intern in the same order on every read. A
+        // child is its path table entry and name.
+        let mut parents: Vec<PrimKey<'a>> = Vec::new();
+        let mut children: HashMap<PrimKey<'a>, Vec<(u32, TokenId)>> = HashMap::new();
         let sections = self.sections;
         for spec in &sections.specs {
             if spec.form != SpecForm::Prim {
                 continue;
             }
-            let Some(path) = sections
-                .paths
-                .get(spec.path_index as usize)
-                .map(String::as_str)
-                .filter(|path| prim_specs.contains_key(path))
-            else {
-                continue;
-            };
-            // Find parent path by stripping the last segment.
-            let Some(parent_path) = parent_prim_path(path) else {
-                continue;
-            };
-            let child_name = path.rsplit('/').next().unwrap_or("");
-            if child_name.is_empty() {
+            let index = spec.path_index;
+            // Specs inside variant branches have no parent prim spec here.
+            if index as usize >= sections.paths.len() || self.in_branch_of(SpecName::Entry(index)) {
                 continue;
             }
-            let child_tok = self.tokens.intern(child_name);
+            let key = self.prim_key_at(index);
+            if !prim_specs.contains_key(key) {
+                continue;
+            }
+            // The parent strips the path's last name: from the path, or as
+            // the text is split.
+            let (parent, child) = match key {
+                PrimKey::Path(path) => {
+                    let Some(parent) = self.paths.parent(path) else {
+                        continue;
+                    };
+                    let Some(name) = self.paths.resolve(path).leaf() else {
+                        continue;
+                    };
+                    (PrimKey::Path(parent), name)
+                }
+                PrimKey::Text(path) => {
+                    let Some(parent_path) = parent_prim_path(path) else {
+                        continue;
+                    };
+                    let child_name = path.rsplit('/').next().unwrap_or("");
+                    if child_name.is_empty() {
+                        continue;
+                    }
+                    (
+                        self.prim_key_of_text(parent_path),
+                        self.tokens.intern(child_name),
+                    )
+                }
+            };
             children
-                .entry(parent_path)
+                .entry(parent)
                 .or_insert_with(|| {
-                    parents.push(parent_path);
+                    parents.push(parent);
                     Vec::new()
                 })
-                .push((path, child_tok));
+                .push((index, child));
         }
 
         // Only add to parent's authored_children if not already present
         // (the prim's own primChildren field is authoritative), in path
         // order.
-        for parent_path in parents {
-            let Some(parent) = prim_specs.get_mut(parent_path) else {
+        for parent_key in parents {
+            let Some(parent) = prim_specs.get_mut(parent_key) else {
                 continue;
             };
-            let mut named = children.remove(parent_path).unwrap_or_default();
+            let mut named = children.remove(&parent_key).unwrap_or_default();
             let listed: HashSet<TokenId> = parent.authored_children.iter().copied().collect();
             named.retain(|(_, name)| !listed.contains(name));
+            if named.is_empty() {
+                continue;
+            }
+            // The few a parent does not list are ordered by their texts.
+            let mut named: Vec<(&str, TokenId)> = named
+                .into_iter()
+                .map(|(index, name)| (self.path_text(index), name))
+                .collect();
             named.sort_unstable();
             append_unique(
                 &mut parent.authored_children,
@@ -1612,7 +1710,7 @@ impl<'a> AssembleCtx<'a> {
     /// Spec: AOUSD Core §7.4 (metadata fields), §12.2.6 (list ops).
     fn convert_metadata(
         &mut self,
-        spec_path: &str,
+        spec_path: SpecName<'_>,
         field: &str,
         field_value: &DecodedField<'_>,
     ) -> Result<Option<FieldValue>, UsdcError> {
@@ -1709,7 +1807,7 @@ impl<'a> AssembleCtx<'a> {
     /// attribute may have a value, a connection, or both).
     fn build_attribute_spec(
         &mut self,
-        spec_path: &str,
+        spec_path: SpecName<'_>,
         fields: &[(&str, DecodedField<'_>)],
     ) -> Result<PropertySpec, UsdcError> {
         let mut spec = PropertySpec::typed_attribute(self.attribute_property_type(fields));
@@ -1783,7 +1881,7 @@ impl<'a> AssembleCtx<'a> {
     /// (`variability`).
     fn apply_property_field(
         &mut self,
-        spec_path: &str,
+        spec_path: SpecName<'_>,
         name: &str,
         value: &DecodedField<'_>,
         spec: &mut PropertySpec,
@@ -1819,7 +1917,7 @@ impl<'a> AssembleCtx<'a> {
     /// Spec: AOUSD Core §7.6.5 (relationship spec fields).
     fn build_relationship_spec(
         &mut self,
-        spec_path: &str,
+        spec_path: SpecName<'_>,
         fields: &[(&str, DecodedField<'_>)],
     ) -> Result<PropertySpec, UsdcError> {
         let mut spec = PropertySpec::relationship();
@@ -2042,11 +2140,11 @@ impl<'a> AssembleCtx<'a> {
     fn target_path_at(&mut self, index: u32) -> Option<TargetPath> {
         let sections = self.sections;
         let at = index as usize;
-        let Some(text) = sections.paths.get(at) else {
+        if at >= sections.paths.len() {
             return self.target_path("");
-        };
-        if sections.path_nodes.len() != sections.paths.len() {
-            return self.target_path(text);
+        }
+        if !sections.paths.has_tree() {
+            return self.target_path(self.path_text(index));
         }
         if self.targets.is_empty() {
             self.targets = alloc::vec![TargetAt::Unknown; sections.paths.len()];
@@ -2054,11 +2152,12 @@ impl<'a> AssembleCtx<'a> {
         if let TargetAt::Found(found) = self.targets[at] {
             return found;
         }
-        let found = match sections.path_nodes[at] {
+        let spelling = |at: usize| sections.paths.spelling(at).unwrap_or_default();
+        let found = match sections.paths.nodes()[at] {
             PathNode::Child { property: true, .. } => match self.property_owner(index) {
                 Some(PropertyOwner::Prim { owner, name }) => {
                     // A prim inside a variant branch is no target's prim.
-                    if sections.paths[owner as usize].contains('{') {
+                    if spelling(owner as usize).selection() {
                         None
                     } else {
                         self.prim_path_at(owner)
@@ -2066,14 +2165,16 @@ impl<'a> AssembleCtx<'a> {
                     }
                 }
                 Some(PropertyOwner::Variant | PropertyOwner::Invalid) => None,
-                None => self.target_path(text),
+                None => self.target_path(self.path_text(index)),
             },
             PathNode::Root | PathNode::Child { .. }
-                if !text.bytes().any(|byte| matches!(byte, b'.' | b'{')) =>
+                if !spelling(at).dot() && !spelling(at).selection() =>
             {
                 self.prim_path_at(index).map(TargetPath::Prim)
             }
-            PathNode::Root | PathNode::Child { .. } | PathNode::Unused => self.target_path(text),
+            PathNode::Root | PathNode::Child { .. } | PathNode::Unused => {
+                self.target_path(self.path_text(index))
+            }
         };
         self.targets[at] = TargetAt::Found(found);
         found
@@ -2344,8 +2445,8 @@ impl<'a> AssembleCtx<'a> {
     /// names no prim path, or a table without its tree.
     fn prim_path_at(&mut self, index: u32) -> Option<PathId> {
         let sections = self.sections;
-        let nodes = &sections.path_nodes;
-        if nodes.len() != sections.paths.len() {
+        let nodes = sections.paths.nodes();
+        if !sections.paths.has_tree() {
             return self.prim_path_of_text(index as usize);
         }
         if self.prim_paths.is_empty() {
@@ -2391,7 +2492,7 @@ impl<'a> AssembleCtx<'a> {
 
     /// [`Self::prim_path_at`] from the text of path table entry `at`.
     fn prim_path_of_text(&self, at: usize) -> Option<PathId> {
-        let text = self.sections.paths.get(at)?;
+        let text = self.sections.path(at)?;
         if text.contains('{') {
             return None;
         }
@@ -2406,14 +2507,14 @@ impl<'a> AssembleCtx<'a> {
     /// property element holding a separator), for the text to say.
     fn property_owner(&mut self, index: u32) -> Option<PropertyOwner> {
         let sections = self.sections;
-        if sections.path_nodes.len() != sections.paths.len() {
+        if !sections.paths.has_tree() {
             return None;
         }
         let PathNode::Child {
             parent,
             token,
             property: true,
-        } = *sections.path_nodes.get(index as usize)?
+        } = *sections.paths.nodes().get(index as usize)?
         else {
             return None;
         };
@@ -2439,18 +2540,18 @@ impl<'a> AssembleCtx<'a> {
         }
         let found = match *self.owners.get(parent as usize)? {
             Owner::Unknown => {
-                let owner = &sections.paths[parent as usize];
-                let found = if owner.contains('{') {
+                let spelling = sections.paths.spelling(parent as usize).unwrap_or_default();
+                let found = if spelling.selection() {
                     // A property directly on a variant (`/A{v=x}.b`)
                     // belongs to the variant spec, and is placed with the
                     // variant specs; one on a prim inside a branch
                     // (`/A{v=x}B.c`) is placed here.
-                    if owner.ends_with('}') {
+                    if spelling.ends_with_close() {
                         Owner::Variant
                     } else {
                         Owner::Prim
                     }
-                } else if is_property_owner(owner) {
+                } else if self.is_property_owner_at(parent) {
                     Owner::Prim
                 } else {
                     Owner::Invalid
@@ -2470,11 +2571,88 @@ impl<'a> AssembleCtx<'a> {
         })
     }
 
+    /// [`is_property_owner`] of the text of path table entry `index`,
+    /// holding no `{`: a path the entry names as a prim path holds no
+    /// empty name and starts with `/`, so its text is a property's prim
+    /// path when it holds no `.` or `}` and is not the root's; the text is
+    /// read only for an entry naming no prim path.
+    fn is_property_owner_at(&mut self, index: u32) -> bool {
+        let spelling = self
+            .sections
+            .paths
+            .spelling(index as usize)
+            .unwrap_or_default();
+        if self.prim_path_at(index).is_some() {
+            return !spelling.dot() && !spelling.close() && !spelling.root();
+        }
+        is_property_owner(self.path_text(index))
+    }
+
+    /// Charges a look at the path at path table entry `index` by its
+    /// text's length, as [`Self::lookup_path`] does, without the text.
+    fn charge_path(&mut self, index: u32) -> Result<(), UsdcError> {
+        let len = self
+            .sections
+            .paths
+            .text_len(index as usize)
+            .ok_or(UsdcError::Inconsistent {
+                message: "path index out of range",
+            })?;
+        self.budget.charge_text(len)
+    }
+
+    /// The text of the path at path table entry `index`, spelled when
+    /// first asked; empty outside the table.
+    fn path_text(&self, index: u32) -> &'a str {
+        let sections = self.sections;
+        sections.path(index as usize).unwrap_or_default()
+    }
+
+    /// Whether the spec `name` names lies inside a variant branch: whether
+    /// its path's text holds a `{`.
+    fn in_branch_of(&self, name: SpecName<'_>) -> bool {
+        match name {
+            SpecName::Text(text) => text.contains('{'),
+            SpecName::Entry(index) => self
+                .sections
+                .paths
+                .spelling(index as usize)
+                .is_some_and(|spelling| spelling.selection()),
+        }
+    }
+
+    /// The key of the prim spec at path table entry `index`: the path the
+    /// tree names ([`Self::prim_path_at`]) for an entry whose text holds no
+    /// `{` or `}`, which the tree's segments spell as the text does;
+    /// [`Self::prim_key_of_text`] of its text otherwise.
+    fn prim_key_at(&mut self, index: u32) -> PrimKey<'a> {
+        let plain = self
+            .sections
+            .paths
+            .spelling(index as usize)
+            .is_some_and(|spelling| !spelling.selection() && !spelling.close());
+        if plain && let Some(path) = self.prim_path_at(index) {
+            return PrimKey::Path(path);
+        }
+        self.prim_key_of_text(self.path_text(index))
+    }
+
+    /// The key of a prim spec at the path `text`: the path it parses as
+    /// outside variant branches ([`Path::parse_absolute`]), otherwise the
+    /// text itself.
+    fn prim_key_of_text(&self, text: &'a str) -> PrimKey<'a> {
+        if !text.contains('{')
+            && let Ok(path) = Path::parse_absolute(text, self.tokens)
+        {
+            return PrimKey::Path(self.paths.intern(path));
+        }
+        PrimKey::Text(text)
+    }
+
     fn lookup_path(&mut self, index: u32) -> Result<&'a str, UsdcError> {
         let sections = self.sections;
         let path = sections
-            .paths
-            .get(index as usize)
+            .path(index as usize)
             .ok_or(UsdcError::Inconsistent {
                 message: "path index out of range",
             })?;
@@ -2809,8 +2987,8 @@ fn convert_math_value(vtype: ValueType, data: &[u8]) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::section::TokenTable;
     use crate::section::{FieldDef, SpecDef};
+    use crate::section::{PathTable, TokenTable};
     use crate::version::CrateVersion;
     use layerstack::AssetResolveError;
 
@@ -2878,7 +3056,7 @@ def "Other" {}
         let sections =
             crate::section::parse_sections(&bytes, &toc, header.crate_version(), &mut budget)
                 .unwrap();
-        assert_eq!(sections.path_nodes.len(), sections.paths.len());
+        assert!(sections.paths.has_tree());
         let assemble_from = |sections: &CrateSections| {
             let mut budget = DecodeBudget::with_limit(u64::MAX);
             assemble(
@@ -2894,7 +3072,7 @@ def "Other" {}
         };
         let tree = assemble_from(&sections);
         let mut text = sections.clone();
-        text.path_nodes.clear();
+        text.paths = PathTable::from_texts(sections.path_texts());
         let text = assemble_from(&text);
         assert!(tree.layer == text.layer, "the same layer");
         assert_eq!(tree.diagnostics, text.diagnostics);
@@ -2944,7 +3122,7 @@ def "T" {}
             let spec = sections
                 .specs
                 .iter()
-                .find(|spec| sections.paths[spec.path_index as usize] == path);
+                .find(|spec| sections.path(spec.path_index as usize) == Some(path));
             spec.unwrap().fieldset_index
         };
         assert_eq!(fieldset("/A"), fieldset("/B"), "the prims share a fieldset");
@@ -3084,8 +3262,7 @@ def "T" {}
                     },
                 ],
                 fieldsets: alloc::vec![-1, 0, 1, -1],
-                paths: alloc::vec!["/A".into(), "/A.a".into()],
-                path_nodes: Vec::new(),
+                paths: PathTable::from_texts(["/A", "/A.a"]),
                 specs: alloc::vec![
                     SpecDef {
                         path_index: 0,
@@ -3210,8 +3387,7 @@ def "T" {}
                 strings: Vec::new(),
                 fields: Vec::new(),
                 fieldsets: Vec::new(),
-                paths: Vec::new(),
-                path_nodes: Vec::new(),
+                paths: PathTable::default(),
                 specs: Vec::new(),
                 version: CrateVersion::NEWEST_READABLE,
             };
@@ -3256,13 +3432,7 @@ def "T" {}
                     },
                 ],
                 fieldsets: alloc::vec![0, -1, 1, -1],
-                paths: alloc::vec![
-                    "/P".into(),
-                    "/P.a".into(),
-                    "/P{v=x}".into(),
-                    "/P{v=x}.a".into()
-                ],
-                path_nodes: Vec::new(),
+                paths: PathTable::from_texts(["/P", "/P.a", "/P{v=x}", "/P{v=x}.a"]),
                 specs: alloc::vec![
                     SpecDef {
                         path_index: 0,
@@ -3378,8 +3548,7 @@ def "T" {}
                 value_rep: rep,
             }],
             fieldsets: alloc::vec![0, -1],
-            paths,
-            path_nodes: Vec::new(),
+            paths: PathTable::from_texts(paths),
             specs: (0..n)
                 .map(|i| SpecDef {
                     path_index: path_of(i),

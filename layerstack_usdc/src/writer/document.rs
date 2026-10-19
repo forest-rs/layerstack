@@ -1093,7 +1093,7 @@ mod tests {
         let root = sections
             .specs
             .iter()
-            .find(|s| sections.paths[s.path_index as usize] == "/")
+            .find(|s| sections.path(s.path_index as usize) == Some("/"))
             .unwrap();
 
         for (key, v) in values {

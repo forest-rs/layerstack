@@ -104,7 +104,11 @@ impl<'a> CrateFile<'a> {
         }
         budget.charge(sections.specs.len() as u64)?;
         let mut order: Vec<_> = (0..sections.specs.len()).collect();
-        let path = |i: usize| sections.paths[sections.specs[i].path_index as usize].as_str();
+        let path = |i: usize| {
+            sections
+                .path(sections.specs[i].path_index as usize)
+                .unwrap_or_default()
+        };
         order.sort_unstable_by(|&a, &b| path(a).cmp(path(b)));
         if order.windows(2).any(|pair| path(pair[0]) == path(pair[1])) {
             return Err(invalid("duplicate spec path"));
@@ -129,8 +133,9 @@ impl<'a> CrateFile<'a> {
         let i = self
             .order
             .binary_search_by(|&i| {
-                self.sections.paths[self.sections.specs[i].path_index as usize]
-                    .as_str()
+                self.sections
+                    .path(self.sections.specs[i].path_index as usize)
+                    .unwrap_or_default()
                     .cmp(path)
             })
             .ok()?;
@@ -163,7 +168,9 @@ impl<'a> CrateSpec<'a> {
     /// The full authored spec path, including variant context and property name.
     #[must_use]
     pub fn path(self) -> &'a str {
-        &self.sections.paths[self.spec.path_index as usize]
+        self.sections
+            .path(self.spec.path_index as usize)
+            .unwrap_or_default()
     }
 
     /// The authored spec kind (prim, attribute, variant, and so on).

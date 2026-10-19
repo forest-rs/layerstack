@@ -9,9 +9,9 @@ use alloc::{string::String, vec::Vec};
 
 use layerstack::edit::{EditTarget, Transaction};
 use layerstack::{
-    CannotApply, LayerStore, ListOp, ListPosition, PathId, PropertyDeclaration, PropertyDefinition,
-    PropertyKind, PropertyPath, PropertySpec, PropertyType, ResolvedValue, Specifier, Stage,
-    TargetPath, TokenId, TokenInterner, Value,
+    CannotApply, LayerStore, ListOp, ListPosition, PathId, PrimPathArg, PropertyDeclaration,
+    PropertyDefinition, PropertyKind, PropertyPath, PropertySpec, PropertyType, ResolvedValue,
+    Specifier, Stage, TargetPath, TokenId, TokenInterner, Value,
 };
 
 /// Collects schema edits into a [`Transaction`] for one [`EditTarget`].
@@ -329,6 +329,15 @@ impl<'s> SchemaEdit<'s> {
     /// OpenUSD: authoring through an invalid `UsdPrim` fails.
     pub(crate) fn exists(&self, path: PathId) -> bool {
         self.stage.has_prim(path) || self.defined.iter().any(|(p, _)| *p == path)
+    }
+
+    /// The interned prim path `path` names: text (`"/World/Rock"`) or an
+    /// id. `None` for text that is not a well-formed absolute prim path, or
+    /// that the store has not interned, which no prim of this edit or its
+    /// stage has. Looking a path up never interns it.
+    #[must_use]
+    pub fn prim_path(&self, path: impl PrimPathArg) -> Option<PathId> {
+        path.prim_path(self.store.paths(), self.store.tokens())
     }
 
     /// Whether the prim at `path` is of the typed schema `schema`, or of

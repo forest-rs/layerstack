@@ -51,7 +51,8 @@ impl<'a> PhysicsArticulationRootApi<'a> {
     #[must_use]
     #[doc(alias = "UsdPhysicsArticulationRootAPI::Get")]
     #[doc(alias = "Get")]
-    pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+        let path = scene.prim_path(path)?;
         scene
             .has_api(path, Self::SCHEMA, None)
             .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
@@ -110,7 +111,7 @@ impl PhysicsArticulationRootApiEdit {
     /// exists: on the edit's stage, or defined earlier in `edit`. Setters
     /// never create a prim that does not.
     #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
+    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
@@ -150,7 +151,8 @@ impl<'a> PhysicsCollisionApi<'a> {
     #[must_use]
     #[doc(alias = "UsdPhysicsCollisionAPI::Get")]
     #[doc(alias = "Get")]
-    pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+        let path = scene.prim_path(path)?;
         scene
             .has_api(path, Self::SCHEMA, None)
             .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
@@ -243,7 +245,7 @@ impl PhysicsCollisionApiEdit {
     /// exists: on the edit's stage, or defined earlier in `edit`. Setters
     /// never create a prim that does not.
     #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
+    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
@@ -341,11 +343,12 @@ impl<'a> PhysicsCollisionGroup<'a> {
     /// The schema's name.
     pub const SCHEMA: &'static str = "PhysicsCollisionGroup";
 
-    #[doc = "A view of the prim at `path`, if it is a `PhysicsCollisionGroup` or of a schema derived from it."]
+    #[doc = "A view of the prim at `path` (text, `\"/World/Prim\"`, or an id), if it is a `PhysicsCollisionGroup` or of a schema derived from it."]
     #[doc(alias = "UsdPhysicsCollisionGroup::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
+    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+        let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
             .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
@@ -455,7 +458,8 @@ impl Deref for PhysicsCollisionGroupEdit {
 impl PhysicsCollisionGroupEdit {
     #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `PhysicsCollisionGroup` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`PhysicsCollisionGroup::define`] types it, and `PhysicsCollisionGroupEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
+    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+        let path = edit.prim_path(path)?;
         edit.is_a(path, PhysicsCollisionGroup::SCHEMA)
             .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
@@ -580,11 +584,12 @@ impl<'a> PhysicsDistanceJoint<'a> {
     /// The schema's name.
     pub const SCHEMA: &'static str = "PhysicsDistanceJoint";
 
-    #[doc = "A view of the prim at `path`, if it is a `PhysicsDistanceJoint` or of a schema derived from it."]
+    #[doc = "A view of the prim at `path` (text, `\"/World/Prim\"`, or an id), if it is a `PhysicsDistanceJoint` or of a schema derived from it."]
     #[doc(alias = "UsdPhysicsDistanceJoint::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
+    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+        let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
             .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
@@ -676,7 +681,8 @@ impl Deref for PhysicsDistanceJointEdit {
 impl PhysicsDistanceJointEdit {
     #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `PhysicsDistanceJoint` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`PhysicsDistanceJoint::define`] types it, and `PhysicsDistanceJointEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
+    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+        let path = edit.prim_path(path)?;
         edit.is_a(path, PhysicsDistanceJoint::SCHEMA)
             .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
@@ -807,7 +813,12 @@ impl<'a> PhysicsDriveApi<'a> {
     #[must_use]
     #[doc(alias = "UsdPhysicsDriveAPI::Get")]
     #[doc(alias = "Get")]
-    pub fn get(scene: &Scene<'a>, path: PathId, instance: &str) -> Option<Self> {
+    pub fn get(
+        scene: &Scene<'a>,
+        path: impl ::layerstack::PrimPathArg,
+        instance: &str,
+    ) -> Option<Self> {
+        let path = scene.prim_path(path)?;
         if !scene.has_api(path, Self::SCHEMA, Some(instance)) {
             return None;
         }
@@ -826,7 +837,13 @@ impl<'a> PhysicsDriveApi<'a> {
     #[must_use]
     #[doc(alias = "UsdPhysicsDriveAPI::GetAll")]
     #[doc(alias = "GetAll")]
-    pub fn instances(scene: &Scene<'a>, path: PathId) -> ::alloc::vec::Vec<Self> {
+    pub fn instances(
+        scene: &Scene<'a>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> ::alloc::vec::Vec<Self> {
+        let Some(path) = scene.prim_path(path) else {
+            return ::alloc::vec::Vec::new();
+        };
         scene
             .instances(path, Self::SCHEMA)
             .into_iter()
@@ -1020,7 +1037,11 @@ impl PhysicsDriveApiEdit {
     /// through `edit`, if the prim exists: on the edit's stage, or defined
     /// earlier in `edit`. Setters never create a prim that does not.
     #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: PathId, instance: &str) -> Option<Self> {
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+        instance: &str,
+    ) -> Option<Self> {
         PrimEdit::new(edit, path).map(|prim| Self::from_instance(InstanceEdit::new(prim, instance)))
     }
 
@@ -1197,7 +1218,8 @@ impl<'a> PhysicsFilteredPairsApi<'a> {
     #[must_use]
     #[doc(alias = "UsdPhysicsFilteredPairsAPI::Get")]
     #[doc(alias = "Get")]
-    pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+        let path = scene.prim_path(path)?;
         scene
             .has_api(path, Self::SCHEMA, None)
             .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
@@ -1270,7 +1292,7 @@ impl PhysicsFilteredPairsApiEdit {
     /// exists: on the edit's stage, or defined earlier in `edit`. Setters
     /// never create a prim that does not.
     #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
+    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
@@ -1344,11 +1366,12 @@ impl<'a> PhysicsFixedJoint<'a> {
     /// The schema's name.
     pub const SCHEMA: &'static str = "PhysicsFixedJoint";
 
-    #[doc = "A view of the prim at `path`, if it is a `PhysicsFixedJoint` or of a schema derived from it."]
+    #[doc = "A view of the prim at `path` (text, `\"/World/Prim\"`, or an id), if it is a `PhysicsFixedJoint` or of a schema derived from it."]
     #[doc(alias = "UsdPhysicsFixedJoint::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
+    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+        let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
             .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
@@ -1400,7 +1423,8 @@ impl Deref for PhysicsFixedJointEdit {
 impl PhysicsFixedJointEdit {
     #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `PhysicsFixedJoint` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`PhysicsFixedJoint::define`] types it, and `PhysicsFixedJointEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
+    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+        let path = edit.prim_path(path)?;
         edit.is_a(path, PhysicsFixedJoint::SCHEMA)
             .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
@@ -1437,11 +1461,12 @@ impl<'a> PhysicsJoint<'a> {
     /// The schema's name.
     pub const SCHEMA: &'static str = "PhysicsJoint";
 
-    #[doc = "A view of the prim at `path`, if it is a `PhysicsJoint` or of a schema derived from it."]
+    #[doc = "A view of the prim at `path` (text, `\"/World/Prim\"`, or an id), if it is a `PhysicsJoint` or of a schema derived from it."]
     #[doc(alias = "UsdPhysicsJoint::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
+    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+        let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
             .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
@@ -1695,7 +1720,8 @@ impl Deref for PhysicsJointEdit {
 impl PhysicsJointEdit {
     #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `PhysicsJoint` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`PhysicsJoint::define`] types it, and `PhysicsJointEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
+    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+        let path = edit.prim_path(path)?;
         edit.is_a(path, PhysicsJoint::SCHEMA)
             .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
@@ -2007,7 +2033,12 @@ impl<'a> PhysicsLimitApi<'a> {
     #[must_use]
     #[doc(alias = "UsdPhysicsLimitAPI::Get")]
     #[doc(alias = "Get")]
-    pub fn get(scene: &Scene<'a>, path: PathId, instance: &str) -> Option<Self> {
+    pub fn get(
+        scene: &Scene<'a>,
+        path: impl ::layerstack::PrimPathArg,
+        instance: &str,
+    ) -> Option<Self> {
+        let path = scene.prim_path(path)?;
         if !scene.has_api(path, Self::SCHEMA, Some(instance)) {
             return None;
         }
@@ -2026,7 +2057,13 @@ impl<'a> PhysicsLimitApi<'a> {
     #[must_use]
     #[doc(alias = "UsdPhysicsLimitAPI::GetAll")]
     #[doc(alias = "GetAll")]
-    pub fn instances(scene: &Scene<'a>, path: PathId) -> ::alloc::vec::Vec<Self> {
+    pub fn instances(
+        scene: &Scene<'a>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> ::alloc::vec::Vec<Self> {
+        let Some(path) = scene.prim_path(path) else {
+            return ::alloc::vec::Vec::new();
+        };
         scene
             .instances(path, Self::SCHEMA)
             .into_iter()
@@ -2142,7 +2179,11 @@ impl PhysicsLimitApiEdit {
     /// through `edit`, if the prim exists: on the edit's stage, or defined
     /// earlier in `edit`. Setters never create a prim that does not.
     #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: PathId, instance: &str) -> Option<Self> {
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+        instance: &str,
+    ) -> Option<Self> {
         PrimEdit::new(edit, path).map(|prim| Self::from_instance(InstanceEdit::new(prim, instance)))
     }
 
@@ -2216,7 +2257,8 @@ impl<'a> PhysicsMassApi<'a> {
     #[must_use]
     #[doc(alias = "UsdPhysicsMassAPI::Get")]
     #[doc(alias = "Get")]
-    pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+        let path = scene.prim_path(path)?;
         scene
             .has_api(path, Self::SCHEMA, None)
             .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
@@ -2375,7 +2417,7 @@ impl PhysicsMassApiEdit {
     /// exists: on the edit's stage, or defined earlier in `edit`. Setters
     /// never create a prim that does not.
     #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
+    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
@@ -2525,7 +2567,8 @@ impl<'a> PhysicsMaterialApi<'a> {
     #[must_use]
     #[doc(alias = "UsdPhysicsMaterialAPI::Get")]
     #[doc(alias = "Get")]
-    pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+        let path = scene.prim_path(path)?;
         scene
             .has_api(path, Self::SCHEMA, None)
             .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
@@ -2664,7 +2707,7 @@ impl PhysicsMaterialApiEdit {
     /// exists: on the edit's stage, or defined earlier in `edit`. Setters
     /// never create a prim that does not.
     #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
+    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
@@ -2863,7 +2906,8 @@ impl<'a> PhysicsMeshCollisionApi<'a> {
     #[must_use]
     #[doc(alias = "UsdPhysicsMeshCollisionAPI::Get")]
     #[doc(alias = "Get")]
-    pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+        let path = scene.prim_path(path)?;
         scene
             .has_api(path, Self::SCHEMA, None)
             .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
@@ -2939,7 +2983,7 @@ impl PhysicsMeshCollisionApiEdit {
     /// exists: on the edit's stage, or defined earlier in `edit`. Setters
     /// never create a prim that does not.
     #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
+    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
@@ -3043,11 +3087,12 @@ impl<'a> PhysicsPrismaticJoint<'a> {
     /// The schema's name.
     pub const SCHEMA: &'static str = "PhysicsPrismaticJoint";
 
-    #[doc = "A view of the prim at `path`, if it is a `PhysicsPrismaticJoint` or of a schema derived from it."]
+    #[doc = "A view of the prim at `path` (text, `\"/World/Prim\"`, or an id), if it is a `PhysicsPrismaticJoint` or of a schema derived from it."]
     #[doc(alias = "UsdPhysicsPrismaticJoint::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
+    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+        let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
             .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
@@ -3153,7 +3198,8 @@ impl Deref for PhysicsPrismaticJointEdit {
 impl PhysicsPrismaticJointEdit {
     #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `PhysicsPrismaticJoint` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`PhysicsPrismaticJoint::define`] types it, and `PhysicsPrismaticJointEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
+    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+        let path = edit.prim_path(path)?;
         edit.is_a(path, PhysicsPrismaticJoint::SCHEMA)
             .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
@@ -3294,11 +3340,12 @@ impl<'a> PhysicsRevoluteJoint<'a> {
     /// The schema's name.
     pub const SCHEMA: &'static str = "PhysicsRevoluteJoint";
 
-    #[doc = "A view of the prim at `path`, if it is a `PhysicsRevoluteJoint` or of a schema derived from it."]
+    #[doc = "A view of the prim at `path` (text, `\"/World/Prim\"`, or an id), if it is a `PhysicsRevoluteJoint` or of a schema derived from it."]
     #[doc(alias = "UsdPhysicsRevoluteJoint::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
+    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+        let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
             .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
@@ -3404,7 +3451,8 @@ impl Deref for PhysicsRevoluteJointEdit {
 impl PhysicsRevoluteJointEdit {
     #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `PhysicsRevoluteJoint` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`PhysicsRevoluteJoint::define`] types it, and `PhysicsRevoluteJointEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
+    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+        let path = edit.prim_path(path)?;
         edit.is_a(path, PhysicsRevoluteJoint::SCHEMA)
             .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
@@ -3497,7 +3545,8 @@ impl<'a> PhysicsRigidBodyApi<'a> {
     #[must_use]
     #[doc(alias = "UsdPhysicsRigidBodyAPI::Get")]
     #[doc(alias = "Get")]
-    pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+        let path = scene.prim_path(path)?;
         scene
             .has_api(path, Self::SCHEMA, None)
             .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
@@ -3664,7 +3713,7 @@ impl PhysicsRigidBodyApiEdit {
     /// exists: on the edit's stage, or defined earlier in `edit`. Setters
     /// never create a prim that does not.
     #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
+    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
@@ -3841,11 +3890,12 @@ impl<'a> PhysicsScene<'a> {
     /// The schema's name.
     pub const SCHEMA: &'static str = "PhysicsScene";
 
-    #[doc = "A view of the prim at `path`, if it is a `PhysicsScene` or of a schema derived from it."]
+    #[doc = "A view of the prim at `path` (text, `\"/World/Prim\"`, or an id), if it is a `PhysicsScene` or of a schema derived from it."]
     #[doc(alias = "UsdPhysicsScene::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
+    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+        let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
             .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
@@ -3937,7 +3987,8 @@ impl Deref for PhysicsSceneEdit {
 impl PhysicsSceneEdit {
     #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `PhysicsScene` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`PhysicsScene::define`] types it, and `PhysicsSceneEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
+    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+        let path = edit.prim_path(path)?;
         edit.is_a(path, PhysicsScene::SCHEMA)
             .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
@@ -4076,11 +4127,12 @@ impl<'a> PhysicsSphericalJoint<'a> {
     /// The schema's name.
     pub const SCHEMA: &'static str = "PhysicsSphericalJoint";
 
-    #[doc = "A view of the prim at `path`, if it is a `PhysicsSphericalJoint` or of a schema derived from it."]
+    #[doc = "A view of the prim at `path` (text, `\"/World/Prim\"`, or an id), if it is a `PhysicsSphericalJoint` or of a schema derived from it."]
     #[doc(alias = "UsdPhysicsSphericalJoint::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
+    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+        let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
             .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
@@ -4186,7 +4238,8 @@ impl Deref for PhysicsSphericalJointEdit {
 impl PhysicsSphericalJointEdit {
     #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `PhysicsSphericalJoint` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`PhysicsSphericalJoint::define`] types it, and `PhysicsSphericalJointEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
+    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+        let path = edit.prim_path(path)?;
         edit.is_a(path, PhysicsSphericalJoint::SCHEMA)
             .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }

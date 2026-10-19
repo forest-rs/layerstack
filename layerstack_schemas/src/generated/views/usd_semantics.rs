@@ -51,7 +51,12 @@ impl<'a> SemanticsLabelsApi<'a> {
     #[must_use]
     #[doc(alias = "UsdSemanticsLabelsAPI::Get")]
     #[doc(alias = "Get")]
-    pub fn get(scene: &Scene<'a>, path: PathId, instance: &str) -> Option<Self> {
+    pub fn get(
+        scene: &Scene<'a>,
+        path: impl ::layerstack::PrimPathArg,
+        instance: &str,
+    ) -> Option<Self> {
+        let path = scene.prim_path(path)?;
         if !scene.has_api(path, Self::SCHEMA, Some(instance)) {
             return None;
         }
@@ -70,7 +75,13 @@ impl<'a> SemanticsLabelsApi<'a> {
     #[must_use]
     #[doc(alias = "UsdSemanticsLabelsAPI::GetAll")]
     #[doc(alias = "GetAll")]
-    pub fn instances(scene: &Scene<'a>, path: PathId) -> ::alloc::vec::Vec<Self> {
+    pub fn instances(
+        scene: &Scene<'a>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> ::alloc::vec::Vec<Self> {
+        let Some(path) = scene.prim_path(path) else {
+            return ::alloc::vec::Vec::new();
+        };
         scene
             .instances(path, Self::SCHEMA)
             .into_iter()
@@ -173,7 +184,11 @@ impl SemanticsLabelsApiEdit {
     /// through `edit`, if the prim exists: on the edit's stage, or defined
     /// earlier in `edit`. Setters never create a prim that does not.
     #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: PathId, instance: &str) -> Option<Self> {
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+        instance: &str,
+    ) -> Option<Self> {
         PrimEdit::new(edit, path).map(|prim| Self::from_instance(InstanceEdit::new(prim, instance)))
     }
 

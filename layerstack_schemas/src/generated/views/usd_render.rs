@@ -45,11 +45,12 @@ impl<'a> RenderPass<'a> {
     /// The schema's name.
     pub const SCHEMA: &'static str = "RenderPass";
 
-    #[doc = "A view of the prim at `path`, if it is a `RenderPass` or of a schema derived from it."]
+    #[doc = "A view of the prim at `path` (text, `\"/World/Prim\"`, or an id), if it is a `RenderPass` or of a schema derived from it."]
     #[doc(alias = "UsdRenderPass::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
+    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+        let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
             .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
@@ -184,7 +185,8 @@ impl Deref for RenderPassEdit {
 impl RenderPassEdit {
     #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `RenderPass` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`RenderPass::define`] types it, and `RenderPassEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
+    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+        let path = edit.prim_path(path)?;
         edit.is_a(path, RenderPass::SCHEMA)
             .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
@@ -387,11 +389,12 @@ impl<'a> RenderProduct<'a> {
     /// The schema's name.
     pub const SCHEMA: &'static str = "RenderProduct";
 
-    #[doc = "A view of the prim at `path`, if it is a `RenderProduct` or of a schema derived from it."]
+    #[doc = "A view of the prim at `path` (text, `\"/World/Prim\"`, or an id), if it is a `RenderProduct` or of a schema derived from it."]
     #[doc(alias = "UsdRenderProduct::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
+    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+        let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
             .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
@@ -491,7 +494,8 @@ impl Deref for RenderProductEdit {
 impl RenderProductEdit {
     #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `RenderProduct` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`RenderProduct::define`] types it, and `RenderProductEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
+    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+        let path = edit.prim_path(path)?;
         edit.is_a(path, RenderProduct::SCHEMA)
             .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
@@ -603,11 +607,12 @@ impl<'a> RenderSettings<'a> {
     /// The schema's name.
     pub const SCHEMA: &'static str = "RenderSettings";
 
-    #[doc = "A view of the prim at `path`, if it is a `RenderSettings` or of a schema derived from it."]
+    #[doc = "A view of the prim at `path` (text, `\"/World/Prim\"`, or an id), if it is a `RenderSettings` or of a schema derived from it."]
     #[doc(alias = "UsdRenderSettings::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
+    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+        let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
             .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
@@ -739,7 +744,8 @@ impl Deref for RenderSettingsEdit {
 impl RenderSettingsEdit {
     #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `RenderSettings` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`RenderSettings::define`] types it, and `RenderSettingsEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
+    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+        let path = edit.prim_path(path)?;
         edit.is_a(path, RenderSettings::SCHEMA)
             .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
@@ -924,11 +930,12 @@ impl<'a> RenderSettingsBase<'a> {
     /// The schema's name.
     pub const SCHEMA: &'static str = "RenderSettingsBase";
 
-    #[doc = "A view of the prim at `path`, if it is a `RenderSettingsBase` or of a schema derived from it."]
+    #[doc = "A view of the prim at `path` (text, `\"/World/Prim\"`, or an id), if it is a `RenderSettingsBase` or of a schema derived from it."]
     #[doc(alias = "UsdRenderSettingsBase::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
+    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+        let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
             .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
@@ -1083,7 +1090,8 @@ impl Deref for RenderSettingsBaseEdit {
 impl RenderSettingsBaseEdit {
     #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `RenderSettingsBase` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`SchemaEdit::define_prim`] with a concrete schema derived from it types it, and `RenderSettingsBaseEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
+    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+        let path = edit.prim_path(path)?;
         edit.is_a(path, RenderSettingsBase::SCHEMA)
             .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
@@ -1303,11 +1311,12 @@ impl<'a> RenderVar<'a> {
     /// The schema's name.
     pub const SCHEMA: &'static str = "RenderVar";
 
-    #[doc = "A view of the prim at `path`, if it is a `RenderVar` or of a schema derived from it."]
+    #[doc = "A view of the prim at `path` (text, `\"/World/Prim\"`, or an id), if it is a `RenderVar` or of a schema derived from it."]
     #[doc(alias = "UsdRenderVar::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
+    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+        let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
             .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
@@ -1401,7 +1410,8 @@ impl Deref for RenderVarEdit {
 impl RenderVarEdit {
     #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `RenderVar` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`RenderVar::define`] types it, and `RenderVarEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
+    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+        let path = edit.prim_path(path)?;
         edit.is_a(path, RenderVar::SCHEMA)
             .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }

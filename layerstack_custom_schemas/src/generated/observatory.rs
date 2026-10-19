@@ -50,7 +50,8 @@ impl<'a> MountedOnApi<'a> {
     /// A view of the schema on the prim at `path`, if the prim has it
     /// applied.
     #[must_use]
-    pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+        let path = scene.prim_path(path)?;
         scene
             .has_api(path, Self::SCHEMA, None)
             .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
@@ -120,7 +121,7 @@ impl MountedOnApiEdit {
     /// exists: on the edit's stage, or defined earlier in `edit`. Setters
     /// never create a prim that does not.
     #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
+    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
@@ -253,9 +254,10 @@ impl<'a> Telescope<'a> {
     /// The schema's name.
     pub const SCHEMA: &'static str = "Telescope";
 
-    #[doc = "A view of the prim at `path`, if it is a `Telescope` or of a schema derived from it."]
+    #[doc = "A view of the prim at `path` (text, `\"/World/Prim\"`, or an id), if it is a `Telescope` or of a schema derived from it."]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
+    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+        let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
             .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
@@ -352,7 +354,8 @@ impl Deref for TelescopeEdit {
 impl TelescopeEdit {
     #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Telescope` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`Telescope::define`] types it, and `TelescopeEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
+    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+        let path = edit.prim_path(path)?;
         edit.is_a(path, Telescope::SCHEMA)
             .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }

@@ -44,7 +44,7 @@ impl<'a> PreviewSurface<'a> {
     pub const ID: &'static str = "UsdPreviewSurface";
     /// Reads an identifier-based Shader whose composed `info:id` matches.
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
+    pub fn new(scene: &Scene<'a>, path: impl layerstack::PrimPathArg) -> Option<Self> {
         let shader = Shader::new(scene, path)?;
         let definition = shader.node_def_api();
         (definition.id() == Some(Self::ID)
@@ -859,7 +859,7 @@ impl<'a> PrimvarReaderFloat<'a> {
     pub const ID: &'static str = "UsdPrimvarReader_float";
     /// Reads an identifier-based Shader whose composed `info:id` matches.
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
+    pub fn new(scene: &Scene<'a>, path: impl layerstack::PrimPathArg) -> Option<Self> {
         let shader = Shader::new(scene, path)?;
         let definition = shader.node_def_api();
         (definition.id() == Some(Self::ID)
@@ -1015,7 +1015,7 @@ impl<'a> PrimvarReaderFloat2<'a> {
     pub const ID: &'static str = "UsdPrimvarReader_float2";
     /// Reads an identifier-based Shader whose composed `info:id` matches.
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
+    pub fn new(scene: &Scene<'a>, path: impl layerstack::PrimPathArg) -> Option<Self> {
         let shader = Shader::new(scene, path)?;
         let definition = shader.node_def_api();
         (definition.id() == Some(Self::ID)
@@ -1175,7 +1175,7 @@ impl<'a> PrimvarReaderFloat3<'a> {
     pub const ID: &'static str = "UsdPrimvarReader_float3";
     /// Reads an identifier-based Shader whose composed `info:id` matches.
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
+    pub fn new(scene: &Scene<'a>, path: impl layerstack::PrimPathArg) -> Option<Self> {
         let shader = Shader::new(scene, path)?;
         let definition = shader.node_def_api();
         (definition.id() == Some(Self::ID)
@@ -1335,7 +1335,7 @@ impl<'a> PrimvarReaderFloat4<'a> {
     pub const ID: &'static str = "UsdPrimvarReader_float4";
     /// Reads an identifier-based Shader whose composed `info:id` matches.
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
+    pub fn new(scene: &Scene<'a>, path: impl layerstack::PrimPathArg) -> Option<Self> {
         let shader = Shader::new(scene, path)?;
         let definition = shader.node_def_api();
         (definition.id() == Some(Self::ID)
@@ -1495,7 +1495,7 @@ impl<'a> PrimvarReaderInt<'a> {
     pub const ID: &'static str = "UsdPrimvarReader_int";
     /// Reads an identifier-based Shader whose composed `info:id` matches.
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
+    pub fn new(scene: &Scene<'a>, path: impl layerstack::PrimPathArg) -> Option<Self> {
         let shader = Shader::new(scene, path)?;
         let definition = shader.node_def_api();
         (definition.id() == Some(Self::ID)
@@ -1651,7 +1651,7 @@ impl<'a> PrimvarReaderMatrix<'a> {
     pub const ID: &'static str = "UsdPrimvarReader_matrix";
     /// Reads an identifier-based Shader whose composed `info:id` matches.
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
+    pub fn new(scene: &Scene<'a>, path: impl layerstack::PrimPathArg) -> Option<Self> {
         let shader = Shader::new(scene, path)?;
         let definition = shader.node_def_api();
         (definition.id() == Some(Self::ID)
@@ -1816,7 +1816,7 @@ impl<'a> PrimvarReaderNormal<'a> {
     pub const ID: &'static str = "UsdPrimvarReader_normal";
     /// Reads an identifier-based Shader whose composed `info:id` matches.
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
+    pub fn new(scene: &Scene<'a>, path: impl layerstack::PrimPathArg) -> Option<Self> {
         let shader = Shader::new(scene, path)?;
         let definition = shader.node_def_api();
         (definition.id() == Some(Self::ID)
@@ -1976,7 +1976,7 @@ impl<'a> PrimvarReaderPoint<'a> {
     pub const ID: &'static str = "UsdPrimvarReader_point";
     /// Reads an identifier-based Shader whose composed `info:id` matches.
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
+    pub fn new(scene: &Scene<'a>, path: impl layerstack::PrimPathArg) -> Option<Self> {
         let shader = Shader::new(scene, path)?;
         let definition = shader.node_def_api();
         (definition.id() == Some(Self::ID)
@@ -2136,7 +2136,7 @@ impl<'a> PrimvarReaderString<'a> {
     pub const ID: &'static str = "UsdPrimvarReader_string";
     /// Reads an identifier-based Shader whose composed `info:id` matches.
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
+    pub fn new(scene: &Scene<'a>, path: impl layerstack::PrimPathArg) -> Option<Self> {
         let shader = Shader::new(scene, path)?;
         let definition = shader.node_def_api();
         (definition.id() == Some(Self::ID)
@@ -2292,7 +2292,7 @@ impl<'a> PrimvarReaderVector<'a> {
     pub const ID: &'static str = "UsdPrimvarReader_vector";
     /// Reads an identifier-based Shader whose composed `info:id` matches.
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
+    pub fn new(scene: &Scene<'a>, path: impl layerstack::PrimPathArg) -> Option<Self> {
         let shader = Shader::new(scene, path)?;
         let definition = shader.node_def_api();
         (definition.id() == Some(Self::ID)
@@ -2452,7 +2452,7 @@ impl<'a> Transform2d<'a> {
     pub const ID: &'static str = "UsdTransform2d";
     /// Reads an identifier-based Shader whose composed `info:id` matches.
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
+    pub fn new(scene: &Scene<'a>, path: impl layerstack::PrimPathArg) -> Option<Self> {
         let shader = Shader::new(scene, path)?;
         let definition = shader.node_def_api();
         (definition.id() == Some(Self::ID)
@@ -2713,7 +2713,7 @@ impl<'a> UvTexture<'a> {
     pub const ID: &'static str = "UsdUVTexture";
     /// Reads an identifier-based Shader whose composed `info:id` matches.
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
+    pub fn new(scene: &Scene<'a>, path: impl layerstack::PrimPathArg) -> Option<Self> {
         let shader = Shader::new(scene, path)?;
         let definition = shader.node_def_api();
         (definition.id() == Some(Self::ID)

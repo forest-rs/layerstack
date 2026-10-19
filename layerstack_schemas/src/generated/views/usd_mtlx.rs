@@ -51,7 +51,8 @@ impl<'a> MaterialXConfigApi<'a> {
     #[must_use]
     #[doc(alias = "UsdMtlxMaterialXConfigAPI::Get")]
     #[doc(alias = "Get")]
-    pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+        let path = scene.prim_path(path)?;
         scene
             .has_api(path, Self::SCHEMA, None)
             .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
@@ -133,7 +134,7 @@ impl MaterialXConfigApiEdit {
     /// exists: on the edit's stage, or defined earlier in `edit`. Setters
     /// never create a prim that does not.
     #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
+    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         PrimEdit::new(edit, path).map(Self::from_prim)
     }
 

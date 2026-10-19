@@ -23,8 +23,8 @@ use core::fmt;
 use alloc::{string::String, vec::Vec};
 
 use layerstack::{
-    LayerStore, ListPosition, PathId, PropertyKind, PropertyPath, ResolvedValue, Stage, TargetPath,
-    Time, TokenId, TokenInterner, Value,
+    LayerStore, ListPosition, PathId, PrimPathArg, PropertyKind, PropertyPath, ResolvedValue,
+    Stage, StageView, TargetPath, Time, TokenId, TokenInterner, Value,
 };
 
 use crate::edit::SchemaEdit;
@@ -148,6 +148,24 @@ impl<'a> Scene<'a> {
         self.stage
     }
 
+    /// The scene's stage and store as a [`StageView`], whose generic
+    /// handles explain values and report types
+    /// ([`Attribute::explain`](layerstack::Attribute::explain),
+    /// [`Attribute::type_name`](layerstack::Attribute::type_name)).
+    #[must_use]
+    pub fn view(&self) -> StageView<'a> {
+        self.stage.view(self.store)
+    }
+
+    /// The interned prim path `path` names: text (`"/World/Rock"`) or an
+    /// id, as a [`StageView`] query takes it. `None` for text that is not a
+    /// well-formed absolute prim path, or names no interned path. Looking a
+    /// path up never interns it.
+    #[must_use]
+    pub fn prim_path(&self, path: impl PrimPathArg) -> Option<PathId> {
+        path.prim_path(self.store.paths(), self.store.tokens())
+    }
+
     /// The store the stage was composed from.
     #[must_use]
     pub fn store(&self) -> &'a dyn LayerStore {
@@ -222,6 +240,15 @@ impl<'a> Scene<'a> {
     }
 }
 
+/// A [`StageView`]'s stage and store, with OpenUSD's kinds
+/// ([`Scene::new`]). A scene is a view and the kind registry it reads
+/// `kind` metadata with, so the two are not one type.
+impl<'a> From<StageView<'a>> for Scene<'a> {
+    fn from(view: StageView<'a>) -> Self {
+        Self::new(view.stage(), view.store())
+    }
+}
+
 /// A composed prim, which every schema view reads through.
 #[derive(Clone, Copy, Debug)]
 pub struct PrimView<'a> {
@@ -246,6 +273,14 @@ impl<'a> PrimView<'a> {
     #[must_use]
     pub fn path(&self) -> PathId {
         self.path
+    }
+
+    /// The generic handle of the prim, through which its attributes
+    /// explain their values and report their types; `None` when the stage
+    /// does not compose the prim.
+    #[must_use]
+    pub fn prim(&self) -> Option<layerstack::Prim<'a>> {
+        self.scene.view().prim(self.path)
     }
 
     /// The prim's property named `name` (its USD name), if the store holds
@@ -508,7 +543,8 @@ impl PrimEdit {
     /// A handle authoring the prim at `path` through `edit`, if the prim
     /// exists: on the edit's stage, or defined earlier in `edit`.
     #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
+    pub fn new(edit: &SchemaEdit<'_>, path: impl PrimPathArg) -> Option<Self> {
+        let path = edit.prim_path(path)?;
         edit.exists(path).then_some(Self { path })
     }
 
@@ -834,6 +870,51 @@ pub(crate) fn forwarded_targets(scene: &Scene<'_>, root: PropertyPath) -> Vec<Ta
         }
     }
     out
+}
+
+#[cfg(all(test, feature = "usd-geom"))]
+mod handle_tests {
+    use alloc::{string::ToString, sync::Arc};
+
+    use layerstack::{InMemoryStore, Layer, LayerId, PrimSpec, Stage, StageOptions, Time};
+
+    use crate::usd_geom::{Sphere, Xform};
+
+    use super::Scene;
+
+    /// Views take text paths or ids, and reach the generic handles.
+    #[test]
+    fn views_take_text_paths_and_reach_generic_handles() {
+        let mut store = InMemoryStore::default();
+        let options = StageOptions {
+            schemas: Some(Arc::new(crate::openusd(&store.tokens))),
+            ..StageOptions::default()
+        };
+        let ball = store.path("/Ball");
+        let sphere = store.tokens.intern("Sphere");
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(ball, PrimSpec::def().with_type_name(sphere));
+        store.insert_layer(layer);
+        let stage = Stage::compose(&mut store, LayerId(1), options);
+        let scene = Scene::from(stage.view(&store));
+        let by_text = Sphere::new(&scene, "/Ball").expect("a sphere");
+        assert_eq!(by_text.path(), ball);
+        assert!(Sphere::new(&scene, ball).is_some());
+        assert!(Xform::new(&scene, "/Ball").is_none(), "not an Xform");
+        for absent in ["/Nowhere", "Ball", "/Ball/"] {
+            assert!(Sphere::new(&scene, absent).is_none(), "{absent:?}");
+        }
+        let radius = by_text
+            .prim()
+            .and_then(|prim| prim.attribute("radius"))
+            .expect("the schema's radius");
+        assert_eq!(radius.type_name(), Some("double"));
+        assert_eq!(radius.to_string(), "/Ball.radius");
+        let explained = radius.explain(Time::Default).expect("a fallback");
+        assert_eq!(explained.source, layerstack::ValueSource::Fallback);
+        assert_eq!(explained.value, Some(layerstack::Value::Double(1.0)));
+        assert_eq!(by_text.radius(), Some(1.0));
+    }
 }
 
 #[cfg(test)]

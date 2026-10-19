@@ -51,7 +51,12 @@ impl<'a> CoordSysApi<'a> {
     #[must_use]
     #[doc(alias = "UsdShadeCoordSysAPI::Get")]
     #[doc(alias = "Get")]
-    pub fn get(scene: &Scene<'a>, path: PathId, instance: &str) -> Option<Self> {
+    pub fn get(
+        scene: &Scene<'a>,
+        path: impl ::layerstack::PrimPathArg,
+        instance: &str,
+    ) -> Option<Self> {
+        let path = scene.prim_path(path)?;
         if !scene.has_api(path, Self::SCHEMA, Some(instance)) {
             return None;
         }
@@ -70,7 +75,13 @@ impl<'a> CoordSysApi<'a> {
     #[must_use]
     #[doc(alias = "UsdShadeCoordSysAPI::GetAll")]
     #[doc(alias = "GetAll")]
-    pub fn instances(scene: &Scene<'a>, path: PathId) -> ::alloc::vec::Vec<Self> {
+    pub fn instances(
+        scene: &Scene<'a>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> ::alloc::vec::Vec<Self> {
+        let Some(path) = scene.prim_path(path) else {
+            return ::alloc::vec::Vec::new();
+        };
         scene
             .instances(path, Self::SCHEMA)
             .into_iter()
@@ -153,7 +164,11 @@ impl CoordSysApiEdit {
     /// through `edit`, if the prim exists: on the edit's stage, or defined
     /// earlier in `edit`. Setters never create a prim that does not.
     #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: PathId, instance: &str) -> Option<Self> {
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+        instance: &str,
+    ) -> Option<Self> {
         PrimEdit::new(edit, path).map(|prim| Self::from_instance(InstanceEdit::new(prim, instance)))
     }
 
@@ -227,11 +242,12 @@ impl<'a> Material<'a> {
     /// The schema's name.
     pub const SCHEMA: &'static str = "Material";
 
-    #[doc = "A view of the prim at `path`, if it is a `Material` or of a schema derived from it."]
+    #[doc = "A view of the prim at `path` (text, `\"/World/Prim\"`, or an id), if it is a `Material` or of a schema derived from it."]
     #[doc(alias = "UsdShadeMaterial::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
+    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+        let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
             .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
@@ -343,7 +359,8 @@ impl Deref for MaterialEdit {
 impl MaterialEdit {
     #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Material` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`Material::define`] types it, and `MaterialEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
+    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+        let path = edit.prim_path(path)?;
         edit.is_a(path, Material::SCHEMA)
             .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
@@ -443,7 +460,8 @@ impl<'a> MaterialBindingApi<'a> {
     #[must_use]
     #[doc(alias = "UsdShadeMaterialBindingAPI::Get")]
     #[doc(alias = "Get")]
-    pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+        let path = scene.prim_path(path)?;
         scene
             .has_api(path, Self::SCHEMA, None)
             .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
@@ -502,7 +520,7 @@ impl MaterialBindingApiEdit {
     /// exists: on the edit's stage, or defined earlier in `edit`. Setters
     /// never create a prim that does not.
     #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
+    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
@@ -596,7 +614,8 @@ impl<'a> NodeDefApi<'a> {
     #[must_use]
     #[doc(alias = "UsdShadeNodeDefAPI::Get")]
     #[doc(alias = "Get")]
-    pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+        let path = scene.prim_path(path)?;
         scene
             .has_api(path, Self::SCHEMA, None)
             .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
@@ -683,7 +702,7 @@ impl NodeDefApiEdit {
     /// exists: on the edit's stage, or defined earlier in `edit`. Setters
     /// never create a prim that does not.
     #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
+    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         PrimEdit::new(edit, path).map(Self::from_prim)
     }
 
@@ -745,11 +764,12 @@ impl<'a> NodeGraph<'a> {
     /// The schema's name.
     pub const SCHEMA: &'static str = "NodeGraph";
 
-    #[doc = "A view of the prim at `path`, if it is a `NodeGraph` or of a schema derived from it."]
+    #[doc = "A view of the prim at `path` (text, `\"/World/Prim\"`, or an id), if it is a `NodeGraph` or of a schema derived from it."]
     #[doc(alias = "UsdShadeNodeGraph::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
+    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+        let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
             .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
@@ -801,7 +821,8 @@ impl Deref for NodeGraphEdit {
 impl NodeGraphEdit {
     #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `NodeGraph` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`NodeGraph::define`] types it, and `NodeGraphEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
+    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+        let path = edit.prim_path(path)?;
         edit.is_a(path, NodeGraph::SCHEMA)
             .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }
@@ -838,11 +859,12 @@ impl<'a> Shader<'a> {
     /// The schema's name.
     pub const SCHEMA: &'static str = "Shader";
 
-    #[doc = "A view of the prim at `path`, if it is a `Shader` or of a schema derived from it."]
+    #[doc = "A view of the prim at `path` (text, `\"/World/Prim\"`, or an id), if it is a `Shader` or of a schema derived from it."]
     #[doc(alias = "UsdShadeShader::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {
+    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+        let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
             .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))
@@ -900,7 +922,8 @@ impl Deref for ShaderEdit {
 impl ShaderEdit {
     #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Shader` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`Shader::define`] types it, and `ShaderEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
     #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {
+    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+        let path = edit.prim_path(path)?;
         edit.is_a(path, Shader::SCHEMA)
             .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
     }

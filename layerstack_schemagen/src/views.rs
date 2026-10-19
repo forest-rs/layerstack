@@ -1298,7 +1298,8 @@ fn typed_view(
          fn deref(&self) -> &Self::Target {{\n        &self.base\n    }}\n}}\n\n\
          {allow}impl<'a> {view}<'a> {{\n    /// The schema's name.\n    pub const SCHEMA: &'static str = {name:?};\n\n    \
          #[doc = {new_doc:?}]\n{get_alias}    #[must_use]\n    \
-         pub fn new(scene: &Scene<'a>, path: PathId) -> Option<Self> {{\n        \
+         pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {{\n        \
+         let path = scene.prim_path(path)?;\n        \
          scene\n            .is_a(path, Self::SCHEMA)\n            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))\n    }}\n\n    \
          /// A view of `prim` as of the schema, without checking that it is\n    \
          /// (`IsA`), as [`Self::new`] does: a getter reads what the prim\n    \
@@ -1312,7 +1313,8 @@ fn typed_view(
          impl Deref for {edit} {{\n    type Target = {base_edit};\n\n    \
          fn deref(&self) -> &Self::Target {{\n        &self.base\n    }}\n}}\n\n\
          {allow}impl {edit} {{\n    #[doc = {new_edit_doc:?}]\n    #[must_use]\n    \
-         pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {{\n        \
+         pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {{\n        \
+         let path = edit.prim_path(path)?;\n        \
          edit.is_a(path, {view}::SCHEMA)\n            \
          .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))\n    }}\n\n    \
          /// A handle authoring the schema's properties on the prim `prim`\n    \
@@ -1323,7 +1325,8 @@ fn typed_view(
         get_alias = cpp_method_alias(schema, "Get", "    "),
         name = schema.name,
         new_doc = format!(
-            "A view of the prim at `path`, if it is a `{}` or of a schema derived from it.",
+            "A view of the prim at `path` (text, `\"/World/Prim\"`, or an id), if it is a `{}` or \
+             of a schema derived from it.",
             schema.name
         ),
         new_edit_doc = format!(
@@ -1399,14 +1402,16 @@ fn applied_view(
         format!(
             "    /// A view of the instance `instance` of the schema on the prim at `path`,\n    \
              /// if the prim has it applied.\n    #[must_use]\n    \
-             pub fn get(scene: &Scene<'a>, path: PathId, instance: &str) -> Option<Self> {{\n        \
+             pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg, instance: &str) -> Option<Self> {{\n        \
+             let path = scene.prim_path(path)?;\n        \
              if !scene.has_api(path, Self::SCHEMA, Some(instance)) {{\n            return None;\n        }}\n        \
              let instance = scene\n            .instances(path, Self::SCHEMA)\n            .into_iter()\n            \
              .find(|applied| *applied == instance)?;\n        \
              Some(Self::from_instance_unchecked(InstanceView::new(\n            PrimView::new(*scene, path),\n            instance,\n        )))\n    }}\n\n    \
              /// Every instance of the schema the prim at `path` has applied, in the\n    \
              /// order its definition applies them.\n    #[must_use]\n    \
-             pub fn instances(scene: &Scene<'a>, path: PathId) -> {vec}<Self> {{\n        \
+             pub fn instances(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> {vec}<Self> {{\n        \
+             let Some(path) = scene.prim_path(path) else {{\n            return {vec}::new();\n        }};\n        \
              scene\n            .instances(path, Self::SCHEMA)\n            .into_iter()\n            \
              .map(|instance| {{\n                Self::from_instance_unchecked(InstanceView::new(PrimView::new(*scene, path), instance))\n            }})\n            .collect()\n    }}\n\n    \
              /// A view of `instance` as an instance of the schema, without\n    \
@@ -1430,7 +1435,8 @@ fn applied_view(
         format!(
             "    /// A view of the schema on the prim at `path`, if the prim has it\n    \
              /// applied.\n    #[must_use]\n    \
-             pub fn get(scene: &Scene<'a>, path: PathId) -> Option<Self> {{\n        \
+             pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {{\n        \
+             let path = scene.prim_path(path)?;\n        \
              scene\n            .has_api(path, Self::SCHEMA, None)\n            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))\n    }}\n\n    \
              /// A view of the schema on `prim`, without checking that the prim\n    \
              /// has it applied (`HasAPI`), as [`Self::get`] does: a getter reads\n    \
@@ -1461,7 +1467,7 @@ fn applied_view(
          /// through `edit`, if the prim exists: on the edit's stage, or defined\n    \
          /// earlier in `edit`. Setters never create a prim that does not.\n    \
          #[must_use]\n    \
-         pub fn new(edit: &SchemaEdit<'_>, path: PathId, instance: &str) -> Option<Self> {\n        \
+         pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg, instance: &str) -> Option<Self> {\n        \
          PrimEdit::new(edit, path).map(|prim| Self::from_instance(InstanceEdit::new(prim, instance)))\n    }\n\n    \
          /// A handle authoring the schema's properties for `instance`, whether\n    \
          /// or not the prim has it applied.\n    #[must_use]\n    \
@@ -1470,7 +1476,7 @@ fn applied_view(
             .to_string()
     } else {
         "    /// A handle authoring the prim at `path` through `edit`, if the prim\n    /// exists: on the edit's stage, or defined earlier in `edit`. Setters\n    /// never create a prim that does not.\n    #[must_use]\n    \
-         pub fn new(edit: &SchemaEdit<'_>, path: PathId) -> Option<Self> {\n        \
+         pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {\n        \
          PrimEdit::new(edit, path).map(Self::from_prim)\n    }\n\n    \
          /// A handle authoring the schema's properties on the prim `prim`\n    \
          /// authors, whether or not it has the schema applied.\n    #[must_use]\n    \

@@ -33,8 +33,8 @@
 //! - **Schemas** — prim definitions (type, applied schemas, defined
 //!   properties and their fallbacks) from the [`SchemaRegistry`] a stage is
 //!   composed with ([`StageOptions::schemas`], [`Stage::prim_definition`])
-//! - **Value explanations** — [`Stage::explain_property_value`] and its
-//!   siblings say why a value is what it is: every consulted opinion with its
+//! - **Value explanations** — [`Attribute::explain`] and the stage's
+//!   `explain_*` queries say why a value is what it is: every consulted opinion with its
 //!   layer, spec, arc and layer offset, and whether it contributed a value, a
 //!   sparse array edit, dictionary entries or a list edit, or was shadowed,
 //!   cut off by a block or incompatible (compare OpenUSD's
@@ -43,31 +43,50 @@
 //! # Quick start
 //!
 //! Add `layerstack = "0.1"` to your dependencies. This example authors a base
-//! layer and a stronger local override, then reads their composed value:
+//! layer and a stronger local override, then reads the composed value through
+//! [`Stage::view`] and asks why it is what it is:
 //!
 //! ```
 //! use layerstack::{
-//!     InMemoryStore, Layer, LayerId, PrimSpec, Stage, StageOptions, SublayerEntry, Value,
+//!     InMemoryStore, Layer, LayerId, PrimSpec, PropertySpec, PropertyType, Stage, StageOptions,
+//!     SublayerEntry, Time, Value,
 //! };
 //!
 //! let mut store = InMemoryStore::default();
-//! let title = store.tokens.intern("title");
 //! let prim = store.path("/Doc");
+//! let title = store.tokens.intern("title");
+//! let text = |value| {
+//!     PropertySpec::typed_attribute(PropertyType::parse("string").unwrap())
+//!         .with_default(Value::string(value))
+//! };
 //!
 //! let mut base = Layer::new(LayerId(1));
-//! base.insert_prim(prim, PrimSpec::def().with_field(title, Value::string("Untitled")));
+//! base.insert_prim(prim, PrimSpec::def().with_property(title, text("Untitled")));
 //! store.insert_layer(base);
 //!
 //! let mut local = Layer::new(LayerId(2));
 //! local.sublayers_mut().push(SublayerEntry::new(LayerId(1)));
-//! local.insert_prim(prim, PrimSpec::over().with_field(title, Value::string("Hello")));
+//! local.insert_prim(prim, PrimSpec::over().with_property(title, text("Hello")));
 //! store.insert_layer(local);
 //!
 //! let stage = Stage::compose(&mut store, LayerId(2), StageOptions::default());
 //! assert!(stage.composition_errors().is_empty());
-//! let resolved = stage.resolve_field(prim, title).unwrap();
-//! assert_eq!(resolved.value, Value::string("Hello"));
+//!
+//! let view = stage.view(&store);
+//! let title = view.attribute("/Doc.title").unwrap();
+//! assert_eq!(title.type_name(), Some("string"));
+//! assert_eq!(title.value::<String>(Time::Default).as_deref(), Some("Hello"));
+//!
+//! // The local layer's opinion wins; the base's is shadowed.
+//! let why = title.explain(Time::Default).unwrap();
+//! assert_eq!(why.contributors().map(|o| o.layer()).collect::<Vec<_>>(), [LayerId(2)]);
+//! assert_eq!(why.opinions.len(), 2);
 //! ```
+//!
+//! A [`StageView`] binds a stage to the store it was composed from: its
+//! queries take paths as text or ids, and its handles ([`Prim`],
+//! [`Attribute`], [`Relationship`]) read at a [`Time`] ([`Time::Default`],
+//! [`Time::at`] or [`Time::held`]) and print their paths.
 //!
 //! Composition returns a stage even when some arcs cannot be resolved. Inspect
 //! [`Stage::composition_errors`] before treating the result as complete. Enable
@@ -77,8 +96,9 @@
 //!
 //! | Type | Role |
 //! |------|------|
+//! | [`StageView`] / [`Prim`] / [`Attribute`] / [`Relationship`] | The way to read a stage: text paths, typed values at a [`Time`], types and explanations |
 //! | [`Layer`] / [`PrimSpec`] | Authored layer and prim opinions |
-//! | [`Stage`] | Read-only composed values and prim hierarchy |
+//! | [`Stage`] | The composed snapshot: prim hierarchy, composition errors and lower-level queries |
 //! | [`LiveStage`] | Incremental edits, change reports, callbacks and change cursors |
 //! | [`InMemoryStore`] / [`LayerStore`] | Built-in storage and a host storage interface |
 //! | [`Value`] / [`FieldValue`] | Authored values and composition containers |

@@ -1,7 +1,7 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use alloc::{vec, vec::Vec};
+use alloc::{string::String, vec, vec::Vec};
 
 use super::*;
 use crate::{
@@ -168,4 +168,59 @@ fn opening_and_index_allocation_are_budgeted() {
         CrateFile::from_sections(&bytes, file.sections, &mut DecodeBudget::with_limit(0)),
         Err(UsdcError::DecodeBudgetExceeded { .. })
     ));
+}
+
+/// Specs are found by their path's identity in the tree as by their text:
+/// every spec path, and texts no spec is spelled with, which a table
+/// without its tree looks up by sorting.
+#[test]
+fn paths_are_found_through_the_tree_as_by_their_text() {
+    let bytes = write_crate(&[
+        Spec::new("/", SpecForm::PseudoRoot),
+        Spec::new("/Rock", SpecForm::Prim),
+        Spec::new("/Rock/Moss", SpecForm::Prim),
+        Spec::new("/Rock.weights", SpecForm::Attribute),
+        Spec::new("/Rock{lod=}", SpecForm::VariantSet),
+        Spec::new("/Rock{lod=low}", SpecForm::Variant),
+        Spec::new("/Rock{lod=low}Pebble", SpecForm::Prim),
+        Spec::new("/Rock{lod=low}Pebble.size", SpecForm::Attribute),
+        Spec::new("/Rock{lod=low}{wet=}", SpecForm::VariantSet),
+        Spec::new("/Rock{lod=low}{wet=yes}", SpecForm::Variant),
+    ])
+    .unwrap();
+    let mut budget = DecodeBudget::for_input(bytes.len());
+    let file = CrateFile::open(&bytes, &mut budget).unwrap();
+    assert!(file.by_identity.is_some(), "found through the tree");
+    let mut sections = file.sections.clone();
+    sections.paths = section::PathTable::from_texts(file.sections.path_texts());
+    let by_text = CrateFile::from_sections(&bytes, sections, &mut budget).unwrap();
+    assert!(by_text.by_identity.is_none());
+    let mut queries: Vec<String> = file.specs().map(|spec| spec.path().into()).collect();
+    queries.extend(
+        [
+            "",
+            "/Rock/",
+            "//Rock",
+            "Rock",
+            "/Rock/Moss/",
+            "/Rock{lod=low}/Pebble",
+            "/Moss",
+            "/Rock{lod=}.weights",
+            "/Rock.weights.x",
+            "/Rock{lod=low}Pebble.size.x",
+        ]
+        .map(String::from),
+    );
+    for query in &queries {
+        fn found(file: &CrateFile<'_>, query: &str) -> Option<String> {
+            file.spec(query).map(|spec| String::from(spec.path()))
+        }
+        assert_eq!(found(&file, query), found(&by_text, query), "{query:?}");
+        if file.specs().any(|spec| spec.path() == query) {
+            assert_eq!(found(&file, query).as_deref(), Some(query.as_str()));
+        }
+    }
+    let sorted: Vec<_> = file.specs().map(CrateSpec::path).collect();
+    let by_text_sorted: Vec<_> = by_text.specs().map(CrateSpec::path).collect();
+    assert_eq!(sorted, by_text_sorted);
 }

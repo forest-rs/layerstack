@@ -1678,7 +1678,7 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
                 let listop = self.convert_connection_value(value)?;
                 let spec = property_entry(&mut prim.properties, name_tok, PropertyKind::Attribute);
                 if spec.targets.is_none() {
-                    spec.targets = Some(listop);
+                    spec.targets = Some(Box::new(listop));
                 }
                 return Ok(());
             }
@@ -2378,10 +2378,10 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
                             });
                         }
                     }
-                    spec.spline = Some(spline);
+                    spec.spline = Some(Box::new(spline));
                 }
                 ("connectionPaths", _) => {
-                    spec.targets = Some(self.convert_connection_value(value)?);
+                    spec.targets = Some(Box::new(self.convert_connection_value(value)?));
                 }
                 // Read by `attribute_property_type`; `connectionChildren`
                 // restates `connectionPaths`.
@@ -2464,7 +2464,9 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
     ) -> Result<(), UsdcError> {
         for (name, value) in fields {
             match *name {
-                "targetPaths" => spec.targets = Some(self.convert_connection_value(value)?),
+                "targetPaths" => {
+                    spec.targets = Some(Box::new(self.convert_connection_value(value)?));
+                }
                 // `targetChildren` restates `targetPaths`.
                 "targetChildren" => {}
                 _ => self.apply_property_field(spec_path, name, value, spec)?,

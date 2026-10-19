@@ -1694,7 +1694,10 @@ fn targets_and_connections_undo_and_redo_exactly() {
     let created = property(&store, look).expect("relationship");
     assert_eq!(created.kind, PropertyKind::Relationship);
     assert!(created.custom, "nothing declares the relationship");
-    assert_eq!(created.targets, Some(ListOp::explicit(vec![target(world)])));
+    assert_eq!(
+        created.targets,
+        Some(Box::new(ListOp::explicit(vec![target(world)])))
+    );
     let after_create = layers(&store);
 
     // An attribute gains connections; the relationship's targets change.
@@ -1704,7 +1707,7 @@ fn targets_and_connections_undo_and_redo_exactly() {
     let undo_edit = edit.apply(&mut store).expect("sets");
     assert_eq!(
         property(&store, size).and_then(|p| p.targets.clone()),
-        Some(ListOp::prepended(vec![target(world)]))
+        Some(Box::new(ListOp::prepended(vec![target(world)])))
     );
     assert_eq!(
         property(&store, size).and_then(|p| p.default.clone()),
@@ -1850,7 +1853,7 @@ fn targets_are_added_and_removed_one_at_a_time() {
                 (
                     entry.spec.kind,
                     entry.spec.custom,
-                    entry.spec.targets.clone(),
+                    entry.spec.targets.as_deref().cloned(),
                 )
             })
     };
@@ -1986,14 +1989,14 @@ fn targets_map_through_the_edit_target() {
         .and_then(|entry| entry.spec.targets.clone());
     assert_eq!(
         authored,
-        Some(ListOp {
+        Some(Box::new(ListOp {
             prepend: vec![
                 TargetPath::Prim(pebble),
                 TargetPath::Property(PropertyPath::new(rock, size)),
             ],
             delete: vec![TargetPath::Prim(rock)],
             ..ListOp::default()
-        })
+        }))
     );
     let round = store.tokens.intern("round");
     let shape = store.tokens.intern("shape");
@@ -2004,7 +2007,7 @@ fn targets_map_through_the_edit_target() {
         .and_then(|entry| entry.spec.targets.clone());
     assert_eq!(
         in_variant,
-        Some(ListOp::explicit(vec![TargetPath::Prim(pebble)])),
+        Some(Box::new(ListOp::explicit(vec![TargetPath::Prim(pebble)]))),
         "a target names no variant selection"
     );
     let after = layers(&store);
@@ -2080,7 +2083,7 @@ fn local_variant_targets_keep_paths_outside_the_branch() {
         .iter()
         .find(|entry| entry.name == look)
         .and_then(|entry| entry.spec.targets.clone());
-    assert_eq!(authored, Some(ListOp::explicit(targets)));
+    assert_eq!(authored, Some(Box::new(ListOp::explicit(targets))));
     let after = layers(&store);
 
     let redo = undo.apply(&mut store).expect("undo");
@@ -2156,10 +2159,10 @@ fn class_arc_targets_keep_the_root_identity() {
             .and_then(|entry| entry.spec.targets.clone());
         assert_eq!(
             authored,
-            Some(ListOp::explicit(vec![
+            Some(Box::new(ListOp::explicit(vec![
                 TargetPath::Prim(light),
                 TargetPath::Prim(source_child)
-            ]))
+            ])))
         );
         let after = layers(&store);
         let redo = undo.apply(&mut store).expect("undo");
@@ -2434,7 +2437,7 @@ fn attribute_block_preserves_empty_sample_fields_and_splines_on_undo() {
     let at = Address::spec(ROCK, path.clone());
     let mut attr = attr(1.);
     attr.time_samples = Some(vec![].into());
-    attr.spline = Some(SplineData {
+    attr.spline = Some(Box::new(SplineData {
         pre_loop_boundary: None,
         post_loop_boundary: None,
         data_type: SplineDataType::Double,
@@ -2443,7 +2446,7 @@ fn attribute_block_preserves_empty_sample_fields_and_splines_on_undo() {
         post_extrapolation: Extrapolation::Held,
         loop_params: None,
         knots: vec![],
-    });
+    }));
     let mut create = Transaction::new();
     create.create_property(at.clone(), attr.clone());
     create.apply(&mut store).unwrap();

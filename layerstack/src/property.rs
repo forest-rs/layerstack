@@ -18,6 +18,7 @@
 //! (`pxr/usd/sdf/propertySpec.h`); the field set per spec form is registered in
 //! `pxr/usd/sdf/schema.cpp`.
 
+use alloc::boxed::Box;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
@@ -292,10 +293,10 @@ pub struct PropertySpec {
     ///
     /// Spec: AOUSD Core §7.6.4.2.2 (`timeSamples`).
     pub time_samples: Option<SharedVec<TimeSample>>,
-    /// Authored spline.
+    /// Authored spline, boxed: few attributes author one.
     ///
     /// Spec: AOUSD Core §7.6.4.2.4 (`spline`).
-    pub spline: Option<SplineData>,
+    pub spline: Option<Box<SplineData>>,
     /// Authored target paths: `connectionPaths` for an attribute,
     /// `targetPaths` for a relationship.
     ///
@@ -303,8 +304,9 @@ pub struct PropertySpec {
     /// (see [`crate::Relationship::targets`]).
     ///
     /// Spec: AOUSD Core §7.6.4.2.3 (`connectionPaths`), §7.6.5.1.1
-    /// (`targetPaths`), §12.4.
-    pub targets: Option<ListOp<TargetPath>>,
+    /// (`targetPaths`), §12.4. Boxed: most properties are attributes
+    /// without connections.
+    pub targets: Option<Box<ListOp<TargetPath>>>,
     /// Shared authored property metadata, in authored order: for example
     /// `interpolation`, `elementSize`, `customData`, `displayName`, `doc`
     /// (stored as `documentation`), `limits` and `colorSpace`.
@@ -408,7 +410,7 @@ impl PropertySpec {
     /// Sets the spline slot (builder, consuming).
     #[must_use]
     pub fn with_spline(mut self, spline: SplineData) -> Self {
-        self.spline = Some(spline);
+        self.spline = Some(Box::new(spline));
         self
     }
 
@@ -416,7 +418,7 @@ impl PropertySpec {
     /// an attribute, target paths for a relationship.
     #[must_use]
     pub fn with_targets(mut self, targets: ListOp<TargetPath>) -> Self {
-        self.targets = Some(targets);
+        self.targets = Some(Box::new(targets));
         self
     }
 

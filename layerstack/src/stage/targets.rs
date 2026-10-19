@@ -168,7 +168,7 @@ impl Stage {
                 layer,
                 spec: spec.clone(),
                 arc,
-                authored,
+                authored: *authored,
                 kept,
                 dropped,
                 contributes: !replaced,

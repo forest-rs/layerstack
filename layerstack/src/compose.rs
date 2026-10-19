@@ -1343,6 +1343,7 @@ mod property_snapshot_tests {
         PropertyPath, PropertySpec, PropertyType, Reference, Stage, StageOptions, TargetPath, Time,
         Value,
     };
+    use alloc::boxed::Box;
     use alloc::{sync::Arc, vec};
 
     fn payload(stage: &Stage, path: PropertyPath) -> &Arc<PropertySpec> {
@@ -1564,16 +1565,19 @@ mod property_snapshot_tests {
         assert!(!Arc::ptr_eq(a_spec, b_spec));
         assert_eq!(a_spec.metadata.as_ptr(), authored.metadata.as_ptr());
         assert_eq!(b_spec.metadata.as_ptr(), authored.metadata.as_ptr());
-        assert_eq!(authored.targets, Some(ListOp::explicit(vec![target])));
+        assert_eq!(
+            authored.targets,
+            Some(Box::new(ListOp::explicit(vec![target])))
+        );
         let a_leaf = store.path("/A/Leaf");
         let b_leaf = store.path("/B/Leaf");
         assert_eq!(
             a_spec.targets,
-            Some(ListOp::explicit(vec![TargetPath::Prim(a_leaf)]))
+            Some(Box::new(ListOp::explicit(vec![TargetPath::Prim(a_leaf)])))
         );
         assert_eq!(
             b_spec.targets,
-            Some(ListOp::explicit(vec![TargetPath::Prim(b_leaf)]))
+            Some(Box::new(ListOp::explicit(vec![TargetPath::Prim(b_leaf)])))
         );
     }
 }

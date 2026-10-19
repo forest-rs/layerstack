@@ -833,14 +833,14 @@ impl EmitCtx<'_> {
         if let Some(listop) = connection {
             match spec.targets.as_mut() {
                 Some(existing) => existing.merge(listop),
-                None => spec.targets = Some(listop),
+                None => spec.targets = Some(Box::new(listop)),
             }
         }
         if let Some(samples) = time_samples {
             *spec = core::mem::take(spec).with_time_samples(samples);
         }
         if let Some(spline) = spline {
-            spec.spline = Some(*spline);
+            spec.spline = Some(Box::new(*spline));
         }
         if let Some(value) = default {
             spec.default = Some(value);
@@ -916,7 +916,7 @@ impl EmitCtx<'_> {
         if let Some(listop) = listop {
             match spec.targets.as_mut() {
                 Some(existing) => existing.merge(listop),
-                None => spec.targets = Some(listop),
+                None => spec.targets = Some(Box::new(listop)),
             }
         }
     }

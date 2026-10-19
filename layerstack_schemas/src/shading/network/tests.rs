@@ -3,6 +3,7 @@
 
 use super::*;
 use crate::shading::preview_surface::{PreviewExpression, PreviewIssueKind, PreviewSurfaceNetwork};
+use alloc::boxed::Box;
 use alloc::vec;
 use layerstack::{
     EditTarget, InMemoryStore, Layer, LayerId, ListOp, LiveStage, PrimSpec, PropertySpec,
@@ -28,9 +29,9 @@ fn port(
         spec = spec.with_default(value);
     }
     if let Some(source) = source {
-        spec.targets = Some(ListOp::explicit(vec![TargetPath::Property(
+        spec.targets = Some(Box::new(ListOp::explicit(vec![TargetPath::Property(
             store.property_path(source),
-        )]));
+        )])));
     }
     layer.prim_mut(p).unwrap().set_property(n, spec);
 }

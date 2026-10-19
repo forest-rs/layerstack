@@ -42,7 +42,7 @@ use crate::{
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct AnimationState {
     pub(crate) samples: Option<crate::SharedVec<crate::TimeSample>>,
-    pub(crate) spline: Option<crate::SplineData>,
+    pub(crate) spline: Option<Box<crate::SplineData>>,
 }
 impl Same for AnimationState {
     fn same(&self, other: &Self) -> bool {
@@ -1900,7 +1900,7 @@ fn edit_target_list(
         .and_then(|spec| get_property(spec.properties(), name))
         .and_then(|spec| spec.targets.clone())
         .unwrap_or_default();
-    let edited = prim_fields::edit_list(authored, target, position);
+    let edited = prim_fields::edit_list(*authored, target, position);
     write_targets(store, at, Some(&edited), stage, journal)
 }
 
@@ -1977,7 +1977,7 @@ fn write_targets(
                 // true)` stamps a relationship nothing declares `custom`.
                 (None, None) => PropertySpec::relationship().custom(),
             };
-            spec.targets = Some(targets.clone());
+            spec.targets = Some(Box::new(targets.clone()));
             ensure(store, id, &loc, journal)?;
             let index = properties_at(store, id, &loc)?.len();
             journal.run(
@@ -2491,7 +2491,7 @@ fn apply_raw(store: &mut dyn LayerStore, step: &Raw) -> Result<Raw, Rejection> {
                     let index = properties.iter().position(|e| e.name == *name)?;
                     Some(core::mem::replace(
                         &mut Arc::make_mut(&mut properties[index].spec).targets,
-                        targets.clone(),
+                        targets.clone().map(Box::new),
                     ))
                 });
             let Some(old) = property else {
@@ -2501,7 +2501,7 @@ fn apply_raw(store: &mut dyn LayerStore, step: &Raw) -> Result<Raw, Rejection> {
                 layer: id,
                 loc: loc.clone(),
                 name: *name,
-                targets: old,
+                targets: old.map(|boxed| *boxed),
             })
         }
         Raw::Default {

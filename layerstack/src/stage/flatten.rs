@@ -805,7 +805,7 @@ impl Flattener<'_, '_> {
                 .into_iter()
                 .map(|target| self.remap_target(target, remap))
                 .collect();
-            spec.targets = Some(ListOp::explicit(targets));
+            spec.targets = Some(Box::new(ListOp::explicit(targets)));
         }
         if declaration.kind == PropertyKind::Relationship {
             return Some(spec);
@@ -897,11 +897,11 @@ impl Flattener<'_, '_> {
             {
                 let offset = source.layer_offset;
                 if offset.is_identity() {
-                    spec.spline = Some(spline.clone());
+                    spec.spline = Some(Box::new(spline.clone()));
                     self.report.preserved.splines += 1;
                 } else if let Some(retimed) = spline.retimed(offset) {
                     // Spec: AOUSD Core §12.3.2.1: the spline in stage time.
-                    spec.spline = Some(retimed);
+                    spec.spline = Some(Box::new(retimed));
                     let t = Transformation::SplineRetimed { offset };
                     self.transformed(path.clone(), t, Some(finding_source));
                 } else {

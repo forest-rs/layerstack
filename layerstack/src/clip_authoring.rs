@@ -239,7 +239,12 @@ fn collect_manifest_properties(
             if has_samples {
                 declaration.time_samples = Some(Vec::new().into());
             } else {
-                declaration.spline = property.spec.spline.as_ref().map(empty_spline);
+                declaration.spline = property
+                    .spec
+                    .spline
+                    .as_deref()
+                    .map(empty_spline)
+                    .map(Box::new);
             }
             declarations.insert(spec_path, declaration);
         }
@@ -1049,7 +1054,7 @@ mod tests {
         let name = store.tokens.lookup("animated").unwrap();
         let property = a.prims.get_mut(&path).unwrap().property_mut(name).unwrap();
         property.time_samples = None;
-        property.spline = Some(crate::spline::SplineData {
+        property.spline = Some(Box::new(crate::spline::SplineData {
             pre_loop_boundary: None,
             post_loop_boundary: None,
 
@@ -1059,7 +1064,7 @@ mod tests {
             post_extrapolation: crate::spline::Extrapolation::Linear,
             loop_params: None,
             knots: Vec::new(),
-        });
+        }));
         let only = generate_clip_manifest_from_layers(
             &[&a],
             path,

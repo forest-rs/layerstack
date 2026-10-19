@@ -190,7 +190,7 @@ impl OpinionValue {
     #[must_use]
     pub fn spline(&self) -> Option<&SplineData> {
         match self {
-            Self::Property(spec) => spec.spline.as_ref(),
+            Self::Property(spec) => spec.spline.as_deref(),
             Self::Field(_) => None,
         }
     }
@@ -202,7 +202,7 @@ impl OpinionValue {
         match self {
             Self::Field(FieldValue::PathListOp(list)) => Some(list),
             Self::Field(_) => None,
-            Self::Property(spec) => spec.targets.as_ref(),
+            Self::Property(spec) => spec.targets.as_deref(),
         }
     }
 

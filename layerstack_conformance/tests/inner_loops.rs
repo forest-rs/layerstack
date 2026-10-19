@@ -44,11 +44,11 @@ const ROWS: [(f64, f64, f64); 18] = [
     (2.5, 64., 64.),
 ];
 fn spline() -> SplineData {
-    Imported::usda(SOURCE)
+    *(Imported::usda(SOURCE)
         .property("/A.x")
         .spline
         .clone()
-        .unwrap()
+        .unwrap())
 }
 fn close(actual: Option<f64>, expected: f64) {
     assert!(

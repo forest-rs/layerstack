@@ -13,7 +13,7 @@ use crate::{
     FieldEntry, FieldValue, HashMap, Layer, ListOp, PrimSpec, PropertyEntry, PropertySpec,
     Specifier, TokenId, TokenInterner, Value, VariantSetSpec, VariantSpec,
 };
-use alloc::{sync::Arc, vec::Vec};
+use alloc::{boxed::Box, sync::Arc, vec::Vec};
 
 /// Work requiring attention while combining authored descriptions.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -356,12 +356,10 @@ fn property(
         strong.time_samples = Some(merged.into());
     }
     if let Some(weak_targets) = &weak.targets {
-        strong.targets = Some(
-            strong
-                .targets
-                .as_ref()
-                .map_or_else(|| weak_targets.clone(), |s| listop(s, weak_targets, report)),
-        );
+        strong.targets = Some(strong.targets.as_ref().map_or_else(
+            || weak_targets.clone(),
+            |s| Box::new(listop(s, weak_targets, report)),
+        ));
     }
     fields(
         strong.metadata.make_mut(),
@@ -660,7 +658,7 @@ mod tests {
         let mut prim = PrimSpec::over();
         prim.inherits = ListOp::appended(vec![other]).into();
         let mut targets = PropertySpec::relationship();
-        targets.targets = Some(ListOp::added(vec![crate::TargetPath::Prim(base)]));
+        targets.targets = Some(Box::new(ListOp::added(vec![crate::TargetPath::Prim(base)])));
         prim.variant_sets
             .entry(set)
             .or_default()

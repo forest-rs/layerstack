@@ -1,7 +1,7 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use alloc::{string::String, vec::Vec};
+use alloc::{boxed::Box, string::String, vec::Vec};
 
 use super::*;
 
@@ -489,7 +489,7 @@ fn generated_schema_layers_read_as_definitions() {
         PrimSpec::class()
             .with_field(
                 api_schemas,
-                FieldValue::TokenListOp(ListOp::explicit(vec![by_type, by_instance])),
+                FieldValue::TokenListOp(Box::new(ListOp::explicit(vec![by_type, by_instance]))),
             )
             .with_field(
                 custom_data,

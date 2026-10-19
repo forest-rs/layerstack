@@ -11,6 +11,7 @@
 //! OpenUSD's `UsdReferences`, `UsdPayloads`, `UsdInherits` and
 //! `UsdSpecializes` do, and writes the result.
 
+use alloc::boxed::Box;
 use alloc::vec::Vec;
 
 use super::{
@@ -551,7 +552,7 @@ pub(crate) fn remove_applied_schema(
     let current = spec_at(layer(store, id)?, &loc).map(|spec| {
         let list = match crate::doc::get_field(spec.fields(), &key) {
             Some(FieldValue::TokenListOp(list)) => list.clone(),
-            _ => ListOp::default(),
+            _ => Box::new(ListOp::default()),
         };
         (list, field_index(spec.fields(), key))
     });

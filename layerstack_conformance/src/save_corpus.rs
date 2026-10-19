@@ -433,7 +433,7 @@ pub fn cases() -> Vec<SaveCase> {
                 let primary = layer.tokens.intern("ExedraAuthorshipAPI:primary");
                 layer.prim("/Asset").set_field(
                     api_schemas,
-                    FieldValue::TokenListOp(ListOp::explicit(vec![primary])),
+                    FieldValue::TokenListOp(Box::new(ListOp::explicit(vec![primary]))),
                 );
             },
             expected: AUTHORSHIP_EDITED,

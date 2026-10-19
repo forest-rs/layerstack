@@ -96,7 +96,7 @@ pub use verify::{FlattenVerification, Mismatch, MismatchKind, SkipReason, Skippe
 
 use super::prototypes::InstanceKey;
 
-use alloc::{borrow::Cow, format, string::String, sync::Arc, vec::Vec};
+use alloc::{borrow::Cow, boxed::Box, format, string::String, sync::Arc, vec::Vec};
 
 use hashbrown::{HashMap, HashSet};
 
@@ -1126,56 +1126,60 @@ impl Flattener<'_, '_> {
         match resolved {
             ResolvedValue::Scalar(value) => FieldValue::Value(value),
             ResolvedValue::Dictionary(entries) => FieldValue::Value(Value::Dictionary(entries)),
-            ResolvedValue::TokenList(items) => FieldValue::TokenListOp(explicit(items)),
-            ResolvedValue::PathList(items) => FieldValue::PathListOp(explicit(
+            ResolvedValue::TokenList(items) => FieldValue::TokenListOp(Box::new(explicit(items))),
+            ResolvedValue::PathList(items) => FieldValue::PathListOp(Box::new(explicit(
                 items
                     .into_iter()
                     .map(|target| self.remap_target(target, remap))
                     .collect(),
-            )),
+            ))),
             ResolvedValue::ValueList(items) => {
                 let items = items.into_iter();
                 match strongest {
-                    Some(FieldValue::IntListOp(_)) => FieldValue::IntListOp(explicit(
+                    Some(FieldValue::IntListOp(_)) => FieldValue::IntListOp(Box::new(explicit(
                         items
                             .filter_map(|v| match v {
                                 Value::Int(v) => Some(v),
                                 _ => None,
                             })
                             .collect(),
-                    )),
-                    Some(FieldValue::UIntListOp(_)) => FieldValue::UIntListOp(explicit(
+                    ))),
+                    Some(FieldValue::UIntListOp(_)) => FieldValue::UIntListOp(Box::new(explicit(
                         items
                             .filter_map(|v| match v {
                                 Value::UInt(v) => Some(v),
                                 _ => None,
                             })
                             .collect(),
-                    )),
-                    Some(FieldValue::Int64ListOp(_)) => FieldValue::Int64ListOp(explicit(
-                        items
-                            .filter_map(|v| match v {
-                                Value::Int64(v) => Some(v),
-                                _ => None,
-                            })
-                            .collect(),
-                    )),
-                    Some(FieldValue::UInt64ListOp(_)) => FieldValue::UInt64ListOp(explicit(
-                        items
-                            .filter_map(|v| match v {
-                                Value::UInt64(v) => Some(v),
-                                _ => None,
-                            })
-                            .collect(),
-                    )),
-                    _ => FieldValue::StringListOp(explicit(
+                    ))),
+                    Some(FieldValue::Int64ListOp(_)) => {
+                        FieldValue::Int64ListOp(Box::new(explicit(
+                            items
+                                .filter_map(|v| match v {
+                                    Value::Int64(v) => Some(v),
+                                    _ => None,
+                                })
+                                .collect(),
+                        )))
+                    }
+                    Some(FieldValue::UInt64ListOp(_)) => {
+                        FieldValue::UInt64ListOp(Box::new(explicit(
+                            items
+                                .filter_map(|v| match v {
+                                    Value::UInt64(v) => Some(v),
+                                    _ => None,
+                                })
+                                .collect(),
+                        )))
+                    }
+                    _ => FieldValue::StringListOp(Box::new(explicit(
                         items
                             .filter_map(|v| match v {
                                 Value::String(v) => Some(v),
                                 _ => None,
                             })
                             .collect(),
-                    )),
+                    ))),
                 }
             }
         }

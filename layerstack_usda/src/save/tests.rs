@@ -731,10 +731,10 @@ def "A" (
     let target = TargetPath::parse("/A", &imported.tokens, &imported.paths).unwrap();
     imported.layer.prim_mut(a).unwrap().set_field(
         key,
-        FieldValue::PathListOp(LayerListOp {
+        FieldValue::PathListOp(Box::new(LayerListOp {
             explicit: Some(vec![target]),
             ..LayerListOp::default()
-        }),
+        })),
     );
     assert_eq!(
         imported.save(),

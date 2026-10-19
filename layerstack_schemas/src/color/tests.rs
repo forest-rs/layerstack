@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use super::*;
+use alloc::boxed::Box;
 use alloc::vec;
 #[test]
 fn native_rec709_matrix_transfer_and_alpha() {
@@ -256,10 +257,10 @@ fn schema_metadata_empty_and_block_preserve_color_precedence() {
         PrimSpec::def()
             .with_field(
                 api_schemas,
-                layerstack::FieldValue::TokenListOp(ListOp {
+                layerstack::FieldValue::TokenListOp(Box::new(ListOp {
                     explicit: Some(vec![api]),
                     ..ListOp::default()
-                }),
+                })),
             )
             .with_property(
                 assignment,

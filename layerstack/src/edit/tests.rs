@@ -1,7 +1,7 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use alloc::{string::ToString, vec, vec::Vec};
+use alloc::{boxed::Box, string::ToString, vec, vec::Vec};
 
 use super::*;
 use crate::{
@@ -1757,7 +1757,7 @@ fn applied_schemas_are_prepended_once_and_undo_exactly() {
     let list = |store: &InMemoryStore, path| {
         store.layers[&ROCK].prims.get(&path).and_then(|spec| {
             match crate::doc::get_field(&spec.fields, &api_schemas) {
-                Some(FieldValue::TokenListOp(list)) => Some(list.clone()),
+                Some(FieldValue::TokenListOp(list)) => Some((**list).clone()),
                 _ => None,
             }
         })
@@ -1792,7 +1792,7 @@ fn applied_schemas_are_prepended_once_and_undo_exactly() {
     explicit.set_metadata(
         at(rock),
         api_schemas,
-        FieldValue::TokenListOp(ListOp::explicit(vec![other])),
+        FieldValue::TokenListOp(Box::new(ListOp::explicit(vec![other]))),
     );
     explicit.add_applied_schema(at(rock), label);
     explicit.apply(&mut store).expect("explicit");
@@ -1804,7 +1804,7 @@ fn applied_schemas_are_prepended_once_and_undo_exactly() {
     appended.set_metadata(
         at(rock),
         api_schemas,
-        FieldValue::TokenListOp(ListOp::appended(vec![label])),
+        FieldValue::TokenListOp(Box::new(ListOp::appended(vec![label]))),
     );
     appended.add_applied_schema(at(rock), label);
     appended.apply(&mut store).expect("appended");

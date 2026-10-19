@@ -185,27 +185,33 @@ fn registered_literals_use_declared_types_without_authoring_defaults() {
     );
     assert_eq!(
         field(&store, &prim.fields, "hostNames"),
-        &FieldValue::StringListOp(layerstack::ListOp {
+        &FieldValue::StringListOp(Box::new(layerstack::ListOp {
             prepend: vec!["first".into()],
             append: vec!["last".into()],
             ..Default::default()
-        })
+        }))
     );
     assert_eq!(
         field(&store, &prim.fields, "hostInts"),
-        &FieldValue::IntListOp(layerstack::ListOp::explicit(vec![i32::MIN, i32::MAX]))
+        &FieldValue::IntListOp(Box::new(layerstack::ListOp::explicit(vec![
+            i32::MIN,
+            i32::MAX
+        ])))
     );
     assert_eq!(
         field(&store, &prim.fields, "hostUnsigned"),
-        &FieldValue::UIntListOp(layerstack::ListOp::explicit(vec![0, u32::MAX]))
+        &FieldValue::UIntListOp(Box::new(layerstack::ListOp::explicit(vec![0, u32::MAX])))
     );
     assert_eq!(
         field(&store, &prim.fields, "hostBig"),
-        &FieldValue::UInt64ListOp(layerstack::ListOp::explicit(vec![0, u64::MAX]))
+        &FieldValue::UInt64ListOp(Box::new(layerstack::ListOp::explicit(vec![0, u64::MAX])))
     );
     assert_eq!(
         field(&store, &prim.fields, "hostSigned"),
-        &FieldValue::Int64ListOp(layerstack::ListOp::explicit(vec![i64::MIN, i64::MAX]))
+        &FieldValue::Int64ListOp(Box::new(layerstack::ListOp::explicit(vec![
+            i64::MIN,
+            i64::MAX
+        ])))
     );
     let attr = prim
         .properties
@@ -316,7 +322,7 @@ fn registered_list_none_is_an_explicit_empty_op() {
             &result.emitted.layer.prims()[&path].fields,
             "hostInts"
         ),
-        &FieldValue::IntListOp(layerstack::ListOp::explicit(vec![]))
+        &FieldValue::IntListOp(Box::new(layerstack::ListOp::explicit(vec![])))
     );
 }
 
@@ -340,15 +346,15 @@ fn integer_list_literals_use_checked_cpp_numeric_coercion() {
     let fields = &result.emitted.layer.prims()[&path].fields;
     assert_eq!(
         field(&store, fields, "hostInts"),
-        &FieldValue::IntListOp(layerstack::ListOp::explicit(vec![1, -1]))
+        &FieldValue::IntListOp(Box::new(layerstack::ListOp::explicit(vec![1, -1])))
     );
     assert_eq!(
         field(&store, fields, "hostUnsigned"),
-        &FieldValue::UIntListOp(layerstack::ListOp::explicit(vec![0, 1]))
+        &FieldValue::UIntListOp(Box::new(layerstack::ListOp::explicit(vec![0, 1])))
     );
     assert_eq!(
         field(&store, fields, "hostSigned"),
-        &FieldValue::Int64ListOp(layerstack::ListOp::explicit(vec![0, 2]))
+        &FieldValue::Int64ListOp(Box::new(layerstack::ListOp::explicit(vec![0, 2])))
     );
 }
 

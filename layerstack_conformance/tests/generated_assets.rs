@@ -609,7 +609,7 @@ fn animate(generated: &mut support::GeneratedScene) {
     edit.set_metadata(
         EditTarget::for_layer(support::ROOT).prim(generated.scatter),
         inactive,
-        FieldValue::Int64ListOp(ListOp::explicit(vec![102])),
+        FieldValue::Int64ListOp(Box::new(ListOp::explicit(vec![102]))),
     );
     generated.live.apply(&mut generated.store, &edit).unwrap();
 }

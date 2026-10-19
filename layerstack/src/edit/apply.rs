@@ -1812,7 +1812,7 @@ fn add_applied_schema(
     let spec = spec_at(layer(store, id)?, &loc).ok_or(Rejection::NoSuchSpec(path.clone()))?;
     let mut list = match crate::doc::get_field(spec.fields(), &key) {
         Some(FieldValue::TokenListOp(list)) => list.clone(),
-        _ => ListOp::default(),
+        _ => Box::new(ListOp::default()),
     };
     match &mut list.explicit {
         Some(explicit) if explicit.contains(&name) => return Ok(()),

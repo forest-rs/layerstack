@@ -2253,7 +2253,9 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
         field_value: &DecodedField<'_>,
     ) -> Result<Option<FieldValue>, UsdcError> {
         if let DecodedField::PathListOp(parts) = field_value {
-            return Ok(Some(FieldValue::PathListOp(self.target_list_op_at(parts))));
+            return Ok(Some(FieldValue::PathListOp(Box::new(
+                self.target_list_op_at(parts),
+            ))));
         }
         let Some(cv) = field_value.value() else {
             return Ok(Some(FieldValue::Value(
@@ -2263,11 +2265,11 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
         Ok(match cv {
             CrateValue::ListOp(listop) => {
                 let converted = match listop.op_type {
-                    ValueType::TokenListOp => {
-                        Some(FieldValue::TokenListOp(self.convert_token_listop(listop)))
-                    }
+                    ValueType::TokenListOp => Some(FieldValue::TokenListOp(Box::new(
+                        self.convert_token_listop(listop),
+                    ))),
                     ValueType::PathListOp => match self.convert_target_listop(listop) {
-                        Ok(converted) => Some(FieldValue::PathListOp(converted)),
+                        Ok(converted) => Some(FieldValue::PathListOp(Box::new(converted))),
                         Err(error) => {
                             self.report(spec_path, Some(field), alloc::format!("{error}"))?;
                             return Ok(None);
@@ -2277,27 +2279,27 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
                         CrateValue::String(s) => Some(Arc::from(s.as_str())),
                         _ => None,
                     })
-                    .map(FieldValue::StringListOp),
+                    .map(FieldValue::from),
                     ValueType::IntListOp => convert_scalar_listop(listop, |v| match v {
                         CrateValue::Int(v) => Some(*v),
                         _ => None,
                     })
-                    .map(FieldValue::IntListOp),
+                    .map(FieldValue::from),
                     ValueType::UIntListOp => convert_scalar_listop(listop, |v| match v {
                         CrateValue::UInt(v) => Some(*v),
                         _ => None,
                     })
-                    .map(FieldValue::UIntListOp),
+                    .map(FieldValue::from),
                     ValueType::Int64ListOp => convert_scalar_listop(listop, |v| match v {
                         CrateValue::Int64(v) => Some(*v),
                         _ => None,
                     })
-                    .map(FieldValue::Int64ListOp),
+                    .map(FieldValue::from),
                     ValueType::UInt64ListOp => convert_scalar_listop(listop, |v| match v {
                         CrateValue::UInt64(v) => Some(*v),
                         _ => None,
                     })
-                    .map(FieldValue::UInt64ListOp),
+                    .map(FieldValue::from),
                     // Reference and payload list ops are arcs, read by their
                     // dedicated fields; unregistered-value list ops have no
                     // element type.

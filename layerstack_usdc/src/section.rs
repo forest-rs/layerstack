@@ -499,6 +499,195 @@ pub fn parse_sections(
     })
 }
 
+/// Parses the sections as [`parse_sections`] does, decompressing and
+/// decoding them on up to `threads` threads (with the `std` feature): each
+/// table, and each of the integer arrays of the PATHS and SPECS sections,
+/// is a task of its own. The paths are then placed in the tree, which
+/// needs the tokens, on the calling thread.
+///
+/// The result, the budget charged and the error, if any, are those of
+/// parsing the sections one after another, in file order: each task is
+/// charged within what is left of `budget`, and the tasks' charges are
+/// added up in that order, so the first to fail, or to exceed the budget
+/// with the tasks before it, is the one reported.
+pub fn parse_sections_on(
+    data: &[u8],
+    toc: &Toc,
+    version: CrateVersion,
+    budget: &mut DecodeBudget,
+    threads: usize,
+) -> Result<CrateSections, UsdcError> {
+    if threads <= 1 {
+        return parse_sections(data, toc, version, budget);
+    }
+    let tasks: Vec<SectionTask> = [
+        toc.tokens.map(SectionTask::Tokens),
+        toc.strings.map(SectionTask::Strings),
+        toc.fields.map(SectionTask::Fields),
+        toc.fieldsets.map(SectionTask::Fieldsets),
+        toc.paths.map(|entry| SectionTask::Paths(entry, 0)),
+        toc.paths.map(|entry| SectionTask::Paths(entry, 1)),
+        toc.paths.map(|entry| SectionTask::Paths(entry, 2)),
+        toc.specs.map(|entry| SectionTask::Specs(entry, 0)),
+        toc.specs.map(|entry| SectionTask::Specs(entry, 1)),
+        toc.specs.map(|entry| SectionTask::Specs(entry, 2)),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    let limit = budget.remaining();
+    let parsed = crate::threads::run_all(threads, tasks, &|task: SectionTask| {
+        let mut local = DecodeBudget::with_limit(limit);
+        let parsed = task.parse(data, &mut local);
+        (task.order(), parsed, local.used())
+    });
+
+    let mut sections = CrateSections {
+        tokens: TokenTable::default(),
+        strings: Vec::new(),
+        fields: Vec::new(),
+        fieldsets: Vec::new(),
+        paths: PathTable::default(),
+        specs: Vec::new(),
+        version,
+    };
+    let mut path_arrays: [Vec<i32>; 3] = Default::default();
+    let mut spec_arrays: [Vec<u32>; 3] = Default::default();
+    let mut path_count = None;
+    let mut spec_count = 0;
+    // The PATHS section is placed in the tree after its arrays, before the
+    // SPECS section, in file order.
+    let place_paths = |sections: &mut CrateSections,
+                       arrays: &mut [Vec<i32>; 3],
+                       count: Option<usize>,
+                       budget: &mut DecodeBudget|
+     -> Result<(), UsdcError> {
+        let Some(count) = count else {
+            return Ok(());
+        };
+        let mut nodes = vec![PathNode::Unused; count];
+        let [path_indices, element_token_indices, jumps] = core::mem::take(arrays);
+        let (lens, spellings) = build_paths(
+            &path_indices,
+            &element_token_indices,
+            &jumps,
+            &sections.tokens,
+            &mut nodes,
+            budget,
+        )?;
+        sections.paths = PathTable {
+            nodes,
+            texts: (0..count).map(|_| TextSlot::new()).collect(),
+            lens,
+            spellings,
+        };
+        Ok(())
+    };
+    for (order, result, used) in parsed {
+        if order == SectionTask::SPECS_ORDER {
+            place_paths(&mut sections, &mut path_arrays, path_count.take(), budget)?;
+        }
+        let parsed = match result {
+            Err(UsdcError::DecodeBudgetExceeded { .. }) => return Err(budget.exceeded()),
+            Err(error) => {
+                budget.charge(used)?;
+                return Err(error);
+            }
+            Ok(parsed) => parsed,
+        };
+        budget.charge(used)?;
+        match parsed {
+            Parsed::Tokens(tokens) => sections.tokens = tokens,
+            Parsed::Strings(strings) => sections.strings = strings,
+            Parsed::Fields(fields) => sections.fields = fields,
+            Parsed::Fieldsets(fieldsets) => sections.fieldsets = fieldsets,
+            Parsed::PathArray(at, array, count) => {
+                path_arrays[at] = array;
+                if let Some(count) = count {
+                    path_count = Some(count);
+                }
+            }
+            Parsed::SpecArray(at, array) => {
+                spec_count = array.len();
+                spec_arrays[at] = array;
+            }
+        }
+    }
+    place_paths(&mut sections, &mut path_arrays, path_count.take(), budget)?;
+    if toc.specs.is_some() {
+        let [path_indices, fieldset_indices, forms] = spec_arrays;
+        let mut specs = Vec::with_capacity(spec_count);
+        for ((&path_index, &fieldset_index), &form) in
+            path_indices.iter().zip(&fieldset_indices).zip(&forms)
+        {
+            specs.push(SpecDef {
+                path_index,
+                fieldset_index,
+                form: SpecForm::try_from(form)?,
+            });
+        }
+        sections.specs = specs;
+    }
+    Ok(sections)
+}
+
+/// One task of [`parse_sections_on`]: a table, or one of the integer arrays
+/// of the PATHS or SPECS sections, by its place among them.
+#[derive(Clone, Copy)]
+enum SectionTask {
+    Tokens(SectionEntry),
+    Strings(SectionEntry),
+    Fields(SectionEntry),
+    Fieldsets(SectionEntry),
+    Paths(SectionEntry, usize),
+    Specs(SectionEntry, usize),
+}
+
+/// What a [`SectionTask`] parsed.
+enum Parsed {
+    Tokens(TokenTable),
+    Strings(Vec<u32>),
+    Fields(Vec<FieldDef>),
+    Fieldsets(Vec<i32>),
+    /// One of the PATHS section's arrays, and with the last, the number of
+    /// paths in the table.
+    PathArray(usize, Vec<i32>, Option<usize>),
+    SpecArray(usize, Vec<u32>),
+}
+
+impl SectionTask {
+    /// The place of the first SPECS task in file order.
+    const SPECS_ORDER: usize = 7;
+
+    /// The task's place in file order.
+    fn order(self) -> usize {
+        match self {
+            Self::Tokens(_) => 0,
+            Self::Strings(_) => 1,
+            Self::Fields(_) => 2,
+            Self::Fieldsets(_) => 3,
+            Self::Paths(_, at) => 4 + at,
+            Self::Specs(_, at) => Self::SPECS_ORDER + at,
+        }
+    }
+
+    fn parse(self, data: &[u8], budget: &mut DecodeBudget) -> Result<Parsed, UsdcError> {
+        Ok(match self {
+            Self::Tokens(entry) => Parsed::Tokens(parse_tokens(data, &entry, budget)?),
+            Self::Strings(entry) => Parsed::Strings(parse_strings(data, &entry, budget)?),
+            Self::Fields(entry) => Parsed::Fields(parse_fields(data, &entry, budget)?),
+            Self::Fieldsets(entry) => Parsed::Fieldsets(parse_fieldsets(data, &entry, budget)?),
+            Self::Paths(entry, at) => {
+                let (array, count) = parse_path_array(data, &entry, at, budget)?;
+                Parsed::PathArray(at, array, count)
+            }
+            Self::Specs(entry, at) => {
+                Parsed::SpecArray(at, parse_spec_array(data, &entry, at, budget)?)
+            }
+        })
+    }
+}
+
 impl CrateSections {
     /// The text of path `index` of the path table ([`PathTable::text`]).
     #[must_use]
@@ -1204,6 +1393,57 @@ mod tests {
             assert_eq!(table.spelling(at), Some(Spelling::of(path)), "{path}");
         }
         Ok(())
+    }
+
+    /// Parsing the sections on threads parses what one thread does: the
+    /// same tables, the same budget charged, and with too small a budget,
+    /// the same error.
+    #[test]
+    #[cfg_attr(target_os = "wasi", ignore = "WASI runs tests without threads")]
+    fn sections_on_threads_parse_what_one_thread_does() {
+        use crate::writer::{Spec, SpecForm as Form, Value as V, write_crate};
+        let mut specs = vec![Spec::new("/", Form::PseudoRoot)];
+        for i in 0..200 {
+            let path = alloc::format!("/P{i}");
+            specs.push(
+                Spec::new(&path, Form::Prim).with_field("typeName", V::Token("Scope".into())),
+            );
+            specs.push(
+                Spec::new(alloc::format!("{path}.label"), Form::Attribute)
+                    .with_field("default", V::String(alloc::format!("label {i}"))),
+            );
+        }
+        let bytes = write_crate(&specs).unwrap();
+        let header = crate::header::parse_header(&bytes).unwrap();
+        let toc = crate::toc::parse_toc(&bytes, header.toc_offset).unwrap();
+        let version = header.crate_version();
+        let parse = |limit: u64, threads: usize| {
+            let mut budget = DecodeBudget::with_limit(limit);
+            let parsed = parse_sections_on(&bytes, &toc, version, &mut budget, threads);
+            (parsed, budget.used())
+        };
+        let (one, used) = parse(u64::MAX, 1);
+        let one = one.unwrap();
+        for threads in [2, 4] {
+            let (many, many_used) = parse(u64::MAX, threads);
+            let many = many.unwrap();
+            assert_eq!(many_used, used);
+            assert_eq!(many.tokens, one.tokens);
+            assert_eq!(many.strings, one.strings);
+            assert_eq!(many.fields, one.fields);
+            assert_eq!(many.fieldsets, one.fieldsets);
+            assert_eq!(many.specs, one.specs);
+            assert_eq!(many.paths.nodes(), one.paths.nodes());
+            for at in 0..one.paths.len() {
+                assert_eq!(many.path(at), one.path(at));
+                assert_eq!(many.paths.spelling(at), one.paths.spelling(at));
+            }
+        }
+        for limit in [used - 1, used / 2, used / 4, 3] {
+            let (expected, _) = parse(limit, 1);
+            let (parsed, _) = parse(limit, 4);
+            assert_eq!(parsed.unwrap_err(), expected.unwrap_err(), "{limit}");
+        }
     }
 
     #[test]

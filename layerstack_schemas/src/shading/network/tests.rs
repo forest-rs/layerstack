@@ -201,7 +201,7 @@ fn fixture() -> (InMemoryStore, LiveStage, PathId) {
     let library = store.path("/Library");
     let mut root = Layer::new(LayerId(1));
     let mut spec = PrimSpec::def();
-    spec.references = ListOp::prepended(vec![Reference::new(LayerId(2), library)]);
+    spec.references = ListOp::prepended(vec![Reference::new(LayerId(2), library)]).into();
     root.insert_prim(mat, spec);
     port(
         &mut store,

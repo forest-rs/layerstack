@@ -48,10 +48,10 @@ fn fixture() -> InMemoryStore {
     let mut root = Layer::new(LayerId(1));
     root.insert_prim(asset, PrimSpec::def().with_property(x, attr(2)));
     let mut spec = PrimSpec::def();
-    spec.references.explicit = Some(vec![Reference::new(LayerId(1), asset)]);
+    spec.references.make_mut().explicit = Some(vec![Reference::new(LayerId(1), asset)]);
     root.insert_prim(internal, spec);
     let mut spec = PrimSpec::def();
-    spec.references.explicit = Some(vec![Reference::from_source(
+    spec.references.make_mut().explicit = Some(vec![Reference::from_source(
         layerstack::ReferenceSource::Layer {
             layer: LayerId(1),
             asset: Some("root.usda"),

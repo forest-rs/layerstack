@@ -1466,26 +1466,26 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
                 "references" => {
                     if let Some(CrateValue::ListOp(listop)) = value.value() {
                         let converted = self.convert_ref_listop(listop)?;
-                        spec.references.merge(converted);
+                        spec.references.make_mut().merge(converted);
                     }
                 }
                 // Spec: AOUSD Core §7.6.2.3.2 (`payload`).
                 "payload" => {
                     if let Some(converted) = self.convert_payload_value(value)? {
-                        spec.payloads.merge(converted);
+                        spec.payloads.make_mut().merge(converted);
                     }
                 }
                 // Spec: AOUSD Core §7.6.2.3.3 (`inheritPaths`).
                 "inheritPaths" => {
                     if let Some(CrateValue::ListOp(listop)) = value.value() {
                         let converted = self.convert_path_listop(listop)?;
-                        spec.inherits.merge(converted);
+                        spec.inherits.make_mut().merge(converted);
                     }
                 }
                 "specializes" => {
                     if let Some(CrateValue::ListOp(listop)) = value.value() {
                         let converted = self.convert_path_listop(listop)?;
-                        spec.specializes.merge(converted);
+                        spec.specializes.make_mut().merge(converted);
                     }
                 }
                 "variantSelection" => {
@@ -1498,7 +1498,7 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
                     }
                 }
                 "variantSetNames" => {
-                    spec.variant_set_names = self.variant_set_names(value);
+                    spec.variant_set_names = self.variant_set_names(value).into();
                 }
                 "instanceable" if matches!(value.value(), Some(CrateValue::Bool(_))) => {
                     if let Some(CrateValue::Bool(b)) = value.value() {
@@ -1880,7 +1880,7 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
                 "variantSetChildren" => {}
                 "variantSetNames" => {
                     // The nested sets, as for a prim spec.
-                    variant.variant_set_names = self.variant_set_names(value);
+                    variant.variant_set_names = self.variant_set_names(value).into();
                 }
                 "variantSelection" => {
                     if let Some(CrateValue::VariantSelectionMap(pairs)) = value.value() {
@@ -1895,26 +1895,26 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
                     if let Some(CrateValue::ListOp(listop)) = value.value()
                         && let Ok(converted) = self.convert_ref_listop(listop)
                     {
-                        variant.references.merge(converted);
+                        variant.references.make_mut().merge(converted);
                     }
                 }
                 "payload" => {
                     if let Ok(Some(converted)) = self.convert_payload_value(value) {
-                        variant.payloads.merge(converted);
+                        variant.payloads.make_mut().merge(converted);
                     }
                 }
                 "inheritPaths" => {
                     if let Some(CrateValue::ListOp(listop)) = value.value()
                         && let Ok(converted) = self.convert_path_listop(listop)
                     {
-                        variant.inherits.merge(converted);
+                        variant.inherits.make_mut().merge(converted);
                     }
                 }
                 "specializes" => {
                     if let Some(CrateValue::ListOp(listop)) = value.value()
                         && let Ok(converted) = self.convert_path_listop(listop)
                     {
-                        variant.specializes.merge(converted);
+                        variant.specializes.make_mut().merge(converted);
                     }
                 }
                 _ => {
@@ -3277,11 +3277,11 @@ fn copy_prim(spec: &PrimSpec) -> PrimSpec {
         authored_children: vec(&spec.authored_children),
         variant_selections: map(&spec.variant_selections),
         variant_sets: map(&spec.variant_sets),
-        variant_set_names: list(&spec.variant_set_names),
-        references: list(&spec.references),
-        inherits: list(&spec.inherits),
-        specializes: list(&spec.specializes),
-        payloads: list(&spec.payloads),
+        variant_set_names: list(&spec.variant_set_names).into(),
+        references: list(&spec.references).into(),
+        inherits: list(&spec.inherits).into(),
+        specializes: list(&spec.specializes).into(),
+        payloads: list(&spec.payloads).into(),
         prim_order: spec.prim_order.clone(),
         instanceable: spec.instanceable,
         active: spec.active,

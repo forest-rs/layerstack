@@ -527,7 +527,9 @@ pub fn cases() -> Vec<SaveCase> {
                      payload with a prim path; the edit moves the offset",
             source: RETIMED_PAYLOAD,
             edit: |layer| {
-                layer.prim("/Shot").payloads.prepend[0].layer_offset.offset = 48.0;
+                layer.prim("/Shot").payloads.make_mut().prepend[0]
+                    .layer_offset
+                    .offset = 48.0;
             },
             expected: RETIMED_PAYLOAD_EDITED,
             weaker: None,
@@ -548,6 +550,7 @@ pub fn cases() -> Vec<SaveCase> {
                 layer
                     .prim("/Item")
                     .inherits
+                    .make_mut()
                     .explicit
                     .as_mut()
                     .expect("explicit inherits")

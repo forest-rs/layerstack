@@ -16,14 +16,15 @@ fn fixture(mask: bool) -> (InMemoryStore, LiveStage) {
     let deep = store.path("/Deep");
     let mut root = Layer::new(LayerId(1));
     let mut spec = PrimSpec::def();
-    spec.payloads.explicit = Some(vec![Reference::with_asset(
+    spec.payloads.make_mut().explicit = Some(vec![Reference::with_asset(
         LayerId(2),
         source,
         "asset.usda",
     )]);
     root.insert_prim(host, spec);
     let mut spec = PrimSpec::def();
-    spec.references.explicit = Some(vec![Reference::new(LayerId(1), store.path("/Host/Nested"))]);
+    spec.references.make_mut().explicit =
+        Some(vec![Reference::new(LayerId(1), store.path("/Host/Nested"))]);
     root.insert_prim(store.path("/Copy"), spec);
     for name in ["/Unrelated", "/Hidden", "/Hidden/Child"] {
         root.insert_prim(store.path(name), PrimSpec::def());
@@ -33,7 +34,8 @@ fn fixture(mask: bool) -> (InMemoryStore, LiveStage) {
     asset.sublayers_mut().push(SublayerEntry::new(LayerId(4)));
     asset.insert_prim(source, PrimSpec::def());
     let mut spec = PrimSpec::def();
-    spec.payloads.explicit = Some(vec![Reference::with_asset(LayerId(3), deep, "deep.usda")]);
+    spec.payloads.make_mut().explicit =
+        Some(vec![Reference::with_asset(LayerId(3), deep, "deep.usda")]);
     asset.insert_prim(nested, spec);
     asset.insert_prim(store.path("/Asset/Child"), PrimSpec::def());
     store.insert_layer(asset);

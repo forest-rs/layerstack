@@ -690,12 +690,15 @@ fn rewrite_properties(
     }
 }
 fn rewrite_arcs(
-    arcs: &mut ListOp<Reference>,
+    arcs: &mut crate::SparseListOp<Reference>,
     kind: AssetDependencyKind,
     layer: LayerId,
     spec: &SpecPath,
     map: &Replacements,
 ) {
+    let Some(arcs) = arcs.get_mut() else {
+        return;
+    };
     for arc in arcs
         .explicit
         .iter_mut()

@@ -290,7 +290,7 @@ fn variants_scene() -> InMemoryStore {
             variants: [(round, VariantSpec::default())].into_iter().collect(),
         },
     );
-    spec.variant_set_names.prepend.push(shape);
+    spec.variant_set_names.make_mut().prepend.push(shape);
     spec.variant_selections.insert(shape, round);
     author(&mut store, &mut layer, "/Varied", spec);
     store.insert_layer(layer);

@@ -553,7 +553,7 @@ mod child_order_tests {
         };
         let mut parent = PrimSpec::def();
         parent.variant_selections.insert(mode, a);
-        parent.variant_set_names.prepend.push(mode);
+        parent.variant_set_names.make_mut().prepend.push(mode);
         parent.variant_sets.insert(
             mode,
             VariantSetSpec {
@@ -864,7 +864,7 @@ mod instancing_tests {
         root.insert_prim(
             p,
             PrimSpec {
-                references: reference(2, group),
+                references: reference(2, group).into(),
                 ..PrimSpec::def()
             },
         );
@@ -889,7 +889,7 @@ mod instancing_tests {
             instance,
             PrimSpec {
                 instanceable: Some(true),
-                references: reference(3, asset),
+                references: reference(3, asset).into(),
                 authored_children: vec![c_tok],
                 ..PrimSpec::def()
             },
@@ -1631,7 +1631,7 @@ mod deferred_arc_tests {
         let (x, y) = (store.tokens.intern("x"), store.tokens.intern("y"));
         let mut host = PrimSpec::def();
         let branch = VariantSpec {
-            references: crate::ListOp::prepended(vec![deferred("./never.usda")]),
+            references: crate::ListOp::prepended(vec![deferred("./never.usda")]).into(),
             ..VariantSpec::default()
         };
         host.variant_sets.insert(
@@ -1642,7 +1642,7 @@ mod deferred_arc_tests {
                     .collect(),
             },
         );
-        host.variant_set_names.prepend.push(set);
+        host.variant_set_names.make_mut().prepend.push(set);
         host.variant_selections.insert(set, y);
 
         let mut root = Layer::new(ROOT);
@@ -1726,7 +1726,7 @@ mod deferred_arc_tests {
         let mut root = Layer::new(ROOT);
         root.sublayers.push(crate::SublayerEntry::new(weak));
         let mut spec = PrimSpec::over();
-        spec.references.delete = vec![Reference::deferred(
+        spec.references.make_mut().delete = vec![Reference::deferred(
             ROOT,
             "./asset.usda",
             ReferenceTarget::Prim(target),

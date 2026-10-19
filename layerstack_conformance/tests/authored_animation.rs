@@ -157,7 +157,13 @@ fn unsupported_and_invalid_spline_semantics_remain_explicit() {
         }),
         None
     );
-    let arc = &mut imported.prim("/A").references.explicit.as_mut().unwrap()[0];
+    let arc = &mut imported
+        .prim("/A")
+        .references
+        .make_mut()
+        .explicit
+        .as_mut()
+        .unwrap()[0];
     let original = arc.clone();
     arc.custom_data
         .push(("nan".into(), Value::Double(f64::NAN)));

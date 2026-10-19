@@ -389,7 +389,7 @@ fn edits_to_a_shared_site_recompose_every_occurrence() {
         .layer_mut(right)
         .and_then(|layer| layer.prim_mut(right_prim))
         .expect("prim spec")
-        .references = ListOp::default();
+        .references = ListOp::default().into();
     live.notify_layer_prim_edits(right, &[right_prim]);
     live.recompose(&mut loaded.store);
     let fresh = Stage::compose(&mut loaded.store, root, options());

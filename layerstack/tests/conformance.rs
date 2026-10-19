@@ -505,7 +505,7 @@ fn variants_selection_is_strength_ordered() {
     );
 
     sub_spec.variant_sets.insert(set_v, set_spec);
-    sub_spec.variant_set_names.prepend.push(set_v);
+    sub_spec.variant_set_names.make_mut().prepend.push(set_v);
     sub_layer.insert_prim(prim, sub_spec);
     store.insert_layer(sub_layer);
 
@@ -2983,7 +2983,7 @@ fn specializes_inside_reference_populates_class_children() {
     model_spec.authored_children = vec![c_tok, cls_tok];
     lib.insert_prim(model, model_spec);
     let mut c_spec = PrimSpec::def();
-    c_spec.specializes = ListOp::prepended(vec![model_cls]);
+    c_spec.specializes = ListOp::prepended(vec![model_cls]).into();
     lib.insert_prim(model_c, c_spec);
     let mut cls_spec = PrimSpec::default().with_field(field_x, 10_i64);
     cls_spec.specifier = Some(layerstack::Specifier::Class);

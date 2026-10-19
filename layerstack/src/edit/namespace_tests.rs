@@ -125,7 +125,7 @@ fn move_subtree_repairs_dependent_targets_expressions_and_arcs_then_undoes() {
     layer.insert_prim(inherit, PrimSpec::def().with_inherit(a));
     layer.insert_prim(specialize, PrimSpec::def().with_specialize(a));
     let mut payload_spec = PrimSpec::def();
-    payload_spec.payloads = ListOp::explicit(vec![Reference::new(ROOT, a)]);
+    payload_spec.payloads = ListOp::explicit(vec![Reference::new(ROOT, a)]).into();
     layer.insert_prim(payload, payload_spec);
     let before = layer.clone();
     let mut live = LiveStage::compose(&mut store, ROOT, StageOptions::default());

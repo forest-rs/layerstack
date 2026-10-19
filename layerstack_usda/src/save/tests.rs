@@ -333,16 +333,16 @@ fn rejects_repeated_arcs_within_one_operation() {
     type Repeat = fn(&mut PrimSpec, PathId, &Reference);
     let cases: [(&str, Repeat); 4] = [
         ("inherits", |spec, c, _| {
-            spec.inherits.explicit = Some(vec![c, c]);
+            spec.inherits.make_mut().explicit = Some(vec![c, c]);
         }),
         ("specializes", |spec, c, _| {
-            spec.specializes.prepend = vec![c, c];
+            spec.specializes.make_mut().prepend = vec![c, c];
         }),
         ("references", |spec, _, arc| {
-            spec.references.append = vec![arc.clone(), arc.clone()];
+            spec.references.make_mut().append = vec![arc.clone(), arc.clone()];
         }),
         ("payload", |spec, _, arc| {
-            spec.payloads.delete = vec![arc.clone(), arc.clone()];
+            spec.payloads.make_mut().delete = vec![arc.clone(), arc.clone()];
         }),
     ];
     for (key, edit) in cases {
@@ -358,8 +358,8 @@ fn rejects_repeated_arcs_within_one_operation() {
     }
 
     let spec = imported.layer.prim_mut(a).unwrap();
-    spec.inherits.delete = vec![c];
-    spec.inherits.prepend = vec![c];
+    spec.inherits.make_mut().delete = vec![c];
+    spec.inherits.make_mut().prepend = vec![c];
     let text = imported.save().unwrap();
     assert!(
         text.contains("    delete inherits = </C>\n    prepend inherits = </C>\n"),

@@ -4377,7 +4377,7 @@ mod tests {
         let mut root = Layer::new(LayerId(1));
         root.insert_prim(c, PrimSpec::class());
         let mut over = PrimSpec::over();
-        over.references.explicit = Some(vec![Reference::new(LayerId(2), b)]);
+        over.references.make_mut().explicit = Some(vec![Reference::new(LayerId(2), b)]);
         root.insert_prim(a, over);
         store.insert_layer(root);
         let mut other = Layer::new(LayerId(2));
@@ -4437,7 +4437,7 @@ mod tests {
         let tree = store.tokens.intern("Tree");
         let mut root = Layer::new(LayerId(1));
         let mut spec = PrimSpec::def().with_type_name(any);
-        spec.references.explicit = Some(vec![Reference::new(LayerId(2), b)]);
+        spec.references.make_mut().explicit = Some(vec![Reference::new(LayerId(2), b)]);
         root.insert_prim(a, spec);
         store.insert_layer(root);
         let mut other = Layer::new(LayerId(2));

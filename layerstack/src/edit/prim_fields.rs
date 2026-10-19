@@ -204,15 +204,15 @@ pub(super) fn read(
             PrimValue::PropertyOrder(spec.property_order.clone())
         }
         (SpecRef::Prim(spec), PrimField::References) => {
-            PrimValue::References(spec.references.clone())
+            PrimValue::References((*spec.references).clone())
         }
-        (SpecRef::Prim(spec), PrimField::Payloads) => PrimValue::Payloads(spec.payloads.clone()),
-        (SpecRef::Prim(spec), PrimField::Inherits) => PrimValue::Inherits(spec.inherits.clone()),
+        (SpecRef::Prim(spec), PrimField::Payloads) => PrimValue::Payloads((*spec.payloads).clone()),
+        (SpecRef::Prim(spec), PrimField::Inherits) => PrimValue::Inherits((*spec.inherits).clone()),
         (SpecRef::Prim(spec), PrimField::Specializes) => {
-            PrimValue::Specializes(spec.specializes.clone())
+            PrimValue::Specializes((*spec.specializes).clone())
         }
         (SpecRef::Prim(spec), PrimField::VariantSetNames) => {
-            PrimValue::VariantSetNames(spec.variant_set_names.clone())
+            PrimValue::VariantSetNames((*spec.variant_set_names).clone())
         }
         (SpecRef::Variant(spec), PrimField::Active) => {
             PrimValue::Active(variant_bool(&spec.fields, "active"))
@@ -224,15 +224,19 @@ pub(super) fn read(
             PrimValue::PropertyOrder(spec.property_order.clone())
         }
         (SpecRef::Variant(spec), PrimField::References) => {
-            PrimValue::References(spec.references.clone())
+            PrimValue::References((*spec.references).clone())
         }
-        (SpecRef::Variant(spec), PrimField::Payloads) => PrimValue::Payloads(spec.payloads.clone()),
-        (SpecRef::Variant(spec), PrimField::Inherits) => PrimValue::Inherits(spec.inherits.clone()),
+        (SpecRef::Variant(spec), PrimField::Payloads) => {
+            PrimValue::Payloads((*spec.payloads).clone())
+        }
+        (SpecRef::Variant(spec), PrimField::Inherits) => {
+            PrimValue::Inherits((*spec.inherits).clone())
+        }
         (SpecRef::Variant(spec), PrimField::Specializes) => {
-            PrimValue::Specializes(spec.specializes.clone())
+            PrimValue::Specializes((*spec.specializes).clone())
         }
         (SpecRef::Variant(spec), PrimField::VariantSetNames) => {
-            PrimValue::VariantSetNames(spec.variant_set_names.clone())
+            PrimValue::VariantSetNames((*spec.variant_set_names).clone())
         }
         (
             SpecRef::Variant(_),
@@ -266,37 +270,37 @@ pub(crate) fn swap(spec: SpecMut<'_>, value: PrimValue) -> Result<PrimValue, Pri
             PrimValue::PropertyOrder(replace(&mut spec.property_order, v))
         }
         (SpecMut::Prim(spec), PrimValue::References(v)) => {
-            PrimValue::References(replace(&mut spec.references, v))
+            PrimValue::References(replace(&mut spec.references, v.into()).into_inner())
         }
         (SpecMut::Prim(spec), PrimValue::Payloads(v)) => {
-            PrimValue::Payloads(replace(&mut spec.payloads, v))
+            PrimValue::Payloads(replace(&mut spec.payloads, v.into()).into_inner())
         }
         (SpecMut::Prim(spec), PrimValue::Inherits(v)) => {
-            PrimValue::Inherits(replace(&mut spec.inherits, v))
+            PrimValue::Inherits(replace(&mut spec.inherits, v.into()).into_inner())
         }
         (SpecMut::Prim(spec), PrimValue::Specializes(v)) => {
-            PrimValue::Specializes(replace(&mut spec.specializes, v))
+            PrimValue::Specializes(replace(&mut spec.specializes, v.into()).into_inner())
         }
         (SpecMut::Prim(spec), PrimValue::VariantSetNames(v)) => {
-            PrimValue::VariantSetNames(replace(&mut spec.variant_set_names, v))
+            PrimValue::VariantSetNames(replace(&mut spec.variant_set_names, v.into()).into_inner())
         }
         (SpecMut::Variant(spec), PrimValue::PropertyOrder(v)) => {
             PrimValue::PropertyOrder(replace(&mut spec.property_order, v))
         }
         (SpecMut::Variant(spec), PrimValue::References(v)) => {
-            PrimValue::References(replace(&mut spec.references, v))
+            PrimValue::References(replace(&mut spec.references, v.into()).into_inner())
         }
         (SpecMut::Variant(spec), PrimValue::Payloads(v)) => {
-            PrimValue::Payloads(replace(&mut spec.payloads, v))
+            PrimValue::Payloads(replace(&mut spec.payloads, v.into()).into_inner())
         }
         (SpecMut::Variant(spec), PrimValue::Inherits(v)) => {
-            PrimValue::Inherits(replace(&mut spec.inherits, v))
+            PrimValue::Inherits(replace(&mut spec.inherits, v.into()).into_inner())
         }
         (SpecMut::Variant(spec), PrimValue::Specializes(v)) => {
-            PrimValue::Specializes(replace(&mut spec.specializes, v))
+            PrimValue::Specializes(replace(&mut spec.specializes, v.into()).into_inner())
         }
         (SpecMut::Variant(spec), PrimValue::VariantSetNames(v)) => {
-            PrimValue::VariantSetNames(replace(&mut spec.variant_set_names, v))
+            PrimValue::VariantSetNames(replace(&mut spec.variant_set_names, v.into()).into_inner())
         }
         (SpecMut::Variant(_), value) => return Err(value.field()),
     })

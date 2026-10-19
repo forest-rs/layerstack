@@ -15,7 +15,7 @@ use crate::{
     array_edit::ArrayEdit,
     interner::TokenId,
     interner::TokenInterner,
-    listop::ListOp,
+    listop::{ListOp, SparseListOp},
     path::{
         Path, PathError, PathId, PathInterner, PropertyPath, PropertyPathError, TargetPath,
         TargetPathError,
@@ -1511,13 +1511,13 @@ pub struct VariantSpec {
     /// to the prim owning the variant set when this variant is selected.
     ///
     /// Spec: AOUSD Core §10.5 (variant arcs).
-    pub references: ListOp<Reference>,
+    pub references: SparseListOp<Reference>,
     /// Inherits arcs on this variant branch itself.
-    pub inherits: ListOp<PathId>,
+    pub inherits: SparseListOp<PathId>,
     /// Specializes arcs on this variant branch itself.
-    pub specializes: ListOp<PathId>,
+    pub specializes: SparseListOp<PathId>,
     /// Payloads on this variant branch itself.
-    pub payloads: ListOp<Reference>,
+    pub payloads: SparseListOp<Reference>,
     /// Variant selections authored within this variant branch.
     ///
     /// When a variant branch header includes `variants = { string v2 = "b" }`,
@@ -1537,7 +1537,7 @@ pub struct VariantSpec {
     /// [`PrimSpec::variant_set_names`] is for a prim spec.
     ///
     /// Spec: AOUSD Core §7.6.2.3.5 (`variantSetNames`), §7.6.7.
-    pub variant_set_names: ListOp<TokenId>,
+    pub variant_set_names: SparseListOp<TokenId>,
     /// Property ordering authored inside this branch (`reorder properties`).
     ///
     /// Spec: AOUSD Core §7.6.7 (variant specs contribute prim spec fields).
@@ -1818,13 +1818,13 @@ pub struct PrimSpec {
     /// Spec: AOUSD Core §7.6.2.3.5 (`variantSetNames`), §12.4 (list ops),
     /// §10.5 (variant selection). OpenUSD: `PcpComposeSiteVariantSets` in
     /// `pxr/usd/pcp/composeSite.cpp`.
-    pub variant_set_names: ListOp<TokenId>,
+    pub variant_set_names: SparseListOp<TokenId>,
     /// References arcs (a `ListOp` chain across the layer stack).
-    pub references: ListOp<Reference>,
+    pub references: SparseListOp<Reference>,
     /// Inherits arcs (a `ListOp` chain across the layer stack).
     ///
     /// Spec: AOUSD Core §10 (inherits arc), with ordering via §12.4 (`ListOps`).
-    pub inherits: ListOp<PathId>,
+    pub inherits: SparseListOp<PathId>,
     /// Specializes arcs (a `ListOp` chain across the layer stack).
     ///
     /// Specializes is similar to inherits but sits at the weakest position in
@@ -1832,7 +1832,7 @@ pub struct PrimSpec {
     /// referencing.
     ///
     /// Spec: AOUSD Core §10 (specializes arc, §5.1.33), with ordering via §12.4 (`ListOps`).
-    pub specializes: ListOp<PathId>,
+    pub specializes: SparseListOp<PathId>,
     /// Payloads arcs (a `ListOp` chain across the layer stack).
     ///
     /// Payloads are structurally identical to references but support deferred
@@ -1840,7 +1840,7 @@ pub struct PrimSpec {
     /// mapping. Their position in LIVERPS is between References and Specializes.
     ///
     /// Spec: AOUSD Core §10 (payloads arc, §5.1.22).
-    pub payloads: ListOp<Reference>,
+    pub payloads: SparseListOp<Reference>,
     /// Optional child ordering (aka `primOrder` in the supplemental suite).
     ///
     /// This is used during stage population to produce deterministic, authored
@@ -1949,49 +1949,49 @@ impl PrimSpec {
 
     /// Appends a reference arc.
     pub fn add_reference(&mut self, reference: Reference) -> &mut Self {
-        self.references.append.push(reference);
+        self.references.make_mut().append.push(reference);
         self
     }
 
     /// Appends a reference arc (builder, consuming).
     pub fn with_reference(mut self, reference: Reference) -> Self {
-        self.references.append.push(reference);
+        self.references.make_mut().append.push(reference);
         self
     }
 
     /// Appends an inherit arc.
     pub fn add_inherit(&mut self, path: PathId) -> &mut Self {
-        self.inherits.append.push(path);
+        self.inherits.make_mut().append.push(path);
         self
     }
 
     /// Appends an inherit arc (builder, consuming).
     pub fn with_inherit(mut self, path: PathId) -> Self {
-        self.inherits.append.push(path);
+        self.inherits.make_mut().append.push(path);
         self
     }
 
     /// Appends a payload arc.
     pub fn add_payload(&mut self, payload: Reference) -> &mut Self {
-        self.payloads.append.push(payload);
+        self.payloads.make_mut().append.push(payload);
         self
     }
 
     /// Appends a payload arc (builder, consuming).
     pub fn with_payload(mut self, payload: Reference) -> Self {
-        self.payloads.append.push(payload);
+        self.payloads.make_mut().append.push(payload);
         self
     }
 
     /// Appends a specialize arc.
     pub fn add_specialize(&mut self, path: PathId) -> &mut Self {
-        self.specializes.append.push(path);
+        self.specializes.make_mut().append.push(path);
         self
     }
 
     /// Appends a specialize arc (builder, consuming).
     pub fn with_specialize(mut self, path: PathId) -> Self {
-        self.specializes.append.push(path);
+        self.specializes.make_mut().append.push(path);
         self
     }
 
@@ -2535,8 +2535,12 @@ impl Layer {
             map: &dyn Fn(LayerId) -> LayerId,
         ) {
             for variant in sets.values_mut().flat_map(|set| set.variants.values_mut()) {
-                arcs(&mut variant.references, map);
-                arcs(&mut variant.payloads, map);
+                if let Some(op) = variant.references.get_mut() {
+                    arcs(op, map);
+                }
+                if let Some(op) = variant.payloads.get_mut() {
+                    arcs(op, map);
+                }
                 variant_sets(&mut variant.variant_sets, map);
             }
         }
@@ -2557,8 +2561,12 @@ impl Layer {
             .values_mut()
             .chain(self.variant_prims.values_mut().flatten());
         for spec in specs {
-            arcs(&mut spec.references, &map);
-            arcs(&mut spec.payloads, &map);
+            if let Some(op) = spec.references.get_mut() {
+                arcs(op, &map);
+            }
+            if let Some(op) = spec.payloads.get_mut() {
+                arcs(op, &map);
+            }
             variant_sets(&mut spec.variant_sets, &map);
         }
     }
@@ -3998,6 +4006,7 @@ mod tests {
             .prim_mut(a)
             .unwrap()
             .references
+            .make_mut()
             .prepend
             .push(Reference::new(LayerId(9), a));
         assert!(!renumbered.known_without_reference_arcs());
@@ -4615,7 +4624,7 @@ mod tests {
             });
             for (set, name, nested) in sets {
                 if !spec.variant_set_names.prepend.contains(&set) {
-                    spec.variant_set_names.prepend.push(set);
+                    spec.variant_set_names.make_mut().prepend.push(set);
                 }
                 spec.variant_sets
                     .entry(set)
@@ -4632,7 +4641,7 @@ mod tests {
         );
         let ay = variant(4, vec![(b, y, variant(5, vec![]))]);
         let mut prim = PrimSpec::def();
-        prim.variant_set_names = ListOp::prepended(vec![a]);
+        prim.variant_set_names = ListOp::prepended(vec![a]).into();
         let set = prim.variant_sets.entry(a).or_default();
         set.variants.insert(x, ax);
         set.variants.insert(y, ay);

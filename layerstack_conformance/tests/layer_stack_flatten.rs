@@ -83,8 +83,8 @@ fn variants(sets: &mut hashbrown::HashMap<layerstack::TokenId, VariantSetSpec>, 
             fields(&mut variant.fields);
             properties(&mut variant.properties);
 
-            arcs(&mut variant.references, output);
-            arcs(&mut variant.payloads, output);
+            arcs(variant.references.make_mut(), output);
+            arcs(variant.payloads.make_mut(), output);
             variants(&mut variant.variant_sets, output);
         }
     }
@@ -93,8 +93,8 @@ fn normalize(spec: &mut PrimSpec, output: LayerId) {
     fields(&mut spec.fields);
     properties(&mut spec.properties);
 
-    arcs(&mut spec.references, output);
-    arcs(&mut spec.payloads, output);
+    arcs(spec.references.make_mut(), output);
+    arcs(spec.payloads.make_mut(), output);
     variants(&mut spec.variant_sets, output);
 }
 

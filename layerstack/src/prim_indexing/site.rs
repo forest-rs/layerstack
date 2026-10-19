@@ -1162,7 +1162,7 @@ mod tests {
             .insert(size, set(big, branch(height, 2.0)));
         weak.variant_sets
             .insert(finish, set(matte, branch(gloss, 3.0)));
-        weak.variant_set_names = ListOp::prepended(vec![look, size]);
+        weak.variant_set_names = ListOp::prepended(vec![look, size]).into();
         weak.variant_selections = [(look, wet), (size, big), (finish, matte)]
             .into_iter()
             .collect();
@@ -1170,7 +1170,7 @@ mod tests {
         sub.insert_prim(rock, weak);
         store.insert_layer(sub);
         let mut strong = PrimSpec::over();
-        strong.variant_set_names = ListOp::deleted(vec![look]);
+        strong.variant_set_names = ListOp::deleted(vec![look]).into();
         let mut root = Layer::new(LayerId(1));
         root.sublayers.push(SublayerEntry::new(LayerId(2)));
         root.insert_prim(rock, strong);

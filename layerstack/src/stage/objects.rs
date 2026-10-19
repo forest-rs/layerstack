@@ -33,6 +33,9 @@ pub struct Prim<'a> {
     stage: &'a Stage,
     store: &'a dyn LayerStore,
     path: PathId,
+    /// The prim's index, found once when the handle is made, so the
+    /// queries that read it look nothing up again.
+    index: &'a PrimIndex,
 }
 impl core::fmt::Debug for Prim<'_> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -156,11 +159,14 @@ impl Stage {
     /// composes no prim there. [`StageView::prim`] also takes text.
     #[doc(alias = "UsdStage::GetPrimAtPath")]
     #[doc(alias = "GetPrimAtPath")]
+    #[inline]
     pub fn prim<'a>(&'a self, path: PathId, store: &'a dyn LayerStore) -> Option<Prim<'a>> {
-        self.has_prim(path).then_some(Prim {
+        let index = self.prims.get(&path)?;
+        Some(Prim {
             stage: self,
             store,
             path,
+            index,
         })
     }
     /// The composed prim, attribute or relationship at `path`.
@@ -174,6 +180,7 @@ impl Stage {
     }
     /// The composed property at `path`: one an opinion declares or a
     /// schema of its prim defines.
+    #[inline]
     pub(crate) fn property<'a>(
         &'a self,
         path: PropertyPath,
@@ -190,12 +197,14 @@ impl<'a> Prim<'a> {
     /// Concrete stage path.
     #[doc(alias = "UsdPrim::GetPath")]
     #[doc(alias = "GetPath")]
+    #[inline]
     pub fn path(self) -> PathId {
         self.path
     }
     /// The prim's name (`Arm`); empty for the pseudo-root.
     #[doc(alias = "UsdPrim::GetName")]
     #[doc(alias = "GetName")]
+    #[inline]
     pub fn name(self) -> &'a str {
         let path = self.store.paths().resolve(self.path);
         path.leaf()
@@ -224,6 +233,7 @@ impl<'a> Prim<'a> {
     /// Spec: AOUSD Core §11.3.1.
     #[doc(alias = "UsdPrim::IsActive")]
     #[doc(alias = "IsActive")]
+    #[inline]
     pub fn is_active(self) -> bool {
         self.stage.is_active(self.path)
     }
@@ -260,6 +270,7 @@ impl<'a> Prim<'a> {
     /// Spec: AOUSD Core §11.3.3 (scene-graph instancing).
     #[doc(alias = "UsdPrim::IsInstance")]
     #[doc(alias = "IsInstance")]
+    #[inline]
     pub fn is_instance(self) -> bool {
         self.stage.is_instance(self.path)
     }
@@ -286,10 +297,9 @@ impl<'a> Prim<'a> {
     /// Spec: AOUSD Core §12.2.1 (specifier resolution).
     #[doc(alias = "UsdPrim::GetSpecifier")]
     #[doc(alias = "GetSpecifier")]
+    #[inline]
     pub fn specifier(self) -> Specifier {
-        self.stage
-            .resolve_specifier(self.path, self.store)
-            .unwrap_or(Specifier::Over)
+        Stage::specifier_of(self.path, self.index, self.store)
     }
     /// Authored type name (`Xform`); fallback mapping does not change it.
     /// An empty type name and `__AnyType__` are no type name.
@@ -303,18 +313,13 @@ impl<'a> Prim<'a> {
     }
     /// The token of [`Self::type_name`], for looking the type up in a
     /// [`SchemaRegistry`], which names schemas by token.
+    #[inline]
     pub fn type_name_token(self) -> Option<TokenId> {
-        self.stage.resolve_type_name(self.path)
+        self.index.type_info.as_ref()?.identity.type_name
     }
     /// Effective schema type, including `fallbackPrimTypes` mapping.
     pub fn schema_type_name(self) -> Option<&'a str> {
-        let identity = &self
-            .stage
-            .prims
-            .get(&self.path)?
-            .type_info
-            .as_ref()?
-            .identity;
+        let identity = &self.index.type_info.as_ref()?.identity;
         let name = identity.mapped_type_name.or(identity.type_name)?;
         Some(self.store.tokens().resolve(name))
     }
@@ -361,8 +366,9 @@ impl<'a> Prim<'a> {
     /// definition).
     #[doc(alias = "UsdPrim::GetPrimDefinition")]
     #[doc(alias = "GetPrimDefinition")]
+    #[inline]
     pub fn definition(self) -> Option<&'a PrimDefinition> {
-        self.stage.prim_definition_ref(self.path)
+        Some(&self.index.type_info.as_ref()?.definition)
     }
     /// Whether the applied schema `schema`, with `instance` for a
     /// multiple-apply schema, may be applied to the prim, given its type,
@@ -397,6 +403,7 @@ impl<'a> Prim<'a> {
     /// Spec: AOUSD Core §12.2 (metadata resolution), §12.2.5, §12.2.6.
     #[doc(alias = "UsdObject::GetMetadata")]
     #[doc(alias = "GetMetadata")]
+    #[inline]
     pub fn metadata(self, key: impl NameArg) -> Option<Resolved<ResolvedValue>> {
         let key = key.token(self.store.tokens())?;
         self.stage.resolve_value(self.path, key)
@@ -426,12 +433,14 @@ impl<'a> Prim<'a> {
     /// Generic attribute with this USD name, including schema-defined properties.
     #[doc(alias = "UsdPrim::GetAttribute")]
     #[doc(alias = "GetAttribute")]
+    #[inline]
     pub fn attribute(self, name: impl NameArg) -> Option<Attribute<'a>> {
         self.property(name)?.as_attribute()
     }
     /// Generic relationship with this USD name.
     #[doc(alias = "UsdPrim::GetRelationship")]
     #[doc(alias = "GetRelationship")]
+    #[inline]
     pub fn relationship(self, name: impl NameArg) -> Option<Relationship<'a>> {
         self.property(name)?.as_relationship()
     }
@@ -439,6 +448,7 @@ impl<'a> Prim<'a> {
     /// declares or a schema of the prim defines.
     #[doc(alias = "UsdPrim::GetProperty")]
     #[doc(alias = "GetProperty")]
+    #[inline]
     pub fn property(self, name: impl NameArg) -> Option<Property<'a>> {
         let name = name.token(self.store.tokens())?;
         self.stage
@@ -459,8 +469,7 @@ impl<'a> Prim<'a> {
     #[doc(alias = "GetPropertyNames")]
     pub fn property_names(self) -> Vec<&'a str> {
         let tokens = self.store.tokens();
-        self.stage
-            .property_names(self.path, self.store)
+        Stage::property_names_of(self.index, self.store)
             .into_iter()
             .map(|name| tokens.resolve(name))
             .collect()
@@ -475,8 +484,7 @@ impl<'a> Prim<'a> {
     #[doc(alias = "GetAuthoredPropertyNames")]
     pub fn authored_property_names(self) -> Vec<&'a str> {
         let tokens = self.store.tokens();
-        self.stage
-            .authored_property_names(self.path, self.store)
+        Stage::authored_property_names_of(self.index, self.store)
             .into_iter()
             .map(|name| tokens.resolve(name))
             .collect()
@@ -486,21 +494,41 @@ impl<'a> Prim<'a> {
     #[doc(alias = "UsdPrim::GetProperties")]
     #[doc(alias = "GetProperties")]
     pub fn properties(self) -> Vec<Property<'a>> {
-        self.property_handles(self.stage.property_names(self.path, self.store))
+        self.property_handles(Stage::property_names_of(self.index, self.store))
     }
     /// The properties some opinion of the prim authors, in the order of
     /// [`Self::property_names`], leaving out those only its schemas define.
     #[doc(alias = "UsdPrim::GetAuthoredProperties")]
     #[doc(alias = "GetAuthoredProperties")]
     pub fn authored_properties(self) -> Vec<Property<'a>> {
-        self.property_handles(self.stage.authored_property_names(self.path, self.store))
+        self.property_handles(Stage::authored_property_names_of(self.index, self.store))
     }
+    /// The authored properties inside `namespace`: those whose names start
+    /// with it and a `:` (`material:binding` holds
+    /// `material:binding:preview`, not `material:binding` itself), in the
+    /// order of [`Self::property_names`]. The empty namespace holds every
+    /// authored property. Only the names inside are sorted, so this is
+    /// cheaper than filtering [`Self::authored_properties`].
+    ///
+    /// OpenUSD: `UsdPrim::GetAuthoredPropertiesInNamespace`.
+    #[doc(alias = "UsdPrim::GetAuthoredPropertiesInNamespace")]
+    #[doc(alias = "GetAuthoredPropertiesInNamespace")]
+    pub fn authored_properties_in_namespace(self, namespace: &str) -> Vec<Property<'a>> {
+        self.property_handles(Stage::authored_property_names_in(
+            self.index, namespace, self.store,
+        ))
+    }
+    /// Handles for names the prim composes: each names a property spec an
+    /// opinion authors (property opinions are always specs) or one its
+    /// definition defines, so none needs its kind checked again.
     fn property_handles(self, names: Vec<TokenId>) -> Vec<Property<'a>> {
+        let (stage, store) = (self.stage, self.store);
         names
             .into_iter()
-            .filter_map(|name| {
-                self.stage
-                    .property(PropertyPath::new(self.path, name), self.store)
+            .map(|name| {
+                let path = PropertyPath::new(self.path, name);
+                debug_assert!(stage.property_kind(path).is_some(), "a composed property");
+                Property { stage, store, path }
             })
             .collect()
     }
@@ -527,6 +555,13 @@ impl<'a> Prim<'a> {
     /// Spec: AOUSD Core §11 (stage population).
     pub fn children(self) -> impl DoubleEndedIterator<Item = Prim<'a>> + ExactSizeIterator + 'a {
         self.child_handles(self.stage.children_of(self.path))
+    }
+    /// The paths of [`Self::children`], in the same order, without making a
+    /// handle for each: for walking the namespace by path.
+    #[inline]
+    pub fn child_paths(self) -> &'a [PathId] {
+        let stage: &'a Stage = self.stage;
+        stage.children_of(self.path).unwrap_or_default()
     }
     /// All the populated children in composed order, inactive ones
     /// included (their own descendants are not populated).
@@ -565,7 +600,7 @@ impl<'a> Prim<'a> {
         children
             .unwrap_or_default()
             .iter()
-            .map(move |&path| Prim { stage, store, path })
+            .map(move |&path| stage.prim(path, store).expect("a composed child"))
     }
     /// The prim's variant sets, each with the variant composition selected
     /// for it (`None` when nothing selects one): the sets each node of its
@@ -669,37 +704,41 @@ impl<'a> Property<'a> {
     /// Concrete property path.
     #[doc(alias = "UsdProperty::GetPath")]
     #[doc(alias = "GetPath")]
+    #[inline]
     pub fn path(self) -> PropertyPath {
         self.path
     }
     /// The property's name (`inputs:intensity`).
     #[doc(alias = "UsdProperty::GetName")]
     #[doc(alias = "GetName")]
+    #[inline]
     pub fn name(self) -> &'a str {
         self.store.tokens().resolve(self.path.property())
     }
     /// The prim the property belongs to.
     #[doc(alias = "UsdProperty::GetPrim")]
     #[doc(alias = "GetPrim")]
+    #[inline]
     pub fn prim(self) -> Prim<'a> {
-        Prim {
-            stage: self.stage,
-            store: self.store,
-            path: self.path.prim_path(),
-        }
+        self.stage
+            .prim(self.path.prim_path(), self.store)
+            .expect("a composed property's prim")
     }
     /// Attribute or relationship: what the prim's schemas define it as,
     /// else what its strongest opinion declares.
+    #[inline]
     pub fn kind(self) -> PropertyKind {
         self.stage
             .property_kind(self.path)
             .expect("composed property")
     }
     /// The attribute this is, if it is one.
+    #[inline]
     pub fn as_attribute(self) -> Option<Attribute<'a>> {
         (self.kind() == PropertyKind::Attribute).then_some(Attribute { property: self })
     }
     /// The relationship this is, if it is one.
+    #[inline]
     pub fn as_relationship(self) -> Option<Relationship<'a>> {
         (self.kind() == PropertyKind::Relationship).then_some(Relationship { property: self })
     }
@@ -730,6 +769,7 @@ impl<'a> Property<'a> {
     /// - Variability comes from the weakest opinion.
     ///
     /// Spec: AOUSD Core §12.2.2–§12.2.4.
+    #[inline]
     pub fn declaration(self) -> Option<PropertyDeclaration> {
         self.stage
             .resolve_property_declaration(self.path.prim_path(), self.path.property())
@@ -741,6 +781,7 @@ impl<'a> Property<'a> {
     /// OpenUSD: `UsdPrimDefinition::GetPropertyDefinition`.
     ///
     /// Spec: AOUSD Core §13.3.2.3–§13.3.2.4.
+    #[inline]
     pub fn definition(self) -> Option<&'a PropertyDefinition> {
         let stage: &'a Stage = self.stage;
         stage.property_definition_ref(self.path.prim_path(), self.path.property())
@@ -754,6 +795,7 @@ impl<'a> Property<'a> {
     /// Spec: AOUSD Core §12.2.5–§12.2.6, §13.3.2.3–§13.3.2.4.
     #[doc(alias = "UsdObject::GetMetadata")]
     #[doc(alias = "GetMetadata")]
+    #[inline]
     pub fn metadata(self, key: impl NameArg) -> Option<Resolved<ResolvedValue>> {
         let key = key.token(self.store.tokens())?;
         self.stage
@@ -780,6 +822,7 @@ impl<'a> Property<'a> {
     /// Spec: AOUSD Core §10.4 (strength ordering), §12.
     #[doc(alias = "UsdProperty::GetPropertyStack")]
     #[doc(alias = "GetPropertyStack")]
+    #[inline]
     pub fn opinions(self) -> &'a [Opinion] {
         let stage: &'a Stage = self.stage;
         stage.explain_property_path(self.path).unwrap_or_default()
@@ -788,6 +831,7 @@ impl<'a> Property<'a> {
     /// schema defines it.
     #[doc(alias = "UsdProperty::IsAuthored")]
     #[doc(alias = "IsAuthored")]
+    #[inline]
     pub fn is_authored(self) -> bool {
         !self.opinions().is_empty()
     }
@@ -864,6 +908,7 @@ impl<'a> Attribute<'a> {
     /// §12.3.6 (blocks), §13.3.2.4 (fallback value resolution).
     #[doc(alias = "UsdAttribute::Get")]
     #[doc(alias = "Get")]
+    #[inline]
     pub fn get(self, time: Time) -> Option<Resolved<Value>> {
         self.property
             .stage
@@ -893,6 +938,7 @@ impl<'a> Attribute<'a> {
     /// OpenUSD: `UsdAttribute::Get<T>`.
     ///
     /// Spec: AOUSD Core §12.3 (value resolution), §13.3.2.4 (fallbacks).
+    #[inline]
     pub fn value<T: FromValue>(self, time: Time) -> Option<T> {
         let tokens = self.property.store.tokens();
         self.read(time, |v| T::from_value(v, tokens))
@@ -914,6 +960,7 @@ impl<'a> Attribute<'a> {
     ///
     /// Spec: AOUSD Core §12.3 (values), §12.3.2.1 (layer offsets),
     /// §13.3.2.4 (schema fallbacks).
+    #[inline]
     pub fn read<T>(self, time: Time, convert: impl Fn(&Value) -> Option<T>) -> Option<Resolved<T>> {
         self.property
             .stage
@@ -1251,6 +1298,7 @@ impl AttributeQuery {
         }
     }
     /// Queried concrete attribute path.
+    #[inline]
     pub fn path(&self) -> PropertyPath {
         self.path
     }
@@ -1270,6 +1318,7 @@ impl AttributeQuery {
     /// The caller synchronizes `LiveStage` before passing its snapshot.
     #[doc(alias = "UsdAttributeQuery::Get")]
     #[doc(alias = "Get")]
+    #[inline]
     pub fn get(&mut self, stage: &Stage, time: Time) -> Option<Resolved<Value>> {
         self.evaluate(stage, time, false).ok().flatten()
     }

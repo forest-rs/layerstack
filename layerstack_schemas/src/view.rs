@@ -502,8 +502,9 @@ impl<'a> PrimView<'a> {
     /// Spec: AOUSD Core §12.4.
     #[must_use]
     pub fn read_targets(&self, name: &str) -> Vec<TargetPath> {
-        self.prim()
-            .and_then(|prim| prim.relationship(name))
+        self.scene
+            .token(name)
+            .and_then(|token| self.scene.relationship(PropertyPath::new(self.path, token)))
             .map(layerstack::Relationship::targets)
             .unwrap_or_default()
     }

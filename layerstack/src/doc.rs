@@ -3158,8 +3158,12 @@ impl Layer {
 
     /// Returns the paths of the prim specs whose deferred references or
     /// payloads ([`Reference::deferred`]) name one of `assets`, in their own
-    /// lists or in their variant branches, sorted.
-    fn deferred_arc_paths(&self, assets: &[&str]) -> Vec<PathId> {
+    /// lists or in their variant branches, sorted; `None` when some asset
+    /// is named by no deferred arc, whose binding no prim path bounds.
+    fn deferred_arc_paths(&self, assets: &[&str]) -> Option<Vec<PathId>> {
+        if self.known_without_reference_arcs() {
+            return None;
+        }
         // A dynamic payload asks for its asset with the arguments
         // composition gave it (`crate::dynamic_format`): an arc names the
         // assets of its path whatever their arguments.
@@ -3167,34 +3171,48 @@ impl Layer {
             .iter()
             .map(|asset| crate::asset::FormatArgs::strip(asset))
             .collect();
-        let names = |op: &ListOp<Reference>| {
-            op.items().any(|arc| {
-                arc.deferred
-                    && arc.asset.as_deref().is_some_and(|asset| {
-                        assets.contains(&crate::asset::FormatArgs::strip(asset))
-                    })
-            })
+        let mut named = alloc::vec![false; assets.len()];
+        let mut names = |op: &ListOp<Reference>| {
+            let mut any = false;
+            for arc in op.items().filter(|arc| arc.deferred) {
+                let Some(asset) = arc.asset.as_deref() else {
+                    continue;
+                };
+                let asset = crate::asset::FormatArgs::strip(asset);
+                for (at, wanted) in assets.iter().enumerate() {
+                    if *wanted == asset {
+                        named[at] = true;
+                        any = true;
+                    }
+                }
+            }
+            any
         };
-        let mut paths: Vec<PathId> = self
-            .prims
-            .iter()
-            .chain(
-                self.variant_prims
-                    .iter()
-                    .flat_map(|(path, specs)| specs.iter().map(move |spec| (path, spec))),
-            )
-            .filter(|(_, spec)| {
-                names(&spec.references)
-                    || names(&spec.payloads)
-                    || spec.variant_branches().any(|branch| {
-                        names(&branch.spec.references) || names(&branch.spec.payloads)
-                    })
-            })
-            .map(|(path, _)| *path)
-            .collect();
+        let mut paths: Vec<PathId> = Vec::new();
+        let specs = self.prims.iter().chain(
+            self.variant_prims
+                .iter()
+                .flat_map(|(path, specs)| specs.iter().map(move |spec| (path, spec))),
+        );
+        for (path, spec) in specs {
+            // Every list is visited, so each asset any of them names is
+            // counted.
+            let mut found = names(&spec.references);
+            found |= names(&spec.payloads);
+            for branch in spec.variant_branches() {
+                found |= names(&branch.spec.references);
+                found |= names(&branch.spec.payloads);
+            }
+            if found {
+                paths.push(*path);
+            }
+        }
+        if !named.iter().all(|named| *named) {
+            return None;
+        }
         paths.sort_unstable();
         paths.dedup();
-        paths
+        Some(paths)
     }
 
     /// Returns every prim spec this layer authors at `path`: the
@@ -3709,7 +3727,7 @@ impl InMemoryStore {
             && let Some(source) = self.layers.get_mut(&anchor)
         {
             let paths = source.deferred_arc_paths(&changed);
-            source.record_change(true, (!paths.is_empty()).then_some(paths));
+            source.record_change(true, paths);
         }
     }
 
@@ -3989,6 +4007,34 @@ mod tests {
     /// `Layer::insert_prims` places specs as `Layer::insert_prim` does each,
     /// a branch spec beside the namespace spec at its path, as one change
     /// naming every path.
+    #[test]
+    fn binding_assets_together_bounds_the_change_only_by_deferred_arcs() {
+        let mut store = InMemoryStore::default();
+        let a = store.path("/A");
+        let mut layer = Layer::new(LayerId(1));
+        let mut spec = PrimSpec::def();
+        spec.references.make_mut().prepend.push(Reference::deferred(
+            LayerId(1),
+            "a.usda",
+            ReferenceTarget::DefaultPrim,
+            LayerOffset::IDENTITY,
+        ));
+        layer.insert_prim(a, spec);
+        store.insert_layer(layer);
+        let since = store.layers[&LayerId(1)].generation();
+        // The deferred arc's asset alone: the change is at its prim.
+        store.insert_asset_layers(LayerId(1), [("a.usda", LayerId(2))]);
+        assert_eq!(
+            store.layers[&LayerId(1)].changed_paths_since(since),
+            Some(alloc::vec![a])
+        );
+        // With an asset no deferred arc names, nothing bounds the change,
+        // as binding that asset alone would not.
+        let since = store.layers[&LayerId(1)].generation();
+        store.insert_asset_layers(LayerId(1), [("a.usda", LayerId(3)), ("b.usda", LayerId(4))]);
+        assert_eq!(store.layers[&LayerId(1)].changed_paths_since(since), None);
+    }
+
     #[test]
     fn reference_arc_note_lasts_until_the_layer_changes() {
         let store = InMemoryStore::default();

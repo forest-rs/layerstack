@@ -1279,12 +1279,17 @@ impl<'a, B: Storage> Reader<'a, B> {
                 store.insert_layer(layer);
             }
         }
-        for ((anchor, asset), id) in self.bindings {
-            if id == LayerId::UNRESOLVED {
-                store.mark_asset_missing(anchor, &asset);
-            } else {
-                store.insert_asset_layer(anchor, &asset, id);
+        // One change of each anchor for all its bindings: recording one
+        // looks through the anchor's specs for the deferred arcs naming
+        // the asset, so binding each alone revisits them per asset.
+        let mut bindings = self.bindings.iter().peekable();
+        while let Some(((anchor, _), _)) = bindings.peek() {
+            let anchor = *anchor;
+            let mut of_anchor = Vec::new();
+            while let Some(((_, asset), id)) = bindings.next_if(|((at, _), _)| *at == anchor) {
+                of_anchor.push((asset.as_str(), *id));
             }
+            store.insert_asset_layers(anchor, of_anchor);
         }
         for id in clean_anchors {
             self.catalog

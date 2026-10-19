@@ -60,7 +60,11 @@ impl Decoded {
                     ));
                     i += 1;
                 }
-                (s.paths[spec.path_index as usize].clone(), spec.form, fields)
+                (
+                    String::from(s.path(spec.path_index as usize).unwrap()),
+                    spec.form,
+                    fields,
+                )
             })
             .collect()
     }
@@ -821,7 +825,7 @@ fn spec_layout_matches_sdf_crate_data() {
     // The path table was built in the same order, parents first; the tree
     // decodes back to every path.
     assert_eq!(
-        file.sections.paths,
+        file.sections.path_texts().collect::<Vec<_>>(),
         [
             "/",
             "/Root",
@@ -899,7 +903,7 @@ fn relationships_connections_and_list_ops() {
         "/Looks/Mat/Tex.outputs:r",
     ] {
         assert!(
-            file.sections.paths.iter().any(|p| p == path),
+            file.sections.path_texts().any(|p| p == path),
             "{path} in table"
         );
     }

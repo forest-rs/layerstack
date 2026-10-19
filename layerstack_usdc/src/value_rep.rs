@@ -1768,9 +1768,9 @@ pub(crate) fn decode_path_list_op_indices(
             let mut items = Vec::with_capacity(num);
             for _ in 0..num {
                 let idx = read_u32_le(data, &mut cursor)?;
-                let text = sections.paths.get(idx as usize);
-                budget.charge_text(text.map_or(0, String::len))?;
-                items.push(if text.is_some() { idx } else { u32::MAX });
+                let len = sections.paths.text_len(idx as usize);
+                budget.charge_text(len.unwrap_or(0))?;
+                items.push(if len.is_some() { idx } else { u32::MAX });
             }
             Ok((items, cursor - pos))
         })
@@ -1912,7 +1912,7 @@ fn lookup_path(
     idx: usize,
     budget: &mut DecodeBudget,
 ) -> Result<String, UsdcError> {
-    budget.clone_str(sections.paths.get(idx).map_or("", String::as_str))
+    budget.clone_str(sections.path(idx).unwrap_or_default())
 }
 
 /// Reads an `SdfReference` (`Write(SdfReference)`,
@@ -2894,7 +2894,7 @@ fn read_typed_value(data: &[u8], pos: &mut usize, dt: SplineDataType) -> Result<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::section::TokenTable;
+    use crate::section::{PathTable, TokenTable};
 
     #[test]
     fn compact_float_arrays_preserve_bits_errors_and_budgets() {
@@ -3258,8 +3258,7 @@ mod tests {
             strings: vec![],
             fields: vec![],
             fieldsets: vec![],
-            paths: vec![],
-            path_nodes: Vec::new(),
+            paths: PathTable::default(),
             specs: vec![],
             version: CrateVersion::NEWEST_READABLE,
         };
@@ -3284,8 +3283,7 @@ mod tests {
             strings: vec![],
             fields: vec![],
             fieldsets: vec![],
-            paths: vec![],
-            path_nodes: Vec::new(),
+            paths: PathTable::default(),
             specs: vec![],
             version: CrateVersion::NEWEST_READABLE,
         };
@@ -3617,8 +3615,7 @@ mod tests {
             strings: vec![],
             fields: vec![],
             fieldsets: vec![],
-            paths: vec![],
-            path_nodes: Vec::new(),
+            paths: PathTable::default(),
             specs: vec![],
             version: CrateVersion::SPLINE_TANGENT_ALGORITHMS,
         };
@@ -3672,8 +3669,7 @@ mod tests {
             strings: vec![0, 1],
             fields: vec![],
             fieldsets: vec![],
-            paths: vec!["/".into(), "/Ref".into()],
-            path_nodes: Vec::new(),
+            paths: PathTable::from_texts(["/", "/Ref"]),
             specs: vec![],
             version,
         }

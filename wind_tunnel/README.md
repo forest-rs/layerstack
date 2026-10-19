@@ -255,7 +255,10 @@ afterwards; the schema registry is built outside the open timer.
 `library_forward_query` asks each of the 40 compiled `MembershipQuery`s, the
 cost without the index. `library_dangling` runs `DanglingReport::compute` with
 eight examples per name and collection, and `Stage::dangling_targets` alone,
-and checks that it finds exactly the injected paths.
+and checks that it finds exactly the injected paths; then
+`LayerDanglingReport::compute`, the same paths checked by the layer that
+authors them with eight examples per layer, and the `Stage::authored_targets`
+walk alone, and checks that the layers' findings add up to the injected paths.
 
 ```sh
 cargo bench -p wind_tunnel --bench library_membership -- --warm-up-time 2 --measurement-time 5
@@ -281,6 +284,28 @@ library, so it can run after every import; most of it is the walk of the
 target lists, about 250 ns a prim, and the collection part adds 0.4 ms. It
 finds 151 paths with no prim (75 slot targets and the 76 collection paths,
 which it also counts by relationship name) and 75 with no property.
+
+The per-layer report, measured on 2026-10-19 with the composed one beside it
+(same machine and toolchain, release profile):
+
+| Phase | USDA | USDC |
+|---|---:|---:|
+| `DanglingReport::compute` | 3.72 ms | 3.08 ms |
+| `Stage::dangling_targets` alone | 3.06 ms | 2.64 ms |
+| `LayerDanglingReport::compute` | 2.49 ms | 2.49 ms |
+| `Stage::authored_targets` alone | 2.33 ms | 2.35 ms |
+
+It reads 19,827 authored paths from 15,218 property specs in the four layers
+(the root authors none; the base layer 15,122 specs and 17,416 paths, the sets
+layer 77 and 2,338, the overrides layer 19 and 73), checks each mapped path as
+the composed report does, and finds the same 226 paths, each where it is
+authored: 188 in the base layer (the 150 slot targets and an include of each
+rule-map collection) and 19 excludes in each of the sets and overrides layers,
+which split the collections' excludes between them. It
+costs less than the composed report: the walk reads each composed property's
+opinions once, without resolving its list, and orders the specs by the stage's
+first read of each instead of by path; sorting each prim's target properties
+by name is about a tenth of it.
 
 The two expression-decided collections are matched on every query and take
 about 170 ns of the 229 ns; the 38 rule-map collections alone cost about 61 ns

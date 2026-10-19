@@ -81,11 +81,18 @@ impl LayerDiscovery {
                 return;
             }
         }
+        // Most specs author no arc and hold no variant that could: they
+        // are passed over without looking their path up again.
         let arcs = layer
             .prims
-            .keys()
-            .copied()
-            .map(|path| (path, ArcReads::at(store, layer, path)))
+            .iter()
+            .filter(|(path, spec)| {
+                !spec.references.is_empty()
+                    || !spec.payloads.is_empty()
+                    || !spec.variant_sets.is_empty()
+                    || layer.variant_prims.contains_key(*path)
+            })
+            .map(|(&path, _)| (path, ArcReads::at(store, layer, path)))
             .filter(|(_, arcs)| !arcs.targets.is_empty() || arcs.expressions)
             .collect();
         self.layers.insert(

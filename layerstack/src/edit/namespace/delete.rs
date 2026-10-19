@@ -87,7 +87,7 @@ fn prepare_with(
     let root = stage.root_layer().ok_or(NamespaceError::NoSuchObject)?;
     let stack = stage.layer_stack().to_vec();
     let index = if use_retained {
-        stage.preparation()
+        stage.preparation(store.paths())
     } else {
         None
     };

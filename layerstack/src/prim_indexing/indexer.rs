@@ -2581,7 +2581,11 @@ impl Indexer<'_, '_, '_> {
 /// Whether the graph `graph` is an instance's index: it has instanceable
 /// data and its strongest `instanceable` opinion is `true`. OpenUSD:
 /// `Pcp_PrimIndexIsInstanceable`.
-pub(crate) fn is_instanceable(store: &dyn LayerStore, stacks: &LayerStacks<'_>, graph: &Graph) -> bool {
+pub(crate) fn is_instanceable(
+    store: &dyn LayerStore,
+    stacks: &LayerStacks<'_>,
+    graph: &Graph,
+) -> bool {
     let instanceable_node =
         |node: &Node| node.transitive_direct && node.can_contribute_specs() && node.has_specs;
     let mut has_data = false;

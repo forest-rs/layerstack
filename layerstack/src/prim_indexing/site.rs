@@ -232,7 +232,11 @@ pub(crate) fn specs<'a>(
 
 /// Whether a layer of `stack` authors a spec at `site`.
 /// OpenUSD: `PcpComposeSiteHasSpecs`.
-pub(crate) fn has_specs(store: &dyn LayerStore, stack: &ComputedStack<'_>, site: &SpecPath) -> bool {
+pub(crate) fn has_specs(
+    store: &dyn LayerStore,
+    stack: &ComputedStack<'_>,
+    site: &SpecPath,
+) -> bool {
     specs(store, stack, site).next().is_some()
 }
 

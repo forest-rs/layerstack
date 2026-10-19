@@ -40,6 +40,11 @@ pub(crate) struct Findings {
 }
 
 impl Findings {
+    /// Whether nothing is recorded.
+    pub(crate) fn is_empty(&self) -> bool {
+        self.errors.is_empty() && self.class_internal_targets.is_empty()
+    }
+
     /// Records the findings of `other` after these, as if found in order:
     /// the findings of one prim's index, merged in traversal order.
     pub(crate) fn extend(&mut self, other: Self) {

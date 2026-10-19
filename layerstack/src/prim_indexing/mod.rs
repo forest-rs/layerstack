@@ -23,7 +23,7 @@ pub(crate) mod map_function;
 pub(crate) mod site;
 pub(crate) mod site_paths;
 
-use alloc::{sync::Arc, vec::Vec};
+use alloc::{boxed::Box, sync::Arc, vec::Vec};
 
 use hashbrown::{HashMap, HashSet};
 
@@ -228,7 +228,15 @@ pub(crate) fn compose(
         keys: ReadLock::default(),
     };
     let work = |prim: Pending, added: &mut Vec<Pending>| {
-        index_prim(&ctx, &scope, boundaries, &claims, prim, added)
+        index_prim(
+            &ctx,
+            &scope,
+            boundaries,
+            &claims,
+            options.with_dependencies,
+            prim,
+            added,
+        )
     };
     crate::parallel::with_pool(options.threads, &work, |pool| {
         let mut walk = Walk {
@@ -245,11 +253,7 @@ pub(crate) fn compose(
 
     if let Some(deps) = out.deps.as_mut() {
         deps.reserve_arcs(out.records.values().map(|record| record.arcs.len()).sum());
-        for (path, record) in &mut out.records {
-            // A layer contributes once per spec and arc of the prim's
-            // index: count each once.
-            record.layers.sort_unstable();
-            record.layers.dedup();
+        for (path, record) in &out.records {
             deps.add_layer_opinions(*path, &record.layers);
             for &layer in &record.default_prim_layers {
                 deps.add_default_prim_dependency(layer, *path);
@@ -340,22 +344,93 @@ struct Claims {
 type Pending = (PathId, Option<Arc<Graph>>);
 
 /// What indexing one prim found, before it joins the composition.
+///
+/// Every prim's result waits for the whole walk before it joins, on one
+/// thread, so it is kept small: what most prims do not report is boxed,
+/// and only when reported, and what the join reads of the prim's graph is
+/// taken from it on the indexing thread, which frees it when its children
+/// are done with it.
 struct Indexed {
     path: PathId,
-    graph: Arc<Graph>,
+    /// The prim's graph, for an instance whose descendants may wait for
+    /// or be walked from it ([`Self::key`]); `None` otherwise.
+    graph: Option<Arc<Graph>>,
+    has_payloads: bool,
+    instanceable: bool,
+    /// The layer stacks of the graph's nodes, each once.
+    stacks: smallvec::SmallVec<[StackId; 2]>,
+    /// The layer stacks of the nodes the prim's own arcs add, rather than
+    /// its parent's.
+    arc_stacks: smallvec::SmallVec<[StackId; 1]>,
+    /// What the prim depends on, when the composition records it.
+    record: Option<PrimRecord>,
     index: PrimIndex,
-    outputs: Outputs,
-    findings: crate::composition_checks::Findings,
+    /// The errors, asset requests and variable reads it reported, if any.
+    reports: Option<Box<Reports>>,
     active: bool,
     /// The key of an active instance, while instances share prototypes.
     key: Option<InstanceKey>,
     /// Whether the children it composes were indexed with it.
     descended: bool,
-    /// The children the scope lists, and those it composes.
+    /// The children the scope lists.
     children: Vec<PathId>,
-    composed_children: Vec<PathId>,
+    /// The children it composes, when the scope lists others; `None` when
+    /// they are [`Self::children`].
+    composed_children: Option<Vec<PathId>>,
     /// Every child, for a requested boundary parent.
     boundary_children: Option<Vec<PathId>>,
+}
+
+/// Where each of a walk's results is, by the path it indexed: a table
+/// by path id when the results are dense among the ids, as for a whole
+/// stage's prims, a map otherwise.
+enum Places {
+    Dense(Vec<u32>),
+    Sparse(HashMap<PathId, usize>),
+}
+
+impl Places {
+    fn new(indexed: &[Indexed]) -> Self {
+        let ids = indexed
+            .iter()
+            .map(|prim| prim.path.get() as usize + 1)
+            .max()
+            .unwrap_or(0);
+        if ids <= 4 * indexed.len() + 1024 {
+            let mut at = alloc::vec![u32::MAX; ids];
+            for (place, prim) in indexed.iter().enumerate() {
+                at[prim.path.get() as usize] = u32::try_from(place).expect("u32 results");
+            }
+            Self::Dense(at)
+        } else {
+            Self::Sparse(
+                indexed
+                    .iter()
+                    .enumerate()
+                    .map(|(place, prim)| (prim.path, place))
+                    .collect(),
+            )
+        }
+    }
+
+    fn get(&self, path: PathId) -> Option<usize> {
+        match self {
+            Self::Dense(at) => at
+                .get(path.get() as usize)
+                .filter(|&&place| place != u32::MAX)
+                .map(|&place| place as usize),
+            Self::Sparse(at) => at.get(&path).copied(),
+        }
+    }
+}
+
+/// What indexing one prim reported besides its index, which most prims
+/// leave empty.
+struct Reports {
+    errors: Vec<Recorded>,
+    asset_requests: Vec<AssetRequest>,
+    reads: VariableReads,
+    findings: crate::composition_checks::Findings,
 }
 
 /// Indexes the prim at `path` from its parent's index, and adds the
@@ -372,6 +447,7 @@ fn index_prim(
     scope: &Scope<'_>,
     boundaries: &HashSet<PathId>,
     claims: &Claims,
+    with_dependencies: bool,
     (path, parent): Pending,
     added: &mut Vec<Pending>,
 ) -> Indexed {
@@ -433,6 +509,18 @@ fn index_prim(
         }
     }
     let key = (claims.share && active && graph.instanceable).then(|| instance_key(&graph));
+    let mut stacks = smallvec::SmallVec::new();
+    let mut arc_stacks = smallvec::SmallVec::new();
+    for (at, node) in graph.nodes.iter().enumerate() {
+        if !stacks.contains(&node.site.stack) {
+            stacks.push(node.site.stack);
+        }
+        if at != 0 && !node.from_parent_prim && !arc_stacks.contains(&node.site.stack) {
+            arc_stacks.push(node.site.stack);
+        }
+    }
+    let record = with_dependencies.then(|| prim_record(ctx, &graph, &index, &mut outputs));
+    let (has_payloads, instanceable) = (graph.has_payloads, graph.instanceable);
     let graph = Arc::new(graph);
     let descended = active
         && key
@@ -445,12 +533,29 @@ fn index_prim(
                 .map(|&child| (child, Some(Arc::clone(&graph)))),
         );
     }
+    let reports = (!outputs.errors.is_empty()
+        || !outputs.asset_requests.is_empty()
+        || !outputs.reads.is_empty()
+        || !findings.is_empty())
+    .then(|| {
+        Box::new(Reports {
+            errors: outputs.errors,
+            asset_requests: outputs.asset_requests,
+            reads: outputs.reads,
+            findings,
+        })
+    });
+    let composed_children = (composed_children != children).then_some(composed_children);
     Indexed {
         path,
-        graph,
+        graph: key.is_some().then_some(graph),
+        has_payloads,
+        instanceable,
+        stacks,
+        arc_stacks,
+        record,
         index,
-        outputs,
-        findings,
+        reports,
         active,
         key,
         descended,
@@ -458,6 +563,44 @@ fn index_prim(
         composed_children,
         boundary_children,
     }
+}
+
+/// The dependencies the prim index `index`, over `graph`, records, its
+/// layers each once (see [`DependencyBuilder`]).
+fn prim_record(
+    ctx: &Ctx<'_>,
+    graph: &Graph,
+    index: &PrimIndex,
+    outputs: &mut Outputs,
+) -> PrimRecord {
+    let mut record = PrimRecord::default();
+    record
+        .layers
+        .extend(index.sources.iter().map(|source| source.layer_id));
+    // The layers authoring the references and payloads on the way to each
+    // node retime it.
+    record
+        .layers
+        .extend(core::mem::take(&mut outputs.arc_layers));
+    record
+        .layers
+        .extend(graph.nodes.iter().filter_map(|node| node.authoring_layer));
+    // A layer contributes once per spec and arc of the index: each counts
+    // once.
+    record.layers.sort_unstable();
+    record.layers.dedup();
+    record.default_prim_layers = core::mem::take(&mut outputs.default_prim_layers);
+    for (at, node) in graph.nodes.iter().enumerate() {
+        if at == 0 || matches!(node.arc_kind, ArcKind::Local | ArcKind::Variants) {
+            continue;
+        }
+        record.arcs.push((
+            node.site.path.prim_path(),
+            node.arc_kind,
+            ctx.stacks.get(node.site.stack).identifier.root,
+        ));
+    }
+    record
 }
 
 /// The prims a composition indexes on a pool of threads, joined into it
@@ -489,41 +632,41 @@ impl Walk<'_, '_, '_> {
         // One thread indexes prims in the order they join: a prim, then
         // the children it adds, depth first.
         if self.pool.in_order() {
+            let mut ignored = Vec::new();
             for prim in indexed {
-                self.join(prim);
+                self.join(prim, &mut ignored);
+                ignored.clear();
             }
             return;
         }
         // Found by place, so each prim moves once more, into its join.
-        let places: HashMap<PathId, usize> = indexed
-            .iter()
-            .enumerate()
-            .map(|(at, prim)| (prim.path, at))
-            .collect();
+        let places = Places::new(&indexed);
         let mut indexed: Vec<Option<Indexed>> = indexed.into_iter().map(Some).collect();
         let mut pending = roots;
         pending.reverse();
         while let Some(path) = pending.pop() {
             let prim = places
-                .get(&path)
-                .and_then(|&at| indexed[at].take())
+                .get(path)
+                .and_then(|at| indexed[at].take())
                 .expect("indexed prim");
-            if let Some(children) = self.join(prim) {
-                pending.extend(children.into_iter().rev());
-            }
+            self.join(prim, &mut pending);
         }
     }
 
-    /// Joins the indexed `prim` into the composition, and returns the
-    /// children to join after it, which are indexed, or `None` when there
-    /// are none to join now.
-    fn join(&mut self, prim: Indexed) -> Option<Vec<PathId>> {
+    /// Joins the indexed `prim` into the composition, and pushes the
+    /// children to join after it, which are indexed, onto `pending`, last
+    /// first.
+    fn join(&mut self, prim: Indexed, pending: &mut Vec<PathId>) {
         let Indexed {
             path,
             graph,
+            has_payloads,
+            instanceable,
+            stacks,
+            arc_stacks,
+            record,
             index,
-            outputs,
-            findings,
+            reports,
             active,
             key,
             descended,
@@ -531,18 +674,46 @@ impl Walk<'_, '_, '_> {
             composed_children,
             boundary_children,
         } = prim;
+        let ctx = self.ctx;
         let out = &mut *self.out;
         if let Some(all) = boundary_children {
             out.boundary_children.insert(path, all);
         }
         out.composed_prim_indexes += 1;
-        self.checks.extend(findings);
-        record(out, self.ctx, path, &graph, &index, outputs);
-        if graph.has_payloads {
+        if let Some(reports) = reports {
+            let Reports {
+                errors,
+                asset_requests,
+                reads,
+                findings,
+            } = *reports;
+            self.checks.extend(findings);
+            record_errors(out, ctx, errors);
+            out.asset_requests.extend(asset_requests);
+            out.reads.extend(reads);
+        }
+        // A layer stack's use belongs to the prim whose index first adds a
+        // node reading it; its descendants inherit the node.
+        for stack in stacks {
+            if out.used_stacks.insert(stack) {
+                out.used_layers
+                    .extend(ctx.stacks.get(stack).layers.iter().copied());
+            }
+        }
+        if !arc_stacks.is_empty() {
+            let sites = out.used_layer_sites.entry(path).or_default();
+            for stack in arc_stacks {
+                sites.extend(ctx.stacks.get(stack).layers.iter().copied());
+            }
+        }
+        if let Some(record) = record {
+            out.records.insert(path, record);
+        }
+        if has_payloads {
             out.loadable.insert(path);
         }
         let mut deferred = false;
-        if graph.instanceable {
+        if instanceable {
             out.instances.insert(path);
         }
         // An inactive instance composes no descendants to share. The first
@@ -552,7 +723,7 @@ impl Walk<'_, '_, '_> {
                 Some(&representative) => {
                     self.instances
                         .deferred
-                        .push((path, representative, Some(Arc::clone(&graph))));
+                        .push((path, representative, graph.clone()));
                     deferred = true;
                 }
                 None => {
@@ -560,7 +731,7 @@ impl Walk<'_, '_, '_> {
                 }
             }
         }
-        let keep = self.scope.keeps(self.ctx.store.paths(), path);
+        let keep = self.scope.keeps(ctx.store.paths(), path);
         if keep {
             out.prims.insert(path, index);
         }
@@ -568,21 +739,40 @@ impl Walk<'_, '_, '_> {
             if keep {
                 out.inactive.insert(path);
             }
-            return None;
+            return;
         }
-        if keep && !children.is_empty() {
-            out.children.insert(path, children);
-        }
+        // The children it composes, when the scope lists them all, are
+        // read back from where they are kept.
+        let composed = match composed_children {
+            Some(composed) => {
+                if keep && !children.is_empty() {
+                    out.children.insert(path, children);
+                }
+                composed
+            }
+            None if keep && !children.is_empty() => {
+                if deferred || descended {
+                    let kept = out.children.entry(path).insert(children);
+                    if !deferred {
+                        pending.extend(kept.get().iter().rev().copied());
+                    }
+                    return;
+                }
+                out.children.insert(path, children.clone());
+                children
+            }
+            None => children,
+        };
         if deferred {
-            return None;
+            return;
         }
         // Another instance of the key claimed its descendants first: index
         // this one's now, as its own subtree.
         if !descended {
-            self.walk(composed_children, Some(&graph));
-            return None;
+            self.walk(composed, graph.as_ref());
+            return;
         }
-        Some(composed_children)
+        pending.extend(composed.into_iter().rev());
     }
     /// Gives each deferred instance its descendants: copies of its
     /// representative's, re-rooted, when their records do not depend on where
@@ -1342,16 +1532,10 @@ fn map_path_expressions(
     }
 }
 
-/// Records what indexing `path` found.
-fn record(
-    out: &mut Composition,
-    ctx: &Ctx<'_>,
-    path: PathId,
-    graph: &Graph,
-    index: &PrimIndex,
-    outputs: Outputs,
-) {
-    for recorded in outputs.errors {
+/// Records the errors indexing a prim found, the errors of a layer stack
+/// with the first prim to use it.
+fn record_errors(out: &mut Composition, ctx: &Ctx<'_>, errors: Vec<Recorded>) {
+    for recorded in errors {
         match recorded {
             Recorded::Error(error) => out.errors.push(error),
             Recorded::StackErrors { stack, prim } => {
@@ -1366,47 +1550,6 @@ fn record(
             }
         }
     }
-    out.asset_requests.extend(outputs.asset_requests);
-    out.reads.extend(outputs.reads);
-    // A layer stack's use belongs to the prim whose index first adds a
-    // node reading it; its descendants inherit the node.
-    for (at, node) in graph.nodes.iter().enumerate() {
-        let stack = ctx.stacks.get(node.site.stack);
-        if out.used_stacks.insert(node.site.stack) {
-            out.used_layers.extend(stack.layers.iter().copied());
-        }
-        if at != 0 && !node.from_parent_prim {
-            out.used_layer_sites
-                .entry(path)
-                .or_default()
-                .extend(stack.layers.iter().copied());
-        }
-    }
-    if out.deps.is_none() {
-        return;
-    }
-    let mut prim_record = PrimRecord::default();
-    prim_record
-        .layers
-        .extend(index.sources.iter().map(|source| source.layer_id));
-    // The layers authoring the references and payloads on the way to each
-    // node retime it.
-    prim_record.layers.extend(outputs.arc_layers);
-    prim_record
-        .layers
-        .extend(graph.nodes.iter().filter_map(|node| node.authoring_layer));
-    prim_record.default_prim_layers = outputs.default_prim_layers;
-    for (at, node) in graph.nodes.iter().enumerate() {
-        if at == 0 || matches!(node.arc_kind, ArcKind::Local | ArcKind::Variants) {
-            continue;
-        }
-        prim_record.arcs.push((
-            node.site.path.prim_path(),
-            node.arc_kind,
-            ctx.stacks.get(node.site.stack).identifier.root,
-        ));
-    }
-    out.records.insert(path, prim_record);
 }
 
 /// Lists inactive children apart and deduplicates the errors.

@@ -357,7 +357,7 @@ fn list_op_forms_read_and_save_as_authored() {
 #[test]
 fn an_empty_explicit_list_saves_only_as_usdc() {
     let mut imported = Imported::usda("#usda 1.0\ndef \"Rock\"\n{\n}\n");
-    imported.prim("/Rock").variant_set_names = ListOp::explicit(Vec::new());
+    imported.prim("/Rock").variant_set_names = ListOp::explicit(Vec::new()).into();
     let error = imported.save_usda().expect_err("USDA refuses it");
     assert!(
         error.to_string().contains("empty explicit variantSets"),

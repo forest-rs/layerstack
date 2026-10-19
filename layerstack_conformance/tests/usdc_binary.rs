@@ -661,7 +661,7 @@ fn inherits_and_payloads_are_read_from_their_fields() {
     assert!(left_rig.field(inherit_paths).is_none());
 
     let mut model = read_composition_asset("TrickyRelocationOfPrimFromPayload_root", "model.usd");
-    let payloads = model.prim("/Model").payloads;
+    let payloads = model.prim("/Model").payloads.into_inner();
     let explicit = payloads.explicit.expect("an explicit payload list");
     assert_eq!(explicit.len(), 1);
     assert_eq!(explicit[0].asset_path(), Some("./model_payload.usd"));

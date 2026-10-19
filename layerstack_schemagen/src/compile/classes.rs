@@ -340,7 +340,7 @@ impl<'s> Parser<'s> {
     /// no inherited opinion can be stronger than a local one.
     fn inherits(&self, path: PathId) -> Option<&'s ListOp<PathId>> {
         self.stage.layer_stack().into_iter().find_map(|layer| {
-            let inherits = &self.spec(layer, path)?.inherits;
+            let inherits = &*self.spec(layer, path)?.inherits;
             is_authored(inherits).then_some(inherits)
         })
     }

@@ -78,7 +78,7 @@ fn build_and_compose(n_prims: usize, n_variants: usize) -> Stage {
         let mut spec = PrimSpec::def();
         spec.variant_sets
             .insert(vs_name, VariantSetSpec { variants });
-        spec.variant_set_names.prepend.push(vs_name);
+        spec.variant_set_names.make_mut().prepend.push(vs_name);
         if let Some(sel) = selected {
             spec.variant_selections.insert(vs_name, sel);
         }

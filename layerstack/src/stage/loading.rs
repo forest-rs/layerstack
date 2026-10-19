@@ -426,7 +426,7 @@ mod tests {
         let unrelated = store.path("/Unrelated");
         let mut root = Layer::new(LayerId(1));
         let mut spec = PrimSpec::def();
-        spec.payloads.explicit = Some(alloc::vec![Reference::with_asset(
+        spec.payloads.make_mut().explicit = Some(alloc::vec![Reference::with_asset(
             LayerId(2),
             source,
             "asset.usda"

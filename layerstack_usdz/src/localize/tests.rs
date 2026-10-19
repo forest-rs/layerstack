@@ -128,6 +128,7 @@ fn unnamed_layer_links_are_named_and_host_expanded_udims_keep_templates() {
         .prim_mut(model)
         .unwrap()
         .references
+        .make_mut()
         .append[0];
     let layerstack::ReferenceSource::Layer { layer, .. } = arc.source() else {
         panic!("the fixture's reference is resolved");

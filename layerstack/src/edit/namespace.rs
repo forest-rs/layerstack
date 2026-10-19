@@ -1088,11 +1088,19 @@ pub(super) fn repair_prim(
     let owner_moves = anchor != path;
     repair_properties(store, &mut spec.properties, local, anchor, owner_moves)?;
     repair_fields(store, &mut spec.fields, local, anchor, owner_moves)?;
-    repair_refs(store, &mut spec.references, author, edited, local, source)?;
-    repair_refs(store, &mut spec.payloads, author, edited, local, source)?;
+    if let Some(op) = spec.references.get_mut() {
+        repair_refs(store, op, author, edited, local, source)?;
+    }
+    if let Some(op) = spec.payloads.get_mut() {
+        repair_refs(store, op, author, edited, local, source)?;
+    }
     if let Some(mapping) = local {
-        map_list(&mut spec.inherits, |p| *p = mapping.prim(store, *p));
-        map_list(&mut spec.specializes, |p| *p = mapping.prim(store, *p));
+        if let Some(op) = spec.inherits.get_mut() {
+            map_list(op, |p| *p = mapping.prim(store, *p));
+        }
+        if let Some(op) = spec.specializes.get_mut() {
+            map_list(op, |p| *p = mapping.prim(store, *p));
+        }
     }
     repair_variants(
         store,
@@ -1134,11 +1142,19 @@ fn repair_variant(
 ) -> Result<(), NamespaceError> {
     repair_properties(store, &mut spec.properties, local, anchor, owner_moves)?;
     repair_fields(store, &mut spec.fields, local, anchor, owner_moves)?;
-    repair_refs(store, &mut spec.references, author, edited, local, source)?;
-    repair_refs(store, &mut spec.payloads, author, edited, local, source)?;
+    if let Some(op) = spec.references.get_mut() {
+        repair_refs(store, op, author, edited, local, source)?;
+    }
+    if let Some(op) = spec.payloads.get_mut() {
+        repair_refs(store, op, author, edited, local, source)?;
+    }
     if let Some(mapping) = local {
-        map_list(&mut spec.inherits, |p| *p = mapping.prim(store, *p));
-        map_list(&mut spec.specializes, |p| *p = mapping.prim(store, *p));
+        if let Some(op) = spec.inherits.get_mut() {
+            map_list(op, |p| *p = mapping.prim(store, *p));
+        }
+        if let Some(op) = spec.specializes.get_mut() {
+            map_list(op, |p| *p = mapping.prim(store, *p));
+        }
     }
     repair_variants(
         store,

@@ -209,7 +209,7 @@ impl FileFormat for TestDynamic {
         );
         layer.set_default_prim(Some(token("Root")));
         let mut geom = PrimSpec::def();
-        geom.references.add.push(Reference::deferred(
+        geom.references.make_mut().add.push(Reference::deferred(
             source.layer,
             path,
             ReferenceTarget::DefaultPrim,
@@ -267,7 +267,7 @@ impl FileFormat for TestDynamic {
                         .with(PAYLOAD_ID, payload_id)
                         .identifier(path)
                 };
-                spec.payloads.add.push(Reference::deferred(
+                spec.payloads.make_mut().add.push(Reference::deferred(
                     source.layer,
                     asset,
                     ReferenceTarget::DefaultPrim,

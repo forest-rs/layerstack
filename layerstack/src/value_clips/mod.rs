@@ -1474,7 +1474,7 @@ mod tests {
             ..VariantSpec::default()
         };
         owner.variant_selections.insert(mode, a);
-        owner.variant_set_names.prepend.push(mode);
+        owner.variant_set_names.make_mut().prepend.push(mode);
         owner.variant_sets.insert(
             mode,
             VariantSetSpec {
@@ -1521,7 +1521,7 @@ mod tests {
         let world_child = store.property_path("/World/Q.x");
         let mut reference = Layer::new(LayerId(10));
         let mut world_spec = PrimSpec::def();
-        world_spec.references = ListOp::explicit(vec![Reference::new(LayerId(1), prim)]);
+        world_spec.references = ListOp::explicit(vec![Reference::new(LayerId(1), prim)]).into();
         reference.prims.insert(world.prim_path(), world_spec);
         store.insert_layer(reference);
         let stage = Stage::compose(&mut store, LayerId(10), StageOptions::default());

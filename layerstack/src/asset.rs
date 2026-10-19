@@ -230,8 +230,12 @@ pub fn resolve_selected_deferred_arcs(
         {
             continue;
         }
-        resolve(&mut spec.references, false);
-        resolve(&mut spec.payloads, true);
+        if let Some(op) = spec.references.get_mut() {
+            resolve(op, false);
+        }
+        if let Some(op) = spec.payloads.get_mut() {
+            resolve(op, true);
+        }
         resolve_branch_arcs(&mut spec.variant_sets, path, &selected, &mut resolve);
     }
     resolved_layers
@@ -255,8 +259,12 @@ fn resolve_branch_arcs(
             }) {
                 continue;
             }
-            resolve(&mut branch.references, false);
-            resolve(&mut branch.payloads, true);
+            if let Some(op) = branch.references.get_mut() {
+                resolve(op, false);
+            }
+            if let Some(op) = branch.payloads.get_mut() {
+                resolve(op, true);
+            }
             resolve_branch_arcs(&mut branch.variant_sets, host, selected, resolve);
         }
     }

@@ -503,11 +503,11 @@ mod tests {
             target: Some(c),
         }];
         let mut referencing = PrimSpec::def();
-        referencing.references.explicit = Some(vec![Reference::new(LayerId(2), r)]);
+        referencing.references.make_mut().explicit = Some(vec![Reference::new(LayerId(2), r)]);
         root.insert_prim(a, referencing);
         root.insert_prim(b, PrimSpec::over());
         let mut stale_spec = PrimSpec::def();
-        stale_spec.references.explicit = Some(vec![Reference::new(LayerId(1), b)]);
+        stale_spec.references.make_mut().explicit = Some(vec![Reference::new(LayerId(1), b)]);
         root.insert_prim(stale, stale_spec);
         store.insert_layer(root);
         let mut referenced = Layer::new(LayerId(2));

@@ -39,3 +39,91 @@
 //! ```
 
 pub use opinionated::{ListOp, resolve_list_chain};
+
+use alloc::boxed::Box;
+use core::{fmt, ops};
+
+/// A [`ListOp`] kept out of line, allocated only once it is authored: a
+/// spec's list ops are mostly empty, and an empty one is a null pointer
+/// here rather than six empty vectors.
+///
+/// It reads as the [`ListOp`] it holds, an empty one when none is
+/// authored. [`Self::make_mut`] allocates the op to author into;
+/// [`Self::get_mut`] edits an authored one and allocates nothing. An op
+/// emptied in place stays allocated, and still reads, and compares, as
+/// empty.
+pub struct SparseListOp<T>(Option<Box<ListOp<T>>>);
+
+impl<T: 'static> SparseListOp<T> {
+    const EMPTY: &'static ListOp<T> = &ListOp::new();
+
+    /// An empty list op, which allocates nothing.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self(None)
+    }
+
+    /// The list op to edit in place, if one is authored: `None`, and no
+    /// allocation, for an empty one.
+    pub fn get_mut(&mut self) -> Option<&mut ListOp<T>> {
+        self.0.as_deref_mut()
+    }
+
+    /// The list op to author into, allocated first if none is authored.
+    pub fn make_mut(&mut self) -> &mut ListOp<T> {
+        self.0.get_or_insert_with(|| Box::new(ListOp::new()))
+    }
+
+    /// The list op, moved out.
+    #[must_use]
+    pub fn into_inner(self) -> ListOp<T> {
+        self.0.map_or_else(ListOp::new, |op| *op)
+    }
+}
+
+impl<T> Default for SparseListOp<T> {
+    fn default() -> Self {
+        Self(None)
+    }
+}
+
+impl<T: Clone> Clone for SparseListOp<T> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
+impl<T: 'static> ops::Deref for SparseListOp<T> {
+    type Target = ListOp<T>;
+
+    fn deref(&self) -> &ListOp<T> {
+        self.0.as_deref().unwrap_or(Self::EMPTY)
+    }
+}
+
+/// An op that authors nothing ([`ListOp::is_empty`]) allocates nothing.
+impl<T> From<ListOp<T>> for SparseListOp<T> {
+    fn from(op: ListOp<T>) -> Self {
+        Self((!op.is_empty()).then(|| Box::new(op)))
+    }
+}
+
+impl<T: PartialEq + 'static> PartialEq for SparseListOp<T> {
+    fn eq(&self, other: &Self) -> bool {
+        **self == **other
+    }
+}
+
+impl<T: Eq + 'static> Eq for SparseListOp<T> {}
+
+impl<T: PartialEq + 'static> PartialEq<ListOp<T>> for SparseListOp<T> {
+    fn eq(&self, other: &ListOp<T>) -> bool {
+        **self == *other
+    }
+}
+
+impl<T: fmt::Debug + 'static> fmt::Debug for SparseListOp<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        (**self).fmt(f)
+    }
+}

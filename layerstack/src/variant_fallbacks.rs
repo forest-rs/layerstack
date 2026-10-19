@@ -182,7 +182,7 @@ mod tests {
             set.variants.insert(store.tokens.intern(name), variant);
         }
         spec.variant_sets.insert(shape, set);
-        spec.variant_set_names.prepend.push(shape);
+        spec.variant_set_names.make_mut().prepend.push(shape);
         if let Some(name) = authored {
             spec.variant_selections
                 .insert(shape, store.tokens.intern(name));
@@ -258,7 +258,8 @@ mod tests {
             vec![size, shape]
         } else {
             vec![shape, size]
-        });
+        })
+        .into();
         let mut layer = Layer::new(LayerId(1));
         layer.insert_prim(mast, spec);
         store.insert_layer(layer);

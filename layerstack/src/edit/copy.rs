@@ -190,13 +190,21 @@ fn reanchor_internal_arcs(spec: &mut PrimSpec, from: LayerId, to: LayerId) {
     }
     fn variants(sets: &mut HashMap<TokenId, VariantSetSpec>, from: LayerId, to: LayerId) {
         for variant in sets.values_mut().flat_map(|set| set.variants.values_mut()) {
-            arcs(&mut variant.references, from, to);
-            arcs(&mut variant.payloads, from, to);
+            if let Some(op) = variant.references.get_mut() {
+                arcs(op, from, to);
+            }
+            if let Some(op) = variant.payloads.get_mut() {
+                arcs(op, from, to);
+            }
             variants(&mut variant.variant_sets, from, to);
         }
     }
-    arcs(&mut spec.references, from, to);
-    arcs(&mut spec.payloads, from, to);
+    if let Some(op) = spec.references.get_mut() {
+        arcs(op, from, to);
+    }
+    if let Some(op) = spec.payloads.get_mut() {
+        arcs(op, from, to);
+    }
     variants(&mut spec.variant_sets, from, to);
 }
 

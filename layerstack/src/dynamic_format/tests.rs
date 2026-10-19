@@ -239,7 +239,7 @@ fn only_payloads_to_registered_formats_are_dynamic() {
         .prims
         .get_mut(&world)
         .unwrap();
-    spec.references.append.push(reference);
+    spec.references.make_mut().append.push(reference);
     assert_eq!(
         requests(&mut store, &options),
         ["field.terrain", IDENTIFIER]

@@ -23,7 +23,7 @@ fn main() {
     let source = store.path("/Asset");
     let mut root = Layer::new(LayerId(1));
     let mut prim = PrimSpec::def();
-    prim.payloads.explicit = Some(vec![Reference::with_asset(
+    prim.payloads.make_mut().explicit = Some(vec![Reference::with_asset(
         LayerId(2),
         source,
         "asset.usda",

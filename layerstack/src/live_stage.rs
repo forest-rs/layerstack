@@ -2054,7 +2054,7 @@ mod tests {
             target: Some(c),
         }];
         let mut referencing = PrimSpec::def();
-        referencing.references.explicit = Some(vec![Reference::new(LayerId(2), r)]);
+        referencing.references.make_mut().explicit = Some(vec![Reference::new(LayerId(2), r)]);
         root.insert_prim(a, referencing);
         store.insert_layer(root);
         let mut referenced = Layer::new(LayerId(2));
@@ -2181,7 +2181,7 @@ mod tests {
                 variants: [(a, branch(1)), (b, branch(2))].into_iter().collect(),
             },
         );
-        spec.variant_set_names.prepend.push(look);
+        spec.variant_set_names.make_mut().prepend.push(look);
         spec.variant_selections.insert(look, a);
         asset.insert_prim(model, spec);
         store.insert_layer(asset);
@@ -3549,7 +3549,7 @@ mod tests {
             );
         }
         model_spec.variant_sets.insert(lod, set);
-        model_spec.variant_set_names.prepend.push(lod);
+        model_spec.variant_set_names.make_mut().prepend.push(lod);
         model_spec.variant_selections.insert(lod, high);
         layer.insert_prim(model, model_spec);
         for (variant, value) in [(high, 1_i64), (low, 2_i64)] {
@@ -3641,7 +3641,7 @@ mod tests {
             );
         }
         model_spec.variant_sets.insert(lod, set);
-        model_spec.variant_set_names.prepend.push(lod);
+        model_spec.variant_set_names.make_mut().prepend.push(lod);
         model_spec.variant_selections.insert(lod, high);
         model_spec.authored_children.push(geom_tok);
         layer.insert_prim(model, model_spec);
@@ -4328,7 +4328,7 @@ mod tests {
             },
         );
         spec.variant_sets.insert(shape, set);
-        spec.variant_set_names.prepend.push(shape);
+        spec.variant_set_names.make_mut().prepend.push(shape);
         spec.variant_selections.insert(shape, smooth);
         spec.authored_children = vec![stone];
         spec.prim_order = Some(vec![moss, stone]);

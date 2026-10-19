@@ -40,15 +40,15 @@ fn reference_custom_data_assets_cover_inactive_buckets_and_unselected_variants()
     let mode = store.tokens.intern("mode");
     let hidden = store.tokens.intern("hidden");
     let mut prim = PrimSpec::def();
-    prim.references = custom_data_arcs(LayerId(1), target, "references");
-    prim.payloads = custom_data_arcs(LayerId(1), target, "payloads");
+    prim.references = custom_data_arcs(LayerId(1), target, "references").into();
+    prim.payloads = custom_data_arcs(LayerId(1), target, "payloads").into();
     prim.variant_sets.insert(
         mode,
         VariantSetSpec {
             variants: crate::HashMap::from([(
                 hidden,
                 VariantSpec {
-                    references: custom_data_arcs(LayerId(1), target, "variant"),
+                    references: custom_data_arcs(LayerId(1), target, "variant").into(),
                     ..VariantSpec::default()
                 },
             )]),
@@ -143,10 +143,11 @@ fn recursive_inventory_visits_unselected_variants_and_reports_partial_resolution
     let hidden = store.tokens.intern("hidden");
     let file = store.tokens.intern("file");
     let mut variant = VariantSpec {
-        references: ListOp::prepended(vec![Reference::with_asset_default_prim(
+        references: (ListOp::prepended(vec![Reference::with_asset_default_prim(
             LayerId(2),
             "child.usda",
-        )]),
+        )]))
+        .into(),
         ..VariantSpec::default()
     };
     variant.properties.push(PropertyEntry {

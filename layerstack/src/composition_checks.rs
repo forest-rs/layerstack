@@ -497,17 +497,19 @@ mod tests {
         );
         let mut root = Layer::new(ROOT);
         let mut stone_spec = PrimSpec::def();
-        stone_spec.payloads = ListOp::explicit(vec![
+        stone_spec.payloads = (ListOp::explicit(vec![
             Reference::new(ROOT, pebble),
             Reference::new(ROOT, missing),
-        ]);
+        ]))
+        .into();
         root.insert_prim(stone, stone_spec);
         root.insert_prim(pebble, PrimSpec::def());
         let mut brook_spec = PrimSpec::def();
-        brook_spec.references = ListOp::explicit(vec![
+        brook_spec.references = (ListOp::explicit(vec![
             Reference::with_asset(ASSET, nowhere, "asset.usda"),
             Reference::with_asset(ASSET, spring, "asset.usda"),
-        ]);
+        ]))
+        .into();
         root.insert_prim(brook, brook_spec);
         store.insert_layer(root);
         let mut asset = Layer::new(ASSET);
@@ -562,7 +564,7 @@ mod tests {
                     .with_targets(ListOp::explicit(vec![TargetPath::Prim(lamp)])),
             );
         lantern_spec.references =
-            ListOp::explicit(vec![Reference::with_asset(ASSET, lamp, "lamp.usda")]);
+            ListOp::explicit(vec![Reference::with_asset(ASSET, lamp, "lamp.usda")]).into();
         root.insert_prim(lantern, lantern_spec);
         store.insert_layer(root);
         let mut asset = Layer::new(ASSET);

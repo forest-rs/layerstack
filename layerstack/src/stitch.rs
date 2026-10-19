@@ -421,12 +421,13 @@ fn variant(
     fields(&mut strong.fields, &weak.fields, tokens, report, false);
     properties(&mut strong.properties, &weak.properties, tokens, report)?;
     append_unique(&mut strong.authored_children, &weak.authored_children);
-    strong.references = arc(&strong.references, &weak.references, report);
-    strong.inherits = arc(&strong.inherits, &weak.inherits, report);
-    strong.specializes = arc(&strong.specializes, &weak.specializes, report);
-    strong.payloads = arc(&strong.payloads, &weak.payloads, report);
+    strong.references = arc(&strong.references, &weak.references, report).into();
+    strong.inherits = arc(&strong.inherits, &weak.inherits, report).into();
+    strong.specializes = arc(&strong.specializes, &weak.specializes, report).into();
+    strong.payloads = arc(&strong.payloads, &weak.payloads, report).into();
     map_missing(&mut strong.variant_selections, &weak.variant_selections);
-    strong.variant_set_names = arc(&strong.variant_set_names, &weak.variant_set_names, report);
+    strong.variant_set_names =
+        arc(&strong.variant_set_names, &weak.variant_set_names, report).into();
     fill(&mut strong.property_order, &weak.property_order);
     variant_sets(&mut strong.variant_sets, &weak.variant_sets, tokens, report)
 }
@@ -446,14 +447,15 @@ fn prim(
     fill(&mut strong.property_order, &weak.property_order);
     fill(&mut strong.prim_order, &weak.prim_order);
     fields(&mut strong.fields, &weak.fields, tokens, report, false);
-    strong.references = arc(&strong.references, &weak.references, report);
-    strong.inherits = arc(&strong.inherits, &weak.inherits, report);
-    strong.specializes = arc(&strong.specializes, &weak.specializes, report);
-    strong.payloads = arc(&strong.payloads, &weak.payloads, report);
+    strong.references = arc(&strong.references, &weak.references, report).into();
+    strong.inherits = arc(&strong.inherits, &weak.inherits, report).into();
+    strong.specializes = arc(&strong.specializes, &weak.specializes, report).into();
+    strong.payloads = arc(&strong.payloads, &weak.payloads, report).into();
     map_missing(&mut strong.variant_selections, &weak.variant_selections);
     // AOUSD Core §7.6.2.3.5, §12.4: `variantSetNames` combines as the
     // other list ops do.
-    strong.variant_set_names = arc(&strong.variant_set_names, &weak.variant_set_names, report);
+    strong.variant_set_names =
+        arc(&strong.variant_set_names, &weak.variant_set_names, report).into();
     if children {
         append_unique(&mut strong.authored_children, &weak.authored_children);
         properties(&mut strong.properties, &weak.properties, tokens, report)?;
@@ -642,7 +644,7 @@ mod tests {
         let mut strong = Layer::new(LayerId(1));
         let mut weak = Layer::new(LayerId(2));
         let mut prim = PrimSpec::def();
-        prim.inherits = ListOp::prepended(vec![base]);
+        prim.inherits = ListOp::prepended(vec![base]).into();
         prim.variant_sets
             .entry(set)
             .or_default()
@@ -656,7 +658,7 @@ mod tests {
             });
         strong.insert_prim(host, prim);
         let mut prim = PrimSpec::over();
-        prim.inherits = ListOp::appended(vec![other]);
+        prim.inherits = ListOp::appended(vec![other]).into();
         let mut targets = PropertySpec::relationship();
         targets.targets = Some(ListOp::added(vec![crate::TargetPath::Prim(base)]));
         prim.variant_sets

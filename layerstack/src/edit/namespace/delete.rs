@@ -535,10 +535,10 @@ fn repair_variant_sets(
 struct Owner<'a> {
     properties: &'a mut Vec<PropertyEntry>,
     fields: &'a mut Vec<FieldEntry>,
-    references: &'a mut ListOp<Reference>,
-    payloads: &'a mut ListOp<Reference>,
-    inherits: &'a mut ListOp<PathId>,
-    specializes: &'a mut ListOp<PathId>,
+    references: &'a mut crate::SparseListOp<Reference>,
+    payloads: &'a mut crate::SparseListOp<Reference>,
+    inherits: &'a mut crate::SparseListOp<PathId>,
+    specializes: &'a mut crate::SparseListOp<PathId>,
 }
 
 fn repair_owner(
@@ -565,13 +565,15 @@ fn repair_owner(
     }
     repair_fields(store, owner.fields, path, object)?;
     if let TargetPath::Prim(_) = object {
-        retain(owner.inherits, |p| {
-            !names(store, object, TargetPath::Prim(*p))
-        });
-        retain(owner.specializes, |p| {
-            !names(store, object, TargetPath::Prim(*p))
-        });
+        for paths in [owner.inherits, owner.specializes] {
+            if let Some(paths) = paths.get_mut() {
+                retain(paths, |p| !names(store, object, TargetPath::Prim(*p)));
+            }
+        }
         for arcs in [owner.references, owner.payloads] {
+            let Some(arcs) = arcs.get_mut() else {
+                continue;
+            };
             if arcs.items().any(Reference::is_expression) {
                 return Err(NamespaceError::UnsupportedComposition(
                     "reference/payload asset expressions require resolved dependency editing",

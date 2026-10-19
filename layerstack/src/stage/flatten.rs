@@ -615,7 +615,8 @@ impl Flattener<'_, '_> {
 
         if let Some(&prototype) = self.prototype_of.get(&source) {
             // Spec: AOUSD Core §11.3.3 (the instance shares its prototype).
-            spec.references.explicit = Some(alloc::vec![Reference::new(self.out.id, prototype)]);
+            spec.references.make_mut().explicit =
+                Some(alloc::vec![Reference::new(self.out.id, prototype)]);
             let (path, prototype) = (self.display(source), self.display(prototype));
             self.transformed(path, Transformation::InstanceShared { prototype }, None);
         } else {

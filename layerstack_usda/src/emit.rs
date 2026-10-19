@@ -427,7 +427,7 @@ impl EmitCtx<'_> {
             match meta {
                 ast::PrimMeta::References(arc) => {
                     self.emitted_arcs = true;
-                    spec.references.merge(self.emit_arc_listop(
+                    spec.references.make_mut().merge(self.emit_arc_listop(
                         arc,
                         "Reference",
                         !sites.is_empty(),
@@ -435,15 +435,19 @@ impl EmitCtx<'_> {
                 }
                 ast::PrimMeta::Payload(arc) => {
                     self.emitted_arcs = true;
-                    spec.payloads
-                        .merge(self.emit_arc_listop(arc, "Payload", !sites.is_empty()));
+                    spec.payloads.make_mut().merge(self.emit_arc_listop(
+                        arc,
+                        "Payload",
+                        !sites.is_empty(),
+                    ));
                 }
                 ast::PrimMeta::Inherits(paths) => {
                     spec.inherits
+                        .make_mut()
                         .merge(self.emit_path_listop(paths, prim_path, &sites, "Inherit"));
                 }
                 ast::PrimMeta::Specializes(paths) => {
-                    spec.specializes.merge(self.emit_path_listop(
+                    spec.specializes.make_mut().merge(self.emit_path_listop(
                         paths,
                         prim_path,
                         &sites,
@@ -460,7 +464,7 @@ impl EmitCtx<'_> {
                 ast::PrimMeta::VariantSets(listop) => {
                     let names = self.emit_name_listop(listop);
                     declare_listed_sets(&names, &mut spec.variant_sets);
-                    spec.variant_set_names.merge(names);
+                    spec.variant_set_names.make_mut().merge(names);
                 }
                 ast::PrimMeta::Custom(entry) if entry.key == "instanceable" => {
                     if let ast::MetadataValue::Value(ast::Value::Bool(b)) = &entry.value {
@@ -1064,29 +1068,32 @@ impl EmitCtx<'_> {
                     self.emitted_arcs = true;
                     variant_spec
                         .references
+                        .make_mut()
                         .merge(self.emit_arc_listop(arc, "Reference", true));
                 }
                 ast::PrimMeta::Payload(arc) => {
                     self.emitted_arcs = true;
                     variant_spec
                         .payloads
+                        .make_mut()
                         .merge(self.emit_arc_listop(arc, "Payload", true));
                 }
                 ast::PrimMeta::Inherits(paths) => {
-                    variant_spec.inherits.merge(self.emit_path_listop(
-                        paths,
-                        prim_path,
-                        branch_sites,
-                        "Inherit",
-                    ));
+                    variant_spec
+                        .inherits
+                        .make_mut()
+                        .merge(self.emit_path_listop(paths, prim_path, branch_sites, "Inherit"));
                 }
                 ast::PrimMeta::Specializes(paths) => {
-                    variant_spec.specializes.merge(self.emit_path_listop(
-                        paths,
-                        prim_path,
-                        branch_sites,
-                        "Specializes",
-                    ));
+                    variant_spec
+                        .specializes
+                        .make_mut()
+                        .merge(self.emit_path_listop(
+                            paths,
+                            prim_path,
+                            branch_sites,
+                            "Specializes",
+                        ));
                 }
                 ast::PrimMeta::Variants(selections) => {
                     for sel in selections {
@@ -1104,7 +1111,7 @@ impl EmitCtx<'_> {
                     // The sets nested in this branch, as for a prim spec.
                     let names = self.emit_name_listop(listop);
                     declare_listed_sets(&names, &mut variant_spec.variant_sets);
-                    variant_spec.variant_set_names.merge(names);
+                    variant_spec.variant_set_names.make_mut().merge(names);
                 }
             }
         }

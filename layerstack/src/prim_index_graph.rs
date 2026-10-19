@@ -886,7 +886,7 @@ mod tests {
         pebble_spec
             .variant_sets
             .insert(shape, VariantSetSpec { variants });
-        pebble_spec.variant_set_names.prepend.push(shape);
+        pebble_spec.variant_set_names.make_mut().prepend.push(shape);
         pebble_spec.variant_selections.insert(shape, jagged);
         library.insert_prim(pebble, pebble_spec);
         store.insert_layer(library);

@@ -320,6 +320,7 @@ fn masks_arcs_variants_and_instanceable_use_general_composition() {
                 .get_mut(&a)
                 .unwrap()
                 .inherits
+                .make_mut()
                 .prepend
                 .push(b),
             2 => {
@@ -411,7 +412,7 @@ fn scoped_variant_change_resyncs_even_when_unqualified_source_sites_are_equal() 
         .get_mut(&owner)
         .unwrap();
     spec.variant_sets.insert(choice, set);
-    spec.variant_set_names.prepend.push(choice);
+    spec.variant_set_names.make_mut().prepend.push(choice);
     spec.variant_selections.insert(choice, first);
     let mut live = LiveStage::compose(&mut store, ROOT, StageOptions::default());
     let mut before = live.stage().source_sites(owner);
@@ -453,7 +454,7 @@ fn undo_restoring_variant_specs_leaves_the_local_fast_path() {
     let layer = store.layer_mut(ROOT).unwrap();
     let host = layer.prims.get_mut(&world).unwrap();
     host.variant_sets.insert(set_name, set);
-    host.variant_set_names.prepend.push(set_name);
+    host.variant_set_names.make_mut().prepend.push(set_name);
     host.variant_selections.insert(set_name, choice);
     layer.insert_prim(
         a,
@@ -524,9 +525,9 @@ fn external_arc_edits_expire_the_local_composition_proof() {
         let b = store.path("/World/B");
         let mut spec = store.layer(ROOT).unwrap().prims[&a].clone();
         if specializes {
-            spec.specializes.prepend.push(b);
+            spec.specializes.make_mut().prepend.push(b);
         } else {
-            spec.inherits.prepend.push(b);
+            spec.inherits.make_mut().prepend.push(b);
         }
         store.layer_mut(ROOT).unwrap().insert_prim(a, spec);
         // No explicit notification: the changed generation must invalidate

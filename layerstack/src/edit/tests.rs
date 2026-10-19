@@ -79,7 +79,7 @@ fn rocks() -> InMemoryStore {
     rock_spec
         .variant_sets
         .insert(shape, VariantSetSpec { variants });
-    rock_spec.variant_set_names.prepend.push(shape);
+    rock_spec.variant_set_names.make_mut().prepend.push(shape);
     rock_spec.variant_selections.insert(shape, round);
     asset.insert_prim(rock, rock_spec);
     store.insert_layer(asset);

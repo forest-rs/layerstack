@@ -163,7 +163,7 @@ fn variant_targets_participate_only_when_the_branch_is_selected() {
     let selected = store.tokens.intern("selected");
     let hidden = store.tokens.intern("hidden");
     let mut prim = PrimSpec::def();
-    prim.variant_set_names.prepend.push(mode);
+    prim.variant_set_names.make_mut().prepend.push(mode);
     prim.variant_selections.insert(mode, selected);
     prim.variant_sets.insert(
         mode,
@@ -322,10 +322,11 @@ fn specialized_target_uses_propagated_source_strength_not_its_inert_placeholder(
     let x = store.tokens.intern("x");
     let mut root = Layer::new(LayerId(1));
     let mut prim = PrimSpec::def();
-    prim.references = crate::ListOp::prepended(vec![
+    prim.references = (crate::ListOp::prepended(vec![
         Reference::new(LayerId(2), asset),
         Reference::new(LayerId(3), other),
-    ]);
+    ]))
+    .into();
     root.insert_prim(dest, prim);
     let mut first = Layer::new(LayerId(2));
     first.sublayers.push(SublayerEntry::new(LayerId(4)));

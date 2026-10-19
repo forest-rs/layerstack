@@ -265,7 +265,7 @@ pub use edit::{
 };
 pub use interner::{TokenId, TokenInterner};
 pub use layer_stack::{LayerStack, LayerStackIdentifier};
-pub use listop::ListOp;
+pub use listop::{ListOp, SparseListOp};
 pub use path::{
     Path, PathError, PathId, PathInterner, PropertyPath, PropertyPathError, TargetPath,
     TargetPathError,

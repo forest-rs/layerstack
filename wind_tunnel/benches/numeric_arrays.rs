@@ -9,7 +9,7 @@ use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use layerstack::{
     ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex, InMemoryStore, Layer, LayerId, PrimSpec,
     PropertyPath, PropertySpec, PropertyType, ResolvedValue, Stage, StageOptions, SublayerEntry,
-    Value,
+    Time, Value,
 };
 use layerstack_schemas::{Scene, usd_geom::Mesh};
 
@@ -123,12 +123,7 @@ fn arrays(c: &mut Criterion) {
                 b.iter(|| black_box(mesh.points().unwrap()));
             });
             group.bench_function(BenchmarkId::new("schema_sparse_points_numeric", len), |b| {
-                b.iter(|| {
-                    black_box(
-                        mesh.points_at(9.0, layerstack::InterpolationType::Linear)
-                            .unwrap(),
-                    )
-                });
+                b.iter(|| black_box(mesh.points_at(Time::at(9.0)).unwrap()));
             });
         }
     }

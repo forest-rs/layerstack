@@ -17,9 +17,9 @@ use std::sync::Arc;
 
 use layerstack::edit::{EditError, Rejection};
 use layerstack::{
-    Address, ArcKind, AssetResolveError, AssetResolver, EditTarget, InMemoryStore,
-    InterpolationType, Layer, LayerId, LiveStage, PathId, PathInterner, PropertyPath,
-    ResolvedAsset, ResolvedValue, SpecPath, Stage, StageOptions, TokenInterner, Transaction, Value,
+    Address, ArcKind, AssetResolveError, AssetResolver, EditTarget, InMemoryStore, Layer, LayerId,
+    LiveStage, PathId, PathInterner, PropertyPath, ResolvedAsset, ResolvedValue, SpecPath, Stage,
+    StageOptions, Time, TokenInterner, Transaction, Value,
 };
 use layerstack_usda::{emit, lower, parser::parse_cst};
 
@@ -206,7 +206,7 @@ fn probe(stage: &Stage, store: &mut InMemoryStore) -> BTreeMap<String, Probe> {
         for time in [2.0, 14.0] {
             // The stage default interpolation, as `UsdAttribute::Get(time)`.
             let value = stage
-                .resolve_property_path_at_time(spin, time, InterpolationType::default())
+                .resolve_property_path_at_time(spin, Time::at(time))
                 .map_or(Probe::Absent, |r| num(&r.value));
             out.insert(format!("{name}.spin@{time}"), value);
         }

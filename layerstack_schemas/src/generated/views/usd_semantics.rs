@@ -135,19 +135,12 @@ impl<'a> SemanticsLabelsApi<'a> {
         })
     }
 
-    #[doc = "[`Self::labels`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::labels`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn labels_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<::alloc::vec::Vec<&'a str>> {
-        self.read_value_at(
-            "semantics:labels:__INSTANCE_NAME__",
-            time,
-            interp,
-            |v, t| crate::value::read_array(v, t, crate::value::read_token),
-        )
+    pub fn labels_at(&self, time: ::layerstack::Time) -> Option<::alloc::vec::Vec<&'a str>> {
+        self.read_value_at("semantics:labels:__INSTANCE_NAME__", time, |v, t| {
+            crate::value::read_array(v, t, crate::value::read_token)
+        })
     }
 
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -199,19 +192,14 @@ impl SemanticsLabelsApiEdit {
     #[doc(alias = "CreateLabelsAttr")]
     pub fn set_labels(&self, edit: &mut SchemaEdit<'_>, value: &[&str]) -> &Self {
         let value = crate::value::write_array(value, edit.tokens(), crate::value::write_token);
-        self.write_value(edit, "semantics:labels:__INSTANCE_NAME__", None, value);
+        self.write_value(edit, "semantics:labels:__INSTANCE_NAME__", value);
         self
     }
 
     #[doc = "[`Self::set_labels`] as a time sample at the time code `time`."]
     pub fn set_labels_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &[&str]) -> &Self {
         let value = crate::value::write_array(value, edit.tokens(), crate::value::write_token);
-        self.write_value(
-            edit,
-            "semantics:labels:__INSTANCE_NAME__",
-            Some(time),
-            value,
-        );
+        self.write_value_at(edit, "semantics:labels:__INSTANCE_NAME__", time, value);
         self
     }
 }

@@ -11,7 +11,7 @@ use layerstack::{
     ArcKind, ArrayEdit, ArrayEditOp, FieldEntry, FieldValue, InterpolationType, Layer, LayerId,
     ListOp, NodeId, PrimIndexGraph, PrimSpec, PropertyDefinition, PropertyPath, PropertySpec,
     PropertyType, Reference, ResolvedValue, SchemaDefinition, SchemaRegistry, Stage, StageOptions,
-    SublayerEntry, TargetPath, Value, VariantSetSpec, VariantSpec, doc::InMemoryStore,
+    SublayerEntry, TargetPath, Time, Value, VariantSetSpec, VariantSpec, doc::InMemoryStore,
 };
 
 /// The arc kinds from the root of `graph` to `node`, outermost first.
@@ -116,13 +116,13 @@ fn property_path_time_queries_read_properties_not_metadata() {
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
 
     let by_property_path = stage
-        .resolve_property_path_at_time(property_path, 2.0, InterpolationType::Held)
+        .resolve_property_path_at_time(property_path, Time::held(2.0))
         .expect("sampled property exists");
     assert_eq!(by_property_path.value, Value::Double(10.0));
     // The name-based query reads prim metadata, and `/P` authors no `x`
     // metadata.
     assert_eq!(
-        stage.resolve_value_at_time(prim, field_x, 2.0, InterpolationType::Held),
+        stage.resolve_value_at_time(prim, field_x, Time::held(2.0)),
         None
     );
 }
@@ -904,8 +904,6 @@ fn value_blocked_only_affects_blocked_field() {
 
 #[test]
 fn time_samples_held_interpolation() {
-    use layerstack::InterpolationType;
-
     let mut store = InMemoryStore::default();
     let field = store.tokens.intern("x");
     let p = store.path("/P");
@@ -928,22 +926,14 @@ fn time_samples_held_interpolation() {
     // Exact samples.
     assert_eq!(
         stage
-            .resolve_property_path_at_time(
-                PropertyPath::new(p, field),
-                1.0,
-                InterpolationType::Held
-            )
+            .resolve_property_path_at_time(PropertyPath::new(p, field), Time::held(1.0))
             .unwrap()
             .value,
         Value::Double(10.0)
     );
     assert_eq!(
         stage
-            .resolve_property_path_at_time(
-                PropertyPath::new(p, field),
-                3.0,
-                InterpolationType::Held
-            )
+            .resolve_property_path_at_time(PropertyPath::new(p, field), Time::held(3.0))
             .unwrap()
             .value,
         Value::Double(30.0)
@@ -952,22 +942,14 @@ fn time_samples_held_interpolation() {
     // Between samples: held returns earlier value.
     assert_eq!(
         stage
-            .resolve_property_path_at_time(
-                PropertyPath::new(p, field),
-                2.0,
-                InterpolationType::Held
-            )
+            .resolve_property_path_at_time(PropertyPath::new(p, field), Time::held(2.0))
             .unwrap()
             .value,
         Value::Double(10.0)
     );
     assert_eq!(
         stage
-            .resolve_property_path_at_time(
-                PropertyPath::new(p, field),
-                4.0,
-                InterpolationType::Held
-            )
+            .resolve_property_path_at_time(PropertyPath::new(p, field), Time::held(4.0))
             .unwrap()
             .value,
         Value::Double(30.0)
@@ -976,11 +958,7 @@ fn time_samples_held_interpolation() {
     // Before first sample: return first value.
     assert_eq!(
         stage
-            .resolve_property_path_at_time(
-                PropertyPath::new(p, field),
-                0.0,
-                InterpolationType::Held
-            )
+            .resolve_property_path_at_time(PropertyPath::new(p, field), Time::held(0.0))
             .unwrap()
             .value,
         Value::Double(10.0)
@@ -989,11 +967,7 @@ fn time_samples_held_interpolation() {
     // After last sample: return last value.
     assert_eq!(
         stage
-            .resolve_property_path_at_time(
-                PropertyPath::new(p, field),
-                100.0,
-                InterpolationType::Held
-            )
+            .resolve_property_path_at_time(PropertyPath::new(p, field), Time::held(100.0))
             .unwrap()
             .value,
         Value::Double(50.0)
@@ -1002,8 +976,6 @@ fn time_samples_held_interpolation() {
 
 #[test]
 fn time_samples_linear_interpolation() {
-    use layerstack::InterpolationType;
-
     let mut store = InMemoryStore::default();
     let field = store.tokens.intern("x");
     let p = store.path("/P");
@@ -1025,11 +997,7 @@ fn time_samples_linear_interpolation() {
     // Midpoint: linear interpolation.
     assert_eq!(
         stage
-            .resolve_property_path_at_time(
-                PropertyPath::new(p, field),
-                5.0,
-                InterpolationType::Linear
-            )
+            .resolve_property_path_at_time(PropertyPath::new(p, field), Time::at(5.0))
             .unwrap()
             .value,
         Value::Double(50.0)
@@ -1038,11 +1006,7 @@ fn time_samples_linear_interpolation() {
     // Quarter point.
     assert_eq!(
         stage
-            .resolve_property_path_at_time(
-                PropertyPath::new(p, field),
-                2.5,
-                InterpolationType::Linear
-            )
+            .resolve_property_path_at_time(PropertyPath::new(p, field), Time::at(2.5))
             .unwrap()
             .value,
         Value::Double(25.0)
@@ -1051,11 +1015,7 @@ fn time_samples_linear_interpolation() {
     // Exact sample.
     assert_eq!(
         stage
-            .resolve_property_path_at_time(
-                PropertyPath::new(p, field),
-                0.0,
-                InterpolationType::Linear
-            )
+            .resolve_property_path_at_time(PropertyPath::new(p, field), Time::at(0.0))
             .unwrap()
             .value,
         Value::Double(0.0)
@@ -1064,22 +1024,14 @@ fn time_samples_linear_interpolation() {
     // Beyond range: clamp.
     assert_eq!(
         stage
-            .resolve_property_path_at_time(
-                PropertyPath::new(p, field),
-                -1.0,
-                InterpolationType::Linear
-            )
+            .resolve_property_path_at_time(PropertyPath::new(p, field), Time::at(-1.0))
             .unwrap()
             .value,
         Value::Double(0.0)
     );
     assert_eq!(
         stage
-            .resolve_property_path_at_time(
-                PropertyPath::new(p, field),
-                20.0,
-                InterpolationType::Linear
-            )
+            .resolve_property_path_at_time(PropertyPath::new(p, field), Time::at(20.0))
             .unwrap()
             .value,
         Value::Double(100.0)
@@ -1092,8 +1044,6 @@ fn time_samples_linear_interpolation() {
 /// Spec: AOUSD Core §12.5 (interpolation).
 #[test]
 fn time_samples_linear_int_holds() {
-    use layerstack::InterpolationType;
-
     let mut store = InMemoryStore::default();
     let field = store.tokens.intern("x");
     let p = store.path("/P");
@@ -1112,11 +1062,7 @@ fn time_samples_linear_int_holds() {
     // Midpoint: the lower sample holds.
     assert_eq!(
         stage
-            .resolve_property_path_at_time(
-                PropertyPath::new(p, field),
-                5.0,
-                InterpolationType::Linear
-            )
+            .resolve_property_path_at_time(PropertyPath::new(p, field), Time::at(5.0))
             .unwrap()
             .value,
         Value::Int64(0)
@@ -1125,8 +1071,6 @@ fn time_samples_linear_int_holds() {
 
 #[test]
 fn time_samples_non_numeric_falls_back_to_held() {
-    use layerstack::InterpolationType;
-
     let mut store = InMemoryStore::default();
     let field = store.tokens.intern("name");
     let p = store.path("/P");
@@ -1148,11 +1092,7 @@ fn time_samples_non_numeric_falls_back_to_held() {
     // Linear on non-numeric falls back to held (earlier value).
     assert_eq!(
         stage
-            .resolve_property_path_at_time(
-                PropertyPath::new(p, field),
-                3.0,
-                InterpolationType::Linear
-            )
+            .resolve_property_path_at_time(PropertyPath::new(p, field), Time::at(3.0))
             .unwrap()
             .value,
         Value::string("hello")
@@ -1177,7 +1117,13 @@ fn resolve_sampled_property(
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
     stage
-        .resolve_property_path_at_time(property, time, interp)
+        .resolve_property_path_at_time(
+            property,
+            Time::At {
+                code: time,
+                interpolation: interp,
+            },
+        )
         .map(|resolved| resolved.value)
 }
 
@@ -1230,8 +1176,6 @@ fn blocked_time_sample_applies_only_where_it_is_in_effect() {
 
 #[test]
 fn time_samples_override_default_value() {
-    use layerstack::InterpolationType;
-
     let mut store = InMemoryStore::default();
     let field = store.tokens.intern("x");
     let p = store.path("/P");
@@ -1257,11 +1201,7 @@ fn time_samples_override_default_value() {
     // TimeSamples from stronger layer takes priority.
     assert_eq!(
         stage
-            .resolve_property_path_at_time(
-                PropertyPath::new(p, field),
-                1.0,
-                InterpolationType::Held
-            )
+            .resolve_property_path_at_time(PropertyPath::new(p, field), Time::held(1.0))
             .unwrap()
             .value,
         Value::Double(10.0)
@@ -1304,11 +1244,7 @@ fn stronger_default_hides_weaker_time_samples() {
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
     assert_eq!(
         stage
-            .resolve_property_path_at_time(
-                PropertyPath::new(p, field),
-                0.0,
-                InterpolationType::Held
-            )
+            .resolve_property_path_at_time(PropertyPath::new(p, field), Time::held(0.0))
             .map(|r| r.value),
         Some(Value::Double(1.0))
     );

@@ -362,58 +362,24 @@ impl ColorSpaceDefinitionApi<'_> {
             instance: Arc::from(self.instance()),
             attribute,
         };
-        let chroma = |name, default: Option<[f32; 2]>, at: Option<[f32; 2]>| {
-            let value = if time == Time::Default { default } else { at };
+        if matches!(time, Time::At { code, .. } if !code.is_finite()) {
+            return Err(error("time"));
+        }
+        let chroma = |name, value: Option<[f32; 2]>| {
             value
                 .filter(|v| v.iter().all(|v| v.is_finite()))
                 .ok_or_else(|| error(name))
         };
-        let (code, interpolation) = match time {
-            Time::Default => (0., layerstack::InterpolationType::Held),
-            Time::At {
-                code,
-                interpolation,
-            } => {
-                if !code.is_finite() {
-                    return Err(error("time"));
-                }
-                (code, interpolation)
-            }
-        };
         let chromaticities = [
-            chroma(
-                "redChroma",
-                self.red_chroma(),
-                self.red_chroma_at(code, interpolation),
-            )?,
-            chroma(
-                "greenChroma",
-                self.green_chroma(),
-                self.green_chroma_at(code, interpolation),
-            )?,
-            chroma(
-                "blueChroma",
-                self.blue_chroma(),
-                self.blue_chroma_at(code, interpolation),
-            )?,
-            chroma(
-                "whitePoint",
-                self.white_point(),
-                self.white_point_at(code, interpolation),
-            )?,
+            chroma("redChroma", self.red_chroma_at(time))?,
+            chroma("greenChroma", self.green_chroma_at(time))?,
+            chroma("blueChroma", self.blue_chroma_at(time))?,
+            chroma("whitePoint", self.white_point_at(time))?,
         ];
-        let gamma = if time == Time::Default {
-            self.gamma()
-        } else {
-            self.gamma_at(code, interpolation)
-        }
-        .ok_or_else(|| error("gamma"))?;
-        let bias = if time == Time::Default {
-            self.linear_bias()
-        } else {
-            self.linear_bias_at(code, interpolation)
-        }
-        .ok_or_else(|| error("linearBias"))?;
+        let gamma = self.gamma_at(time).ok_or_else(|| error("gamma"))?;
+        let bias = self
+            .linear_bias_at(time)
+            .ok_or_else(|| error("linearBias"))?;
         let mut definition = ColorSpaceDefinition::from_chromaticities(
             self.name().ok_or_else(|| error("name"))?,
             chromaticities,

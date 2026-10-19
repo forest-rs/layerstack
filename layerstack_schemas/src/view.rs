@@ -23,8 +23,8 @@ use core::fmt;
 use alloc::{string::String, vec::Vec};
 
 use layerstack::{
-    InterpolationType, LayerStore, ListPosition, PathId, PropertyKind, PropertyPath, ResolvedValue,
-    Stage, TargetPath, Time, TokenId, TokenInterner, Value,
+    LayerStore, ListPosition, PathId, PropertyKind, PropertyPath, ResolvedValue, Stage, TargetPath,
+    Time, TokenId, TokenInterner, Value,
 };
 
 use crate::edit::SchemaEdit;
@@ -278,28 +278,24 @@ impl<'a> PrimView<'a> {
             .map(|resolved| resolved.value)
     }
 
-    /// [`PrimView::read_value`] at the time code `time`.
+    /// [`PrimView::read_value`] at `time`: at a time code, the strongest
+    /// source's value converted, without retrying weaker opinions; at
+    /// [`Time::Default`], exactly [`PrimView::read_value`].
     ///
     /// Spec: AOUSD Core §12.3.2 (time-based resolution), §12.5
     /// (interpolation).
     pub fn read_value_at<T>(
         &self,
         name: &str,
-        time: f64,
-        interp: InterpolationType,
+        time: Time,
         read: impl Fn(&Value, &'a TokenInterner) -> Option<T>,
     ) -> Option<T> {
         let token = self.scene.token(name)?;
         self.scene
             .stage
-            .read_property(
-                PropertyPath::new(self.path, token),
-                Time::At {
-                    code: time,
-                    interpolation: interp,
-                },
-                |value| read(value, self.scene.store.tokens()),
-            )
+            .read_property(PropertyPath::new(self.path, token), time, |value| {
+                read(value, self.scene.store.tokens())
+            })
             .map(|resolved| resolved.value)
     }
 
@@ -340,14 +336,11 @@ impl<'a> PrimView<'a> {
                     _ => None,
                 }
             }
-            Time::At {
-                code,
-                interpolation,
-            } => {
+            Time::At { .. } => {
                 let token = self.scene.token(name)?;
                 self.scene
                     .stage
-                    .resolve_value_at_time_with_schema(self.path, token, code, interpolation)
+                    .resolve_value_at_time_with_schema(self.path, token, time)
                     .map(|resolved| resolved.value)
             }
         }
@@ -360,7 +353,7 @@ impl<'a> PrimView<'a> {
         if self.property_path(name).is_some_and(|p| {
             self.scene
                 .stage
-                .property_clip_source(p.prim_path(), p.property(), 0.0, InterpolationType::Held)
+                .property_clip_source(p.prim_path(), p.property(), Time::held(0.0))
                 .is_some()
         }) {
             return true;
@@ -448,12 +441,7 @@ impl<'a> PrimView<'a> {
         if self
             .scene
             .stage
-            .property_clip_source(
-                property.prim_path(),
-                property.property(),
-                0.0,
-                InterpolationType::Held,
-            )
+            .property_clip_source(property.prim_path(), property.property(), Time::held(0.0))
             .is_some()
         {
             return true;
@@ -539,23 +527,27 @@ impl PrimEdit {
         self.path
     }
 
-    /// Authors `value` for the attribute `name` (its USD name), as a time
-    /// sample at the time code `time`, or as its default for `None`. An
-    /// attribute no layer authors yet is created as the prim's schemas
-    /// define it: the type and variability of their definition.
+    /// Authors `value` as the default of the attribute `name` (its USD
+    /// name). An attribute no layer authors yet is created as the prim's
+    /// schemas define it: the type and variability of their definition.
     ///
-    /// OpenUSD: `UsdAttribute::Set`, after `UsdPrim::CreateAttribute` for a
-    /// schema attribute.
+    /// OpenUSD: `UsdAttribute::Set` at the default time, after
+    /// `UsdPrim::CreateAttribute` for a schema attribute.
     ///
-    /// Spec: AOUSD Core §12.3 (attribute values).
-    pub fn write_value(
-        &self,
-        edit: &mut SchemaEdit<'_>,
-        name: &str,
-        time: Option<f64>,
-        value: Value,
-    ) {
-        edit.set_value(self.path, name, time, value);
+    /// Spec: AOUSD Core §7.6.4.1.3 (`default`), §12.3 (attribute values).
+    pub fn write_value(&self, edit: &mut SchemaEdit<'_>, name: &str, value: Value) {
+        edit.set_value(self.path, name, None, value);
+    }
+
+    /// [`Self::write_value`] as a time sample at the time code `time`,
+    /// mapped through the edit target.
+    ///
+    /// OpenUSD: `UsdAttribute::Set` at a time code.
+    ///
+    /// Spec: AOUSD Core §7.6.4.1.4 (`timeSamples`), §12.3.2 (time-based
+    /// resolution).
+    pub fn write_value_at(&self, edit: &mut SchemaEdit<'_>, name: &str, time: f64, value: Value) {
+        edit.set_value(self.path, name, Some(time), value);
     }
 
     /// Authors `targets`, stage paths, as the explicit targets of the
@@ -652,12 +644,11 @@ impl<'a> InstanceView<'a> {
     pub fn read_value_at<T>(
         &self,
         template: &str,
-        time: f64,
-        interp: InterpolationType,
+        time: Time,
         read: impl Fn(&Value, &'a TokenInterner) -> Option<T>,
     ) -> Option<T> {
         self.prim
-            .read_value_at(&instance_name(template, self.instance), time, interp, read)
+            .read_value_at(&instance_name(template, self.instance), time, read)
     }
 
     /// Checked typed read of this instance's namespaced attribute.
@@ -718,15 +709,22 @@ impl InstanceEdit {
     /// [`PrimEdit::write_value`] of the instance's attribute `template`:
     /// a multiple-apply schema's property name, whose `__INSTANCE_NAME__`
     /// segment is the instance name (see [`InstanceView::read_value`]).
-    pub fn write_value(
+    pub fn write_value(&self, edit: &mut SchemaEdit<'_>, template: &str, value: Value) {
+        self.prim
+            .write_value(edit, &instance_name(template, &self.instance), value);
+    }
+
+    /// [`PrimEdit::write_value_at`] of the instance's attribute `template`
+    /// (see [`Self::write_value`]).
+    pub fn write_value_at(
         &self,
         edit: &mut SchemaEdit<'_>,
         template: &str,
-        time: Option<f64>,
+        time: f64,
         value: Value,
     ) {
         self.prim
-            .write_value(edit, &instance_name(template, &self.instance), time, value);
+            .write_value_at(edit, &instance_name(template, &self.instance), time, value);
     }
 
     /// [`PrimEdit::write_targets`] of the instance's relationship

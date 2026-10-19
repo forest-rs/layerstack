@@ -125,6 +125,26 @@ impl<T> Resolved<T> {
     }
 }
 
+impl Resolved<ResolvedValue> {
+    /// The value of a scalar or dictionary, as a [`Value`]; `None` for a
+    /// list.
+    pub(crate) fn into_value(self) -> Option<Resolved<Value>> {
+        let value = match self.value {
+            ResolvedValue::Scalar(value) => value,
+            ResolvedValue::Dictionary(entries) => Value::Dictionary(entries),
+            ResolvedValue::TokenList(_)
+            | ResolvedValue::PathList(_)
+            | ResolvedValue::ValueList(_) => {
+                return None;
+            }
+        };
+        Some(Resolved {
+            value,
+            provenance: self.provenance,
+        })
+    }
+}
+
 /// A resolved field value.
 ///
 /// Spec: AOUSD Core §12 (value resolution), including §12.4 for `ListOps`.
@@ -942,18 +962,26 @@ impl Stage {
     /// templates require broader discovery. `max_demands` limits returned uses,
     /// not metadata preparation work. A complete dense clip source masks weaker
     /// sets; stronger sparse or unresolved sets retain conservative discovery
-    /// until their source composition can be established. AOUSD Core §12.3, §12.5.
+    /// until their source composition can be established. Clips hold time
+    /// samples only, so at [`Time::Default`] no clip is consulted and the
+    /// plan is empty. AOUSD Core §12.3, §12.5.
     #[must_use]
     pub fn plan_clip_query(
         &self,
         property: PropertyPath,
-        time: f64,
-        interpolation: InterpolationType,
+        time: Time,
         max_demands: usize,
     ) -> crate::value_clips::ClipQueryPlan {
+        let Time::At {
+            code,
+            interpolation,
+        } = time
+        else {
+            return crate::value_clips::ClipQueryPlan::empty(property, time);
+        };
         self.clips.query_plan(
             property,
-            time,
+            code,
             interpolation,
             max_demands,
             self.prims.get(&property.prim_path()),
@@ -987,17 +1015,24 @@ impl Stage {
     /// Under held interpolation, a stronger dense lower sample may supply the
     /// entire result even when the selected chain reaches a clip at its upper
     /// bracket. Explanations and provenance identify actual contributions.
-    /// Eligible gaps retain their clip source.
+    /// Eligible gaps retain their clip source. `None` at [`Time::Default`]:
+    /// clips hold time samples only.
     #[must_use]
     pub fn property_clip_source(
         &self,
         prim: PathId,
         field: TokenId,
-        time: f64,
-        interp: InterpolationType,
+        time: Time,
     ) -> Option<crate::value_clips::ClipValueSource> {
+        let Time::At {
+            code,
+            interpolation,
+        } = time
+        else {
+            return None;
+        };
         let index = self.prims.get(&prim)?;
-        self.clip_time_opinions(prim, field, index, time, interp)
+        self.clip_time_opinions(prim, field, index, code, interpolation)
             .source
     }
 
@@ -1005,21 +1040,28 @@ impl Stage {
     ///
     /// Preparation errors are in [`Self::clip_issues`]. This separate diagnostic
     /// covers invalid query times and errors encountered while evaluating a
-    /// selected source. It performs no loading or mutation.
+    /// selected source. It performs no loading or mutation. `None` at
+    /// [`Time::Default`], where no clip is evaluated.
     #[must_use]
     pub fn property_clip_evaluation_error(
         &self,
         prim: PathId,
         field: TokenId,
-        time: f64,
-        interp: InterpolationType,
+        time: Time,
     ) -> Option<crate::value_clips::ClipEvalError> {
+        let Time::At {
+            code,
+            interpolation,
+        } = time
+        else {
+            return None;
+        };
         let index = self.prims.get(&prim)?;
         let selected = self
-            .clip_time_opinions(prim, field, index, time, interp)
+            .clip_time_opinions(prim, field, index, code, interpolation)
             .selected?;
         self.clips
-            .evaluation_error_for(prim, field, selected.entry, selected.query, interp)
+            .evaluation_error_for(prim, field, selected.entry, selected.query, interpolation)
     }
 
     // OpenUSD stage.cpp::_ResolveInfoResolver::ProcessLayerAtTime: a site
@@ -2046,20 +2088,8 @@ impl Stage {
         field: TokenId,
         lookup: Lookup,
     ) -> Option<Resolved<Value>> {
-        let resolved = self.resolve_value_by(prim, field, lookup)?;
-        match resolved.value {
-            ResolvedValue::Scalar(v) => Some(Resolved {
-                value: v,
-                provenance: resolved.provenance,
-            }),
-            ResolvedValue::Dictionary(d) => Some(Resolved {
-                value: Value::Dictionary(d),
-                provenance: resolved.provenance,
-            }),
-            ResolvedValue::TokenList(_)
-            | ResolvedValue::PathList(_)
-            | ResolvedValue::ValueList(_) => None,
-        }
+        self.resolve_value_by(prim, field, lookup)
+            .and_then(Resolved::into_value)
     }
 
     /// Resolves a token `ListOp` prim metadata field, such as `apiSchemas`.
@@ -2339,9 +2369,11 @@ impl Stage {
         }
     }
 
-    /// Resolves a time-varying field on a prim at a specific numeric time.
+    /// Resolves a time-varying field on a prim at `time`.
     ///
-    /// Opinions are visited strongest first. For each, authored time samples
+    /// At [`Time::Default`] this is the default value
+    /// ([`Stage::resolve_value`], as a [`Value`]); time samples and splines
+    /// are not consulted. At a time code, opinions are visited strongest first. For each, authored time samples
     /// answer the query; failing those, a spline; failing that, the authored
     /// default. The first opinion that authors any of them wins, so a
     /// stronger default hides weaker samples, and a spec's own samples hide
@@ -2365,10 +2397,22 @@ impl Stage {
         &self,
         prim: PathId,
         field: TokenId,
-        time: f64,
-        interp: InterpolationType,
+        time: Time,
     ) -> Option<Resolved<Value>> {
-        self.resolve_value_at_time_by(prim, field, time, interp, Lookup::Metadata, None)
+        match time {
+            Time::Default => self.resolve_field_by(prim, field, Lookup::Metadata),
+            Time::At {
+                code,
+                interpolation,
+            } => self.resolve_value_at_time_by(
+                prim,
+                field,
+                code,
+                interpolation,
+                Lookup::Metadata,
+                None,
+            ),
+        }
     }
 
     /// Resolves the authored value of `field` at numeric `time`, with
@@ -2720,22 +2764,30 @@ impl Stage {
         )
     }
 
-    /// Resolves a concrete property path at a specific time.
+    /// Resolves a concrete property path at `time`, as
+    /// [`Stage::resolve_value_at_time`] resolves a field: at
+    /// [`Time::Default`], its default value ([`Stage::resolve_field_path`]).
     #[must_use]
     pub fn resolve_property_path_at_time(
         &self,
         property_path: PropertyPath,
-        time: f64,
-        interp: InterpolationType,
+        time: Time,
     ) -> Option<Resolved<Value>> {
-        self.resolve_value_at_time_by(
-            property_path.prim_path(),
-            property_path.property(),
-            time,
-            interp,
-            Lookup::Property,
-            None,
-        )
+        let (prim, name) = (property_path.prim_path(), property_path.property());
+        match time {
+            Time::Default => self.resolve_field_by(prim, name, Lookup::Property),
+            Time::At {
+                code,
+                interpolation,
+            } => self.resolve_value_at_time_by(
+                prim,
+                name,
+                code,
+                interpolation,
+                Lookup::Property,
+                None,
+            ),
+        }
     }
 
     /// Resolves a default and materializes its selected numeric array.
@@ -2756,15 +2808,15 @@ impl Stage {
         }
         Ok(resolved)
     }
-    /// Resolves at time and materializes only selected numeric endpoints.
+    /// Resolves at `time` and materializes only selected numeric endpoints
+    /// (at [`Time::Default`], the selected default).
     /// A malformed selected endpoint is an error, never a weaker fallback.
     pub fn try_resolve_property_path_at_time(
         &self,
         path: PropertyPath,
-        time: f64,
-        interp: InterpolationType,
+        time: Time,
     ) -> Result<Option<Resolved<Value>>, crate::ArrayReadError> {
-        let mut resolved = self.resolve_property_path_at_time(path, time, interp);
+        let mut resolved = self.resolve_property_path_at_time(path, time);
         if let Some(Resolved { value, .. }) = &mut resolved {
             materialize_selected(value)?;
         }
@@ -3647,25 +3699,13 @@ impl Stage {
         prim: PathId,
         field: TokenId,
     ) -> Option<Resolved<Value>> {
-        let resolved = self.resolve_value_with_schema(prim, field)?;
-        match resolved.value {
-            ResolvedValue::Scalar(v) => Some(Resolved {
-                value: v,
-                provenance: resolved.provenance,
-            }),
-            ResolvedValue::Dictionary(d) => Some(Resolved {
-                value: Value::Dictionary(d),
-                provenance: resolved.provenance,
-            }),
-            ResolvedValue::TokenList(_)
-            | ResolvedValue::PathList(_)
-            | ResolvedValue::ValueList(_) => None,
-        }
+        self.resolve_value_with_schema(prim, field)?.into_value()
     }
 
-    /// Resolves a property on a prim at a numeric time with schema fallback.
+    /// Resolves a property on a prim at `time` with schema fallback; at
+    /// [`Time::Default`], [`Stage::resolve_field_with_schema`].
     ///
-    /// Like [`Stage::resolve_property_path_at_time`], with the default-time
+    /// At a time code, like [`Stage::resolve_property_path_at_time`], with the default-time
     /// fallback contract of [`Stage::resolve_value_with_schema`]:
     ///
     /// - When nothing is authored at `time`, or a block is in effect there,
@@ -3693,15 +3733,21 @@ impl Stage {
         &self,
         prim: PathId,
         field: TokenId,
-        time: f64,
-        interp: InterpolationType,
+        time: Time,
     ) -> Option<Resolved<Value>> {
+        let Time::At {
+            code,
+            interpolation,
+        } = time
+        else {
+            return self.resolve_field_with_schema(prim, field);
+        };
         let fallback = self.schema_fallback(prim, field);
         let (resolved, clip_selected) = self.resolve_property_at_time(
             prim,
             field,
-            time,
-            interp,
+            code,
+            interpolation,
             fallback,
             None,
             self.with_provenance,
@@ -4556,22 +4602,14 @@ mod tests {
         let stage = Stage::from_parts(HashMap::from([(prim, index)]), HashMap::new(), false, None);
         assert_eq!(
             stage
-                .resolve_property_path_at_time(
-                    PropertyPath::new(prim, field),
-                    2.5,
-                    InterpolationType::Held
-                )
+                .resolve_property_path_at_time(PropertyPath::new(prim, field), Time::held(2.5))
                 .expect("resolved override")
                 .value,
             array_value(&[9, 2])
         );
         assert_eq!(
             stage
-                .resolve_property_path_at_time(
-                    PropertyPath::new(prim, field),
-                    3.5,
-                    InterpolationType::Held
-                )
+                .resolve_property_path_at_time(PropertyPath::new(prim, field), Time::held(3.5))
                 .expect("resolved reset")
                 .value,
             array_value(&[1, 2])
@@ -4615,7 +4653,7 @@ mod tests {
         let stage = Stage::from_parts(HashMap::from([(prim, index)]), HashMap::new(), false, None);
         for time in [0.0, 1.0] {
             assert_eq!(
-                stage.resolve_value_at_time(prim, field, time, InterpolationType::Held),
+                stage.resolve_value_at_time(prim, field, Time::held(time)),
                 None,
                 "the sampled block must hide the weaker array at t={time}"
             );
@@ -4793,7 +4831,7 @@ mod tests {
         );
         assert_eq!(
             stage
-                .resolve_property_path_at_time(property, 1.0, InterpolationType::Held)
+                .resolve_property_path_at_time(property, Time::held(1.0))
                 .map(|r| r.value),
             authored
         );
@@ -4805,21 +4843,18 @@ mod tests {
         );
         assert_eq!(
             stage
-                .resolve_value_at_time_with_schema(prim, field, 1.0, InterpolationType::Held,)
+                .resolve_value_at_time_with_schema(prim, field, Time::held(1.0),)
                 .map(|r| r.value),
             Some(composed.clone())
         );
         let explained = stage
-            .explain_value_with_schema(prim, field)
+            .explain_value_with_schema(prim, field, Time::Default)
             .expect("authored");
-        assert_eq!(
-            explained.value,
-            Some(ResolvedValue::Scalar(composed.clone()))
-        );
+        assert_eq!(explained.value, Some(composed.clone()));
         assert!(explained.seeded_by_fallback);
         assert_eq!(explained.contributors().count(), 2);
         let explained = stage
-            .explain_value_at_time_with_schema(prim, field, 1.0, InterpolationType::Held)
+            .explain_value_with_schema(prim, field, Time::held(1.0))
             .expect("authored");
         assert_eq!(explained.value, Some(composed));
         assert_eq!(explained.contributors().count(), 2);
@@ -4898,7 +4933,14 @@ mod tests {
         let resolve = |stage: &Stage, prim, field| {
             [InterpolationType::Held, InterpolationType::Linear].map(|interp| {
                 stage
-                    .resolve_value_at_time_with_schema(prim, field, 1.0, interp)
+                    .resolve_value_at_time_with_schema(
+                        prim,
+                        field,
+                        Time::At {
+                            code: 1.0,
+                            interpolation: interp,
+                        },
+                    )
                     .map(|resolved| resolved.value)
             })
         };
@@ -4914,11 +4956,7 @@ mod tests {
         );
         assert_eq!(
             stage
-                .resolve_property_path_at_time(
-                    PropertyPath::new(prim, field),
-                    1.0,
-                    InterpolationType::Held
-                )
+                .resolve_property_path_at_time(PropertyPath::new(prim, field), Time::held(1.0))
                 .map(|resolved| resolved.value),
             Some(array_value(&[7])),
             "without a schema the edit composes over the empty array"
@@ -5027,8 +5065,10 @@ mod tests {
         let default = Some(ResolvedValue::Scalar(Value::TimeCode(13.0)));
         assert_eq!(stage.resolve_property_path(bloom).map(|r| r.value), default);
         assert_eq!(
-            stage.explain_property_value(bloom).and_then(|e| e.value),
-            default
+            stage
+                .explain_property_value(bloom, Time::Default)
+                .and_then(|e| e.value),
+            Some(Value::TimeCode(13.0))
         );
         assert_eq!(
             stage
@@ -5057,13 +5097,13 @@ mod tests {
         let at_25 = Some(Value::Array(vec![Value::TimeCode(11.0)]));
         assert_eq!(
             stage
-                .resolve_property_path_at_time(cues, 25.0, InterpolationType::Held)
+                .resolve_property_path_at_time(cues, Time::held(25.0))
                 .map(|r| r.value),
             at_25
         );
         assert_eq!(
             stage
-                .explain_property_value_at_time(cues, 25.0, InterpolationType::Held)
+                .explain_property_value(cues, Time::held(25.0))
                 .and_then(|e| e.value),
             at_25
         );

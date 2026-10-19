@@ -35,7 +35,7 @@
 //! ```
 //! use layerstack::{
 //!     ArcKind, EditTarget, InMemoryStore, Layer, LayerId, LiveStage, PrimSpec, PropertySpec,
-//!     PropertyType, Reference, StageOptions, Transaction, Value,
+//!     PropertyType, Reference, StageOptions, Time, Transaction, Value,
 //! };
 //!
 //! // `/World/Rock` references `/Rock` of a rock asset, 10 frames later.
@@ -74,7 +74,7 @@
 //!     store.layers[&LayerId(2)].property(asset_spin).unwrap().time_samples.clone()
 //! };
 //! assert_eq!(samples(&store), Some(vec![(4.0, Value::Double(70.0))].into()));
-//! let at_14 = live.stage().resolve_property_path_at_time(spin_path, 14.0, Default::default());
+//! let at_14 = live.stage().resolve_property_path_at_time(spin_path, Time::at(14.0));
 //! assert_eq!(at_14.unwrap().value, Value::Double(70.0));
 //!
 //! // The inverse removes the sample it created.

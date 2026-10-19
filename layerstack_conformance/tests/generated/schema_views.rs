@@ -23,13 +23,10 @@
 //! name, else `a`. Path expressions are left out: USDA save does not
 //! write them yet.
 
-use layerstack::InterpolationType;
+use layerstack::Time;
 use layerstack_schemas::*;
 
 use super::{Harness, Readings, When};
-
-/// How the table reads time samples.
-const HELD: InterpolationType = InterpolationType::Held;
 
 /// Every prim the table authors.
 pub(crate) const PRIMS: &[&str] = &[
@@ -2164,7 +2161,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "colorSpaceDefinition:a:blueChroma",
             When::Sample,
-            v.blue_chroma_at(2.0, HELD),
+            v.blue_chroma_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -2176,7 +2173,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "colorSpaceDefinition:a:gamma",
             When::Sample,
-            v.gamma_at(2.0, HELD),
+            v.gamma_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -2188,7 +2185,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "colorSpaceDefinition:a:greenChroma",
             When::Sample,
-            v.green_chroma_at(2.0, HELD),
+            v.green_chroma_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -2200,7 +2197,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "colorSpaceDefinition:a:linearBias",
             When::Sample,
-            v.linear_bias_at(2.0, HELD),
+            v.linear_bias_at(Time::held(2.0)),
         );
         r.value(prim, "colorSpaceDefinition:a:name", When::Default, v.name());
         r.value(
@@ -2213,7 +2210,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "colorSpaceDefinition:a:redChroma",
             When::Sample,
-            v.red_chroma_at(2.0, HELD),
+            v.red_chroma_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -2225,7 +2222,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "colorSpaceDefinition:a:whitePoint",
             When::Sample,
-            v.white_point_at(2.0, HELD),
+            v.white_point_at(Time::held(2.0)),
         );
     }
     for prim in ["/Fallback_BasisCurves", "/Authored_BasisCurves"] {
@@ -2252,7 +2249,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "backPlate:a:alpha:image",
             When::Sample,
-            v.alpha_image_at(2.0, HELD),
+            v.alpha_image_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -2264,7 +2261,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "backPlate:a:depth:cameraSpaceOffset",
             When::Sample,
-            v.depth_camera_space_offset_at(2.0, HELD),
+            v.depth_camera_space_offset_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -2276,7 +2273,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "backPlate:a:depth:image",
             When::Sample,
-            v.depth_image_at(2.0, HELD),
+            v.depth_image_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -2288,7 +2285,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "backPlate:a:depth:minOffset",
             When::Sample,
-            v.depth_min_offset_at(2.0, HELD),
+            v.depth_min_offset_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -2300,21 +2297,21 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "backPlate:a:depth:normalizingFactor",
             When::Sample,
-            v.depth_normalizing_factor_at(2.0, HELD),
+            v.depth_normalizing_factor_at(Time::held(2.0)),
         );
         r.value(prim, "backPlate:a:image", When::Default, v.image());
         r.value(
             prim,
             "backPlate:a:image",
             When::Sample,
-            v.image_at(2.0, HELD),
+            v.image_at(Time::held(2.0)),
         );
         r.value(prim, "backPlate:a:luma:gain", When::Default, v.luma_gain());
         r.value(
             prim,
             "backPlate:a:luma:gain",
             When::Sample,
-            v.luma_gain_at(2.0, HELD),
+            v.luma_gain_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -2326,14 +2323,14 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "backPlate:a:luma:gamma",
             When::Sample,
-            v.luma_gamma_at(2.0, HELD),
+            v.luma_gamma_at(Time::held(2.0)),
         );
         r.value(prim, "backPlate:a:luma:lift", When::Default, v.luma_lift());
         r.value(
             prim,
             "backPlate:a:luma:lift",
             When::Sample,
-            v.luma_lift_at(2.0, HELD),
+            v.luma_lift_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -2352,7 +2349,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "backPlate:a:plateVisibility",
             When::Sample,
-            v.plate_visibility_at(2.0, HELD)
+            v.plate_visibility_at(Time::held(2.0))
                 .as_ref()
                 .map(usd_geom::BackPlateApiPlateVisibility::as_str),
         );
@@ -2366,7 +2363,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "backPlate:a:rotateXYZ:tweak",
             When::Sample,
-            v.rotate_xyz_tweak_at(2.0, HELD),
+            v.rotate_xyz_tweak_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -2378,7 +2375,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "backPlate:a:scale:tweak",
             When::Sample,
-            v.scale_tweak_at(2.0, HELD),
+            v.scale_tweak_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -2390,7 +2387,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "backPlate:a:translate:tweak",
             When::Sample,
-            v.translate_tweak_at(2.0, HELD),
+            v.translate_tweak_at(Time::held(2.0)),
         );
     }
     for prim in ["/Fallback_BasisCurves", "/Authored_BasisCurves"] {
@@ -2424,7 +2421,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         let v = usd_geom::Boundable::new(scene, h.path(prim)).expect("a Boundable at the prim");
         let _ = v.edit();
         r.value(prim, "extent", When::Default, v.extent());
-        r.value(prim, "extent", When::Sample, v.extent_at(2.0, HELD));
+        r.value(prim, "extent", When::Sample, v.extent_at(Time::held(2.0)));
     }
     for prim in ["/Fallback_Camera", "/Authored_Camera"] {
         let v = usd_geom::Camera::new(scene, h.path(prim)).expect("a Camera at the prim");
@@ -2434,30 +2431,35 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "clippingPlanes",
             When::Sample,
-            v.clipping_planes_at(2.0, HELD),
+            v.clipping_planes_at(Time::held(2.0)),
         );
         r.value(prim, "clippingRange", When::Default, v.clipping_range());
         r.value(
             prim,
             "clippingRange",
             When::Sample,
-            v.clipping_range_at(2.0, HELD),
+            v.clipping_range_at(Time::held(2.0)),
         );
         r.value(prim, "exposure", When::Default, v.exposure());
-        r.value(prim, "exposure", When::Sample, v.exposure_at(2.0, HELD));
+        r.value(
+            prim,
+            "exposure",
+            When::Sample,
+            v.exposure_at(Time::held(2.0)),
+        );
         r.value(prim, "exposure:fStop", When::Default, v.exposure_f_stop());
         r.value(
             prim,
             "exposure:fStop",
             When::Sample,
-            v.exposure_f_stop_at(2.0, HELD),
+            v.exposure_f_stop_at(Time::held(2.0)),
         );
         r.value(prim, "exposure:iso", When::Default, v.exposure_iso());
         r.value(
             prim,
             "exposure:iso",
             When::Sample,
-            v.exposure_iso_at(2.0, HELD),
+            v.exposure_iso_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -2469,31 +2471,31 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "exposure:responsivity",
             When::Sample,
-            v.exposure_responsivity_at(2.0, HELD),
+            v.exposure_responsivity_at(Time::held(2.0)),
         );
         r.value(prim, "exposure:time", When::Default, v.exposure_time());
         r.value(
             prim,
             "exposure:time",
             When::Sample,
-            v.exposure_time_at(2.0, HELD),
+            v.exposure_time_at(Time::held(2.0)),
         );
         r.value(prim, "focalLength", When::Default, v.focal_length());
         r.value(
             prim,
             "focalLength",
             When::Sample,
-            v.focal_length_at(2.0, HELD),
+            v.focal_length_at(Time::held(2.0)),
         );
         r.value(prim, "focusDistance", When::Default, v.focus_distance());
         r.value(
             prim,
             "focusDistance",
             When::Sample,
-            v.focus_distance_at(2.0, HELD),
+            v.focus_distance_at(Time::held(2.0)),
         );
         r.value(prim, "fStop", When::Default, v.f_stop());
-        r.value(prim, "fStop", When::Sample, v.f_stop_at(2.0, HELD));
+        r.value(prim, "fStop", When::Sample, v.f_stop_at(Time::held(2.0)));
         r.value(
             prim,
             "horizontalAperture",
@@ -2504,7 +2506,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "horizontalAperture",
             When::Sample,
-            v.horizontal_aperture_at(2.0, HELD),
+            v.horizontal_aperture_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -2516,7 +2518,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "horizontalApertureOffset",
             When::Sample,
-            v.horizontal_aperture_offset_at(2.0, HELD),
+            v.horizontal_aperture_offset_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -2531,7 +2533,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "projection",
             When::Sample,
-            v.projection_at(2.0, HELD)
+            v.projection_at(Time::held(2.0))
                 .as_ref()
                 .map(usd_geom::CameraProjection::as_str),
         );
@@ -2540,14 +2542,14 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "shutter:close",
             When::Sample,
-            v.shutter_close_at(2.0, HELD),
+            v.shutter_close_at(Time::held(2.0)),
         );
         r.value(prim, "shutter:open", When::Default, v.shutter_open());
         r.value(
             prim,
             "shutter:open",
             When::Sample,
-            v.shutter_open_at(2.0, HELD),
+            v.shutter_open_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -2568,7 +2570,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "verticalAperture",
             When::Sample,
-            v.vertical_aperture_at(2.0, HELD),
+            v.vertical_aperture_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -2580,7 +2582,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "verticalApertureOffset",
             When::Sample,
-            v.vertical_aperture_offset_at(2.0, HELD),
+            v.vertical_aperture_offset_at(Time::held(2.0)),
         );
     }
     for prim in ["/Fallback_Capsule", "/Authored_Capsule"] {
@@ -2594,9 +2596,9 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         );
         r.allowed(prim, "axis", usd_geom::CapsuleAxis::TOKENS);
         r.value(prim, "height", When::Default, v.height());
-        r.value(prim, "height", When::Sample, v.height_at(2.0, HELD));
+        r.value(prim, "height", When::Sample, v.height_at(Time::held(2.0)));
         r.value(prim, "radius", When::Default, v.radius());
-        r.value(prim, "radius", When::Sample, v.radius_at(2.0, HELD));
+        r.value(prim, "radius", When::Sample, v.radius_at(Time::held(2.0)));
     }
     for prim in ["/Fallback_Capsule_1", "/Authored_Capsule_1"] {
         let v = usd_geom::Capsule1::new(scene, h.path(prim)).expect("a Capsule_1 at the prim");
@@ -2609,16 +2611,21 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         );
         r.allowed(prim, "axis", usd_geom::Capsule1Axis::TOKENS);
         r.value(prim, "height", When::Default, v.height());
-        r.value(prim, "height", When::Sample, v.height_at(2.0, HELD));
+        r.value(prim, "height", When::Sample, v.height_at(Time::held(2.0)));
         r.value(prim, "radiusBottom", When::Default, v.radius_bottom());
         r.value(
             prim,
             "radiusBottom",
             When::Sample,
-            v.radius_bottom_at(2.0, HELD),
+            v.radius_bottom_at(Time::held(2.0)),
         );
         r.value(prim, "radiusTop", When::Default, v.radius_top());
-        r.value(prim, "radiusTop", When::Sample, v.radius_top_at(2.0, HELD));
+        r.value(
+            prim,
+            "radiusTop",
+            When::Sample,
+            v.radius_top_at(Time::held(2.0)),
+        );
     }
     for prim in ["/Fallback_Cone", "/Authored_Cone"] {
         let v = usd_geom::Cone::new(scene, h.path(prim)).expect("a Cone at the prim");
@@ -2631,15 +2638,15 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         );
         r.allowed(prim, "axis", usd_geom::ConeAxis::TOKENS);
         r.value(prim, "height", When::Default, v.height());
-        r.value(prim, "height", When::Sample, v.height_at(2.0, HELD));
+        r.value(prim, "height", When::Sample, v.height_at(Time::held(2.0)));
         r.value(prim, "radius", When::Default, v.radius());
-        r.value(prim, "radius", When::Sample, v.radius_at(2.0, HELD));
+        r.value(prim, "radius", When::Sample, v.radius_at(Time::held(2.0)));
     }
     for prim in ["/Fallback_Cube", "/Authored_Cube"] {
         let v = usd_geom::Cube::new(scene, h.path(prim)).expect("a Cube at the prim");
         let _ = v.edit();
         r.value(prim, "size", When::Default, v.size());
-        r.value(prim, "size", When::Sample, v.size_at(2.0, HELD));
+        r.value(prim, "size", When::Sample, v.size_at(Time::held(2.0)));
     }
     for prim in ["/Fallback_BasisCurves", "/Authored_BasisCurves"] {
         let v = usd_geom::Curves::new(scene, h.path(prim)).expect("a Curves at the prim");
@@ -2654,10 +2661,10 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "curveVertexCounts",
             When::Sample,
-            v.curve_vertex_counts_at(2.0, HELD),
+            v.curve_vertex_counts_at(Time::held(2.0)),
         );
         r.value(prim, "widths", When::Default, v.widths());
-        r.value(prim, "widths", When::Sample, v.widths_at(2.0, HELD));
+        r.value(prim, "widths", When::Sample, v.widths_at(Time::held(2.0)));
     }
     for prim in ["/Fallback_Cylinder", "/Authored_Cylinder"] {
         let v = usd_geom::Cylinder::new(scene, h.path(prim)).expect("a Cylinder at the prim");
@@ -2670,9 +2677,9 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         );
         r.allowed(prim, "axis", usd_geom::CylinderAxis::TOKENS);
         r.value(prim, "height", When::Default, v.height());
-        r.value(prim, "height", When::Sample, v.height_at(2.0, HELD));
+        r.value(prim, "height", When::Sample, v.height_at(Time::held(2.0)));
         r.value(prim, "radius", When::Default, v.radius());
-        r.value(prim, "radius", When::Sample, v.radius_at(2.0, HELD));
+        r.value(prim, "radius", When::Sample, v.radius_at(Time::held(2.0)));
     }
     for prim in ["/Fallback_Cylinder_1", "/Authored_Cylinder_1"] {
         let v = usd_geom::Cylinder1::new(scene, h.path(prim)).expect("a Cylinder_1 at the prim");
@@ -2685,16 +2692,21 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         );
         r.allowed(prim, "axis", usd_geom::Cylinder1Axis::TOKENS);
         r.value(prim, "height", When::Default, v.height());
-        r.value(prim, "height", When::Sample, v.height_at(2.0, HELD));
+        r.value(prim, "height", When::Sample, v.height_at(Time::held(2.0)));
         r.value(prim, "radiusBottom", When::Default, v.radius_bottom());
         r.value(
             prim,
             "radiusBottom",
             When::Sample,
-            v.radius_bottom_at(2.0, HELD),
+            v.radius_bottom_at(Time::held(2.0)),
         );
         r.value(prim, "radiusTop", When::Default, v.radius_top());
-        r.value(prim, "radiusTop", When::Sample, v.radius_top_at(2.0, HELD));
+        r.value(
+            prim,
+            "radiusTop",
+            When::Sample,
+            v.radius_top_at(Time::held(2.0)),
+        );
     }
     for prim in ["/Fallback_GeomModelAPI", "/Authored_GeomModelAPI"] {
         let v =
@@ -2729,7 +2741,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "model:cardTextureXNeg",
             When::Sample,
-            v.model_card_texture_x_neg_at(2.0, HELD),
+            v.model_card_texture_x_neg_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -2741,7 +2753,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "model:cardTextureXPos",
             When::Sample,
-            v.model_card_texture_x_pos_at(2.0, HELD),
+            v.model_card_texture_x_pos_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -2753,7 +2765,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "model:cardTextureYNeg",
             When::Sample,
-            v.model_card_texture_y_neg_at(2.0, HELD),
+            v.model_card_texture_y_neg_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -2765,7 +2777,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "model:cardTextureYPos",
             When::Sample,
-            v.model_card_texture_y_pos_at(2.0, HELD),
+            v.model_card_texture_y_pos_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -2777,7 +2789,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "model:cardTextureZNeg",
             When::Sample,
-            v.model_card_texture_z_neg_at(2.0, HELD),
+            v.model_card_texture_z_neg_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -2789,7 +2801,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "model:cardTextureZPos",
             When::Sample,
-            v.model_card_texture_z_pos_at(2.0, HELD),
+            v.model_card_texture_z_pos_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -2838,7 +2850,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         r.allowed(prim, "elementType", usd_geom::GeomSubsetElementType::TOKENS);
         r.value(prim, "familyName", When::Default, v.family_name());
         r.value(prim, "indices", When::Default, v.indices());
-        r.value(prim, "indices", When::Sample, v.indices_at(2.0, HELD));
+        r.value(prim, "indices", When::Sample, v.indices_at(Time::held(2.0)));
     }
     for prim in ["/Fallback_BasisCurves", "/Authored_BasisCurves"] {
         let v = usd_geom::Gprim::new(scene, h.path(prim)).expect("a Gprim at the prim");
@@ -2863,7 +2875,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "primvars:displayColor",
             When::Sample,
-            v.display_color_at(2.0, HELD),
+            v.display_color_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -2875,7 +2887,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "primvars:displayOpacity",
             When::Sample,
-            v.display_opacity_at(2.0, HELD),
+            v.display_opacity_at(Time::held(2.0)),
         );
     }
     for prim in ["/Fallback_HermiteCurves", "/Authored_HermiteCurves"] {
@@ -2883,7 +2895,12 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             usd_geom::HermiteCurves::new(scene, h.path(prim)).expect("a HermiteCurves at the prim");
         let _ = v.edit();
         r.value(prim, "tangents", When::Default, v.tangents());
-        r.value(prim, "tangents", When::Sample, v.tangents_at(2.0, HELD));
+        r.value(
+            prim,
+            "tangents",
+            When::Sample,
+            v.tangents_at(Time::held(2.0)),
+        );
     }
     for prim in ["/Fallback_BasisCurves", "/Authored_BasisCurves"] {
         let v = usd_geom::Imageable::new(scene, h.path(prim)).expect("a Imageable at the prim");
@@ -2909,7 +2926,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "visibility",
             When::Sample,
-            v.visibility_at(2.0, HELD)
+            v.visibility_at(Time::held(2.0))
                 .as_ref()
                 .map(usd_geom::ImageableVisibility::as_str),
         );
@@ -2922,7 +2939,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "cornerIndices",
             When::Sample,
-            v.corner_indices_at(2.0, HELD),
+            v.corner_indices_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -2934,21 +2951,21 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "cornerSharpnesses",
             When::Sample,
-            v.corner_sharpnesses_at(2.0, HELD),
+            v.corner_sharpnesses_at(Time::held(2.0)),
         );
         r.value(prim, "creaseIndices", When::Default, v.crease_indices());
         r.value(
             prim,
             "creaseIndices",
             When::Sample,
-            v.crease_indices_at(2.0, HELD),
+            v.crease_indices_at(Time::held(2.0)),
         );
         r.value(prim, "creaseLengths", When::Default, v.crease_lengths());
         r.value(
             prim,
             "creaseLengths",
             When::Sample,
-            v.crease_lengths_at(2.0, HELD),
+            v.crease_lengths_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -2960,7 +2977,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "creaseSharpnesses",
             When::Sample,
-            v.crease_sharpnesses_at(2.0, HELD),
+            v.crease_sharpnesses_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -2979,7 +2996,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "faceVaryingLinearInterpolation",
             When::Sample,
-            v.face_varying_linear_interpolation_at(2.0, HELD)
+            v.face_varying_linear_interpolation_at(Time::held(2.0))
                 .as_ref()
                 .map(usd_geom::MeshFaceVaryingLinearInterpolation::as_str),
         );
@@ -2993,7 +3010,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "faceVertexCounts",
             When::Sample,
-            v.face_vertex_counts_at(2.0, HELD),
+            v.face_vertex_counts_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -3005,14 +3022,14 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "faceVertexIndices",
             When::Sample,
-            v.face_vertex_indices_at(2.0, HELD),
+            v.face_vertex_indices_at(Time::held(2.0)),
         );
         r.value(prim, "holeIndices", When::Default, v.hole_indices());
         r.value(
             prim,
             "holeIndices",
             When::Sample,
-            v.hole_indices_at(2.0, HELD),
+            v.hole_indices_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -3031,7 +3048,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "interpolateBoundary",
             When::Sample,
-            v.interpolate_boundary_at(2.0, HELD)
+            v.interpolate_boundary_at(Time::held(2.0))
                 .as_ref()
                 .map(usd_geom::MeshInterpolateBoundary::as_str),
         );
@@ -3065,7 +3082,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "triangleSubdivisionRule",
             When::Sample,
-            v.triangle_subdivision_rule_at(2.0, HELD)
+            v.triangle_subdivision_rule_at(Time::held(2.0))
                 .as_ref()
                 .map(usd_geom::MeshTriangleSubdivisionRule::as_str),
         );
@@ -3083,7 +3100,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "motion:blurScale",
             When::Sample,
-            v.motion_blur_scale_at(2.0, HELD),
+            v.motion_blur_scale_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -3095,7 +3112,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "motion:nonlinearSampleCount",
             When::Sample,
-            v.nonlinear_sample_count_at(2.0, HELD),
+            v.nonlinear_sample_count_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -3107,25 +3124,25 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "motion:velocityScale",
             When::Sample,
-            v.velocity_scale_at(2.0, HELD),
+            v.velocity_scale_at(Time::held(2.0)),
         );
     }
     for prim in ["/Fallback_NurbsCurves", "/Authored_NurbsCurves"] {
         let v = usd_geom::NurbsCurves::new(scene, h.path(prim)).expect("a NurbsCurves at the prim");
         let _ = v.edit();
         r.value(prim, "knots", When::Default, v.knots());
-        r.value(prim, "knots", When::Sample, v.knots_at(2.0, HELD));
+        r.value(prim, "knots", When::Sample, v.knots_at(Time::held(2.0)));
         r.value(prim, "order", When::Default, v.order());
-        r.value(prim, "order", When::Sample, v.order_at(2.0, HELD));
+        r.value(prim, "order", When::Sample, v.order_at(Time::held(2.0)));
         r.value(prim, "pointWeights", When::Default, v.point_weights());
         r.value(
             prim,
             "pointWeights",
             When::Sample,
-            v.point_weights_at(2.0, HELD),
+            v.point_weights_at(Time::held(2.0)),
         );
         r.value(prim, "ranges", When::Default, v.ranges());
-        r.value(prim, "ranges", When::Sample, v.ranges_at(2.0, HELD));
+        r.value(prim, "ranges", When::Sample, v.ranges_at(Time::held(2.0)));
     }
     for prim in ["/Fallback_NurbsPatch", "/Authored_NurbsPatch"] {
         let v = usd_geom::NurbsPatch::new(scene, h.path(prim)).expect("a NurbsPatch at the prim");
@@ -3135,7 +3152,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "pointWeights",
             When::Sample,
-            v.point_weights_at(2.0, HELD),
+            v.point_weights_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -3147,14 +3164,14 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "trimCurve:counts",
             When::Sample,
-            v.trim_curve_counts_at(2.0, HELD),
+            v.trim_curve_counts_at(Time::held(2.0)),
         );
         r.value(prim, "trimCurve:knots", When::Default, v.trim_curve_knots());
         r.value(
             prim,
             "trimCurve:knots",
             When::Sample,
-            v.trim_curve_knots_at(2.0, HELD),
+            v.trim_curve_knots_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -3166,7 +3183,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "trimCurve:orders",
             When::Sample,
-            v.trim_curve_orders_at(2.0, HELD),
+            v.trim_curve_orders_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -3178,7 +3195,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "trimCurve:points",
             When::Sample,
-            v.trim_curve_points_at(2.0, HELD),
+            v.trim_curve_points_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -3190,7 +3207,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "trimCurve:ranges",
             When::Sample,
-            v.trim_curve_ranges_at(2.0, HELD),
+            v.trim_curve_ranges_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -3202,7 +3219,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "trimCurve:vertexCounts",
             When::Sample,
-            v.trim_curve_vertex_counts_at(2.0, HELD),
+            v.trim_curve_vertex_counts_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -3212,17 +3229,17 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         );
         r.allowed(prim, "uForm", usd_geom::NurbsPatchUForm::TOKENS);
         r.value(prim, "uKnots", When::Default, v.u_knots());
-        r.value(prim, "uKnots", When::Sample, v.u_knots_at(2.0, HELD));
+        r.value(prim, "uKnots", When::Sample, v.u_knots_at(Time::held(2.0)));
         r.value(prim, "uOrder", When::Default, v.u_order());
-        r.value(prim, "uOrder", When::Sample, v.u_order_at(2.0, HELD));
+        r.value(prim, "uOrder", When::Sample, v.u_order_at(Time::held(2.0)));
         r.value(prim, "uRange", When::Default, v.u_range());
-        r.value(prim, "uRange", When::Sample, v.u_range_at(2.0, HELD));
+        r.value(prim, "uRange", When::Sample, v.u_range_at(Time::held(2.0)));
         r.value(prim, "uVertexCount", When::Default, v.u_vertex_count());
         r.value(
             prim,
             "uVertexCount",
             When::Sample,
-            v.u_vertex_count_at(2.0, HELD),
+            v.u_vertex_count_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -3232,17 +3249,17 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         );
         r.allowed(prim, "vForm", usd_geom::NurbsPatchVForm::TOKENS);
         r.value(prim, "vKnots", When::Default, v.v_knots());
-        r.value(prim, "vKnots", When::Sample, v.v_knots_at(2.0, HELD));
+        r.value(prim, "vKnots", When::Sample, v.v_knots_at(Time::held(2.0)));
         r.value(prim, "vOrder", When::Default, v.v_order());
-        r.value(prim, "vOrder", When::Sample, v.v_order_at(2.0, HELD));
+        r.value(prim, "vOrder", When::Sample, v.v_order_at(Time::held(2.0)));
         r.value(prim, "vRange", When::Default, v.v_range());
-        r.value(prim, "vRange", When::Sample, v.v_range_at(2.0, HELD));
+        r.value(prim, "vRange", When::Sample, v.v_range_at(Time::held(2.0)));
         r.value(prim, "vVertexCount", When::Default, v.v_vertex_count());
         r.value(
             prim,
             "vVertexCount",
             When::Sample,
-            v.v_vertex_count_at(2.0, HELD),
+            v.v_vertex_count_at(Time::held(2.0)),
         );
     }
     for prim in ["/Fallback_Plane", "/Authored_Plane"] {
@@ -3256,9 +3273,9 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         );
         r.allowed(prim, "axis", usd_geom::PlaneAxis::TOKENS);
         r.value(prim, "length", When::Default, v.length());
-        r.value(prim, "length", When::Sample, v.length_at(2.0, HELD));
+        r.value(prim, "length", When::Sample, v.length_at(Time::held(2.0)));
         r.value(prim, "width", When::Default, v.width());
-        r.value(prim, "width", When::Sample, v.width_at(2.0, HELD));
+        r.value(prim, "width", When::Sample, v.width_at(Time::held(2.0)));
     }
     for prim in ["/Fallback_BasisCurves", "/Authored_BasisCurves"] {
         let v = usd_geom::PointBased::new(scene, h.path(prim)).expect("a PointBased at the prim");
@@ -3268,14 +3285,19 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "accelerations",
             When::Sample,
-            v.accelerations_at(2.0, HELD),
+            v.accelerations_at(Time::held(2.0)),
         );
         r.value(prim, "normals", When::Default, v.normals());
-        r.value(prim, "normals", When::Sample, v.normals_at(2.0, HELD));
+        r.value(prim, "normals", When::Sample, v.normals_at(Time::held(2.0)));
         r.value(prim, "points", When::Default, v.points());
-        r.value(prim, "points", When::Sample, v.points_at(2.0, HELD));
+        r.value(prim, "points", When::Sample, v.points_at(Time::held(2.0)));
         r.value(prim, "velocities", When::Default, v.velocities());
-        r.value(prim, "velocities", When::Sample, v.velocities_at(2.0, HELD));
+        r.value(
+            prim,
+            "velocities",
+            When::Sample,
+            v.velocities_at(Time::held(2.0)),
+        );
     }
     for prim in ["/Fallback_PointInstancer", "/Authored_PointInstancer"] {
         let v = usd_geom::PointInstancer::new(scene, h.path(prim))
@@ -3286,7 +3308,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "accelerations",
             When::Sample,
-            v.accelerations_at(2.0, HELD),
+            v.accelerations_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -3298,53 +3320,63 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "angularVelocities",
             When::Sample,
-            v.angular_velocities_at(2.0, HELD),
+            v.angular_velocities_at(Time::held(2.0)),
         );
         r.value(prim, "ids", When::Default, v.ids());
-        r.value(prim, "ids", When::Sample, v.ids_at(2.0, HELD));
+        r.value(prim, "ids", When::Sample, v.ids_at(Time::held(2.0)));
         r.value(prim, "invisibleIds", When::Default, v.invisible_ids());
         r.value(
             prim,
             "invisibleIds",
             When::Sample,
-            v.invisible_ids_at(2.0, HELD),
+            v.invisible_ids_at(Time::held(2.0)),
         );
         r.value(prim, "orientations", When::Default, v.orientations());
         r.value(
             prim,
             "orientations",
             When::Sample,
-            v.orientations_at(2.0, HELD),
+            v.orientations_at(Time::held(2.0)),
         );
         r.value(prim, "orientationsf", When::Default, v.orientationsf());
         r.value(
             prim,
             "orientationsf",
             When::Sample,
-            v.orientationsf_at(2.0, HELD),
+            v.orientationsf_at(Time::held(2.0)),
         );
         r.value(prim, "positions", When::Default, v.positions());
-        r.value(prim, "positions", When::Sample, v.positions_at(2.0, HELD));
+        r.value(
+            prim,
+            "positions",
+            When::Sample,
+            v.positions_at(Time::held(2.0)),
+        );
         r.value(prim, "protoIndices", When::Default, v.proto_indices());
         r.value(
             prim,
             "protoIndices",
             When::Sample,
-            v.proto_indices_at(2.0, HELD),
+            v.proto_indices_at(Time::held(2.0)),
         );
         r.targets(prim, "prototypes", &v.prototypes());
         r.value(prim, "scales", When::Default, v.scales());
-        r.value(prim, "scales", When::Sample, v.scales_at(2.0, HELD));
+        r.value(prim, "scales", When::Sample, v.scales_at(Time::held(2.0)));
         r.value(prim, "velocities", When::Default, v.velocities());
-        r.value(prim, "velocities", When::Sample, v.velocities_at(2.0, HELD));
+        r.value(
+            prim,
+            "velocities",
+            When::Sample,
+            v.velocities_at(Time::held(2.0)),
+        );
     }
     for prim in ["/Fallback_Points", "/Authored_Points"] {
         let v = usd_geom::Points::new(scene, h.path(prim)).expect("a Points at the prim");
         let _ = v.edit();
         r.value(prim, "ids", When::Default, v.ids());
-        r.value(prim, "ids", When::Sample, v.ids_at(2.0, HELD));
+        r.value(prim, "ids", When::Sample, v.ids_at(Time::held(2.0)));
         r.value(prim, "widths", When::Default, v.widths());
-        r.value(prim, "widths", When::Sample, v.widths_at(2.0, HELD));
+        r.value(prim, "widths", When::Sample, v.widths_at(Time::held(2.0)));
     }
     for prim in ["/Fallback_Scope", "/Authored_Scope"] {
         let v = usd_geom::Scope::new(scene, h.path(prim)).expect("a Scope at the prim");
@@ -3354,7 +3386,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         let v = usd_geom::Sphere::new(scene, h.path(prim)).expect("a Sphere at the prim");
         let _ = v.edit();
         r.value(prim, "radius", When::Default, v.radius());
-        r.value(prim, "radius", When::Sample, v.radius_at(2.0, HELD));
+        r.value(prim, "radius", When::Sample, v.radius_at(Time::held(2.0)));
     }
     for prim in ["/Fallback_TetMesh", "/Authored_TetMesh"] {
         let v = usd_geom::TetMesh::new(scene, h.path(prim)).expect("a TetMesh at the prim");
@@ -3369,7 +3401,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "surfaceFaceVertexIndices",
             When::Sample,
-            v.surface_face_vertex_indices_at(2.0, HELD),
+            v.surface_face_vertex_indices_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -3381,7 +3413,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "tetVertexIndices",
             When::Sample,
-            v.tet_vertex_indices_at(2.0, HELD),
+            v.tet_vertex_indices_at(Time::held(2.0)),
         );
     }
     for prim in ["/Fallback_VisibilityAPI", "/Authored_VisibilityAPI"] {
@@ -3462,17 +3494,22 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "outputs:displacement",
             When::Sample,
-            v.displacement_at(2.0, HELD),
+            v.displacement_at(Time::held(2.0)),
         );
         r.value(prim, "outputs:surface", When::Default, v.surface());
         r.value(
             prim,
             "outputs:surface",
             When::Sample,
-            v.surface_at(2.0, HELD),
+            v.surface_at(Time::held(2.0)),
         );
         r.value(prim, "outputs:volume", When::Default, v.volume());
-        r.value(prim, "outputs:volume", When::Sample, v.volume_at(2.0, HELD));
+        r.value(
+            prim,
+            "outputs:volume",
+            When::Sample,
+            v.volume_at(Time::held(2.0)),
+        );
     }
     for prim in [
         "/Fallback_MaterialBindingAPI",
@@ -3520,29 +3557,49 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             usd_lux::CylinderLight::new(scene, h.path(prim)).expect("a CylinderLight at the prim");
         let _ = v.edit();
         r.value(prim, "inputs:length", When::Default, v.length());
-        r.value(prim, "inputs:length", When::Sample, v.length_at(2.0, HELD));
+        r.value(
+            prim,
+            "inputs:length",
+            When::Sample,
+            v.length_at(Time::held(2.0)),
+        );
         r.value(prim, "inputs:radius", When::Default, v.radius());
-        r.value(prim, "inputs:radius", When::Sample, v.radius_at(2.0, HELD));
+        r.value(
+            prim,
+            "inputs:radius",
+            When::Sample,
+            v.radius_at(Time::held(2.0)),
+        );
         r.value(prim, "treatAsLine", When::Default, v.treat_as_line());
         r.value(
             prim,
             "treatAsLine",
             When::Sample,
-            v.treat_as_line_at(2.0, HELD),
+            v.treat_as_line_at(Time::held(2.0)),
         );
     }
     for prim in ["/Fallback_DiskLight", "/Authored_DiskLight"] {
         let v = usd_lux::DiskLight::new(scene, h.path(prim)).expect("a DiskLight at the prim");
         let _ = v.edit();
         r.value(prim, "inputs:radius", When::Default, v.radius());
-        r.value(prim, "inputs:radius", When::Sample, v.radius_at(2.0, HELD));
+        r.value(
+            prim,
+            "inputs:radius",
+            When::Sample,
+            v.radius_at(Time::held(2.0)),
+        );
     }
     for prim in ["/Fallback_DistantLight", "/Authored_DistantLight"] {
         let v =
             usd_lux::DistantLight::new(scene, h.path(prim)).expect("a DistantLight at the prim");
         let _ = v.edit();
         r.value(prim, "inputs:angle", When::Default, v.angle());
-        r.value(prim, "inputs:angle", When::Sample, v.angle_at(2.0, HELD));
+        r.value(
+            prim,
+            "inputs:angle",
+            When::Sample,
+            v.angle_at(Time::held(2.0)),
+        );
     }
     for prim in ["/Fallback_DomeLight", "/Authored_DomeLight"] {
         let v = usd_lux::DomeLight::new(scene, h.path(prim)).expect("a DomeLight at the prim");
@@ -3552,14 +3609,14 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "guideRadius",
             When::Sample,
-            v.guide_radius_at(2.0, HELD),
+            v.guide_radius_at(Time::held(2.0)),
         );
         r.value(prim, "inputs:texture:file", When::Default, v.texture_file());
         r.value(
             prim,
             "inputs:texture:file",
             When::Sample,
-            v.texture_file_at(2.0, HELD),
+            v.texture_file_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -3578,7 +3635,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "inputs:texture:format",
             When::Sample,
-            v.texture_format_at(2.0, HELD)
+            v.texture_format_at(Time::held(2.0))
                 .as_ref()
                 .map(usd_lux::DomeLightTextureFormat::as_str),
         );
@@ -3592,14 +3649,14 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "guideRadius",
             When::Sample,
-            v.guide_radius_at(2.0, HELD),
+            v.guide_radius_at(Time::held(2.0)),
         );
         r.value(prim, "inputs:texture:file", When::Default, v.texture_file());
         r.value(
             prim,
             "inputs:texture:file",
             When::Sample,
-            v.texture_file_at(2.0, HELD),
+            v.texture_file_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -3618,7 +3675,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "inputs:texture:format",
             When::Sample,
-            v.texture_format_at(2.0, HELD)
+            v.texture_format_at(Time::held(2.0))
                 .as_ref()
                 .map(usd_lux::DomeLight1TextureFormat::as_str),
         );
@@ -3643,7 +3700,12 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         let v = usd_lux::LightApi::get(scene, h.path(prim)).expect("a LightAPI at the prim");
         let _ = v.edit();
         r.value(prim, "inputs:color", When::Default, v.color());
-        r.value(prim, "inputs:color", When::Sample, v.color_at(2.0, HELD));
+        r.value(
+            prim,
+            "inputs:color",
+            When::Sample,
+            v.color_at(Time::held(2.0)),
+        );
         r.value(
             prim,
             "inputs:colorTemperature",
@@ -3654,14 +3716,14 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "inputs:colorTemperature",
             When::Sample,
-            v.color_temperature_at(2.0, HELD),
+            v.color_temperature_at(Time::held(2.0)),
         );
         r.value(prim, "inputs:diffuse", When::Default, v.diffuse());
         r.value(
             prim,
             "inputs:diffuse",
             When::Sample,
-            v.diffuse_at(2.0, HELD),
+            v.diffuse_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -3673,35 +3735,35 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "inputs:enableColorTemperature",
             When::Sample,
-            v.enable_color_temperature_at(2.0, HELD),
+            v.enable_color_temperature_at(Time::held(2.0)),
         );
         r.value(prim, "inputs:exposure", When::Default, v.exposure());
         r.value(
             prim,
             "inputs:exposure",
             When::Sample,
-            v.exposure_at(2.0, HELD),
+            v.exposure_at(Time::held(2.0)),
         );
         r.value(prim, "inputs:intensity", When::Default, v.intensity());
         r.value(
             prim,
             "inputs:intensity",
             When::Sample,
-            v.intensity_at(2.0, HELD),
+            v.intensity_at(Time::held(2.0)),
         );
         r.value(prim, "inputs:normalize", When::Default, v.normalize());
         r.value(
             prim,
             "inputs:normalize",
             When::Sample,
-            v.normalize_at(2.0, HELD),
+            v.normalize_at(Time::held(2.0)),
         );
         r.value(prim, "inputs:specular", When::Default, v.specular());
         r.value(
             prim,
             "inputs:specular",
             When::Sample,
-            v.specular_at(2.0, HELD),
+            v.specular_at(Time::held(2.0)),
         );
         r.targets(prim, "light:filters", &v.filters());
         r.value(
@@ -3746,7 +3808,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "lightList:cacheBehavior",
             When::Sample,
-            v.light_list_cache_behavior_at(2.0, HELD)
+            v.light_list_cache_behavior_at(Time::held(2.0))
                 .as_ref()
                 .map(usd_lux::LightListApiLightListCacheBehavior::as_str),
         );
@@ -3772,7 +3834,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "lightList:cacheBehavior",
             When::Sample,
-            v.light_list_cache_behavior_at(2.0, HELD)
+            v.light_list_cache_behavior_at(Time::held(2.0))
                 .as_ref()
                 .map(usd_lux::ListApiLightListCacheBehavior::as_str),
         );
@@ -3804,24 +3866,44 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         let v = usd_lux::PortalLight::new(scene, h.path(prim)).expect("a PortalLight at the prim");
         let _ = v.edit();
         r.value(prim, "inputs:height", When::Default, v.height());
-        r.value(prim, "inputs:height", When::Sample, v.height_at(2.0, HELD));
+        r.value(
+            prim,
+            "inputs:height",
+            When::Sample,
+            v.height_at(Time::held(2.0)),
+        );
         r.value(prim, "inputs:width", When::Default, v.width());
-        r.value(prim, "inputs:width", When::Sample, v.width_at(2.0, HELD));
+        r.value(
+            prim,
+            "inputs:width",
+            When::Sample,
+            v.width_at(Time::held(2.0)),
+        );
     }
     for prim in ["/Fallback_RectLight", "/Authored_RectLight"] {
         let v = usd_lux::RectLight::new(scene, h.path(prim)).expect("a RectLight at the prim");
         let _ = v.edit();
         r.value(prim, "inputs:height", When::Default, v.height());
-        r.value(prim, "inputs:height", When::Sample, v.height_at(2.0, HELD));
+        r.value(
+            prim,
+            "inputs:height",
+            When::Sample,
+            v.height_at(Time::held(2.0)),
+        );
         r.value(prim, "inputs:texture:file", When::Default, v.texture_file());
         r.value(
             prim,
             "inputs:texture:file",
             When::Sample,
-            v.texture_file_at(2.0, HELD),
+            v.texture_file_at(Time::held(2.0)),
         );
         r.value(prim, "inputs:width", When::Default, v.width());
-        r.value(prim, "inputs:width", When::Sample, v.width_at(2.0, HELD));
+        r.value(
+            prim,
+            "inputs:width",
+            When::Sample,
+            v.width_at(Time::held(2.0)),
+        );
     }
     for prim in ["/Fallback_ShadowAPI", "/Authored_ShadowAPI"] {
         let v = usd_lux::ShadowApi::get(scene, h.path(prim)).expect("a ShadowAPI at the prim");
@@ -3831,7 +3913,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "inputs:shadow:color",
             When::Sample,
-            v.shadow_color_at(2.0, HELD),
+            v.shadow_color_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -3843,7 +3925,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "inputs:shadow:distance",
             When::Sample,
-            v.shadow_distance_at(2.0, HELD),
+            v.shadow_distance_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -3855,7 +3937,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "inputs:shadow:enable",
             When::Sample,
-            v.shadow_enable_at(2.0, HELD),
+            v.shadow_enable_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -3867,7 +3949,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "inputs:shadow:falloff",
             When::Sample,
-            v.shadow_falloff_at(2.0, HELD),
+            v.shadow_falloff_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -3879,7 +3961,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "inputs:shadow:falloffGamma",
             When::Sample,
-            v.shadow_falloff_gamma_at(2.0, HELD),
+            v.shadow_falloff_gamma_at(Time::held(2.0)),
         );
     }
     for prim in ["/Fallback_ShapingAPI", "/Authored_ShapingAPI"] {
@@ -3895,7 +3977,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "inputs:shaping:cone:angle",
             When::Sample,
-            v.shaping_cone_angle_at(2.0, HELD),
+            v.shaping_cone_angle_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -3907,7 +3989,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "inputs:shaping:cone:softness",
             When::Sample,
-            v.shaping_cone_softness_at(2.0, HELD),
+            v.shaping_cone_softness_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -3919,7 +4001,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "inputs:shaping:focus",
             When::Sample,
-            v.shaping_focus_at(2.0, HELD),
+            v.shaping_focus_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -3931,7 +4013,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "inputs:shaping:focusTint",
             When::Sample,
-            v.shaping_focus_tint_at(2.0, HELD),
+            v.shaping_focus_tint_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -3943,7 +4025,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "inputs:shaping:ies:angleScale",
             When::Sample,
-            v.shaping_ies_angle_scale_at(2.0, HELD),
+            v.shaping_ies_angle_scale_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -3955,7 +4037,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "inputs:shaping:ies:file",
             When::Sample,
-            v.shaping_ies_file_at(2.0, HELD),
+            v.shaping_ies_file_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -3967,20 +4049,25 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "inputs:shaping:ies:normalize",
             When::Sample,
-            v.shaping_ies_normalize_at(2.0, HELD),
+            v.shaping_ies_normalize_at(Time::held(2.0)),
         );
     }
     for prim in ["/Fallback_SphereLight", "/Authored_SphereLight"] {
         let v = usd_lux::SphereLight::new(scene, h.path(prim)).expect("a SphereLight at the prim");
         let _ = v.edit();
         r.value(prim, "inputs:radius", When::Default, v.radius());
-        r.value(prim, "inputs:radius", When::Sample, v.radius_at(2.0, HELD));
+        r.value(
+            prim,
+            "inputs:radius",
+            When::Sample,
+            v.radius_at(Time::held(2.0)),
+        );
         r.value(prim, "treatAsPoint", When::Default, v.treat_as_point());
         r.value(
             prim,
             "treatAsPoint",
             When::Sample,
-            v.treat_as_point_at(2.0, HELD),
+            v.treat_as_point_at(Time::held(2.0)),
         );
     }
     for prim in ["/Fallback_VolumeLightAPI", "/Authored_VolumeLightAPI"] {
@@ -4010,19 +4097,24 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "blendShapeWeights",
             When::Sample,
-            v.blend_shape_weights_at(2.0, HELD),
+            v.blend_shape_weights_at(Time::held(2.0)),
         );
         r.value(prim, "joints", When::Default, v.joints());
         r.value(prim, "rotations", When::Default, v.rotations());
-        r.value(prim, "rotations", When::Sample, v.rotations_at(2.0, HELD));
+        r.value(
+            prim,
+            "rotations",
+            When::Sample,
+            v.rotations_at(Time::held(2.0)),
+        );
         r.value(prim, "scales", When::Default, v.scales());
-        r.value(prim, "scales", When::Sample, v.scales_at(2.0, HELD));
+        r.value(prim, "scales", When::Sample, v.scales_at(Time::held(2.0)));
         r.value(prim, "translations", When::Default, v.translations());
         r.value(
             prim,
             "translations",
             When::Sample,
-            v.translations_at(2.0, HELD),
+            v.translations_at(Time::held(2.0)),
         );
     }
     for prim in ["/Fallback_SkelBindingAPI", "/Authored_SkelBindingAPI"] {
@@ -4039,7 +4131,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "primvars:skel:geomBindTransform",
             When::Sample,
-            v.geom_bind_transform_at(2.0, HELD),
+            v.geom_bind_transform_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -4051,7 +4143,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "primvars:skel:jointIndices",
             When::Sample,
-            v.joint_indices_at(2.0, HELD),
+            v.joint_indices_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -4063,7 +4155,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "primvars:skel:jointWeights",
             When::Sample,
-            v.joint_weights_at(2.0, HELD),
+            v.joint_weights_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -4121,7 +4213,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "physics:collisionEnabled",
             When::Sample,
-            v.collision_enabled_at(2.0, HELD),
+            v.collision_enabled_at(Time::held(2.0)),
         );
         r.targets(prim, "physics:simulationOwner", &v.simulation_owner());
     }
@@ -4143,7 +4235,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "physics:invertFilteredGroups",
             When::Sample,
-            v.invert_filtered_groups_at(2.0, HELD),
+            v.invert_filtered_groups_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -4155,7 +4247,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "physics:mergeGroup",
             When::Sample,
-            v.merge_group_name_at(2.0, HELD),
+            v.merge_group_name_at(Time::held(2.0)),
         );
     }
     for prim in [
@@ -4170,14 +4262,14 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "physics:maxDistance",
             When::Sample,
-            v.max_distance_at(2.0, HELD),
+            v.max_distance_at(Time::held(2.0)),
         );
         r.value(prim, "physics:minDistance", When::Default, v.min_distance());
         r.value(
             prim,
             "physics:minDistance",
             When::Sample,
-            v.min_distance_at(2.0, HELD),
+            v.min_distance_at(Time::held(2.0)),
         );
     }
     for prim in ["/Fallback_PhysicsDriveAPI", "/Authored_PhysicsDriveAPI"] {
@@ -4195,7 +4287,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "drive:a:physics:damping",
             When::Sample,
-            v.damping_at(2.0, HELD),
+            v.damping_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -4207,7 +4299,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "drive:a:physics:maxForce",
             When::Sample,
-            v.max_force_at(2.0, HELD),
+            v.max_force_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -4219,7 +4311,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "drive:a:physics:stiffness",
             When::Sample,
-            v.stiffness_at(2.0, HELD),
+            v.stiffness_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -4231,7 +4323,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "drive:a:physics:targetPosition",
             When::Sample,
-            v.target_position_at(2.0, HELD),
+            v.target_position_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -4243,7 +4335,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "drive:a:physics:targetVelocity",
             When::Sample,
-            v.target_velocity_at(2.0, HELD),
+            v.target_velocity_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -4284,14 +4376,14 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "physics:breakForce",
             When::Sample,
-            v.break_force_at(2.0, HELD),
+            v.break_force_at(Time::held(2.0)),
         );
         r.value(prim, "physics:breakTorque", When::Default, v.break_torque());
         r.value(
             prim,
             "physics:breakTorque",
             When::Sample,
-            v.break_torque_at(2.0, HELD),
+            v.break_torque_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -4303,7 +4395,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "physics:collisionEnabled",
             When::Sample,
-            v.collision_enabled_at(2.0, HELD),
+            v.collision_enabled_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -4321,35 +4413,35 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "physics:jointEnabled",
             When::Sample,
-            v.joint_enabled_at(2.0, HELD),
+            v.joint_enabled_at(Time::held(2.0)),
         );
         r.value(prim, "physics:localPos0", When::Default, v.local_pos0());
         r.value(
             prim,
             "physics:localPos0",
             When::Sample,
-            v.local_pos0_at(2.0, HELD),
+            v.local_pos0_at(Time::held(2.0)),
         );
         r.value(prim, "physics:localPos1", When::Default, v.local_pos1());
         r.value(
             prim,
             "physics:localPos1",
             When::Sample,
-            v.local_pos1_at(2.0, HELD),
+            v.local_pos1_at(Time::held(2.0)),
         );
         r.value(prim, "physics:localRot0", When::Default, v.local_rot0());
         r.value(
             prim,
             "physics:localRot0",
             When::Sample,
-            v.local_rot0_at(2.0, HELD),
+            v.local_rot0_at(Time::held(2.0)),
         );
         r.value(prim, "physics:localRot1", When::Default, v.local_rot1());
         r.value(
             prim,
             "physics:localRot1",
             When::Sample,
-            v.local_rot1_at(2.0, HELD),
+            v.local_rot1_at(Time::held(2.0)),
         );
     }
     for prim in ["/Fallback_PhysicsLimitAPI", "/Authored_PhysicsLimitAPI"] {
@@ -4367,14 +4459,14 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "limit:a:physics:high",
             When::Sample,
-            v.high_at(2.0, HELD),
+            v.high_at(Time::held(2.0)),
         );
         r.value(prim, "limit:a:physics:low", When::Default, v.low());
         r.value(
             prim,
             "limit:a:physics:low",
             When::Sample,
-            v.low_at(2.0, HELD),
+            v.low_at(Time::held(2.0)),
         );
     }
     for prim in ["/Fallback_PhysicsMassAPI", "/Authored_PhysicsMassAPI"] {
@@ -4391,14 +4483,14 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "physics:centerOfMass",
             When::Sample,
-            v.center_of_mass_at(2.0, HELD),
+            v.center_of_mass_at(Time::held(2.0)),
         );
         r.value(prim, "physics:density", When::Default, v.density());
         r.value(
             prim,
             "physics:density",
             When::Sample,
-            v.density_at(2.0, HELD),
+            v.density_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -4410,10 +4502,15 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "physics:diagonalInertia",
             When::Sample,
-            v.diagonal_inertia_at(2.0, HELD),
+            v.diagonal_inertia_at(Time::held(2.0)),
         );
         r.value(prim, "physics:mass", When::Default, v.mass());
-        r.value(prim, "physics:mass", When::Sample, v.mass_at(2.0, HELD));
+        r.value(
+            prim,
+            "physics:mass",
+            When::Sample,
+            v.mass_at(Time::held(2.0)),
+        );
         r.value(
             prim,
             "physics:principalAxes",
@@ -4424,7 +4521,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "physics:principalAxes",
             When::Sample,
-            v.principal_axes_at(2.0, HELD),
+            v.principal_axes_at(Time::held(2.0)),
         );
     }
     for prim in [
@@ -4439,7 +4536,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "physics:density",
             When::Sample,
-            v.density_at(2.0, HELD),
+            v.density_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -4451,14 +4548,14 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "physics:dynamicFriction",
             When::Sample,
-            v.dynamic_friction_at(2.0, HELD),
+            v.dynamic_friction_at(Time::held(2.0)),
         );
         r.value(prim, "physics:restitution", When::Default, v.restitution());
         r.value(
             prim,
             "physics:restitution",
             When::Sample,
-            v.restitution_at(2.0, HELD),
+            v.restitution_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -4470,7 +4567,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "physics:staticFriction",
             When::Sample,
-            v.static_friction_at(2.0, HELD),
+            v.static_friction_at(Time::held(2.0)),
         );
     }
     for prim in [
@@ -4519,14 +4616,14 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "physics:lowerLimit",
             When::Sample,
-            v.lower_limit_at(2.0, HELD),
+            v.lower_limit_at(Time::held(2.0)),
         );
         r.value(prim, "physics:upperLimit", When::Default, v.upper_limit());
         r.value(
             prim,
             "physics:upperLimit",
             When::Sample,
-            v.upper_limit_at(2.0, HELD),
+            v.upper_limit_at(Time::held(2.0)),
         );
     }
     for prim in [
@@ -4554,14 +4651,14 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "physics:lowerLimit",
             When::Sample,
-            v.lower_limit_at(2.0, HELD),
+            v.lower_limit_at(Time::held(2.0)),
         );
         r.value(prim, "physics:upperLimit", When::Default, v.upper_limit());
         r.value(
             prim,
             "physics:upperLimit",
             When::Sample,
-            v.upper_limit_at(2.0, HELD),
+            v.upper_limit_at(Time::held(2.0)),
         );
     }
     for prim in [
@@ -4581,7 +4678,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "physics:angularVelocity",
             When::Sample,
-            v.angular_velocity_at(2.0, HELD),
+            v.angular_velocity_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -4593,7 +4690,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "physics:kinematicEnabled",
             When::Sample,
-            v.kinematic_enabled_at(2.0, HELD),
+            v.kinematic_enabled_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -4605,7 +4702,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "physics:rigidBodyEnabled",
             When::Sample,
-            v.rigid_body_enabled_at(2.0, HELD),
+            v.rigid_body_enabled_at(Time::held(2.0)),
         );
         r.targets(prim, "physics:simulationOwner", &v.simulation_owner());
         r.value(
@@ -4619,7 +4716,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "physics:velocity",
             When::Sample,
-            v.velocity_at(2.0, HELD),
+            v.velocity_at(Time::held(2.0)),
         );
     }
     for prim in ["/Fallback_PhysicsScene", "/Authored_PhysicsScene"] {
@@ -4636,7 +4733,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "physics:gravityDirection",
             When::Sample,
-            v.gravity_direction_at(2.0, HELD),
+            v.gravity_direction_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -4648,7 +4745,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "physics:gravityMagnitude",
             When::Sample,
-            v.gravity_magnitude_at(2.0, HELD),
+            v.gravity_magnitude_at(Time::held(2.0)),
         );
     }
     for prim in [
@@ -4681,7 +4778,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "physics:coneAngle0Limit",
             When::Sample,
-            v.cone_angle0_limit_at(2.0, HELD),
+            v.cone_angle0_limit_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -4693,7 +4790,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "physics:coneAngle1Limit",
             When::Sample,
-            v.cone_angle1_limit_at(2.0, HELD),
+            v.cone_angle1_limit_at(Time::held(2.0)),
         );
     }
     for prim in ["/Fallback_Field3DAsset", "/Authored_Field3DAsset"] {
@@ -4705,7 +4802,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "fieldPurpose",
             When::Sample,
-            v.field_purpose_at(2.0, HELD),
+            v.field_purpose_at(Time::held(2.0)),
         );
     }
     for prim in ["/Fallback_Field3DAsset", "/Authored_Field3DAsset"] {
@@ -4733,7 +4830,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "fieldClass",
             When::Sample,
-            v.field_class_at(2.0, HELD)
+            v.field_class_at(Time::held(2.0))
                 .as_ref()
                 .map(usd_vol::OpenVDBAssetFieldClass::as_str),
         );
@@ -4823,9 +4920,19 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             .expect("a ParticleFieldOpacityAttributeAPI at the prim");
         let _ = v.edit();
         r.value(prim, "opacities", When::Default, v.opacities());
-        r.value(prim, "opacities", When::Sample, v.opacities_at(2.0, HELD));
+        r.value(
+            prim,
+            "opacities",
+            When::Sample,
+            v.opacities_at(Time::held(2.0)),
+        );
         r.value(prim, "opacitiesh", When::Default, v.opacitiesh());
-        r.value(prim, "opacitiesh", When::Sample, v.opacitiesh_at(2.0, HELD));
+        r.value(
+            prim,
+            "opacitiesh",
+            When::Sample,
+            v.opacitiesh_at(Time::held(2.0)),
+        );
     }
     for prim in [
         "/Fallback_ParticleFieldOrientationAttributeAPI",
@@ -4839,14 +4946,14 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "orientations",
             When::Sample,
-            v.orientations_at(2.0, HELD),
+            v.orientations_at(Time::held(2.0)),
         );
         r.value(prim, "orientationsh", When::Default, v.orientationsh());
         r.value(
             prim,
             "orientationsh",
             When::Sample,
-            v.orientationsh_at(2.0, HELD),
+            v.orientationsh_at(Time::held(2.0)),
         );
     }
     for prim in [
@@ -4857,9 +4964,19 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             .expect("a ParticleFieldPositionAttributeAPI at the prim");
         let _ = v.edit();
         r.value(prim, "positions", When::Default, v.positions());
-        r.value(prim, "positions", When::Sample, v.positions_at(2.0, HELD));
+        r.value(
+            prim,
+            "positions",
+            When::Sample,
+            v.positions_at(Time::held(2.0)),
+        );
         r.value(prim, "positionsh", When::Default, v.positionsh());
-        r.value(prim, "positionsh", When::Sample, v.positionsh_at(2.0, HELD));
+        r.value(
+            prim,
+            "positionsh",
+            When::Sample,
+            v.positionsh_at(Time::held(2.0)),
+        );
     }
     for prim in [
         "/Fallback_ParticleFieldPositionBaseAPI",
@@ -4885,9 +5002,9 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             .expect("a ParticleFieldScaleAttributeAPI at the prim");
         let _ = v.edit();
         r.value(prim, "scales", When::Default, v.scales());
-        r.value(prim, "scales", When::Sample, v.scales_at(2.0, HELD));
+        r.value(prim, "scales", When::Sample, v.scales_at(Time::held(2.0)));
         r.value(prim, "scalesh", When::Default, v.scalesh());
-        r.value(prim, "scalesh", When::Sample, v.scalesh_at(2.0, HELD));
+        r.value(prim, "scalesh", When::Sample, v.scalesh_at(Time::held(2.0)));
     }
     for prim in [
         "/Fallback_ParticleFieldSphericalHarmonicsAttributeAPI",
@@ -4906,7 +5023,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "radiance:sphericalHarmonicsCoefficients",
             When::Sample,
-            v.radiance_spherical_harmonics_coefficients_at(2.0, HELD),
+            v.radiance_spherical_harmonics_coefficients_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -4918,7 +5035,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "radiance:sphericalHarmonicsCoefficientsh",
             When::Sample,
-            v.radiance_spherical_harmonics_coefficientsh_at(2.0, HELD),
+            v.radiance_spherical_harmonics_coefficientsh_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -4940,19 +5057,29 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "fieldDataType",
             When::Sample,
-            v.field_data_type_at(2.0, HELD),
+            v.field_data_type_at(Time::held(2.0)),
         );
         r.value(prim, "fieldIndex", When::Default, v.field_index());
         r.value(
             prim,
             "fieldIndex",
             When::Sample,
-            v.field_index_at(2.0, HELD),
+            v.field_index_at(Time::held(2.0)),
         );
         r.value(prim, "fieldName", When::Default, v.field_name());
-        r.value(prim, "fieldName", When::Sample, v.field_name_at(2.0, HELD));
+        r.value(
+            prim,
+            "fieldName",
+            When::Sample,
+            v.field_name_at(Time::held(2.0)),
+        );
         r.value(prim, "filePath", When::Default, v.file_path());
-        r.value(prim, "filePath", When::Sample, v.file_path_at(2.0, HELD));
+        r.value(
+            prim,
+            "filePath",
+            When::Sample,
+            v.file_path_at(Time::held(2.0)),
+        );
         r.value(
             prim,
             "vectorDataRoleHint",
@@ -4970,7 +5097,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "vectorDataRoleHint",
             When::Sample,
-            v.vector_data_role_hint_at(2.0, HELD)
+            v.vector_data_role_hint_at(Time::held(2.0))
                 .as_ref()
                 .map(usd_vol::VolumeFieldAssetVectorDataRoleHint::as_str),
         );
@@ -4999,7 +5126,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "productName",
             When::Sample,
-            v.product_name_at(2.0, HELD),
+            v.product_name_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -5109,7 +5236,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         r.value(prim, "blendThresholds", When::Default, v.blend_thresholds());
         r.targets(prim, "boundingVolume", &v.bounding_volume());
         r.value(prim, "center", When::Default, v.center());
-        r.value(prim, "center", When::Sample, v.center_at(2.0, HELD));
+        r.value(prim, "center", When::Sample, v.center_at(Time::held(2.0)));
         r.value(prim, "thresholds", When::Default, v.thresholds());
     }
     for prim in [
@@ -5135,7 +5262,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "lod:override:index",
             When::Sample,
-            v.lod_override_index_at(2.0, HELD),
+            v.lod_override_index_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -5154,7 +5281,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "lod:override:mode",
             When::Sample,
-            v.lod_override_mode_at(2.0, HELD)
+            v.lod_override_mode_at(Time::held(2.0))
                 .as_ref()
                 .map(usd_lod::LODOverrideApiLodOverrideMode::as_str),
         );
@@ -5172,7 +5299,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "lod:default:index",
             When::Sample,
-            v.lod_default_index_at(2.0, HELD),
+            v.lod_default_index_at(Time::held(2.0)),
         );
         r.targets(prim, "lod:heuristics", &v.lod_heuristics());
     }
@@ -5186,7 +5313,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         r.value(prim, "blendThresholds", When::Default, v.blend_thresholds());
         r.targets(prim, "boundingVolume", &v.bounding_volume());
         r.value(prim, "extent", When::Default, v.extent());
-        r.value(prim, "extent", When::Sample, v.extent_at(2.0, HELD));
+        r.value(prim, "extent", When::Sample, v.extent_at(Time::held(2.0)));
         r.value(
             prim,
             "projectionMethod",
@@ -5222,14 +5349,14 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "accessibility:a:description",
             When::Sample,
-            v.description_at(2.0, HELD),
+            v.description_at(Time::held(2.0)),
         );
         r.value(prim, "accessibility:a:label", When::Default, v.label());
         r.value(
             prim,
             "accessibility:a:label",
             When::Sample,
-            v.label_at(2.0, HELD),
+            v.label_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -5248,7 +5375,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "accessibility:a:priority",
             When::Sample,
-            v.priority_at(2.0, HELD)
+            v.priority_at(Time::held(2.0))
                 .as_ref()
                 .map(usd_ui::AccessibilityApiPriority::as_str),
         );
@@ -5313,21 +5440,21 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "outputs:ri:displacement",
             When::Sample,
-            v.displacement_at(2.0, HELD),
+            v.displacement_at(Time::held(2.0)),
         );
         r.value(prim, "outputs:ri:surface", When::Default, v.surface());
         r.value(
             prim,
             "outputs:ri:surface",
             When::Sample,
-            v.surface_at(2.0, HELD),
+            v.surface_at(Time::held(2.0)),
         );
         r.value(prim, "outputs:ri:volume", When::Default, v.volume());
         r.value(
             prim,
             "outputs:ri:volume",
             When::Sample,
-            v.volume_at(2.0, HELD),
+            v.volume_at(Time::held(2.0)),
         );
     }
     for prim in ["/Fallback_RiSplineAPI", "/Authored_RiSplineAPI"] {
@@ -5356,7 +5483,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "primvars:hdGp:proceduralType",
             When::Sample,
-            v.procedural_type_at(2.0, HELD),
+            v.procedural_type_at(Time::held(2.0)),
         );
         r.value(
             prim,
@@ -5368,7 +5495,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "proceduralSystem",
             When::Sample,
-            v.procedural_system_at(2.0, HELD),
+            v.procedural_system_at(Time::held(2.0)),
         );
     }
     for prim in [
@@ -5406,7 +5533,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         r.value(prim, "endTime", When::Default, v.end_time());
         r.value(prim, "filePath", When::Default, v.file_path());
         r.value(prim, "gain", When::Default, v.gain());
-        r.value(prim, "gain", When::Sample, v.gain_at(2.0, HELD));
+        r.value(prim, "gain", When::Sample, v.gain_at(Time::held(2.0)));
         r.value(prim, "mediaOffset", When::Default, v.media_offset());
         r.value(
             prim,
@@ -5440,7 +5567,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "proceduralSystem",
             When::Sample,
-            v.procedural_system_at(2.0, HELD),
+            v.procedural_system_at(Time::held(2.0)),
         );
     }
     for prim in [
@@ -5461,7 +5588,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "semantics:labels:a",
             When::Sample,
-            v.labels_at(2.0, HELD),
+            v.labels_at(Time::held(2.0)),
         );
     }
     for prim in ["/Fallback_ClaimsAPI", "/Authored_ClaimsAPI"] {
@@ -5485,7 +5612,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             prim,
             "config:mtlx:version",
             When::Sample,
-            v.config_mtlx_version_at(2.0, HELD),
+            v.config_mtlx_version_at(Time::held(2.0)),
         );
     }
 }

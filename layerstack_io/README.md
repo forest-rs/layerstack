@@ -71,8 +71,7 @@ Encoded files are still read completely. Package members, including nested
 archives, share checked ranges into one immutable encoded owner. Decoder units are not memory bytes or a scene-wide memory limit.
 Run `cargo run -p layerstack_examples --bin lazy_io` for a complete example.
 
-For a time-specific clip read, call `Stage::plan_clip_query(property, time,
-interpolation, max_demands)` to inspect manifest, active-interval and interpolation
+For a time-specific clip read, call `Stage::plan_clip_query(property, Time::At { code: time, interpolation }, max_demands)` to inspect manifest, active-interval and interpolation
 bound demands without I/O. `StageDocument::prepare_clip_query` explicitly loads
 and replans under a request budget. Inspect `plan.is_complete()`, failures and
 budget exhaustion before a checked value read; a complete plan can describe a

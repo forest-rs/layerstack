@@ -21,9 +21,9 @@ use std::hint::black_box;
 
 use criterion::{Criterion, criterion_group, criterion_main};
 use layerstack::{
-    ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex, FieldValue, InMemoryStore,
-    InterpolationType, Layer, LayerId, ListOp, PrimSpec, PropertyPath, PropertySpec, PropertyType,
-    Stage, StageOptions, SublayerEntry, TokenId, Value,
+    ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex, FieldValue, InMemoryStore, Layer,
+    LayerId, ListOp, PrimSpec, PropertyPath, PropertySpec, PropertyType, Stage, StageOptions,
+    SublayerEntry, Time, TokenId, Value,
 };
 
 const LAYERS: u64 = 20;
@@ -151,11 +151,12 @@ fn bench_resolve(c: &mut Criterion) {
     });
     group.bench_function("sparse_array_linear", |b| {
         b.iter(|| {
-            black_box(stage.resolve_property_path_at_time(
-                black_box(scene.animated),
-                black_box(2.5),
-                InterpolationType::Linear,
-            ))
+            black_box(
+                stage.resolve_property_path_at_time(
+                    black_box(scene.animated),
+                    Time::at(black_box(2.5)),
+                ),
+            )
         });
     });
     group.bench_function("scalar_default", |b| {
@@ -163,11 +164,10 @@ fn bench_resolve(c: &mut Criterion) {
     });
     group.bench_function("scalar_at_time", |b| {
         b.iter(|| {
-            black_box(stage.resolve_property_path_at_time(
-                black_box(scene.size),
-                black_box(2.5),
-                InterpolationType::Linear,
-            ))
+            black_box(
+                stage
+                    .resolve_property_path_at_time(black_box(scene.size), Time::at(black_box(2.5))),
+            )
         });
     });
     group.bench_function("dictionary", |b| {
@@ -185,8 +185,7 @@ fn bench_resolve(c: &mut Criterion) {
             b.iter(|| {
                 black_box(scene.stage.resolve_property_path_at_time(
                     black_box(scene.animated),
-                    black_box(2.5),
-                    InterpolationType::Linear,
+                    Time::at(black_box(2.5)),
                 ))
             });
         });
@@ -200,11 +199,12 @@ fn bench_resolve(c: &mut Criterion) {
     });
     group.bench_function("sparse_program_linear", |b| {
         b.iter(|| {
-            black_box(scene.stage.resolve_property_path_at_time(
-                black_box(scene.animated),
-                black_box(2.5),
-                InterpolationType::Linear,
-            ))
+            black_box(
+                scene.stage.resolve_property_path_at_time(
+                    black_box(scene.animated),
+                    Time::at(black_box(2.5)),
+                ),
+            )
         });
     });
 

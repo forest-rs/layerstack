@@ -77,19 +77,10 @@ impl<'a> PreviewSurface<'a> {
     pub fn clearcoat(&self) -> Option<f32> {
         self.read_value("inputs:clearcoat", crate::value::read_float)
     }
-    /// The composed `inputs:clearcoat` at a numeric time.
+    /// The composed `inputs:clearcoat` at `time`.
     #[must_use]
-    pub fn clearcoat_at(
-        &self,
-        time: f64,
-        interpolation: layerstack::InterpolationType,
-    ) -> Option<f32> {
-        self.read_value_at(
-            "inputs:clearcoat",
-            time,
-            interpolation,
-            crate::value::read_float,
-        )
+    pub fn clearcoat_at(&self, time: layerstack::Time) -> Option<f32> {
+        self.read_value_at("inputs:clearcoat", time, crate::value::read_float)
     }
     /// The `inputs:clearcoat` default in the node definition, separate from authored values.
     #[must_use]
@@ -106,19 +97,10 @@ impl<'a> PreviewSurface<'a> {
     pub fn clearcoat_roughness(&self) -> Option<f32> {
         self.read_value("inputs:clearcoatRoughness", crate::value::read_float)
     }
-    /// The composed `inputs:clearcoatRoughness` at a numeric time.
+    /// The composed `inputs:clearcoatRoughness` at `time`.
     #[must_use]
-    pub fn clearcoat_roughness_at(
-        &self,
-        time: f64,
-        interpolation: layerstack::InterpolationType,
-    ) -> Option<f32> {
-        self.read_value_at(
-            "inputs:clearcoatRoughness",
-            time,
-            interpolation,
-            crate::value::read_float,
-        )
+    pub fn clearcoat_roughness_at(&self, time: layerstack::Time) -> Option<f32> {
+        self.read_value_at("inputs:clearcoatRoughness", time, crate::value::read_float)
     }
     /// The `inputs:clearcoatRoughness` default in the node definition, separate from authored values.
     #[must_use]
@@ -135,19 +117,10 @@ impl<'a> PreviewSurface<'a> {
     pub fn diffuse_color(&self) -> Option<[f32; 3]> {
         self.read_value("inputs:diffuseColor", crate::value::read_float3)
     }
-    /// The composed `inputs:diffuseColor` at a numeric time.
+    /// The composed `inputs:diffuseColor` at `time`.
     #[must_use]
-    pub fn diffuse_color_at(
-        &self,
-        time: f64,
-        interpolation: layerstack::InterpolationType,
-    ) -> Option<[f32; 3]> {
-        self.read_value_at(
-            "inputs:diffuseColor",
-            time,
-            interpolation,
-            crate::value::read_float3,
-        )
+    pub fn diffuse_color_at(&self, time: layerstack::Time) -> Option<[f32; 3]> {
+        self.read_value_at("inputs:diffuseColor", time, crate::value::read_float3)
     }
     /// The `inputs:diffuseColor` default in the node definition, separate from authored values.
     #[must_use]
@@ -164,19 +137,10 @@ impl<'a> PreviewSurface<'a> {
     pub fn displacement(&self) -> Option<f32> {
         self.read_value("inputs:displacement", crate::value::read_float)
     }
-    /// The composed `inputs:displacement` at a numeric time.
+    /// The composed `inputs:displacement` at `time`.
     #[must_use]
-    pub fn displacement_at(
-        &self,
-        time: f64,
-        interpolation: layerstack::InterpolationType,
-    ) -> Option<f32> {
-        self.read_value_at(
-            "inputs:displacement",
-            time,
-            interpolation,
-            crate::value::read_float,
-        )
+    pub fn displacement_at(&self, time: layerstack::Time) -> Option<f32> {
+        self.read_value_at("inputs:displacement", time, crate::value::read_float)
     }
     /// The `inputs:displacement` default in the node definition, separate from authored values.
     #[must_use]
@@ -193,19 +157,10 @@ impl<'a> PreviewSurface<'a> {
     pub fn emissive_color(&self) -> Option<[f32; 3]> {
         self.read_value("inputs:emissiveColor", crate::value::read_float3)
     }
-    /// The composed `inputs:emissiveColor` at a numeric time.
+    /// The composed `inputs:emissiveColor` at `time`.
     #[must_use]
-    pub fn emissive_color_at(
-        &self,
-        time: f64,
-        interpolation: layerstack::InterpolationType,
-    ) -> Option<[f32; 3]> {
-        self.read_value_at(
-            "inputs:emissiveColor",
-            time,
-            interpolation,
-            crate::value::read_float3,
-        )
+    pub fn emissive_color_at(&self, time: layerstack::Time) -> Option<[f32; 3]> {
+        self.read_value_at("inputs:emissiveColor", time, crate::value::read_float3)
     }
     /// The `inputs:emissiveColor` default in the node definition, separate from authored values.
     #[must_use]
@@ -222,10 +177,10 @@ impl<'a> PreviewSurface<'a> {
     pub fn ior(&self) -> Option<f32> {
         self.read_value("inputs:ior", crate::value::read_float)
     }
-    /// The composed `inputs:ior` at a numeric time.
+    /// The composed `inputs:ior` at `time`.
     #[must_use]
-    pub fn ior_at(&self, time: f64, interpolation: layerstack::InterpolationType) -> Option<f32> {
-        self.read_value_at("inputs:ior", time, interpolation, crate::value::read_float)
+    pub fn ior_at(&self, time: layerstack::Time) -> Option<f32> {
+        self.read_value_at("inputs:ior", time, crate::value::read_float)
     }
     /// The `inputs:ior` default in the node definition, separate from authored values.
     #[must_use]
@@ -242,19 +197,10 @@ impl<'a> PreviewSurface<'a> {
     pub fn metallic(&self) -> Option<f32> {
         self.read_value("inputs:metallic", crate::value::read_float)
     }
-    /// The composed `inputs:metallic` at a numeric time.
+    /// The composed `inputs:metallic` at `time`.
     #[must_use]
-    pub fn metallic_at(
-        &self,
-        time: f64,
-        interpolation: layerstack::InterpolationType,
-    ) -> Option<f32> {
-        self.read_value_at(
-            "inputs:metallic",
-            time,
-            interpolation,
-            crate::value::read_float,
-        )
+    pub fn metallic_at(&self, time: layerstack::Time) -> Option<f32> {
+        self.read_value_at("inputs:metallic", time, crate::value::read_float)
     }
     /// The `inputs:metallic` default in the node definition, separate from authored values.
     #[must_use]
@@ -271,19 +217,10 @@ impl<'a> PreviewSurface<'a> {
     pub fn normal(&self) -> Option<[f32; 3]> {
         self.read_value("inputs:normal", crate::value::read_float3)
     }
-    /// The composed `inputs:normal` at a numeric time.
+    /// The composed `inputs:normal` at `time`.
     #[must_use]
-    pub fn normal_at(
-        &self,
-        time: f64,
-        interpolation: layerstack::InterpolationType,
-    ) -> Option<[f32; 3]> {
-        self.read_value_at(
-            "inputs:normal",
-            time,
-            interpolation,
-            crate::value::read_float3,
-        )
+    pub fn normal_at(&self, time: layerstack::Time) -> Option<[f32; 3]> {
+        self.read_value_at("inputs:normal", time, crate::value::read_float3)
     }
     /// The `inputs:normal` default in the node definition, separate from authored values.
     #[must_use]
@@ -300,19 +237,10 @@ impl<'a> PreviewSurface<'a> {
     pub fn occlusion(&self) -> Option<f32> {
         self.read_value("inputs:occlusion", crate::value::read_float)
     }
-    /// The composed `inputs:occlusion` at a numeric time.
+    /// The composed `inputs:occlusion` at `time`.
     #[must_use]
-    pub fn occlusion_at(
-        &self,
-        time: f64,
-        interpolation: layerstack::InterpolationType,
-    ) -> Option<f32> {
-        self.read_value_at(
-            "inputs:occlusion",
-            time,
-            interpolation,
-            crate::value::read_float,
-        )
+    pub fn occlusion_at(&self, time: layerstack::Time) -> Option<f32> {
+        self.read_value_at("inputs:occlusion", time, crate::value::read_float)
     }
     /// The `inputs:occlusion` default in the node definition, separate from authored values.
     #[must_use]
@@ -329,19 +257,10 @@ impl<'a> PreviewSurface<'a> {
     pub fn opacity(&self) -> Option<f32> {
         self.read_value("inputs:opacity", crate::value::read_float)
     }
-    /// The composed `inputs:opacity` at a numeric time.
+    /// The composed `inputs:opacity` at `time`.
     #[must_use]
-    pub fn opacity_at(
-        &self,
-        time: f64,
-        interpolation: layerstack::InterpolationType,
-    ) -> Option<f32> {
-        self.read_value_at(
-            "inputs:opacity",
-            time,
-            interpolation,
-            crate::value::read_float,
-        )
+    pub fn opacity_at(&self, time: layerstack::Time) -> Option<f32> {
+        self.read_value_at("inputs:opacity", time, crate::value::read_float)
     }
     /// The `inputs:opacity` default in the node definition, separate from authored values.
     #[must_use]
@@ -358,19 +277,10 @@ impl<'a> PreviewSurface<'a> {
     pub fn opacity_mode(&self) -> Option<&'a str> {
         self.read_value("inputs:opacityMode", crate::value::read_token)
     }
-    /// The composed `inputs:opacityMode` at a numeric time.
+    /// The composed `inputs:opacityMode` at `time`.
     #[must_use]
-    pub fn opacity_mode_at(
-        &self,
-        time: f64,
-        interpolation: layerstack::InterpolationType,
-    ) -> Option<&'a str> {
-        self.read_value_at(
-            "inputs:opacityMode",
-            time,
-            interpolation,
-            crate::value::read_token,
-        )
+    pub fn opacity_mode_at(&self, time: layerstack::Time) -> Option<&'a str> {
+        self.read_value_at("inputs:opacityMode", time, crate::value::read_token)
     }
     /// The `inputs:opacityMode` default in the node definition, separate from authored values.
     #[must_use]
@@ -387,19 +297,10 @@ impl<'a> PreviewSurface<'a> {
     pub fn opacity_threshold(&self) -> Option<f32> {
         self.read_value("inputs:opacityThreshold", crate::value::read_float)
     }
-    /// The composed `inputs:opacityThreshold` at a numeric time.
+    /// The composed `inputs:opacityThreshold` at `time`.
     #[must_use]
-    pub fn opacity_threshold_at(
-        &self,
-        time: f64,
-        interpolation: layerstack::InterpolationType,
-    ) -> Option<f32> {
-        self.read_value_at(
-            "inputs:opacityThreshold",
-            time,
-            interpolation,
-            crate::value::read_float,
-        )
+    pub fn opacity_threshold_at(&self, time: layerstack::Time) -> Option<f32> {
+        self.read_value_at("inputs:opacityThreshold", time, crate::value::read_float)
     }
     /// The `inputs:opacityThreshold` default in the node definition, separate from authored values.
     #[must_use]
@@ -416,19 +317,10 @@ impl<'a> PreviewSurface<'a> {
     pub fn roughness(&self) -> Option<f32> {
         self.read_value("inputs:roughness", crate::value::read_float)
     }
-    /// The composed `inputs:roughness` at a numeric time.
+    /// The composed `inputs:roughness` at `time`.
     #[must_use]
-    pub fn roughness_at(
-        &self,
-        time: f64,
-        interpolation: layerstack::InterpolationType,
-    ) -> Option<f32> {
-        self.read_value_at(
-            "inputs:roughness",
-            time,
-            interpolation,
-            crate::value::read_float,
-        )
+    pub fn roughness_at(&self, time: layerstack::Time) -> Option<f32> {
+        self.read_value_at("inputs:roughness", time, crate::value::read_float)
     }
     /// The `inputs:roughness` default in the node definition, separate from authored values.
     #[must_use]
@@ -445,19 +337,10 @@ impl<'a> PreviewSurface<'a> {
     pub fn specular_color(&self) -> Option<[f32; 3]> {
         self.read_value("inputs:specularColor", crate::value::read_float3)
     }
-    /// The composed `inputs:specularColor` at a numeric time.
+    /// The composed `inputs:specularColor` at `time`.
     #[must_use]
-    pub fn specular_color_at(
-        &self,
-        time: f64,
-        interpolation: layerstack::InterpolationType,
-    ) -> Option<[f32; 3]> {
-        self.read_value_at(
-            "inputs:specularColor",
-            time,
-            interpolation,
-            crate::value::read_float3,
-        )
+    pub fn specular_color_at(&self, time: layerstack::Time) -> Option<[f32; 3]> {
+        self.read_value_at("inputs:specularColor", time, crate::value::read_float3)
     }
     /// The `inputs:specularColor` default in the node definition, separate from authored values.
     #[must_use]
@@ -474,19 +357,10 @@ impl<'a> PreviewSurface<'a> {
     pub fn use_specular_workflow(&self) -> Option<i32> {
         self.read_value("inputs:useSpecularWorkflow", crate::value::read_int)
     }
-    /// The composed `inputs:useSpecularWorkflow` at a numeric time.
+    /// The composed `inputs:useSpecularWorkflow` at `time`.
     #[must_use]
-    pub fn use_specular_workflow_at(
-        &self,
-        time: f64,
-        interpolation: layerstack::InterpolationType,
-    ) -> Option<i32> {
-        self.read_value_at(
-            "inputs:useSpecularWorkflow",
-            time,
-            interpolation,
-            crate::value::read_int,
-        )
+    pub fn use_specular_workflow_at(&self, time: layerstack::Time) -> Option<i32> {
+        self.read_value_at("inputs:useSpecularWorkflow", time, crate::value::read_int)
     }
     /// The `inputs:useSpecularWorkflow` default in the node definition, separate from authored values.
     #[must_use]
@@ -1018,19 +892,10 @@ impl<'a> PrimvarReaderFloat<'a> {
     pub fn fallback(&self) -> Option<f32> {
         self.read_value("inputs:fallback", crate::value::read_float)
     }
-    /// The composed `inputs:fallback` at a numeric time.
+    /// The composed `inputs:fallback` at `time`.
     #[must_use]
-    pub fn fallback_at(
-        &self,
-        time: f64,
-        interpolation: layerstack::InterpolationType,
-    ) -> Option<f32> {
-        self.read_value_at(
-            "inputs:fallback",
-            time,
-            interpolation,
-            crate::value::read_float,
-        )
+    pub fn fallback_at(&self, time: layerstack::Time) -> Option<f32> {
+        self.read_value_at("inputs:fallback", time, crate::value::read_float)
     }
     /// The `inputs:fallback` default in the node definition, separate from authored values.
     #[must_use]
@@ -1047,19 +912,10 @@ impl<'a> PrimvarReaderFloat<'a> {
     pub fn varname(&self) -> Option<::alloc::sync::Arc<str>> {
         self.read_value("inputs:varname", crate::value::read_primvar_name)
     }
-    /// The composed `inputs:varname` at a numeric time.
+    /// The composed `inputs:varname` at `time`.
     #[must_use]
-    pub fn varname_at(
-        &self,
-        time: f64,
-        interpolation: layerstack::InterpolationType,
-    ) -> Option<::alloc::sync::Arc<str>> {
-        self.read_value_at(
-            "inputs:varname",
-            time,
-            interpolation,
-            crate::value::read_primvar_name,
-        )
+    pub fn varname_at(&self, time: layerstack::Time) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value_at("inputs:varname", time, crate::value::read_primvar_name)
     }
     /// The `inputs:varname` default in the node definition, separate from authored values.
     #[must_use]
@@ -1192,19 +1048,10 @@ impl<'a> PrimvarReaderFloat2<'a> {
     pub fn fallback(&self) -> Option<[f32; 2]> {
         self.read_value("inputs:fallback", crate::value::read_float2)
     }
-    /// The composed `inputs:fallback` at a numeric time.
+    /// The composed `inputs:fallback` at `time`.
     #[must_use]
-    pub fn fallback_at(
-        &self,
-        time: f64,
-        interpolation: layerstack::InterpolationType,
-    ) -> Option<[f32; 2]> {
-        self.read_value_at(
-            "inputs:fallback",
-            time,
-            interpolation,
-            crate::value::read_float2,
-        )
+    pub fn fallback_at(&self, time: layerstack::Time) -> Option<[f32; 2]> {
+        self.read_value_at("inputs:fallback", time, crate::value::read_float2)
     }
     /// The `inputs:fallback` default in the node definition, separate from authored values.
     #[must_use]
@@ -1221,19 +1068,10 @@ impl<'a> PrimvarReaderFloat2<'a> {
     pub fn varname(&self) -> Option<::alloc::sync::Arc<str>> {
         self.read_value("inputs:varname", crate::value::read_primvar_name)
     }
-    /// The composed `inputs:varname` at a numeric time.
+    /// The composed `inputs:varname` at `time`.
     #[must_use]
-    pub fn varname_at(
-        &self,
-        time: f64,
-        interpolation: layerstack::InterpolationType,
-    ) -> Option<::alloc::sync::Arc<str>> {
-        self.read_value_at(
-            "inputs:varname",
-            time,
-            interpolation,
-            crate::value::read_primvar_name,
-        )
+    pub fn varname_at(&self, time: layerstack::Time) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value_at("inputs:varname", time, crate::value::read_primvar_name)
     }
     /// The `inputs:varname` default in the node definition, separate from authored values.
     #[must_use]
@@ -1370,19 +1208,10 @@ impl<'a> PrimvarReaderFloat3<'a> {
     pub fn fallback(&self) -> Option<[f32; 3]> {
         self.read_value("inputs:fallback", crate::value::read_float3)
     }
-    /// The composed `inputs:fallback` at a numeric time.
+    /// The composed `inputs:fallback` at `time`.
     #[must_use]
-    pub fn fallback_at(
-        &self,
-        time: f64,
-        interpolation: layerstack::InterpolationType,
-    ) -> Option<[f32; 3]> {
-        self.read_value_at(
-            "inputs:fallback",
-            time,
-            interpolation,
-            crate::value::read_float3,
-        )
+    pub fn fallback_at(&self, time: layerstack::Time) -> Option<[f32; 3]> {
+        self.read_value_at("inputs:fallback", time, crate::value::read_float3)
     }
     /// The `inputs:fallback` default in the node definition, separate from authored values.
     #[must_use]
@@ -1399,19 +1228,10 @@ impl<'a> PrimvarReaderFloat3<'a> {
     pub fn varname(&self) -> Option<::alloc::sync::Arc<str>> {
         self.read_value("inputs:varname", crate::value::read_primvar_name)
     }
-    /// The composed `inputs:varname` at a numeric time.
+    /// The composed `inputs:varname` at `time`.
     #[must_use]
-    pub fn varname_at(
-        &self,
-        time: f64,
-        interpolation: layerstack::InterpolationType,
-    ) -> Option<::alloc::sync::Arc<str>> {
-        self.read_value_at(
-            "inputs:varname",
-            time,
-            interpolation,
-            crate::value::read_primvar_name,
-        )
+    pub fn varname_at(&self, time: layerstack::Time) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value_at("inputs:varname", time, crate::value::read_primvar_name)
     }
     /// The `inputs:varname` default in the node definition, separate from authored values.
     #[must_use]
@@ -1548,19 +1368,10 @@ impl<'a> PrimvarReaderFloat4<'a> {
     pub fn fallback(&self) -> Option<[f32; 4]> {
         self.read_value("inputs:fallback", crate::value::read_float4)
     }
-    /// The composed `inputs:fallback` at a numeric time.
+    /// The composed `inputs:fallback` at `time`.
     #[must_use]
-    pub fn fallback_at(
-        &self,
-        time: f64,
-        interpolation: layerstack::InterpolationType,
-    ) -> Option<[f32; 4]> {
-        self.read_value_at(
-            "inputs:fallback",
-            time,
-            interpolation,
-            crate::value::read_float4,
-        )
+    pub fn fallback_at(&self, time: layerstack::Time) -> Option<[f32; 4]> {
+        self.read_value_at("inputs:fallback", time, crate::value::read_float4)
     }
     /// The `inputs:fallback` default in the node definition, separate from authored values.
     #[must_use]
@@ -1577,19 +1388,10 @@ impl<'a> PrimvarReaderFloat4<'a> {
     pub fn varname(&self) -> Option<::alloc::sync::Arc<str>> {
         self.read_value("inputs:varname", crate::value::read_primvar_name)
     }
-    /// The composed `inputs:varname` at a numeric time.
+    /// The composed `inputs:varname` at `time`.
     #[must_use]
-    pub fn varname_at(
-        &self,
-        time: f64,
-        interpolation: layerstack::InterpolationType,
-    ) -> Option<::alloc::sync::Arc<str>> {
-        self.read_value_at(
-            "inputs:varname",
-            time,
-            interpolation,
-            crate::value::read_primvar_name,
-        )
+    pub fn varname_at(&self, time: layerstack::Time) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value_at("inputs:varname", time, crate::value::read_primvar_name)
     }
     /// The `inputs:varname` default in the node definition, separate from authored values.
     #[must_use]
@@ -1726,19 +1528,10 @@ impl<'a> PrimvarReaderInt<'a> {
     pub fn fallback(&self) -> Option<i32> {
         self.read_value("inputs:fallback", crate::value::read_int)
     }
-    /// The composed `inputs:fallback` at a numeric time.
+    /// The composed `inputs:fallback` at `time`.
     #[must_use]
-    pub fn fallback_at(
-        &self,
-        time: f64,
-        interpolation: layerstack::InterpolationType,
-    ) -> Option<i32> {
-        self.read_value_at(
-            "inputs:fallback",
-            time,
-            interpolation,
-            crate::value::read_int,
-        )
+    pub fn fallback_at(&self, time: layerstack::Time) -> Option<i32> {
+        self.read_value_at("inputs:fallback", time, crate::value::read_int)
     }
     /// The `inputs:fallback` default in the node definition, separate from authored values.
     #[must_use]
@@ -1755,19 +1548,10 @@ impl<'a> PrimvarReaderInt<'a> {
     pub fn varname(&self) -> Option<::alloc::sync::Arc<str>> {
         self.read_value("inputs:varname", crate::value::read_primvar_name)
     }
-    /// The composed `inputs:varname` at a numeric time.
+    /// The composed `inputs:varname` at `time`.
     #[must_use]
-    pub fn varname_at(
-        &self,
-        time: f64,
-        interpolation: layerstack::InterpolationType,
-    ) -> Option<::alloc::sync::Arc<str>> {
-        self.read_value_at(
-            "inputs:varname",
-            time,
-            interpolation,
-            crate::value::read_primvar_name,
-        )
+    pub fn varname_at(&self, time: layerstack::Time) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value_at("inputs:varname", time, crate::value::read_primvar_name)
     }
     /// The `inputs:varname` default in the node definition, separate from authored values.
     #[must_use]
@@ -1900,19 +1684,10 @@ impl<'a> PrimvarReaderMatrix<'a> {
     pub fn fallback(&self) -> Option<[[f64; 4]; 4]> {
         self.read_value("inputs:fallback", crate::value::read_matrix4d)
     }
-    /// The composed `inputs:fallback` at a numeric time.
+    /// The composed `inputs:fallback` at `time`.
     #[must_use]
-    pub fn fallback_at(
-        &self,
-        time: f64,
-        interpolation: layerstack::InterpolationType,
-    ) -> Option<[[f64; 4]; 4]> {
-        self.read_value_at(
-            "inputs:fallback",
-            time,
-            interpolation,
-            crate::value::read_matrix4d,
-        )
+    pub fn fallback_at(&self, time: layerstack::Time) -> Option<[[f64; 4]; 4]> {
+        self.read_value_at("inputs:fallback", time, crate::value::read_matrix4d)
     }
     /// The `inputs:fallback` default in the node definition, separate from authored values.
     #[must_use]
@@ -1934,19 +1709,10 @@ impl<'a> PrimvarReaderMatrix<'a> {
     pub fn varname(&self) -> Option<::alloc::sync::Arc<str>> {
         self.read_value("inputs:varname", crate::value::read_primvar_name)
     }
-    /// The composed `inputs:varname` at a numeric time.
+    /// The composed `inputs:varname` at `time`.
     #[must_use]
-    pub fn varname_at(
-        &self,
-        time: f64,
-        interpolation: layerstack::InterpolationType,
-    ) -> Option<::alloc::sync::Arc<str>> {
-        self.read_value_at(
-            "inputs:varname",
-            time,
-            interpolation,
-            crate::value::read_primvar_name,
-        )
+    pub fn varname_at(&self, time: layerstack::Time) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value_at("inputs:varname", time, crate::value::read_primvar_name)
     }
     /// The `inputs:varname` default in the node definition, separate from authored values.
     #[must_use]
@@ -2083,19 +1849,10 @@ impl<'a> PrimvarReaderNormal<'a> {
     pub fn fallback(&self) -> Option<[f32; 3]> {
         self.read_value("inputs:fallback", crate::value::read_float3)
     }
-    /// The composed `inputs:fallback` at a numeric time.
+    /// The composed `inputs:fallback` at `time`.
     #[must_use]
-    pub fn fallback_at(
-        &self,
-        time: f64,
-        interpolation: layerstack::InterpolationType,
-    ) -> Option<[f32; 3]> {
-        self.read_value_at(
-            "inputs:fallback",
-            time,
-            interpolation,
-            crate::value::read_float3,
-        )
+    pub fn fallback_at(&self, time: layerstack::Time) -> Option<[f32; 3]> {
+        self.read_value_at("inputs:fallback", time, crate::value::read_float3)
     }
     /// The `inputs:fallback` default in the node definition, separate from authored values.
     #[must_use]
@@ -2112,19 +1869,10 @@ impl<'a> PrimvarReaderNormal<'a> {
     pub fn varname(&self) -> Option<::alloc::sync::Arc<str>> {
         self.read_value("inputs:varname", crate::value::read_primvar_name)
     }
-    /// The composed `inputs:varname` at a numeric time.
+    /// The composed `inputs:varname` at `time`.
     #[must_use]
-    pub fn varname_at(
-        &self,
-        time: f64,
-        interpolation: layerstack::InterpolationType,
-    ) -> Option<::alloc::sync::Arc<str>> {
-        self.read_value_at(
-            "inputs:varname",
-            time,
-            interpolation,
-            crate::value::read_primvar_name,
-        )
+    pub fn varname_at(&self, time: layerstack::Time) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value_at("inputs:varname", time, crate::value::read_primvar_name)
     }
     /// The `inputs:varname` default in the node definition, separate from authored values.
     #[must_use]
@@ -2261,19 +2009,10 @@ impl<'a> PrimvarReaderPoint<'a> {
     pub fn fallback(&self) -> Option<[f32; 3]> {
         self.read_value("inputs:fallback", crate::value::read_float3)
     }
-    /// The composed `inputs:fallback` at a numeric time.
+    /// The composed `inputs:fallback` at `time`.
     #[must_use]
-    pub fn fallback_at(
-        &self,
-        time: f64,
-        interpolation: layerstack::InterpolationType,
-    ) -> Option<[f32; 3]> {
-        self.read_value_at(
-            "inputs:fallback",
-            time,
-            interpolation,
-            crate::value::read_float3,
-        )
+    pub fn fallback_at(&self, time: layerstack::Time) -> Option<[f32; 3]> {
+        self.read_value_at("inputs:fallback", time, crate::value::read_float3)
     }
     /// The `inputs:fallback` default in the node definition, separate from authored values.
     #[must_use]
@@ -2290,19 +2029,10 @@ impl<'a> PrimvarReaderPoint<'a> {
     pub fn varname(&self) -> Option<::alloc::sync::Arc<str>> {
         self.read_value("inputs:varname", crate::value::read_primvar_name)
     }
-    /// The composed `inputs:varname` at a numeric time.
+    /// The composed `inputs:varname` at `time`.
     #[must_use]
-    pub fn varname_at(
-        &self,
-        time: f64,
-        interpolation: layerstack::InterpolationType,
-    ) -> Option<::alloc::sync::Arc<str>> {
-        self.read_value_at(
-            "inputs:varname",
-            time,
-            interpolation,
-            crate::value::read_primvar_name,
-        )
+    pub fn varname_at(&self, time: layerstack::Time) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value_at("inputs:varname", time, crate::value::read_primvar_name)
     }
     /// The `inputs:varname` default in the node definition, separate from authored values.
     #[must_use]
@@ -2439,19 +2169,10 @@ impl<'a> PrimvarReaderString<'a> {
     pub fn fallback(&self) -> Option<::alloc::sync::Arc<str>> {
         self.read_value("inputs:fallback", crate::value::read_string)
     }
-    /// The composed `inputs:fallback` at a numeric time.
+    /// The composed `inputs:fallback` at `time`.
     #[must_use]
-    pub fn fallback_at(
-        &self,
-        time: f64,
-        interpolation: layerstack::InterpolationType,
-    ) -> Option<::alloc::sync::Arc<str>> {
-        self.read_value_at(
-            "inputs:fallback",
-            time,
-            interpolation,
-            crate::value::read_string,
-        )
+    pub fn fallback_at(&self, time: layerstack::Time) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value_at("inputs:fallback", time, crate::value::read_string)
     }
     /// The `inputs:fallback` default in the node definition, separate from authored values.
     #[must_use]
@@ -2468,19 +2189,10 @@ impl<'a> PrimvarReaderString<'a> {
     pub fn varname(&self) -> Option<::alloc::sync::Arc<str>> {
         self.read_value("inputs:varname", crate::value::read_primvar_name)
     }
-    /// The composed `inputs:varname` at a numeric time.
+    /// The composed `inputs:varname` at `time`.
     #[must_use]
-    pub fn varname_at(
-        &self,
-        time: f64,
-        interpolation: layerstack::InterpolationType,
-    ) -> Option<::alloc::sync::Arc<str>> {
-        self.read_value_at(
-            "inputs:varname",
-            time,
-            interpolation,
-            crate::value::read_primvar_name,
-        )
+    pub fn varname_at(&self, time: layerstack::Time) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value_at("inputs:varname", time, crate::value::read_primvar_name)
     }
     /// The `inputs:varname` default in the node definition, separate from authored values.
     #[must_use]
@@ -2613,19 +2325,10 @@ impl<'a> PrimvarReaderVector<'a> {
     pub fn fallback(&self) -> Option<[f32; 3]> {
         self.read_value("inputs:fallback", crate::value::read_float3)
     }
-    /// The composed `inputs:fallback` at a numeric time.
+    /// The composed `inputs:fallback` at `time`.
     #[must_use]
-    pub fn fallback_at(
-        &self,
-        time: f64,
-        interpolation: layerstack::InterpolationType,
-    ) -> Option<[f32; 3]> {
-        self.read_value_at(
-            "inputs:fallback",
-            time,
-            interpolation,
-            crate::value::read_float3,
-        )
+    pub fn fallback_at(&self, time: layerstack::Time) -> Option<[f32; 3]> {
+        self.read_value_at("inputs:fallback", time, crate::value::read_float3)
     }
     /// The `inputs:fallback` default in the node definition, separate from authored values.
     #[must_use]
@@ -2642,19 +2345,10 @@ impl<'a> PrimvarReaderVector<'a> {
     pub fn varname(&self) -> Option<::alloc::sync::Arc<str>> {
         self.read_value("inputs:varname", crate::value::read_primvar_name)
     }
-    /// The composed `inputs:varname` at a numeric time.
+    /// The composed `inputs:varname` at `time`.
     #[must_use]
-    pub fn varname_at(
-        &self,
-        time: f64,
-        interpolation: layerstack::InterpolationType,
-    ) -> Option<::alloc::sync::Arc<str>> {
-        self.read_value_at(
-            "inputs:varname",
-            time,
-            interpolation,
-            crate::value::read_primvar_name,
-        )
+    pub fn varname_at(&self, time: layerstack::Time) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value_at("inputs:varname", time, crate::value::read_primvar_name)
     }
     /// The `inputs:varname` default in the node definition, separate from authored values.
     #[must_use]
@@ -2791,14 +2485,10 @@ impl<'a> Transform2d<'a> {
     pub fn in_value(&self) -> Option<[f32; 2]> {
         self.read_value("inputs:in", crate::value::read_float2)
     }
-    /// The composed `inputs:in` at a numeric time.
+    /// The composed `inputs:in` at `time`.
     #[must_use]
-    pub fn in_value_at(
-        &self,
-        time: f64,
-        interpolation: layerstack::InterpolationType,
-    ) -> Option<[f32; 2]> {
-        self.read_value_at("inputs:in", time, interpolation, crate::value::read_float2)
+    pub fn in_value_at(&self, time: layerstack::Time) -> Option<[f32; 2]> {
+        self.read_value_at("inputs:in", time, crate::value::read_float2)
     }
     /// The `inputs:in` default in the node definition, separate from authored values.
     #[must_use]
@@ -2815,19 +2505,10 @@ impl<'a> Transform2d<'a> {
     pub fn rotation(&self) -> Option<f32> {
         self.read_value("inputs:rotation", crate::value::read_float)
     }
-    /// The composed `inputs:rotation` at a numeric time.
+    /// The composed `inputs:rotation` at `time`.
     #[must_use]
-    pub fn rotation_at(
-        &self,
-        time: f64,
-        interpolation: layerstack::InterpolationType,
-    ) -> Option<f32> {
-        self.read_value_at(
-            "inputs:rotation",
-            time,
-            interpolation,
-            crate::value::read_float,
-        )
+    pub fn rotation_at(&self, time: layerstack::Time) -> Option<f32> {
+        self.read_value_at("inputs:rotation", time, crate::value::read_float)
     }
     /// The `inputs:rotation` default in the node definition, separate from authored values.
     #[must_use]
@@ -2844,19 +2525,10 @@ impl<'a> Transform2d<'a> {
     pub fn scale(&self) -> Option<[f32; 2]> {
         self.read_value("inputs:scale", crate::value::read_float2)
     }
-    /// The composed `inputs:scale` at a numeric time.
+    /// The composed `inputs:scale` at `time`.
     #[must_use]
-    pub fn scale_at(
-        &self,
-        time: f64,
-        interpolation: layerstack::InterpolationType,
-    ) -> Option<[f32; 2]> {
-        self.read_value_at(
-            "inputs:scale",
-            time,
-            interpolation,
-            crate::value::read_float2,
-        )
+    pub fn scale_at(&self, time: layerstack::Time) -> Option<[f32; 2]> {
+        self.read_value_at("inputs:scale", time, crate::value::read_float2)
     }
     /// The `inputs:scale` default in the node definition, separate from authored values.
     #[must_use]
@@ -2873,19 +2545,10 @@ impl<'a> Transform2d<'a> {
     pub fn translation(&self) -> Option<[f32; 2]> {
         self.read_value("inputs:translation", crate::value::read_float2)
     }
-    /// The composed `inputs:translation` at a numeric time.
+    /// The composed `inputs:translation` at `time`.
     #[must_use]
-    pub fn translation_at(
-        &self,
-        time: f64,
-        interpolation: layerstack::InterpolationType,
-    ) -> Option<[f32; 2]> {
-        self.read_value_at(
-            "inputs:translation",
-            time,
-            interpolation,
-            crate::value::read_float2,
-        )
+    pub fn translation_at(&self, time: layerstack::Time) -> Option<[f32; 2]> {
+        self.read_value_at("inputs:translation", time, crate::value::read_float2)
     }
     /// The `inputs:translation` default in the node definition, separate from authored values.
     #[must_use]
@@ -3083,19 +2746,10 @@ impl<'a> UvTexture<'a> {
     pub fn bias(&self) -> Option<[f32; 4]> {
         self.read_value("inputs:bias", crate::value::read_float4)
     }
-    /// The composed `inputs:bias` at a numeric time.
+    /// The composed `inputs:bias` at `time`.
     #[must_use]
-    pub fn bias_at(
-        &self,
-        time: f64,
-        interpolation: layerstack::InterpolationType,
-    ) -> Option<[f32; 4]> {
-        self.read_value_at(
-            "inputs:bias",
-            time,
-            interpolation,
-            crate::value::read_float4,
-        )
+    pub fn bias_at(&self, time: layerstack::Time) -> Option<[f32; 4]> {
+        self.read_value_at("inputs:bias", time, crate::value::read_float4)
     }
     /// The `inputs:bias` default in the node definition, separate from authored values.
     #[must_use]
@@ -3112,19 +2766,10 @@ impl<'a> UvTexture<'a> {
     pub fn fallback(&self) -> Option<[f32; 4]> {
         self.read_value("inputs:fallback", crate::value::read_float4)
     }
-    /// The composed `inputs:fallback` at a numeric time.
+    /// The composed `inputs:fallback` at `time`.
     #[must_use]
-    pub fn fallback_at(
-        &self,
-        time: f64,
-        interpolation: layerstack::InterpolationType,
-    ) -> Option<[f32; 4]> {
-        self.read_value_at(
-            "inputs:fallback",
-            time,
-            interpolation,
-            crate::value::read_float4,
-        )
+    pub fn fallback_at(&self, time: layerstack::Time) -> Option<[f32; 4]> {
+        self.read_value_at("inputs:fallback", time, crate::value::read_float4)
     }
     /// The `inputs:fallback` default in the node definition, separate from authored values.
     #[must_use]
@@ -3141,14 +2786,10 @@ impl<'a> UvTexture<'a> {
     pub fn file(&self) -> Option<::alloc::sync::Arc<str>> {
         self.read_value("inputs:file", crate::value::read_asset)
     }
-    /// The composed `inputs:file` at a numeric time.
+    /// The composed `inputs:file` at `time`.
     #[must_use]
-    pub fn file_at(
-        &self,
-        time: f64,
-        interpolation: layerstack::InterpolationType,
-    ) -> Option<::alloc::sync::Arc<str>> {
-        self.read_value_at("inputs:file", time, interpolation, crate::value::read_asset)
+    pub fn file_at(&self, time: layerstack::Time) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value_at("inputs:file", time, crate::value::read_asset)
     }
     /// The `inputs:file` default in the node definition, separate from authored values.
     #[must_use]
@@ -3165,19 +2806,10 @@ impl<'a> UvTexture<'a> {
     pub fn scale(&self) -> Option<[f32; 4]> {
         self.read_value("inputs:scale", crate::value::read_float4)
     }
-    /// The composed `inputs:scale` at a numeric time.
+    /// The composed `inputs:scale` at `time`.
     #[must_use]
-    pub fn scale_at(
-        &self,
-        time: f64,
-        interpolation: layerstack::InterpolationType,
-    ) -> Option<[f32; 4]> {
-        self.read_value_at(
-            "inputs:scale",
-            time,
-            interpolation,
-            crate::value::read_float4,
-        )
+    pub fn scale_at(&self, time: layerstack::Time) -> Option<[f32; 4]> {
+        self.read_value_at("inputs:scale", time, crate::value::read_float4)
     }
     /// The `inputs:scale` default in the node definition, separate from authored values.
     #[must_use]
@@ -3194,19 +2826,10 @@ impl<'a> UvTexture<'a> {
     pub fn source_color_space(&self) -> Option<&'a str> {
         self.read_value("inputs:sourceColorSpace", crate::value::read_token)
     }
-    /// The composed `inputs:sourceColorSpace` at a numeric time.
+    /// The composed `inputs:sourceColorSpace` at `time`.
     #[must_use]
-    pub fn source_color_space_at(
-        &self,
-        time: f64,
-        interpolation: layerstack::InterpolationType,
-    ) -> Option<&'a str> {
-        self.read_value_at(
-            "inputs:sourceColorSpace",
-            time,
-            interpolation,
-            crate::value::read_token,
-        )
+    pub fn source_color_space_at(&self, time: layerstack::Time) -> Option<&'a str> {
+        self.read_value_at("inputs:sourceColorSpace", time, crate::value::read_token)
     }
     /// The `inputs:sourceColorSpace` default in the node definition, separate from authored values.
     #[must_use]
@@ -3223,14 +2846,10 @@ impl<'a> UvTexture<'a> {
     pub fn st(&self) -> Option<[f32; 2]> {
         self.read_value("inputs:st", crate::value::read_float2)
     }
-    /// The composed `inputs:st` at a numeric time.
+    /// The composed `inputs:st` at `time`.
     #[must_use]
-    pub fn st_at(
-        &self,
-        time: f64,
-        interpolation: layerstack::InterpolationType,
-    ) -> Option<[f32; 2]> {
-        self.read_value_at("inputs:st", time, interpolation, crate::value::read_float2)
+    pub fn st_at(&self, time: layerstack::Time) -> Option<[f32; 2]> {
+        self.read_value_at("inputs:st", time, crate::value::read_float2)
     }
     /// The `inputs:st` default in the node definition, separate from authored values.
     #[must_use]
@@ -3247,19 +2866,10 @@ impl<'a> UvTexture<'a> {
     pub fn wrap_s(&self) -> Option<&'a str> {
         self.read_value("inputs:wrapS", crate::value::read_token)
     }
-    /// The composed `inputs:wrapS` at a numeric time.
+    /// The composed `inputs:wrapS` at `time`.
     #[must_use]
-    pub fn wrap_s_at(
-        &self,
-        time: f64,
-        interpolation: layerstack::InterpolationType,
-    ) -> Option<&'a str> {
-        self.read_value_at(
-            "inputs:wrapS",
-            time,
-            interpolation,
-            crate::value::read_token,
-        )
+    pub fn wrap_s_at(&self, time: layerstack::Time) -> Option<&'a str> {
+        self.read_value_at("inputs:wrapS", time, crate::value::read_token)
     }
     /// The `inputs:wrapS` default in the node definition, separate from authored values.
     #[must_use]
@@ -3276,19 +2886,10 @@ impl<'a> UvTexture<'a> {
     pub fn wrap_t(&self) -> Option<&'a str> {
         self.read_value("inputs:wrapT", crate::value::read_token)
     }
-    /// The composed `inputs:wrapT` at a numeric time.
+    /// The composed `inputs:wrapT` at `time`.
     #[must_use]
-    pub fn wrap_t_at(
-        &self,
-        time: f64,
-        interpolation: layerstack::InterpolationType,
-    ) -> Option<&'a str> {
-        self.read_value_at(
-            "inputs:wrapT",
-            time,
-            interpolation,
-            crate::value::read_token,
-        )
+    pub fn wrap_t_at(&self, time: layerstack::Time) -> Option<&'a str> {
+        self.read_value_at("inputs:wrapT", time, crate::value::read_token)
     }
     /// The `inputs:wrapT` default in the node definition, separate from authored values.
     #[must_use]

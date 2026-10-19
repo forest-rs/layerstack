@@ -46,7 +46,7 @@ use crate::{
     path::{PathId, PropertyPath},
     prim_index::{ArcKind, Opinion, OpinionValue, PrimIndex},
     prim_index_graph::PrimNode,
-    property::{PropertySpec, PropertyType},
+    property::{PropertySpec, PropertyType, Time},
     spec_path::SpecPath,
     value_resolution::{
         SampleFold, SparseQuery, SparseResolveResult, explain_sparse_value, reads_array_family,
@@ -77,6 +77,26 @@ pub struct ValueExplanation<'s, T> {
     /// the result. Opinions that author nothing the query reads (a property
     /// spec with only connections, for a value) are left out.
     pub opinions: Vec<ExplainedOpinion<'s>>,
+}
+
+impl<'s> ValueExplanation<'s, ResolvedValue> {
+    /// The explanation of a scalar or dictionary, its value as a [`Value`];
+    /// a list explains no value.
+    fn into_values(self) -> ValueExplanation<'s, Value> {
+        ValueExplanation {
+            value: self.value.and_then(|value| match value {
+                ResolvedValue::Scalar(value) => Some(value),
+                ResolvedValue::Dictionary(entries) => Some(Value::Dictionary(entries)),
+                ResolvedValue::TokenList(_)
+                | ResolvedValue::PathList(_)
+                | ResolvedValue::ValueList(_) => None,
+            }),
+            source: self.source,
+            clip: self.clip,
+            seeded_by_fallback: self.seeded_by_fallback,
+            opinions: self.opinions,
+        }
+    }
 }
 
 impl<T> ValueExplanation<'_, T> {
@@ -298,14 +318,62 @@ impl Stage {
         self.explain_value_by(prim, field, Lookup::Metadata)
     }
 
-    /// Explains [`Stage::resolve_property_path`]: why a property has its
-    /// default-time value, or a relationship its targets.
+    /// Explains [`Stage::resolve_property_path_at_time`]: why an attribute
+    /// has its value at `time`, its default value at [`Time::Default`].
     ///
-    /// Returns `None` when no opinion authors the property.
+    /// Returns `None` when no opinion authors the property. A
+    /// relationship's targets, and an attribute's connections, are not
+    /// values: [`Stage::explain_targets`] explains them.
     ///
-    /// Spec: AOUSD Core §12.3.1 (default values), §12.4 (relationships).
+    /// Spec: AOUSD Core §12.3.1 (default values), §12.3.2 (time samples,
+    /// then splines, then the default), §12.3.2.1 (layer offsets), §12.5
+    /// (interpolation).
     #[must_use]
     pub fn explain_property_value(
+        &self,
+        property_path: PropertyPath,
+        time: Time,
+    ) -> Option<ValueExplanation<'_, Value>> {
+        match time {
+            Time::Default => self
+                .explain_property_default(property_path)
+                .map(ValueExplanation::into_values),
+            Time::At {
+                code,
+                interpolation,
+            } => self.explain_property_value_at_time(property_path, code, interpolation),
+        }
+    }
+
+    /// Explains [`Stage::resolve_value_at_time_with_schema`]: like
+    /// [`Stage::explain_property_value`], falling back to the schema.
+    ///
+    /// Returns `None` when no opinion authors the property and the schema
+    /// has no fallback for it.
+    ///
+    /// Spec: AOUSD Core §12.3.5 (fallback values), §12.3.6 (blocks),
+    /// §13.3.2.4 (fallback value resolution).
+    #[must_use]
+    pub fn explain_value_with_schema(
+        &self,
+        prim: PathId,
+        field: TokenId,
+        time: Time,
+    ) -> Option<ValueExplanation<'_, Value>> {
+        match time {
+            Time::Default => self
+                .explain_default_with_schema(prim, field)
+                .map(ValueExplanation::into_values),
+            Time::At {
+                code,
+                interpolation,
+            } => self.explain_value_at_time_with_schema(prim, field, code, interpolation),
+        }
+    }
+
+    /// Why a property has its default-time value, or a relationship its
+    /// targets ([`Stage::resolve_property_path`]).
+    fn explain_property_default(
         &self,
         property_path: PropertyPath,
     ) -> Option<ValueExplanation<'_, ResolvedValue>> {
@@ -316,15 +384,8 @@ impl Stage {
         )
     }
 
-    /// Explains [`Stage::resolve_property_path_at_time`]: why an attribute
-    /// has its value at stage time `time`.
-    ///
-    /// Returns `None` when no opinion authors the property.
-    ///
-    /// Spec: AOUSD Core §12.3.2 (time samples, then splines, then the
-    /// default), §12.3.2.1 (layer offsets), §12.5 (interpolation).
-    #[must_use]
-    pub fn explain_property_value_at_time(
+    /// Why an attribute has its value at the time code `time`.
+    fn explain_property_value_at_time(
         &self,
         property_path: PropertyPath,
         time: f64,
@@ -340,15 +401,9 @@ impl Stage {
         Some(self.explain_property_at_time(prim, index, name, opinions, time, interp, None))
     }
 
-    /// Explains [`Stage::resolve_value_with_schema`]: like
-    /// [`Stage::explain_property_value`], falling back to the schema.
-    ///
-    /// Returns `None` when no opinion authors the property and the schema
-    /// has no fallback for it.
-    ///
-    /// Spec: AOUSD Core §13.3.2.4 (fallback value resolution).
-    #[must_use]
-    pub fn explain_value_with_schema(
+    /// Explains [`Stage::resolve_value_with_schema`]: the default-time
+    /// value, falling back to the schema.
+    fn explain_default_with_schema(
         &self,
         prim: PathId,
         field: TokenId,
@@ -395,17 +450,8 @@ impl Stage {
         Some(with_fallback(explained, value))
     }
 
-    /// Explains [`Stage::resolve_value_at_time_with_schema`]: like
-    /// [`Stage::explain_property_value_at_time`], falling back to the
-    /// schema.
-    ///
-    /// Returns `None` when no opinion authors the property and the schema
-    /// has no fallback for it.
-    ///
-    /// Spec: AOUSD Core §12.3.5 (fallback values), §12.3.6 (blocks),
-    /// §13.3.2.4 (fallback value resolution).
-    #[must_use]
-    pub fn explain_value_at_time_with_schema(
+    /// The value at the time code `time`, falling back to the schema.
+    fn explain_value_at_time_with_schema(
         &self,
         prim: PathId,
         field: TokenId,

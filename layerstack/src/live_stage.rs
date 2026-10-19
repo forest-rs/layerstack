@@ -5002,7 +5002,7 @@ mod tests {
     /// `pxr/usd/pcp/primIndex.cpp`.
     #[test]
     fn sublayer_offset_edit_retimes_arcs_it_authors() {
-        use crate::{InterpolationType, LayerOffset};
+        use crate::{LayerOffset, Time};
 
         let mut store = InMemoryStore::default();
         let field_x = store.tokens.intern("x");
@@ -5052,11 +5052,7 @@ mod tests {
         let mut live = LiveStage::compose(&mut store, LayerId(1), options);
         let x_at = |stage: &Stage, prim: PathId, time: f64| {
             stage
-                .resolve_property_path_at_time(
-                    PropertyPath::new(prim, field_x),
-                    time,
-                    InterpolationType::Linear,
-                )
+                .resolve_property_path_at_time(PropertyPath::new(prim, field_x), Time::at(time))
                 .map(|resolved| resolved.value)
         };
         // 10 (the sublayer) + 5 (the reference).
@@ -5098,7 +5094,7 @@ mod tests {
     /// Spec: AOUSD Core §12.3.2.1 (offsets compose along a chain of arcs).
     #[test]
     fn sublayer_offset_edit_retimes_prims_of_nested_arcs() {
-        use crate::{InterpolationType, LayerOffset};
+        use crate::{LayerOffset, Time};
 
         let mut store = InMemoryStore::default();
         let field_x = store.tokens.intern("x");
@@ -5167,11 +5163,7 @@ mod tests {
         let mut live = LiveStage::compose(&mut store, LayerId(1), options);
         let x_at = |stage: &Stage, prim: PathId, time: f64| {
             stage
-                .resolve_property_path_at_time(
-                    PropertyPath::new(prim, field_x),
-                    time,
-                    InterpolationType::Linear,
-                )
+                .resolve_property_path_at_time(PropertyPath::new(prim, field_x), Time::at(time))
                 .map(|resolved| resolved.value)
         };
         // 10 (the sublayer) + 5 (the reference).

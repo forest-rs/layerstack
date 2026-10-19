@@ -104,19 +104,13 @@ impl<'a> MaterialXConfigApi<'a> {
         self.read_value("config:mtlx:version", crate::value::read_string)
     }
 
-    #[doc = "[`Self::config_mtlx_version`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::config_mtlx_version`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn config_mtlx_version_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<str>> {
-        self.read_value_at(
-            "config:mtlx:version",
-            time,
-            interp,
-            crate::value::read_string,
-        )
+        self.read_value_at("config:mtlx:version", time, crate::value::read_string)
     }
 }
 
@@ -158,7 +152,7 @@ impl MaterialXConfigApiEdit {
     #[doc(alias = "CreateConfigMtlxVersionAttr")]
     pub fn set_config_mtlx_version(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_string(value, edit.tokens());
-        self.write_value(edit, "config:mtlx:version", None, value);
+        self.write_value(edit, "config:mtlx:version", value);
         self
     }
 
@@ -170,7 +164,7 @@ impl MaterialXConfigApiEdit {
         value: &str,
     ) -> &Self {
         let value = crate::value::write_string(value, edit.tokens());
-        self.write_value(edit, "config:mtlx:version", Some(time), value);
+        self.write_value_at(edit, "config:mtlx:version", time, value);
         self
     }
 }

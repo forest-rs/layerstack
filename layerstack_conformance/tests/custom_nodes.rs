@@ -4,9 +4,7 @@
 //! Downstream generation keeps typed authoring, sampling and exact undo.
 #![allow(missing_docs, reason = "integration tests")]
 include!(concat!(env!("OUT_DIR"), "/custom_modules.rs"));
-use layerstack::{
-    InMemoryStore, InterpolationType, Layer, LayerId, LiveStage, StageOptions, edit::EditTarget,
-};
+use layerstack::{InMemoryStore, Layer, LayerId, LiveStage, StageOptions, Time, edit::EditTarget};
 use layerstack_schemas::{Scene, SchemaEdit};
 use std::sync::Arc;
 #[test]
@@ -44,7 +42,7 @@ fn inherited_ports_compile_and_author_through_the_public_api() {
     assert_eq!(node.precision(), Some(0.5));
     assert_eq!(node.enabled(), Some(false));
     assert_eq!(node.tint(), Some([1.0, 0.5, 0.25]));
-    assert_eq!(node.roughness_at(1.0, InterpolationType::Linear), Some(0.4));
+    assert_eq!(node.roughness_at(Time::at(1.0)), Some(0.4));
     assert_eq!(node.coat(), None);
     assert_eq!(custom::StudioWetPaint::coat_default(), 0.8);
     assert_eq!(custom::StudioWetPaint::roughness_default(), 0.4);

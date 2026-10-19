@@ -43,8 +43,8 @@
 //! untimed query finds the defaults layer's 0.8.
 
 use layerstack::{
-    InMemoryStore, InterpolationType, Layer, LayerId, LayerOffset, PrimSpec, PropertySpec,
-    SplineData, Stage, StageOptions, SublayerEntry, Value,
+    InMemoryStore, Layer, LayerId, LayerOffset, PrimSpec, PropertySpec, SplineData, Stage,
+    StageOptions, SublayerEntry, Time, Value,
     spline::{CurveType, Extrapolation, Knot, KnotInterp, SplineDataType},
 };
 
@@ -272,9 +272,8 @@ fn main() {
     println!();
 
     for frame in [0.0, 5.0, 10.0, 15.0, 22.0, 30.0, 34.0] {
-        let pos =
-            stage.resolve_value_at_time(char_path, position_x, frame, InterpolationType::Linear);
-        let opa = stage.resolve_value_at_time(char_path, opacity, frame, InterpolationType::Linear);
+        let pos = stage.resolve_value_at_time(char_path, position_x, Time::at(frame));
+        let opa = stage.resolve_value_at_time(char_path, opacity, Time::at(frame));
 
         let pos_str = pos.as_ref().map_or("none".into(), |r| fmt_val(&r.value));
         let opa_str = opa.as_ref().map_or("none".into(), |r| fmt_val(&r.value));
@@ -307,12 +306,12 @@ fn main() {
     println!();
 
     let linear = stage
-        .resolve_value_at_time(char_path, position_x, 16.0, InterpolationType::Linear)
+        .resolve_value_at_time(char_path, position_x, Time::at(16.0))
         .map(|r| fmt_val(&r.value))
         .unwrap_or_else(|| "none".into());
 
     let held = stage
-        .resolve_value_at_time(char_path, position_x, 16.0, InterpolationType::Held)
+        .resolve_value_at_time(char_path, position_x, Time::held(16.0))
         .map(|r| fmt_val(&r.value))
         .unwrap_or_else(|| "none".into());
 
@@ -363,9 +362,7 @@ fn main() {
     println!("  Global frame 22 → base-local frame 12 (the midpoint).");
     println!();
 
-    if let Some(r) =
-        stage.resolve_value_at_time(char_path, position_x, 22.0, InterpolationType::Linear)
-    {
+    if let Some(r) = stage.resolve_value_at_time(char_path, position_x, Time::at(22.0)) {
         println!("  position at global frame 22.0 = {}", fmt_val(&r.value));
         if let Some(p) = &r.provenance {
             println!("  source: {} layer", source_name(Some(p)));

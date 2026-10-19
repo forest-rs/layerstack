@@ -5,8 +5,8 @@
 //! AOUSD Core §16.3.9–§16.3.10, §12.3 and §12.5.
 
 use layerstack::{
-    ArrayReadError, AssetResolveError, AssetResolver, InMemoryStore, InterpolationType, LayerId,
-    PathInterner, ResolvedAsset, Stage, StageOptions, TokenInterner, TypedArray, Value,
+    ArrayReadError, AssetResolveError, AssetResolver, InMemoryStore, LayerId, PathInterner,
+    ResolvedAsset, Stage, StageOptions, Time, TokenInterner, TypedArray, Value,
 };
 use layerstack_usdc::writer::{Spec, SpecForm, Specifier, Value as W, write_crate};
 use layerstack_usdc::{DecodeBudget, read_usdc, read_usdc_lazy, read_usdc_lazy_within};
@@ -89,13 +89,13 @@ fn retained_defaults_and_selected_endpoints_share_one_cache() {
     assert!(stage.try_resolve_property_path(b).unwrap().is_some());
     assert_eq!(read.values.stats().decode_attempts, 1);
     let held = stage
-        .try_resolve_property_path_at_time(anim, 5., InterpolationType::Held)
+        .try_resolve_property_path_at_time(anim, Time::held(5.))
         .unwrap()
         .unwrap();
     assert_eq!(held.value, Value::from(vec![0_f32, 2.]));
     assert_eq!(read.values.stats().decode_attempts, 2);
     let linear = stage
-        .try_resolve_property_path_at_time(anim, 5., InterpolationType::Linear)
+        .try_resolve_property_path_at_time(anim, Time::at(5.))
         .unwrap()
         .unwrap();
     assert_eq!(linear.value, Value::from(vec![5_f32, 7.]));
@@ -244,7 +244,7 @@ fn failures_never_select_weaker_defaults_or_hold_a_good_endpoint() {
     assert!(stage.try_resolve_property_path(a).is_err());
     assert!(
         stage
-            .read_property(a, layerstack::Time::Default, |value| value
+            .read_property(a, Time::Default, |value| value
                 .array_ref()
                 .map(|array| array.len()))
             .is_none(),
@@ -252,12 +252,12 @@ fn failures_never_select_weaker_defaults_or_hold_a_good_endpoint() {
     );
     assert!(
         stage
-            .try_resolve_property_path_at_time(anim, 5., InterpolationType::Linear)
+            .try_resolve_property_path_at_time(anim, Time::at(5.))
             .is_err()
     );
     assert_eq!(
         stage
-            .try_resolve_property_path_at_time(anim, 5., InterpolationType::Held)
+            .try_resolve_property_path_at_time(anim, Time::held(5.))
             .unwrap()
             .unwrap()
             .value,
@@ -477,7 +477,7 @@ fn retimed_timecode_arrays_only_demand_the_bracketing_frames() {
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
     let property = store.property_path("/P.clock");
     let held = stage
-        .try_resolve_property_path_at_time(property, 18., InterpolationType::Held)
+        .try_resolve_property_path_at_time(property, Time::held(18.))
         .unwrap()
         .unwrap();
     assert_eq!(
@@ -492,7 +492,7 @@ fn retimed_timecode_arrays_only_demand_the_bracketing_frames() {
     );
     assert_eq!(read.values.stats().decode_attempts, 1);
     let linear = stage
-        .try_resolve_property_path_at_time(property, 18., InterpolationType::Linear)
+        .try_resolve_property_path_at_time(property, Time::at(18.))
         .unwrap()
         .unwrap();
     assert_eq!(
@@ -562,12 +562,12 @@ fn mixed_array_storage_holds_without_demanding_unselected_endpoints() {
         store.insert_layer(layer);
         let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
         let held = stage
-            .try_resolve_property_path_at_time(x, 5., InterpolationType::Held)
+            .try_resolve_property_path_at_time(x, Time::held(5.))
             .unwrap()
             .unwrap();
         assert_eq!(held.value, expected);
         assert_eq!(source.calls.load(Ordering::Relaxed), 0);
-        let linear = stage.try_resolve_property_path_at_time(x, 5., InterpolationType::Linear);
+        let linear = stage.try_resolve_property_path_at_time(x, Time::at(5.));
         if name == "double" {
             assert!(
                 linear.is_err(),

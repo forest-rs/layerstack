@@ -11,9 +11,9 @@ use std::{
 
 use criterion::{BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main};
 use layerstack::{
-    AssetResolveError, AssetResolver, InMemoryStore, InterpolationType, Layer, LayerId, LiveStage,
-    PathInterner, PrimSpec, PropertyPath, PropertySpec, PropertyType, Reference, ResolvedAsset,
-    Stage, StageOptions, TokenInterner, Value,
+    AssetResolveError, AssetResolver, InMemoryStore, Layer, LayerId, LiveStage, PathInterner,
+    PrimSpec, PropertyPath, PropertySpec, PropertyType, Reference, ResolvedAsset, Stage,
+    StageOptions, Time, TokenInterner, Value,
     edit::{EditTarget, Transaction},
 };
 
@@ -137,7 +137,7 @@ fn bench_storage(c: &mut Criterion) {
         let property = PropertyPath::new(prim, field);
         assert_eq!(
             stage
-                .resolve_property_path_at_time(property, 23.5, InterpolationType::Linear)
+                .resolve_property_path_at_time(property, Time::at(23.5))
                 .unwrap()
                 .value,
             Value::Double(if samples == 0 { 0.0 } else { 23.5 }),
@@ -224,7 +224,7 @@ fn check_default_edit(references: u32, samples: u32) {
         );
         let sampled = live
             .stage()
-            .resolve_property_path_at_time(path, 23.5, InterpolationType::Linear)
+            .resolve_property_path_at_time(path, Time::at(23.5))
             .unwrap()
             .value;
         assert_eq!(

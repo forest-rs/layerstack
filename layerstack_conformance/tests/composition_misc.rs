@@ -61,9 +61,7 @@
 
 use std::collections::BTreeMap;
 
-use layerstack::{
-    Contribution, InterpolationType, OpinionRole, ResolvedValue, Stage, StageOptions, Value,
-};
+use layerstack::{Contribution, OpinionRole, Stage, StageOptions, Time, Value};
 use layerstack_conformance::{
     usda_real::{LoadedStage, load_entry_usda},
     workspace_root,
@@ -228,9 +226,9 @@ fn values_match_openusd() {
             mismatches.push(format!("{attr}: expected {expected:?}, got {value:?}"));
         }
         let explained = stage
-            .explain_property_value(property)
+            .explain_property_value(property, Time::Default)
             .and_then(|explanation| explanation.value);
-        if explained != expected.clone().map(ResolvedValue::Scalar) {
+        if explained != expected {
             mismatches.push(format!(
                 "{attr}: explained {explained:?}, expected {expected:?}"
             ));
@@ -242,7 +240,7 @@ fn values_match_openusd() {
             let property = loaded.store.property_path(attr);
             let expected = expected.as_ref().map(OracleValue::to_value);
             let value = stage
-                .resolve_property_path_at_time(property, time, InterpolationType::Held)
+                .resolve_property_path_at_time(property, Time::held(time))
                 .map(|resolved| resolved.value);
             if value != expected {
                 mismatches.push(format!(
@@ -250,7 +248,7 @@ fn values_match_openusd() {
                 ));
             }
             let explained = stage
-                .explain_property_value_at_time(property, time, InterpolationType::Held)
+                .explain_property_value(property, Time::held(time))
                 .and_then(|explanation| explanation.value);
             if explained != expected {
                 mismatches.push(format!(
@@ -288,21 +286,25 @@ fn explanations_credit_the_weaker_expressions() {
     };
 
     let plus = loaded.store.property_path("/Part.plus");
-    let explained = stage.explain_property_value(plus).expect("authored");
+    let explained = stage
+        .explain_property_value(plus, Time::Default)
+        .expect("authored");
     assert_eq!(contributing(&explained.opinions), 2, "{explained:?}");
     let explained = stage
-        .explain_property_value_at_time(plus, 1.0, InterpolationType::Held)
+        .explain_property_value(plus, Time::held(1.0))
         .expect("authored");
     assert_eq!(contributing(&explained.opinions), 2, "{explained:?}");
 
     let sampled = loaded.store.property_path("/Sets.sampled");
     let explained = stage
-        .explain_property_value_at_time(sampled, 5.0, InterpolationType::Held)
+        .explain_property_value(sampled, Time::held(5.0))
         .expect("authored");
     assert_eq!(contributing(&explained.opinions), 2, "{explained:?}");
 
     let blocked = loaded.store.property_path("/Sets.blocked");
-    let explained = stage.explain_property_value(blocked).expect("authored");
+    let explained = stage
+        .explain_property_value(blocked, Time::Default)
+        .expect("authored");
     assert_eq!(explained.value, None);
     assert!(
         explained

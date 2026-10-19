@@ -10,9 +10,8 @@
 use std::sync::Arc;
 
 use layerstack::{
-    AssetResolveError, AssetResolver, CannotApply, EditTarget, InMemoryStore, InterpolationType,
-    LayerId, LiveStage, PathInterner, ResolvedAsset, SchemaRegistry, StageOptions, TargetPath,
-    TokenInterner,
+    AssetResolveError, AssetResolver, CannotApply, EditTarget, InMemoryStore, LayerId, LiveStage,
+    PathInterner, ResolvedAsset, SchemaRegistry, StageOptions, TargetPath, TokenInterner,
 };
 use layerstack_custom_schemas::lab::{
     CalibrationApi, CalibrationApiCalibrationMethod, Centrifuge, ChannelApi, ChannelApiMode,
@@ -197,11 +196,11 @@ fn getters_read_authored_values_fallbacks_and_samples() {
     // at time codes.
     assert_eq!(spectrometer.spectrometer_max_wavelength(), Some(780.0));
     assert_eq!(
-        spectrometer.spectrometer_max_wavelength_at(1.5, InterpolationType::Linear),
+        spectrometer.spectrometer_max_wavelength_at(Time::at(1.5)),
         Some(750.0)
     );
     assert_eq!(
-        spectrometer.spectrometer_max_wavelength_at(1.5, InterpolationType::Held),
+        spectrometer.spectrometer_max_wavelength_at(Time::held(1.5)),
         Some(700.0)
     );
     assert_eq!(
@@ -366,10 +365,7 @@ fn setters_author_through_a_schema_edit() {
     let scene = Scene::new(live.stage(), &store);
     let centrifuge = Centrifuge::new(&scene, centrifuge).expect("defined");
     assert_eq!(centrifuge.max_rpm(), Some(9000.0));
-    assert_eq!(
-        centrifuge.max_rpm_at(4.0, InterpolationType::Held),
-        Some(12000.0)
-    );
+    assert_eq!(centrifuge.max_rpm_at(Time::held(4.0)), Some(12000.0));
     assert_eq!(centrifuge.centrifuge_refrigerated(), Some(true));
     assert_eq!(
         centrifuge.instrument_status(),

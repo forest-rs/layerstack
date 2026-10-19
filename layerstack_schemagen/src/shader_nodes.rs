@@ -379,7 +379,7 @@ pub(crate) fn render(model: &Model, external: bool) -> Result<Vec<(String, Strin
                 if port.variability == Variability::Varying {
                     let _ = writeln!(
                         out,
-                        "    /// The composed `{full}` at a numeric time.\n    #[must_use]\n    pub fn {m}_at(&self, time: f64, interpolation: layerstack::InterpolationType) -> Option<{}> {{ self.read_value_at({full:?}, time, interpolation, {}) }}",
+                        "    /// The composed `{full}` at `time`.\n    #[must_use]\n    pub fn {m}_at(&self, time: layerstack::Time) -> Option<{}> {{ self.read_value_at({full:?}, time, {}) }}",
                         ty.read, ty.read_fn
                     );
                 }

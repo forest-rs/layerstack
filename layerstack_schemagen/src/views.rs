@@ -49,6 +49,7 @@ const RESERVED: &[&str] = &[
     "try_read_value",
     "read_targets",
     "write_value",
+    "write_value_at",
     "write_targets",
     "add_target",
     "remove_target",
@@ -826,10 +827,10 @@ fn getter(docs: &str, name: &str, usd: &str, ty: &RustType, varying: bool) -> St
     if varying {
         let _ = write!(
             out,
-            "    #[doc = \"[`Self::{name}`] at the time code `time`, interpolated with `interp`.\"]\n    \
+            "    #[doc = \"[`Self::{name}`] at `time`, interpolating time samples as it says.\"]\n    \
              #[must_use]\n    \
-             pub fn {name}_at(&self, time: f64, interp: ::layerstack::InterpolationType) -> Option<{read}> {{\n        \
-             self.read_value_at({usd:?}, time, interp, {read_fn})\n    }}\n\n",
+             pub fn {name}_at(&self, time: ::layerstack::Time) -> Option<{read}> {{\n        \
+             self.read_value_at({usd:?}, time, {read_fn})\n    }}\n\n",
             read = ty.read,
             read_fn = ty.read_fn
         );
@@ -846,14 +847,14 @@ fn setter(docs: &str, set: &str, usd: &str, ty: &str, write: &str, varying: bool
         .replace("TOKENS", "edit.tokens()");
     let mut out = format!(
         "{docs}    pub fn {set}(&self, edit: &mut SchemaEdit<'_>, value: {ty}) -> &Self {{\n        \
-         let value = {value};\n        self.write_value(edit, {usd:?}, None, value);\n        self\n    }}\n\n"
+         let value = {value};\n        self.write_value(edit, {usd:?}, value);\n        self\n    }}\n\n"
     );
     if varying {
         let _ = write!(
             out,
             "    #[doc = \"[`Self::{set}`] as a time sample at the time code `time`.\"]\n    \
              pub fn {set}_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: {ty}) -> &Self {{\n        \
-             let value = {value};\n        self.write_value(edit, {usd:?}, Some(time), value);\n        self\n    }}\n\n"
+             let value = {value};\n        self.write_value_at(edit, {usd:?}, time, value);\n        self\n    }}\n\n"
         );
     }
     out
@@ -1808,7 +1809,7 @@ impl TestTable {
                         if *varying {
                             let _ = writeln!(
                                 reads,
-                                "        r.value(prim, {usd:?}, When::Sample, v.{method}_at({SAMPLE_TIME}, HELD));"
+                                "        r.value(prim, {usd:?}, When::Sample, v.{method}_at(Time::held({SAMPLE_TIME})));"
                             );
                         }
                     }
@@ -1822,7 +1823,7 @@ impl TestTable {
                         if *varying {
                             let _ = writeln!(
                                 reads,
-                                "        r.value(prim, {usd:?}, When::Sample, v.{method}_at({SAMPLE_TIME}, HELD).as_ref().map({path}::as_str));"
+                                "        r.value(prim, {usd:?}, When::Sample, v.{method}_at(Time::held({SAMPLE_TIME})).as_ref().map({path}::as_str));"
                             );
                         }
                         let _ = writeln!(
@@ -1852,9 +1853,8 @@ impl TestTable {
              //! when unrestricted), a multiple-apply one with its first allowed instance\n\
              //! name, else `a`. Path expressions are left out: USDA save does not\n\
              //! write them yet.\n\n\
-             use layerstack::InterpolationType;\nuse layerstack_schemas::*;\n\n\
+             use layerstack::Time;\nuse layerstack_schemas::*;\n\n\
              use super::{Harness, Readings, When};\n\n\
-             /// How the table reads time samples.\nconst HELD: InterpolationType = InterpolationType::Held;\n\n\
              /// Every prim the table authors.\npub(crate) const PRIMS: &[&str] = &[\n",
         );
         for prim in &prims {

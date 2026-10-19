@@ -41,12 +41,7 @@ pub(crate) fn anchor(
     let clip_selected = property.is_some_and(|p| {
         prim.scene()
             .stage()
-            .property_clip_source(
-                p.prim_path(),
-                p.property(),
-                code,
-                layerstack::InterpolationType::Held,
-            )
+            .property_clip_source(p.prim_path(), p.property(), Time::held(code))
             .is_some()
     });
     let opinions = if clip_selected {

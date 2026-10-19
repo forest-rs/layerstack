@@ -39,10 +39,8 @@ pub struct ClipDemand {
 pub struct ClipQueryPlan {
     /// Queried property in the stage namespace.
     pub property: PropertyPath,
-    /// Requested stage time.
-    pub time: f64,
-    /// Requested interpolation policy.
-    pub interpolation: InterpolationType,
+    /// Requested stage time and interpolation.
+    pub time: crate::Time,
     /// Required assets, including resident and confirmed-missing uses.
     pub demands: Vec<ClipDemand>,
     /// Relevant preparation diagnostics, excluding mere unresolved-template state.
@@ -53,6 +51,17 @@ pub struct ClipQueryPlan {
     pub budget_exhausted: bool,
 }
 impl ClipQueryPlan {
+    /// A plan of `property` at `time` that demands nothing.
+    pub(crate) fn empty(property: PropertyPath, time: crate::Time) -> Self {
+        Self {
+            property,
+            time,
+            demands: Vec::new(),
+            issues: Vec::new(),
+            error: None,
+            budget_exhausted: false,
+        }
+    }
     /// True when planning found no unknown residency, error or exhausted budget.
     /// A confirmed missing clip can supply a complete gap; completeness does not
     /// promise a numeric value or validate deferred numeric payloads.
@@ -198,15 +207,14 @@ impl Catalog {
         max_demands: usize,
         index: Option<&PrimIndex>,
     ) -> ClipQueryPlan {
-        let mut plan = ClipQueryPlan {
+        let mut plan = ClipQueryPlan::empty(
             property,
-            time,
-            interpolation,
-            demands: Vec::new(),
-            issues: Vec::new(),
-            error: (!time.is_finite()).then_some(ClipEvalError::InvalidQuery),
-            budget_exhausted: false,
-        };
+            crate::Time::At {
+                code: time,
+                interpolation,
+            },
+        );
+        plan.error = (!time.is_finite()).then_some(ClipEvalError::InvalidQuery);
         if plan.error.is_some() {
             return plan;
         }

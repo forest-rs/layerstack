@@ -549,9 +549,7 @@ fn animate(generated: &mut support::GeneratedScene) {
         .unwrap();
     let scene = Scene::new(generated.live.stage(), &generated.store);
     let source = Mesh::new(&scene, generated.source).unwrap();
-    let owned_sample = source
-        .points_at(14., layerstack::InterpolationType::Linear)
-        .unwrap();
+    let owned_sample = source.points_at(Time::at(14.)).unwrap();
     assert_eq!(
         owned_sample.as_ptr(),
         owned_pointer,
@@ -564,18 +562,14 @@ fn animate(generated: &mut support::GeneratedScene) {
     );
     assert!(
         Arc::ptr_eq(
-            &source
-                .points_at(12., layerstack::InterpolationType::Linear)
-                .unwrap(),
+            &source.points_at(Time::at(12.)).unwrap(),
             &generated.geometry.points
         ),
         "exact samples retain their source allocation"
     );
     assert!(
         !Arc::ptr_eq(
-            &source
-                .points_at(13., layerstack::InterpolationType::Linear)
-                .unwrap(),
+            &source.points_at(Time::at(13.)).unwrap(),
             &generated.geometry.points
         ),
         "interpolation materializes a new result"
@@ -653,7 +647,7 @@ fn missing_prototypes_and_default_republication_retire_previous_samples() {
     assert_eq!(height(&mut cache, &scene, generated.scatter), 1.);
     let points = Mesh::new(&scene, generated.source)
         .unwrap()
-        .points_at(13., layerstack::InterpolationType::Linear)
+        .points_at(Time::at(13.))
         .unwrap();
     assert!(Arc::ptr_eq(&points, &generated.geometry.points));
     assert!(
@@ -730,7 +724,7 @@ fn report(stage: &Stage, store: &InMemoryStore) -> serde_json::Value {
     serde_json::json!({
         "nativeInstances": stage.prototypes().flat_map(|p| p.instances().to_vec()).count(),
         "isProxy": stage.is_instance(find("/World/Native_0")),
-        "points": &**mesh.points_at(13., layerstack::InterpolationType::Linear).unwrap(),
+        "points": &**mesh.points_at(Time::at(13.)).unwrap(),
         "counts": &**mesh.face_vertex_counts().unwrap(),
         "indices": &**mesh.face_vertex_indices().unwrap(),
         "uvIndices": &**uv.indices(time).unwrap(),
@@ -741,11 +735,11 @@ fn report(stage: &Stage, store: &InMemoryStore) -> serde_json::Value {
         "ids": transforms.iter().map(|t| t.id).collect::<Vec<_>>(),
         "transforms": transforms.iter().map(|t| t.matrix).collect::<Vec<_>>(),
         "bounds": [bounds.min,bounds.max],
-        "sourceHeight": Mesh::new(&scene, source).unwrap().points_at(13.,layerstack::InterpolationType::Linear).unwrap()[2][1],
+        "sourceHeight": Mesh::new(&scene, source).unwrap().points_at(Time::at(13.)).unwrap()[2][1],
         "material": store.paths.display(mesh.compute_bound_material(&MaterialPurpose::All,BindingOptions::default()).material.unwrap(), &store.tokens).to_string(),
         "userTag": mesh.read_value("user:tag", layerstack_schemas::value::read_int),
         "proceduralSystem": recipe.procedural_system(),
-        "recipeHeight": recipe.read_value_at("primvars:height", 13., layerstack::InterpolationType::Linear, layerstack_schemas::value::read_float),
+        "recipeHeight": recipe.read_value_at("primvars:height", Time::at(13.), layerstack_schemas::value::read_float),
         "recipeGeneratedPoints": &**generated.geometry.mesh().points,
         "recipeGeneratedCounts": &**generated.geometry.mesh().face_vertex_counts,
         "recipeTexture": generated.texture.as_deref(),

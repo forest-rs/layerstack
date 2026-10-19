@@ -279,19 +279,10 @@ impl<'a> Material<'a> {
         self.read_value("outputs:displacement", crate::value::read_token)
     }
 
-    #[doc = "[`Self::displacement`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::displacement`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn displacement_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<&'a str> {
-        self.read_value_at(
-            "outputs:displacement",
-            time,
-            interp,
-            crate::value::read_token,
-        )
+    pub fn displacement_at(&self, time: ::layerstack::Time) -> Option<&'a str> {
+        self.read_value_at("outputs:displacement", time, crate::value::read_token)
     }
 
     /// The USD name of [`Self::surface`].
@@ -308,14 +299,10 @@ impl<'a> Material<'a> {
         self.read_value("outputs:surface", crate::value::read_token)
     }
 
-    #[doc = "[`Self::surface`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::surface`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn surface_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<&'a str> {
-        self.read_value_at("outputs:surface", time, interp, crate::value::read_token)
+    pub fn surface_at(&self, time: ::layerstack::Time) -> Option<&'a str> {
+        self.read_value_at("outputs:surface", time, crate::value::read_token)
     }
 
     /// The USD name of [`Self::volume`].
@@ -332,10 +319,10 @@ impl<'a> Material<'a> {
         self.read_value("outputs:volume", crate::value::read_token)
     }
 
-    #[doc = "[`Self::volume`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::volume`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn volume_at(&self, time: f64, interp: ::layerstack::InterpolationType) -> Option<&'a str> {
-        self.read_value_at("outputs:volume", time, interp, crate::value::read_token)
+    pub fn volume_at(&self, time: ::layerstack::Time) -> Option<&'a str> {
+        self.read_value_at("outputs:volume", time, crate::value::read_token)
     }
 }
 
@@ -378,14 +365,14 @@ impl MaterialEdit {
     #[doc(alias = "CreateDisplacementAttr")]
     pub fn set_displacement(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value(edit, "outputs:displacement", None, value);
+        self.write_value(edit, "outputs:displacement", value);
         self
     }
 
     #[doc = "[`Self::set_displacement`] as a time sample at the time code `time`."]
     pub fn set_displacement_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &str) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value(edit, "outputs:displacement", Some(time), value);
+        self.write_value_at(edit, "outputs:displacement", time, value);
         self
     }
 
@@ -397,14 +384,14 @@ impl MaterialEdit {
     #[doc(alias = "CreateSurfaceAttr")]
     pub fn set_surface(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value(edit, "outputs:surface", None, value);
+        self.write_value(edit, "outputs:surface", value);
         self
     }
 
     #[doc = "[`Self::set_surface`] as a time sample at the time code `time`."]
     pub fn set_surface_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &str) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value(edit, "outputs:surface", Some(time), value);
+        self.write_value_at(edit, "outputs:surface", time, value);
         self
     }
 
@@ -416,14 +403,14 @@ impl MaterialEdit {
     #[doc(alias = "CreateVolumeAttr")]
     pub fn set_volume(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value(edit, "outputs:volume", None, value);
+        self.write_value(edit, "outputs:volume", value);
         self
     }
 
     #[doc = "[`Self::set_volume`] as a time sample at the time code `time`."]
     pub fn set_volume_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &str) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value(edit, "outputs:volume", Some(time), value);
+        self.write_value_at(edit, "outputs:volume", time, value);
         self
     }
 }
@@ -715,7 +702,7 @@ impl NodeDefApiEdit {
     #[doc(alias = "CreateIdAttr")]
     pub fn set_id(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value(edit, "info:id", None, value);
+        self.write_value(edit, "info:id", value);
         self
     }
 
@@ -731,7 +718,7 @@ impl NodeDefApiEdit {
         value: NodeDefApiImplementationSource,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "info:implementationSource", None, value);
+        self.write_value(edit, "info:implementationSource", value);
         self
     }
 }

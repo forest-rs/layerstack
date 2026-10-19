@@ -5,8 +5,8 @@
 //! Hosts can replace the in-memory catalog with their own asynchronous loader.
 
 use layerstack::{
-    InMemoryStore, InterpolationType, Layer, LayerId, LayerOffset, PrimSpec, PropertyPath,
-    PropertySpec, PropertyType, Stage, StageOptions, Value,
+    InMemoryStore, Layer, LayerId, LayerOffset, PrimSpec, PropertyPath, PropertySpec, PropertyType,
+    Stage, StageOptions, Time, Value,
     clip_authoring::{ClipBundleOptions, ClipSource, stitch_clip_sequence},
     value_clips::{ClipAssetStatus, ClipAssetUnavailable},
 };
@@ -94,11 +94,7 @@ fn main() {
         "the host must satisfy every clip asset request"
     );
     let at_five = stage
-        .resolve_property_path_at_time(
-            PropertyPath::new(model, height),
-            5.,
-            InterpolationType::Linear,
-        )
+        .resolve_property_path_at_time(PropertyPath::new(model, height), Time::at(5.))
         .expect("sampled height");
     assert_eq!(
         at_five.value,
@@ -111,7 +107,7 @@ fn main() {
         "mapped clip endpoints"
     );
     let source = stage
-        .property_clip_source(model, height, 5., InterpolationType::Linear)
+        .property_clip_source(model, height, Time::at(5.))
         .expect("clip sample provenance");
     assert_eq!(source.lower.layer, Some(clip.id()), "lower raw clip source");
     assert_eq!(source.upper.layer, Some(clip.id()), "upper raw clip source");

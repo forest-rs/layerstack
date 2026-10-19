@@ -21,7 +21,7 @@ use layerstack::interner::TokenInterner;
 use layerstack::path::PathInterner;
 use layerstack::{
     AssetResolveError, AssetResolver, Contribution, IgnoreCause, InterpolationType, OpinionRole,
-    ResolvedAsset, ResolvedValue, Stage, StageOptions, Value, ValueExplanation, ValueSource,
+    ResolvedAsset, Stage, StageOptions, Time, Value, ValueExplanation, ValueSource,
 };
 use layerstack_usda::{emit, lower, parser::parse_cst};
 
@@ -234,11 +234,13 @@ fn main() {
 
     // The grove's local height shadows the referenced tree's.
     let height = store.property_path("/Grove/OldOak.height");
-    let explained = stage.explain_property_value(height).expect("height");
+    let explained = stage
+        .explain_property_value(height, Time::Default)
+        .expect("height");
     print("height", &explained, &store, &resolver);
     assert_eq!(
         explained.value,
-        Some(ResolvedValue::Scalar(Value::Double(7.0))),
+        Some(Value::Double(7.0)),
         "the grove's local height wins"
     );
     assert_eq!(
@@ -250,7 +252,9 @@ fn main() {
     // The sparse edit from the edits sublayer composes over the asset's
     // dense points, reached through the reference.
     let points = store.property_path("/Grove/OldOak.points");
-    let explained = stage.explain_property_value(points).expect("points");
+    let explained = stage
+        .explain_property_value(points, Time::Default)
+        .expect("points");
     print("points", &explained, &store, &resolver);
     let roles: Vec<_> = explained.opinions.iter().map(|o| o.role.clone()).collect();
     assert_eq!(
@@ -263,19 +267,19 @@ fn main() {
     );
     assert_eq!(
         explained.value,
-        Some(ResolvedValue::Scalar(Value::Array(vec![
+        Some(Value::Array(vec![
             Value::Vec3f([0.0, 0.0, 0.0]),
             Value::Vec3f([0.0, 1.0, 0.0]),
             Value::Vec3f([0.0, 2.5, 0.5]),
             Value::Vec3f([0.0, 3.0, 1.0]),
-        ]))),
+        ])),
         "the edit moves the last point and appends one"
     );
 
     // The reference offsets the tree's samples by 10 frames.
     let sway = store.property_path("/Grove/OldOak.sway");
     let explained = stage
-        .explain_property_value_at_time(sway, 22.0, InterpolationType::Linear)
+        .explain_property_value(sway, Time::at(22.0))
         .expect("sway");
     print("sway at 22", &explained, &store, &resolver);
     assert_eq!(
@@ -308,7 +312,9 @@ fn main() {
 
     // The bark comes from the class the tree inherits.
     let bark = store.property_path("/Grove/OldOak.bark");
-    let explained = stage.explain_property_value(bark).expect("bark");
+    let explained = stage
+        .explain_property_value(bark, Time::Default)
+        .expect("bark");
     print("bark", &explained, &store, &resolver);
     assert_eq!(
         explained.opinions[0].arc_kind(),

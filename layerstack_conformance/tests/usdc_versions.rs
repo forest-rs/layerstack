@@ -14,7 +14,8 @@
 
 use std::path::PathBuf;
 
-use layerstack::doc::{InterpolationType, LayerId, Value};
+use layerstack::Time;
+use layerstack::doc::{LayerId, Value};
 use layerstack::interner::TokenInterner;
 use layerstack::path::{Path, PathInterner};
 use layerstack::{
@@ -192,11 +193,7 @@ fn compare_file_with_openusd(root: &std::path::Path, expected: &Json) -> Vec<Mis
                 let time = sample[0].as_f64().expect("time");
                 let openusd = &sample[1];
                 let value = stage
-                    .resolve_property_path_at_time(
-                        PropertyPath::new(prim, field),
-                        time,
-                        InterpolationType::Linear,
-                    )
+                    .resolve_property_path_at_time(PropertyPath::new(prim, field), Time::at(time))
                     .map(|resolved| resolved.value);
                 let matches = match &value {
                     Some(value) => value_matches(value, openusd, &store.tokens),
@@ -720,11 +717,7 @@ fn failing_vectors(vectors: &[Vector]) -> Vec<String> {
                     _ => None,
                 }),
             Some(time) => stage
-                .resolve_property_path_at_time(
-                    PropertyPath::new(prim_id, field),
-                    time,
-                    InterpolationType::Linear,
-                )
+                .resolve_property_path_at_time(PropertyPath::new(prim_id, field), Time::at(time))
                 .map(|resolved| resolved.value),
         };
         let json: Json = serde_json::from_str(expected).expect("vector");

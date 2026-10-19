@@ -24,8 +24,7 @@ use std::sync::Arc;
 
 use layerstack::edit::EditTarget;
 use layerstack::{
-    InMemoryStore, InterpolationType, Layer, LayerId, LiveStage, StageOptions, SublayerEntry,
-    TargetPath,
+    InMemoryStore, Layer, LayerId, LiveStage, StageOptions, SublayerEntry, TargetPath,
 };
 use layerstack_schemas::usd::CollectionApi;
 use layerstack_schemas::usd_geom::{
@@ -175,9 +174,7 @@ fn main() {
     println!("  intensity         = {:?}", light.light_api().intensity());
     println!(
         "  intensity at 24   = {:?}",
-        light
-            .light_api()
-            .intensity_at(24.0, InterpolationType::Linear)
+        light.light_api().intensity_at(Time::at(24.0))
     );
 
     for collection in CollectionApi::instances(&scene, robot) {

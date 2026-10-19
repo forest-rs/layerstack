@@ -190,17 +190,12 @@ impl<'a> AccessibilityApi<'a> {
         )
     }
 
-    #[doc = "[`Self::description`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::description`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn description_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<::alloc::sync::Arc<str>> {
+    pub fn description_at(&self, time: ::layerstack::Time) -> Option<::alloc::sync::Arc<str>> {
         self.read_value_at(
             "accessibility:__INSTANCE_NAME__:description",
             time,
-            interp,
             crate::value::read_string,
         )
     }
@@ -219,17 +214,12 @@ impl<'a> AccessibilityApi<'a> {
         )
     }
 
-    #[doc = "[`Self::label`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::label`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn label_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<::alloc::sync::Arc<str>> {
+    pub fn label_at(&self, time: ::layerstack::Time) -> Option<::alloc::sync::Arc<str>> {
         self.read_value_at(
             "accessibility:__INSTANCE_NAME__:label",
             time,
-            interp,
             crate::value::read_string,
         )
     }
@@ -248,17 +238,12 @@ impl<'a> AccessibilityApi<'a> {
         )
     }
 
-    #[doc = "[`Self::priority`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::priority`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn priority_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<AccessibilityApiPriority> {
+    pub fn priority_at(&self, time: ::layerstack::Time) -> Option<AccessibilityApiPriority> {
         self.read_value_at(
             "accessibility:__INSTANCE_NAME__:priority",
             time,
-            interp,
             AccessibilityApiPriority::read,
         )
     }
@@ -302,22 +287,17 @@ impl AccessibilityApiEdit {
     #[doc(alias = "CreateDescriptionAttr")]
     pub fn set_description(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_string(value, edit.tokens());
-        self.write_value(
-            edit,
-            "accessibility:__INSTANCE_NAME__:description",
-            None,
-            value,
-        );
+        self.write_value(edit, "accessibility:__INSTANCE_NAME__:description", value);
         self
     }
 
     #[doc = "[`Self::set_description`] as a time sample at the time code `time`."]
     pub fn set_description_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &str) -> &Self {
         let value = crate::value::write_string(value, edit.tokens());
-        self.write_value(
+        self.write_value_at(
             edit,
             "accessibility:__INSTANCE_NAME__:description",
-            Some(time),
+            time,
             value,
         );
         self
@@ -331,19 +311,14 @@ impl AccessibilityApiEdit {
     #[doc(alias = "CreateLabelAttr")]
     pub fn set_label(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_string(value, edit.tokens());
-        self.write_value(edit, "accessibility:__INSTANCE_NAME__:label", None, value);
+        self.write_value(edit, "accessibility:__INSTANCE_NAME__:label", value);
         self
     }
 
     #[doc = "[`Self::set_label`] as a time sample at the time code `time`."]
     pub fn set_label_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &str) -> &Self {
         let value = crate::value::write_string(value, edit.tokens());
-        self.write_value(
-            edit,
-            "accessibility:__INSTANCE_NAME__:label",
-            Some(time),
-            value,
-        );
+        self.write_value_at(edit, "accessibility:__INSTANCE_NAME__:label", time, value);
         self
     }
 
@@ -359,12 +334,7 @@ impl AccessibilityApiEdit {
         value: AccessibilityApiPriority,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(
-            edit,
-            "accessibility:__INSTANCE_NAME__:priority",
-            None,
-            value,
-        );
+        self.write_value(edit, "accessibility:__INSTANCE_NAME__:priority", value);
         self
     }
 
@@ -376,10 +346,10 @@ impl AccessibilityApiEdit {
         value: AccessibilityApiPriority,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(
+        self.write_value_at(
             edit,
             "accessibility:__INSTANCE_NAME__:priority",
-            Some(time),
+            time,
             value,
         );
         self
@@ -500,7 +470,7 @@ impl BackdropEdit {
     #[doc(alias = "CreateDescriptionAttr")]
     pub fn set_description(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value(edit, "ui:description", None, value);
+        self.write_value(edit, "ui:description", value);
         self
     }
 }
@@ -763,7 +733,7 @@ impl NodeGraphNodeApiEdit {
     #[doc(alias = "CreateDisplayColorAttr")]
     pub fn set_display_color(&self, edit: &mut SchemaEdit<'_>, value: [f32; 3]) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
-        self.write_value(edit, "ui:nodegraph:node:displayColor", None, value);
+        self.write_value(edit, "ui:nodegraph:node:displayColor", value);
         self
     }
 
@@ -772,7 +742,7 @@ impl NodeGraphNodeApiEdit {
     #[doc = "USD attribute `ui:nodegraph:node:docURI` (`string`, uniform)."]
     pub fn set_doc_uri(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_string(value, edit.tokens());
-        self.write_value(edit, "ui:nodegraph:node:docURI", None, value);
+        self.write_value(edit, "ui:nodegraph:node:docURI", value);
         self
     }
 
@@ -788,7 +758,7 @@ impl NodeGraphNodeApiEdit {
         value: NodeGraphNodeApiExpansionState,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "ui:nodegraph:node:expansionState", None, value);
+        self.write_value(edit, "ui:nodegraph:node:expansionState", value);
         self
     }
 
@@ -800,7 +770,7 @@ impl NodeGraphNodeApiEdit {
     #[doc(alias = "CreateIconAttr")]
     pub fn set_icon(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value(edit, "ui:nodegraph:node:icon", None, value);
+        self.write_value(edit, "ui:nodegraph:node:icon", value);
         self
     }
 
@@ -812,7 +782,7 @@ impl NodeGraphNodeApiEdit {
     #[doc(alias = "CreatePosAttr")]
     pub fn set_pos(&self, edit: &mut SchemaEdit<'_>, value: [f32; 2]) -> &Self {
         let value = crate::value::write_float2(value, edit.tokens());
-        self.write_value(edit, "ui:nodegraph:node:pos", None, value);
+        self.write_value(edit, "ui:nodegraph:node:pos", value);
         self
     }
 
@@ -824,7 +794,7 @@ impl NodeGraphNodeApiEdit {
     #[doc(alias = "CreateSizeAttr")]
     pub fn set_size(&self, edit: &mut SchemaEdit<'_>, value: [f32; 2]) -> &Self {
         let value = crate::value::write_float2(value, edit.tokens());
-        self.write_value(edit, "ui:nodegraph:node:size", None, value);
+        self.write_value(edit, "ui:nodegraph:node:size", value);
         self
     }
 
@@ -836,7 +806,7 @@ impl NodeGraphNodeApiEdit {
     #[doc(alias = "CreateStackingOrderAttr")]
     pub fn set_stacking_order(&self, edit: &mut SchemaEdit<'_>, value: i32) -> &Self {
         let value = crate::value::write_int(value, edit.tokens());
-        self.write_value(edit, "ui:nodegraph:node:stackingOrder", None, value);
+        self.write_value(edit, "ui:nodegraph:node:stackingOrder", value);
         self
     }
 }
@@ -975,7 +945,7 @@ impl SceneGraphPrimApiEdit {
     #[doc(alias = "CreateDisplayGroupAttr")]
     pub fn set_display_group(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value(edit, "ui:displayGroup", None, value);
+        self.write_value(edit, "ui:displayGroup", value);
         self
     }
 
@@ -987,7 +957,7 @@ impl SceneGraphPrimApiEdit {
     #[doc(alias = "CreateDisplayNameAttr")]
     pub fn set_display_name(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value(edit, "ui:displayName", None, value);
+        self.write_value(edit, "ui:displayName", value);
         self
     }
 }

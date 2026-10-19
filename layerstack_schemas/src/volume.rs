@@ -237,12 +237,9 @@ impl crate::usd_vol::ParticleField3DGaussianSplat<'_> {
     pub fn attribute_in_use(&self, data: SplatData) -> SplatAttribute {
         let (float_name, half_name) = data.names();
         let uses_float = self
-            .read_value_at(
-                float_name,
-                f64::MIN,
-                layerstack::InterpolationType::Held,
-                |value, _| Some(value.array_ref().is_some_and(|array| !array.is_empty())),
-            )
+            .read_value_at(float_name, layerstack::Time::held(f64::MIN), |value, _| {
+                Some(value.array_ref().is_some_and(|array| !array.is_empty()))
+            })
             .unwrap_or(false);
         let name = if uses_float { float_name } else { half_name };
         SplatAttribute {

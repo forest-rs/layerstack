@@ -189,14 +189,7 @@ impl<'a> LabelsQuery<'a> {
         };
         match self.time {
             QueryTime::At(time) => {
-                labels = match time {
-                    Time::Default => api.labels(),
-                    Time::At {
-                        code,
-                        interpolation,
-                    } => api.labels_at(code, interpolation),
-                }
-                .unwrap_or_default();
+                labels = api.labels_at(time).unwrap_or_default();
             }
             QueryTime::Interval(interval) => {
                 let name = alloc::format!("semantics:labels:{}", self.taxonomy);
@@ -221,8 +214,7 @@ impl<'a> LabelsQuery<'a> {
                 for time in times {
                     // If any evaluation fails, OpenUSD discards the
                     // complete interval union, rather than a partial set.
-                    let Some(at_time) = api.labels_at(time, layerstack::InterpolationType::Held)
-                    else {
+                    let Some(at_time) = api.labels_at(Time::held(time)) else {
                         labels.clear();
                         break;
                     };

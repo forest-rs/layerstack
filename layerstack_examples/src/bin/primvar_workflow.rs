@@ -45,8 +45,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "vertex",
         1,
     )?;
-    weights.set_indices(&mut edit, &[0, 1], Some(1.))?;
-    weights.set_indices(&mut edit, &[1, 0], Some(2.))?;
+    weights.set_indices_at(&mut edit, 1., &[0, 1])?;
+    weights.set_indices_at(&mut edit, 2., &[1, 0])?;
     let id = mesh.create_primvar(
         &mut edit,
         "id",

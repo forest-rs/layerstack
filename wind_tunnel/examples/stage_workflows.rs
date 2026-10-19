@@ -6,7 +6,7 @@
 //! encoded ownership/copies, directory work and numeric decode/cache storage.
 //! Run the built binary under the host memory profiler for peak allocation/RSS;
 //! phase-boundary RSS is not peak memory and is not mapped address space.
-use layerstack::{EditTarget, PrimPredicate, PropertyPath, StageOptions, Transaction};
+use layerstack::{EditTarget, PrimPredicate, PropertyPath, StageOptions, Time, Transaction};
 use layerstack_io::{Filesystem, LoadOptions, StageDocument, UsdcArrayLoading, UsdcReadOptions};
 use std::{hint::black_box, time::Instant};
 
@@ -111,11 +111,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     let started = Instant::now();
     if let Some(property) = properties.first() {
-        black_box(document.stage().stage().try_resolve_property_path_at_time(
-            *property,
-            5.,
-            layerstack::InterpolationType::Linear,
-        )?);
+        black_box(
+            document
+                .stage()
+                .stage()
+                .try_resolve_property_path_at_time(*property, Time::at(5.))?,
+        );
     }
     report(
         &document,
@@ -125,20 +126,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     let started = Instant::now();
     for &property in &properties {
-        black_box(document.stage().stage().try_resolve_property_path_at_time(
-            property,
-            5.,
-            layerstack::InterpolationType::Linear,
-        )?);
+        black_box(
+            document
+                .stage()
+                .stage()
+                .try_resolve_property_path_at_time(property, Time::at(5.))?,
+        );
     }
     report(&document, "demand_all_arrays", started, properties.len());
     let started = Instant::now();
     for &property in &properties {
-        black_box(document.stage().stage().try_resolve_property_path_at_time(
-            property,
-            5.,
-            layerstack::InterpolationType::Linear,
-        )?);
+        black_box(
+            document
+                .stage()
+                .stage()
+                .try_resolve_property_path_at_time(property, Time::at(5.))?,
+        );
     }
     report(&document, "demand_all_warm", started, properties.len());
     let root_layer = document

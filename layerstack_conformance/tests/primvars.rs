@@ -126,7 +126,7 @@ fn primvar_authoring_and_rejections_preserve_undo() {
     .unwrap();
     var.set_interpolation(&mut edit, "vertex").unwrap();
     var.set_element_size(&mut edit, 1).unwrap();
-    var.set_indices(&mut edit, &[1, 0], None).unwrap();
+    var.set_indices(&mut edit, &[1, 0]).unwrap();
     let checkpoint = edit.transaction().clone();
     assert!(var.set_interpolation(&mut edit, "bogus").is_err());
     assert!(var.set_element_size(&mut edit, 0).is_err());

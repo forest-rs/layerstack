@@ -6,7 +6,7 @@
 
 use layerstack::{
     AssetResolveError, AssetResolver, InMemoryStore, InterpolationType, LayerId, PathInterner,
-    ResolvedAsset, Stage, StageOptions, TokenInterner, Value,
+    ResolvedAsset, Stage, StageOptions, Time, TokenInterner, Value,
 };
 use serde::Deserialize;
 use std::{
@@ -250,7 +250,7 @@ fn check(
     for (&time, expected) in queries.iter().zip(expected) {
         let actual = numeric_array(
             stage
-                .resolve_property_path_at_time(path, time, InterpolationType::Linear)
+                .resolve_property_path_at_time(path, Time::at(time))
                 .map(|r| r.value),
         )
         .unwrap();
@@ -339,21 +339,14 @@ fn raw_sparse_clips_interpolate_and_explain_the_weaker_default_base() {
     );
     let path = store.property_path("/P.x");
     let source = stage
-        .property_clip_source(
-            path.prim_path(),
-            path.property(),
-            5.,
-            InterpolationType::Linear,
-        )
+        .property_clip_source(path.prim_path(), path.property(), Time::at(5.))
         .unwrap();
     assert_eq!(source.lower.layer, Some(LayerId(2)));
     let resolved = stage
-        .read_property_with_provenance(path, layerstack::Time::at(5.), |v| Some(v.clone()))
+        .read_property_with_provenance(path, Time::at(5.), |v| Some(v.clone()))
         .unwrap();
     assert_eq!(resolved.provenance.unwrap().layer, LayerId(2));
-    let explanation = stage
-        .explain_property_value_at_time(path, 5., InterpolationType::Linear)
-        .unwrap();
+    let explanation = stage.explain_property_value(path, Time::at(5.)).unwrap();
     assert_eq!(explanation.source, layerstack::ValueSource::ValueClips);
     assert_eq!(numeric_array(explanation.value), Some(vec![150., 0.]));
     assert!(
@@ -393,12 +386,7 @@ fn authored_sparse_samples_at_the_clip_anchor_exclude_that_sites_clips() {
     let path = store.property_path("/P.x");
     assert!(
         stage
-            .property_clip_source(
-                path.prim_path(),
-                path.property(),
-                5.,
-                InterpolationType::Linear
-            )
+            .property_clip_source(path.prim_path(), path.property(), Time::at(5.))
             .is_none()
     );
 }
@@ -434,20 +422,15 @@ fn skeleton_discovery_keeps_clip_samples_after_a_dense_to_sparse_transition() {
     let property = store.property_path("/P.blendShapeWeights");
     assert!(
         stage
-            .property_clip_source(
-                property.prim_path(),
-                property.property(),
-                5.,
-                InterpolationType::Linear
-            )
+            .property_clip_source(property.prim_path(), property.property(), Time::at(5.))
             .is_some()
     );
     let explanation = stage
-        .explain_property_value_at_time(property, 5., InterpolationType::Linear)
+        .explain_property_value(property, Time::at(5.))
         .unwrap();
     assert_eq!(numeric_array(explanation.value), Some(vec![150., 50.]));
     let resolved = stage
-        .read_property_with_provenance(property, layerstack::Time::at(5.), |v| Some(v.clone()))
+        .read_property_with_provenance(property, Time::at(5.), |v| Some(v.clone()))
         .unwrap();
     assert_eq!(resolved.provenance.unwrap().layer, LayerId(1));
     let path = store.path("/P");
@@ -585,17 +568,10 @@ fn stronger_sparse_upper_endpoint_lands_on_a_synthetic_clip_activation() {
     let path = store.property_path("/P.x");
     assert!(
         stage
-            .property_clip_source(
-                path.prim_path(),
-                path.property(),
-                2.,
-                InterpolationType::Held
-            )
+            .property_clip_source(path.prim_path(), path.property(), Time::held(2.))
             .is_some()
     );
-    let explanation = stage
-        .explain_property_value_at_time(path, 2., InterpolationType::Held)
-        .unwrap();
+    let explanation = stage.explain_property_value(path, Time::held(2.)).unwrap();
     assert_eq!(explanation.source, layerstack::ValueSource::ValueClips);
     assert!(explanation.clip.is_some());
     assert_eq!(
@@ -620,9 +596,7 @@ fn stronger_sparse_upper_endpoint_lands_on_a_synthetic_clip_activation() {
         layerstack::OpinionRole::Contributed(layerstack::Contribution::Value)
     );
     let resolved = stage
-        .read_property_with_provenance(path, layerstack::Time::held(2.), |value| {
-            Some(value.clone())
-        })
+        .read_property_with_provenance(path, Time::held(2.), |value| Some(value.clone()))
         .unwrap();
     assert_eq!(
         numeric_array(Some(resolved.value)),
@@ -668,7 +642,7 @@ fn synthetic_sparse_clip_lower_metadata_advances_the_weaker_sample_query() {
     for (&time, value) in queries.iter().zip(&expected) {
         let actual = numeric_array(
             stage
-                .resolve_property_path_at_time(path, time, InterpolationType::Held)
+                .resolve_property_path_at_time(path, Time::held(time))
                 .map(|r| r.value),
         );
         assert_eq!(actual.as_ref(), Some(value), "held time {time}");

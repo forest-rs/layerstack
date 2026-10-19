@@ -709,7 +709,7 @@ impl PrimEdit {
             pv.set_interpolation(edit, interpolation)?;
             pv.set_element_size(edit, element_size)?;
             pv.set(edit, value)?;
-            pv.set_indices(edit, indices, None)?;
+            pv.set_indices(edit, indices)?;
             Ok(pv)
         })
     }
@@ -893,32 +893,73 @@ impl PrimvarEdit {
         edit.set_property_metadata(self.prim, &self.name, "elementSize", Value::Int(size));
         Ok(self)
     }
-    /// Authors indices for an array-valued primvar, at default or numeric time.
+    /// Authors the default indices of an array-valued primvar.
+    ///
+    /// OpenUSD: `UsdGeomPrimvar::SetIndices` at the default time.
+    ///
+    /// Spec: AOUSD Core §7.6.4.1.3 (`default`).
     pub fn set_indices(
         &self,
         edit: &mut SchemaEdit<'_>,
         indices: &[i32],
-        time: Option<f64>,
     ) -> Result<&Self, PrimvarError> {
-        self.set_indices_owned(edit, indices.to_vec(), time)
+        self.set_indices_owned(edit, indices.to_vec())
     }
-    /// Transfers an index vector without copying its allocation or capacity.
-    /// Allocates only a shared owner; `time` is mapped through the edit target.
+    /// [`Self::set_indices`] as a time sample at the time code `time`,
+    /// mapped through the edit target.
+    pub fn set_indices_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        indices: &[i32],
+    ) -> Result<&Self, PrimvarError> {
+        self.set_indices_owned_at(edit, time, indices.to_vec())
+    }
+    /// Transfers a default index vector without copying its allocation or
+    /// capacity. Allocates only a shared owner.
     pub fn set_indices_owned(
         &self,
         edit: &mut SchemaEdit<'_>,
         indices: Vec<i32>,
-        time: Option<f64>,
     ) -> Result<&Self, PrimvarError> {
-        self.set_indices_shared(edit, Arc::new(indices), time)
+        self.set_indices_shared(edit, Arc::new(indices))
     }
-    /// Transfers a shared index buffer without copying or allocating elements.
-    /// Indices are checked against values when flattening or publishing a mesh.
+    /// [`Self::set_indices_owned`] as a time sample at the time code `time`,
+    /// mapped through the edit target.
+    pub fn set_indices_owned_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        indices: Vec<i32>,
+    ) -> Result<&Self, PrimvarError> {
+        self.set_indices_shared_at(edit, time, Arc::new(indices))
+    }
+    /// Transfers a shared default index buffer without copying or
+    /// allocating elements. Indices are checked against values when
+    /// flattening or publishing a mesh.
     pub fn set_indices_shared(
         &self,
         edit: &mut SchemaEdit<'_>,
         indices: Arc<Vec<i32>>,
+    ) -> Result<&Self, PrimvarError> {
+        self.write_indices(edit, None, indices)
+    }
+    /// [`Self::set_indices_shared`] as a time sample at the time code
+    /// `time`, mapped through the edit target.
+    pub fn set_indices_shared_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        indices: Arc<Vec<i32>>,
+    ) -> Result<&Self, PrimvarError> {
+        self.write_indices(edit, Some(time), indices)
+    }
+    /// Authors `indices` as the default, or the sample at `time`.
+    fn write_indices(
+        &self,
+        edit: &mut SchemaEdit<'_>,
         time: Option<f64>,
+        indices: Arc<Vec<i32>>,
     ) -> Result<&Self, PrimvarError> {
         if !self.validate(edit)?.is_array() {
             return Err(PrimvarError::TypeMismatch(self.name.clone()));

@@ -301,17 +301,12 @@ impl<'a> Telescope<'a> {
         )
     }
 
-    #[doc = "[`Self::telescope_aperture`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::telescope_aperture`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn telescope_aperture_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<f32> {
+    pub fn telescope_aperture_at(&self, time: ::layerstack::Time) -> Option<f32> {
         self.read_value_at(
             "telescope:aperture",
             time,
-            interp,
             ::layerstack_schemas::value::read_float,
         )
     }
@@ -376,7 +371,7 @@ impl TelescopeEdit {
     #[doc = "USD attribute `telescope:aperture` (`float`; fallback `0.2`)."]
     pub fn set_telescope_aperture(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = ::layerstack_schemas::value::write_float(value, edit.tokens());
-        self.write_value(edit, "telescope:aperture", None, value);
+        self.write_value(edit, "telescope:aperture", value);
         self
     }
 
@@ -388,7 +383,7 @@ impl TelescopeEdit {
         value: f32,
     ) -> &Self {
         let value = ::layerstack_schemas::value::write_float(value, edit.tokens());
-        self.write_value(edit, "telescope:aperture", Some(time), value);
+        self.write_value_at(edit, "telescope:aperture", time, value);
         self
     }
 
@@ -399,7 +394,7 @@ impl TelescopeEdit {
         value: TelescopeTelescopeMount,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "telescope:mount", None, value);
+        self.write_value(edit, "telescope:mount", value);
         self
     }
 

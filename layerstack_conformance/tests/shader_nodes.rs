@@ -91,14 +91,7 @@ fn identifier_checks_defaults_connections_samples_and_undo_are_explicit() {
         view.roughness().is_none(),
         "samples do not become default values"
     );
-    assert!(
-        (view
-            .roughness_at(2.0, layerstack::InterpolationType::Linear)
-            .unwrap()
-            - 0.5)
-            .abs()
-            < 1e-6
-    );
+    assert!((view.roughness_at(Time::at(2.0)).unwrap() - 0.5).abs() < 1e-6);
     assert!(
         view.diffuse_color().is_none(),
         "reads do not follow connections"

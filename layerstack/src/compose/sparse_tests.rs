@@ -4,8 +4,8 @@
 use super::*;
 use crate::doc::{LayerOffset, Reference};
 use crate::{
-    InMemoryStore, InterpolationType, Layer, PrimSpec, PropertyPath, PropertySpec, PropertyType,
-    SublayerEntry, Value,
+    InMemoryStore, Layer, PrimSpec, PropertyPath, PropertySpec, PropertyType, SublayerEntry, Time,
+    Value,
 };
 use alloc::vec;
 
@@ -47,10 +47,10 @@ fn compare(
     );
     for time in [-10.0, 0.0, 3.5, 15.0, 30.0] {
         assert_eq!(
-            fast.resolve_property_path_at_time(property, time, InterpolationType::Linear)
+            fast.resolve_property_path_at_time(property, Time::at(time))
                 .map(|r| r.value),
             general
-                .resolve_property_path_at_time(property, time, InterpolationType::Linear)
+                .resolve_property_path_at_time(property, Time::at(time))
                 .map(|r| r.value)
         );
     }

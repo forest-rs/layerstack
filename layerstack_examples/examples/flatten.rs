@@ -29,9 +29,8 @@ use std::sync::Arc;
 
 use layerstack::stage::flatten::{FindingKind, FlattenRequirements, Instancing, Transformation};
 use layerstack::{
-    AssetResolveError, AssetResolver, InMemoryStore, InterpolationType, Layer, LayerId, ListOp,
-    PathInterner, PropertyPath, ResolvedAsset, ResolvedValue, Stage, StageOptions, TokenInterner,
-    Value,
+    AssetResolveError, AssetResolver, InMemoryStore, Layer, LayerId, ListOp, PathInterner,
+    PropertyPath, ResolvedAsset, ResolvedValue, Stage, StageOptions, Time, TokenInterner, Value,
 };
 
 const GROVE: &str = r#"#usda 1.0
@@ -260,7 +259,7 @@ fn main() {
             let path = PropertyPath::new(prim, sway);
             let value = |stage: &Stage| {
                 stage
-                    .resolve_property_path_at_time(path, time, InterpolationType::Linear)
+                    .resolve_property_path_at_time(path, Time::at(time))
                     .map(|resolved| resolved.value)
             };
             assert_eq!(value(&flattened), value(&stage), "{tree}.sway at {time}");
@@ -277,7 +276,7 @@ fn main() {
     let elm = store.property_path("/Grove/Elm.sway");
     assert_eq!(
         flattened
-            .resolve_property_path_at_time(elm, 15.0, InterpolationType::Linear)
+            .resolve_property_path_at_time(elm, Time::at(15.0))
             .map(|resolved| resolved.value),
         Some(Value::Float(1.0)),
         "the retimed Elm reaches full sway at stage time 15"

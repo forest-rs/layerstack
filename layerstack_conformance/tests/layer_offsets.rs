@@ -35,7 +35,7 @@
 
 use std::collections::BTreeMap;
 
-use layerstack::{InterpolationType, LayerOffset, Stage, StageOptions, Value};
+use layerstack::{LayerOffset, Stage, StageOptions, Time, Value};
 use layerstack_conformance::{
     usda_real::{LoadedStage, load_entry_usda},
     workspace_root,
@@ -162,7 +162,7 @@ fn time_samples_take_the_authoring_sublayer_offset() {
         let property = loaded.store.property_path(attr);
         for &(time, expected) in probes {
             let value = stage
-                .resolve_property_path_at_time(property, time, InterpolationType::Linear)
+                .resolve_property_path_at_time(property, Time::at(time))
                 .map(|resolved| resolved.value);
             if value != Some(Value::Double(expected)) {
                 mismatches.push(format!(
@@ -190,7 +190,7 @@ fn explanations_report_the_combined_offset() {
         let property = loaded.store.property_path(attr);
         let (time, _) = oracle.samples[attr][0];
         let explanation = stage
-            .explain_property_value_at_time(property, time, InterpolationType::Linear)
+            .explain_property_value(property, Time::at(time))
             .expect("explained");
         let strongest = explanation.contributors().next().expect("a contributor");
         let expected = LayerOffset { offset, scale };

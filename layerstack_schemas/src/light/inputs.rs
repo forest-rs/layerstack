@@ -138,17 +138,9 @@ fn capture_value(scene: &Scene<'_>, path: PropertyPath, time: Time) -> LightValu
                     ResolvedValue::Scalar(v) => Some((v, r.provenance)),
                     _ => None,
                 }),
-            Time::At {
-                code,
-                interpolation,
-            } => scene
+            Time::At { .. } => scene
                 .stage()
-                .resolve_value_at_time_with_schema(
-                    path.prim_path(),
-                    path.property(),
-                    code,
-                    interpolation,
-                )
+                .resolve_value_at_time_with_schema(path.prim_path(), path.property(), time)
                 .map(|r| (r.value, r.provenance)),
         }
     };

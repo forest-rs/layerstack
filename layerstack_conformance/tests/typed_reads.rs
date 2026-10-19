@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use layerstack::{InterpolationType, LayerId, ResolvedValue, Stage, StageOptions, Time, Value};
+use layerstack::{LayerId, ResolvedValue, Stage, StageOptions, Time, Value};
 use layerstack_conformance::{
     usda_real::{LoadedStage, load_entry_usda},
     workspace_root,
@@ -243,22 +243,17 @@ fn typed_defaults_skip_incompatible_opinions_without_numeric_retry() {
                         _ => None,
                     });
             let raw_numeric = stage
-                .resolve_property_path_at_time(property, 9.0, InterpolationType::Linear)
+                .resolve_property_path_at_time(property, Time::at(9.0))
                 .and_then(|resolved| {
                     convert(&resolved.value, record["rawNumericKind"].as_str().unwrap())
                 });
             let explained_default = stage
-                .explain_property_value(property)
+                .explain_property_value(property, Time::Default)
                 .unwrap()
                 .value
-                .and_then(|value| match value {
-                    ResolvedValue::Scalar(value) => {
-                        convert(&value, record["rawDefaultKind"].as_str().unwrap())
-                    }
-                    _ => None,
-                });
+                .and_then(|value| convert(&value, record["rawDefaultKind"].as_str().unwrap()));
             let explained_numeric = stage
-                .explain_property_value_at_time(property, 9.0, InterpolationType::Linear)
+                .explain_property_value(property, Time::at(9.0))
                 .unwrap()
                 .value
                 .and_then(|value| convert(&value, record["rawNumericKind"].as_str().unwrap()));
@@ -361,7 +356,7 @@ fn typed_defaults_skip_incompatible_opinions_without_numeric_retry() {
             );
             assert_eq!(
                 light
-                    .intensity_at(9.0, InterpolationType::Linear)
+                    .intensity_at(Time::at(9.0))
                     .map(|v| json!(v))
                     .unwrap_or(Json::Null),
                 record["numeric"]
@@ -457,14 +452,14 @@ fn empty_sample_maps_preserve_default_sources_when_flattened() {
     ] {
         let property = loaded.store.property_path(name);
         let explained = stage
-            .explain_property_value_at_time(property, 9.0, InterpolationType::Linear)
+            .explain_property_value(property, Time::at(9.0))
             .unwrap();
         assert!(
             matches!(explained.source, ValueSource::Default),
             "{name}: default source"
         );
         let resolved = stage
-            .resolve_property_path_at_time(property, 9.0, InterpolationType::Linear)
+            .resolve_property_path_at_time(property, Time::at(9.0))
             .unwrap();
         assert_eq!(resolved.provenance.unwrap().layer, source);
         assert_eq!(convert(&resolved.value, "float[]"), Some(json!(expected)));

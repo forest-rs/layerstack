@@ -216,22 +216,23 @@ pub(crate) fn spec_at<'a>(
 /// its layer's strength and id.
 pub(crate) fn specs<'a>(
     store: &'a dyn LayerStore,
-    stack: &'a ComputedStack,
+    stack: &'a ComputedStack<'_>,
     site: &'a SpecPath,
 ) -> impl Iterator<Item = (usize, LayerId, SpecRef<'a>)> + 'a {
+    let paths = store.paths();
     stack
         .layers
         .iter()
+        .zip(&stack.resolved)
         .enumerate()
-        .filter_map(move |(strength, id)| {
-            let layer = store.layer(*id)?;
-            Some((strength, *id, spec_at(layer, site, store.paths())?))
+        .filter_map(move |(strength, (id, layer))| {
+            Some((strength, *id, spec_at(layer, site, paths)?))
         })
 }
 
 /// Whether a layer of `stack` authors a spec at `site`.
 /// OpenUSD: `PcpComposeSiteHasSpecs`.
-pub(crate) fn has_specs(store: &dyn LayerStore, stack: &ComputedStack, site: &SpecPath) -> bool {
+pub(crate) fn has_specs(store: &dyn LayerStore, stack: &ComputedStack<'_>, site: &SpecPath) -> bool {
     specs(store, stack, site).next().is_some()
 }
 
@@ -239,7 +240,7 @@ pub(crate) fn has_specs(store: &dyn LayerStore, stack: &ComputedStack, site: &Sp
 /// OpenUSD: `PcpComposeSiteHasValueClips`.
 pub(crate) fn has_value_clips(
     store: &dyn LayerStore,
-    stack: &ComputedStack,
+    stack: &ComputedStack<'_>,
     site: &SpecPath,
 ) -> bool {
     let Some(clips) = store.tokens().lookup("clips") else {
@@ -265,7 +266,7 @@ pub(crate) struct SiteArc {
 /// OpenUSD: `_PcpComposeSiteReferencesOrPayloads`.
 pub(crate) fn references(
     store: &dyn LayerStore,
-    stack: &ComputedStack,
+    stack: &ComputedStack<'_>,
     site: &SpecPath,
     payloads: bool,
     scope: Option<&ExpressionScope>,
@@ -333,7 +334,7 @@ pub(crate) fn references(
 /// `PcpComposeSiteSpecializes`.
 pub(crate) fn class_arcs(
     store: &dyn LayerStore,
-    stack: &ComputedStack,
+    stack: &ComputedStack<'_>,
     site: &SpecPath,
     specializes: bool,
 ) -> Vec<PathId> {
@@ -362,7 +363,7 @@ pub(crate) fn class_arcs(
 /// OpenUSD: `PcpComposeSiteVariantSets` in `pxr/usd/pcp/composeSite.cpp`.
 pub(crate) fn variant_sets(
     store: &dyn LayerStore,
-    stack: &ComputedStack,
+    stack: &ComputedStack<'_>,
     site: &SpecPath,
 ) -> Vec<TokenId> {
     let authored: Vec<&ListOp<TokenId>> = specs(store, stack, site)
@@ -380,7 +381,7 @@ pub(crate) fn variant_sets(
 /// OpenUSD: `PcpComposeSiteVariantSetOptions`.
 pub(crate) fn variant_set_options(
     store: &dyn LayerStore,
-    stack: &ComputedStack,
+    stack: &ComputedStack<'_>,
     site: &SpecPath,
     set: TokenId,
 ) -> HashSet<TokenId> {
@@ -397,7 +398,7 @@ pub(crate) fn variant_set_options(
 /// OpenUSD: `PcpComposeSiteHasVariantSelections`.
 pub(crate) fn has_variant_selections(
     store: &dyn LayerStore,
-    stack: &ComputedStack,
+    stack: &ComputedStack<'_>,
     site: &SpecPath,
 ) -> bool {
     specs(store, stack, site).any(|(_, _, spec)| !spec.variant_selections().is_empty())
@@ -408,7 +409,7 @@ pub(crate) fn has_variant_selections(
 /// `PcpComposeSiteVariantSelection`.
 pub(crate) fn authored_selections(
     store: &dyn LayerStore,
-    stack: &ComputedStack,
+    stack: &ComputedStack<'_>,
     site: &SpecPath,
     set: TokenId,
 ) -> Vec<TokenId> {
@@ -428,7 +429,7 @@ pub(crate) fn authored_selections(
 /// read it without taking the index's lock.
 pub(crate) fn compose_child_names(
     store: &dyn LayerStore,
-    stack: &ComputedStack,
+    stack: &ComputedStack<'_>,
     site: &SpecPath,
     children: &ChildIndex,
     order: &mut Vec<TokenId>,
@@ -436,10 +437,10 @@ pub(crate) fn compose_child_names(
     unlisted: &mut Vec<TokenId>,
 ) {
     let layers = stack
-        .layers
+        .resolved
         .iter()
         .zip(stack.children.iter())
-        .map(|(&id, memo)| (id, Some(memo)));
+        .map(|(&layer, memo)| (Some(layer), Some(memo)));
     compose_child_names_of(store, layers, site, children, order, names, unlisted);
 }
 
@@ -453,7 +454,7 @@ pub(crate) fn compose_child_names_in(
     names: &mut HashSet<TokenId>,
     unlisted: &mut Vec<TokenId>,
 ) {
-    let layers = layers.iter().map(|&id| (id, None));
+    let layers = layers.iter().map(|&id| (store.layer(id), None));
     compose_child_names_of(store, layers, site, children, order, names, unlisted);
 }
 
@@ -461,15 +462,15 @@ pub(crate) fn compose_child_names_in(
 /// memo of its listing if it has one.
 fn compose_child_names_of<'m>(
     store: &dyn LayerStore,
-    layers: impl DoubleEndedIterator<Item = (LayerId, Option<&'m ChildListing>)>,
+    layers: impl DoubleEndedIterator<Item = (Option<&'m Layer>, Option<&'m ChildListing>)>,
     site: &SpecPath,
     children: &ChildIndex,
     order: &mut Vec<TokenId>,
     names: &mut HashSet<TokenId>,
     unlisted: &mut Vec<TokenId>,
 ) {
-    for (id, memo) in layers.rev() {
-        let Some(layer) = store.layer(id) else {
+    for (layer, memo) in layers.rev() {
+        let Some(layer) = layer else {
             continue;
         };
         let spec = spec_at(layer, site, store.paths());

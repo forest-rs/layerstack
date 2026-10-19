@@ -21,7 +21,7 @@ use hashbrown::HashMap;
 
 use crate::{
     composition_error::CompositionError,
-    doc::{LayerId, LayerOffset, LayerStore},
+    doc::{Layer, LayerId, LayerOffset, LayerStore},
     expression_variables::{EXPRESSION_VARIABLES, VariableReads},
     layer_stack::{LayerStack, LayerStackIdentifier},
     path::PathId,
@@ -34,15 +34,17 @@ use crate::{
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub(crate) struct StackId(pub(crate) u32);
 
-/// One computed layer stack.
-#[derive(Debug)]
-pub(crate) struct ComputedStack {
+/// One computed layer stack, of layers the store `'s` holds.
+pub(crate) struct ComputedStack<'s> {
     pub(crate) identifier: LayerStackIdentifier,
     /// The root layers of the layer stacks whose expression variables this
     /// one composes, outermost first, ending with its own.
     pub(crate) chain: Arc<[LayerStackIdentifier]>,
     /// The resident layers, strongest first, and their offsets.
     pub(crate) layers: Vec<LayerId>,
+    /// Each of `layers`, as the store holds it: the store does not change
+    /// while a composition reads it, so its layers are looked up once.
+    pub(crate) resolved: Box<[&'s Layer]>,
     pub(crate) offsets: Vec<LayerOffset>,
     /// `layers` with their offsets, shared by the stage's nodes of this
     /// layer stack ([`crate::prim_index_graph::PrimNode::stack_layers`]).
@@ -62,7 +64,17 @@ pub(crate) struct ComputedStack {
     pub(crate) reads: VariableReads,
 }
 
-impl ComputedStack {
+impl core::fmt::Debug for ComputedStack<'_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("ComputedStack")
+            .field("identifier", &self.identifier)
+            .field("layers", &self.layers)
+            .field("errors", &self.errors)
+            .finish_non_exhaustive()
+    }
+}
+
+impl ComputedStack<'_> {
     pub(crate) fn has_relocates(&self) -> bool {
         !self.relocations.is_empty()
     }
@@ -82,19 +94,32 @@ type StackKey = (LayerStackIdentifier, Arc<[LayerStackIdentifier]>);
 
 /// Every layer stack computed so far.
 #[derive(Default)]
-pub(crate) struct LayerStacks {
-    stacks: Slots<ComputedStack>,
+pub(crate) struct LayerStacks<'s> {
+    stacks: Slots<ComputedStack<'s>>,
     len: AtomicU32,
     by_key: ReadLock<HashMap<StackKey, StackId>>,
 }
 
-impl LayerStacks {
-    pub(crate) fn get(&self, id: StackId) -> &ComputedStack {
+/// Reads computed layer stacks by id, for a reader borrowing the stacks
+/// for less long than their layers live.
+pub(crate) trait Stacks {
+    /// The stack `id`.
+    fn stack(&self, id: StackId) -> &ComputedStack<'_>;
+}
+
+impl Stacks for LayerStacks<'_> {
+    fn stack(&self, id: StackId) -> &ComputedStack<'_> {
+        self.get(id)
+    }
+}
+
+impl<'s> LayerStacks<'s> {
+    pub(crate) fn get(&self, id: StackId) -> &ComputedStack<'s> {
         self.stacks.get(id.0).expect("computed layer stack")
     }
 
     /// The stacks computed so far, in the order they were recorded.
-    pub(crate) fn iter(&self) -> impl Iterator<Item = &ComputedStack> {
+    pub(crate) fn iter(&self) -> impl Iterator<Item = &ComputedStack<'s>> {
         (0..self.len.load(Ordering::Acquire)).map(|n| self.get(StackId(n)))
     }
 
@@ -102,7 +127,7 @@ impl LayerStacks {
     /// stacks of `outer`'s chain (`None` for the stage's own).
     pub(crate) fn find_or_compute(
         &self,
-        store: &dyn LayerStore,
+        store: &'s dyn LayerStore,
         identifier: LayerStackIdentifier,
         outer: Option<StackId>,
     ) -> StackId {
@@ -157,11 +182,11 @@ impl LayerStacks {
 
 /// Gathers the layer stack rooted at `identifier`, reached through the
 /// layer stacks of `chain`, and its relocations.
-fn compute(
-    store: &dyn LayerStore,
+fn compute<'s>(
+    store: &'s dyn LayerStore,
     identifier: LayerStackIdentifier,
     chain: Arc<[LayerStackIdentifier]>,
-) -> ComputedStack {
+) -> ComputedStack<'s> {
     let mut full_chain: Vec<LayerStackIdentifier> = chain.to_vec();
     if full_chain.last() != Some(&identifier) {
         full_chain.push(identifier);
@@ -171,12 +196,17 @@ fn compute(
     let stack = LayerStack::gather_recording(store, &full_chain, &mut errors, Some(&mut reads));
     let relocations = RelocationTable::compute(store, &stack, &mut errors);
     let combined_source_to_target = combined_relocations(store, &relocations);
+    let mut resolved = Vec::with_capacity(stack.layers.len());
     let (layers, offsets): (Vec<_>, Vec<_>) = stack
         .layers
         .iter()
         .copied()
         .zip(stack.offsets.iter().copied())
-        .filter(|(layer, _)| store.layer(*layer).is_some())
+        .filter(|(layer, _)| {
+            let held = store.layer(*layer);
+            resolved.extend(held);
+            held.is_some()
+        })
         .unzip();
     let layer_offsets = layers
         .iter()
@@ -188,6 +218,7 @@ fn compute(
         identifier,
         chain,
         children,
+        resolved: resolved.into_boxed_slice(),
         layers,
         offsets,
         layer_offsets,

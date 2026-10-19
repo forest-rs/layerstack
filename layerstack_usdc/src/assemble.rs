@@ -41,8 +41,9 @@ use crate::numeric_array::*;
 use crate::section::{CrateSections, PathNode};
 use crate::value_rep::{
     CrateArrayEdit, CrateArrayEditOp, CrateListOp, CrateValue, DecodeBudget, DecodedField,
-    FloatArray, ListOpParts, RawValueRep, decode_field_within, decode_path_list_op_indices,
-    decode_text_indices, decode_token_vector_indices,
+    FloatArray, ListOpParts, RawValueRep, TextKind, decode_field_within,
+    decode_path_list_op_indices, decode_text_index, decode_text_indices,
+    decode_token_vector_indices, scalar_text_kind,
 };
 use crate::value_type::{SpecForm, ValueType};
 
@@ -101,6 +102,7 @@ pub fn assemble(
         paths,
         target_paths: HashMap::new(),
         prim_paths: Vec::new(),
+        pending_paths: Vec::new(),
         owners: Vec::new(),
         property_names: Vec::new(),
         targets: Vec::new(),
@@ -116,6 +118,7 @@ pub fn assemble(
         fieldset_uses: Vec::new(),
         shared_prims: HashMap::new(),
         shared_properties: HashMap::new(),
+        property_types: HashMap::new(),
     };
 
     let layer = ctx.assemble_layer()?;
@@ -145,6 +148,8 @@ struct AssembleCtx<'a> {
     /// variant branches, found from the path tree when first asked
     /// ([`Self::prim_path_at`]).
     prim_paths: Vec<PrimPathAt>,
+    /// The entries [`Self::prim_path_at`] is finding, kept between calls.
+    pending_paths: Vec<usize>,
     /// What each entry of the path table is as the prim path text of a
     /// property path ([`Self::property_owner`]).
     owners: Vec<Owner>,
@@ -181,6 +186,10 @@ struct AssembleCtx<'a> {
     /// The property spec built for each fieldset property specs share, by
     /// the fieldset and whether the specs are attributes.
     shared_properties: HashMap<(u32, bool), Shared<Arc<PropertySpec>>>,
+    /// The declared type of the attributes declaring each `typeName`, by
+    /// its token index (`u32::MAX` for none) and whether an array value
+    /// makes it an array ([`Self::attribute_property_type`]).
+    property_types: HashMap<(u32, bool), PropertyType>,
 }
 
 /// A spec built from a fieldset other specs use too, for each of them to
@@ -510,7 +519,11 @@ impl<'a> AssembleCtx<'a> {
                     self.report(name, None, "prim spec path could not be parsed")?;
                     continue;
                 }
-                let (prim, children) = self.prim_spec(i, name, &mut decoded, &mut fields)?;
+                let (mut prim, children) = self.prim_spec(i, name, &mut decoded, &mut fields)?;
+                // Its property specs come next: as many as it lists, mostly.
+                if let Some(children) = &children {
+                    prim.properties.reserve_exact(children.len());
+                }
                 let key = self.prim_key_at(index);
                 let at = prim_specs_map.insert(index, key, prim);
                 if at == property_children.len() {
@@ -830,6 +843,11 @@ impl<'a> AssembleCtx<'a> {
                         self.sections,
                         self.budget,
                     )?)
+                } else if let Some(kind) = scalar_text_kind(&rep) {
+                    // Converted from the token table's text, not a copy.
+                    let index =
+                        decode_text_index(&rep, self.data, self.sections, kind, self.budget)?;
+                    DecodedField::Text(kind, index)
                 } else {
                     decode_field_within(&rep, self.data, self.sections, self.budget)?
                 };
@@ -889,8 +907,8 @@ impl<'a> AssembleCtx<'a> {
                     prim_order = Some(self.extract_token_names(value));
                 }
                 "defaultPrim" => {
-                    if let Some(CrateValue::Token(name)) = value.value() {
-                        layer.set_default_prim(Some(self.tokens.intern(name)));
+                    if let DecodedField::Text(TextKind::Token, index) = *value {
+                        layer.set_default_prim(Some(self.token_id(index)));
                     }
                 }
                 "layerRelocates" => {
@@ -986,10 +1004,10 @@ impl<'a> AssembleCtx<'a> {
                     }
                 }
                 "typeName" => {
-                    if let Some(CrateValue::Token(t)) = value.value()
-                        && !t.is_empty()
+                    if let DecodedField::Text(TextKind::Token, index) = *value
+                        && !self.lookup_token(index).is_empty()
                     {
-                        spec.type_name = Some(self.tokens.intern(t));
+                        spec.type_name = Some(self.token_id(index));
                     }
                 }
                 "primChildren" => {
@@ -1507,6 +1525,15 @@ impl<'a> AssembleCtx<'a> {
             DecodedField::MathArray(array) => convert_math_array(array),
             // List ops are not plain values.
             DecodedField::PathListOp(_) => Value::Null,
+            DecodedField::Text(kind, index) => {
+                let text = self.lookup_token(*index);
+                match kind {
+                    TextKind::Token => Value::Token(self.token_id(*index)),
+                    TextKind::String => Value::String(Arc::from(text)),
+                    TextKind::AssetPath => Value::Asset(Arc::from(text)),
+                    TextKind::PathExpression => Value::PathExpression(Arc::from(text)),
+                }
+            }
             // What `Value::array` packs tokens into, without its copy.
             DecodedField::TokenArray(indices) => Value::Array(
                 indices
@@ -1932,29 +1959,33 @@ impl<'a> AssembleCtx<'a> {
         Ok(spec)
     }
 
+    /// The declared type of an attribute spec with `fields`: its
+    /// `typeName`, made an array type by an array value. Many attributes
+    /// declare one type, so each is parsed once per read and shared.
     fn attribute_property_type(&mut self, fields: &[(&str, DecodedField<'_>)]) -> PropertyType {
-        let mut type_name = String::new();
-        for (name, value) in fields {
-            if *name == "typeName"
-                && let Some(CrateValue::Token(token)) = value.value()
-            {
-                type_name = token.clone();
-                break;
-            }
-        }
-
+        let type_name = fields.iter().find_map(|(name, value)| match *value {
+            DecodedField::Text(TextKind::Token, index) if *name == "typeName" => Some(index),
+            _ => None,
+        });
         let inferred_array = fields.iter().any(|(name, value)| {
             matches!(*name, "default" | "timeSamples")
+                && !matches!(value, DecodedField::Text(..))
                 && value.value().is_none_or(crate_value_is_array)
         });
-
+        let key = (type_name.unwrap_or(u32::MAX), inferred_array);
+        if let Some(found) = self.property_types.get(&key) {
+            return found.clone();
+        }
+        let mut type_name = String::from(type_name.map_or("", |index| self.lookup_token(index)));
         // `typeName` spells arrays with `[]` (`point3f[]`); an array value
         // makes the declaration an array too, as USDA ingestion does. A name
         // the value type table lacks is kept, as OpenUSD keeps it.
         if inferred_array && !type_name.ends_with("[]") {
             type_name.push_str("[]");
         }
-        PropertyType::parse(&type_name).unwrap_or_else(PropertyType::unregistered)
+        let found = PropertyType::parse(&type_name).unwrap_or_else(PropertyType::unregistered);
+        self.property_types.insert(key, found.clone());
+        found
     }
 
     // ── List op conversion ──────────────────────────────────────────
@@ -2366,6 +2397,7 @@ impl<'a> AssembleCtx<'a> {
         match field.value() {
             Some(CrateValue::ListOp(listop)) => self.convert_token_listop(listop),
             Some(_) => ListOp::explicit(self.extract_token_names(field)),
+            None if matches!(field, DecodedField::Text(..)) => ListOp::explicit(Vec::new()),
             None if matches!(field, DecodedField::TokenArray(_)) => {
                 ListOp::explicit(self.extract_token_names(field))
             }
@@ -2454,7 +2486,8 @@ impl<'a> AssembleCtx<'a> {
             self.prim_paths = alloc::vec![PrimPathAt::Unknown; nodes.len()];
         }
         // The entries up to the nearest found ancestor, nearest last.
-        let mut pending = Vec::new();
+        let mut pending = core::mem::take(&mut self.pending_paths);
+        pending.clear();
         let mut at = index as usize;
         while matches!(self.prim_paths.get(at), Some(PrimPathAt::Unknown)) {
             pending.push(at);
@@ -2486,6 +2519,7 @@ impl<'a> AssembleCtx<'a> {
             };
             self.prim_paths[at] = found.map_or(PrimPathAt::None, PrimPathAt::Some);
         }
+        self.pending_paths = pending;
         match self.prim_paths.get(index as usize) {
             Some(PrimPathAt::Some(path)) => Some(*path),
             _ => None,
@@ -3079,6 +3113,93 @@ def "Other" {}
         assert!(tree.layer == text.layer, "the same layer");
         assert_eq!(tree.diagnostics, text.diagnostics);
         assert!(tree.layer == read.emitted.layer, "the layer written");
+    }
+
+    /// Text values convert from the token table's text: strings, tokens,
+    /// asset paths and path expressions, as attribute defaults, prim
+    /// `typeName`s and metadata, and in a dictionary, through the generic
+    /// decoder. Attributes declaring one `typeName` share its type, except
+    /// where an array value makes it an array.
+    #[test]
+    fn text_values_convert_from_the_token_table() {
+        use crate::writer::{Spec, SpecForm as Form, Value as V, write_crate};
+        let attribute = |path: &str, type_name: &str, value: V| {
+            Spec::new(path, Form::Attribute)
+                .with_field("typeName", V::Token(type_name.into()))
+                .with_field("default", value)
+        };
+        let bytes = write_crate(&[
+            Spec::new("/", Form::PseudoRoot)
+                .with_field("primChildren", V::TokenVector(alloc::vec!["A".into()]))
+                .with_field("defaultPrim", V::Token("A".into())),
+            Spec::new("/A", Form::Prim)
+                .with_field("specifier", V::Specifier(Specifier::Def))
+                .with_field("typeName", V::Token("Scope".into()))
+                .with_field("kind", V::Token("component".into()))
+                .with_field("documentation", V::String("a note".into())),
+            attribute("/A.s", "string", V::String("hello".into())),
+            attribute("/A.t", "token", V::Token("there".into())),
+            attribute("/A.u", "asset", V::Asset("./u.usda".into())),
+            attribute("/A.e", "pathExpression", V::PathExpression("/A/*".into())),
+            attribute("/A.one", "int", V::Int(1)),
+            attribute("/A.many", "int", V::IntArray(alloc::vec![1, 2])),
+            Spec::new("/A.d", Form::Attribute)
+                .with_field("typeName", V::Token("int".into()))
+                .with_field(
+                    "customData",
+                    V::Dictionary(alloc::vec![("k".into(), V::String("v".into()))]),
+                ),
+        ])
+        .unwrap();
+        let (tokens, paths) = (TokenInterner::default(), PathInterner::default());
+        let read = crate::read_usdc(&bytes, LayerId(1), &tokens, &paths, &mut NoAssets).unwrap();
+        assert!(read.diagnostics.is_empty(), "{:?}", read.diagnostics);
+        let layer = &read.layer;
+        assert_eq!(layer.default_prim(), Some(tokens.intern("A")));
+        let a = paths.intern(Path::parse_absolute("/A", &tokens).unwrap());
+        let prim = layer.prims().get(&a).unwrap();
+        assert_eq!(prim.type_name, Some(tokens.intern("Scope")));
+        let field = |name: &str| {
+            let name = tokens.intern(name);
+            prim.fields
+                .iter()
+                .find(|f| f.name == name)
+                .map(|f| f.value.clone())
+        };
+        assert_eq!(
+            field("kind"),
+            Some(FieldValue::Value(Value::Token(tokens.intern("component"))))
+        );
+        assert_eq!(
+            field("documentation"),
+            Some(FieldValue::Value(Value::String("a note".into())))
+        );
+        let property = |name: &str| {
+            let name = tokens.intern(name);
+            let entry = prim.properties.iter().find(|e| e.name == name).unwrap();
+            Arc::clone(&entry.spec)
+        };
+        let default = |name: &str| property(name).default.clone().unwrap();
+        assert_eq!(default("s"), Value::String("hello".into()));
+        assert_eq!(default("t"), Value::Token(tokens.intern("there")));
+        assert_eq!(default("u"), Value::Asset("./u.usda".into()));
+        assert_eq!(default("e"), Value::PathExpression("/A/*".into()));
+        let type_name =
+            |name: &str| String::from(property(name).type_name.as_ref().unwrap().type_name());
+        assert_eq!(type_name("s"), "string");
+        assert_eq!(type_name("one"), "int");
+        assert_eq!(type_name("many"), "int[]");
+        assert_eq!(type_name("d"), "int");
+        let custom = tokens.intern("customData");
+        let data = property("d");
+        let data = data.metadata.iter().find(|f| f.name == custom).unwrap();
+        assert_eq!(
+            data.value,
+            FieldValue::Value(Value::Dictionary(alloc::vec![(
+                "k".into(),
+                Value::String("v".into())
+            )]))
+        );
     }
 
     /// A property's prim path text is checked as parsing it would check it.

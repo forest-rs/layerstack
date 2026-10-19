@@ -539,7 +539,15 @@ impl PathInterner {
     /// ```
     #[must_use]
     pub fn intern_child(&self, parent: PathId, name: TokenId) -> PathId {
-        self.intern_joined(parent, &[name])
+        // The parent is interned: looked up once, not again as an ancestor.
+        let segments = self.joined(parent, &[name]);
+        let make = || PathEntry {
+            path: Path {
+                segments: segments[..].into(),
+            },
+            parent: Some(parent),
+        };
+        PathId(self.paths.intern(&segments[..], make).0)
     }
 
     /// Interns `path` moved from beneath `from` to beneath `to`: `to` itself

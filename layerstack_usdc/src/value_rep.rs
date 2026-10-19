@@ -360,7 +360,7 @@ pub(crate) enum DecodedField<'a> {
     /// A path list op as path table indices
     /// ([`decode_path_list_op_indices`]), which assembly maps to paths
     /// through the path tree without copying their text.
-    PathListOp(ListOpParts<u32>),
+    PathListOp(ListOpParts<Items<u32>>),
     /// One token, string, asset path or path expression as the token-table
     /// index of its text ([`decode_text_index`]), `u32::MAX` for the empty
     /// text, which assembly converts without copying the text first.
@@ -1731,34 +1731,39 @@ fn decode_list_op(
     }))
 }
 
-/// The components of a list op, whatever its items are read as.
+/// The items of one component of a list op: held in place when there are
+/// two or fewer, as a relationship's targets mostly are.
+pub(crate) type Items<T> = smallvec::SmallVec<[T; 2]>;
+
+/// The components of a list op, whatever its items are read as and held
+/// in.
 #[derive(Clone, Debug)]
-pub(crate) struct ListOpParts<T> {
-    pub(crate) explicit: Option<Vec<T>>,
-    pub(crate) prepended: Vec<T>,
-    pub(crate) appended: Vec<T>,
-    pub(crate) deleted: Vec<T>,
-    pub(crate) added: Vec<T>,
-    pub(crate) ordered: Vec<T>,
+pub(crate) struct ListOpParts<C> {
+    pub(crate) explicit: Option<C>,
+    pub(crate) prepended: C,
+    pub(crate) appended: C,
+    pub(crate) deleted: C,
+    pub(crate) added: C,
+    pub(crate) ordered: C,
 }
 
 /// Reads a list op's header and the components it flags, each with
 /// `read_items` from its position, which returns the items and the bytes
 /// they took (`Read<SdfListOp>`, `pxr/usd/sdf/crateFile.cpp`).
-fn decode_list_op_parts<T>(
+fn decode_list_op_parts<C: Default>(
     rep: &RawValueRep,
     data: &[u8],
     budget: &mut DecodeBudget,
-    mut read_items: impl FnMut(&[u8], usize, &mut DecodeBudget) -> Result<(Vec<T>, usize), UsdcError>,
-) -> Result<ListOpParts<T>, UsdcError> {
+    mut read_items: impl FnMut(&[u8], usize, &mut DecodeBudget) -> Result<(C, usize), UsdcError>,
+) -> Result<ListOpParts<C>, UsdcError> {
     let off = payload_offset_usize(rep, data)?;
     let mut parts = ListOpParts {
         explicit: None,
-        prepended: vec![],
-        appended: vec![],
-        deleted: vec![],
-        added: vec![],
-        ordered: vec![],
+        prepended: C::default(),
+        appended: C::default(),
+        deleted: C::default(),
+        added: C::default(),
+        ordered: C::default(),
     };
     if off == 0 {
         return Ok(parts);
@@ -1782,7 +1787,7 @@ fn decode_list_op_parts<T>(
         parts.explicit = Some(items);
         pos += consumed;
     } else if make_explicit {
-        parts.explicit = Some(vec![]);
+        parts.explicit = Some(C::default());
     }
 
     if add_items_flag {
@@ -1826,7 +1831,7 @@ pub(crate) fn decode_path_list_op_indices(
     data: &[u8],
     sections: &CrateSections,
     budget: &mut DecodeBudget,
-) -> Result<ListOpParts<u32>, UsdcError> {
+) -> Result<ListOpParts<Items<u32>>, UsdcError> {
     within_value_budget(budget, |budget| {
         if rep.value_type()? != ValueType::PathListOp || rep.is_array_edit() {
             return Err(UsdcError::Inconsistent {
@@ -1835,7 +1840,7 @@ pub(crate) fn decode_path_list_op_indices(
         }
         decode_list_op_parts(rep, data, budget, |data, pos, budget| {
             let (num, mut cursor) = list_op_item_count(data, pos, budget)?;
-            let mut items = Vec::with_capacity(num);
+            let mut items = Items::with_capacity(num);
             for _ in 0..num {
                 let idx = read_u32_le(data, &mut cursor)?;
                 let len = sections.paths.text_len(idx as usize);

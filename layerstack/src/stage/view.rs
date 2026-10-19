@@ -181,6 +181,13 @@ impl<'a> StageView<'a> {
     }
 
     /// The composed prim at `path`, active or not.
+    ///
+    /// `None` when the stage composes no prim there, and also when the text
+    /// is not a well-formed absolute prim path (`"World"`, `"/World/"`):
+    /// a lookup does not say which. To tell them apart, parse the text
+    /// first ([`Path::parse_absolute`](crate::Path::parse_absolute), or
+    /// [`InMemoryStore::try_path`](crate::InMemoryStore::try_path), which
+    /// returns the [`PathError`](crate::PathError)).
     #[doc(alias = "UsdStage::GetPrimAtPath")]
     pub fn prim(self, path: impl PrimPathArg) -> Option<Prim<'a>> {
         let id = path.prim_path(self.store.paths(), self.store.tokens())?;
@@ -495,6 +502,73 @@ mod tests {
         let tag = view.attribute("/World.kind:tag").unwrap();
         let token = tag.value::<TokenId>(Time::Default).unwrap();
         assert_eq!(store.tokens.resolve(token), "x");
+    }
+
+    /// The schema's declaration wins over an authored one, as in OpenUSD;
+    /// without a schema, the strongest type and the weakest variability.
+    #[test]
+    fn attribute_types_and_variability() {
+        use crate::{PropertyDefinition, SchemaDefinition, SchemaRegistry, Variability};
+        let (store, stage) = scene();
+        let view = stage.view(&store);
+        let radius = view.attribute("/World.radius").unwrap();
+        assert_eq!(radius.type_name(), Some("double"));
+        assert_eq!(radius.variability(), Variability::Varying);
+        assert_eq!(
+            view.attribute("/World.name").unwrap().type_name(),
+            Some("string")
+        );
+
+        let mut store = InMemoryStore::default();
+        let (shape, size, rank) = (
+            store.tokens.intern("Shape"),
+            store.tokens.intern("size"),
+            store.tokens.intern("rank"),
+        );
+        let world = store.path("/World");
+        let mut builder = SchemaRegistry::builder();
+        builder.register(
+            SchemaDefinition::typed(shape).with_property(
+                PropertyDefinition::attribute(size)
+                    .with_type(PropertyType::parse("float").unwrap())
+                    .uniform(),
+            ),
+        );
+        let options = StageOptions {
+            schemas: Some(alloc::sync::Arc::new(builder.build(&store.tokens))),
+            ..StageOptions::default()
+        };
+        let mut top = Layer::new(LayerId(1));
+        top.sublayers_mut()
+            .push(crate::SublayerEntry::new(LayerId(2)));
+        let mut uniform_rank = PropertySpec::typed_attribute(PropertyType::parse("int").unwrap());
+        uniform_rank.variability = Variability::Uniform;
+        top.insert_prim(
+            world,
+            PrimSpec::def()
+                .with_type_name(shape)
+                .with_property(size, double(1.0))
+                .with_property(
+                    rank,
+                    PropertySpec::typed_attribute(PropertyType::parse("int").unwrap()),
+                ),
+        );
+        let mut weaker = Layer::new(LayerId(2));
+        weaker.insert_prim(world, PrimSpec::over().with_property(rank, uniform_rank));
+        store.insert_layer(top);
+        store.insert_layer(weaker);
+        let stage = Stage::compose(&mut store, LayerId(1), options);
+        let view = stage.view(&store);
+        let size = view.attribute("/World.size").unwrap();
+        assert_eq!(size.type_name(), Some("float"), "the schema's type");
+        assert_eq!(size.variability(), Variability::Uniform);
+        let rank = view.attribute("/World.rank").unwrap();
+        assert_eq!(rank.type_name(), Some("int"));
+        assert_eq!(
+            rank.variability(),
+            Variability::Uniform,
+            "the weakest opinion's"
+        );
     }
 
     #[test]

@@ -174,10 +174,65 @@ impl<'a> Prim<'a> {
             .filter_map(move |&path| self.stage.prim(path, self.store))
     }
 }
-impl Attribute<'_> {
+impl<'a> Attribute<'a> {
     /// Concrete property path.
     pub fn path(self) -> PropertyPath {
         self.path
+    }
+    /// The value type name (`float`, `color3f[]`): the type the prim's
+    /// schemas define the attribute with, else the strongest type an
+    /// opinion declares. `None` when neither declares one. It names the
+    /// Rust type [`Self::value`] converts to: a `float` reads as `f32`.
+    ///
+    /// ```
+    /// # use layerstack::{InMemoryStore, Layer, LayerId, PrimSpec, PropertySpec, PropertyType, Stage, StageOptions, Variability};
+    /// # let mut store = InMemoryStore::default();
+    /// # let (world, radius) = (store.path("/World"), store.tokens.intern("radius"));
+    /// # let mut layer = Layer::new(LayerId(1));
+    /// # layer.insert_prim(world, PrimSpec::def().with_property(radius,
+    /// #     PropertySpec::typed_attribute(PropertyType::parse("double").unwrap())));
+    /// # store.insert_layer(layer);
+    /// # let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+    /// let radius = stage.view(&store).attribute("/World.radius").unwrap();
+    /// assert_eq!(radius.type_name(), Some("double"));
+    /// assert_eq!(radius.variability(), Variability::Varying);
+    /// ```
+    ///
+    /// OpenUSD: `UsdAttribute::GetTypeName`, which consults the prim
+    /// definition before authored opinions (`UsdStage::_GetAttrTypeImpl`).
+    ///
+    /// Spec: AOUSD Core §7.6.4.1.1 (`typeName`), §12.2.2 (the strongest
+    /// opinion), §13.3.2 (prim definitions).
+    #[doc(alias = "UsdAttribute::GetTypeName")]
+    #[doc(alias = "GetTypeName")]
+    pub fn type_name(self) -> Option<&'a str> {
+        let (prim, name) = (self.path.prim_path(), self.path.property());
+        let stage: &'a Stage = self.stage;
+        stage
+            .property_definition_ref(prim, name)
+            .and_then(|defined| defined.type_name.as_ref())
+            .or_else(|| stage.prims.get(&prim)?.property_type_for(&name))
+            .map(PropertyType::type_name)
+    }
+    /// Whether the value may vary over time: the variability the prim's
+    /// schemas define the attribute with, else the weakest opinion's.
+    ///
+    /// OpenUSD: `UsdAttribute::GetVariability`
+    /// (`UsdStage::_GetAttrVariabilityImpl`).
+    ///
+    /// Spec: AOUSD Core §7.6.4.1.2 (`variability`), §12.2.3 (the weakest
+    /// opinion decides).
+    #[doc(alias = "UsdAttribute::GetVariability")]
+    #[doc(alias = "GetVariability")]
+    pub fn variability(self) -> Variability {
+        let (prim, name) = (self.path.prim_path(), self.path.property());
+        if let Some(defined) = self.stage.property_definition_ref(prim, name) {
+            return defined.variability;
+        }
+        self.stage
+            .resolve_property_declaration(prim, name)
+            .map(|declared| declared.variability)
+            .unwrap_or_default()
     }
     /// Composed value with captured schema fallback and optional provenance.
     /// Numeric arrays remain retained until the caller selects materialization.

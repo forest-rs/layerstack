@@ -252,7 +252,7 @@ pub fn crate_structure(data: &[u8]) -> Result<CrateStructure, layerstack_usdc::U
             let rep = RawValueRep::new(field.value_rep);
             let value = decode_value(&rep, data, &s)?;
             fields.push((
-                s.tokens[field.token_index as usize].clone(),
+                s.tokens[field.token_index as usize].to_owned(),
                 format!("{:?} {value:?}", rep.value_type()?),
             ));
             i += 1;

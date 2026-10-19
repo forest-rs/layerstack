@@ -2486,10 +2486,7 @@ impl<'a> AssembleCtx<'a> {
     /// range.
     fn lookup_token(&self, index: u32) -> &'a str {
         let sections = self.sections;
-        sections
-            .tokens
-            .get(index as usize)
-            .map_or("", String::as_str)
+        sections.tokens.get(index as usize).unwrap_or_default()
     }
 
     /// Resolves an asset path.
@@ -2812,6 +2809,7 @@ fn convert_math_value(vtype: ValueType, data: &[u8]) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::section::TokenTable;
     use crate::section::{FieldDef, SpecDef};
     use crate::version::CrateVersion;
     use layerstack::AssetResolveError;
@@ -3005,7 +3003,9 @@ def "T" {}
             (0..n).map(|i| alloc::format!("/P{i}")).collect(),
             |i| i,
         );
-        sections.tokens = alloc::vec![String::from("relocates")];
+        sections.tokens = [String::from("relocates")]
+            .into_iter()
+            .collect::<TokenTable>();
         let mut budget = DecodeBudget::with_limit(u64::MAX);
         let read = assemble_within(&sections, &mut budget).unwrap();
         let reported: Vec<&str> = read
@@ -3069,7 +3069,9 @@ def "T" {}
             declaration_rep[6] = ValueType::Token as u8;
             declaration_rep[7] = 0x40;
             let sections = CrateSections {
-                tokens: alloc::vec!["default".into(), "typeName".into(), "double[]".into()],
+                tokens: ["default", "typeName", "double[]"]
+                    .into_iter()
+                    .collect::<TokenTable>(),
                 strings: Vec::new(),
                 fields: alloc::vec![
                     FieldDef {
@@ -3204,7 +3206,7 @@ def "T" {}
             raw[6] = ty as u8;
             raw[7] = 0x80;
             let sections = CrateSections {
-                tokens: Vec::new(),
+                tokens: TokenTable::default(),
                 strings: Vec::new(),
                 fields: Vec::new(),
                 fieldsets: Vec::new(),
@@ -3239,7 +3241,9 @@ def "T" {}
             raw[6] = tag;
             raw[7] = 0x80;
             let sections = CrateSections {
-                tokens: alloc::vec!["default".into(), "customArray".into()],
+                tokens: ["default", "customArray"]
+                    .into_iter()
+                    .collect::<TokenTable>(),
                 strings: Vec::new(),
                 fields: alloc::vec![
                     FieldDef {
@@ -3367,7 +3371,7 @@ def "T" {}
         rep[6] = ValueType::Int as u8;
         rep[7] = 0x40; // inlined
         CrateSections {
-            tokens: alloc::vec!["x".repeat(name_len)],
+            tokens: ["x".repeat(name_len)].into_iter().collect::<TokenTable>(),
             strings: Vec::new(),
             fields: alloc::vec![FieldDef {
                 token_index: 0,

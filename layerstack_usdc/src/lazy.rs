@@ -280,10 +280,7 @@ impl DeferredValueSource for LazyValue {
                         Value::Token(ids.get(index).copied().unwrap_or(TokenId::EMPTY))
                     } else {
                         Value::String(Arc::from(
-                            pool.sections
-                                .tokens
-                                .get(index)
-                                .map_or("", |text| text.as_str()),
+                            pool.sections.tokens.get(index).unwrap_or_default(),
                         ))
                     }
                 });

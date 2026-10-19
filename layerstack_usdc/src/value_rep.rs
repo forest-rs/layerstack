@@ -1406,7 +1406,7 @@ fn lookup_token(
     idx: usize,
     budget: &mut DecodeBudget,
 ) -> Result<String, UsdcError> {
-    budget.clone_str(sections.tokens.get(idx).map_or("", String::as_str))
+    budget.clone_str(sections.tokens.get(idx).unwrap_or_default())
 }
 
 // ---------------------------------------------------------------------------
@@ -2093,7 +2093,7 @@ pub(crate) fn decode_token_vector_indices(
             .map(|mut pos| {
                 let idx = read_u32_le(data, &mut pos)?;
                 let text = sections.tokens.get(idx as usize);
-                budget.charge_text(text.map_or(0, String::len))?;
+                budget.charge_text(text.map_or(0, str::len))?;
                 Ok(if text.is_some() { idx } else { u32::MAX })
             })
             .collect()
@@ -2894,6 +2894,7 @@ fn read_typed_value(data: &[u8], pos: &mut usize, dt: SplineDataType) -> Result<
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::section::TokenTable;
 
     #[test]
     fn compact_float_arrays_preserve_bits_errors_and_budgets() {
@@ -3253,7 +3254,7 @@ mod tests {
         let rep = RawValueRep::new(bytes);
 
         let sections = CrateSections {
-            tokens: vec![],
+            tokens: TokenTable::default(),
             strings: vec![],
             fields: vec![],
             fieldsets: vec![],
@@ -3279,7 +3280,7 @@ mod tests {
         let rep = RawValueRep::new(bytes);
 
         let sections = CrateSections {
-            tokens: vec![],
+            tokens: TokenTable::default(),
             strings: vec![],
             fields: vec![],
             fieldsets: vec![],
@@ -3612,7 +3613,7 @@ mod tests {
         bytes[7] = 0x10; // is_array_edit, identity
         let rep = RawValueRep::new(bytes);
         let mut sections = CrateSections {
-            tokens: vec![],
+            tokens: TokenTable::default(),
             strings: vec![],
             fields: vec![],
             fieldsets: vec![],
@@ -3667,7 +3668,7 @@ mod tests {
 
     fn sections_with(version: CrateVersion) -> CrateSections {
         CrateSections {
-            tokens: vec!["./ref.usd".into(), "note".into()],
+            tokens: ["./ref.usd", "note"].into_iter().collect::<TokenTable>(),
             strings: vec![0, 1],
             fields: vec![],
             fieldsets: vec![],
@@ -4011,7 +4012,8 @@ mod tests {
     #[test]
     fn cloned_strings_are_charged_by_length() {
         let mut sections = sections_with(CrateVersion::NEWEST_READABLE);
-        sections.tokens[0] = "x".repeat(1600);
+        let rest: Vec<String> = sections.tokens.iter().skip(1).map(String::from).collect();
+        sections.tokens = core::iter::once("x".repeat(1600)).chain(rest).collect();
         let rep = inlined(ValueType::Token, [0, 0, 0, 0]);
         let mut budget = DecodeBudget::with_limit(u64::MAX);
         decode_value_within(&rep, &[], &sections, &mut budget).unwrap();

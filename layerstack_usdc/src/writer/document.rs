@@ -1114,7 +1114,7 @@ mod tests {
                 let index = sections.fieldsets[i];
                 assert!(index >= 0, "{key} in the USDC");
                 let field = sections.fields[index as usize];
-                if sections.tokens[field.token_index as usize] == key {
+                if &sections.tokens[field.token_index as usize] == key {
                     let rep = crate::value_rep::RawValueRep::new(field.value_rep);
                     match crate::value_rep::decode_value(&rep, &bytes, &sections) {
                         Ok(crate::value_rep::CrateValue::Double(d)) => break d,
@@ -1366,7 +1366,7 @@ mod tests {
         let profiles_field = sections
             .fields
             .iter()
-            .find(|f| sections.tokens[f.token_index as usize] == "profilesInfo")
+            .find(|f| &sections.tokens[f.token_index as usize] == "profilesInfo")
             .unwrap();
         let rep = crate::value_rep::RawValueRep::new(profiles_field.value_rep);
         assert_eq!(
@@ -1749,7 +1749,7 @@ def Xform "A" (
         let payload = sections
             .fields
             .iter()
-            .find(|f| sections.tokens[f.token_index as usize] == "payload")
+            .find(|f| &sections.tokens[f.token_index as usize] == "payload")
             .unwrap();
         let rep = crate::value_rep::RawValueRep::new(payload.value_rep);
         assert_eq!(

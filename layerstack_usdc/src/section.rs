@@ -65,13 +65,96 @@ pub enum PathNode {
     },
 }
 
+/// The TOKENS section: every token's text in one buffer, and where each
+/// ends, so that a token is read as a slice of the text the section
+/// decompressed to rather than copied into a string of its own.
+///
+/// Spec: AOUSD Core §16.3.5.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct TokenTable {
+    /// The tokens' text, each followed by a separator byte.
+    text: String,
+    /// The offset in `text` where each token ends.
+    ends: Vec<u32>,
+}
+
+impl TokenTable {
+    /// The text of token `index`.
+    #[must_use]
+    pub fn get(&self, index: usize) -> Option<&str> {
+        let end = *self.ends.get(index)? as usize;
+        let start = match index.checked_sub(1) {
+            Some(before) => self.ends[before] as usize + 1,
+            None => 0,
+        };
+        self.text.get(start..end)
+    }
+
+    /// The number of tokens.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.ends.len()
+    }
+
+    /// Whether there are no tokens.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.ends.is_empty()
+    }
+
+    /// Every token's text, in table order.
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = &str> + '_ {
+        (0..self.len()).map(|index| self.get(index).unwrap_or_default())
+    }
+
+    /// The table of `text`, a section's decompressed tokens: each ended by
+    /// a `\0` byte, the last perhaps not.
+    fn of_section(text: String) -> Result<Self, UsdcError> {
+        let too_long = UsdcError::Inconsistent {
+            message: "TOKENS section exceeds 4 GiB",
+        };
+        let mut ends = Vec::new();
+        for (at, byte) in text.bytes().enumerate() {
+            if byte == 0 {
+                ends.push(u32::try_from(at).map_err(|_| too_long.clone())?);
+            }
+        }
+        let last = ends.last().map_or(0, |&end| end as usize + 1);
+        if last < text.len() {
+            ends.push(u32::try_from(text.len()).map_err(|_| too_long)?);
+        }
+        Ok(Self { text, ends })
+    }
+}
+
+impl core::ops::Index<usize> for TokenTable {
+    type Output = str;
+
+    fn index(&self, index: usize) -> &str {
+        self.get(index).expect("token index out of range")
+    }
+}
+
+impl<S: AsRef<str>> FromIterator<S> for TokenTable {
+    fn from_iter<I: IntoIterator<Item = S>>(tokens: I) -> Self {
+        let mut table = Self::default();
+        for token in tokens {
+            table.text.push_str(token.as_ref());
+            let end = u32::try_from(table.text.len()).expect("a token table under 4 GiB");
+            table.ends.push(end);
+            table.text.push('\0');
+        }
+        table
+    }
+}
+
 /// All parsed section data from a USDC file.
 ///
 /// Holds the decoded contents of all six sections ready for scene assembly.
 #[derive(Clone, Debug)]
 pub struct CrateSections {
-    /// Decoded token strings from the TOKENS section.
-    pub tokens: Vec<String>,
+    /// The tokens of the TOKENS section.
+    pub tokens: TokenTable,
     /// String indices (into `tokens`) from the STRINGS section.
     pub strings: Vec<u32>,
     /// Field definitions from the FIELDS section.
@@ -117,7 +200,7 @@ pub fn parse_sections(
     let tokens = if let Some(entry) = toc.tokens {
         parse_tokens(data, &entry, budget)?
     } else {
-        vec![]
+        TokenTable::default()
     };
 
     let strings = if let Some(entry) = toc.strings {
@@ -178,7 +261,7 @@ fn parse_tokens(
     data: &[u8],
     entry: &SectionEntry,
     budget: &mut DecodeBudget,
-) -> Result<Vec<String>, UsdcError> {
+) -> Result<TokenTable, UsdcError> {
     let section = section_slice(data, entry)?;
     if section.len() < 24 {
         return Err(UsdcError::UnexpectedEof {
@@ -206,22 +289,17 @@ fn parse_tokens(
     let usz = usize::try_from(uncompressed_size).map_err(|_| UsdcError::DecompressionFailed {
         context: "TOKENS size exceeds the address space",
     })?;
-    // The text is decompressed, then copied into one string per token.
+    // The text is decompressed, and charged again for the table of where
+    // each token ends, as when each token was copied into a string.
     budget.charge_text(usz)?;
     budget.charge_text(usz)?;
     budget.charge(num_tokens)?;
     let decompressed = lz4_decompress(compressed, usz)?;
-
-    // Split on null bytes; the final null produces a trailing empty string.
-    let text = core::str::from_utf8(&decompressed).map_err(|_| UsdcError::Inconsistent {
+    let text = String::from_utf8(decompressed).map_err(|_| UsdcError::Inconsistent {
         message: "TOKENS section contains invalid UTF-8",
     })?;
-
-    let mut tokens: Vec<String> = text.split('\0').map(String::from).collect();
-    // Remove trailing empty string from the final null terminator.
-    if tokens.last().is_some_and(|s| s.is_empty()) {
-        tokens.pop();
-    }
+    // Each token ends at a null byte; the final null ends the last one.
+    let tokens = TokenTable::of_section(text)?;
 
     #[allow(
         clippy::cast_possible_truncation,
@@ -427,7 +505,7 @@ fn parse_fieldsets(
 fn parse_paths(
     data: &[u8],
     entry: &SectionEntry,
-    tokens: &[String],
+    tokens: &TokenTable,
     budget: &mut DecodeBudget,
 ) -> Result<(Vec<String>, Vec<PathNode>), UsdcError> {
     let section = section_slice(data, entry)?;
@@ -504,7 +582,7 @@ fn build_paths(
     path_indices: &[i64],
     element_token_indices: &[i64],
     jumps: &[i64],
-    tokens: &[String],
+    tokens: &TokenTable,
     paths: &mut [String],
     nodes: &mut [PathNode],
     budget: &mut DecodeBudget,
@@ -738,10 +816,29 @@ mod tests {
 
     use super::*;
 
+    /// A section's tokens are its text split at each null byte, the null
+    /// ending the last token dropped, as splitting the text into strings
+    /// read them.
+    #[test]
+    fn token_tables_split_the_text_at_nulls() {
+        for text in ["", "a", "a\0", "a\0b", "a\0b\0", "a\0\0", "\0", "\0\0x"] {
+            let mut split: Vec<&str> = text.split('\0').collect();
+            if split.last().is_some_and(|s| s.is_empty()) {
+                split.pop();
+            }
+            let table = TokenTable::of_section(String::from(text)).unwrap();
+            assert_eq!(table.iter().collect::<Vec<_>>(), split, "{text:?}");
+            assert_eq!(table.len(), split.len());
+            assert_eq!(table.get(split.len()), None);
+        }
+        let built: TokenTable = ["x", "", "y\0z"].into_iter().collect();
+        assert_eq!(built.iter().collect::<Vec<_>>(), ["x", "", "y\0z"]);
+    }
+
     #[test]
     fn build_paths_single_root() {
         // One path: the pseudo-root "/"
-        let tokens: Vec<String> = vec!["Root".to_string()];
+        let tokens: TokenTable = ["Root".to_string()].into_iter().collect();
         let path_indices = vec![0_i64];
         let element_token_indices = vec![0_i64];
         let jumps = vec![0_i64]; // leaf
@@ -768,7 +865,7 @@ mod tests {
         // Encoded entries:
         //   [0]: path_index=0, token=0("Cube"), jump=-1 (has child, no sibling)
         //   [1]: path_index=1, token=0("Cube"), jump=0 (leaf)
-        let tokens = vec!["Cube".to_string()];
+        let tokens: TokenTable = ["Cube".to_string()].into_iter().collect();
         let path_indices = vec![0_i64, 1];
         let element_token_indices = vec![0_i64, 0];
         let jumps = vec![-1_i64, 0];
@@ -793,7 +890,9 @@ mod tests {
     #[test]
     fn build_paths_property() {
         // Three paths: "/" at 0, "/Sphere" at 1, "/Sphere.radius" at 2
-        let tokens = vec!["Sphere".to_string(), "radius".to_string()];
+        let tokens: TokenTable = ["Sphere".to_string(), "radius".to_string()]
+            .into_iter()
+            .collect();
         let path_indices = vec![0_i64, 1, 2];
         // Entry 0: root
         // Entry 1: prim Sphere (positive token index)
@@ -826,13 +925,15 @@ mod tests {
     fn build_paths_variant_selections_attach_to_their_prim() {
         // "/", "/root", "/root{foo=}", "/root{foo=eggs}",
         // "/root{foo=eggs}Child", "/root{foo=eggs}Child.attr".
-        let tokens = vec![
+        let tokens: TokenTable = [
             "root".to_string(),
             "{foo=}".to_string(),
             "{foo=eggs}".to_string(),
             "Child".to_string(),
             "attr".to_string(),
-        ];
+        ]
+        .into_iter()
+        .collect();
         let path_indices = vec![0, 1, 2, 3, 4, 5_i64];
         let element_token_indices = vec![0, 0, 1, 2, 3, -4_i64];
         // The variant set is a leaf with a sibling (the variant); the
@@ -888,7 +989,7 @@ mod tests {
     #[test]
     fn build_paths_charges_each_path_by_length() {
         let depth = 64_usize;
-        let tokens = vec!["n".repeat(1024)];
+        let tokens: TokenTable = ["n".repeat(1024)].into_iter().collect();
         let path_indices: Vec<i64> = (0..=depth as i64).collect();
         let element_token_indices = vec![0_i64; depth + 1];
         let mut jumps = vec![-1_i64; depth + 1];
@@ -927,7 +1028,7 @@ mod tests {
 
     #[test]
     fn build_paths_rejects_corrupt_encodings() {
-        let tokens = vec!["a".to_string(), "b".to_string()];
+        let tokens: TokenTable = ["a".to_string(), "b".to_string()].into_iter().collect();
         let build = |indices: &[i64], elements: &[i64], jumps: &[i64]| {
             let mut paths = vec![String::new(); 3];
             let mut nodes = vec![PathNode::Unused; 3];
@@ -970,14 +1071,16 @@ mod tests {
         //   [3]: idx=3, token=-3("array:unset"), jump=0 → /root.array:unset (sibling → advance)
         //   [4]: idx=4, token=-4("single"),jump=0   → /root.single (sibling → advance)
         //   [5]: idx=5, token=-5("unset"), jump=-2  → /root.unset (no child, no sibling → stop)
-        let tokens = vec![
+        let tokens: TokenTable = [
             "".to_string(),
             "root".to_string(),
             "array".to_string(),
             "array:unset".to_string(),
             "single".to_string(),
             "unset".to_string(),
-        ];
+        ]
+        .into_iter()
+        .collect();
         let path_indices = vec![0, 1, 2, 3, 4, 5_i64];
         let element_token_indices = vec![0, 1, -2, -3, -4, -5_i64];
         let jumps = vec![-1, -1, 0, 0, 0, -2_i64];

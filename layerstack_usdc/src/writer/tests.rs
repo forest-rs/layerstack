@@ -55,7 +55,7 @@ impl Decoded {
                 while s.fieldsets[i] >= 0 {
                     let field = s.fields[s.fieldsets[i] as usize];
                     fields.push((
-                        s.tokens[field.token_index as usize].clone(),
+                        String::from(&s.tokens[field.token_index as usize]),
                         RawValueRep::new(field.value_rep),
                     ));
                     i += 1;
@@ -717,7 +717,10 @@ fn inlining_follows_openusd() {
     assert_eq!(bits("vec4h"), 0x03_02_01_00, "half4 int8 components");
     // A scalar asset path is a token index; strings are string indexes.
     let asset = payload(file.rep("/Root.asset", "default"));
-    assert_eq!(file.sections.tokens[asset], "textures/a.png", "token index");
+    assert_eq!(
+        &file.sections.tokens[asset], "textures/a.png",
+        "token index"
+    );
 }
 
 #[test]
@@ -774,7 +777,7 @@ fn identical_values_are_stored_once() {
     let fields = &file.sections.fields;
     let defaults = fields
         .iter()
-        .filter(|f| file.sections.tokens[f.token_index as usize] == "default")
+        .filter(|f| &file.sections.tokens[f.token_index as usize] == "default")
         .count();
     assert_eq!(defaults, 1, "one default field");
 }
@@ -830,7 +833,7 @@ fn spec_layout_matches_sdf_crate_data() {
         ],
         "path table"
     );
-    assert_eq!(file.sections.tokens[0], ";-)", "sentinel token 0");
+    assert_eq!(&file.sections.tokens[0], ";-)", "sentinel token 0");
 }
 
 #[test]

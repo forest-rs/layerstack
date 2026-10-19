@@ -543,7 +543,7 @@ fn spline_knots_are_charged_before_parsing() {
     use layerstack_usdc::value_rep::{CrateValue, decode_value_within};
 
     let sections = CrateSections {
-        tokens: Vec::new(),
+        tokens: layerstack_usdc::section::TokenTable::default(),
         strings: Vec::new(),
         fields: Vec::new(),
         fieldsets: Vec::new(),

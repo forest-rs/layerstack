@@ -162,7 +162,7 @@ fn summary(doc: &StageDocument<Memory>) -> Vec<String> {
     for root in ["/Three", "/Plain", "/Two"] {
         let prim = view.prim(root).unwrap();
         let rows: Vec<String> = prim
-            .children(false)
+            .children()
             .map(|row| {
                 let height = row.attribute("height").unwrap().value::<f64>(Time::Default);
                 format!(

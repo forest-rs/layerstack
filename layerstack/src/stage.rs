@@ -25,11 +25,12 @@ pub use dangling::{
     DanglingByName, DanglingCounts, DanglingKind, DanglingTarget, DanglingTargetReport,
 };
 pub use objects::{
-    Attribute, AttributeQuery, AttributeQueryWork, Object, Prim, PrimSnapshot, Relationship,
+    Attribute, AttributeQuery, AttributeQueryWork, Object, Prim, PrimSnapshot, Property,
+    Relationship,
 };
 pub use relationships::{RelationshipQuery, RelationshipQueryWork};
 pub use targets::{DropReason, DroppedTarget, TargetOpinion, TargetsExplanation};
-pub use view::{FromValue, PrimPathArg, PropertyPathArg, StageView};
+pub use view::{FromValue, NameArg, PrimPathArg, PropertyPathArg, StageView};
 mod traversal;
 pub use traversal::{PrimPredicate, PrimRange, PrimStatus, PrimVisit, PrimVisits};
 pub(crate) mod metadata;
@@ -128,7 +129,8 @@ impl<T> Resolved<T> {
 impl Resolved<ResolvedValue> {
     /// The value of a scalar or dictionary, as a [`Value`]; `None` for a
     /// list.
-    pub(crate) fn into_value(self) -> Option<Resolved<Value>> {
+    #[must_use]
+    pub fn into_value(self) -> Option<Resolved<Value>> {
         let value = match self.value {
             ResolvedValue::Scalar(value) => value,
             ResolvedValue::Dictionary(entries) => Value::Dictionary(entries),

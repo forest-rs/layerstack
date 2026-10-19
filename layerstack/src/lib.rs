@@ -290,13 +290,13 @@ pub use stage::{
     FlattenError, FlattenReport, FlattenRequirements, FlattenVerification, Flattened, IgnoreCause,
     KeyPath, LayerMuteError, LoadPolicy, Object, OpinionRole, PayloadLoadRules, PayloadRule,
     PopulationMask, Prim, PrimPredicate, PrimRange, PrimSnapshot, PrimStatus, PrimVisit,
-    PrimVisits, PropertyDeclaration, Provenance, Relationship, RelationshipQuery,
+    PrimVisits, Property, PropertyDeclaration, Provenance, Relationship, RelationshipQuery,
     RelationshipQueryWork, Resolved, ResolvedValue, SampleUse, SourceComposability, Stage,
     StageMetadataError, StageOptions, Traverse, ValueExplanation, ValueSource,
 };
 pub use stage::{
     AuthoredTarget, AuthoredTargets, DanglingByName, DanglingCounts, DanglingKind, DanglingTarget,
-    DanglingTargetReport, DropReason, DroppedTarget, FromValue, LayerTargets, PrimPathArg,
+    DanglingTargetReport, DropReason, DroppedTarget, FromValue, LayerTargets, NameArg, PrimPathArg,
     PropertyPathArg, StageView, TargetListPosition, TargetOpinion, TargetRead, TargetsExplanation,
     UnreadReason, UnreadTargetSpec,
 };

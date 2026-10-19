@@ -54,6 +54,15 @@ pub struct ChangeNotice<'a> {
     pub changes: &'a Changes,
 }
 
+impl<'a> ChangeNotice<'a> {
+    /// The updated stage bound to its store, for reading the changed prims
+    /// through their handles.
+    #[must_use]
+    pub fn view(&self) -> crate::StageView<'a> {
+        self.stage.view(self.store)
+    }
+}
+
 impl core::fmt::Debug for ChangeNotice<'_> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("ChangeNotice")

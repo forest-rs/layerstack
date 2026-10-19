@@ -69,6 +69,7 @@ impl Stage {
     /// names and paths there. Release builds do not check.
     #[must_use]
     #[track_caller]
+    #[inline]
     pub fn view<'a>(&'a self, store: &'a dyn LayerStore) -> StageView<'a> {
         debug_assert!(
             self.store_identity()
@@ -217,6 +218,7 @@ impl<'a> StageView<'a> {
     /// [`InMemoryStore::try_path`](crate::InMemoryStore::try_path), which
     /// returns the [`PathError`](crate::PathError)).
     #[doc(alias = "UsdStage::GetPrimAtPath")]
+    #[inline]
     pub fn prim(self, path: impl PrimPathArg) -> Option<Prim<'a>> {
         let id = path.prim_path(self.store.paths(), self.store.tokens())?;
         self.stage.prim(id, self.store)
@@ -224,18 +226,21 @@ impl<'a> StageView<'a> {
 
     /// The composed attribute at `path` (`"/World/Arm.points"`).
     #[doc(alias = "UsdStage::GetAttributeAtPath")]
+    #[inline]
     pub fn attribute(self, path: impl PropertyPathArg) -> Option<Attribute<'a>> {
         self.property(path)?.as_attribute()
     }
 
     /// The composed relationship at `path`.
     #[doc(alias = "UsdStage::GetRelationshipAtPath")]
+    #[inline]
     pub fn relationship(self, path: impl PropertyPathArg) -> Option<Relationship<'a>> {
         self.property(path)?.as_relationship()
     }
 
     /// The composed attribute or relationship at `path`.
     #[doc(alias = "UsdStage::GetPropertyAtPath")]
+    #[inline]
     pub fn property(self, path: impl PropertyPathArg) -> Option<Property<'a>> {
         let path = path.property_path(self.store.paths(), self.store.tokens())?;
         self.stage.property(path, self.store)
@@ -760,6 +765,42 @@ mod tests {
             world.can_apply("NoSuchAPI", None),
             Err(crate::CannotApply::NotAnAppliedSchema)
         );
+    }
+
+    /// A namespace holds the names inside it, not its own name, as OpenUSD
+    /// 26.08's `UsdPrim::GetAuthoredPropertiesInNamespace` returns
+    /// `material:binding:collection:a` and `material:binding:preview` for
+    /// `material:binding`, and not `material:binding` or
+    /// `material:bindingFoo`.
+    #[test]
+    fn namespaces_hold_the_names_inside_them() {
+        let mut store = InMemoryStore::default();
+        let prim = store.path("/P");
+        let mut spec = PrimSpec::def();
+        for name in [
+            "material:binding",
+            "material:binding:preview",
+            "material:bindingFoo",
+            "material:binding:collection:a",
+            "other",
+        ] {
+            spec = spec.with_property(store.tokens.intern(name), PropertySpec::relationship());
+        }
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(prim, spec);
+        store.insert_layer(layer);
+        let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+        let prim = stage.view(&store).prim("/P").unwrap();
+        let inside = |namespace: &str| -> Vec<&str> {
+            prim.authored_properties_in_namespace(namespace)
+                .into_iter()
+                .map(|property| property.name())
+                .collect()
+        };
+        let expected = ["material:binding:collection:a", "material:binding:preview"];
+        assert_eq!(inside("material:binding"), expected);
+        assert_eq!(inside("material:binding:"), expected);
+        assert_eq!(inside("").len(), 5);
     }
 
     /// A relationship spec where the schema defines an attribute authors no

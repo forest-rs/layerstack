@@ -2865,13 +2865,17 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
             if let Some(layer) = resolved.layer {
                 self.resolved_layers.push(layer);
             }
-            let source = ReferenceSource::Layer {
-                layer: resolved.layer_id,
-                asset: Some(&asset_path),
+            // The asset path moves into the arc, not copied.
+            let arc = match target {
+                ReferenceTarget::Prim(prim) => {
+                    Reference::with_asset(resolved.layer_id, prim, asset_path)
+                }
+                ReferenceTarget::DefaultPrim => {
+                    Reference::with_asset_default_prim(resolved.layer_id, asset_path)
+                }
             };
             Some(
-                Reference::from_source(source, target)
-                    .with_layer_offset(layer_offset)
+                arc.with_layer_offset(layer_offset)
                     .with_custom_data(custom_data),
             )
         } else {

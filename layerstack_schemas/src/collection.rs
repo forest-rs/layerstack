@@ -41,7 +41,7 @@ use layerstack::path_expression::{
 };
 use layerstack::{Path, PathId, PropertyPath, TargetPath, Value};
 
-use crate::predicate::{CollectionPredicate, CollectionPredicates, is_abstract, is_defined};
+use crate::predicate::{CollectionPredicate, CollectionPredicates};
 use crate::usd::{CollectionApi, CollectionApiExpansionRule, CollectionApiMode};
 use crate::view::{PrimView, Scene};
 
@@ -800,20 +800,19 @@ impl Included {
 fn children<'s>(scene: &Scene<'s>, prim: PathId) -> impl DoubleEndedIterator<Item = PathId> + 's {
     scene
         .prim(prim)
-        .into_iter()
-        .flat_map(layerstack::Prim::children)
-        .map(layerstack::Prim::path)
+        .map_or(&[][..], layerstack::Prim::child_paths)
+        .iter()
+        .copied()
 }
 
 /// The paths of the properties of `prim` on the stage, in composed order.
-fn property_paths(scene: &Scene<'_>, prim: PathId) -> Vec<PropertyPath> {
+fn property_paths(scene: &Scene<'_>, prim: PathId) -> impl Iterator<Item = PropertyPath> {
     scene
         .prim(prim)
         .map(layerstack::Prim::properties)
         .unwrap_or_default()
         .into_iter()
         .map(layerstack::Property::path)
-        .collect()
 }
 
 /// Whether a default traversal visits the prim: defined and not abstract.
@@ -821,7 +820,21 @@ fn property_paths(scene: &Scene<'_>, prim: PathId) -> Vec<PropertyPath> {
 /// OpenUSD: `UsdPrimDefaultPredicate` (active and loaded as layerstack's
 /// stages always are).
 fn traversable(scene: &Scene<'_>, prim: PathId) -> bool {
-    is_defined(scene, prim) && !is_abstract(scene, prim)
+    // Defined and not abstract: the prim and every ancestor resolve `def`
+    // (a `class` makes it abstract, an `over` undefined), found in one walk
+    // that resolves each specifier once. AOUSD Core §11.5.
+    let mut at = Some(prim);
+    while let Some(path) = at {
+        let parent = scene.parent(path);
+        if parent.is_none() {
+            break;
+        }
+        if scene.prim(path).map(layerstack::Prim::specifier) != Some(layerstack::Specifier::Def) {
+            return false;
+        }
+        at = parent;
+    }
+    true
 }
 
 /// The depth-first expression search of `UsdComputeIncludedPathsFromCollection`

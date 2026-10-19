@@ -798,9 +798,9 @@ impl BoundsCache {
                 let inclusion_varying = if let Some(reduction) = self.reductions.get(&current) {
                     reduction.dirty.iter().any(inclusion_varies)
                 } else {
-                    scene.prim(current).is_some_and(|prim| {
-                        prim.children().any(|child| inclusion_varies(&child.path()))
-                    })
+                    scene
+                        .prim(current)
+                        .is_some_and(|prim| prim.child_paths().iter().any(inclusion_varies))
                 };
                 let (bounds, varying) = self.compute(scene, current, &children)?;
                 (bounds, varying || hint_varying || inclusion_varying)
@@ -1260,7 +1260,7 @@ pub(crate) fn bounds_property(name: &str) -> bool {
 fn child_paths(scene: &Scene<'_>, path: PathId) -> Vec<PathId> {
     scene
         .prim(path)
-        .map(|prim| prim.children().map(|child| child.path()).collect())
+        .map(|prim| prim.child_paths().to_vec())
         .unwrap_or_default()
 }
 

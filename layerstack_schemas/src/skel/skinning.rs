@@ -721,7 +721,7 @@ impl<'a> SkelRoot<'a> {
                     result.push(query);
                 }
             } else if instance_proxies || !prim.is_instance() {
-                pending.extend(prim.children().rev().map(|child| child.path()));
+                pending.extend(prim.child_paths().iter().rev().copied());
             }
         }
         Ok(result)

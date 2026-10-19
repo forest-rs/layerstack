@@ -239,7 +239,7 @@ impl PhysicsSceneSnapshot {
                 if let Some(prim) = prim
                     && !scene.is_a(path, "PointInstancer")
                 {
-                    pending.extend(prim.children().rev().map(|child| child.path()));
+                    pending.extend(prim.child_paths().iter().rev().copied());
                 }
             }
         }

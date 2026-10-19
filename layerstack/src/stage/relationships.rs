@@ -76,6 +76,7 @@ impl Stage {
     ///
     /// Every handle lookup asks this, so it reads the strongest property
     /// spec's kind without building the whole declaration.
+    #[inline]
     pub(crate) fn property_kind(&self, path: PropertyPath) -> Option<PropertyKind> {
         let index = self.prims.get(&path.prim_path())?;
         if let Some(defined) = index

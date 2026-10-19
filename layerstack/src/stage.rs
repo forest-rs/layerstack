@@ -2685,7 +2685,11 @@ impl Stage {
         prim: PathId,
         store: &dyn LayerStore,
     ) -> Option<Vec<TokenId>> {
-        let index = self.prims.get(&prim)?;
+        Self::property_order_of(self.prims.get(&prim)?, store)
+    }
+
+    /// [`Self::resolve_property_order`] of the prim whose index is `index`.
+    fn property_order_of(index: &PrimIndex, store: &dyn LayerStore) -> Option<Vec<TokenId>> {
         index.sources.iter().find_map(|source| {
             let spec = store.layer(source.layer_id)?.source_prim_spec(
                 source.lookup_path,
@@ -2830,8 +2834,18 @@ impl Stage {
     /// §13.3.2.3 (and every property its prim definition defines).
     #[must_use]
     pub(crate) fn property_names(&self, prim: PathId, store: &dyn LayerStore) -> Vec<TokenId> {
-        let mut names = self.authored_names(prim);
-        if let Some(definition) = self.prim_definition_ref(prim) {
+        self.prims
+            .get(&prim)
+            .map(|index| Self::property_names_of(index, store))
+            .unwrap_or_default()
+    }
+
+    /// [`Self::property_names`] of the prim whose index is `index`, for a
+    /// caller that holds the index already.
+    pub(crate) fn property_names_of(index: &PrimIndex, store: &dyn LayerStore) -> Vec<TokenId> {
+        let mut names = Self::authored_names_of(index);
+        if let Some(info) = index.type_info.as_ref() {
+            let definition = &info.definition;
             let authored: HashSet<TokenId> = names.iter().copied().collect();
             names.extend(
                 definition
@@ -2841,7 +2855,7 @@ impl Stage {
                     .filter(|name| !authored.contains(name)),
             );
         }
-        self.order_property_names(prim, &mut names, store);
+        Self::order_names_of(index, &mut names, store);
         names
     }
 
@@ -2859,27 +2873,67 @@ impl Stage {
         prim: PathId,
         store: &dyn LayerStore,
     ) -> Vec<TokenId> {
-        let mut names = self.authored_names(prim);
-        self.order_property_names(prim, &mut names, store);
+        self.prims
+            .get(&prim)
+            .map(|index| Self::authored_property_names_of(index, store))
+            .unwrap_or_default()
+    }
+
+    /// [`Self::authored_property_names`] of the prim whose index is `index`.
+    pub(crate) fn authored_property_names_of(
+        index: &PrimIndex,
+        store: &dyn LayerStore,
+    ) -> Vec<TokenId> {
+        let mut names = Self::authored_names_of(index);
+        Self::order_names_of(index, &mut names, store);
         names
     }
 
-    /// Sorts `names` in dictionary order, then applies the prim's
-    /// `reorder properties`.
-    fn order_property_names(&self, prim: PathId, names: &mut [TokenId], store: &dyn LayerStore) {
+    /// Sorts `names` in dictionary order, then applies the `reorder
+    /// properties` of the prim whose index is `index`.
+    fn order_names_of(index: &PrimIndex, names: &mut [TokenId], store: &dyn LayerStore) {
         sort_property_names(names, store.tokens());
-        if let Some(order) = self.resolve_property_order(prim, store) {
+        if let Some(order) = Self::property_order_of(index, store) {
             apply_property_order(&order, names);
         }
     }
 
+    /// The names of the authored properties of `prim` inside `namespace`
+    /// (`material:binding` holds `material:binding:preview`, not itself),
+    /// in the order of [`Stage::property_names`]. Only the matching names
+    /// are sorted.
+    ///
+    /// OpenUSD: `UsdPrim::GetAuthoredPropertiesInNamespace`.
+    pub(crate) fn authored_property_names_in(
+        index: &PrimIndex,
+        namespace: &str,
+        store: &dyn LayerStore,
+    ) -> Vec<TokenId> {
+        let namespace = namespace.trim_end_matches(':');
+        let tokens = store.tokens();
+        let mut names = Self::authored_names_of(index);
+        names.retain(|name| {
+            tokens
+                .resolve(*name)
+                .strip_prefix(namespace)
+                .is_some_and(|rest| rest.starts_with(':') || namespace.is_empty())
+        });
+        Self::order_names_of(index, &mut names, store);
+        names
+    }
+
     /// The names of the properties opinions of `prim` author, unsorted.
     fn authored_names(&self, prim: PathId) -> Vec<TokenId> {
+        self.prims
+            .get(&prim)
+            .map(Self::authored_names_of)
+            .unwrap_or_default()
+    }
+
+    /// [`Self::authored_names`] of the prim whose index is `index`.
+    fn authored_names_of(index: &PrimIndex) -> Vec<TokenId> {
         use crate::prim_index::FieldKey;
 
-        let Some(index) = self.prims.get(&prim) else {
-            return Vec::new();
-        };
         index
             .fields
             .iter()
@@ -3129,10 +3183,20 @@ impl Stage {
         store: &dyn LayerStore,
     ) -> Option<Specifier> {
         let index = self.prims.get(&prim)?;
+        Some(Self::specifier_of(prim, index, store))
+    }
+
+    /// [`Self::resolve_specifier`] of the prim `prim` whose index is
+    /// `index`, for a caller that holds the index already.
+    pub(crate) fn specifier_of(
+        prim: PathId,
+        index: &PrimIndex,
+        store: &dyn LayerStore,
+    ) -> Specifier {
         let depth = store.paths().resolve(prim).depth();
         // The pseudo-root is always defining (OpenUSD `UsdPrim::GetSpecifier`).
         if depth == 0 {
-            return Some(Specifier::Def);
+            return Specifier::Def;
         }
         // Whether `node` is reached through an inherit authored at this
         // prim rather than at one of its ancestors (OpenUSD's
@@ -3162,16 +3226,16 @@ impl Stage {
                 continue;
             };
             match spec.specifier {
-                Some(Specifier::Def) => return Some(Specifier::Def),
+                Some(Specifier::Def) => return Specifier::Def,
                 Some(Specifier::Class) if !direct_inherit(key.node) => {
-                    return Some(Specifier::Class);
+                    return Specifier::Class;
                 }
                 Some(Specifier::Class) => resolved = Specifier::Class,
                 Some(Specifier::Over) | None => {}
             }
         }
 
-        Some(resolved)
+        resolved
     }
 
     /// Returns `true` if the prim is *defined* per §11.5.

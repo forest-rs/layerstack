@@ -98,7 +98,7 @@ fn colliders(scene: Scene<'_>, root: PathId) -> Vec<PathId> {
         if scene.has_api(path, "PhysicsCollisionAPI", None) {
             result.push(path);
         }
-        pending.extend(prim.children().rev().map(|child| child.path()));
+        pending.extend(prim.child_paths().iter().rev().copied());
     }
     result
 }

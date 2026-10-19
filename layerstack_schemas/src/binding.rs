@@ -266,15 +266,19 @@ impl BindingInputs {
         if !options.support_legacy_bindings && !binding_api {
             return out;
         }
-        let tokens = scene.store().tokens();
+        // `material:binding` itself, then the names inside its namespace:
+        // only those are read and sorted, not every authored name.
         let names: Vec<(&str, layerstack::TokenId)> = scene
             .prim(path)
-            .map(|prim| prim.authored_property_names())
-            .unwrap_or_default()
-            .into_iter()
-            .filter(|name| name.starts_with(BINDING))
-            .filter_map(|name| Some((name, tokens.lookup(name)?)))
-            .collect();
+            .map(|prim| {
+                prim.property(BINDING)
+                    .filter(|property| property.is_authored())
+                    .into_iter()
+                    .chain(prim.authored_properties_in_namespace(BINDING))
+                    .map(|property| (property.name(), property.path().property()))
+                    .collect()
+            })
+            .unwrap_or_default();
         if names.is_empty() {
             return out;
         }

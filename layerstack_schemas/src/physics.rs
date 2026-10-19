@@ -119,7 +119,7 @@ pub fn compute_collision_group_table(
             groups.push(group);
         }
         if !prim.is_instance() {
-            pending.extend(prim.children().rev().map(|child| child.path()));
+            pending.extend(prim.child_paths().iter().rev().copied());
         }
     }
     let mut names: HashMap<Arc<str>, usize> = HashMap::new();

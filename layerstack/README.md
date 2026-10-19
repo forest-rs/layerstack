@@ -210,3 +210,28 @@ as defined in the Apache-2.0 license, shall be dual licensed as above, without a
 
 [LICENSE-APACHE]: LICENSE-APACHE
 [LICENSE-MIT]: LICENSE-MIT
+
+## Native keyed tables
+
+`layerstack::table` is a domain-neutral extension for catalogs and other dense
+row data. It is separate from USD `Stage` composition. `KeyedTable` borrows
+strictly sorted unique text keys and typed column buffers; key lookup uses a
+binary search and allocates no per-row index or property objects. Text columns
+can borrow dictionary/index storage (`CrateTextArray` implements `TextColumn`).
+
+`TableView::compose` validates sparse `TablePatch` layers, **weakest first**.
+Updates replace named cells, inserts provide a complete row, and deletion
+removes a row. Updating a missing/deleted row is an error; resurrection requires
+an explicit insertion. Wrong column kinds and malformed base shapes are refused
+before the view is exposed. Unedited cells remain borrowed from the base;
+patches do not copy its rows. Numeric columns distinguish signed/unsigned
+integers and binary floats; exact decimals/money must not be converted to floats.
+
+This API is additive and experimental. It does not silently add table semantics
+to stock USD arrays or prims. It supplies no wire format, patch serialization,
+USD `Stage` integration, schema evolution, foreign-key validation, nullability,
+conflict/rebase protocol or implicit cache. Hosts own those contracts and can
+project base columns into ordinary USD arrays for portable inspection. Domains
+with optional fields must model presence explicitly rather than equating empty
+text with absence. Native table correctness tests protect sparse composition,
+source borrowing, stable keys and explicit deletion/reinsertion.

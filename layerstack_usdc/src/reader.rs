@@ -373,3 +373,12 @@ impl<'a> CrateTextArray<'a> {
 
 #[cfg(test)]
 mod tests;
+
+impl layerstack::table::TextColumn for CrateTextArray<'_> {
+    fn len(&self) -> usize {
+        self.len()
+    }
+    fn get(&self, index: usize) -> Option<&str> {
+        self.get(index)
+    }
+}

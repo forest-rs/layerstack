@@ -285,3 +285,6 @@ pub use live_stage::{
     ChangeCursor, ChangeHistoryError, ChangeNotice, ChangeSubscription, LiveStage,
     MaskExpansionReport, RecompositionWork,
 };
+
+/// Native keyed-table storage and sparse composition (a Layerstack extension).
+pub mod table;

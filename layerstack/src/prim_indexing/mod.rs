@@ -202,6 +202,7 @@ pub(crate) fn compose(
         root_path,
         dynamic_formats: &options.dynamic_formats,
         schemas: options.schemas.as_deref(),
+        any_type: store.tokens().lookup("__AnyType__"),
     };
     let identifier = LayerStackIdentifier {
         root,
@@ -396,6 +397,13 @@ fn index_prim(
     let names = child_names(ctx, &graph);
     let mut findings = crate::composition_checks::Findings::default();
     let mut index = prim_index(ctx, path, &graph, &mut findings);
+    // Found here, on the thread indexing the prim, for the stage's type
+    // info to read.
+    index.type_name = Some(crate::Stage::source_type_name(
+        &index,
+        ctx.store,
+        ctx.any_type,
+    ));
     let dynamic = core::mem::take(&mut outputs.dynamic);
     index.dynamic = (!dynamic.is_empty()).then(|| Arc::new(dynamic));
     let active = path == ctx.root_path || is_active(ctx, &graph);

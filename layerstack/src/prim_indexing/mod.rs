@@ -478,6 +478,11 @@ impl Walk<'_, '_, '_> {
     fn walk(&mut self, roots: Vec<PathId>, parent: Option<&Arc<Graph>>) {
         let tasks = roots.iter().map(|&root| (root, parent.cloned())).collect();
         let indexed = self.pool.run(tasks);
+        // Grown once, rather than rehashing as the prims join.
+        self.out.prims.reserve(indexed.len());
+        if self.out.deps.is_some() {
+            self.out.records.reserve(indexed.len());
+        }
         // One thread indexes prims in the order they join: a prim, then
         // the children it adds, depth first.
         if self.pool.in_order() {

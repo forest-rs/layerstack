@@ -157,7 +157,8 @@ pub fn read_usdc_within(
 ) -> Result<AssembleResult, UsdcError> {
     let hdr = header::parse_header(data)?;
     let toc_sections = toc::parse_toc(data, hdr.toc_offset)?;
-    let sections = section::parse_sections(data, &toc_sections, hdr.crate_version(), budget)?;
+    let version = hdr.crate_version();
+    let sections = section::parse_sections_on(data, &toc_sections, version, budget, threads)?;
     assemble::assemble(
         data, &sections, layer_id, tokens, paths, resolver, budget, threads,
     )

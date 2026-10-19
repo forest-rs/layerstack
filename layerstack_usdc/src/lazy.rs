@@ -490,11 +490,12 @@ pub fn read_usdc_lazy_range_within(
 ) -> Result<LazyReadResult, UsdcError> {
     let header = crate::header::parse_header(&bytes)?;
     let toc = crate::toc::parse_toc(&bytes, header.toc_offset)?;
-    let sections = Arc::new(crate::section::parse_sections(
+    let sections = Arc::new(crate::section::parse_sections_on(
         &bytes,
         &toc,
         header.crate_version(),
         &mut budget,
+        threads,
     )?);
     let pool = Arc::new(LazyPool {
         bytes,

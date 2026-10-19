@@ -51,7 +51,7 @@ use super::{
 /// What every prim index of one composition shares.
 pub(crate) struct Ctx<'s> {
     pub(crate) store: &'s dyn LayerStore,
-    pub(crate) stacks: LayerStacks,
+    pub(crate) stacks: LayerStacks<'s>,
     pub(crate) child_index: &'s ChildIndex,
     pub(crate) fallbacks: &'s VariantFallbacks,
     /// Whether payloads at a stage path are loaded.
@@ -2581,7 +2581,7 @@ impl Indexer<'_, '_, '_> {
 /// Whether the graph `graph` is an instance's index: it has instanceable
 /// data and its strongest `instanceable` opinion is `true`. OpenUSD:
 /// `Pcp_PrimIndexIsInstanceable`.
-pub(crate) fn is_instanceable(store: &dyn LayerStore, stacks: &LayerStacks, graph: &Graph) -> bool {
+pub(crate) fn is_instanceable(store: &dyn LayerStore, stacks: &LayerStacks<'_>, graph: &Graph) -> bool {
     let instanceable_node =
         |node: &Node| node.transitive_direct && node.can_contribute_specs() && node.has_specs;
     let mut has_data = false;
@@ -2655,7 +2655,7 @@ fn replace_spec_prefix(
 /// `GetExpressionForRelocatesAtPath`, `_FilterRelocationsForPath`.
 fn relocates_map_at(
     store: &dyn LayerStore,
-    stack: &super::layer_stacks::ComputedStack,
+    stack: &super::layer_stacks::ComputedStack<'_>,
     path: PathId,
 ) -> MapFunction {
     let mut pairs: Vec<(PathId, Option<PathId>)> = Vec::new();

@@ -35,7 +35,7 @@ use crate::{
 use super::{
     graph::{Graph, NodeIndex},
     indexer::Frame,
-    layer_stacks::LayerStacks,
+    layer_stacks::Stacks,
     site, site_paths,
 };
 
@@ -44,7 +44,7 @@ use super::{
 /// the frames of the recursive indexing in progress.
 pub(crate) struct Walk<'a> {
     pub(crate) store: &'a dyn LayerStore,
-    pub(crate) stacks: &'a LayerStacks,
+    pub(crate) stacks: &'a dyn Stacks,
     pub(crate) schemas: Option<&'a SchemaRegistry>,
     pub(crate) graph: &'a Graph,
     pub(crate) parent: NodeIndex,
@@ -148,7 +148,7 @@ impl<'a> State<'_, 'a> {
         let store = self.walk.store;
         let paths = store.paths();
         let entry = graph.node(node);
-        let stack = self.walk.stacks.get(entry.site.stack);
+        let stack = self.walk.stacks.stack(entry.site.stack);
         for (_, layer, spec) in site::specs(store, stack, path) {
             self.sites.insert((layer, path.prim_path()));
             let value = match self.key {
@@ -270,7 +270,7 @@ pub(crate) fn payload_is_stronger(
 /// composition here has no asset resolver, so the format anchors them.
 fn evaluate_assets(
     store: &dyn LayerStore,
-    stack: &super::layer_stacks::ComputedStack,
+    stack: &super::layer_stacks::ComputedStack<'_>,
     value: Value,
 ) -> Value {
     let evaluate = |asset: alloc::sync::Arc<str>| {

@@ -10,6 +10,9 @@
 
 use alloc::{collections::BTreeMap, sync::Arc, vec::Vec};
 
+/// Experimental native block storage for immutable table columns.
+pub mod storage;
+
 /// Read-only string storage, including dictionary/index-backed arrays.
 /// Implementations must return one element for every index below `len`, and
 /// keep their length and text stable while a table borrows them.
@@ -19,6 +22,18 @@ pub trait TextColumn: core::fmt::Debug + Sync {
     /// Borrow one element without allocating or caching an owned string.
     fn get(&self, index: usize) -> Option<&str>;
     /// Whether there are no elements.
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
+/// Read-only binary records. Length and contents stay stable while borrowed.
+pub trait BytesColumn: core::fmt::Debug + Sync {
+    /// Number of records.
+    fn len(&self) -> usize;
+    /// Borrow a record without allocating or decoding its domain contents.
+    fn get(&self, index: usize) -> Option<&[u8]>;
+    /// Whether there are no records.
     fn is_empty(&self) -> bool {
         self.len() == 0
     }
@@ -43,6 +58,8 @@ impl TextColumn for Vec<Arc<str>> {
 /// The scalar kind of one native table column.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CellKind {
+    /// Domain-encoded binary data; interpretation belongs to the host.
+    Bytes,
     /// Exact text. Decimal quantities can use a separately declared text codec.
     Text,
     /// A boolean.
@@ -58,6 +75,8 @@ pub enum CellKind {
 /// A cell borrowed from a column or sparse edit.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Cell<'a> {
+    /// A borrowed domain-encoded binary record.
+    Bytes(&'a [u8]),
     /// Borrowed text.
     Text(&'a str),
     /// A boolean.
@@ -74,6 +93,7 @@ impl Cell<'_> {
     #[must_use]
     pub fn kind(self) -> CellKind {
         match self {
+            Self::Bytes(_) => CellKind::Bytes,
             Self::Text(_) => CellKind::Text,
             Self::Bool(_) => CellKind::Bool,
             Self::Int64(_) => CellKind::Int64,
@@ -86,6 +106,8 @@ impl Cell<'_> {
 /// An owned sparse cell. Only edited/inserted cells need this representation.
 #[derive(Clone, Debug, PartialEq)]
 pub enum OwnedCell {
+    /// An owned edited binary record.
+    Bytes(Arc<[u8]>),
     /// Shared exact text.
     Text(Arc<str>),
     /// A boolean.
@@ -102,6 +124,7 @@ impl OwnedCell {
     #[must_use]
     pub fn as_cell(&self) -> Cell<'_> {
         match self {
+            Self::Bytes(v) => Cell::Bytes(v),
             Self::Text(v) => Cell::Text(v),
             Self::Bool(v) => Cell::Bool(*v),
             Self::Int64(v) => Cell::Int64(*v),
@@ -114,6 +137,8 @@ impl OwnedCell {
 /// A typed, borrowed base column. No cell objects are stored per base row.
 #[derive(Clone, Copy, Debug)]
 pub enum ColumnData<'a> {
+    /// Borrowed binary records. The table does not interpret their contents.
+    Bytes(&'a dyn BytesColumn),
     /// Text, possibly backed by a compact dictionary and index array.
     Text(&'a dyn TextColumn),
     /// Booleans.
@@ -130,6 +155,7 @@ impl<'a> ColumnData<'a> {
     #[must_use]
     pub fn len(self) -> usize {
         match self {
+            Self::Bytes(v) => v.len(),
             Self::Text(v) => v.len(),
             Self::Bool(v) => v.len(),
             Self::Int64(v) => v.len(),
@@ -146,6 +172,7 @@ impl<'a> ColumnData<'a> {
     #[must_use]
     pub fn kind(self) -> CellKind {
         match self {
+            Self::Bytes(_) => CellKind::Bytes,
             Self::Text(_) => CellKind::Text,
             Self::Bool(_) => CellKind::Bool,
             Self::Int64(_) => CellKind::Int64,
@@ -155,6 +182,7 @@ impl<'a> ColumnData<'a> {
     }
     fn get(self, index: usize) -> Option<Cell<'a>> {
         match self {
+            Self::Bytes(v) => v.get(index).map(Cell::Bytes),
             Self::Text(v) => v.get(index).map(Cell::Text),
             Self::Bool(v) => v.get(index).copied().map(Cell::Bool),
             Self::Int64(v) => v.get(index).copied().map(Cell::Int64),

@@ -227,8 +227,16 @@ before the view is exposed. Unedited cells remain borrowed from the base;
 patches do not copy its rows. Numeric columns distinguish signed/unsigned
 integers and binary floats; exact decimals/money must not be converted to floats.
 
+`table::storage` adds an experimental version-zero physical format independent
+of USDC: a borrowed block directory, dictionary/index text columns, and
+offset-indexed binary-record columns with no read-side allocations. Columns
+remain unread until requested. See
+[native table storage](docs/native-tables.md) for the wire layout, validation,
+ownership and compatibility limits. Exhaustive table-cell matches must handle
+the new `Bytes` variant; existing scene callers are unchanged.
+
 This API is additive and experimental. It does not silently add table semantics
-to stock USD arrays or prims. It supplies no wire format, patch serialization,
+to stock USD arrays or prims. It supplies no patch serialization,
 USD `Stage` integration, schema evolution, foreign-key validation, nullability,
 conflict/rebase protocol or implicit cache. Hosts own those contracts and can
 project base columns into ordinary USD arrays for portable inspection. Domains

@@ -707,6 +707,7 @@ fn read_within(
         &PathInterner::default(),
         &mut StubResolver,
         budget,
+        1,
     )
 }
 

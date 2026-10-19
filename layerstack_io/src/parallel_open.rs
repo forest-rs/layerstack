@@ -81,6 +81,8 @@ struct Shared<'a, B> {
     usdc_options: super::UsdcReadOptions,
     formats: &'a FileFormats,
     defers_variant_arcs: bool,
+    /// The threads a USDC source is read on ([`read_loose`]).
+    threads: usize,
     /// [`Reader::identify`]'s cache.
     identities: Mutex<Identities>,
     /// Each source found so far, by identifier, with its provisional id.
@@ -169,6 +171,7 @@ impl<B: Storage> Shared<'_, B> {
             self.schemas,
             self.usdc_options,
             self.formats,
+            self.threads,
         );
         if !resolver.package {
             read.calls = resolver.calls;
@@ -300,6 +303,7 @@ impl<B: Storage> Reader<'_, B> {
             usdc_options: self.usdc_options,
             formats: &self.formats,
             defers_variant_arcs: self.defers_variant_arcs(),
+            threads,
             identities: Mutex::new(self.identities.clone()),
             sources: Mutex::default(),
         };

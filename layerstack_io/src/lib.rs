@@ -1336,6 +1336,7 @@ impl<'a, B: Storage> Reader<'a, B> {
                     schemas.as_deref(),
                     usdc_options,
                     &formats,
+                    1,
                 );
                 self.pending.extend(read.resolved_layers);
                 self.diagnostics.extend(read.diagnostics);
@@ -1478,7 +1479,8 @@ struct LooseRead {
 }
 
 /// Reads the USDA, USDC or registered-format layer `data`, `identifier`
-/// read as `id`, resolving its arcs through `resolver`.
+/// read as `id`, resolving its arcs through `resolver`, a USDC layer on up
+/// to `threads` threads.
 #[expect(
     clippy::too_many_arguments,
     reason = "one reader's inputs, passed through"
@@ -1494,6 +1496,7 @@ fn read_loose(
     schemas: Option<&layerstack::SchemaRegistry>,
     usdc_options: UsdcReadOptions,
     formats: &FileFormats,
+    threads: usize,
 ) -> LooseRead {
     let mut read = LooseRead {
         layer: Err(IoError::new(IoErrorKind::Rejected, "unread layer")),
@@ -1575,17 +1578,25 @@ fn read_loose(
             paths,
             resolver,
             budget,
+            threads,
         )
         .map(|result| {
             read.retained = Some(result.values);
             result.assembled
         }),
-        UsdcArrayLoading::Eager => {
-            layerstack_usdc::read_usdc_within(data, id, tokens, paths, resolver, &mut budget)
-        }
+        UsdcArrayLoading::Eager => layerstack_usdc::read_usdc_within(
+            data,
+            id,
+            tokens,
+            paths,
+            resolver,
+            &mut budget,
+            threads,
+        ),
     };
     #[cfg(not(feature = "std"))]
-    let result = layerstack_usdc::read_usdc_within(data, id, tokens, paths, resolver, &mut budget);
+    let result =
+        layerstack_usdc::read_usdc_within(data, id, tokens, paths, resolver, &mut budget, threads);
     match result {
         Ok(result) => {
             read.resolved_layers = result.resolved_layers;

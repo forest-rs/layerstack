@@ -13,7 +13,7 @@ use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 
-use crate::compression::{lz4_decompress, read_compressed_ints};
+use crate::compression::{lz4_decompress, read_compressed_ints_as};
 use crate::error::UsdcError;
 use crate::toc::{SectionEntry, Toc};
 use crate::value_rep::DecodeBudget;
@@ -446,13 +446,44 @@ pub fn parse_sections(
     };
 
     let paths = if let Some(entry) = toc.paths {
-        parse_paths(data, &entry, &tokens, budget)?
+        let (path_indices, _) = parse_path_array(data, &entry, 0, budget)?;
+        let (element_token_indices, _) = parse_path_array(data, &entry, 1, budget)?;
+        let (jumps, count) = parse_path_array(data, &entry, 2, budget)?;
+        let count = count.expect("the last array counts the paths");
+        let mut nodes = vec![PathNode::Unused; count];
+        let (lens, spellings) = build_paths(
+            &path_indices,
+            &element_token_indices,
+            &jumps,
+            &tokens,
+            &mut nodes,
+            budget,
+        )?;
+        PathTable {
+            nodes,
+            texts: (0..count).map(|_| TextSlot::new()).collect(),
+            lens,
+            spellings,
+        }
     } else {
         PathTable::default()
     };
 
     let specs = if let Some(entry) = toc.specs {
-        parse_specs(data, &entry, budget)?
+        let path_indices = parse_spec_array(data, &entry, 0, budget)?;
+        let fieldset_indices = parse_spec_array(data, &entry, 1, budget)?;
+        let forms = parse_spec_array(data, &entry, 2, budget)?;
+        let mut specs = Vec::with_capacity(path_indices.len());
+        for ((&path_index, &fieldset_index), &form) in
+            path_indices.iter().zip(&fieldset_indices).zip(&forms)
+        {
+            specs.push(SpecDef {
+                path_index,
+                fieldset_index,
+                form: SpecForm::try_from(form)?,
+            });
+        }
+        specs
     } else {
         vec![]
     };
@@ -629,7 +660,13 @@ fn parse_fields(
     // Read compressed token indices. A unit per field covers its index, its
     // 8-byte value rep and its `FieldDef`.
     budget.charge(num_fields)?;
-    let (indices_i64, indices_consumed) = read_compressed_ints(&section[8..], count, 4)?;
+    #[allow(
+        clippy::cast_sign_loss,
+        clippy::cast_possible_truncation,
+        reason = "token indices are u32-range values"
+    )]
+    let (indices, indices_consumed) =
+        read_compressed_ints_as(&section[8..], count, 4, |index| index as u32)?;
 
     // Read reps_size and LZ4-compressed value reps.
     let reps_start = 8 + indices_consumed;
@@ -664,19 +701,12 @@ fn parse_fields(
         });
     }
 
-    let fields = indices_i64
+    let fields = indices
         .iter()
         .zip(decompressed_reps.as_chunks::<8>().0)
-        .map(|(&idx_val, rep)| {
-            #[allow(
-                clippy::cast_possible_truncation,
-                reason = "token indices are u32-range values"
-            )]
-            let token_index = idx_val as u32;
-            FieldDef {
-                token_index,
-                value_rep: *rep,
-            }
+        .map(|(&token_index, rep)| FieldDef {
+            token_index,
+            value_rep: *rep,
         })
         .collect();
 
@@ -715,13 +745,11 @@ fn parse_fieldsets(
     let count = num as usize;
 
     budget.charge(num)?;
-    let (values, _consumed) = read_compressed_ints(&section[8..], count, 4)?;
-
     #[allow(
         clippy::cast_possible_truncation,
         reason = "fieldset values are i32-range"
     )]
-    let fieldsets: Vec<i32> = values.iter().map(|&v| v as i32).collect();
+    let (fieldsets, _consumed) = read_compressed_ints_as(&section[8..], count, 4, |v| v as i32)?;
     Ok(fieldsets)
 }
 
@@ -729,21 +757,22 @@ fn parse_fieldsets(
 // PATHS section
 // ---------------------------------------------------------------------------
 
-/// Parses the PATHS section and reconstructs SDF path strings.
+/// Decodes array `at` of the PATHS section, and with the last, checks and
+/// returns the number of paths its table holds, for [`build_paths`] to
+/// place them in the tree.
 ///
 /// Format: `num_paths: u64`, `num_encoded: u64`, then three compressed
-/// integer arrays: `path_indices`, `element_token_indices`, `jumps`.
-///
-/// The path reconstruction algorithm builds SDF paths recursively using
-/// a token table and the three index arrays.
+/// integer arrays of `num_encoded` entries: `path_indices`,
+/// `element_token_indices`, `jumps`. Each array starts with its compressed
+/// size, so array `at` is found without decoding those before it.
 ///
 /// Spec: AOUSD Core §16.3.7.
-fn parse_paths(
+fn parse_path_array(
     data: &[u8],
     entry: &SectionEntry,
-    tokens: &TokenTable,
+    at: usize,
     budget: &mut DecodeBudget,
-) -> Result<PathTable, UsdcError> {
+) -> Result<(Vec<i32>, Option<usize>), UsdcError> {
     let section = section_slice(data, entry)?;
     if section.len() < 16 {
         return Err(UsdcError::UnexpectedEof {
@@ -768,13 +797,18 @@ fn parse_paths(
     let n_encoded = num_encoded as usize;
 
     // Three index arrays of `n_encoded` entries.
-    budget.charge(num_encoded.saturating_mul(3))?;
-    let mut cursor = &section[16..];
-    let (path_indices, c1) = read_compressed_ints(cursor, n_encoded, 4)?;
-    cursor = &cursor[c1..];
-    let (element_token_indices, c2) = read_compressed_ints(cursor, n_encoded, 4)?;
-    cursor = &cursor[c2..];
-    let (jumps, _c3) = read_compressed_ints(cursor, n_encoded, 4)?;
+    if at == 0 {
+        budget.charge(num_encoded.saturating_mul(3))?;
+    }
+    let cursor = skip_compressed_ints(&section[16..], at)?;
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "path arrays are summed in int32 arithmetic"
+    )]
+    let (array, _) = read_compressed_ints_as(cursor, n_encoded, 4, |v| v as i32)?;
+    if at < 2 {
+        return Ok((array, None));
+    }
 
     // The table holds the encoded paths, and OpenUSD tolerates unused
     // entries. The count comes from the file, so unused entries are limited
@@ -785,22 +819,93 @@ fn parse_paths(
         });
     }
     budget.charge(num_paths)?;
-    let mut nodes = vec![PathNode::Unused; n_paths];
-    let (lens, spellings) = build_paths(
-        &path_indices,
-        &element_token_indices,
-        &jumps,
-        tokens,
-        &mut nodes,
-        budget,
-    )?;
-    let texts = (0..n_paths).map(|_| TextSlot::new()).collect();
-    Ok(PathTable {
-        nodes,
-        texts,
-        lens,
-        spellings,
-    })
+    Ok((array, Some(n_paths)))
+}
+
+/// `data` after the first `count` of the compressed integer arrays it
+/// starts with, each its compressed size and its bytes.
+fn skip_compressed_ints(mut data: &[u8], count: usize) -> Result<&[u8], UsdcError> {
+    for _ in 0..count {
+        let truncated = UsdcError::UnexpectedEof {
+            section: "compressed int array",
+            offset: 0,
+            expected: 8,
+        };
+        let size = data.get(..8).ok_or(truncated)?;
+        let size = u64::from_le_bytes(size.try_into().expect("eight bytes"));
+        let end = usize::try_from(size)
+            .ok()
+            .and_then(|size| size.checked_add(8))
+            .filter(|end| *end <= data.len())
+            .ok_or(UsdcError::UnexpectedEof {
+                section: "compressed int array data",
+                offset: 8,
+                expected: size,
+            })?;
+        data = &data[end..];
+    }
+    Ok(data)
+}
+
+/// What a path element's text holds, for [`build_paths`] to spell a path
+/// from its parent's without the text.
+#[derive(Clone, Copy, Debug, Default)]
+struct Element {
+    len: usize,
+    flags: u8,
+}
+
+impl Element {
+    /// The element has been read.
+    const KNOWN: u8 = 1;
+    /// The text starts with `{`.
+    const OPENS: u8 = 2;
+    /// The text ends with `}`.
+    const CLOSES: u8 = 4;
+    /// The text holds a `{`.
+    const OPEN: u8 = 8;
+    /// The text holds a `.`.
+    const DOT: u8 = 16;
+    /// The text holds a `}`.
+    const CLOSE: u8 = 32;
+
+    fn of(text: &str) -> Self {
+        let mut flags = Self::KNOWN;
+        for (flag, holds) in [
+            (Self::OPENS, text.starts_with('{')),
+            (Self::CLOSES, text.ends_with('}')),
+            (Self::OPEN, text.contains('{')),
+            (Self::DOT, text.contains('.')),
+            (Self::CLOSE, text.contains('}')),
+        ] {
+            if holds {
+                flags |= flag;
+            }
+        }
+        Self {
+            len: text.len(),
+            flags,
+        }
+    }
+
+    fn has(self, flag: u8) -> bool {
+        self.flags & flag != 0
+    }
+}
+
+/// The [`Element`] of each token of a table, read when first asked.
+struct Elements(Vec<Element>);
+
+impl Elements {
+    /// The element token `index` of `tokens` spells; `None` outside the
+    /// table.
+    fn of(&mut self, index: usize, tokens: &TokenTable) -> Option<Element> {
+        let slot = self.0.get_mut(index)?;
+        if !slot.has(Element::KNOWN) {
+            *slot = Element::of(tokens.get(index)?);
+        }
+        Some(*slot)
+    }
 }
 
 /// Iterative path reconstruction using an explicit stack.
@@ -819,10 +924,10 @@ fn parse_paths(
 /// describe paths far longer than the file: each path's text is charged to
 /// `budget` by its length, found from its parent's, as building it would
 /// be.
-fn build_paths(
-    path_indices: &[i64],
-    element_token_indices: &[i64],
-    jumps: &[i64],
+fn build_paths<I: Copy + Into<i64>>(
+    path_indices: &[I],
+    element_token_indices: &[I],
+    jumps: &[I],
     tokens: &TokenTable,
     nodes: &mut [PathNode],
     budget: &mut DecodeBudget,
@@ -839,13 +944,16 @@ fn build_paths(
     // whose jumps overlap could revisit entries exponentially often.
     let mut targets = vec![false; nodes.len()];
     for &target in path_indices {
-        let target = usize::try_from(target).map_err(|_| UsdcError::PathReconstruction)?;
+        let target = usize::try_from(target.into()).map_err(|_| UsdcError::PathReconstruction)?;
         match targets.get_mut(target) {
             Some(seen @ false) => *seen = true,
             _ => return Err(corrupt),
         }
     }
     let mut visited = vec![false; path_indices.len()];
+    // What each element's text holds, found once per token: many paths
+    // share an element (a property name).
+    let mut elements = Elements(vec![Element::default(); tokens.len()]);
     // Each path's text length, whether it ends with `}`, and whether it is
     // `/`, as the root's is.
     let mut texts: Vec<(usize, bool, bool)> = vec![(0, false, false); nodes.len()];
@@ -870,7 +978,7 @@ fn build_paths(
                 clippy::cast_possible_truncation,
                 reason = "path indexes were checked against the table"
             )]
-            let target = path_indices[idx] as usize;
+            let target = path_indices[idx].into() as usize;
 
             if first && parent_at == NO_PARENT {
                 // Root node.
@@ -878,15 +986,11 @@ fn build_paths(
                 spellings[target] = Spelling(Spelling::ROOT);
                 nodes[target] = PathNode::Root;
             } else {
-                let token_idx_raw = element_token_indices[idx];
+                let token_idx_raw: i64 = element_token_indices[idx].into();
                 let is_property = token_idx_raw < 0;
-                #[allow(
-                    clippy::cast_possible_truncation,
-                    reason = "token indices are u32-range"
-                )]
                 let Some(element) = usize::try_from(token_idx_raw.unsigned_abs())
                     .ok()
-                    .and_then(|token_idx| tokens.get(token_idx))
+                    .and_then(|token_idx| elements.of(token_idx, tokens))
                 else {
                     return Err(UsdcError::PathReconstruction);
                 };
@@ -898,21 +1002,21 @@ fn build_paths(
                     .unwrap_or((0, false, false));
                 let sep = if is_property {
                     "."
-                } else if element.starts_with('{') || parent_brace {
+                } else if element.has(Element::OPENS) || parent_brace {
                     ""
                 } else {
                     "/"
                 };
-                budget.charge_text(parent_len + sep.len() + element.len())?;
+                budget.charge_text(parent_len + sep.len() + element.len)?;
                 // As the text is spelled: a path below `/` starts with its
                 // separator, and one with an empty element ends as its
                 // parent's text does.
                 let prefix = if parent_slash { 0 } else { parent_len };
-                let len = prefix + sep.len() + element.len();
-                let brace = if element.is_empty() {
+                let len = prefix + sep.len() + element.len;
+                let brace = if element.len == 0 {
                     sep.is_empty() && !parent_slash && parent_brace
                 } else {
-                    element.ends_with('}')
+                    element.has(Element::CLOSES)
                 };
                 texts[target] = (len, brace, len == 1 && sep == "/");
                 // Separators hold none of these but `.`, and the text
@@ -923,9 +1027,9 @@ fn build_paths(
                     .unwrap_or_default();
                 let mut bits = parent.0 & !(Spelling::CLOSE_LAST | Spelling::ROOT);
                 for (flag, holds) in [
-                    (Spelling::SELECTION, element.contains('{')),
-                    (Spelling::DOT, sep == "." || element.contains('.')),
-                    (Spelling::CLOSE, element.contains('}')),
+                    (Spelling::SELECTION, element.has(Element::OPEN)),
+                    (Spelling::DOT, sep == "." || element.has(Element::DOT)),
+                    (Spelling::CLOSE, element.has(Element::CLOSE)),
                     (Spelling::CLOSE_LAST, brace),
                     (Spelling::ROOT, len == 1 && sep == "/"),
                 ] {
@@ -947,7 +1051,7 @@ fn build_paths(
             }
             first = false;
 
-            let jump = jumps[idx];
+            let jump: i64 = jumps[idx].into();
             let has_child = jump > 0 || jump == -1;
             let has_sibling = jump >= 0;
 
@@ -986,17 +1090,19 @@ fn build_paths(
 // SPECS section
 // ---------------------------------------------------------------------------
 
-/// Parses the SPECS section.
+/// Decodes array `at` of the SPECS section.
 ///
 /// Format: `num_specs: u64`, then three compressed integer arrays:
-/// `path_indices`, `fieldset_indices`, `forms`.
+/// `path_indices`, `fieldset_indices`, `forms`, found as
+/// [`parse_path_array`] finds the PATHS section's.
 ///
 /// Spec: AOUSD Core §16.3.8.
-fn parse_specs(
+fn parse_spec_array(
     data: &[u8],
     entry: &SectionEntry,
+    at: usize,
     budget: &mut DecodeBudget,
-) -> Result<Vec<SpecDef>, UsdcError> {
+) -> Result<Vec<u32>, UsdcError> {
     let section = section_slice(data, entry)?;
     if section.len() < 8 {
         return Err(UsdcError::UnexpectedEof {
@@ -1014,39 +1120,17 @@ fn parse_specs(
     let count = num_specs as usize;
 
     // Three index arrays, and the specs.
-    budget.charge(num_specs.saturating_mul(4))?;
-    let mut cursor = &section[8..];
-    let (path_indices, c1) = read_compressed_ints(cursor, count, 4)?;
-    cursor = &cursor[c1..];
-    let (fieldset_indices, c2) = read_compressed_ints(cursor, count, 4)?;
-    cursor = &cursor[c2..];
-    let (forms, _c3) = read_compressed_ints(cursor, count, 4)?;
-
-    let mut specs = Vec::with_capacity(count);
-    for i in 0..count {
-        #[allow(
-            clippy::cast_possible_truncation,
-            reason = "spec indices are u32-range"
-        )]
-        let path_index = path_indices[i] as u32;
-        #[allow(
-            clippy::cast_possible_truncation,
-            reason = "spec indices are u32-range"
-        )]
-        let fieldset_index = fieldset_indices[i] as u32;
-        #[allow(
-            clippy::cast_possible_truncation,
-            reason = "spec forms are small enum values"
-        )]
-        let form = SpecForm::try_from(forms[i] as u32)?;
-        specs.push(SpecDef {
-            path_index,
-            fieldset_index,
-            form,
-        });
+    if at == 0 {
+        budget.charge(num_specs.saturating_mul(4))?;
     }
-
-    Ok(specs)
+    let cursor = skip_compressed_ints(&section[8..], at)?;
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "spec indices and forms are u32-range values"
+    )]
+    let (array, _) = read_compressed_ints_as(cursor, count, 4, |v| v as u32)?;
+    Ok(array)
 }
 
 // ---------------------------------------------------------------------------

@@ -123,7 +123,7 @@ fn build(layers: u64, points_len: usize, instructions: usize) -> Scene {
             .with_field(custom_data, entry)
             .with_field(
                 api_schemas,
-                FieldValue::TokenListOp(ListOp::prepended(vec![schema])),
+                FieldValue::TokenListOp(Box::new(ListOp::prepended(vec![schema]))),
             );
         let mut layer = Layer::new(LayerId(id));
         layer.insert_prim(prim, spec);

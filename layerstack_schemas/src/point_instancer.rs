@@ -11,7 +11,7 @@ use crate::{
     motion_sampling::{aligned, anchor, rate},
     usd_geom::PointInstancer,
 };
-use alloc::{sync::Arc, vec::Vec};
+use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use core::num::NonZeroUsize;
 use layerstack::{PathId, TargetPath, TokenInterner, Value};
 
@@ -135,7 +135,7 @@ impl crate::usd_geom::PointInstancerEdit {
         edit.group(|edit| {
             let current = match edit.local_prim_metadata(self.path(), "inactiveIds") {
                 None => layerstack::ListOp::default(),
-                Some(layerstack::FieldValue::Int64ListOp(op)) => op,
+                Some(layerstack::FieldValue::Int64ListOp(op)) => *op,
                 Some(_) => return Err(InstanceIdEditError::InvalidInactiveIds),
             };
             let ids = unique_ids(ids);
@@ -180,7 +180,7 @@ impl crate::usd_geom::PointInstancerEdit {
             edit.set_prim_metadata(
                 self.path(),
                 "inactiveIds",
-                layerstack::FieldValue::Int64ListOp(result),
+                layerstack::FieldValue::Int64ListOp(Box::new(result)),
             );
             Ok(())
         })
@@ -192,7 +192,7 @@ impl crate::usd_geom::PointInstancerEdit {
         edit.set_prim_metadata(
             self.path(),
             "inactiveIds",
-            layerstack::FieldValue::Int64ListOp(layerstack::ListOp::explicit(Vec::new())),
+            layerstack::FieldValue::Int64ListOp(Box::new(layerstack::ListOp::explicit(Vec::new()))),
         );
         self
     }

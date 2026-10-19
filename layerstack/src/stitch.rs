@@ -264,13 +264,13 @@ fn field_value(strong: &mut FieldValue, weak: &FieldValue, report: &mut StitchRe
         (FieldValue::Value(Value::Dictionary(a)), FieldValue::Value(Value::Dictionary(b))) => {
             *a = crate::doc::combine_dictionaries(a, b);
         }
-        (FieldValue::TokenListOp(a), FieldValue::TokenListOp(b)) => *a = listop(a, b, report),
-        (FieldValue::PathListOp(a), FieldValue::PathListOp(b)) => *a = listop(a, b, report),
-        (FieldValue::StringListOp(a), FieldValue::StringListOp(b)) => *a = listop(a, b, report),
-        (FieldValue::IntListOp(a), FieldValue::IntListOp(b)) => *a = listop(a, b, report),
-        (FieldValue::UIntListOp(a), FieldValue::UIntListOp(b)) => *a = listop(a, b, report),
-        (FieldValue::Int64ListOp(a), FieldValue::Int64ListOp(b)) => *a = listop(a, b, report),
-        (FieldValue::UInt64ListOp(a), FieldValue::UInt64ListOp(b)) => *a = listop(a, b, report),
+        (FieldValue::TokenListOp(a), FieldValue::TokenListOp(b)) => **a = listop(a, b, report),
+        (FieldValue::PathListOp(a), FieldValue::PathListOp(b)) => **a = listop(a, b, report),
+        (FieldValue::StringListOp(a), FieldValue::StringListOp(b)) => **a = listop(a, b, report),
+        (FieldValue::IntListOp(a), FieldValue::IntListOp(b)) => **a = listop(a, b, report),
+        (FieldValue::UIntListOp(a), FieldValue::UIntListOp(b)) => **a = listop(a, b, report),
+        (FieldValue::Int64ListOp(a), FieldValue::Int64ListOp(b)) => **a = listop(a, b, report),
+        (FieldValue::UInt64ListOp(a), FieldValue::UInt64ListOp(b)) => **a = listop(a, b, report),
         _ => {}
     }
 }

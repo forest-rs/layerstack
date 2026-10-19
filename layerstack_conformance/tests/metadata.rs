@@ -116,7 +116,7 @@ fn composed_metadata_and_layer_defaults_match_cpp() {
     let mut weak = PrimSpec::over();
     weak.set_field(
         inactive,
-        FieldValue::Int64ListOp(ListOp::explicit(vec![1, 2])),
+        FieldValue::Int64ListOp(Box::new(ListOp::explicit(vec![1, 2]))),
     );
     weak.properties.push(entry(
         normals,
@@ -140,7 +140,7 @@ fn composed_metadata_and_layer_defaults_match_cpp() {
     let spec = root.prim_mut(mesh).unwrap();
     spec.set_field(
         inactive,
-        FieldValue::Int64ListOp(ListOp::appended(vec![3]).with_deleted(vec![1])),
+        FieldValue::Int64ListOp(Box::new(ListOp::appended(vec![3]).with_deleted(vec![1]))),
     );
     Arc::make_mut(&mut spec.properties[0].spec).set_metadata(
         sdr,

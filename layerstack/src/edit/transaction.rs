@@ -1308,7 +1308,7 @@ pub(crate) fn authored(
             .map(Authored::Field),
         Slot::Targets => property
             .and_then(|p| p.targets.clone())
-            .map(|targets| Authored::Field(FieldValue::PathListOp(targets))),
+            .map(|targets| Authored::Field(FieldValue::PathListOp(Box::new(targets)))),
         // Layer slots name no spec; preconditions guard them by generation.
         Slot::Sublayers | Slot::Relocates => return None,
         Slot::Prim(field) => super::prim_fields::read(&*store, spec, *field)

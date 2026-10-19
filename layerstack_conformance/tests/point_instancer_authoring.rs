@@ -28,7 +28,7 @@ fn authored_id_sequence() -> (layerstack::InMemoryStore, layerstack::LiveStage) 
         path,
         PrimSpec::over().with_field(
             inactive,
-            FieldValue::Int64ListOp(ListOp::appended(vec![10, 20])),
+            FieldValue::Int64ListOp(Box::new(ListOp::appended(vec![10, 20]))),
         ),
     );
     store.insert_layer(weak);
@@ -37,11 +37,11 @@ fn authored_id_sequence() -> (layerstack::InMemoryStore, layerstack::LiveStage) 
         .push(layerstack::SublayerEntry::new(LayerId(2)));
     root.prim_mut(path).unwrap().set_field(
         inactive,
-        FieldValue::Int64ListOp(ListOp {
+        FieldValue::Int64ListOp(Box::new(ListOp {
             add: vec![30, 10],
             delete: vec![20],
             ..ListOp::default()
-        }),
+        })),
     );
     live.synchronize(&mut store);
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
@@ -68,7 +68,7 @@ fn authored_id_sequence() -> (layerstack::InMemoryStore, layerstack::LiveStage) 
         path,
         PrimSpec::over().with_field(
             inactive,
-            FieldValue::Int64ListOp(ListOp::appended(vec![10, 20, 60, 90])),
+            FieldValue::Int64ListOp(Box::new(ListOp::appended(vec![10, 20, 60, 90]))),
         ),
     );
     store.insert_layer(weak);
@@ -134,7 +134,7 @@ fn explicit_inactive_lists_keep_their_cutoff_after_id_edits() {
         .unwrap()
         .set_field(
             inactive,
-            FieldValue::Int64ListOp(ListOp::explicit(vec![30, 10])),
+            FieldValue::Int64ListOp(Box::new(ListOp::explicit(vec![30, 10]))),
         );
     live.synchronize(&mut store);
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
@@ -154,7 +154,7 @@ fn explicit_inactive_lists_keep_their_cutoff_after_id_edits() {
         path,
         PrimSpec::over().with_field(
             inactive,
-            FieldValue::Int64ListOp(ListOp::appended(vec![90])),
+            FieldValue::Int64ListOp(Box::new(ListOp::appended(vec![90]))),
         ),
     );
     store.insert_layer(weak);

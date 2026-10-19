@@ -742,13 +742,13 @@ fn merge_fields(strong: &mut Vec<FieldEntry>, weak: &[FieldEntry]) {
                     FieldValue::Value(Value::Dictionary(a)),
                     FieldValue::Value(Value::Dictionary(b)),
                 ) => *a = crate::combine_dictionaries(a, b),
-                (FieldValue::TokenListOp(a), FieldValue::TokenListOp(b)) => *a = list(a, b),
-                (FieldValue::PathListOp(a), FieldValue::PathListOp(b)) => *a = list(a, b),
-                (FieldValue::StringListOp(a), FieldValue::StringListOp(b)) => *a = list(a, b),
-                (FieldValue::IntListOp(a), FieldValue::IntListOp(b)) => *a = list(a, b),
-                (FieldValue::UIntListOp(a), FieldValue::UIntListOp(b)) => *a = list(a, b),
-                (FieldValue::Int64ListOp(a), FieldValue::Int64ListOp(b)) => *a = list(a, b),
-                (FieldValue::UInt64ListOp(a), FieldValue::UInt64ListOp(b)) => *a = list(a, b),
+                (FieldValue::TokenListOp(a), FieldValue::TokenListOp(b)) => **a = list(a, b),
+                (FieldValue::PathListOp(a), FieldValue::PathListOp(b)) => **a = list(a, b),
+                (FieldValue::StringListOp(a), FieldValue::StringListOp(b)) => **a = list(a, b),
+                (FieldValue::IntListOp(a), FieldValue::IntListOp(b)) => **a = list(a, b),
+                (FieldValue::UIntListOp(a), FieldValue::UIntListOp(b)) => **a = list(a, b),
+                (FieldValue::Int64ListOp(a), FieldValue::Int64ListOp(b)) => **a = list(a, b),
+                (FieldValue::UInt64ListOp(a), FieldValue::UInt64ListOp(b)) => **a = list(a, b),
                 _ => {}
             }
         } else {

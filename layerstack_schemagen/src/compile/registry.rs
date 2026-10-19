@@ -152,7 +152,11 @@ pub(crate) fn generate(
                     .map(|s| store.tokens.intern(s))
                     .collect(),
             );
-            edit.set_metadata(at.clone(), names.api_schemas, FieldValue::TokenListOp(list));
+            edit.set_metadata(
+                at.clone(),
+                names.api_schemas,
+                FieldValue::TokenListOp(Box::new(list)),
+            );
         }
         // The registry reads only the override names and the brief docs
         // from customData.

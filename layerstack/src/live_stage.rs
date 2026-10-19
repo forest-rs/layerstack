@@ -5312,7 +5312,7 @@ mod tests {
         edit.set_metadata(
             Address::spec(LayerId(1), SpecPath::from_prim_path(prim)),
             api_schemas,
-            FieldValue::TokenListOp(ListOp::prepended(vec![instance])),
+            FieldValue::from(ListOp::prepended(vec![instance])),
         );
         live.apply(&mut store, &edit).expect("applies");
 

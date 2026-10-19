@@ -36,6 +36,7 @@
 //! [`Layer`]: layerstack::Layer
 //! [`PrimSpec`]: layerstack::PrimSpec
 
+use alloc::boxed::Box;
 use alloc::format;
 use alloc::string::String;
 use alloc::sync::Arc;
@@ -711,7 +712,7 @@ impl EmitCtx<'_> {
                         _ => return None,
                     }
                 }
-                FieldValue::TokenListOp(list(op, tokens))
+                FieldValue::TokenListOp(Box::new(list(op, tokens)))
             }
             ListElement::String => {
                 let strings = items
@@ -721,36 +722,36 @@ impl EmitCtx<'_> {
                         _ => None,
                     })
                     .collect::<Option<Vec<_>>>()?;
-                FieldValue::StringListOp(list(op, strings))
+                FieldValue::StringListOp(Box::new(list(op, strings)))
             }
-            ListElement::Int => FieldValue::IntListOp(list(
+            ListElement::Int => FieldValue::IntListOp(Box::new(list(
                 op,
                 items
                     .iter()
                     .map(|value| i32::try_from(integer(value, "int")?).ok())
                     .collect::<Option<Vec<_>>>()?,
-            )),
-            ListElement::UInt => FieldValue::UIntListOp(list(
+            ))),
+            ListElement::UInt => FieldValue::UIntListOp(Box::new(list(
                 op,
                 items
                     .iter()
                     .map(|value| u32::try_from(integer(value, "uint")?).ok())
                     .collect::<Option<Vec<_>>>()?,
-            )),
-            ListElement::Int64 => FieldValue::Int64ListOp(list(
+            ))),
+            ListElement::Int64 => FieldValue::Int64ListOp(Box::new(list(
                 op,
                 items
                     .iter()
                     .map(|value| i64::try_from(integer(value, "int64")?).ok())
                     .collect::<Option<Vec<_>>>()?,
-            )),
-            ListElement::UInt64 => FieldValue::UInt64ListOp(list(
+            ))),
+            ListElement::UInt64 => FieldValue::UInt64ListOp(Box::new(list(
                 op,
                 items
                     .iter()
                     .map(|value| u64::try_from(integer(value, "uint64")?).ok())
                     .collect::<Option<Vec<_>>>()?,
-            )),
+            ))),
         })
     }
 
@@ -1920,12 +1921,12 @@ impl<'a> MetadataFieldType<'a> {
 /// Returns `false` when the two have different element types.
 fn merge_field_list_ops(existing: &mut FieldValue, value: FieldValue) -> bool {
     match (existing, value) {
-        (FieldValue::TokenListOp(a), FieldValue::TokenListOp(b)) => a.merge(b),
-        (FieldValue::StringListOp(a), FieldValue::StringListOp(b)) => a.merge(b),
-        (FieldValue::IntListOp(a), FieldValue::IntListOp(b)) => a.merge(b),
-        (FieldValue::UIntListOp(a), FieldValue::UIntListOp(b)) => a.merge(b),
-        (FieldValue::Int64ListOp(a), FieldValue::Int64ListOp(b)) => a.merge(b),
-        (FieldValue::UInt64ListOp(a), FieldValue::UInt64ListOp(b)) => a.merge(b),
+        (FieldValue::TokenListOp(a), FieldValue::TokenListOp(b)) => a.merge(*b),
+        (FieldValue::StringListOp(a), FieldValue::StringListOp(b)) => a.merge(*b),
+        (FieldValue::IntListOp(a), FieldValue::IntListOp(b)) => a.merge(*b),
+        (FieldValue::UIntListOp(a), FieldValue::UIntListOp(b)) => a.merge(*b),
+        (FieldValue::Int64ListOp(a), FieldValue::Int64ListOp(b)) => a.merge(*b),
+        (FieldValue::UInt64ListOp(a), FieldValue::UInt64ListOp(b)) => a.merge(*b),
         (existing @ FieldValue::Value(_), value) => *existing = value,
         _ => return false,
     }
@@ -3253,7 +3254,7 @@ def \"A\" {
         expected[15] = 1.0;
         assert_eq!(
             *field,
-            FieldValue::Value(Value::Matrix4d(alloc::boxed::Box::new(expected)))
+            FieldValue::Value(Value::Matrix4d(Box::new(expected)))
         );
     }
 
@@ -3665,9 +3666,9 @@ def Xform \"A\" (
         let review = tokens.intern("StudioReviewAPI:main");
         assert_eq!(
             spec.field(api),
-            Some(&FieldValue::TokenListOp(
+            Some(&FieldValue::TokenListOp(Box::new(
                 ListOp::prepended(vec![geom]).with_appended(vec![review])
-            )),
+            ))),
             "list-op statements for one field combine"
         );
         assert_eq!(
@@ -3700,7 +3701,9 @@ def Xform \"A\" (
         let geom = tokens.intern("GeomModelAPI");
         assert_eq!(
             spec.field(tokens.intern("apiSchemas")),
-            Some(&FieldValue::TokenListOp(ListOp::explicit(vec![geom])))
+            Some(&FieldValue::TokenListOp(Box::new(ListOp::explicit(vec![
+                geom
+            ]))))
         );
     }
 

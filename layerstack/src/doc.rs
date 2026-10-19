@@ -683,6 +683,10 @@ pub struct FieldEntry {
 
 /// The value of one authored metadata field.
 ///
+/// The list-op variants are boxed: most fields hold a [`Value`], and a
+/// field no larger than one keeps every [`FieldEntry`] and composed
+/// opinion small.
+///
 /// Spec: AOUSD Core §7.4 (metadata fields), §12.2 (metadata resolution).
 #[derive(Clone, Debug, PartialEq)]
 pub enum FieldValue {
@@ -690,22 +694,22 @@ pub enum FieldValue {
     Value(Value),
     /// A list-op field over tokens (resolved by chaining), such as
     /// `apiSchemas`.
-    TokenListOp(ListOp<TokenId>),
+    TokenListOp(Box<ListOp<TokenId>>),
     /// A list-op field over target paths (resolved by chaining).
     ///
     /// Spec: AOUSD Core §12.4 (`ListOps`), applied to path lists.
-    PathListOp(ListOp<TargetPath>),
+    PathListOp(Box<ListOp<TargetPath>>),
     /// A list-op field over strings (`stringlistop`), such as `clipSets`.
-    StringListOp(ListOp<Arc<str>>),
+    StringListOp(Box<ListOp<Arc<str>>>),
     /// A list-op field over `int` values (`intlistop`).
-    IntListOp(ListOp<i32>),
+    IntListOp(Box<ListOp<i32>>),
     /// A list-op field over `uint` values (`uintlistop`).
-    UIntListOp(ListOp<u32>),
+    UIntListOp(Box<ListOp<u32>>),
     /// A list-op field over `int64` values (`int64listop`), such as
     /// `PointInstancer`'s `inactiveIds`.
-    Int64ListOp(ListOp<i64>),
+    Int64ListOp(Box<ListOp<i64>>),
     /// A list-op field over `uint64` values (`uint64listop`).
-    UInt64ListOp(ListOp<u64>),
+    UInt64ListOp(Box<ListOp<u64>>),
 }
 
 impl FieldValue {
@@ -716,6 +720,48 @@ impl FieldValue {
     #[must_use]
     pub fn is_list_op(&self) -> bool {
         !matches!(self, Self::Value(_))
+    }
+}
+
+impl From<ListOp<TokenId>> for FieldValue {
+    fn from(op: ListOp<TokenId>) -> Self {
+        Self::TokenListOp(Box::new(op))
+    }
+}
+
+impl From<ListOp<TargetPath>> for FieldValue {
+    fn from(op: ListOp<TargetPath>) -> Self {
+        Self::PathListOp(Box::new(op))
+    }
+}
+
+impl From<ListOp<Arc<str>>> for FieldValue {
+    fn from(op: ListOp<Arc<str>>) -> Self {
+        Self::StringListOp(Box::new(op))
+    }
+}
+
+impl From<ListOp<i32>> for FieldValue {
+    fn from(op: ListOp<i32>) -> Self {
+        Self::IntListOp(Box::new(op))
+    }
+}
+
+impl From<ListOp<u32>> for FieldValue {
+    fn from(op: ListOp<u32>) -> Self {
+        Self::UIntListOp(Box::new(op))
+    }
+}
+
+impl From<ListOp<i64>> for FieldValue {
+    fn from(op: ListOp<i64>) -> Self {
+        Self::Int64ListOp(Box::new(op))
+    }
+}
+
+impl From<ListOp<u64>> for FieldValue {
+    fn from(op: ListOp<u64>) -> Self {
+        Self::UInt64ListOp(Box::new(op))
     }
 }
 

@@ -775,13 +775,23 @@ impl Stage {
                     .collect(),
                 _ => HashMap::new(),
             };
+        let any_type = store.tokens().lookup("__AnyType__");
+        // The info of the prim before: prims of one type often come
+        // together, and their identity is then compared, not hashed.
+        let mut last: Option<Arc<PrimTypeInfo>> = None;
         for (&path, index) in &mut self.prims {
+            let type_name = index
+                .type_name
+                .unwrap_or_else(|| Self::source_type_name(index, store, any_type));
             let identity = SchemaIdentity {
-                type_name: Self::source_type_name(index, store),
-                mapped_type_name: Self::source_type_name(index, store)
-                    .and_then(|name| fallback_types.get(&name).copied()),
+                type_name,
+                mapped_type_name: type_name.and_then(|name| fallback_types.get(&name).copied()),
                 applied: applied.remove(&path).unwrap_or_default(),
             };
+            if let Some(info) = last.as_ref().filter(|info| info.identity == identity) {
+                index.type_info = Some(Arc::clone(info));
+                continue;
+            }
             let info = self
                 .type_infos
                 .get(&identity)
@@ -809,7 +819,8 @@ impl Stage {
                     self.type_infos.insert(identity, Arc::downgrade(&info));
                     info
                 });
-            index.type_info = Some(info);
+            index.type_info = Some(Arc::clone(&info));
+            last = Some(info);
         }
     }
 
@@ -3283,7 +3294,13 @@ impl Stage {
             .type_name
     }
 
-    fn source_type_name(index: &PrimIndex, store: &dyn LayerStore) -> Option<TokenId> {
+    /// The strongest type name `index`'s sources author, other than the
+    /// empty one and `any_type` (`__AnyType__`, when interned).
+    pub(crate) fn source_type_name(
+        index: &PrimIndex,
+        store: &dyn LayerStore,
+        any_type: Option<TokenId>,
+    ) -> Option<TokenId> {
         for key in &index.sources {
             let Some(layer) = store.layer(key.layer_id) else {
                 continue;
@@ -3292,11 +3309,11 @@ impl Stage {
             else {
                 continue;
             };
-            if let Some(tn) = spec.type_name {
-                let name = store.tokens().resolve(tn);
-                if !name.is_empty() && name != "__AnyType__" {
-                    return Some(tn);
-                }
+            if let Some(tn) = spec.type_name
+                && tn != TokenId::EMPTY
+                && Some(tn) != any_type
+            {
+                return Some(tn);
             }
         }
         None

@@ -63,6 +63,9 @@ pub(crate) struct Ctx<'s> {
     pub(crate) dynamic_formats: &'s DynamicFormats,
     /// The registry whose plugin metadata dynamic arguments may read.
     pub(crate) schemas: Option<&'s crate::schema::SchemaRegistry>,
+    /// The token `__AnyType__`, when interned: a type name naming no
+    /// type ([`crate::Stage::source_type_name`]).
+    pub(crate) any_type: Option<TokenId>,
 }
 
 /// Whether a prim index's payload was included.

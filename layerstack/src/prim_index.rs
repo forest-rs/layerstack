@@ -274,6 +274,10 @@ impl FieldKey {
 pub(crate) struct PrimIndex {
     /// Schema identity captured with this composed prim snapshot.
     pub(crate) type_info: Option<Arc<crate::stage::PrimTypeInfo>>,
+    /// The type name the index's sources author
+    /// ([`crate::Stage::source_type_name`]), found when it was indexed;
+    /// `None` for an index built otherwise.
+    pub(crate) type_name: Option<Option<TokenId>>,
     /// The arc expansions contributing to the prim; every key below names
     /// one of its nodes.
     pub(crate) graph: PrimIndexGraph,

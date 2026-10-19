@@ -274,9 +274,10 @@ pub use stage::{
     StageMetadataError, StageOptions, Traverse, ValueExplanation, ValueSource,
 };
 pub use stage::{
-    DanglingByName, DanglingCounts, DanglingKind, DanglingTarget, DanglingTargetReport, DropReason,
-    DroppedTarget, FromValue, PrimPathArg, PropertyPathArg, StageView, TargetOpinion,
-    TargetsExplanation,
+    AuthoredTarget, AuthoredTargets, DanglingByName, DanglingCounts, DanglingKind, DanglingTarget,
+    DanglingTargetReport, DropReason, DroppedTarget, FromValue, LayerTargets, PrimPathArg,
+    PropertyPathArg, StageView, TargetListPosition, TargetOpinion, TargetRead, TargetsExplanation,
+    UnreadReason, UnreadTargetSpec,
 };
 pub use value_type::{UnknownValueType, ValueRole, ValueType};
 pub use variant_fallbacks::VariantFallbacks;

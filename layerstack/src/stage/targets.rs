@@ -74,7 +74,7 @@ pub struct DroppedTarget {
 }
 
 /// Why composition dropped an authored target or connection path.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum DropReason {
     /// The path is outside the namespace the arc maps: a reference or
     /// payload maps only its target prim and what lies beneath it.

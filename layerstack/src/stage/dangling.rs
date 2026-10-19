@@ -296,6 +296,11 @@ impl Stage {
     /// and per target a lookup or two; a dangling one walks up its path to
     /// the nearest populated prim. Nothing is cached.
     ///
+    /// To find the layer and spec that author each path, walk the specs
+    /// instead: [`Stage::authored_targets`] reads every authored path as
+    /// this stage does, layer by layer, and `layerstack_schemas`'
+    /// `LayerDanglingReport` checks them as this report does.
+    ///
     /// OpenUSD: `UsdRelationship::GetTargets`,
     /// `UsdAttribute::GetConnections`, `UsdStage::GetObjectAtPath`.
     ///

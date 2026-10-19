@@ -5,6 +5,7 @@
 //!
 //! Spec: AOUSD Core §11–§12 (stage population and value resolution).
 
+mod authored_targets;
 mod authoring;
 mod dangling;
 mod explain;
@@ -16,6 +17,10 @@ mod objects;
 mod relationships;
 mod targets;
 mod view;
+pub use authored_targets::{
+    AuthoredTarget, AuthoredTargets, LayerTargets, TargetListPosition, TargetRead, UnreadReason,
+    UnreadTargetSpec,
+};
 pub use dangling::{
     DanglingByName, DanglingCounts, DanglingKind, DanglingTarget, DanglingTargetReport,
 };

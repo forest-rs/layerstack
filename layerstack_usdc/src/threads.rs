@@ -13,7 +13,8 @@ pub(crate) type Each<'w, T, R> = dyn Fn(T) -> R + Sync + 'w;
 pub(crate) type Each<'w, T, R> = dyn Fn(T) -> R + 'w;
 
 /// Runs `each` on every one of `items` on up to `threads` threads, and
-/// returns the results in the items' order.
+/// returns the results in the items' order; on one thread, in turn,
+/// without a pool.
 ///
 /// The pool starts a thread each time a task leaves another for it, so the
 /// items are handed out as halves of halves: the first threads start while
@@ -24,6 +25,9 @@ pub(crate) fn run_all<T: Send, R: Send>(
     items: Vec<T>,
     each: &Each<'_, T, R>,
 ) -> Vec<R> {
+    if threads <= 1 {
+        return items.into_iter().map(each).collect();
+    }
     let work = |(first, mut items): (usize, Vec<T>), added: &mut Vec<(usize, Vec<T>)>| {
         if items.len() > 1 {
             let right = items.split_off(items.len() / 2);

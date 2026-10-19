@@ -423,6 +423,7 @@ fn parse_usdc(
                 paths,
                 resolver,
                 budget,
+                1,
             );
             match result {
                 Ok(result) => (Ok(result.assembled), Some(result.values)),
@@ -437,13 +438,14 @@ fn parse_usdc(
                 paths,
                 resolver,
                 &mut budget,
+                1,
             ),
             None,
         ),
     };
     #[cfg(not(feature = "std"))]
     let result =
-        layerstack_usdc::read_usdc_within(&data, layer_id, tokens, paths, resolver, &mut budget);
+        layerstack_usdc::read_usdc_within(&data, layer_id, tokens, paths, resolver, &mut budget, 1);
     let result = result.map_err(|cause| UsdzError::LayerRead {
         member: Arc::from(name),
         layer_id,

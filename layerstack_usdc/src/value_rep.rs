@@ -660,6 +660,17 @@ impl DecodeBudget {
         Ok(())
     }
 
+    /// Returns the units charged since [`Self::used`] was `used`, as if
+    /// they never were.
+    pub(crate) fn rewind_to(&mut self, used: u64) {
+        self.remaining = self.limit - used.min(self.limit);
+    }
+
+    /// The error a charge beyond this budget fails with.
+    pub(crate) fn exceeded(&self) -> UsdcError {
+        UsdcError::DecodeBudgetExceeded { limit: self.limit }
+    }
+
     /// Charges `count` elements.
     pub(crate) fn charge_elements(&mut self, count: usize) -> Result<(), UsdcError> {
         self.charge(u64::try_from(count).unwrap_or(u64::MAX))

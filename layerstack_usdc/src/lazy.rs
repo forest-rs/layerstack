@@ -97,12 +97,7 @@ impl RetainedValues {
                 .remaining(),
             ..RetainedValueStats::default()
         };
-        let registry = self
-            .pool
-            .arrays
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        for array in registry.values().filter_map(Weak::upgrade) {
+        for array in self.pool.arrays.live() {
             stats.live_arrays += 1;
             match array.cached.get() {
                 Some(Ok(native)) => {
@@ -113,13 +108,7 @@ impl RetainedValues {
                 None => {}
             }
         }
-        drop(registry);
-        let values = self
-            .pool
-            .values
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        for value in values.values().filter_map(Weak::upgrade) {
+        for value in self.pool.values.live() {
             stats.live_values += 1;
             match value.cached.get() {
                 Some(Ok(decoded)) => {
@@ -141,11 +130,68 @@ pub(crate) struct LazyPool {
     /// retains a `token[]` value, so that deferred values decode without the
     /// store's interner.
     token_ids: OnceLock<alloc::boxed::Box<[TokenId]>>,
+    /// Whether the read retained a `token[]` value, for the token table to
+    /// be interned once it ends ([`Self::token_ids`]).
+    retains_tokens: core::sync::atomic::AtomicBool,
     budget: Mutex<DecodeBudget>,
     // Weak registries avoid a source -> pool -> source ownership cycle.
-    arrays: Mutex<HashMap<[u8; 8], Weak<LazyArray>>>,
-    values: Mutex<HashMap<[u8; 8], Weak<LazyValue>>>,
+    arrays: Registry<LazyArray>,
+    values: Registry<LazyValue>,
     attempts: AtomicUsize,
+}
+
+/// The sources a read retains, by their value representation, so that
+/// fields sharing one share its source: in shards, each locked alone, as
+/// the threads assembling a layer register sources at once.
+struct Registry<T> {
+    shards: [Mutex<HashMap<[u8; 8], Weak<T>>>; 64],
+}
+
+impl<T> Default for Registry<T> {
+    fn default() -> Self {
+        Self {
+            shards: core::array::from_fn(|_| Mutex::default()),
+        }
+    }
+}
+
+impl<T> Registry<T> {
+    fn shard(&self, rep: &[u8; 8]) -> std::sync::MutexGuard<'_, HashMap<[u8; 8], Weak<T>>> {
+        // The payload's offset differs between values: mix it into the
+        // top bits, which pick the shard.
+        let mixed = u64::from_le_bytes(*rep).wrapping_mul(0x9e37_79b9_7f4a_7c15);
+        #[allow(
+            clippy::cast_possible_truncation,
+            reason = "the top six bits pick one of 64 shards"
+        )]
+        let at = (mixed >> 58) as usize;
+        self.shards[at]
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// The live source registered for `rep`, or `make()` registered.
+    fn get_or_register(&self, rep: &[u8; 8], make: impl FnOnce() -> Arc<T>) -> Arc<T> {
+        let mut shard = self.shard(rep);
+        if let Some(source) = shard.get(rep).and_then(Weak::upgrade) {
+            return source;
+        }
+        let source = make();
+        shard.insert(*rep, Arc::downgrade(&source));
+        source
+    }
+
+    /// Every live source.
+    fn live(&self) -> alloc::vec::Vec<Arc<T>> {
+        let mut live = alloc::vec::Vec::new();
+        for shard in &self.shards {
+            let shard = shard
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            live.extend(shard.values().filter_map(Weak::upgrade));
+        }
+        live
+    }
 }
 impl fmt::Debug for LazyPool {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -157,57 +203,32 @@ impl fmt::Debug for LazyPool {
 }
 impl LazyPool {
     pub(crate) fn register(self: &Arc<Self>, rep: RawValueRep, kind: Value) -> TypedArray {
-        let mut arrays = self
-            .arrays
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let source = if let Some(source) = arrays.get(&rep.bytes).and_then(Weak::upgrade) {
-            source
-        } else {
-            let source = Arc::new(LazyArray {
+        let source = self.arrays.get_or_register(&rep.bytes, || {
+            Arc::new(LazyArray {
                 pool: Arc::clone(self),
                 rep,
                 kind,
                 cached: OnceLock::new(),
-            });
-            arrays.insert(rep.bytes, Arc::downgrade(&source));
-            source
-        };
+            })
+        });
         TypedArray::Deferred(source)
     }
 
     /// Retains a `token[]` or `string[]` value ([`retains_text_array`]);
-    /// fields sharing one representation share one source. The first
-    /// `token[]` value interns the whole token table into `tokens`.
-    pub(crate) fn register_value(
-        self: &Arc<Self>,
-        rep: RawValueRep,
-        tokens: &TokenInterner,
-    ) -> DeferredValue {
+    /// fields sharing one representation share one source. A `token[]`
+    /// value has the whole token table interned when the read ends, on
+    /// one thread ([`read_usdc_lazy_range_within`]).
+    pub(crate) fn register_value(self: &Arc<Self>, rep: RawValueRep) -> DeferredValue {
         if matches!(rep.value_type(), Ok(ValueType::Token)) {
-            self.token_ids.get_or_init(|| {
-                self.sections
-                    .tokens
-                    .iter()
-                    .map(|t| tokens.intern(t))
-                    .collect()
-            });
+            self.retains_tokens.store(true, Ordering::Relaxed);
         }
-        let mut values = self
-            .values
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let source = if let Some(source) = values.get(&rep.bytes).and_then(Weak::upgrade) {
-            source
-        } else {
-            let source = Arc::new(LazyValue {
+        let source = self.values.get_or_register(&rep.bytes, || {
+            Arc::new(LazyValue {
                 pool: Arc::clone(self),
                 rep,
                 cached: OnceLock::new(),
-            });
-            values.insert(rep.bytes, Arc::downgrade(&source));
-            source
-        };
+            })
+        });
         DeferredValue::new(source)
     }
 }
@@ -435,10 +456,12 @@ pub fn read_usdc_lazy(
     resolver: &mut dyn AssetResolver,
 ) -> Result<LazyReadResult, UsdcError> {
     let budget = DecodeBudget::for_input(bytes.len());
-    read_usdc_lazy_within(bytes, id, tokens, paths, resolver, budget)
+    read_usdc_lazy_within(bytes, id, tokens, paths, resolver, budget, 1)
 }
 /// Retained import with one explicitly owned budget covering assembly and all
 /// future decodes. A cached failure never consumes the budget a second time.
+/// The read uses up to `threads` threads, as [`crate::read_usdc_within`]
+/// does.
 pub fn read_usdc_lazy_within(
     bytes: Arc<[u8]>,
     id: LayerId,
@@ -446,13 +469,16 @@ pub fn read_usdc_lazy_within(
     paths: &PathInterner,
     resolver: &mut dyn AssetResolver,
     budget: DecodeBudget,
+    threads: usize,
 ) -> Result<LazyReadResult, UsdcError> {
-    read_usdc_lazy_range_within(bytes.into(), id, tokens, paths, resolver, budget)
+    read_usdc_lazy_range_within(bytes.into(), id, tokens, paths, resolver, budget, threads)
 }
 /// Retains a checked view of shared encoded storage without copying its bytes.
 /// The budget and once-only cache have the same semantics as
 /// [`read_usdc_lazy_within`]. A small file view may retain a large archive;
 /// pass [`EncodedBytes::detached`] when independent ownership is preferable.
+/// The read uses up to `threads` threads, as [`crate::read_usdc_within`]
+/// does.
 pub fn read_usdc_lazy_range_within(
     bytes: EncodedBytes,
     id: LayerId,
@@ -460,6 +486,7 @@ pub fn read_usdc_lazy_range_within(
     paths: &PathInterner,
     resolver: &mut dyn AssetResolver,
     mut budget: DecodeBudget,
+    threads: usize,
 ) -> Result<LazyReadResult, UsdcError> {
     let header = crate::header::parse_header(&bytes)?;
     let toc = crate::toc::parse_toc(&bytes, header.toc_offset)?;
@@ -473,9 +500,10 @@ pub fn read_usdc_lazy_range_within(
         bytes,
         sections,
         token_ids: OnceLock::new(),
+        retains_tokens: core::sync::atomic::AtomicBool::new(false),
         budget: Mutex::new(DecodeBudget::with_limit(0)),
-        arrays: Mutex::new(HashMap::new()),
-        values: Mutex::new(HashMap::new()),
+        arrays: Registry::default(),
+        values: Registry::default(),
         attempts: AtomicUsize::new(0),
     });
     budget.lazy = Some(Arc::clone(&pool));
@@ -487,8 +515,13 @@ pub fn read_usdc_lazy_range_within(
         paths,
         resolver,
         &mut budget,
+        threads,
     )?;
     budget.lazy = None;
+    if pool.retains_tokens.load(Ordering::Relaxed) {
+        let ids = pool.sections.tokens.iter().map(|t| tokens.intern(t));
+        let _ = pool.token_ids.set(ids.collect());
+    }
     *pool
         .budget
         .lock()

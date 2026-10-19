@@ -53,6 +53,7 @@ pub mod error;
 pub mod header;
 pub mod reader;
 pub mod section;
+mod threads;
 pub mod toc;
 // Value representation decoding pervasively casts u64 file offsets/counts to
 // usize. Files larger than 4 GiB on 32-bit targets are unsupported.
@@ -131,7 +132,7 @@ pub fn read_usdc(
     resolver: &mut dyn AssetResolver,
 ) -> Result<AssembleResult, UsdcError> {
     let mut budget = DecodeBudget::for_input(data.len());
-    read_usdc_within(data, layer_id, tokens, paths, resolver, &mut budget)
+    read_usdc_within(data, layer_id, tokens, paths, resolver, &mut budget, 1)
 }
 
 /// Reads a USDC binary file like [`read_usdc`], charging everything it
@@ -141,6 +142,10 @@ pub fn read_usdc(
 /// A file can reference one value, name or path any number of times, and
 /// each reference would otherwise cost its own copy; the budget bounds the
 /// total. Exceeding it fails with [`UsdcError::DecodeBudgetExceeded`].
+///
+/// The read uses up to `threads` threads, the calling thread among them
+/// (with the `std` feature); it reads the same layer on any number
+/// ([`assemble::assemble`]).
 pub fn read_usdc_within(
     data: &[u8],
     layer_id: LayerId,
@@ -148,9 +153,12 @@ pub fn read_usdc_within(
     paths: &PathInterner,
     resolver: &mut dyn AssetResolver,
     budget: &mut DecodeBudget,
+    threads: usize,
 ) -> Result<AssembleResult, UsdcError> {
     let hdr = header::parse_header(data)?;
     let toc_sections = toc::parse_toc(data, hdr.toc_offset)?;
     let sections = section::parse_sections(data, &toc_sections, hdr.crate_version(), budget)?;
-    assemble::assemble(data, &sections, layer_id, tokens, paths, resolver, budget)
+    assemble::assemble(
+        data, &sections, layer_id, tokens, paths, resolver, budget, threads,
+    )
 }

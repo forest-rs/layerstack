@@ -83,7 +83,19 @@ pub struct AssembleDiagnostic {
 /// that several fields share, and every use of a field name or spec path,
 /// which many specs may share.
 ///
+/// Prim and property specs are converted on up to `threads` threads (with
+/// the `std` feature): one converts them in file order, more in chunks of
+/// a fixed number of specs. The layer, its diagnostics and the budget
+/// charged, or the error, are the same on any number of threads; only the
+/// order in which new tokens and paths are interned, and so their ids,
+/// depends on them. Arcs are resolved on the calling thread, in file
+/// order.
+///
 /// Spec: AOUSD Core §16.3.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the inputs a read assembles from, each explicit"
+)]
 pub fn assemble(
     data: &[u8],
     sections: &CrateSections,
@@ -92,6 +104,29 @@ pub fn assemble(
     paths: &PathInterner,
     resolver: &mut dyn AssetResolver,
     budget: &mut DecodeBudget,
+    threads: usize,
+) -> Result<AssembleResult, UsdcError> {
+    let chunk = SPECS_PER_CHUNK;
+    assemble_in_chunks(
+        data, sections, layer_id, tokens, paths, resolver, budget, threads, chunk,
+    )
+}
+
+/// [`assemble`], converting chunks of `chunk` specs at a time.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the inputs a read assembles from, each explicit"
+)]
+fn assemble_in_chunks(
+    data: &[u8],
+    sections: &CrateSections,
+    layer_id: LayerId,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
+    resolver: &mut dyn AssetResolver,
+    budget: &mut DecodeBudget,
+    threads: usize,
+    chunk: usize,
 ) -> Result<AssembleResult, UsdcError> {
     let tables = ReadTables::for_read(sections);
     let inputs = ReadInputs {
@@ -102,10 +137,11 @@ pub fn assemble(
         tables: &tables,
         layer_id,
         defer_variant_arcs: resolver.defers_variant_arcs(),
+        chunk: chunk.max(1),
     };
-    let mut ctx = inputs.ctx(budget, resolver);
+    let mut ctx = inputs.ctx(budget, Some(resolver));
 
-    let layer = ctx.assemble_layer()?;
+    let layer = ctx.assemble_layer(inputs, threads.max(1))?;
 
     Ok(AssembleResult {
         layer,
@@ -130,7 +166,12 @@ struct AssembleCtx<'a, 'b> {
     target_paths: HashMap<String, Option<TargetPath>>,
     /// The entries [`Self::prim_path_at`] is finding, kept between calls.
     pending_paths: Vec<usize>,
-    resolver: &'b mut dyn AssetResolver,
+    /// The asset resolver, for the passes that convert arcs; `None` for
+    /// specs converted on other threads, which leave a spec asking for it
+    /// to be converted with it ([`Self::wants_resolver`]).
+    resolver: Option<&'b mut dyn AssetResolver>,
+    /// Whether a conversion without a resolver asked for one.
+    wants_resolver: bool,
     /// Whether arcs inside variant branches are left for composition to
     /// resolve ([`AssetResolver::defers_variant_arcs`]).
     defer_variant_arcs: bool,
@@ -248,15 +289,17 @@ struct ReadInputs<'a> {
     tables: &'a ReadTables,
     layer_id: LayerId,
     defer_variant_arcs: bool,
+    /// How many specs of a pass a chunk holds ([`SPECS_PER_CHUNK`]).
+    chunk: usize,
 }
 
 impl<'a> ReadInputs<'a> {
     /// A context converting specs within `budget`, resolving arcs with
-    /// `resolver`.
+    /// `resolver`, or asking for it ([`AssembleCtx::wants_resolver`]).
     fn ctx<'b>(
         self,
         budget: &'b mut DecodeBudget,
-        resolver: &'b mut dyn AssetResolver,
+        resolver: Option<&'b mut dyn AssetResolver>,
     ) -> AssembleCtx<'a, 'b> {
         AssembleCtx {
             data: self.data,
@@ -270,6 +313,7 @@ impl<'a> ReadInputs<'a> {
             in_branch: false,
             in_payloads: false,
             resolver,
+            wants_resolver: false,
             layer_id: self.layer_id,
             resolved_layers: Vec::new(),
             diagnostics: Vec::new(),
@@ -296,25 +340,92 @@ impl Visits<'_> {
         *seen = true;
     }
 
+    /// Marks spec `spec` not decoded, for another pass to decode.
+    fn unmark(&mut self, spec: usize) {
+        self.seen[spec - self.first] = false;
+    }
+
     fn is_marked(&self, spec: usize) -> bool {
         self.seen[spec - self.first]
     }
 }
 
+/// How many specs a pass converts at a time on one thread: a fixed number
+/// of the specs the pass converts, so that a pass divides a file the same
+/// way on any number of threads, and evenly however the file orders its
+/// specs (a writer may put every prim spec first).
+const SPECS_PER_CHUNK: usize = 512;
+
+/// What converting one chunk of specs found ([`AssembleCtx::run_pass`]).
+struct Chunk<T> {
+    /// What its specs converted to, in spec order.
+    items: Vec<T>,
+    /// The diagnostics, each with the index of the spec reporting it, in
+    /// spec order.
+    diagnostics: Vec<(usize, AssembleDiagnostic)>,
+    /// The specs that asked for the resolver, to convert with it.
+    deferred: Vec<usize>,
+    /// The budget units the chunk charged.
+    used: u64,
+    /// Whether an arc was left for the resolver to resolve later.
+    deferred_arcs: bool,
+    /// The error the chunk stopped at.
+    error: Option<UsdcError>,
+}
+
+/// Converts one spec in a pass: what it converts to, or `None`.
+#[cfg(feature = "std")]
+type Convert<'c, 'a, T> = dyn for<'b, 'v> Fn(
+        &mut AssembleCtx<'a, 'b>,
+        usize,
+        &mut Visits<'v>,
+        &mut Fields<'a>,
+    ) -> Result<Option<T>, UsdcError>
+    + Sync
+    + 'c;
+/// Converts one spec in a pass: what it converts to, or `None`.
+#[cfg(not(feature = "std"))]
+type Convert<'c, 'a, T> = dyn for<'b, 'v> Fn(
+        &mut AssembleCtx<'a, 'b>,
+        usize,
+        &mut Visits<'v>,
+        &mut Fields<'a>,
+    ) -> Result<Option<T>, UsdcError>
+    + 'c;
+
+/// What a pass converted one spec to, by its index.
+trait SpecItem {
+    fn spec(&self) -> usize;
+}
+
 /// A prim spec the prim pass converted, to place in the layer.
 struct PrimItem<'a> {
+    spec: usize,
     index: u32,
     key: PrimKey<'a>,
     prim: Box<PrimSpec>,
     children: Option<Order<'a>>,
 }
 
+impl SpecItem for PrimItem<'_> {
+    fn spec(&self) -> usize {
+        self.spec
+    }
+}
+
 /// A property spec the property pass converted, for the prim spec at
 /// `place`.
 struct PropertyItem {
+    spec: usize,
     place: usize,
     name: TokenId,
     property: Arc<PropertySpec>,
+}
+
+impl SpecItem for PropertyItem {
+    fn spec(&self) -> usize {
+        self.spec
+    }
 }
 
 /// What a read finds once about each entry of the file's token and path
@@ -566,8 +677,13 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
         }
     }
 
-    /// Assembles all specs into a [`Layer`].
-    fn assemble_layer(&mut self) -> Result<Layer, UsdcError> {
+    /// Assembles all specs into a [`Layer`], converting prim and property
+    /// specs on up to `threads` threads ([`Self::run_pass`]).
+    fn assemble_layer(
+        &mut self,
+        inputs: ReadInputs<'a>,
+        threads: usize,
+    ) -> Result<Layer, UsdcError> {
         let mut layer = Layer::new(self.layer_id);
 
         // Build a map from prim path string → PrimSpec being constructed.
@@ -606,34 +722,55 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
             }
         }
 
-        // Process Prim specs, placing them in the order the file holds them.
+        // Process Prim specs, placing them in the order the file holds
+        // them, then Attribute and Relationship specs, adding them to their
+        // parent prim: on one thread each in turn, on more in chunks
+        // (`Self::run_pass`). Specs under variant paths are handled with
+        // the variant specs below.
+        if threads <= 1 {
+            let mut decoded = Visits {
+                first: 0,
+                seen: &mut seen,
+            };
+            for spec in 0..self.sections.specs.len() {
+                if let Some(item) = self.prim_item(spec, &mut decoded, &mut fields)? {
+                    place_prim(&mut prim_specs_map, &mut property_children, item);
+                }
+            }
+            for spec in 0..self.sections.specs.len() {
+                let item = self.property_item(spec, &prim_specs_map, &mut decoded, &mut fields)?;
+                if let Some(item) = item {
+                    place_property(&mut prim_specs_map, item);
+                }
+            }
+        } else {
+            let convert =
+                |ctx: &mut AssembleCtx<'a, '_>,
+                 spec: usize,
+                 decoded: &mut Visits<'_>,
+                 fields: &mut Fields<'a>| { ctx.prim_item(spec, decoded, fields) };
+            let prim_form = [SpecForm::Prim];
+            let items = self.run_pass(inputs, threads, &mut seen, &prim_form, &convert)?;
+            for item in items.into_iter().flatten() {
+                place_prim(&mut prim_specs_map, &mut property_children, item);
+            }
+            let prims = &prim_specs_map;
+            let convert = |ctx: &mut AssembleCtx<'a, '_>,
+                           spec: usize,
+                           decoded: &mut Visits<'_>,
+                           fields: &mut Fields<'a>| {
+                ctx.property_item(spec, prims, decoded, fields)
+            };
+            let property_forms = [SpecForm::Attribute, SpecForm::Relationship];
+            let items = self.run_pass(inputs, threads, &mut seen, &property_forms, &convert)?;
+            for item in items.into_iter().flatten() {
+                place_property(&mut prim_specs_map, item);
+            }
+        }
         let mut decoded = Visits {
             first: 0,
             seen: &mut seen,
         };
-        for spec in 0..self.sections.specs.len() {
-            let Some(item) = self.prim_item(spec, &mut decoded, &mut fields)? else {
-                continue;
-            };
-            let at = prim_specs_map.insert(item.index, item.key, item.prim);
-            if at == property_children.len() {
-                property_children.push(None);
-            }
-            if let Some(children) = item.children {
-                property_children[at] = Some(children);
-            }
-        }
-
-        // Process Attribute and Relationship specs — add them to their
-        // parent prim. Specs under variant paths are handled with the
-        // variant specs below.
-        for spec in 0..self.sections.specs.len() {
-            let item = self.property_item(spec, &prim_specs_map, &mut decoded, &mut fields)?;
-            if let Some(item) = item {
-                let prim = prim_specs_map.spec_mut(item.place).expect("a placed spec");
-                put_property(&mut prim.properties, item.name, item.property);
-            }
-        }
 
         // Process Connection specs — add connection paths to attribute on parent.
         for (i, spec) in self.sections.specs.iter().enumerate() {
@@ -683,11 +820,19 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
         // Keep the authored property order (`propertyChildren`).
         //
         // Spec: AOUSD Core §7.6.2.2.2 (`propertyChildren`).
-        for (prim, order) in prim_specs_map.specs.iter_mut().zip(&property_children) {
-            if let Some(order) = order {
-                sort_by_children(&mut prim.properties, order);
+        // Each prim's properties sort on their own: in chunks, on threads.
+        let orders = prim_specs_map.specs.chunks_mut(SPECS_PER_CHUNK);
+        let orders = orders
+            .zip(property_children.chunks(SPECS_PER_CHUNK))
+            .collect();
+        let sort = |(prims, orders): (&mut [Box<PrimSpec>], &[Option<Order<'a>>])| {
+            for (prim, order) in prims.iter_mut().zip(orders) {
+                if let Some(order) = order {
+                    sort_by_children(&mut prim.properties, order);
+                }
             }
-        }
+        };
+        crate::threads::run_all(threads, orders, &sort);
 
         // Establish parent-child relationships.
         self.build_child_relationships(&mut prim_specs_map);
@@ -749,16 +894,146 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
 
         // Only a layer with a deferred arc has one to resolve, and most
         // have none: finding them visits every spec.
-        if self.defer_variant_arcs && self.deferred_arcs {
+        if self.defer_variant_arcs
+            && self.deferred_arcs
+            && let Some(resolver) = self.resolver.as_deref_mut()
+        {
             let resolved = layerstack::resolve_selected_deferred_arcs(
                 &mut layer,
-                self.resolver,
+                resolver,
                 self.tokens,
                 self.paths,
             );
             self.resolved_layers.extend(resolved);
         }
         Ok(layer)
+    }
+
+    /// Converts the specs of `forms` in the file with `convert`, in chunks
+    /// of `inputs.chunk` specs of `forms` ([`SPECS_PER_CHUNK`]) on up to
+    /// `threads` threads, each chunk within what is left of this context's
+    /// budget and without the resolver. A spec asking for the resolver is
+    /// converted again here, with it, after the chunks. Returns what the
+    /// specs converted to, by chunk, in spec order; charges their budget
+    /// and keeps their diagnostics in spec order as converting them one by
+    /// one would: the first chunk in spec order to fail, or to exceed the
+    /// budget with the chunks before it, fails the pass.
+    fn run_pass<T: SpecItem + Send>(
+        &mut self,
+        inputs: ReadInputs<'a>,
+        threads: usize,
+        seen: &mut [bool],
+        forms: &[SpecForm],
+        convert: &Convert<'_, 'a, T>,
+    ) -> Result<Vec<Vec<T>>, UsdcError> {
+        let limit = self.budget.remaining();
+        #[cfg(feature = "std")]
+        let lazy = self.budget.lazy.clone();
+        let work = |(first, seen): (usize, &mut [bool])| {
+            let mut budget = DecodeBudget::with_limit(limit);
+            #[cfg(feature = "std")]
+            {
+                budget.lazy.clone_from(&lazy);
+            }
+            let mut ctx = inputs.ctx(&mut budget, None);
+            let mut chunk = Chunk {
+                items: Vec::new(),
+                diagnostics: Vec::new(),
+                deferred: Vec::new(),
+                used: 0,
+                deferred_arcs: false,
+                error: None,
+            };
+            let specs = first..first + seen.len();
+            let converted = inputs.sections.specs[specs.clone()].iter();
+            let converted = converted.filter(|spec| forms.contains(&spec.form)).count();
+            chunk.items.reserve_exact(converted);
+            let mut decoded = Visits { first, seen };
+            let mut fields = Vec::new();
+            for spec in specs {
+                if !forms.contains(&inputs.sections.specs[spec].form) {
+                    continue;
+                }
+                let used = ctx.budget.used();
+                let item = match convert(&mut ctx, spec, &mut decoded, &mut fields) {
+                    Ok(item) => item,
+                    Err(error) => {
+                        chunk.error = Some(error);
+                        break;
+                    }
+                };
+                if core::mem::take(&mut ctx.wants_resolver) {
+                    // Converted again with the resolver: as if never here.
+                    ctx.budget.rewind_to(used);
+                    ctx.diagnostics.clear();
+                    if decoded.is_marked(spec) {
+                        decoded.unmark(spec);
+                    }
+                    chunk.deferred.push(spec);
+                    continue;
+                }
+                chunk.items.extend(item);
+                if !ctx.diagnostics.is_empty() {
+                    let reported = ctx.diagnostics.drain(..).map(|reported| (spec, reported));
+                    chunk.diagnostics.extend(reported);
+                }
+            }
+            chunk.deferred_arcs = ctx.deferred_arcs;
+            chunk.used = budget.used();
+            chunk
+        };
+        // Each chunk runs from its first spec to just before the spec that
+        // would be its `inputs.chunk + 1`th of `forms`.
+        let mut tasks = Vec::new();
+        let (mut rest, mut first, mut count) = (&mut *seen, 0, 0);
+        for (at, spec) in self.sections.specs.iter().enumerate() {
+            if forms.contains(&spec.form) {
+                if count == inputs.chunk {
+                    let (chunk, tail) = rest.split_at_mut(at - first);
+                    tasks.push((first, chunk));
+                    (rest, first, count) = (tail, at, 0);
+                }
+                count += 1;
+            }
+        }
+        tasks.push((first, rest));
+        let chunks = crate::threads::run_all(threads, tasks, &work);
+
+        let mut items = Vec::with_capacity(chunks.len());
+        let mut diagnostics = Vec::new();
+        let mut deferred = Vec::new();
+        for chunk in chunks {
+            if let Some(error) = chunk.error {
+                if matches!(error, UsdcError::DecodeBudgetExceeded { .. }) {
+                    return Err(self.budget.exceeded());
+                }
+                self.budget.charge(chunk.used)?;
+                return Err(error);
+            }
+            self.budget.charge(chunk.used)?;
+            self.deferred_arcs |= chunk.deferred_arcs;
+            items.push(chunk.items);
+            diagnostics.extend(chunk.diagnostics);
+            deferred.extend(chunk.deferred);
+        }
+        if !deferred.is_empty() {
+            let mut decoded = Visits { first: 0, seen };
+            let mut fields = Vec::new();
+            let mut all: Vec<T> = items.into_iter().flatten().collect();
+            for spec in deferred {
+                let before = self.diagnostics.len();
+                all.extend(convert(self, spec, &mut decoded, &mut fields)?);
+                let reported = self.diagnostics.drain(before..);
+                diagnostics.extend(reported.map(|reported| (spec, reported)));
+            }
+            // Stable: a spec's diagnostics keep their order.
+            all.sort_by_key(SpecItem::spec);
+            diagnostics.sort_by_key(|(spec, _)| *spec);
+            items = alloc::vec![all];
+        }
+        self.diagnostics
+            .extend(diagnostics.into_iter().map(|(_, reported)| reported));
+        Ok(items)
     }
 
     /// The prim spec `spec` of the spec table converts to, with its key
@@ -772,6 +1047,11 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
     ) -> Result<Option<PrimItem<'a>>, UsdcError> {
         let def = &self.sections.specs[spec];
         if def.form != SpecForm::Prim {
+            return Ok(None);
+        }
+        // A spec with arcs asks the resolver: converted with it, not here.
+        if self.resolver.is_none() && self.authors_arcs(def.fieldset_index) {
+            self.wants_resolver = true;
             return Ok(None);
         }
         let index = def.path_index;
@@ -790,6 +1070,7 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
         }
         let key = self.prim_key_at(index);
         Ok(Some(PrimItem {
+            spec,
             index,
             key,
             prim,
@@ -837,6 +1118,7 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
             };
             let property = self.property_spec(spec, spec_name, is_attribute, decoded, fields)?;
             return Ok(Some(PropertyItem {
+                spec,
                 place,
                 name,
                 property,
@@ -872,6 +1154,7 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
         let property = self.property_spec(spec, path_str.into(), is_attribute, decoded, fields)?;
         let name = self.tokens.intern(name);
         Ok(Some(PropertyItem {
+            spec,
             place,
             name,
             property,
@@ -1272,6 +1555,7 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
             .any(|(name, _)| matches!(*name, "references" | "payload"));
         if let Some(shared) = shared
             && !resolves
+            && !self.wants_resolver
             && self.diagnostics.len() == diagnostics
         {
             let charged = self.budget.used() - used;
@@ -1331,6 +1615,26 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
             });
         }
         Ok(spec)
+    }
+
+    /// Whether the fieldset at `fieldset` holds a `references` or `payload`
+    /// field, whose arcs the resolver resolves.
+    fn authors_arcs(&self, fieldset: u32) -> bool {
+        let sections = self.sections;
+        let fields = sections
+            .fieldsets
+            .get(fieldset as usize..)
+            .unwrap_or_default();
+        fields
+            .iter()
+            .take_while(|&&field| field >= 0)
+            .filter_map(|&field| sections.fields.get(field as usize))
+            .any(|field| {
+                matches!(
+                    self.lookup_token(field.token_index),
+                    "references" | "payload"
+                )
+            })
     }
 
     /// The specs built for the fieldset at `fieldset`, when more than one
@@ -1746,7 +2050,7 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
                     .lazy
                     .as_ref()
                     .expect("retained by a retained read");
-                Value::Deferred(pool.register_value(*rep, self.tokens))
+                Value::Deferred(pool.register_value(*rep))
             }
         }
     }
@@ -2543,7 +2847,7 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
             // layer selects is left until the whole layer is read
             // (`resolve_selected_deferred_arcs`), the rest to composition.
             if (self.in_branch && self.defer_variant_arcs)
-                || (self.in_payloads && self.resolver.defers_payload(&asset_path))
+                || (self.in_payloads && self.defers_payload(&asset_path))
             {
                 self.deferred_arcs = true;
                 return Some(
@@ -2877,15 +3181,51 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
         if is_expression(asset_path) {
             return None;
         }
-        self.resolver
+        let Some(resolver) = self.resolver.as_deref_mut() else {
+            self.wants_resolver = true;
+            return None;
+        };
+        resolver
             .resolve(asset_path, Some(self.layer_id), self.tokens, self.paths)
             .ok()
+    }
+
+    /// Whether the resolver leaves a payload to `asset_path` for
+    /// composition to resolve ([`AssetResolver::defers_payload`]).
+    fn defers_payload(&mut self, asset_path: &str) -> bool {
+        let Some(resolver) = self.resolver.as_deref_mut() else {
+            self.wants_resolver = true;
+            return false;
+        };
+        resolver.defers_payload(asset_path)
     }
 }
 
 // ---------------------------------------------------------------------------
 // Path parsing helpers
 // ---------------------------------------------------------------------------
+
+/// Places the prim spec `item` among `prims`, and its authored property
+/// order among `orders`, by its place.
+fn place_prim<'a>(
+    prims: &mut PrimSpecs<'a>,
+    orders: &mut Vec<Option<Order<'a>>>,
+    item: PrimItem<'a>,
+) {
+    let at = prims.insert(item.index, item.key, item.prim);
+    if at == orders.len() {
+        orders.push(None);
+    }
+    if let Some(children) = item.children {
+        orders[at] = Some(children);
+    }
+}
+
+/// Adds the property spec `item` to its prim spec among `prims`.
+fn place_property(prims: &mut PrimSpecs<'_>, item: PropertyItem) {
+    let prim = prims.spec_mut(item.place).expect("a placed spec");
+    put_property(&mut prim.properties, item.name, item.property);
+}
 
 /// A copy of `spec`, a spec built for a fieldset specs share, cloning only
 /// what it authors: most of a prim spec's lists and maps are empty, and
@@ -3310,6 +3650,7 @@ def "Other" {}
                 &paths,
                 &mut NoAssets,
                 &mut budget,
+                1,
             )
             .unwrap()
         };
@@ -3409,6 +3750,167 @@ def "Other" {}
         );
     }
 
+    /// A resolver that resolves nothing and records what it is asked.
+    #[derive(Default)]
+    struct Recording(Vec<String>);
+
+    impl AssetResolver for Recording {
+        fn resolve(
+            &mut self,
+            asset: &str,
+            _: Option<LayerId>,
+            _: &TokenInterner,
+            _: &PathInterner,
+        ) -> Result<ResolvedAsset, AssetResolveError> {
+            self.0.push(String::from(asset));
+            Err(AssetResolveError::NotFound)
+        }
+
+        fn resolved_path(&self, _: LayerId) -> Option<&str> {
+            None
+        }
+    }
+
+    /// A file of `n` prims and their properties, with what a read reports
+    /// or resolves spread among them: prims sharing fieldsets, references
+    /// and payloads the resolver is asked for, prim relocates, which are
+    /// reported, and a variant set.
+    fn chunked_file(n: usize) -> Vec<u8> {
+        use crate::writer::{
+            ListOp as Op, Reference as Arc_, Spec, SpecForm as Form, Value as V, write_crate,
+        };
+        let arc = |asset: &str| Arc_ {
+            custom_data: Vec::new(),
+            asset: String::from(asset),
+            prim_path: String::new(),
+            offset: 0.0,
+            scale: 1.0,
+        };
+        let names: Vec<String> = (0..n).map(|i| alloc::format!("P{i}")).collect();
+        let mut specs = alloc::vec![
+            Spec::new("/", Form::PseudoRoot)
+                .with_field("primChildren", V::TokenVector(names.clone()))
+        ];
+        for (i, name) in names.iter().enumerate() {
+            let path = alloc::format!("/{name}");
+            let mut prim = Spec::new(&path, Form::Prim)
+                .with_field("specifier", V::Specifier(Specifier::Def))
+                .with_field("typeName", V::Token("Scope".into()));
+            if i % 7 == 3 {
+                let asset = alloc::format!("./asset_{i}.usda");
+                prim = prim.with_field(
+                    "references",
+                    V::ReferenceListOp(Op::prepend(alloc::vec![arc(&asset)])),
+                );
+            }
+            if i % 11 == 5 {
+                let asset = alloc::format!("./payload_{i}.usda");
+                prim = prim.with_field(
+                    "payload",
+                    V::PayloadListOp(Op::prepend(alloc::vec![arc(&asset)])),
+                );
+            }
+            if i % 13 == 9 {
+                prim = prim.with_field(
+                    "relocates",
+                    V::Relocates(alloc::vec![("/a".into(), "/b".into())]),
+                );
+            }
+            if i == n / 2 {
+                prim = prim.with_field(
+                    "variantSetNames",
+                    V::StringListOp(Op::prepend(alloc::vec!["look".into()])),
+                );
+            }
+            specs.push(prim);
+            specs.push(
+                Spec::new(alloc::format!("{path}.x"), Form::Attribute)
+                    .with_field("typeName", V::Token("int".into()))
+                    .with_field("default", V::Int(i32::try_from(i % 3).unwrap())),
+            );
+            specs.push(
+                Spec::new(alloc::format!("{path}.label"), Form::Attribute)
+                    .with_field("typeName", V::Token("string".into()))
+                    .with_field("default", V::String(alloc::format!("label {i}"))),
+            );
+            specs.push(
+                Spec::new(alloc::format!("{path}.next"), Form::Relationship).with_field(
+                    "targetPaths",
+                    V::PathListOp(Op::explicit(alloc::vec![alloc::format!(
+                        "/P{}",
+                        (i + 1) % n
+                    )])),
+                ),
+            );
+        }
+        let host = alloc::format!("/P{}", n / 2);
+        specs.push(Spec::new(
+            alloc::format!("{host}{{look=}}"),
+            Form::VariantSet,
+        ));
+        specs.push(Spec::new(
+            alloc::format!("{host}{{look=red}}"),
+            Form::Variant,
+        ));
+        write_crate(&specs).unwrap()
+    }
+
+    /// Assembling in chunks, on any number of threads, reads the layer a
+    /// single pass does: the same specs, diagnostics in the same order, the
+    /// resolver asked the same things in the same order, the same budget
+    /// charged, and with too small a budget, the same error.
+    #[test]
+    #[cfg_attr(target_os = "wasi", ignore = "WASI runs tests without threads")]
+    fn chunks_on_any_number_of_threads_read_what_one_pass_does() {
+        let bytes = chunked_file(60);
+        let header = crate::header::parse_header(&bytes).unwrap();
+        let toc = crate::toc::parse_toc(&bytes, header.toc_offset).unwrap();
+        let mut budget = DecodeBudget::with_limit(u64::MAX);
+        let sections =
+            crate::section::parse_sections(&bytes, &toc, header.crate_version(), &mut budget)
+                .unwrap();
+        // Shared interners: each read finds the ids the first interned.
+        let (tokens, paths) = (TokenInterner::default(), PathInterner::default());
+        let read = |limit: u64, threads: usize, chunk: usize| {
+            let mut resolver = Recording::default();
+            let mut budget = DecodeBudget::with_limit(limit);
+            let result = assemble_in_chunks(
+                &bytes,
+                &sections,
+                LayerId(1),
+                &tokens,
+                &paths,
+                &mut resolver,
+                &mut budget,
+                threads,
+                chunk,
+            );
+            (result, resolver.0, budget.used())
+        };
+        let (whole, asked, used) = read(u64::MAX, 1, usize::MAX);
+        let whole = whole.unwrap();
+        assert!(!whole.diagnostics.is_empty());
+        assert!(!asked.is_empty());
+        for threads in [1, 2, 4] {
+            for chunk in [1, 2, 3, 7, 64] {
+                let (chunked, chunked_asked, chunked_used) = read(u64::MAX, threads, chunk);
+                let chunked = chunked.unwrap();
+                assert!(chunked.layer == whole.layer, "{threads} threads, {chunk}");
+                assert_eq!(chunked.diagnostics, whole.diagnostics, "{threads} {chunk}");
+                assert_eq!(chunked_asked, asked, "{threads} {chunk}");
+                assert_eq!(chunked_used, used, "{threads} {chunk}");
+            }
+        }
+        for limit in [used - 1, used / 2, used / 5] {
+            let (expected, ..) = read(limit, 1, usize::MAX);
+            let expected = expected.unwrap_err();
+            for (threads, chunk) in [(1, 3), (4, 3), (4, 1)] {
+                let (chunked, ..) = read(limit, threads, chunk);
+                assert_eq!(chunked.unwrap_err(), expected, "{limit} {threads} {chunk}");
+            }
+        }
+    }
+
     /// A property's prim path text is checked as parsing it would check it.
     #[test]
     fn property_owners_are_checked_as_parsed() {
@@ -3466,6 +3968,7 @@ def "T" {}
             &paths,
             &mut NoAssets,
             &mut budget,
+            1,
         )
         .unwrap();
         assert!(
@@ -3616,6 +4119,7 @@ def "T" {}
                 &PathInterner::default(),
                 &mut NoAssets,
                 &mut DecodeBudget::with_limit(10_000),
+                1,
             )
             .unwrap();
             let property = &read.layer.prims().values().next().unwrap().properties[0].spec;
@@ -3797,6 +4301,7 @@ def "T" {}
                 &paths,
                 &mut NoAssets,
                 &mut DecodeBudget::with_limit(100),
+                1,
             )
             .unwrap();
             assert!(result.diagnostics.is_empty());
@@ -3902,6 +4407,7 @@ def "T" {}
             &PathInterner::default(),
             &mut NoAssets,
             budget,
+            1,
         )
     }
 

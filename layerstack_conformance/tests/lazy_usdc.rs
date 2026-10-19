@@ -159,6 +159,7 @@ fn source_budget_failure_is_cached_across_threads() {
         &paths,
         &mut NoAssets,
         DecodeBudget::with_limit(structural),
+        1,
     )
     .unwrap();
     let p = paths

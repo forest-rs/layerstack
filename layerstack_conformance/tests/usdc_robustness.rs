@@ -236,6 +236,7 @@ fn read_counting(
             &PathInterner::default(),
             &mut NoAssets,
             budget,
+            1,
         )
     })
 }
@@ -399,6 +400,7 @@ fn the_path_tree_reads_what_the_text_does() {
                 &paths,
                 &mut NoAssets,
                 &mut budget,
+                1,
             );
             (
                 read.map(|read| (read.layer, read.diagnostics)),

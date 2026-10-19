@@ -21,9 +21,11 @@
 mod cache;
 mod dangling;
 mod index;
+mod layer_dangling;
 pub use cache::*;
 pub use dangling::*;
 pub use index::*;
+pub use layer_dangling::*;
 
 use alloc::{
     format,

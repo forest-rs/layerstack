@@ -117,6 +117,11 @@ impl DanglingCollection {
 /// (`collection:<name>:includes`); [`Self::collections`] groups them by
 /// collection, and checks that each included collection exists.
 ///
+/// This report checks what the stage composes. To find the layer and spec
+/// that author each path, for a scene authored as several layers, use
+/// [`LayerDanglingReport`](super::LayerDanglingReport), which checks the
+/// same paths, the same way, as each layer authors them.
+///
 /// ```
 /// use std::sync::Arc;
 ///

@@ -586,6 +586,11 @@ jobs:
       - name: check dangling targets oracle
         run: python layerstack_conformance/scripts/dangling_targets_oracle.py --check
 
+      # The per-layer oracle must be how OpenUSD reads each authored target,
+      # connection and collection path.
+      - name: check layer dangling targets oracle
+        run: python layerstack_conformance/scripts/layer_dangling_targets_oracle.py --check
+
       - name: check shading port authoring oracle
         run: python layerstack_conformance/scripts/shading_ports_oracle.py --check
       - name: check runnable tutorial outputs with OpenUSD

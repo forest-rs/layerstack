@@ -1,0 +1,21 @@
+#usda 1.0
+(
+    doc = """A planter whose paths name its own namespace, which each
+    referencing prim maps to its own."""
+)
+
+def Xform "Planter"
+{
+    rel water = [</Planter/Soil>, </Planter/Gone>, </Outside>]
+
+    def Xform "Soil"
+    {
+        custom double moisture = 0
+        rel feeds = </Planter/Roots>
+    }
+}
+
+def Xform "Unused"
+{
+    rel water = </Unused/Gone>
+}

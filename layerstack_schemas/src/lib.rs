@@ -325,6 +325,9 @@
 //! [`DanglingReport`] counts, by relationship and connection name and by
 //! collection, the targets, connections, includes and excludes that name
 //! nothing on the stage, and why (`layerstack::DanglingKind`).
+//! [`LayerDanglingReport`] checks the same paths by the layer that authors
+//! them, each mapped across the arcs that bring its spec in, so every
+//! finding names a spec to edit.
 //!
 //! With `usd-geom`, [`bounds::BoundsCache`] computes oriented local and world
 //! bounds from authored extents and model extent hints, partitioned by purpose.
@@ -505,9 +508,10 @@ pub use binding::{
 };
 #[cfg(feature = "usd")]
 pub use collection::{
-    CollectionIdentity, CollectionList, CollectionTargetProblem, DanglingCollection,
-    DanglingCollectionTarget, DanglingReport, ExpansionRule, ExpressionEvaluator, ExpressionSearch,
-    Inclusion, Membership, MembershipCache, MembershipCacheError, MembershipCacheMemory,
+    AuthoredTargetProblem, CollectionIdentity, CollectionList, CollectionTargetProblem,
+    DanglingCollection, DanglingCollectionTarget, DanglingReport, ExpansionRule,
+    ExpressionEvaluator, ExpressionSearch, Inclusion, LayerDangling, LayerDanglingReport,
+    LayerDanglingTarget, Membership, MembershipCache, MembershipCacheError, MembershipCacheMemory,
     MembershipCacheStats, MembershipDependencies, MembershipIndex, MembershipIndexStats,
     MembershipIndexUpdate, MembershipProblem, MembershipQuery, MembershipRevisions, MembershipRule,
     MembershipSample,

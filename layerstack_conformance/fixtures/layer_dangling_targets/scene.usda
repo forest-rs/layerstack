@@ -1,0 +1,82 @@
+#usda 1.0
+(
+    doc = """Targets, connections and collection paths authored across
+    sublayers, a referenced planter used three times (once instanced), a
+    payload the stage unloads, variants, an inactive prim and list edits
+    that delete or replace weaker paths. Each authored path is read once
+    for every composed prim that reads its spec."""
+    subLayers = [
+        @./scope_strong.usda@,
+        @./scope_weak.usda@
+    ]
+)
+
+def Scope "World"
+{
+    def Xform "Bed_A" (
+        references = @./planter.usda@</Planter>
+    )
+    {
+    }
+
+    def Xform "Bed_B" (
+        references = @./planter.usda@</Planter>
+    )
+    {
+        rel water = [</World/Bed_B/Soil>, </World/Bed_B/Dry>]
+    }
+
+    def Xform "Bed_C" (
+        instanceable = true
+        references = @./planter.usda@</Planter>
+    )
+    {
+        over "Soil"
+        {
+            rel feeds = </World/Gone_local>
+        }
+    }
+
+    def Xform "Shed" (
+        payload = @./planter.usda@</Planter>
+    )
+    {
+    }
+}
+
+def Scope "Retired" (
+    active = false
+)
+{
+    def Xform "Rock"
+    {
+        rel shade = </World/Gone_retired>
+    }
+}
+
+def Xform "Spot" (
+    variants = {
+        string look = "bright"
+    }
+    prepend variantSets = "look"
+)
+{
+    variantSet "look" = {
+        "bright" {
+            rel shade = [</World/Bed_A/Soil>, </World/Gone_bright>]
+
+        }
+        "dim" {
+            rel shade = </World/Gone_dim>
+
+        }
+    }
+}
+
+def Scope "Lights" (
+    prepend apiSchemas = ["CollectionAPI:lit"]
+)
+{
+    prepend rel collection:lit:includes = [</World/Bed_A>, </World/Gone_lit>, </Lights.collection:glare>, </Spot.collection:lit>]
+    rel collection:lit:excludes = </World/Bed_A/Soil/Gone>
+}

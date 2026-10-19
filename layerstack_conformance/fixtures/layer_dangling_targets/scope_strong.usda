@@ -1,0 +1,16 @@
+#usda 1.0
+(
+    doc = """The stronger scope: deletes a weaker dangling path, adds its
+    own, and replaces nothing."""
+)
+
+over "Path_1"
+{
+    delete rel shade = </World/Lost>
+    prepend rel shade = </World/Bed_B/Soil.wetness>
+}
+
+over "Lights"
+{
+    delete rel collection:lit:includes = </World/Gone_weak>
+}

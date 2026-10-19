@@ -1284,7 +1284,9 @@ pub(super) fn resolve_including_pseudo_root(
     if store.layer(at.layer()).is_none() {
         return Err(Rejection::NoSuchLayer(at.layer()));
     }
-    let path = at.resolve(store.paths_mut()).ok_or(Rejection::Unmappable)?;
+    let path = at
+        .resolve(store.paths_mut())
+        .ok_or_else(|| Rejection::Unmappable(at.named_path()))?;
     let loc = Loc::of(&path);
     Ok((path, loc))
 }
@@ -1699,6 +1701,7 @@ fn check_type(path: &SpecPath, ty: &PropertyType, value: &Value) -> Result<(), R
         Err(Rejection::TypeMismatch {
             path: path.clone(),
             declared: Arc::from(ty.type_name()),
+            offered: crate::value_type::offered_type_name(value),
         })
     }
 }

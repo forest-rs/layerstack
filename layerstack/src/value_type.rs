@@ -259,6 +259,39 @@ impl ValueType {
     }
 }
 
+/// The name of the role-less type `value` is a value of (`double`,
+/// `float3[]`), as an edit that rejects it names it; `dictionary` for a
+/// dictionary, and `value` for anything else no type holds.
+pub(crate) fn offered_type_name(value: &Value) -> &'static str {
+    fn scalar(value: &Value) -> Option<ValueType> {
+        let kind = core::mem::discriminant(value);
+        ValueType::ALL
+            .iter()
+            .copied()
+            .filter(|ty| ty.storage() == *ty)
+            .find(|ty| {
+                let zero = ty.zero();
+                !matches!(zero, Value::Null) && core::mem::discriminant(&zero) == kind
+            })
+    }
+    let element = match value {
+        Value::Dictionary(_) => return "dictionary",
+        Value::Array(items) => match items.first() {
+            Some(item) => item,
+            None => return "array",
+        },
+        Value::TypedArray(items) => {
+            return scalar(&items.element_kind())
+                .and_then(ValueType::array_name)
+                .unwrap_or("array");
+        }
+        value => return scalar(value).map_or("value", ValueType::name),
+    };
+    scalar(element)
+        .and_then(ValueType::array_name)
+        .unwrap_or("array")
+}
+
 impl fmt::Display for ValueType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.name())

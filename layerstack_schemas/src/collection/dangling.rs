@@ -60,21 +60,27 @@ impl DanglingCollectionTarget {
     /// The example as text, within its collection: `includes /Gone
     /// (NoPrim)`, or `includes /Lights/Fill.collection:glare
     /// (NoCollection)`.
+    ///
+    /// Its path is written as text with `store`, the store the stage was
+    /// composed from, as every diagnostic's `display` writes its ids.
     #[must_use]
-    pub fn display(
-        &self,
-        paths: &layerstack::PathInterner,
-        tokens: &layerstack::TokenInterner,
-    ) -> alloc::string::String {
-        let list = match self.list {
-            CollectionList::Includes => "includes",
-            CollectionList::Excludes => "excludes",
-        };
-        let problem = match self.problem {
-            CollectionTargetProblem::Dangling(kind) => alloc::format!("{kind:?}"),
-            CollectionTargetProblem::NoCollection => alloc::string::String::from("NoCollection"),
-        };
-        alloc::format!("{list} {} ({problem})", self.target.display(paths, tokens))
+    pub fn display<'a>(
+        &'a self,
+        store: &'a dyn layerstack::LayerStore,
+    ) -> impl core::fmt::Display + 'a {
+        crate::diagnostic::Shown(move |f: &mut core::fmt::Formatter<'_>| {
+            let list = match self.list {
+                CollectionList::Includes => "includes",
+                CollectionList::Excludes => "excludes",
+            };
+            let target = self.target.display(store.paths(), store.tokens());
+            match self.problem {
+                CollectionTargetProblem::Dangling(kind) => write!(f, "{list} {target} ({kind:?})"),
+                CollectionTargetProblem::NoCollection => {
+                    write!(f, "{list} {target} (NoCollection)")
+                }
+            }
+        })
     }
 }
 

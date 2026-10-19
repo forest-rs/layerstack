@@ -1,13 +1,13 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use alloc::{vec, vec::Vec};
+use alloc::{string::ToString, vec, vec::Vec};
 
 use super::*;
 use crate::{
     ArcKind, FieldValue, HashMap, InMemoryStore, Layer, LayerId, LayerOffset, LayerStore, NodeId,
     PathId, PrimSpec, PropertySpec, PropertyType, Reference, SpecPath, Specifier, Stage,
-    StageOptions, SublayerEntry, Time, TokenId, Value, VariantSetSpec, VariantSpec,
+    StageOptions, SublayerEntry, TargetPath, Time, TokenId, Value, VariantSetSpec, VariantSpec,
 };
 
 const SCENE: LayerId = LayerId(1);
@@ -351,9 +351,16 @@ fn values_must_conform_to_the_declared_type() {
         error,
         EditError::Rejected {
             op: 1,
-            reason: Rejection::TypeMismatch { .. }
+            reason: Rejection::TypeMismatch {
+                offered: "string",
+                ..
+            }
         }
     ));
+    assert_eq!(
+        error.display(&store).to_string(),
+        "edit 1 rejected: the value is a `string`, but /Rock{shape=jagged}.roughness is a `double`"
+    );
     assert_eq!(layers(&store), original, "the first edit was rolled back");
     assert_eq!(
         store.layers[&ROCK].generation(),
@@ -492,12 +499,17 @@ fn unmappable_paths_are_rejected_when_applied() {
     let mut edit = Transaction::new();
     edit.set_default(through_b.property(size_b), Value::Double(10.0))
         .set_default(through_b.property(size_a), Value::Double(11.0));
+    let error = edit.apply(&mut store).unwrap_err();
     assert_eq!(
-        edit.apply(&mut store),
-        Err(EditError::Rejected {
+        error,
+        EditError::Rejected {
             op: 1,
-            reason: Rejection::Unmappable
-        })
+            reason: Rejection::Unmappable(TargetPath::Property(size_a))
+        }
+    );
+    assert_eq!(
+        error.display(&store).to_string(),
+        "edit 1 rejected: the edit target does not map /World/RockA.size"
     );
     assert_eq!(layers(&store), original);
 }
@@ -1037,6 +1049,13 @@ fn an_inverse_does_not_overwrite_a_later_edit_of_its_slot() {
             })
         ),
         "{stale:?}"
+    );
+    assert_eq!(
+        stale.unwrap_err().display(&store).to_string(),
+        alloc::format!(
+            "the default of /Rock.size in layer {} changed since the edit was prepared",
+            ROCK.0
+        )
     );
     assert_eq!(layers(&store), before, "the later edit stays");
     assert_eq!(
@@ -2532,8 +2551,8 @@ fn attributes_need_a_registered_value_type() {
     txn.set_default(layer.property(moss), Value::Float(1.0));
     assert_eq!(reason(&mut store, &txn), unknown);
     assert_eq!(
-        alloc::string::ToString::to_string(&unknown),
-        "`float5` is not a registered value type"
+        unknown.display(&store).to_string(),
+        "`float5`, the type of /World/RockA.moss, is not a registered value type"
     );
 }
 
@@ -2612,7 +2631,7 @@ fn prim_field_edits_reject_what_they_cannot_author() {
     txn.add_inherit(target.prim(rock_a), rock, ListPosition::BackOfPrepend);
     assert_eq!(
         reason(&mut store, &txn),
-        Rejection::UnmappableTarget(crate::TargetPath::Prim(rock))
+        Rejection::UnmappableTarget(TargetPath::Prim(rock))
     );
     let mut txn = Transaction::new();
     txn.add_reference(
@@ -2622,7 +2641,7 @@ fn prim_field_edits_reject_what_they_cannot_author() {
     );
     assert_eq!(
         reason(&mut store, &txn),
-        Rejection::UnmappableTarget(crate::TargetPath::Prim(rock))
+        Rejection::UnmappableTarget(TargetPath::Prim(rock))
     );
 }
 
@@ -2852,4 +2871,22 @@ fn created_children_are_listed_once_in_creation_order() {
         undo.apply(&mut store).expect("undoes");
     }
     assert_eq!(listed(&store), [a, d, e]);
+}
+
+#[test]
+fn slots_name_their_fields_in_words() {
+    let store = InMemoryStore::default();
+    let (kind, season) = (store.tokens.intern("kind"), store.tokens.intern("season"));
+    for (slot, text) in [
+        (Slot::Default, "the default"),
+        (Slot::TimeSample(5.0), "the time sample at 5"),
+        (Slot::Metadata(kind), "the `kind` metadata"),
+        (
+            Slot::VariantSelection(season),
+            "the selection of variant set `season`",
+        ),
+        (Slot::Prim(PrimField::TypeName), "the `typeName`"),
+    ] {
+        assert_eq!(slot.display(&store).to_string(), text);
+    }
 }

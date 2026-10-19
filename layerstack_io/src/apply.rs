@@ -23,6 +23,23 @@ pub enum ApplyError {
         error: IoError,
     },
 }
+impl ApplyError {
+    /// The error in words, a rejected edit's paths and names written as
+    /// text with `store`, the document's store ([`EditError::display`]).
+    #[must_use]
+    pub fn display<'a>(&'a self, store: &'a dyn LayerStore) -> impl core::fmt::Display + 'a {
+        struct Shown<'a>(&'a ApplyError, &'a dyn LayerStore);
+        impl core::fmt::Display for Shown<'_> {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                match self.0 {
+                    ApplyError::Edit(error) => write!(f, "{}", error.display(self.1)),
+                    load => write!(f, "{load}"),
+                }
+            }
+        }
+        Shown(self, store)
+    }
+}
 impl core::fmt::Display for ApplyError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {

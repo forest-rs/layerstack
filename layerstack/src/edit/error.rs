@@ -6,10 +6,19 @@
 use alloc::sync::Arc;
 use core::fmt;
 
-use crate::{doc::LayerId, interner::TokenId, path::TargetPath, spec_path::SpecPath};
+use crate::{
+    diagnostic::{Describe, Described, Names, with_store},
+    doc::{LayerId, LayerStore},
+    interner::TokenId,
+    path::TargetPath,
+    spec_path::SpecPath,
+};
 
 /// Why a [`Transaction`](super::Transaction) was not applied. When one is
 /// returned, no layer was changed.
+///
+/// [`EditError::display`] writes it in words, its paths, names and slots
+/// as text; its `Display` writes the same with ids, having no store.
 #[derive(Clone, Debug, PartialEq)]
 pub enum EditError {
     /// `layer` is not at the generation the transaction expects: it was
@@ -61,7 +70,7 @@ pub enum EditError {
         /// ([`Stage::store_identity`](crate::Stage::store_identity)).
         stage: crate::StoreIdentity,
         /// The domains of the store passed in
-        /// ([`LayerStore::identity`](crate::LayerStore::identity)).
+        /// ([`LayerStore::identity`]).
         store: crate::StoreIdentity,
     },
 }
@@ -98,8 +107,8 @@ pub enum Slot {
 pub enum Rejection {
     /// No layer with this id is in the store.
     NoSuchLayer(LayerId),
-    /// The edit target does not map the stage path.
-    Unmappable,
+    /// The edit target does not map this stage path, the edit's address.
+    Unmappable(TargetPath),
     /// The edit target does not map this relationship or connection
     /// target (a stage path).
     UnmappableTarget(TargetPath),
@@ -140,6 +149,8 @@ pub enum Rejection {
         path: SpecPath,
         /// Its declared type name.
         declared: Arc<str>,
+        /// The role-less type of the value offered (`double`, `float3[]`).
+        offered: &'static str,
     },
     /// The metadata field is kept in a dedicated member of the layer model
     /// and has its own edit, or none: the prim fields of
@@ -229,8 +240,19 @@ pub enum Rejection {
     Diverged(SpecPath),
 }
 
-impl fmt::Display for EditError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl EditError {
+    /// The error in words, its paths, names and slots written as text
+    /// with `store`, the store the transaction was applied to ("edit 0
+    /// rejected: the value is a `double`, but /World/Sun.inputs:intensity
+    /// is a `float`"). `Display` writes the same without a store, with ids.
+    #[must_use]
+    pub fn display<'a>(&'a self, store: &'a dyn LayerStore) -> impl fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+
+impl Describe for EditError {
+    fn describe(&self, f: &mut fmt::Formatter<'_>, names: Names<'_>) -> fmt::Result {
         match self {
             Self::StaleGeneration {
                 layer,
@@ -238,13 +260,15 @@ impl fmt::Display for EditError {
                 found,
             } => write!(
                 f,
-                "layer {} changed since the edit was prepared (generation {found}, expected {expected})",
-                layer.0
+                "{} changed since the edit was prepared (generation {found}, expected {expected})",
+                names.layer(*layer)
             ),
-            Self::StaleValue { layer, slot, .. } => write!(
+            Self::StaleValue { layer, path, slot } => write!(
                 f,
-                "the authored {slot:?} of a spec in layer {} changed since the edit was prepared",
-                layer.0
+                "{} of {} in {} changed since the edit was prepared",
+                Described(slot, names),
+                names.spec(path),
+                names.layer(*layer)
             ),
             Self::UnresolvedPrecondition { index } => {
                 write!(
@@ -252,7 +276,9 @@ impl fmt::Display for EditError {
                     "precondition {index} names a path its target does not map"
                 )
             }
-            Self::Rejected { op, reason } => write!(f, "edit {op} rejected: {reason}"),
+            Self::Rejected { op, reason } => {
+                write!(f, "edit {op} rejected: {}", Described(reason, names))
+            }
             Self::ForeignStore { stage, store } => write!(
                 f,
                 "the store is not the one the stage was composed from: its {}; \
@@ -263,31 +289,119 @@ impl fmt::Display for EditError {
     }
 }
 
-impl fmt::Display for Rejection {
+impl fmt::Display for EditError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.describe(f, Names(None))
+    }
+}
+
+impl Slot {
+    /// The slot in words ("the time sample at 5", "the `kind` metadata"),
+    /// its names written with `store`.
+    #[must_use]
+    pub fn display<'a>(&'a self, store: &'a dyn LayerStore) -> impl fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+
+impl Describe for Slot {
+    fn describe(&self, f: &mut fmt::Formatter<'_>, names: Names<'_>) -> fmt::Result {
         match self {
-            Self::NoSuchLayer(layer) => write!(f, "no layer {}", layer.0),
-            Self::Unmappable => f.write_str("the edit target does not map the path"),
-            Self::UnmappableTarget(_) => f.write_str("the edit target does not map a target path"),
-            Self::NotAProperty(_) => f.write_str("expected a property path"),
-            Self::NotAPrim(_) => f.write_str("expected a prim or variant path"),
-            Self::NoSuchSpec(_) => f.write_str("no spec at the path"),
-            Self::SpecExists(_) => f.write_str("a spec exists at the path"),
-            Self::NotAnAttribute(_) => f.write_str("the property is not an attribute"),
-            Self::UndeclaredType(_) => f.write_str("the attribute declares no type"),
-            Self::UnknownValueType { type_name, .. } => {
-                write!(f, "`{type_name}` is not a registered value type")
+            Self::Spec => f.write_str("the spec"),
+            Self::Default => f.write_str("the default"),
+            Self::Animation => f.write_str("the time samples and spline"),
+            Self::TimeSample(time) => write!(f, "the time sample at {time}"),
+            Self::Targets => f.write_str("the targets"),
+            Self::AppliedSchemas => f.write_str("the `apiSchemas`"),
+            Self::Metadata(key) => write!(f, "the `{}` metadata", names.token(*key)),
+            Self::VariantSelection(set) => {
+                write!(f, "the selection of variant set `{}`", names.token(*set))
             }
-            Self::TypeMismatch { declared, .. } => {
-                write!(f, "the value is not a `{declared}`")
+            Self::Prim(field) => write!(f, "the `{}`", field_name(*field)),
+            Self::Sublayers => f.write_str("the sublayers"),
+            Self::Relocates => f.write_str("the `layerRelocates`"),
+        }
+    }
+}
+
+impl Rejection {
+    /// Why the edit was rejected, its paths and names written as text with
+    /// `store`.
+    #[must_use]
+    pub fn display<'a>(&'a self, store: &'a dyn LayerStore) -> impl fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+
+/// The field's name as layers spell it (`typeName`).
+fn field_name(field: super::PrimField) -> &'static str {
+    use super::PrimField;
+    match field {
+        PrimField::Specifier => "specifier",
+        PrimField::TypeName => "typeName",
+        PrimField::Active => "active",
+        PrimField::Instanceable => "instanceable",
+        PrimField::PrimOrder => "primOrder",
+        PrimField::PropertyOrder => "propertyOrder",
+        PrimField::References => "references",
+        PrimField::Payloads => "payload",
+        PrimField::Inherits => "inheritPaths",
+        PrimField::Specializes => "specializes",
+        PrimField::VariantSetNames => "variantSetNames",
+    }
+}
+
+impl Describe for Rejection {
+    fn describe(&self, f: &mut fmt::Formatter<'_>, names: Names<'_>) -> fmt::Result {
+        match self {
+            Self::NoSuchLayer(layer) => write!(f, "no {} is in the store", names.layer(*layer)),
+            Self::Unmappable(path) => {
+                write!(f, "the edit target does not map {}", names.target(*path))
             }
-            Self::ReservedField(_) => f.write_str("the field has a dedicated member"),
+            Self::UnmappableTarget(path) => write!(
+                f,
+                "the edit target does not map the target {}",
+                names.target(*path)
+            ),
+            Self::NotAProperty(path) => write!(f, "{} is not a property path", names.spec(path)),
+            Self::NotAPrim(path) => {
+                write!(f, "{} is not a prim or variant path", names.spec(path))
+            }
+            Self::NoSuchSpec(path) => write!(f, "no spec is at {}", names.spec(path)),
+            Self::SpecExists(path) => write!(f, "a spec is already at {}", names.spec(path)),
+            Self::NotAnAttribute(path) => write!(f, "{} is not an attribute", names.spec(path)),
+            Self::UndeclaredType(path) => write!(
+                f,
+                "{} declares no type; create it with a type first",
+                names.spec(path)
+            ),
+            Self::UnknownValueType { path, type_name } => write!(
+                f,
+                "`{type_name}`, the type of {}, is not a registered value type",
+                names.spec(path)
+            ),
+            Self::TypeMismatch {
+                path,
+                declared,
+                offered,
+            } => write!(
+                f,
+                "the value is a `{offered}`, but {} is a `{declared}`",
+                names.spec(path)
+            ),
+            Self::ReservedField(field) => write!(
+                f,
+                "`{}` has a dedicated member and edit, not a metadata edit",
+                names.token(*field)
+            ),
             Self::PseudoRoot => f.write_str(
                 "the pseudo-root holds no prim fields or properties; layer metadata has its own edits",
             ),
             Self::PseudoRootArc => f.write_str("an arc cannot target the pseudo-root"),
-            Self::NotOnVariant(field) => write!(f, "a variant spec holds no {field:?} field"),
-            Self::NoSuchSublayer(index) => write!(f, "no sublayer at index {index}"),
+            Self::NotOnVariant(field) => {
+                write!(f, "a variant spec holds no `{}`", field_name(*field))
+            }
+            Self::NoSuchSublayer(index) => write!(f, "no sublayer is at index {index}"),
             Self::EmptySublayerAsset(index) => {
                 write!(f, "the sublayer at index {index} has an empty asset path")
             }
@@ -295,12 +409,16 @@ impl fmt::Display for Rejection {
                 write!(f, "the sublayer at index {index} repeats an earlier one")
             }
             Self::SublayerCycle(layer) => {
-                write!(f, "sublayering layer {} makes a cycle", layer.0)
+                write!(f, "sublayering {} makes a cycle", names.layer(*layer))
             }
-            Self::InvalidRelocate { reason, .. } => {
-                write!(f, "composition would ignore the relocate: {reason:?}")
+            Self::InvalidRelocate { source, reason } => write!(
+                f,
+                "composition would ignore the relocate of {}: {reason:?}",
+                names.path(*source)
+            ),
+            Self::DuplicateRelocateSource(source) => {
+                write!(f, "two relocates move {}", names.path(*source))
             }
-            Self::DuplicateRelocateSource(_) => f.write_str("two relocates move the same source"),
             Self::CopyBetweenKinds => {
                 f.write_str("a prim and a property copy only to their own kind")
             }
@@ -311,11 +429,23 @@ impl fmt::Display for Rejection {
             Self::UnsupportedCopy => {
                 f.write_str("the copied specs author paths that cannot be remapped")
             }
-            Self::InvalidVariantSetName(_) => {
-                f.write_str("the variant set name is not an identifier")
-            }
-            Self::Diverged(_) => f.write_str("the layer no longer matches the inverse"),
+            Self::InvalidVariantSetName(name) => write!(
+                f,
+                "`{}` is not an identifier, so not a variant set name",
+                names.token(*name)
+            ),
+            Self::Diverged(path) => write!(
+                f,
+                "the layer no longer matches the inverse at {}",
+                names.spec(path)
+            ),
         }
+    }
+}
+
+impl fmt::Display for Rejection {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.describe(f, Names(None))
     }
 }
 

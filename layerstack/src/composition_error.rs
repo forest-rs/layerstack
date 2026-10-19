@@ -13,20 +13,24 @@
 //! [`Stage::composition_errors`]: crate::Stage::composition_errors
 
 use alloc::{string::String, vec::Vec};
-use core::cmp::Ordering;
+use core::{cmp::Ordering, fmt};
 
 use hashbrown::HashMap;
 
 use crate::{
-    doc::LayerId,
+    diagnostic::{Describe, Names, with_store},
+    doc::{LayerId, LayerStore},
     interner::{TokenId, TokenInterner},
-    path::{PathId, PathInterner, TargetPath},
+    path::{PathId, PathInterner, PropertyPath, TargetPath},
     prim_index::ArcKind,
     property::PropertyKind,
     spec_path::SpecPath,
 };
 
 /// An error found while composing a stage.
+///
+/// [`CompositionError::display`] writes it in words, its paths and names
+/// as text.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum CompositionError {
@@ -136,6 +140,217 @@ impl CompositionError {
             Self::InvalidExternalTargetPath(_) => 13,
             Self::InvalidInstanceTargetPath(_) => 14,
             Self::VariableExpressionError(_) => 15,
+        }
+    }
+}
+
+impl CompositionError {
+    /// The error in words, its paths and names written as text with
+    /// `store`, the store the stage was composed from ("/World/Moss: the
+    /// reference to @./moss.usda@ authored at /World/Moss in layer 0 does
+    /// not resolve; it contributes nothing").
+    #[must_use]
+    pub fn display<'a>(&'a self, store: &'a dyn LayerStore) -> impl fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+
+/// The arc as an error names it.
+fn arc_name(arc: ArcKind) -> &'static str {
+    match arc {
+        ArcKind::Local => "local opinion",
+        ArcKind::Inherits => "inherit",
+        ArcKind::Variants => "variant",
+        ArcKind::Relocates => "relocate",
+        ArcKind::References => "reference",
+        ArcKind::Payloads => "payload",
+        ArcKind::Specializes => "specializes",
+    }
+}
+
+impl Describe for CompositionError {
+    fn describe(&self, f: &mut fmt::Formatter<'_>, names: Names<'_>) -> fmt::Result {
+        let target = |target: Option<PathId>| match target {
+            Some(path) => names.path(path),
+            None => String::from("<>"),
+        };
+        match self {
+            Self::ForeignSchemaRegistry => f.write_str(
+                "the schema registry was built on another token interner than the store's; \
+                 the stage was composed without schemas",
+            ),
+            Self::SublayerCycle(error) => write!(
+                f,
+                "{}: sublayer {} would form a cycle; it is ignored",
+                names.layer(error.layer),
+                names.layer(error.sublayer)
+            ),
+            Self::ArcCycle(error) => {
+                write!(f, "{}: an arc cycle is ignored:", names.path(error.prim))?;
+                for site in &error.sites {
+                    if let Some(arc) = site.arc {
+                        write!(f, " -> {}", arc_name(arc))?;
+                    }
+                    write!(
+                        f,
+                        " {} in {}",
+                        names.path(site.path),
+                        names.layer(site.layer_stack)
+                    )?;
+                }
+                Ok(())
+            }
+            Self::UnresolvedDefaultPrim(error) => {
+                write!(
+                    f,
+                    "{}: the {} to {} has no prim path, and its defaultPrim ",
+                    names.path(error.prim),
+                    arc_name(error.arc),
+                    names.layer(error.layer)
+                )?;
+                match error.path {
+                    Some(path) => write!(f, "names {}, which has no prim spec", names.path(path))?,
+                    None => f.write_str("is not authored or not a prim path")?,
+                }
+                f.write_str("; it contributes nothing")
+            }
+            Self::UnresolvedPrimPath(error) => {
+                write!(
+                    f,
+                    "{}: the {} authored at {}",
+                    names.path(error.prim),
+                    arc_name(error.arc),
+                    names.spec(&error.introducing_spec)
+                )?;
+                if let Some(layer) = error.introducing_layer {
+                    write!(f, " in {}", names.layer(layer))?;
+                }
+                write!(
+                    f,
+                    " targets {} in {}, which has no prim there; it contributes nothing",
+                    names.path(error.path),
+                    names.layer(error.layer)
+                )
+            }
+            Self::UnresolvedAsset(error) => write!(
+                f,
+                "{}: the {} to @{}@ authored at {} in {} does not resolve; it contributes nothing",
+                names.path(error.prim),
+                arc_name(error.arc),
+                error.asset,
+                names.spec(&error.introducing_spec),
+                names.layer(error.introducing_layer)
+            ),
+            Self::UnresolvedSublayer(error) => write!(
+                f,
+                "{}: sublayer @{}@ does not resolve; it is ignored",
+                names.layer(error.layer),
+                error.asset
+            ),
+            Self::InvalidAuthoredRelocation(error) => write!(
+                f,
+                "{}: the relocate {} -> {} is invalid ({:?}); it is ignored",
+                names.layer(error.layer),
+                names.path(error.source),
+                target(error.target),
+                error.reason
+            ),
+            Self::InvalidConflictingRelocation(error) => write!(
+                f,
+                "{}: the relocate {} -> {} conflicts with {} -> {} in {} ({:?}); it is ignored",
+                names.layer(error.layer),
+                names.path(error.source),
+                target(error.target),
+                names.path(error.conflict_source),
+                target(error.conflict_target),
+                names.layer(error.conflict_layer),
+                error.reason
+            ),
+            Self::InvalidSameTargetRelocations(error) => {
+                write!(f, "relocates move")?;
+                for (i, (layer, source)) in error.sources.iter().enumerate() {
+                    let sep = if i == 0 { " " } else { ", " };
+                    write!(
+                        f,
+                        "{sep}{} (in {})",
+                        names.path(*source),
+                        names.layer(*layer)
+                    )?;
+                }
+                write!(
+                    f,
+                    " to the one target {}; they are all ignored",
+                    names.path(error.target)
+                )
+            }
+            Self::OpinionAtRelocationSource(error) => write!(
+                f,
+                "{}: {} authors opinions at the relocation source {}; they are ignored",
+                names.path(error.prim),
+                names.layer(error.layer),
+                names.path(error.path)
+            ),
+            Self::ArcToProhibitedChild(error) => write!(
+                f,
+                "{}: the {} to {} in {} targets the relocation source {} or beneath it; \
+                 it contributes nothing",
+                names.path(error.prim),
+                arc_name(error.arc),
+                names.path(error.target),
+                names.layer(error.layer_stack),
+                names.path(error.relocation_source)
+            ),
+            Self::InconsistentPropertyType(error) => write!(
+                f,
+                "{}: the spec at {} in {} is not {}, as the defining spec at {} in {} is; \
+                 it is ignored",
+                names.property(PropertyPath::new(error.prim, error.property)),
+                names.spec(&error.conflicting_spec),
+                names.layer(error.conflicting_layer),
+                match error.defining_kind {
+                    PropertyKind::Attribute => "an attribute",
+                    PropertyKind::Relationship => "a relationship",
+                },
+                names.spec(&error.defining_spec),
+                names.layer(error.defining_layer)
+            ),
+            Self::InvalidExternalTargetPath(error) => write!(
+                f,
+                "{}: the target {} authored at {} in {} cannot be mapped across the {}; \
+                 it is ignored",
+                names.property(PropertyPath::new(error.prim, error.property)),
+                names.target(error.target),
+                names.spec(&error.spec),
+                names.layer(error.layer),
+                arc_name(error.arc)
+            ),
+            Self::InvalidInstanceTargetPath(error) => write!(
+                f,
+                "{}: the target {} authored at {} in {} names an instance of its class; \
+                 it is ignored",
+                names.property(PropertyPath::new(error.prim, error.property)),
+                names.target(error.target),
+                names.spec(&error.spec),
+                names.layer(error.layer)
+            ),
+            Self::VariableExpressionError(error) => {
+                if let Some(prim) = error.prim {
+                    write!(f, "{}: ", names.path(prim))?;
+                }
+                let context = match error.context {
+                    ExpressionContext::Sublayer => "sublayer",
+                    ExpressionContext::Reference => "reference",
+                    ExpressionContext::Payload => "payload",
+                    ExpressionContext::VariantSelection => "variant selection",
+                };
+                write!(
+                    f,
+                    "the {context} expression {} in {} does not evaluate ({}); it is ignored",
+                    error.expression,
+                    names.layer(error.layer),
+                    error.error
+                )
+            }
         }
     }
 }
@@ -655,4 +870,48 @@ pub struct VariableExpressionError {
     pub expression: String,
     /// The evaluation errors, joined with `"; "`.
     pub error: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use alloc::string::ToString;
+
+    use super::*;
+    use crate::{InMemoryStore, PropertyPath};
+
+    #[test]
+    fn errors_name_their_paths_in_words() {
+        let store = InMemoryStore::default();
+        let moss = store.path("/World/Moss");
+        let unresolved = CompositionError::UnresolvedAsset(UnresolvedAsset {
+            prim: moss,
+            arc: ArcKind::References,
+            asset: "./moss.usda".into(),
+            introducing_layer: LayerId(0),
+            introducing_spec: SpecPath::from_prim_path(moss),
+        });
+        assert_eq!(
+            unresolved.display(&store).to_string(),
+            "/World/Moss: the reference to @./moss.usda@ authored at /World/Moss in layer 0 \
+             does not resolve; it contributes nothing"
+        );
+        let height = store.property_path("/World/Moss.height");
+        let inconsistent = CompositionError::InconsistentPropertyType(InconsistentPropertyType {
+            prim: moss,
+            property: height.property(),
+            defining_layer: LayerId(1),
+            defining_spec: SpecPath::from_property_path(height),
+            defining_kind: PropertyKind::Attribute,
+            conflicting_layer: LayerId(2),
+            conflicting_spec: SpecPath::from_property_path(PropertyPath::new(
+                moss,
+                height.property(),
+            )),
+        });
+        assert_eq!(
+            inconsistent.display(&store).to_string(),
+            "/World/Moss.height: the spec at /World/Moss.height in layer 2 is not an attribute, \
+             as the defining spec at /World/Moss.height in layer 1 is; it is ignored"
+        );
+    }
 }

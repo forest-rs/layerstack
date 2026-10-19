@@ -362,6 +362,20 @@ impl Address {
         }
     }
 
+    /// The path an address names, as an edit that cannot map it reports
+    /// it: a stage address's stage path (`/World/Rock.height`), or a spec
+    /// address's own prim or property path, which needs no mapping.
+    pub(crate) fn named_path(&self) -> TargetPath {
+        let (prim, property) = match &self.path {
+            AddressPath::Spec(path) => (path.prim_path(), path.property()),
+            AddressPath::Stage { prim, property, .. } => (*prim, *property),
+        };
+        match property {
+            Some(name) => TargetPath::Property(PropertyPath::new(prim, name)),
+            None => TargetPath::Prim(prim),
+        }
+    }
+
     /// The addressed spec path; `None` if the target does not map the
     /// stage path.
     pub(crate) fn resolve(&self, paths: &mut PathInterner) -> Option<SpecPath> {

@@ -17,7 +17,10 @@
 //! - `library_reverse_update`: `apply_changes` for one appended include;
 //! - `library_dangling`: `DanglingReport::compute`, every relationship
 //!   target, connection, include and exclude checked, with eight examples
-//!   of each name and collection, and `Stage::dangling_targets` alone.
+//!   of each name and collection, and `Stage::dangling_targets` alone;
+//!   `LayerDanglingReport::compute`, the same paths checked as each layer
+//!   authors them, with eight examples per layer, and the
+//!   `Stage::authored_targets` walk alone.
 //!
 //! The scene is written once into Cargo's benchmark temporary directory
 //! and removed at the end.
@@ -34,7 +37,9 @@ use layerstack_conformance::library_scene::{
 };
 use layerstack_io::{Filesystem, LoadOptions, StageDocument, UsdcArrayLoading, UsdcReadOptions};
 use layerstack_schemas::usd::CollectionApi;
-use layerstack_schemas::{DanglingReport, MembershipIndex, MembershipQuery, Scene};
+use layerstack_schemas::{
+    DanglingReport, LayerDanglingReport, MembershipIndex, MembershipQuery, Scene,
+};
 
 /// Dangling slot relationships: one in a hundred.
 const DANGLING: usize = 150;
@@ -186,6 +191,38 @@ fn bench_library(c: &mut Criterion) {
         let stage = document.stage().stage();
         group.bench_function(format!("{}/targets", format.extension()), |b| {
             b.iter(|| black_box(stage.dangling_targets(document.store(), EXAMPLES)));
+        });
+        let layers = LayerDanglingReport::compute(&scene, EXAMPLES);
+        let found: usize = layers.layers.iter().map(|layer| layer.total()).sum();
+        assert_eq!(
+            found,
+            counts.dangling_prims + counts.dangling_properties + counts.dangling_collection_paths,
+            "every injected path dangles in the layer that authors it"
+        );
+        let walk = stage.authored_targets(document.store());
+        for layer in &layers.layers {
+            eprintln!(
+                "library {} layer {}: {} specs, {} paths read, {} replaced, {} unread specs, \
+                 {} name nothing",
+                format.extension(),
+                document.identifier(layer.layer).unwrap_or("?"),
+                layer.specs,
+                layer.targets,
+                layer.replaced,
+                layer.unread_specs,
+                layer.total(),
+            );
+        }
+        eprintln!(
+            "library {}: {} authored paths read",
+            format.extension(),
+            walk.targets().count()
+        );
+        group.bench_function(format!("{}/layers", format.extension()), |b| {
+            b.iter(|| black_box(LayerDanglingReport::compute(&scene, EXAMPLES)));
+        });
+        group.bench_function(format!("{}/authored_targets", format.extension()), |b| {
+            b.iter(|| black_box(stage.authored_targets(document.store())));
         });
     }
     group.finish();

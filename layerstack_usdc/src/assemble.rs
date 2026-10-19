@@ -112,6 +112,7 @@ pub fn assemble(
         resolved_layers: Vec::new(),
         diagnostics: Vec::new(),
         budget,
+        deferred_arcs: false,
         fieldset_uses: Vec::new(),
         shared_prims: HashMap::new(),
         shared_properties: HashMap::new(),
@@ -163,6 +164,9 @@ struct AssembleCtx<'a> {
     in_branch: bool,
     /// Whether the arcs being converted are payloads.
     in_payloads: bool,
+    /// Whether an arc was left for the resolver to resolve later
+    /// ([`Reference::deferred`]).
+    deferred_arcs: bool,
     layer_id: LayerId,
     resolved_layers: Vec<Layer>,
     diagnostics: Vec<AssembleDiagnostic>,
@@ -652,7 +656,9 @@ impl<'a> AssembleCtx<'a> {
             }
         }
 
-        if self.defer_variant_arcs {
+        // Only a layer with a deferred arc has one to resolve, and most
+        // have none: finding them visits every spec.
+        if self.defer_variant_arcs && self.deferred_arcs {
             let resolved = layerstack::resolve_selected_deferred_arcs(
                 &mut layer,
                 self.resolver,
@@ -2218,6 +2224,7 @@ impl<'a> AssembleCtx<'a> {
             if (self.in_branch && self.defer_variant_arcs)
                 || (self.in_payloads && self.resolver.defers_payload(&asset_path))
             {
+                self.deferred_arcs = true;
                 return Some(
                     Reference::deferred(self.layer_id, asset_path, target, layer_offset)
                         .with_custom_data(custom_data),

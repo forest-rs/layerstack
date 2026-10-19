@@ -369,6 +369,7 @@ mod tests {
             generation: 0,
             structure: 0,
             change_history: crate::change_history::History::default(),
+            no_reference_arcs: None,
         });
         store.insert_layer(Layer {
             id: LayerId(2),
@@ -381,6 +382,7 @@ mod tests {
             generation: 0,
             structure: 0,
             change_history: crate::change_history::History::default(),
+            no_reference_arcs: None,
         });
         store.insert_layer(Layer {
             id: LayerId(3),
@@ -393,6 +395,7 @@ mod tests {
             generation: 0,
             structure: 0,
             change_history: crate::change_history::History::default(),
+            no_reference_arcs: None,
         });
 
         let stack = LayerStack::gather(&store, LayerId(1));
@@ -418,6 +421,7 @@ mod tests {
             generation: 0,
             structure: 0,
             change_history: crate::change_history::History::default(),
+            no_reference_arcs: None,
         });
         store.insert_layer(Layer {
             id: LayerId(2),
@@ -430,6 +434,7 @@ mod tests {
             generation: 0,
             structure: 0,
             change_history: crate::change_history::History::default(),
+            no_reference_arcs: None,
         });
         store.insert_layer(Layer {
             id: LayerId(3),
@@ -442,6 +447,7 @@ mod tests {
             generation: 0,
             structure: 0,
             change_history: crate::change_history::History::default(),
+            no_reference_arcs: None,
         });
 
         let mut cycles = Vec::new();
@@ -501,6 +507,7 @@ mod tests {
             generation: 0,
             structure: 0,
             change_history: crate::change_history::History::default(),
+            no_reference_arcs: None,
         });
         store.insert_layer(Layer {
             id: LayerId(2),
@@ -513,6 +520,7 @@ mod tests {
             generation: 0,
             structure: 0,
             change_history: crate::change_history::History::default(),
+            no_reference_arcs: None,
         });
 
         let mut cycles = Vec::new();
@@ -544,6 +552,7 @@ mod tests {
             generation: 0,
             structure: 0,
             change_history: crate::change_history::History::default(),
+            no_reference_arcs: None,
         });
         store.insert_layer(Layer {
             id: LayerId(2),
@@ -563,6 +572,7 @@ mod tests {
             generation: 0,
             structure: 0,
             change_history: crate::change_history::History::default(),
+            no_reference_arcs: None,
         });
         store.insert_layer(Layer {
             id: LayerId(3),
@@ -575,6 +585,7 @@ mod tests {
             generation: 0,
             structure: 0,
             change_history: crate::change_history::History::default(),
+            no_reference_arcs: None,
         });
 
         let stack = LayerStack::gather(&store, LayerId(1));
@@ -620,6 +631,7 @@ mod tests {
             generation: 0,
             structure: 0,
             change_history: crate::change_history::History::default(),
+            no_reference_arcs: None,
         });
         store.insert_layer(Layer {
             id: LayerId(2),
@@ -639,6 +651,7 @@ mod tests {
             generation: 0,
             structure: 0,
             change_history: crate::change_history::History::default(),
+            no_reference_arcs: None,
         });
         store.insert_layer(Layer {
             id: LayerId(3),
@@ -651,6 +664,7 @@ mod tests {
             generation: 0,
             structure: 0,
             change_history: crate::change_history::History::default(),
+            no_reference_arcs: None,
         });
 
         let stack = LayerStack::gather(&store, LayerId(1));

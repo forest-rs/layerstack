@@ -2012,16 +2012,17 @@ fn authors_expressions(layer: &Layer) -> bool {
         .sublayers()
         .iter()
         .any(layerstack::SublayerEntry::is_expression)
-        || layer
-            .prims()
-            .values()
-            .chain(layer.variant_prims().values().flatten())
-            .any(|spec| {
-                arcs([&spec.references, &spec.payloads])
-                    || spec
-                        .variant_branches()
-                        .any(|branch| arcs([&branch.spec.references, &branch.spec.payloads]))
-            })
+        || !layer.known_without_reference_arcs()
+            && layer
+                .prims()
+                .values()
+                .chain(layer.variant_prims().values().flatten())
+                .any(|spec| {
+                    arcs([&spec.references, &spec.payloads])
+                        || spec
+                            .variant_branches()
+                            .any(|branch| arcs([&branch.spec.references, &branch.spec.payloads]))
+                })
 }
 struct Overlay<'a> {
     store: &'a InMemoryStore,

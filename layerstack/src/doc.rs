@@ -2410,6 +2410,10 @@ pub struct Layer {
     /// [`Layer::structural_generation`]).
     pub(crate) structure: u64,
     pub(crate) change_history: crate::change_history::History<LayerChange>,
+    /// The [`Layer::generation`] at which a reader found that no prim spec
+    /// authors a reference or payload ([`Layer::note_no_reference_arcs`]);
+    /// stale, and so unused, once the layer changes.
+    pub(crate) no_reference_arcs: Option<u64>,
 }
 
 /// Bounded authored evidence, independent of each stage's synchronization cursor.
@@ -2453,6 +2457,7 @@ impl PartialEq for Layer {
             generation: _,
             structure: _,
             change_history: _,
+            no_reference_arcs: _,
         } = self;
         *id == other.id
             && *sublayers == other.sublayers
@@ -2489,10 +2494,17 @@ impl Layer {
                 variant_sets(&mut variant.variant_sets, map);
             }
         }
+        // Renumbering changes no spec's arcs: a layer known to author none
+        // stays known to, and its specs need no visit.
+        let without_arcs = self.known_without_reference_arcs();
         self.touch_structure();
         self.id = map(self.id);
         for sublayer in &mut self.sublayers {
             sublayer.layer = map(sublayer.layer);
+        }
+        if without_arcs {
+            self.no_reference_arcs = Some(self.generation);
+            return;
         }
         let specs = self
             .prims
@@ -2518,7 +2530,52 @@ impl Layer {
             generation: 0,
             structure: 0,
             change_history: crate::change_history::History::default(),
+            no_reference_arcs: None,
         }
+    }
+
+    /// Records that no prim spec of this layer, in or out of a variant
+    /// branch, authors a reference or payload, as the layer now is.
+    ///
+    /// A reader that ingested none says so after building the layer, so
+    /// the passes that visit every spec's arcs ([`Layer::map_layer_ids`],
+    /// a loader looking for asset paths authored as expressions) can skip
+    /// the visit. The note lapses with the layer's next change
+    /// ([`Layer::generation`]): an edit, a replaced spec, a reload.
+    pub fn note_no_reference_arcs(&mut self) {
+        debug_assert!(
+            !self.authors_reference_arcs_in_specs(),
+            "a layer noted as authoring no reference or payload authors one"
+        );
+        self.no_reference_arcs = Some(self.generation);
+    }
+
+    /// Whether this layer is known to author no reference or payload in
+    /// any prim spec: a reader noted so ([`Layer::note_no_reference_arcs`])
+    /// and the layer has not changed since. `false` says nothing either
+    /// way.
+    #[must_use]
+    pub fn known_without_reference_arcs(&self) -> bool {
+        self.no_reference_arcs == Some(self.generation)
+    }
+
+    /// Whether some prim spec, in or out of a variant branch, authors a
+    /// reference or payload, found by visiting every spec.
+    fn authors_reference_arcs_in_specs(&self) -> bool {
+        fn arcs(references: &ListOp<Reference>, payloads: &ListOp<Reference>) -> bool {
+            !references.is_empty() || !payloads.is_empty()
+        }
+        fn in_sets(sets: &HashMap<TokenId, VariantSetSpec>) -> bool {
+            sets.values()
+                .flat_map(|set| set.variants.values())
+                .any(|variant| {
+                    arcs(&variant.references, &variant.payloads) || in_sets(&variant.variant_sets)
+                })
+        }
+        self.prims
+            .values()
+            .chain(self.variant_prims.values().flatten())
+            .any(|spec| arcs(&spec.references, &spec.payloads) || in_sets(&spec.variant_sets))
     }
 
     /// Returns this layer's stable identifier in its store.
@@ -3878,6 +3935,39 @@ mod tests {
     /// `Layer::insert_prims` places specs as `Layer::insert_prim` does each,
     /// a branch spec beside the namespace spec at its path, as one change
     /// naming every path.
+    #[test]
+    fn reference_arc_note_lasts_until_the_layer_changes() {
+        let store = InMemoryStore::default();
+        let a = store.path("/A");
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(a, PrimSpec::def());
+        assert!(!layer.known_without_reference_arcs(), "unknown until noted");
+        layer.note_no_reference_arcs();
+        assert!(layer.known_without_reference_arcs());
+        // Renumbering keeps it; any edit ends it.
+        layer.map_layer_ids(|id| LayerId(id.0 + 1));
+        assert!(layer.known_without_reference_arcs());
+        let mut renumbered = layer.clone();
+        renumbered
+            .prim_mut(a)
+            .unwrap()
+            .references
+            .prepend
+            .push(Reference::new(LayerId(9), a));
+        assert!(!renumbered.known_without_reference_arcs());
+        renumbered.map_layer_ids(|id| if id == LayerId(9) { LayerId(10) } else { id });
+        assert_eq!(
+            renumbered.prim(a).unwrap().references.prepend[0].layer,
+            LayerId(10),
+            "a layer not known to author none has its arcs renumbered"
+        );
+        layer.insert_prim(a, PrimSpec::def());
+        assert!(
+            !layer.known_without_reference_arcs(),
+            "a replaced spec ends it"
+        );
+    }
+
     #[test]
     fn inserting_prims_together_places_them_as_one_change() {
         let store = InMemoryStore::default();

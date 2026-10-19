@@ -906,6 +906,17 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
             );
             self.resolved_layers.extend(resolved);
         }
+        // No field of the file is a reference or payload list: no spec,
+        // in a variant branch or not, authors one.
+        let sections = self.sections;
+        if !sections.fields.iter().any(|field| {
+            matches!(
+                self.lookup_token(field.token_index),
+                "references" | "payload"
+            )
+        }) {
+            layer.note_no_reference_arcs();
+        }
         Ok(layer)
     }
 
@@ -3914,6 +3925,38 @@ def "Other" {}
                 let (chunked, ..) = read(limit, threads, chunk);
                 assert_eq!(chunked.unwrap_err(), expected, "{limit} {threads} {chunk}");
             }
+        }
+    }
+
+    /// A file with no reference or payload field reads as a layer known
+    /// to author none; one with either, in a variant branch or not, does
+    /// not, and neither does the layer once it is edited.
+    #[test]
+    fn a_layer_without_arc_fields_is_noted_as_authoring_none() {
+        let read = |source: &str| {
+            let (tokens, paths) = (TokenInterner::default(), PathInterner::default());
+            let text =
+                layerstack_usda::read_usda(source, LayerId(1), &tokens, &paths, &mut NoAssets);
+            let bytes = crate::writer::save_layer(&text.emitted.layer, &tokens, &paths).unwrap();
+            let read =
+                crate::read_usdc(&bytes, LayerId(1), &tokens, &paths, &mut NoAssets).unwrap();
+            (read.layer, paths, tokens)
+        };
+        let (mut layer, paths, tokens) =
+            read("#usda 1.0\ndef \"A\" {\n    int x = 1\n    def \"B\" {}\n}\n");
+        assert!(layer.known_without_reference_arcs());
+        let a = paths.intern(Path::parse_absolute("/A", &tokens).unwrap());
+        layer.prim_mut(a).unwrap();
+        assert!(
+            !layer.known_without_reference_arcs(),
+            "an edit ends the note"
+        );
+        for source in [
+            "#usda 1.0\ndef \"A\" (references = </B>) {}\ndef \"B\" {}\n",
+            "#usda 1.0\ndef \"A\" (payload = </B>) {}\ndef \"B\" {}\n",
+            "#usda 1.0\ndef \"A\" (variantSets = \"v\") {\n    variantSet \"v\" = {\n        \"x\" (references = </B>) {}\n    }\n}\ndef \"B\" {}\n",
+        ] {
+            assert!(!read(source).0.known_without_reference_arcs(), "{source}");
         }
     }
 

@@ -160,6 +160,7 @@ pub(crate) fn emit_with_arrays(
         rejected: false,
         arrays,
         registry,
+        emitted_arcs: false,
     };
     let layer = ctx.emit_layer(ast);
     EmitResult {
@@ -189,6 +190,8 @@ struct EmitCtx<'a> {
     rejections: Vec<String>,
     /// Whether the layer is rejected (see [`EmitResult::rejected`]).
     rejected: bool,
+    /// Whether a prim or variant spec authors a reference or payload.
+    emitted_arcs: bool,
 }
 
 impl EmitCtx<'_> {
@@ -322,6 +325,9 @@ impl EmitCtx<'_> {
             );
             self.resolved_layers.extend(resolved);
         }
+        if !self.emitted_arcs {
+            layer.note_no_reference_arcs();
+        }
         layer
     }
 
@@ -419,6 +425,7 @@ impl EmitCtx<'_> {
         for meta in metadata {
             match meta {
                 ast::PrimMeta::References(arc) => {
+                    self.emitted_arcs = true;
                     spec.references.merge(self.emit_arc_listop(
                         arc,
                         "Reference",
@@ -426,6 +433,7 @@ impl EmitCtx<'_> {
                     ));
                 }
                 ast::PrimMeta::Payload(arc) => {
+                    self.emitted_arcs = true;
                     spec.payloads
                         .merge(self.emit_arc_listop(arc, "Payload", !sites.is_empty()));
                 }
@@ -1052,11 +1060,13 @@ impl EmitCtx<'_> {
         for meta in metadata {
             match meta {
                 ast::PrimMeta::References(arc) => {
+                    self.emitted_arcs = true;
                     variant_spec
                         .references
                         .merge(self.emit_arc_listop(arc, "Reference", true));
                 }
                 ast::PrimMeta::Payload(arc) => {
+                    self.emitted_arcs = true;
                     variant_spec
                         .payloads
                         .merge(self.emit_arc_listop(arc, "Payload", true));
@@ -2224,6 +2234,22 @@ def \"A\" {
         let b_path = Path::parse_absolute("/B", &tokens).unwrap();
         let b_id = paths.lookup(&b_path).expect("/B");
         assert_eq!(spec.inherits.explicit.as_ref().unwrap(), &[b_id]);
+    }
+
+    #[test]
+    fn a_layer_without_arcs_is_noted_as_authoring_none() {
+        let (result, ..) =
+            emit_source("#usda 1.0\ndef \"A\" (inherits = </B>) {\n    def \"C\" {}\n}\n");
+        assert!(result.layer.known_without_reference_arcs());
+        // An arc in a nested variant branch, or on a prim, is one.
+        for src in [
+            "#usda 1.0\ndef \"A\" (prepend references = @./ref.usd@) {}\n",
+            "#usda 1.0\ndef \"A\" (payload = @./p.usd@) {}\n",
+            "#usda 1.0\ndef \"A\" (variantSets = \"v\") {\n    variantSet \"v\" = {\n        \"x\" (variantSets = \"w\") {\n            variantSet \"w\" = {\n                \"y\" (payload = @./p.usd@) {}\n            }\n        }\n    }\n}\n",
+        ] {
+            let (result, ..) = emit_source(src);
+            assert!(!result.layer.known_without_reference_arcs(), "{src}");
+        }
     }
 
     #[test]

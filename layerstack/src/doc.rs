@@ -1937,6 +1937,172 @@ pub fn remove_field(fields: &mut Vec<FieldEntry>, name: TokenId) -> Option<Field
     Some(fields.remove(index).value)
 }
 
+/// The prim specs of a layer outside variant branches, keyed by prim path
+/// ([`Layer::prims`]), read and changed as a map of them.
+///
+/// Each spec stays where it was placed until it is removed: a layer
+/// growing to more paths moves no spec, and a reader placing a spec it
+/// built moves none.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct LayerPrims {
+    specs: HashMap<PathId, Box<PrimSpec>>,
+}
+
+/// An iterator over the paths and specs of a [`LayerPrims`].
+pub type LayerPrimsIter<'a> = core::iter::Map<
+    hashbrown::hash_map::Iter<'a, PathId, Box<PrimSpec>>,
+    fn((&'a PathId, &'a Box<PrimSpec>)) -> (&'a PathId, &'a PrimSpec),
+>;
+
+/// An iterator over the paths and specs of a [`LayerPrims`], for editing.
+pub type LayerPrimsIterMut<'a> = core::iter::Map<
+    hashbrown::hash_map::IterMut<'a, PathId, Box<PrimSpec>>,
+    fn((&'a PathId, &'a mut Box<PrimSpec>)) -> (&'a PathId, &'a mut PrimSpec),
+>;
+
+impl LayerPrims {
+    /// The spec at `path`, if there is one.
+    #[must_use]
+    pub fn get(&self, path: &PathId) -> Option<&PrimSpec> {
+        self.specs.get(path).map(|spec| &**spec)
+    }
+
+    /// The spec at `path` for editing, if there is one.
+    pub fn get_mut(&mut self, path: &PathId) -> Option<&mut PrimSpec> {
+        self.specs.get_mut(path).map(|spec| &mut **spec)
+    }
+
+    /// Whether a spec is at `path`.
+    #[must_use]
+    pub fn contains_key(&self, path: &PathId) -> bool {
+        self.specs.contains_key(path)
+    }
+
+    /// The number of specs.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.specs.len()
+    }
+
+    /// Whether there are no specs.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.specs.is_empty()
+    }
+
+    /// The paths and specs, in no particular order.
+    pub fn iter(&self) -> LayerPrimsIter<'_> {
+        self.specs.iter().map(|(path, spec)| (path, &**spec))
+    }
+
+    /// The paths and specs for editing, in no particular order.
+    pub fn iter_mut(&mut self) -> LayerPrimsIterMut<'_> {
+        self.specs
+            .iter_mut()
+            .map(|(path, spec)| (path, &mut **spec))
+    }
+
+    /// The paths, in no particular order.
+    pub fn keys(&self) -> impl ExactSizeIterator<Item = &PathId> {
+        self.specs.keys()
+    }
+
+    /// The specs, in no particular order.
+    pub fn values(&self) -> impl ExactSizeIterator<Item = &PrimSpec> {
+        self.specs.values().map(|spec| &**spec)
+    }
+
+    /// The specs for editing, in no particular order.
+    pub fn values_mut(&mut self) -> impl ExactSizeIterator<Item = &mut PrimSpec> {
+        self.specs.values_mut().map(|spec| &mut **spec)
+    }
+
+    /// Places `spec` at `path`, returning the spec it replaces.
+    pub fn insert(&mut self, path: PathId, spec: PrimSpec) -> Option<PrimSpec> {
+        self.insert_boxed(path, Box::new(spec)).map(|spec| *spec)
+    }
+
+    /// Removes the spec at `path`, returning it.
+    pub fn remove(&mut self, path: &PathId) -> Option<PrimSpec> {
+        self.remove_boxed(path).map(|spec| *spec)
+    }
+
+    /// Keeps only the specs `keep` accepts.
+    pub fn retain(&mut self, mut keep: impl FnMut(&PathId, &mut PrimSpec) -> bool) {
+        self.specs.retain(|path, spec| keep(path, spec));
+    }
+
+    /// Removes every spec.
+    pub fn clear(&mut self) {
+        self.specs.clear();
+    }
+
+    /// Makes room for `additional` more specs.
+    pub fn reserve(&mut self, additional: usize) {
+        self.specs.reserve(additional);
+    }
+
+    /// [`LayerPrims::insert`], moving the spec where it is.
+    pub(crate) fn insert_boxed(
+        &mut self,
+        path: PathId,
+        spec: Box<PrimSpec>,
+    ) -> Option<Box<PrimSpec>> {
+        self.specs.insert(path, spec)
+    }
+
+    /// [`LayerPrims::remove`], leaving the spec where it is.
+    pub(crate) fn remove_boxed(&mut self, path: &PathId) -> Option<Box<PrimSpec>> {
+        self.specs.remove(path)
+    }
+
+    /// The map entry at `path`.
+    pub(crate) fn entry(
+        &mut self,
+        path: PathId,
+    ) -> hashbrown::hash_map::Entry<'_, PathId, Box<PrimSpec>, hashbrown::DefaultHashBuilder> {
+        self.specs.entry(path)
+    }
+}
+
+impl<'a> IntoIterator for &'a LayerPrims {
+    type Item = (&'a PathId, &'a PrimSpec);
+    type IntoIter = LayerPrimsIter<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+impl IntoIterator for LayerPrims {
+    type Item = (PathId, PrimSpec);
+    type IntoIter = core::iter::Map<
+        hashbrown::hash_map::IntoIter<PathId, Box<PrimSpec>>,
+        fn((PathId, Box<PrimSpec>)) -> (PathId, PrimSpec),
+    >;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.specs.into_iter().map(|(path, spec)| (path, *spec))
+    }
+}
+
+impl<'a> IntoIterator for &'a mut LayerPrims {
+    type Item = (&'a PathId, &'a mut PrimSpec);
+    type IntoIter = LayerPrimsIterMut<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter_mut()
+    }
+}
+
+impl core::ops::Index<&PathId> for LayerPrims {
+    type Output = PrimSpec;
+
+    fn index(&self, path: &PathId) -> &PrimSpec {
+        self.get(path).expect("no prim spec at the path")
+    }
+}
+
 /// A document layer.
 ///
 /// Its content is read through accessors such as [`Layer::prims`] and
@@ -1980,7 +2146,7 @@ pub struct Layer {
     /// branch if there is one, otherwise the first spec ingested for it.
     /// Specs authored for the same path inside other variant branches are
     /// kept in [`Layer::variant_prims`]; see [`Layer::prim_specs`].
-    pub(crate) prims: HashMap<PathId, PrimSpec>,
+    pub(crate) prims: LayerPrims,
     /// Further prim specs at a path already in [`Layer::prims`], each
     /// authored inside a different variant branch and identified by its
     /// [`PrimSpec::outer_variant_sites`].
@@ -2101,7 +2267,7 @@ impl Layer {
             default_prim: None,
             metadata: Vec::new(),
             relocates: Vec::new(),
-            prims: HashMap::new(),
+            prims: LayerPrims::default(),
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
@@ -2208,7 +2374,7 @@ impl Layer {
     /// Specs authored for the same path inside other variant branches are
     /// in [`Layer::variant_prims`]; [`Layer::prim_specs`] visits both.
     #[must_use]
-    pub fn prims(&self) -> &HashMap<PathId, PrimSpec> {
+    pub fn prims(&self) -> &LayerPrims {
         &self.prims
     }
 
@@ -2254,7 +2420,7 @@ impl Layer {
     /// live stage drawing on it anew; [`Layer::prim_mut`],
     /// [`Layer::insert_prim`] and [`Layer::remove_prim`] record changes
     /// confined to one path.
-    pub fn prims_mut(&mut self) -> &mut HashMap<PathId, PrimSpec> {
+    pub fn prims_mut(&mut self) -> &mut LayerPrims {
         self.touch_structure();
         &mut self.prims
     }
@@ -2513,21 +2679,29 @@ impl Layer {
     /// authored outside any variant branch takes the [`Layer::prims`] slot.
     pub fn insert_prim(&mut self, path: PathId, spec: PrimSpec) {
         self.record_change(true, Some(alloc::vec![path]));
-        self.place_prim(path, spec);
+        self.place_prim(path, Box::new(spec));
     }
 
     /// Inserts each of `specs` as [`Layer::insert_prim`] does, as one
     /// change: the layer's generation advances once, recording every path.
     /// A format reading a whole layer inserts its specs this way, so the
     /// prim map grows once, to the number of specs, rather than as they
-    /// arrive, and the layer's history holds one change for the read.
-    pub fn insert_prims(&mut self, specs: impl IntoIterator<Item = (PathId, PrimSpec)>) {
+    /// arrive, and the layer's history holds one change for the read. A
+    /// boxed spec stays where it is.
+    pub fn insert_prims<S: Into<Box<PrimSpec>>>(
+        &mut self,
+        specs: impl IntoIterator<Item = (PathId, S)>,
+    ) {
         let specs = specs.into_iter();
-        self.prims.reserve(specs.size_hint().0);
-        let mut paths = Vec::with_capacity(specs.size_hint().0);
+        // Grown once, by as many specs as may come: a reader filtering
+        // its specs knows only that many.
+        let (fewest, most) = specs.size_hint();
+        let most = most.unwrap_or(fewest);
+        self.prims.reserve(most);
+        let mut paths = Vec::with_capacity(most);
         for (path, spec) in specs {
             paths.push(path);
-            self.place_prim(path, spec);
+            self.place_prim(path, spec.into());
         }
         if !paths.is_empty() {
             self.record_change(true, Some(paths));
@@ -2536,19 +2710,22 @@ impl Layer {
 
     /// Places `spec` at `path` as [`Layer::insert_prim`] does, recording no
     /// change.
-    fn place_prim(&mut self, path: PathId, spec: PrimSpec) {
-        let displaced = match self.prims.get(&path) {
-            Some(existing) if existing.outer_variant_sites == spec.outer_variant_sites => None,
-            Some(_) if !spec.outer_variant_sites.is_empty() => {
-                insert_branch_spec(self.variant_prims.entry(path).or_default(), spec);
+    fn place_prim(&mut self, path: PathId, spec: Box<PrimSpec>) {
+        // One lookup: a read places every spec of a layer this way.
+        let mut slot = match self.prims.entry(path) {
+            hashbrown::hash_map::Entry::Vacant(slot) => {
+                slot.insert(spec);
                 return;
             }
-            Some(_) => self.prims.remove(&path),
-            None => None,
+            hashbrown::hash_map::Entry::Occupied(slot) => slot,
         };
-        self.prims.insert(path, spec);
-        if let Some(displaced) = displaced {
-            insert_branch_spec(self.variant_prims.entry(path).or_default(), displaced);
+        if slot.get().outer_variant_sites == spec.outer_variant_sites {
+            slot.insert(spec);
+        } else if !spec.outer_variant_sites.is_empty() {
+            insert_branch_spec(self.variant_prims.entry(path).or_default(), *spec);
+        } else {
+            let displaced = slot.insert(spec);
+            insert_branch_spec(self.variant_prims.entry(path).or_default(), *displaced);
         }
     }
 
@@ -3343,7 +3520,7 @@ mod tests {
         assert_eq!(together.variant_prims, one_by_one.variant_prims);
         assert_eq!(together.generation(), 1);
         assert_eq!(together.changed_paths_since(0), Some(vec![a, b]));
-        together.insert_prims([]);
+        together.insert_prims::<PrimSpec>([]);
         assert_eq!(together.generation(), 1, "no specs, no change");
     }
 

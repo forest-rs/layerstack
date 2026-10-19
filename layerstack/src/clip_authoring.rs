@@ -16,7 +16,7 @@ use crate::{
     PropertyKind, PropertyPath, PropertySpec, SublayerEntry, TokenId, TokenInterner, Value,
     VariantSetSpec,
 };
-use alloc::{collections::BTreeMap, format, string::String, sync::Arc, vec::Vec};
+use alloc::{boxed::Box, collections::BTreeMap, format, string::String, sync::Arc, vec::Vec};
 
 /// A clip layer, with an explicitly authored asset and local-to-stage time map.
 #[derive(Clone, Copy, Debug)]
@@ -153,11 +153,11 @@ fn ensure_parent_specs(layer: &mut Layer, path: PathId, paths: &mut PathInterner
         let parent = paths.intern(parent_path);
         // AOUSD §7.3.1: the pseudo-root carries child names, not a prim specifier.
         let spec = layer.prims.entry(parent).or_insert_with(|| {
-            if pseudo_root {
+            Box::new(if pseudo_root {
                 PrimSpec::default()
             } else {
                 PrimSpec::over()
-            }
+            })
         });
         if let Some(leaf) = leaf
             && !spec.authored_children.contains(&leaf)

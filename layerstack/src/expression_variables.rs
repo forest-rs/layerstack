@@ -219,6 +219,11 @@ pub(crate) struct VariableReads {
 }
 
 impl VariableReads {
+    /// Whether no lookup is recorded.
+    pub(crate) fn is_empty(&self) -> bool {
+        self.reads.is_empty()
+    }
+
     /// Records the lookups of `used` along `stacks`.
     fn record(
         &mut self,

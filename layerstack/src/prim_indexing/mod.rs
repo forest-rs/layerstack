@@ -244,10 +244,13 @@ pub(crate) fn compose(
     });
 
     if let Some(deps) = out.deps.as_mut() {
-        for (path, record) in &out.records {
-            for &layer in &record.layers {
-                deps.add_layer_opinion(layer, *path);
-            }
+        deps.reserve_arcs(out.records.values().map(|record| record.arcs.len()).sum());
+        for (path, record) in &mut out.records {
+            // A layer contributes once per spec and arc of the prim's
+            // index: count each once.
+            record.layers.sort_unstable();
+            record.layers.dedup();
+            deps.add_layer_opinions(*path, &record.layers);
             for &layer in &record.default_prim_layers {
                 deps.add_default_prim_dependency(layer, *path);
             }

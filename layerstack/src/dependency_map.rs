@@ -124,24 +124,54 @@ impl DependencyBuilder {
     /// diagnostic metadata.
     pub(crate) fn add_arc(&mut self, dep: ArcDependency) {
         if self.arc_set.insert(dep) {
+            // The edge closes a cycle only along a path from `source` to
+            // `target`: when `source` depends on nothing yet, or nothing
+            // depends on `target`, there is none, and the search for one,
+            // a walk of everything `source` depends on, is skipped. A
+            // self-dependency is ignored either way.
+            let handling = if self.graph.has_dependencies(dep.source, OPINION_EDIT)
+                && self.graph.has_dependents(dep.target, OPINION_EDIT)
+            {
+                CycleHandling::Ignore
+            } else {
+                CycleHandling::Allow
+            };
             // target depends on source: if source changes, target needs recomposition.
-            let _ = self.graph.add_dependency(
-                dep.target,
-                dep.source,
-                OPINION_EDIT,
-                CycleHandling::Ignore,
-            );
+            let _ = self
+                .graph
+                .add_dependency(dep.target, dep.source, OPINION_EDIT, handling);
         }
     }
 
-    /// Records a layer-opinion dependency edge: `prim` receives opinions
-    /// from `layer`, or is reached by a reference or payload it authors.
-    pub(crate) fn add_layer_opinion(&mut self, layer: LayerId, prim: PathId) {
-        self.layer_to_prims.entry(layer).or_default().insert(prim);
-        self.prim_to_layers
-            .entry(prim)
-            .and_modify(|layers| layers.add(layer))
-            .or_insert(MutableLayerSet::One(layer));
+    /// Records layer-opinion dependency edges: `prim` receives opinions
+    /// from each of `layers`, or is reached by a reference or payload one
+    /// authors. `layers` is sorted, without repeats.
+    pub(crate) fn add_layer_opinions(&mut self, prim: PathId, layers: &[LayerId]) {
+        debug_assert!(layers.is_sorted_by(|a, b| a < b), "sorted and unique");
+        for &layer in layers {
+            self.layer_to_prims.entry(layer).or_default().insert(prim);
+        }
+        match self.prim_to_layers.entry(prim) {
+            hashbrown::hash_map::Entry::Occupied(mut set) => {
+                for &layer in layers {
+                    set.get_mut().add(layer);
+                }
+            }
+            hashbrown::hash_map::Entry::Vacant(slot) => match layers {
+                [] => {}
+                [layer] => {
+                    slot.insert(MutableLayerSet::One(*layer));
+                }
+                _ => {
+                    slot.insert(MutableLayerSet::Many(layers.to_vec()));
+                }
+            },
+        }
+    }
+
+    /// Makes room for `additional` more arc edges.
+    pub(crate) fn reserve_arcs(&mut self, additional: usize) {
+        self.arc_set.reserve(additional);
     }
 
     /// Records that composing `prim` consulted the `defaultPrim` of `layer`,
@@ -228,14 +258,46 @@ mod tests {
     #[test]
     fn builder_deduplicates_layer_opinions() {
         let mut builder = DependencyBuilder::new();
-        builder.add_layer_opinion(LayerId(1), PathId::from_raw(5));
-        builder.add_layer_opinion(LayerId(1), PathId::from_raw(5));
+        builder.add_layer_opinions(PathId::from_raw(5), &[LayerId(1)]);
+        builder.add_layer_opinions(PathId::from_raw(5), &[LayerId(1), LayerId(2)]);
         let deps = builder.finish();
         assert_eq!(
             deps.layer_to_prims.get(&LayerId(1)).unwrap().len(),
             1,
             "duplicate layer opinions should be deduplicated"
         );
+        assert_eq!(
+            **deps.prim_to_layers.get(&PathId::from_raw(5)).unwrap(),
+            [LayerId(1), LayerId(2)]
+        );
+    }
+
+    #[test]
+    fn an_arc_closing_a_cycle_is_ignored_wherever_it_is_added() {
+        let arc = |source, target| ArcDependency {
+            source: PathId::from_raw(source),
+            target: PathId::from_raw(target),
+            arc_kind: ArcKind::References,
+            layer: LayerId(1),
+        };
+        let mut builder = DependencyBuilder::new();
+        // 2 depends on 1, 3 on 2: nothing to search for yet.
+        builder.add_arc(arc(1, 2));
+        builder.add_arc(arc(2, 3));
+        // 1 depending on 3 would close 1 -> 3 -> 2 -> 1.
+        builder.add_arc(arc(3, 1));
+        // 4 depending on 3 closes nothing, though 3 depends on 2.
+        builder.add_arc(arc(3, 4));
+        let deps = builder.finish();
+        let depends = |key| {
+            deps.graph
+                .dependencies(PathId::from_raw(key), OPINION_EDIT)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(depends(1), []);
+        assert_eq!(depends(2), [PathId::from_raw(1)]);
+        assert_eq!(depends(3), [PathId::from_raw(2)]);
+        assert_eq!(depends(4), [PathId::from_raw(3)]);
     }
 
     #[test]

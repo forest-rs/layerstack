@@ -41,7 +41,7 @@ use crate::numeric_array::*;
 use crate::section::{CrateSections, PathNode};
 use crate::value_rep::{
     CrateArrayEdit, CrateArrayEditOp, CrateListOp, CrateValue, DecodeBudget, DecodedField,
-    FloatArray, ListOpParts, RawValueRep, TextKind, decode_field_within,
+    FloatArray, Items, ListOpParts, RawValueRep, TextKind, decode_field_within,
     decode_path_list_op_indices, decode_text_index, decode_text_indices,
     decode_token_vector_indices, scalar_text_kind,
 };
@@ -978,7 +978,7 @@ impl<'a> AssembleCtx<'a> {
         Ok(())
     }
 
-    /// Builds a [`PrimSpec`] from decoded fields, also returning the
+    /// Fills `spec`, a new [`PrimSpec`], from decoded fields, returning the
     /// authored property order (`propertyChildren`) when present.
     ///
     /// Spec: AOUSD Core §7.6.2 (prim spec fields).
@@ -986,8 +986,8 @@ impl<'a> AssembleCtx<'a> {
         &mut self,
         spec_path: SpecName<'_>,
         fields: &[(&str, DecodedField<'_>)],
-    ) -> Result<(PrimSpec, Option<Vec<TokenId>>), UsdcError> {
-        let mut spec = PrimSpec::default();
+        spec: &mut PrimSpec,
+    ) -> Result<Option<Vec<TokenId>>, UsdcError> {
         let mut property_children = None;
         self.in_branch = self.in_branch_of(spec_path);
 
@@ -1094,7 +1094,7 @@ impl<'a> AssembleCtx<'a> {
             }
         }
 
-        Ok((spec, property_children))
+        Ok(property_children)
     }
 
     /// Builds the prim spec `index` of the spec table, at `spec_path`,
@@ -1113,18 +1113,21 @@ impl<'a> AssembleCtx<'a> {
         if shares && let Some(shared) = self.shared_prims.get(&fieldset) {
             self.budget.charge(shared.charged)?;
             decoded[index] = true;
-            return Ok(shared.spec.clone());
+            let (spec, children) = &shared.spec;
+            return Ok((Box::new(copy_prim(spec)), children.clone()));
         }
         let (used, diagnostics) = (self.budget.used(), self.diagnostics.len());
         self.collect_spec_fields(index, decoded, fields)?;
-        let (prim, children) = self.build_prim_spec(spec_path, fields)?;
-        let built = (Box::new(prim), children.map(Arc::from));
+        // Built where it is kept: a spec is too large to move cheaply.
+        let mut prim = Box::new(PrimSpec::default());
+        let children = self.build_prim_spec(spec_path, fields, &mut prim)?;
+        let built = (prim, children.map(Arc::from));
         let resolves = fields
             .iter()
             .any(|(name, _)| matches!(*name, "references" | "payload"));
         if shares && !resolves && self.diagnostics.len() == diagnostics {
             let charged = self.budget.used() - used;
-            let spec = built.clone();
+            let spec = (Box::new(copy_prim(&built.0)), built.1.clone());
             self.shared_prims.insert(fieldset, Shared { spec, charged });
         }
         Ok(built)
@@ -1150,11 +1153,18 @@ impl<'a> AssembleCtx<'a> {
         }
         let (used, diagnostics) = (self.budget.used(), self.diagnostics.len());
         self.collect_spec_fields(index, decoded, fields)?;
-        let spec = Arc::new(if is_attribute {
-            self.build_attribute_spec(spec_path, fields)?
+        // Built where it is kept: a spec is too large to move cheaply.
+        let mut spec = Arc::new(if is_attribute {
+            PropertySpec::attribute()
         } else {
-            self.build_relationship_spec(spec_path, fields)?
+            PropertySpec::relationship()
         });
+        let built = Arc::get_mut(&mut spec).expect("a new spec");
+        if is_attribute {
+            self.build_attribute_spec(spec_path, fields, built)?;
+        } else {
+            self.build_relationship_spec(spec_path, fields, built)?;
+        }
         if shares && self.diagnostics.len() == diagnostics {
             let charged = self.budget.used() - used;
             let shared = Shared {
@@ -1219,8 +1229,28 @@ impl<'a> AssembleCtx<'a> {
     ) -> Result<(), UsdcError> {
         // Properties directly on a variant (`/P{v=x}.b`), by variant path.
         let mut variant_properties: HashMap<&str, Vec<PropertyEntry>> = HashMap::new();
+        // Only a path holding a `}` names a variant: in a file without one,
+        // each property's path is charged, all at once, and passed over.
+        let paths = &self.sections.paths;
+        let any_close = (0..paths.len()).any(|at| paths.spelling(at).is_some_and(|s| s.close()));
+        if !any_close {
+            let mut units = 0_usize;
+            for spec in &self.sections.specs {
+                if matches!(spec.form, SpecForm::Attribute | SpecForm::Relationship) {
+                    let len = paths.text_len(spec.path_index as usize).ok_or(
+                        UsdcError::Inconsistent {
+                            message: "path index out of range",
+                        },
+                    )?;
+                    units = units.saturating_add(len / 16);
+                }
+            }
+            self.budget.charge_elements(units)?;
+        }
         for (i, spec) in self.sections.specs.iter().enumerate() {
-            if spec.form != SpecForm::Attribute && spec.form != SpecForm::Relationship {
+            if !any_close
+                || (spec.form != SpecForm::Attribute && spec.form != SpecForm::Relationship)
+            {
                 continue;
             }
             let index = spec.path_index;
@@ -1252,9 +1282,13 @@ impl<'a> AssembleCtx<'a> {
             };
             self.collect_spec_fields(i, decoded, fields)?;
             let property = if spec.form == SpecForm::Attribute {
-                self.build_attribute_spec(path_str.into(), fields)?
+                let mut property = PropertySpec::attribute();
+                self.build_attribute_spec(path_str.into(), fields, &mut property)?;
+                property
             } else {
-                self.build_relationship_spec(path_str.into(), fields)?
+                let mut property = PropertySpec::relationship();
+                self.build_relationship_spec(path_str.into(), fields, &mut property)?;
+                property
             };
             let prop_tok = self.tokens.intern(prop_name);
             set_property_vec(
@@ -1827,7 +1861,7 @@ impl<'a> AssembleCtx<'a> {
         })
     }
 
-    /// Builds an attribute [`PropertySpec`] from its crate fields, keeping
+    /// Fills `spec`, a new attribute [`PropertySpec`], from its crate fields, keeping
     /// every authored value slot.
     ///
     /// Spec: AOUSD Core §7.6.4 (attribute spec fields; §7.6.4.2.3: an
@@ -1836,8 +1870,9 @@ impl<'a> AssembleCtx<'a> {
         &mut self,
         spec_path: SpecName<'_>,
         fields: &[(&str, DecodedField<'_>)],
-    ) -> Result<PropertySpec, UsdcError> {
-        let mut spec = PropertySpec::typed_attribute(self.attribute_property_type(fields));
+        spec: &mut PropertySpec,
+    ) -> Result<(), UsdcError> {
+        spec.type_name = Some(self.attribute_property_type(fields));
         for (name, value) in fields {
             match (*name, value.value()) {
                 ("default", _) => spec.default = Some(self.convert_field_value(value)),
@@ -1872,7 +1907,7 @@ impl<'a> AssembleCtx<'a> {
                 // Read by `attribute_property_type`; `connectionChildren`
                 // restates `connectionPaths`.
                 ("typeName" | "connectionChildren", _) => {}
-                _ => self.apply_property_field(spec_path, name, value, &mut spec)?,
+                _ => self.apply_property_field(spec_path, name, value, spec)?,
             }
         }
         if let Some(property_type) = spec.type_name.as_ref() {
@@ -1898,7 +1933,7 @@ impl<'a> AssembleCtx<'a> {
                 }
             }
         }
-        Ok(spec)
+        Ok(())
     }
 
     /// Applies a field shared by attribute and relationship specs: the
@@ -1939,24 +1974,24 @@ impl<'a> AssembleCtx<'a> {
         Ok(())
     }
 
-    /// Builds a relationship [`PropertySpec`] from its crate fields.
+    /// Fills `spec`, a new relationship [`PropertySpec`], from its crate fields.
     ///
     /// Spec: AOUSD Core §7.6.5 (relationship spec fields).
     fn build_relationship_spec(
         &mut self,
         spec_path: SpecName<'_>,
         fields: &[(&str, DecodedField<'_>)],
-    ) -> Result<PropertySpec, UsdcError> {
-        let mut spec = PropertySpec::relationship();
+        spec: &mut PropertySpec,
+    ) -> Result<(), UsdcError> {
         for (name, value) in fields {
             match *name {
                 "targetPaths" => spec.targets = Some(self.convert_connection_value(value)?),
                 // `targetChildren` restates `targetPaths`.
                 "targetChildren" => {}
-                _ => self.apply_property_field(spec_path, name, value, &mut spec)?,
+                _ => self.apply_property_field(spec_path, name, value, spec)?,
             }
         }
-        Ok(spec)
+        Ok(())
     }
 
     /// The declared type of an attribute spec with `fields`: its
@@ -2144,7 +2179,7 @@ impl<'a> AssembleCtx<'a> {
     }
 
     /// [`Self::convert_target_listop`] for a list op of path table indices.
-    fn target_list_op_at(&mut self, parts: &ListOpParts<u32>) -> ListOp<TargetPath> {
+    fn target_list_op_at(&mut self, parts: &ListOpParts<Items<u32>>) -> ListOp<TargetPath> {
         let mut convert = |items: &[u32]| -> Vec<TargetPath> {
             items
                 .iter()
@@ -2721,6 +2756,48 @@ impl<'a> AssembleCtx<'a> {
 // ---------------------------------------------------------------------------
 // Path parsing helpers
 // ---------------------------------------------------------------------------
+
+/// A copy of `spec`, a spec built for a fieldset specs share, cloning only
+/// what it authors: most of a prim spec's lists and maps are empty, and
+/// cloning each costs as much as building the spec.
+fn copy_prim(spec: &PrimSpec) -> PrimSpec {
+    fn list<T: Clone>(list: &ListOp<T>) -> ListOp<T> {
+        if list.is_empty() {
+            ListOp::new()
+        } else {
+            list.clone()
+        }
+    }
+    fn map<K: Clone, V: Clone>(map: &HashMap<K, V>) -> HashMap<K, V> {
+        if map.is_empty() {
+            HashMap::new()
+        } else {
+            map.clone()
+        }
+    }
+    fn vec<T: Clone>(vec: &[T]) -> Vec<T> {
+        vec.to_vec()
+    }
+    PrimSpec {
+        specifier: spec.specifier,
+        type_name: spec.type_name,
+        fields: vec(&spec.fields),
+        properties: vec(&spec.properties),
+        property_order: spec.property_order.clone(),
+        outer_variant_sites: vec(&spec.outer_variant_sites),
+        authored_children: vec(&spec.authored_children),
+        variant_selections: map(&spec.variant_selections),
+        variant_sets: map(&spec.variant_sets),
+        variant_set_names: list(&spec.variant_set_names),
+        references: list(&spec.references),
+        inherits: list(&spec.inherits),
+        specializes: list(&spec.specializes),
+        payloads: list(&spec.payloads),
+        prim_order: spec.prim_order.clone(),
+        instanceable: spec.instanceable,
+        active: spec.active,
+    }
+}
 
 /// Appends the `names` that `list` does not hold yet, in order.
 ///

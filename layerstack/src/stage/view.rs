@@ -6,12 +6,12 @@
 
 use alloc::{string::String, sync::Arc, vec::Vec};
 
-use super::{Attribute, Object, Prim, PrimPredicate, Relationship, Stage};
+use super::{Attribute, Prim, PrimPredicate, Property, Relationship, Stage};
 use crate::{
     Value,
     doc::LayerStore,
     interner::{TokenId, TokenInterner},
-    path::{PathId, PathInterner, PropertyPath, TargetPath},
+    path::{PathId, PathInterner, PropertyPath},
 };
 
 /// A composed [`Stage`] bound to the [`LayerStore`] it was composed from.
@@ -101,6 +101,34 @@ impl PrimPathArg for &str {
 impl PrimPathArg for &String {
     fn prim_path(&self, paths: &PathInterner, tokens: &TokenInterner) -> Option<PathId> {
         lookup_prim(self, paths, tokens)
+    }
+}
+
+/// A name given to a handle query, such as a property name or a metadata
+/// key: text (`"radius"`) or an interned token.
+///
+/// Looking text up never interns it; text the store has never interned
+/// names nothing, so the query answers `None`.
+pub trait NameArg {
+    /// The interned token this names, if the store has interned it.
+    fn token(&self, tokens: &TokenInterner) -> Option<TokenId>;
+}
+
+impl NameArg for TokenId {
+    fn token(&self, _: &TokenInterner) -> Option<TokenId> {
+        Some(*self)
+    }
+}
+
+impl NameArg for &str {
+    fn token(&self, tokens: &TokenInterner) -> Option<TokenId> {
+        tokens.lookup(self)
+    }
+}
+
+impl NameArg for &String {
+    fn token(&self, tokens: &TokenInterner) -> Option<TokenId> {
+        tokens.lookup(self)
     }
 }
 
@@ -197,26 +225,20 @@ impl<'a> StageView<'a> {
     /// The composed attribute at `path` (`"/World/Arm.points"`).
     #[doc(alias = "UsdStage::GetAttributeAtPath")]
     pub fn attribute(self, path: impl PropertyPathArg) -> Option<Attribute<'a>> {
-        match self.property(path)? {
-            Object::Attribute(attribute) => Some(attribute),
-            _ => None,
-        }
+        self.property(path)?.as_attribute()
     }
 
     /// The composed relationship at `path`.
     #[doc(alias = "UsdStage::GetRelationshipAtPath")]
     pub fn relationship(self, path: impl PropertyPathArg) -> Option<Relationship<'a>> {
-        match self.property(path)? {
-            Object::Relationship(relationship) => Some(relationship),
-            _ => None,
-        }
+        self.property(path)?.as_relationship()
     }
 
     /// The composed attribute or relationship at `path`.
     #[doc(alias = "UsdStage::GetPropertyAtPath")]
-    pub fn property(self, path: impl PropertyPathArg) -> Option<Object<'a>> {
+    pub fn property(self, path: impl PropertyPathArg) -> Option<Property<'a>> {
         let path = path.property_path(self.store.paths(), self.store.tokens())?;
-        self.stage.object(TargetPath::Property(path), self.store)
+        self.stage.property(path, self.store)
     }
 
     /// The composed prim the root layer's `defaultPrim` names (a root
@@ -271,7 +293,7 @@ impl<'a> StageView<'a> {
 /// value that does not convert reads as nothing. The
 /// `layerstack_conformance` `typed_reads` oracle records both from a
 /// program built against OpenUSD. To see the opinion a read skipped, use
-/// [`Stage::explain_property_value`](crate::Stage::explain_property_value),
+/// [`Attribute::explain`],
 /// which marks it incompatible.
 ///
 /// Spec: AOUSD Core §6 (value types), §12.3 (value resolution).
@@ -605,6 +627,139 @@ mod tests {
         );
         let object = view.property("/World.radius").unwrap();
         assert_eq!(object.to_string(), "/World.radius");
+    }
+
+    /// The prim, property and attribute handles answer the queries that
+    /// used to take a `(prim, name)` pair on the stage.
+    #[test]
+    fn handles_answer_prim_and_property_queries() {
+        use crate::{
+            PrimPredicate, PropertyDefinition, ResolvedValue, SchemaDefinition, SchemaRegistry,
+            Specifier,
+        };
+        let mut store = InMemoryStore::default();
+        let (world, arm, gone, base) = (
+            store.path("/World"),
+            store.path("/World/Arm"),
+            store.path("/World/Gone"),
+            store.path("/Base"),
+        );
+        let (shape, size, note, kind, tag) = (
+            store.tokens.intern("Shape"),
+            store.tokens.intern("size"),
+            store.tokens.intern("note"),
+            store.tokens.intern("kind"),
+            store.tokens.intern("prop"),
+        );
+        let mut builder = SchemaRegistry::builder();
+        builder.register(
+            SchemaDefinition::typed(shape)
+                .with_property(PropertyDefinition::attribute(size).with_fallback(1.5_f64)),
+        );
+        let options = StageOptions {
+            schemas: Some(alloc::sync::Arc::new(builder.build(&store.tokens))),
+            ..StageOptions::default()
+        };
+        let mut custom = double(4.0);
+        custom.custom = true;
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(
+            world,
+            PrimSpec::def()
+                .with_type_name(shape)
+                .with_field(kind, Value::Token(tag))
+                .with_children(vec![
+                    store.tokens.intern("Arm"),
+                    store.tokens.intern("Gone"),
+                ])
+                .with_property(note, custom),
+        );
+        layer.insert_prim(arm, PrimSpec::over());
+        layer.insert_prim(gone, PrimSpec::def().with_active(false));
+        layer.insert_prim(base, PrimSpec::class());
+        store.insert_layer(layer);
+        let stage = Stage::compose(&mut store, LayerId(1), options);
+        let view = stage.view(&store);
+
+        let world = view.prim("/World").unwrap();
+        assert_eq!((world.name(), world.specifier()), ("World", Specifier::Def));
+        assert_eq!(world.type_name(), Some("Shape"));
+        assert_eq!(world.type_name_token(), Some(shape));
+        assert!(world.definition().unwrap().is_a(shape));
+        assert!(world.is_defined() && world.is_active() && world.is_loaded());
+        assert!(!world.is_abstract() && !world.is_instance() && !world.is_instance_proxy());
+        assert_eq!(world.parent().map(|p| p.to_string()).as_deref(), Some("/"));
+        assert!(view.pseudo_root().unwrap().parent().is_none());
+        assert!(view.prim("/Base").unwrap().is_abstract());
+        let arm = view.prim("/World/Arm").unwrap();
+        assert_eq!(arm.specifier(), Specifier::Over);
+        assert!(!arm.is_defined());
+
+        // Metadata, by name or token, with its explanation and opinions.
+        assert_eq!(
+            world.metadata("kind").map(|r| r.value),
+            Some(ResolvedValue::Scalar(Value::Token(tag)))
+        );
+        assert_eq!(world.metadata(kind), world.metadata("kind"));
+        assert!(world.metadata("unheard-of").is_none());
+        let explained = world.explain_metadata("kind").unwrap();
+        assert_eq!(explained.contributors().count(), 1);
+        assert_eq!(world.metadata_opinions("kind").len(), 1);
+        assert!(
+            world.metadata_opinions("note").is_empty(),
+            "a property is not metadata"
+        );
+
+        // Children: active ones, all of them, or as a predicate admits.
+        let names = |children: Vec<crate::Prim<'_>>| -> Vec<String> {
+            children.iter().map(ToString::to_string).collect()
+        };
+        assert_eq!(names(world.children().collect()), ["/World/Arm"]);
+        assert_eq!(
+            names(world.all_children().collect()),
+            ["/World/Arm", "/World/Gone"]
+        );
+        assert!(
+            world
+                .filtered_children(PrimPredicate::DEFAULT)
+                .next()
+                .is_none(),
+            "the over is not defined"
+        );
+        assert_eq!(world.children().len(), 1);
+
+        // Properties: authored, schema-defined, and their declarations.
+        assert_eq!(world.property_names(), ["note", "size"]);
+        assert_eq!(world.authored_property_names(), ["note"]);
+        let paths: Vec<String> = world.properties().iter().map(ToString::to_string).collect();
+        assert_eq!(paths, ["/World.note", "/World.size"]);
+        assert_eq!(world.authored_properties().len(), 1);
+        let note = world.property("note").unwrap();
+        assert!(note.is_custom() && note.is_authored());
+        assert_eq!(note.prim().path(), world.path());
+        assert!(note.definition().is_none());
+        assert_eq!(note.opinions().len(), 1);
+        let size = world.attribute("size").unwrap();
+        assert!(!size.is_custom() && !size.is_authored());
+        assert!(size.declaration().is_none() && size.definition().is_some());
+        assert_eq!(size.value::<f64>(Time::Default), Some(1.5), "the fallback");
+        assert!(
+            size.authored_value(Time::Default).is_none(),
+            "nothing is authored"
+        );
+        assert!(world.relationship("size").is_none());
+        assert_eq!(
+            world.prim_stack().len(),
+            world.sources().len(),
+            "one site, reached once"
+        );
+        assert_eq!(world.composition_graph().nodes().count(), 1);
+        assert!(world.variant_sets().is_empty() && world.variant_selections().is_empty());
+        assert!(world.prototype().is_none() && world.dynamic_dependency().is_none());
+        assert_eq!(
+            world.can_apply("NoSuchAPI", None),
+            Err(crate::CannotApply::NotAnAppliedSchema)
+        );
     }
 
     /// An explanation's value is the value the handle reads, at every time.

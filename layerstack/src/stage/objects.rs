@@ -2,11 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 //! Borrowed generic USD views and caller-owned retained attribute evaluation.
-//! AOUSD Core §11–§13; OpenUSD `UsdPrim`, `UsdAttribute`, `UsdRelationship`,
-//! `UsdAttributeQuery`. Views borrow immutable snapshots; queries never hide
-//! synchronization or keep a mutable stage borrowed between evaluations.
+//! AOUSD Core §11–§13; OpenUSD `UsdPrim`, `UsdProperty`, `UsdAttribute`,
+//! `UsdRelationship`, `UsdAttributeQuery`. Views borrow immutable snapshots;
+//! queries never hide synchronization or keep a mutable stage borrowed
+//! between evaluations.
+use alloc::collections::BTreeMap;
+
 use super::*;
-use crate::{FromValue, PropertyKind, TargetPath};
+use crate::{DynamicDependency, FromValue, NameArg};
 
 /// A generic object in a composed snapshot.
 #[derive(Clone, Copy, Debug)]
@@ -18,7 +21,12 @@ pub enum Object<'a> {
     /// An authored or schema-defined relationship.
     Relationship(Relationship<'a>),
 }
-/// Borrowed prim view, including generic properties and composed status.
+/// A composed prim of a stage, bound to the store the stage was composed
+/// from: the handle every prim query goes through.
+///
+/// Get one from a [`StageView`] (`view.prim("/World")`), or from
+/// [`Stage::prim`]. It is `Copy` and borrows the stage and store; names go
+/// in as text or tokens ([`NameArg`]) and come out as text.
 #[derive(Clone, Copy)]
 #[doc(alias = "UsdPrim")]
 pub struct Prim<'a> {
@@ -33,34 +41,75 @@ impl core::fmt::Debug for Prim<'_> {
             .finish_non_exhaustive()
     }
 }
-/// Borrowed attribute view. Creation checks its composed property kind.
+/// A composed property of a prim, attribute or relationship: what the two
+/// have in common (its name, declaration, schema definition, metadata and
+/// opinions).
+///
+/// [`Attribute`] and [`Relationship`] deref to it; [`Self::as_attribute`]
+/// and [`Self::as_relationship`] go the other way. A property is
+/// composed when an opinion declares it or a schema of its prim defines it.
 #[derive(Clone, Copy)]
-#[doc(alias = "UsdAttribute")]
-pub struct Attribute<'a> {
+#[doc(alias = "UsdProperty")]
+pub struct Property<'a> {
     stage: &'a Stage,
     store: &'a dyn LayerStore,
     path: PropertyPath,
 }
-impl core::fmt::Debug for Attribute<'_> {
+impl core::fmt::Debug for Property<'_> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("Attribute")
+        f.debug_struct("Property")
             .field("path", &self.path)
             .finish_non_exhaustive()
     }
 }
-/// Borrowed relationship view. Creation checks its composed property kind.
+/// A composed attribute. Creation checks its composed property kind; the
+/// queries every property has are [`Property`]'s, which it derefs to.
+#[derive(Clone, Copy)]
+#[doc(alias = "UsdAttribute")]
+pub struct Attribute<'a> {
+    property: Property<'a>,
+}
+impl core::fmt::Debug for Attribute<'_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Attribute")
+            .field("path", &self.property.path)
+            .finish_non_exhaustive()
+    }
+}
+/// A composed relationship. Creation checks its composed property kind;
+/// the queries every property has are [`Property`]'s, which it derefs to.
 #[derive(Clone, Copy)]
 #[doc(alias = "UsdRelationship")]
 pub struct Relationship<'a> {
-    stage: &'a Stage,
-    store: &'a dyn LayerStore,
-    path: PropertyPath,
+    property: Property<'a>,
 }
 impl core::fmt::Debug for Relationship<'_> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Relationship")
-            .field("path", &self.path)
+            .field("path", &self.property.path)
             .finish_non_exhaustive()
+    }
+}
+impl<'a> core::ops::Deref for Attribute<'a> {
+    type Target = Property<'a>;
+    fn deref(&self) -> &Property<'a> {
+        &self.property
+    }
+}
+impl<'a> core::ops::Deref for Relationship<'a> {
+    type Target = Property<'a>;
+    fn deref(&self) -> &Property<'a> {
+        &self.property
+    }
+}
+impl<'a> From<Attribute<'a>> for Property<'a> {
+    fn from(attribute: Attribute<'a>) -> Self {
+        attribute.property
+    }
+}
+impl<'a> From<Relationship<'a>> for Property<'a> {
+    fn from(relationship: Relationship<'a>) -> Self {
+        relationship.property
     }
 }
 /// The prim's path (`/World/Arm`).
@@ -69,16 +118,22 @@ impl core::fmt::Display for Prim<'_> {
         f.write_str(&self.store.paths().display(self.path, self.store.tokens()))
     }
 }
+/// The property's path (`/World/Arm.points`).
+impl core::fmt::Display for Property<'_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(&self.path.display(self.store.paths(), self.store.tokens()))
+    }
+}
 /// The attribute's path (`/World/Arm.points`).
 impl core::fmt::Display for Attribute<'_> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.write_str(&self.path.display(self.store.paths(), self.store.tokens()))
+        self.property.fmt(f)
     }
 }
 /// The relationship's path (`/World/Arm.material:binding`).
 impl core::fmt::Display for Relationship<'_> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.write_str(&self.path.display(self.store.paths(), self.store.tokens()))
+        self.property.fmt(f)
     }
 }
 /// The object's path.
@@ -97,7 +152,8 @@ impl Stage {
     pub fn store_identity(&self) -> Option<&crate::StoreIdentity> {
         self.store_identity.as_ref()
     }
-    /// Views a populated prim in this immutable snapshot.
+    /// The composed prim at `path`, active or not; `None` when the stage
+    /// composes no prim there. [`StageView::prim`] also takes text.
     #[doc(alias = "UsdStage::GetPrimAtPath")]
     #[doc(alias = "GetPrimAtPath")]
     pub fn prim<'a>(&'a self, path: PathId, store: &'a dyn LayerStore) -> Option<Prim<'a>> {
@@ -107,25 +163,27 @@ impl Stage {
             path,
         })
     }
-    /// Views a concrete prim or property after checking its composed existence.
+    /// The composed prim, attribute or relationship at `path`.
     #[doc(alias = "UsdStage::GetObjectAtPath")]
     #[doc(alias = "GetObjectAtPath")]
     pub fn object<'a>(&'a self, path: TargetPath, store: &'a dyn LayerStore) -> Option<Object<'a>> {
         match path {
             TargetPath::Prim(path) => self.prim(path, store).map(Object::Prim),
-            TargetPath::Property(path) => match self.property_kind(path)? {
-                PropertyKind::Attribute => Some(Object::Attribute(Attribute {
-                    stage: self,
-                    store,
-                    path,
-                })),
-                PropertyKind::Relationship => Some(Object::Relationship(Relationship {
-                    stage: self,
-                    store,
-                    path,
-                })),
-            },
+            TargetPath::Property(path) => self.property(path, store).map(Property::into_object),
         }
+    }
+    /// The composed property at `path`: one an opinion declares or a
+    /// schema of its prim defines.
+    pub(crate) fn property<'a>(
+        &'a self,
+        path: PropertyPath,
+        store: &'a dyn LayerStore,
+    ) -> Option<Property<'a>> {
+        self.property_kind(path).map(|_| Property {
+            stage: self,
+            store,
+            path,
+        })
     }
 }
 impl<'a> Prim<'a> {
@@ -135,18 +193,118 @@ impl<'a> Prim<'a> {
     pub fn path(self) -> PathId {
         self.path
     }
+    /// The prim's name (`Arm`); empty for the pseudo-root.
+    #[doc(alias = "UsdPrim::GetName")]
+    #[doc(alias = "GetName")]
+    pub fn name(self) -> &'a str {
+        let path = self.store.paths().resolve(self.path);
+        path.leaf()
+            .map_or("", |name| self.store.tokens().resolve(name))
+    }
+    /// The parent prim; `None` for the pseudo-root.
+    #[doc(alias = "UsdPrim::GetParent")]
+    #[doc(alias = "GetParent")]
+    pub fn parent(self) -> Option<Self> {
+        let parent = self.store.paths().parent(self.path)?;
+        self.stage.prim(parent, self.store)
+    }
+    /// The stage and store this prim belongs to, as a view.
+    pub fn view(self) -> StageView<'a> {
+        self.stage.view(self.store)
+    }
     /// Composed status, captured by this view's immutable snapshot.
     pub fn status(self) -> PrimStatus {
         self.stage
             .prim_status(self.path, self.store)
             .expect("populated view")
     }
+    /// Whether the prim is active. An inactive prim stays on the stage
+    /// to be inspected, without its descendants.
+    ///
+    /// Spec: AOUSD Core §11.3.1.
+    #[doc(alias = "UsdPrim::IsActive")]
+    #[doc(alias = "IsActive")]
+    pub fn is_active(self) -> bool {
+        self.stage.is_active(self.path)
+    }
+    /// Whether the prim is active and every payload on it and its
+    /// ancestors is included by the stage's load rules.
+    ///
+    /// Spec: AOUSD Core §10.3.2.7, §11.3.
+    #[doc(alias = "UsdPrim::IsLoaded")]
+    #[doc(alias = "IsLoaded")]
+    pub fn is_loaded(self) -> bool {
+        self.stage.is_loaded(self.path, self.store.paths())
+    }
+    /// Whether the prim and all its ancestors resolve a defining specifier
+    /// (`def` or `class`).
+    ///
+    /// Spec: AOUSD Core §11.5.
+    #[doc(alias = "UsdPrim::IsDefined")]
+    #[doc(alias = "IsDefined")]
+    pub fn is_defined(self) -> bool {
+        self.stage.is_defined(self.path, self.store)
+    }
+    /// Whether the prim or one of its ancestors resolves the specifier
+    /// `class`.
+    ///
+    /// Spec: AOUSD Core §11.5.
+    #[doc(alias = "UsdPrim::IsAbstract")]
+    #[doc(alias = "IsAbstract")]
+    pub fn is_abstract(self) -> bool {
+        self.stage.is_abstract(self.path, self.store)
+    }
+    /// Whether the prim is a native instance root: its children are
+    /// instance proxies of its prototype ([`Self::prototype`]).
+    ///
+    /// Spec: AOUSD Core §11.3.3 (scene-graph instancing).
+    #[doc(alias = "UsdPrim::IsInstance")]
+    #[doc(alias = "IsInstance")]
+    pub fn is_instance(self) -> bool {
+        self.stage.is_instance(self.path)
+    }
+    /// Whether the prim is beneath a native instance root.
+    #[doc(alias = "UsdPrim::IsInstanceProxy")]
+    #[doc(alias = "IsInstanceProxy")]
+    pub fn is_instance_proxy(self) -> bool {
+        self.stage.is_instance_proxy(self.path, self.store.paths())
+    }
+    /// The prototype of an instance root; `None` for any other prim.
+    #[doc(alias = "UsdPrim::GetPrototype")]
+    #[doc(alias = "GetPrototype")]
+    pub fn prototype(self) -> Option<PrototypeId> {
+        self.stage.instance_prototype(self.path)
+    }
+    /// The resolved specifier: `def` when the strongest defining opinion
+    /// is a `def`, `class` when it is a `class`, `over` when no opinion
+    /// defines the prim. A `class` reached through an inherit of the prim
+    /// itself is weaker than every other defining opinion. The pseudo-root
+    /// is `def`.
+    ///
+    /// OpenUSD: `UsdPrim::GetSpecifier` (`_GetPrimSpecifierImpl`).
+    ///
+    /// Spec: AOUSD Core §12.2.1 (specifier resolution).
+    #[doc(alias = "UsdPrim::GetSpecifier")]
+    #[doc(alias = "GetSpecifier")]
+    pub fn specifier(self) -> Specifier {
+        self.stage
+            .resolve_specifier(self.path, self.store)
+            .unwrap_or(Specifier::Over)
+    }
     /// Authored type name (`Xform`); fallback mapping does not change it.
+    /// An empty type name and `__AnyType__` are no type name.
+    ///
+    /// Spec: AOUSD Core §7.6 (`typeName`), §12.2.3.
     #[doc(alias = "UsdPrim::GetTypeName")]
     #[doc(alias = "GetTypeName")]
     pub fn type_name(self) -> Option<&'a str> {
-        let name = self.stage.resolve_type_name(self.path)?;
+        let name = self.type_name_token()?;
         Some(self.store.tokens().resolve(name))
+    }
+    /// The token of [`Self::type_name`], for looking the type up in a
+    /// [`SchemaRegistry`], which names schemas by token.
+    pub fn type_name_token(self) -> Option<TokenId> {
+        self.stage.resolve_type_name(self.path)
     }
     /// Effective schema type, including `fallbackPrimTypes` mapping.
     pub fn schema_type_name(self) -> Option<&'a str> {
@@ -160,32 +318,143 @@ impl<'a> Prim<'a> {
         let name = identity.mapped_type_name.or(identity.type_name)?;
         Some(self.store.tokens().resolve(name))
     }
+    /// The prim definition: the prim's typed schema (or none: it is
+    /// typeless), its applied schemas in strength order, and the
+    /// properties they define. Empty when the stage has no schemas
+    /// ([`StageOptions::schemas`]). `None` only while a partial composition
+    /// has not yet typed the prim.
+    ///
+    /// ```
+    /// use std::sync::Arc;
+    ///
+    /// use layerstack::{
+    ///     InMemoryStore, Layer, LayerId, PrimSpec, PropertyDefinition, SchemaDefinition,
+    ///     SchemaRegistry, Stage, StageOptions,
+    /// };
+    ///
+    /// let mut store = InMemoryStore::default();
+    /// let (tile, width) = (store.tokens.intern("Tile"), store.tokens.intern("width"));
+    /// let floor = store.path("/Floor");
+    /// let mut layer = Layer::new(LayerId(1));
+    /// layer.insert_prim(floor, PrimSpec::def().with_type_name(tile));
+    /// store.insert_layer(layer);
+    ///
+    /// let mut builder = SchemaRegistry::builder();
+    /// builder.register(SchemaDefinition::typed(tile).with_property(
+    ///     PropertyDefinition::attribute(width).with_fallback(1.0_f32),
+    /// ));
+    /// let options = StageOptions {
+    ///     schemas: Some(Arc::new(builder.build(&store.tokens))),
+    ///     ..StageOptions::default()
+    /// };
+    /// let stage = Stage::compose(&mut store, LayerId(1), options);
+    ///
+    /// let prim = stage.view(&store).prim("/Floor").unwrap();
+    /// let definition = prim.definition().expect("typed at composition");
+    /// assert!(definition.is_a(tile));
+    /// assert!(definition.property(width).is_some());
+    /// ```
+    ///
+    /// OpenUSD: `UsdPrim::GetPrimDefinition`.
+    ///
+    /// Spec: AOUSD Core §13.3.1 (typeless prims), §13.3.2.3 (the prim
+    /// definition).
+    #[doc(alias = "UsdPrim::GetPrimDefinition")]
+    #[doc(alias = "GetPrimDefinition")]
+    pub fn definition(self) -> Option<&'a PrimDefinition> {
+        self.stage.prim_definition_ref(self.path)
+    }
+    /// Whether the applied schema `schema`, with `instance` for a
+    /// multiple-apply schema, may be applied to the prim, given its type,
+    /// and why not.
+    ///
+    /// # Errors
+    ///
+    /// [`CannotApply::NotAnAppliedSchema`] when the stage has no schemas or
+    /// none of that name, and otherwise what [`SchemaRegistry::can_apply`]
+    /// reports.
+    ///
+    /// OpenUSD: `UsdPrim::CanApplyAPI`.
+    #[doc(alias = "UsdPrim::CanApplyAPI")]
+    #[doc(alias = "CanApplyAPI")]
+    pub fn can_apply(
+        self,
+        schema: impl NameArg,
+        instance: Option<&str>,
+    ) -> Result<(), CannotApply> {
+        let schema = schema
+            .token(self.store.tokens())
+            .ok_or(CannotApply::NotAnAppliedSchema)?;
+        self.stage
+            .can_apply(self.path, schema, instance, self.store)
+    }
+    /// The composed prim metadata field `key` (`kind`, `customData`,
+    /// `apiSchemas`): the strongest authored value, dictionaries combined,
+    /// list ops chained. Never a property: a prim may author a field and a
+    /// property of the same name, and the two never stand in for each
+    /// other. `None` when no opinion authors the field.
+    ///
+    /// Spec: AOUSD Core §12.2 (metadata resolution), §12.2.5, §12.2.6.
+    #[doc(alias = "UsdObject::GetMetadata")]
+    #[doc(alias = "GetMetadata")]
+    pub fn metadata(self, key: impl NameArg) -> Option<Resolved<ResolvedValue>> {
+        let key = key.token(self.store.tokens())?;
+        self.stage.resolve_value(self.path, key)
+    }
+    /// Why the metadata field `key` has its value (see
+    /// [`ValueExplanation`]); `None` when no opinion authors it.
+    ///
+    /// Spec: AOUSD Core §12.2 (metadata resolution), §12.2.5, §12.2.6.
+    pub fn explain_metadata(
+        self,
+        key: impl NameArg,
+    ) -> Option<ValueExplanation<'a, ResolvedValue>> {
+        let key = key.token(self.store.tokens())?;
+        let stage: &'a Stage = self.stage;
+        stage.explain_value(self.path, key)
+    }
+    /// The opinions of the metadata field `key`, strongest first; empty
+    /// when none authors it.
+    ///
+    /// Spec: AOUSD Core §10.4 (strength ordering), §12.
+    pub fn metadata_opinions(self, key: impl NameArg) -> &'a [Opinion] {
+        let stage: &'a Stage = self.stage;
+        key.token(self.store.tokens())
+            .and_then(|key| stage.explain_field(self.path, key))
+            .unwrap_or_default()
+    }
     /// Generic attribute with this USD name, including schema-defined properties.
     #[doc(alias = "UsdPrim::GetAttribute")]
     #[doc(alias = "GetAttribute")]
-    pub fn attribute(self, name: &str) -> Option<Attribute<'a>> {
-        let path = PropertyPath::new(self.path, self.store.tokens().lookup(name)?);
-        (self.stage.property_kind(path) == Some(PropertyKind::Attribute)).then_some(Attribute {
-            stage: self.stage,
-            store: self.store,
-            path,
-        })
+    pub fn attribute(self, name: impl NameArg) -> Option<Attribute<'a>> {
+        self.property(name)?.as_attribute()
     }
     /// Generic relationship with this USD name.
     #[doc(alias = "UsdPrim::GetRelationship")]
     #[doc(alias = "GetRelationship")]
-    pub fn relationship(self, name: &str) -> Option<Relationship<'a>> {
-        let path = PropertyPath::new(self.path, self.store.tokens().lookup(name)?);
-        (self.stage.property_kind(path) == Some(PropertyKind::Relationship)).then_some(
-            Relationship {
-                stage: self.stage,
-                store: self.store,
-                path,
-            },
-        )
+    pub fn relationship(self, name: impl NameArg) -> Option<Relationship<'a>> {
+        self.property(name)?.as_relationship()
     }
-    /// All authored and schema-defined property names in composed order
-    /// (see [`Stage::property_names`]).
+    /// The attribute or relationship with this USD name, one an opinion
+    /// declares or a schema of the prim defines.
+    #[doc(alias = "UsdPrim::GetProperty")]
+    #[doc(alias = "GetProperty")]
+    pub fn property(self, name: impl NameArg) -> Option<Property<'a>> {
+        let name = name.token(self.store.tokens())?;
+        self.stage
+            .property(PropertyPath::new(self.path, name), self.store)
+    }
+    /// The names of the prim's properties, attributes and relationships
+    /// together: those any opinion authors and those its schemas define.
+    ///
+    /// They are in dictionary order (letters ignoring case, runs of digits
+    /// by value), then the names the prim's `reorder properties` lists
+    /// ([`Self::property_order`]) move to the front in its order, as
+    /// OpenUSD's `UsdPrim::GetPropertyNames` orders them.
+    ///
+    /// Spec: AOUSD Core §7.3.3 (a prim's properties share one name space),
+    /// §12 (the composed prim holds every property any opinion authors),
+    /// §13.3.2.3 (and every property its prim definition defines).
     #[doc(alias = "UsdPrim::GetPropertyNames")]
     #[doc(alias = "GetPropertyNames")]
     pub fn property_names(self) -> Vec<&'a str> {
@@ -196,31 +465,334 @@ impl<'a> Prim<'a> {
             .map(|name| tokens.resolve(name))
             .collect()
     }
-    /// Direct populated children, with an explicit instance-proxy policy.
-    #[doc(alias = "UsdPrim::GetChildren")]
-    #[doc(alias = "GetChildren")]
-    pub fn children(self, instance_proxies: bool) -> impl Iterator<Item = Prim<'a>> {
-        let children = if self.stage.is_instance(self.path) && !instance_proxies {
-            &[][..]
-        } else {
-            self.stage.all_children_of(self.path).unwrap_or_default()
+    /// The names of the properties some opinion of the prim authors, in
+    /// the order of [`Self::property_names`], leaving out those only its
+    /// schemas define.
+    ///
+    /// Spec: AOUSD Core §12 (the composed prim holds every property any
+    /// opinion authors).
+    #[doc(alias = "UsdPrim::GetAuthoredPropertyNames")]
+    #[doc(alias = "GetAuthoredPropertyNames")]
+    pub fn authored_property_names(self) -> Vec<&'a str> {
+        let tokens = self.store.tokens();
+        self.stage
+            .authored_property_names(self.path, self.store)
+            .into_iter()
+            .map(|name| tokens.resolve(name))
+            .collect()
+    }
+    /// The prim's properties, attributes and relationships together, in
+    /// the order of [`Self::property_names`].
+    #[doc(alias = "UsdPrim::GetProperties")]
+    #[doc(alias = "GetProperties")]
+    pub fn properties(self) -> Vec<Property<'a>> {
+        self.property_handles(self.stage.property_names(self.path, self.store))
+    }
+    /// The properties some opinion of the prim authors, in the order of
+    /// [`Self::property_names`], leaving out those only its schemas define.
+    #[doc(alias = "UsdPrim::GetAuthoredProperties")]
+    #[doc(alias = "GetAuthoredProperties")]
+    pub fn authored_properties(self) -> Vec<Property<'a>> {
+        self.property_handles(self.stage.authored_property_names(self.path, self.store))
+    }
+    fn property_handles(self, names: Vec<TokenId>) -> Vec<Property<'a>> {
+        names
+            .into_iter()
+            .filter_map(|name| {
+                self.stage
+                    .property(PropertyPath::new(self.path, name), self.store)
+            })
+            .collect()
+    }
+    /// The strongest authored property ordering (`reorder properties`);
+    /// `None` when no opinion authors one.
+    ///
+    /// Spec: AOUSD Core §7.6.2.2.2 (`propertyChildren`), §12.2 (strongest
+    /// opinion).
+    #[doc(alias = "UsdPrim::GetPropertyOrder")]
+    #[doc(alias = "GetPropertyOrder")]
+    pub fn property_order(self) -> Option<Vec<&'a str>> {
+        let tokens = self.store.tokens();
+        let order = self.stage.resolve_property_order(self.path, self.store)?;
+        Some(order.into_iter().map(|name| tokens.resolve(name)).collect())
+    }
+    /// The active children, in composed order.
+    ///
+    /// Inactive children are left out ([`Self::all_children`] has them).
+    /// No other flag filters them: unlike OpenUSD's `UsdPrim::GetChildren`,
+    /// undefined and abstract children are included, and so are an
+    /// instance's children, its instance proxies.
+    /// [`Self::filtered_children`] applies a predicate as OpenUSD does.
+    ///
+    /// Spec: AOUSD Core §11 (stage population).
+    pub fn children(self) -> impl DoubleEndedIterator<Item = Prim<'a>> + ExactSizeIterator + 'a {
+        self.child_handles(self.stage.children_of(self.path))
+    }
+    /// All the populated children in composed order, inactive ones
+    /// included (their own descendants are not populated).
+    #[doc(alias = "UsdPrim::GetAllChildren")]
+    #[doc(alias = "GetAllChildren")]
+    pub fn all_children(
+        self,
+    ) -> impl DoubleEndedIterator<Item = Prim<'a>> + ExactSizeIterator + 'a {
+        self.child_handles(self.stage.all_children_of(self.path))
+    }
+    /// The children `predicate` admits, in composed order. An instance's
+    /// children are instance proxies and need
+    /// [`PrimPredicate::instance_proxies`], unless this prim is an instance
+    /// proxy itself.
+    ///
+    /// OpenUSD: `UsdPrim::GetFilteredChildren`; `PrimPredicate::DEFAULT`
+    /// gives `UsdPrim::GetChildren`.
+    #[doc(alias = "UsdPrim::GetFilteredChildren")]
+    #[doc(alias = "GetFilteredChildren")]
+    pub fn filtered_children(
+        self,
+        predicate: PrimPredicate,
+    ) -> impl Iterator<Item = Prim<'a>> + 'a {
+        let predicate = PrimPredicate {
+            instance_proxies: predicate.instance_proxies || self.is_instance_proxy(),
+            ..predicate
         };
+        self.all_children()
+            .filter(move |child| predicate.matches(child.status()))
+    }
+    fn child_handles(
+        self,
+        children: Option<&'a [PathId]>,
+    ) -> impl DoubleEndedIterator<Item = Prim<'a>> + ExactSizeIterator + 'a {
+        let (stage, store) = (self.stage, self.store);
         children
+            .unwrap_or_default()
             .iter()
-            .filter_map(move |&path| self.stage.prim(path, self.store))
+            .map(move |&path| Prim { stage, store, path })
+    }
+    /// The prim's variant sets, each with the variant composition selected
+    /// for it (`None` when nothing selects one): the sets each node of its
+    /// prim index lists, nodes in strength order, each node's in its
+    /// composed `variantSetNames` order, a set listed by several nodes
+    /// once. A set listed only in a variant that is not selected is not
+    /// one, nor is a variant set spec no list names. A selection may name
+    /// a variant no layer defines.
+    ///
+    /// OpenUSD: `UsdVariantSets::GetNames`, with
+    /// `UsdVariantSet::GetVariantSelection` for each set.
+    ///
+    /// Spec: AOUSD Core §7.3.6 (variant specs may contain variant set
+    /// specs), §10.5 (variant selection).
+    #[doc(alias = "UsdPrim::GetVariantSets")]
+    #[doc(alias = "GetVariantSets")]
+    pub fn variant_sets(self) -> Vec<(&'a str, Option<&'a str>)> {
+        let tokens = self.store.tokens();
+        self.stage
+            .variant_sets(self.path, self.store)
+            .into_iter()
+            .map(|(set, selection)| {
+                (
+                    tokens.resolve(set),
+                    selection.map(|variant| tokens.resolve(variant)),
+                )
+            })
+            .collect()
+    }
+    /// The variant selections that govern the prim, by variant set name:
+    /// for each set, the strongest selection authored on any site of the
+    /// prim's index, selections inside selected variants included, and for
+    /// a declared set without one, the variant the stage's fallbacks
+    /// select ([`StageOptions::variant_fallbacks`]). An authored selection
+    /// is reported whether or not the variant it names exists.
+    ///
+    /// OpenUSD: `UsdVariantSet::GetVariantSelection`, which reports the
+    /// variant composition selected, fallbacks included.
+    ///
+    /// Spec: AOUSD Core §10.5 (variant selection).
+    #[doc(alias = "UsdVariantSets::GetAllVariantSelections")]
+    #[doc(alias = "GetAllVariantSelections")]
+    pub fn variant_selections(self) -> BTreeMap<&'a str, &'a str> {
+        let tokens = self.store.tokens();
+        self.stage
+            .variant_selections(self.path, self.store)
+            .into_iter()
+            .map(|(set, variant)| (tokens.resolve(set), tokens.resolve(variant)))
+            .collect()
+    }
+    /// The prim stack: each `(layer, spec)` site that contributes to the
+    /// prim, strongest first, once, at its strongest position.
+    /// [`Self::sources`] keeps the sites reached through several arcs.
+    ///
+    /// Spec: AOUSD Core §10.4 (strength ordering), §11.
+    #[doc(alias = "UsdPrim::GetPrimStack")]
+    #[doc(alias = "GetPrimStack")]
+    pub fn prim_stack(self) -> Vec<(LayerId, SpecPath)> {
+        self.stage.prim_stack(self.path).unwrap_or_default()
+    }
+    /// Every source that contributes to the prim, strongest first: one
+    /// [`OpinionKey`] per contributing `(arc, layer, spec)` site, a site
+    /// reached through two arcs (a reference diamond, or a layer that
+    /// appears twice in a layer stack) twice, as OpenUSD's
+    /// `PcpPrimIndex::GetPrimStack` lists them.
+    ///
+    /// Spec: AOUSD Core §10.4 (strength ordering).
+    pub fn sources(self) -> &'a [OpinionKey] {
+        let stage: &'a Stage = self.stage;
+        stage.explain_prim(self.path).unwrap_or_default()
+    }
+    /// The composition graph of the prim: one node per arc expansion that
+    /// contributes to it, with its arc kind, layer stack, site and parent.
+    /// Every [`OpinionKey::node`] of the prim's opinions and sources names
+    /// one of its nodes; see [`PrimIndexGraph`] for how it relates to
+    /// strength order.
+    ///
+    /// OpenUSD: `PcpPrimIndex::GetGraph`.
+    ///
+    /// Spec: AOUSD Core §10.4 (strength ordering).
+    #[doc(alias = "UsdPrim::GetPrimIndex")]
+    #[doc(alias = "GetPrimIndex")]
+    pub fn composition_graph(self) -> &'a PrimIndexGraph {
+        let stage: &'a Stage = self.stage;
+        stage.explain_prim_graph(self.path).expect("populated view")
+    }
+    /// What the arguments of the payloads to dynamic file formats the
+    /// prim's index follows were composed from: the fields and attributes
+    /// read, and each format's dependency data. `None` when the index
+    /// composes no dynamic arguments; the payloads of the prim's ancestors
+    /// belong to their own indexes.
+    ///
+    /// See [`crate::dynamic_format`]. OpenUSD:
+    /// `PcpCache::GetDynamicFileFormatArgumentDependencyData`.
+    pub fn dynamic_dependency(self) -> Option<&'a DynamicDependency> {
+        let stage: &'a Stage = self.stage;
+        stage.dynamic_dependency(self.path)
     }
 }
-impl<'a> Attribute<'a> {
+impl<'a> Property<'a> {
     /// Concrete property path.
+    #[doc(alias = "UsdProperty::GetPath")]
+    #[doc(alias = "GetPath")]
     pub fn path(self) -> PropertyPath {
         self.path
     }
-    /// The attribute's name (`inputs:intensity`).
+    /// The property's name (`inputs:intensity`).
     #[doc(alias = "UsdProperty::GetName")]
     #[doc(alias = "GetName")]
     pub fn name(self) -> &'a str {
         self.store.tokens().resolve(self.path.property())
     }
+    /// The prim the property belongs to.
+    #[doc(alias = "UsdProperty::GetPrim")]
+    #[doc(alias = "GetPrim")]
+    pub fn prim(self) -> Prim<'a> {
+        Prim {
+            stage: self.stage,
+            store: self.store,
+            path: self.path.prim_path(),
+        }
+    }
+    /// Attribute or relationship: what the prim's schemas define it as,
+    /// else what its strongest opinion declares.
+    pub fn kind(self) -> PropertyKind {
+        self.stage
+            .property_kind(self.path)
+            .expect("composed property")
+    }
+    /// The attribute this is, if it is one.
+    pub fn as_attribute(self) -> Option<Attribute<'a>> {
+        (self.kind() == PropertyKind::Attribute).then_some(Attribute { property: self })
+    }
+    /// The relationship this is, if it is one.
+    pub fn as_relationship(self) -> Option<Relationship<'a>> {
+        (self.kind() == PropertyKind::Relationship).then_some(Relationship { property: self })
+    }
+    fn into_object(self) -> Object<'a> {
+        match self.kind() {
+            PropertyKind::Attribute => Object::Attribute(Attribute { property: self }),
+            PropertyKind::Relationship => Object::Relationship(Relationship { property: self }),
+        }
+    }
+    /// Whether an opinion declares the property `custom`: one no schema of
+    /// its prim is expected to define. `false` for a property only a
+    /// schema defines.
+    ///
+    /// Spec: AOUSD Core §12.2.4 (`custom` is true if any opinion says so).
+    #[doc(alias = "UsdProperty::IsCustom")]
+    #[doc(alias = "IsCustom")]
+    pub fn is_custom(self) -> bool {
+        self.declaration().is_some_and(|declared| declared.custom)
+    }
+    /// How the opinions declare the property: its kind, type, variability
+    /// and `custom` qualifier, without consulting a schema. `None` when no
+    /// opinion declares it and only a schema defines it
+    /// ([`Self::definition`]).
+    ///
+    /// - The kind and type come from the strongest opinion that authors
+    ///   them.
+    /// - `custom` is `true` if any opinion authors it.
+    /// - Variability comes from the weakest opinion.
+    ///
+    /// Spec: AOUSD Core §12.2.2–§12.2.4.
+    pub fn declaration(self) -> Option<PropertyDeclaration> {
+        self.stage
+            .resolve_property_declaration(self.path.prim_path(), self.path.property())
+    }
+    /// How a schema of the prim defines the property: its kind, type,
+    /// variability, fallback and metadata. `None` when no schema defines
+    /// it.
+    ///
+    /// OpenUSD: `UsdPrimDefinition::GetPropertyDefinition`.
+    ///
+    /// Spec: AOUSD Core §13.3.2.3–§13.3.2.4.
+    pub fn definition(self) -> Option<&'a PropertyDefinition> {
+        let stage: &'a Stage = self.stage;
+        stage.property_definition_ref(self.path.prim_path(), self.path.property())
+    }
+    /// The composed property metadata field `key`, the schema's fallback
+    /// included. Authored scalar values (empty tokens too) win; a block
+    /// hides weaker opinions and the fallback. Dictionaries combine across
+    /// opinions and the fallback; list ops chain. A schema-only value has
+    /// no layer provenance.
+    ///
+    /// Spec: AOUSD Core §12.2.5–§12.2.6, §13.3.2.3–§13.3.2.4.
+    #[doc(alias = "UsdObject::GetMetadata")]
+    #[doc(alias = "GetMetadata")]
+    pub fn metadata(self, key: impl NameArg) -> Option<Resolved<ResolvedValue>> {
+        let key = key.token(self.store.tokens())?;
+        self.stage
+            .resolve_property_metadata(self.path.prim_path(), self.path.property(), key)
+    }
+    /// The property metadata field `key` as opinions author it, without the
+    /// schema's fallback. A block reads as `None`, hiding weaker values.
+    ///
+    /// Spec: AOUSD Core §12.2.5–§12.2.6.
+    #[doc(alias = "UsdObject::HasAuthoredMetadata")]
+    pub fn authored_metadata(self, key: impl NameArg) -> Option<Resolved<ResolvedValue>> {
+        let key = key.token(self.store.tokens())?;
+        self.stage.resolve_authored_property_metadata(
+            self.path.prim_path(),
+            self.path.property(),
+            key,
+        )
+    }
+    /// The property's opinions, strongest first; empty when only a schema
+    /// defines it.
+    ///
+    /// OpenUSD: `UsdProperty::GetPropertyStack`, as opinions.
+    ///
+    /// Spec: AOUSD Core §10.4 (strength ordering), §12.
+    #[doc(alias = "UsdProperty::GetPropertyStack")]
+    #[doc(alias = "GetPropertyStack")]
+    pub fn opinions(self) -> &'a [Opinion] {
+        let stage: &'a Stage = self.stage;
+        stage.explain_property_path(self.path).unwrap_or_default()
+    }
+    /// Whether an opinion declares the property: `false` when only a
+    /// schema defines it.
+    #[doc(alias = "UsdProperty::IsAuthored")]
+    #[doc(alias = "IsAuthored")]
+    pub fn is_authored(self) -> bool {
+        !self.opinions().is_empty()
+    }
+}
+impl<'a> Attribute<'a> {
     /// The value type name (`float`, `color3f[]`): the type the prim's
     /// schemas define the attribute with, else the strongest type an
     /// opinion declares. `None` when neither declares one. It names the
@@ -248,8 +820,9 @@ impl<'a> Attribute<'a> {
     #[doc(alias = "UsdAttribute::GetTypeName")]
     #[doc(alias = "GetTypeName")]
     pub fn type_name(self) -> Option<&'a str> {
-        let (prim, name) = (self.path.prim_path(), self.path.property());
-        let stage: &'a Stage = self.stage;
+        let path = self.property.path;
+        let (prim, name) = (path.prim_path(), path.property());
+        let stage: &'a Stage = self.property.stage;
         stage
             .property_definition_ref(prim, name)
             .and_then(|defined| defined.type_name.as_ref())
@@ -267,22 +840,34 @@ impl<'a> Attribute<'a> {
     #[doc(alias = "UsdAttribute::GetVariability")]
     #[doc(alias = "GetVariability")]
     pub fn variability(self) -> Variability {
-        let (prim, name) = (self.path.prim_path(), self.path.property());
-        if let Some(defined) = self.stage.property_definition_ref(prim, name) {
+        if let Some(defined) = self.definition() {
             return defined.variability;
         }
-        self.stage
-            .resolve_property_declaration(prim, name)
+        self.declaration()
             .map(|declared| declared.variability)
             .unwrap_or_default()
     }
-    /// Composed value with captured schema fallback and optional provenance.
-    /// Numeric arrays remain retained until the caller selects materialization.
+    /// The composed value at `time`, with the source it came from when the
+    /// stage records provenance ([`StageOptions::with_provenance`]). Numeric
+    /// arrays stay retained until the caller materializes them.
+    ///
+    /// The schema's fallback answers when nothing authored answers at
+    /// `time` (a spec without a value included) and when a block is in
+    /// effect, default or sampled; an array fallback is the weakest dense
+    /// seed that sparse array edits compose over. Otherwise authored values
+    /// resolve as without a schema ([`Self::authored_value`]). OpenUSD
+    /// 26.08 resolves no value after a block instead: the named divergences
+    /// `default-time-block-hides-fallback` and `sampled-block-drops-fallback`
+    /// (`docs/generic-sparse-composition.md`).
+    ///
+    /// Spec: AOUSD Core §12.3 (value resolution), §12.3.5 (fallback values),
+    /// §12.3.6 (blocks), §13.3.2.4 (fallback value resolution).
     #[doc(alias = "UsdAttribute::Get")]
     #[doc(alias = "Get")]
     pub fn get(self, time: Time) -> Option<Resolved<Value>> {
-        self.stage
-            .read_property(self.path, time, |v| Some(v.clone()))
+        self.property
+            .stage
+            .read_property(self.property.path, time, |v| Some(v.clone()))
     }
     /// The value at `time` as a `T`, schema fallback included. At the
     /// default time this is the strongest default that converts
@@ -309,31 +894,114 @@ impl<'a> Attribute<'a> {
     ///
     /// Spec: AOUSD Core §12.3 (value resolution), §13.3.2.4 (fallbacks).
     pub fn value<T: FromValue>(self, time: Time) -> Option<T> {
-        let tokens = self.store.tokens();
-        self.stage
-            .read_property(self.path, time, |v| T::from_value(v, tokens))
+        let tokens = self.property.store.tokens();
+        self.read(time, |v| T::from_value(v, tokens))
             .map(|resolved| resolved.value)
+    }
+    /// The value at `time` converted by `convert`, schema fallback
+    /// included, as [`Self::value`] converts to a [`FromValue`] type, with
+    /// the winning source when the stage records provenance
+    /// ([`StageOptions::with_provenance`]).
+    ///
+    /// At [`Time::Default`] a default `convert` rejects is skipped for a
+    /// weaker one; at a time code the source is selected first, and a
+    /// value it rejects reads as nothing. `convert` should reject only
+    /// values of another type: check shape or range afterwards, so
+    /// malformed data never turns into a weaker value. Sparse array edits
+    /// may also call it on candidate bases.
+    ///
+    /// OpenUSD: `UsdAttribute::Get<T>`.
+    ///
+    /// Spec: AOUSD Core §12.3 (values), §12.3.2.1 (layer offsets),
+    /// §13.3.2.4 (schema fallbacks).
+    pub fn read<T>(self, time: Time, convert: impl Fn(&Value) -> Option<T>) -> Option<Resolved<T>> {
+        self.property
+            .stage
+            .read_property(self.property.path, time, convert)
+    }
+    /// [`Self::read`], always with the winning authored source, whatever
+    /// the stage's provenance policy; a schema fallback still has none.
+    /// For asset paths, which resolve against the layer that authors them.
+    ///
+    /// Spec: AOUSD Core §9.4 (asset paths), §12.3, §13.3.2.4.
+    pub fn read_with_provenance<T>(
+        self,
+        time: Time,
+        convert: impl Fn(&Value) -> Option<T>,
+    ) -> Option<Resolved<T>> {
+        self.property
+            .stage
+            .read_property_with_provenance(self.property.path, time, convert)
+    }
+    /// [`Self::read`], materializing the selected value: a retained or
+    /// deferred array that does not decode is an error, never an absent
+    /// value or a weaker one.
+    ///
+    /// # Errors
+    ///
+    /// The [`ArrayReadError`](crate::ArrayReadError) of the selected
+    /// value, or of a schema fallback a sparse fold read.
+    pub fn try_read<T>(
+        self,
+        time: Time,
+        convert: impl Fn(&Value) -> Option<T>,
+    ) -> Result<Option<Resolved<T>>, crate::ArrayReadError> {
+        self.property
+            .stage
+            .try_read_property(self.property.path, time, convert)
     }
     /// The value at `time` beneath `layer`, as a `T`, with the source it
     /// came from: what the attribute would read without `layer`'s opinions
-    /// and those stronger than them (see [`Stage::read_property_below`]).
+    /// and those stronger than them.
+    ///
+    /// The cut is in the composed opinion stack, so the arcs `layer`
+    /// authors still shape it: opinions a reference, payload, inherit or
+    /// sublayer of `layer` brings in are weaker than `layer`'s own and
+    /// count as beneath it. When `layer` authors no opinion here and
+    /// belongs to the stage's own layer stack, the cut is beneath the
+    /// stack's layers stronger than it. The schema fallback answers when
+    /// nothing beneath holds a value.
+    ///
+    /// Spec: AOUSD Core §12.3 (value resolution in strength order).
     pub fn value_below<T: FromValue>(self, layer: LayerId, time: Time) -> Option<Resolved<T>> {
-        let tokens = self.store.tokens();
-        self.stage
-            .read_property_below(self.path, layer, time, |v| T::from_value(v, tokens))
+        let tokens = self.property.store.tokens();
+        self.property
+            .stage
+            .read_property_below(self.property.path, layer, time, |v| {
+                T::from_value(v, tokens)
+            })
+    }
+    /// The value opinions author at `time`, without the schema fallback:
+    /// at [`Time::Default`] the strongest authored default (sparse array
+    /// edits composed over it), at a time code the time samples, spline or
+    /// default that answer it. `None` when nothing authored answers, or a
+    /// block is in effect.
+    ///
+    /// Spec: AOUSD Core §12.3.1 (default values), §12.3.2 (time samples,
+    /// then splines, then the default), §12.3.6 (blocks).
+    pub fn authored_value(self, time: Time) -> Option<Resolved<Value>> {
+        self.property
+            .stage
+            .resolve_property_path_at_time(self.property.path, time)
     }
     /// Reads and materializes the selected numeric array, exposing decode failure.
+    ///
+    /// # Errors
+    ///
+    /// The [`ArrayReadError`](crate::ArrayReadError) of a selected value
+    /// that does not decode.
     #[doc(alias = "UsdAttribute::Get")]
     #[doc(alias = "Get")]
     pub fn try_get(self, time: Time) -> Result<Option<Resolved<Value>>, crate::ArrayReadError> {
-        checked_read(self.stage, self.path, time)
+        checked_read(self.property.stage, self.property.path, time)
     }
     /// Raw composed attribute connections, independent of its value.
     #[doc(alias = "UsdAttribute::GetConnections")]
     #[doc(alias = "GetConnections")]
     pub fn connections(self) -> Vec<TargetPath> {
-        self.stage
-            .resolve_target_list_path(self.path)
+        self.property
+            .stage
+            .resolve_target_list_path(self.property.path)
             .map(|r| r.value)
             .unwrap_or_default()
     }
@@ -370,32 +1038,34 @@ impl<'a> Attribute<'a> {
     #[doc(alias = "UsdAttribute::GetResolveInfo")]
     #[doc(alias = "GetResolveInfo")]
     pub fn explain(self, time: Time) -> Option<ValueExplanation<'a, Value>> {
-        let stage: &'a Stage = self.stage;
-        stage.explain_value_with_schema(self.path.prim_path(), self.path.property(), time)
+        let path = self.property.path;
+        let stage: &'a Stage = self.property.stage;
+        stage.explain_value_with_schema(path.prim_path(), path.property(), time)
     }
     /// Why the connections are what they are: each opinion's paths, and
-    /// those composition dropped, with why (see
-    /// [`Stage::explain_targets`]).
+    /// those composition dropped, with why (see [`TargetsExplanation`]).
     pub fn explain_connections(self) -> Option<TargetsExplanation> {
-        self.stage.explain_targets(self.path, self.store)
-    }
-    /// Composed property metadata, including schema fallbacks.
-    #[doc(alias = "UsdAttribute::GetMetadata")]
-    #[doc(alias = "GetMetadata")]
-    pub fn metadata(self, key: TokenId) -> Option<Resolved<ResolvedValue>> {
-        self.stage
-            .resolve_property_metadata(self.path.prim_path(), self.path.property(), key)
+        self.property
+            .stage
+            .explain_targets(self.property.path, self.property.store)
     }
     /// Caller-owned retained query for this concrete attribute path.
     pub fn query(self) -> AttributeQuery {
-        AttributeQuery::new(self.path)
+        AttributeQuery::new(self.property.path)
     }
     /// Distinct composed sample times in stage time, including value clips.
+    /// Dense defaults and blocks mask weaker animation; sparse array edits
+    /// keep weaker grids. Clip times include activations and mapping
+    /// discontinuities; splines have no discrete sample times.
+    ///
+    /// Spec: AOUSD Core §12.3.2 (effective stage-time samples).
     #[doc(alias = "UsdAttribute::GetTimeSamples")]
     #[doc(alias = "GetTimeSamples")]
     pub fn sample_times(self) -> Vec<f64> {
-        self.stage
-            .property_sample_times(self.path.prim_path(), self.path.property())
+        let path = self.property.path;
+        self.property
+            .stage
+            .property_sample_times(path.prim_path(), path.property())
     }
     /// Effective sample times within open, closed or unbounded stage-time bounds.
     /// Filters the composed grid; does not add evaluation times or brackets.
@@ -403,50 +1073,76 @@ impl<'a> Attribute<'a> {
     #[doc(alias = "UsdAttribute::GetTimeSamplesInInterval")]
     #[doc(alias = "GetTimeSamplesInInterval")]
     pub fn sample_times_in_range(self, interval: impl core::ops::RangeBounds<f64>) -> Vec<f64> {
-        self.stage.property_sample_times_in_range(
-            self.path.prim_path(),
-            self.path.property(),
+        let path = self.property.path;
+        self.property.stage.property_sample_times_in_range(
+            path.prim_path(),
+            path.property(),
             interval,
         )
     }
-    /// Conservative whether a numeric-time query can vary with time.
+    /// Conservative whether a numeric-time query can vary with time: a
+    /// contributing source with several samples, or a spline, counts as
+    /// varying even when its values agree.
     #[doc(alias = "UsdAttribute::ValueMightBeTimeVarying")]
     #[doc(alias = "ValueMightBeTimeVarying")]
     pub fn might_be_time_varying(self) -> bool {
-        self.stage
-            .property_might_be_time_varying(self.path.prim_path(), self.path.property())
+        let path = self.property.path;
+        self.property
+            .stage
+            .property_might_be_time_varying(path.prim_path(), path.property())
+    }
+    /// The value clip that supplies the value at `time`, with its mapped
+    /// bracketing samples; `None` when source selection ends before clips,
+    /// no manifest makes the attribute eligible, or at [`Time::Default`]
+    /// (clips hold time samples only). Under held interpolation a stronger
+    /// dense lower sample may supply the whole result even when the chain
+    /// reaches a clip; explanations name actual contributions.
+    ///
+    /// Spec: AOUSD Core §12.3, §12.5 (value clips).
+    pub fn clip_source(self, time: Time) -> Option<crate::value_clips::ClipValueSource> {
+        let path = self.property.path;
+        self.property
+            .stage
+            .property_clip_source(path.prim_path(), path.property(), time)
+    }
+    /// The error the selected clip's evaluator met at `time`, without
+    /// exposing weaker values: an invalid query time, or an evaluation
+    /// failure. Preparation errors are [`Stage::clip_issues`]. Loads and
+    /// changes nothing; `None` at [`Time::Default`].
+    pub fn clip_evaluation_error(self, time: Time) -> Option<crate::value_clips::ClipEvalError> {
+        let path = self.property.path;
+        self.property
+            .stage
+            .property_clip_evaluation_error(path.prim_path(), path.property(), time)
     }
 }
-impl<'a> Relationship<'a> {
-    /// Concrete property path.
-    pub fn path(self) -> PropertyPath {
-        self.path
-    }
-    /// The relationship's name (`material:binding`).
-    #[doc(alias = "UsdProperty::GetName")]
-    #[doc(alias = "GetName")]
-    pub fn name(self) -> &'a str {
-        self.store.tokens().resolve(self.path.property())
-    }
+impl Relationship<'_> {
     /// Ordered composed targets without forwarding.
     #[doc(alias = "UsdRelationship::GetTargets")]
     #[doc(alias = "GetTargets")]
     pub fn targets(self) -> Vec<TargetPath> {
-        self.stage
-            .resolve_target_list_path(self.path)
+        self.property
+            .stage
+            .resolve_target_list_path(self.property.path)
             .map(|r| r.value)
             .unwrap_or_default()
     }
     /// Why the targets are what they are: each opinion's paths, and those
-    /// composition dropped, with why (see [`Stage::explain_targets`]).
+    /// composition dropped, with why (see [`TargetsExplanation`]).
     pub fn explain_targets(self) -> Option<TargetsExplanation> {
-        self.stage.explain_targets(self.path, self.store)
+        self.property
+            .stage
+            .explain_targets(self.property.path, self.property.store)
     }
     /// Ordered terminal targets after recursively forwarding relationships.
+    /// A cycle contributes no terminal target along its cyclic edge;
+    /// missing prim and attribute targets stay terminal, as in OpenUSD.
     #[doc(alias = "UsdRelationship::GetForwardedTargets")]
     #[doc(alias = "GetForwardedTargets")]
     pub fn forwarded_targets(self) -> Vec<TargetPath> {
-        self.stage.forwarded_relationship_targets(self.path)
+        self.property
+            .stage
+            .forwarded_relationship_targets(self.property.path)
     }
 }
 /// Work performed by one retained query, independent of stage counters.

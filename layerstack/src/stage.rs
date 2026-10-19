@@ -1971,18 +1971,31 @@ impl Stage {
         let Some(index) = self.prims.get(&prim) else {
             return Vec::new();
         };
-        let keys = index
-            .sources
-            .iter()
-            .chain(index.opinions.iter().map(|op| &op.key));
-        // Sorted and deduplicated rather than hashed: a prim has few sites,
-        // each named by many of its keys.
-        let mut sites = Vec::with_capacity(2 * (index.sources.len() + index.opinions.len()));
-        for key in keys {
+        let push = |sites: &mut Vec<(LayerId, PathId)>, key: &OpinionKey| {
             sites.push((key.layer_id, key.lookup_path));
             let spec_prim = key.spec_path.prim_path();
             if spec_prim != key.lookup_path {
                 sites.push((key.layer_id, spec_prim));
+            }
+        };
+        // Sorted and deduplicated rather than hashed: a prim has few sites,
+        // each named by many of its keys. Its opinions are read from its
+        // sources' specs, so their keys nearly always name sites the
+        // sources do; only one naming another is added.
+        let mut sites = Vec::with_capacity(2 * index.sources.len() + 2);
+        for key in &index.sources {
+            push(&mut sites, key);
+        }
+        sites.sort_unstable();
+        sites.dedup();
+        let of_sources = sites.len();
+        for opinion in &index.opinions {
+            let key = &opinion.key;
+            let named = |site| sites[..of_sources].binary_search(&site).is_ok();
+            if !named((key.layer_id, key.lookup_path))
+                || !named((key.layer_id, key.spec_path.prim_path()))
+            {
+                push(&mut sites, key);
             }
         }
         sites.extend(self.clips.source_sites(prim));

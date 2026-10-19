@@ -92,6 +92,32 @@ fn matches_clean(store: &mut InMemoryStore, live: &LiveStage) {
 }
 
 #[test]
+fn index_is_built_from_the_layer_as_composed_or_not_at_all() {
+    // Built on first use from the unchanged layer: as if built with the
+    // composition.
+    let (store, mut live) = scene();
+    assert!(
+        live.local_namespace.built().is_none(),
+        "not built at compose"
+    );
+    let world = store.path("/World");
+    let index = live.local_index(&store).unwrap();
+    assert!(index.current(&store));
+    assert_eq!(index.children(world).len(), 2);
+    // A layer changed behind the stage's back before the first edit has no
+    // current index, as one built with the composition would not be.
+    let (mut store, mut live) = scene();
+    store.layer_mut(ROOT).unwrap().touch();
+    assert!(live.local_index(&store).is_none());
+    // The edit then takes the general path, and composition finds an index
+    // for the next one.
+    let mut txn = Transaction::new();
+    txn.create_prim(address(&mut store, "/World/C"), Specifier::Def, None);
+    live.apply(&mut store, &txn).unwrap();
+    matches_clean(&mut store, &live);
+}
+
+#[test]
 fn local_subtree_delete_undo_and_value_sequence_has_precise_reports() {
     let (mut store, mut live) = scene();
     let a = store.path("/World/A");
@@ -102,7 +128,7 @@ fn local_subtree_delete_undo_and_value_sequence_has_precise_reports() {
     value.set_default(address(&mut store, "/World/B.value"), Value::Double(4.0));
     let info = live.apply(&mut store, &value).unwrap();
     assert_eq!(info.changes.changed_info_only, [b]);
-    assert!(live.local_namespace.as_ref().unwrap().current(&store));
+    assert!(live.local_index(&store).unwrap().current(&store));
     let mut remove = Transaction::new();
     remove.remove_spec(address(&mut store, "/World/A"));
     let removed = live.apply(&mut store, &remove).unwrap();
@@ -122,7 +148,7 @@ fn local_subtree_delete_undo_and_value_sequence_has_precise_reports() {
     let c = store.path("/World/C");
     assert_eq!(added.changes.resynced, [c]);
     assert_eq!(added.changes.created.len(), 2);
-    assert!(live.local_namespace.as_ref().unwrap().current(&store));
+    assert!(live.local_index(&store).unwrap().current(&store));
     matches_clean(&mut store, &live);
 }
 
@@ -206,7 +232,7 @@ fn authored_child_order_survives_delete_and_exact_undo() {
     live.apply(&mut store, &applied.inverse).unwrap();
     assert_eq!(live.stage().children_of(world).unwrap(), [b, c, a]);
     matches_clean(&mut store, &live);
-    assert!(live.local_namespace.as_ref().unwrap().current(&store));
+    assert!(live.local_index(&store).unwrap().current(&store));
 }
 
 #[test]
@@ -318,12 +344,12 @@ fn masks_arcs_variants_and_instanceable_use_general_composition() {
             }
         }
         let mut live = LiveStage::compose(&mut store, ROOT, options.clone());
-        assert!(live.local_namespace.is_none(), "case {case}");
+        assert!(live.local_index(&store).is_none(), "case {case}");
         let mut txn = Transaction::new();
         txn.create_prim(address(&mut store, "/World/A/New"), Specifier::Def, None);
         let applied = live.apply(&mut store, &txn).unwrap();
         assert!(!applied.changes.resynced.contains(&store.path("/")));
-        assert!(live.local_namespace.is_none());
+        assert!(live.local_index(&store).is_none());
         let fresh = Stage::compose(&mut store, ROOT, options);
         let mut actual: Vec<_> = live.stage().prim_paths().collect();
         let mut expected: Vec<_> = fresh.prim_paths().collect();
@@ -344,14 +370,14 @@ fn failed_transaction_rolls_back_without_consuming_the_namespace_index() {
     txn.remove_spec(address(&mut store, "/World/A"));
     txn.create_prim(address(&mut store, "/World/B"), Specifier::Def, None);
     assert!(live.apply(&mut store, &txn).is_err());
-    assert!(live.local_namespace.as_ref().unwrap().current(&store));
+    assert!(live.local_index(&store).unwrap().current(&store));
     matches_clean(&mut store, &live);
     let mut remove = Transaction::new();
     remove.remove_spec(address(&mut store, "/World/A"));
     let removed = live.apply(&mut store, &remove).unwrap();
     assert_eq!(removed.changes.resynced, [store.path("/World/A")]);
     assert_eq!(removed.changes.removed.len(), 2);
-    assert!(live.local_namespace.as_ref().unwrap().current(&store));
+    assert!(live.local_index(&store).unwrap().current(&store));
     matches_clean(&mut store, &live);
 }
 
@@ -441,17 +467,17 @@ fn undo_restoring_variant_specs_leaves_the_local_fast_path() {
         },
     );
     let mut live = LiveStage::compose(&mut store, ROOT, StageOptions::default());
-    assert!(live.local_namespace.is_none());
+    assert!(live.local_index(&store).is_none());
     let mut remove = Transaction::new();
     remove.remove_spec(address(&mut store, "/World"));
     let removed = live.apply(&mut store, &remove).unwrap();
-    assert!(live.local_namespace.as_ref().unwrap().current(&store));
+    assert!(live.local_index(&store).unwrap().current(&store));
     let restored = live.apply(&mut store, &removed.inverse).unwrap();
-    assert!(live.local_namespace.is_none());
+    assert!(live.local_index(&store).is_none());
     assert_eq!(restored.changes.resynced, [world]);
     matches_clean(&mut store, &live);
     let removed_again = live.apply(&mut store, &restored.inverse).unwrap();
-    assert!(live.local_namespace.as_ref().unwrap().current(&store));
+    assert!(live.local_index(&store).unwrap().current(&store));
     assert_eq!(removed_again.changes.removed, removed.changes.removed);
     matches_clean(&mut store, &live);
 }
@@ -509,7 +535,7 @@ fn external_arc_edits_expire_the_local_composition_proof() {
         txn.create_prim(address(&mut store, "/World/A/New"), Specifier::Def, None);
         let result = live.apply(&mut store, &txn).unwrap();
         assert_eq!(result.changes.resynced, [store.path("/")]);
-        assert!(live.local_namespace.is_none());
+        assert!(live.local_index(&store).is_none());
         matches_clean(&mut store, &live);
         assert!(live.stage().has_prim(store.path("/World/A/Y")));
         live.apply(&mut store, &result.inverse).unwrap();
@@ -582,7 +608,7 @@ fn batch_removals_include_disjoint_and_overlapping_subtrees() {
     failing.create_prim(address(&mut store, "/World"), Specifier::Def, None);
     assert!(live.apply(&mut store, &failing).is_err());
     assert_eq!(store.layer(ROOT).unwrap().prims, before);
-    assert!(live.local_namespace.as_ref().unwrap().current(&store));
+    assert!(live.local_index(&store).unwrap().current(&store));
     matches_clean(&mut store, &live);
 }
 

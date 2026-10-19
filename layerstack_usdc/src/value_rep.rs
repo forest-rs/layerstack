@@ -361,6 +361,10 @@ pub(crate) enum DecodedField<'a> {
     /// ([`decode_path_list_op_indices`]), which assembly maps to paths
     /// through the path tree without copying their text.
     PathListOp(ListOpParts<u32>),
+    /// One token, string, asset path or path expression as the token-table
+    /// index of its text ([`decode_text_index`]), `u32::MAX` for the empty
+    /// text, which assembly converts without copying the text first.
+    Text(TextKind, u32),
     /// A value left encoded, for a retained read to decode on demand.
     #[cfg(feature = "std")]
     Retained(RawValueRep),
@@ -373,7 +377,8 @@ impl DecodedField<'_> {
             Self::MathArray(_)
             | Self::FloatArray(_)
             | Self::TokenArray(_)
-            | Self::PathListOp(_) => None,
+            | Self::PathListOp(_)
+            | Self::Text(..) => None,
             #[cfg(feature = "std")]
             Self::Retained(_) => None,
         }
@@ -425,6 +430,71 @@ pub(crate) fn decode_text_indices(
         }
         budget.charge_elements(text_units)?;
         Ok(indices)
+    })
+}
+
+/// What a scalar text value names ([`scalar_text_kind`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum TextKind {
+    /// A token (`TfToken`).
+    Token,
+    /// A string (`std::string`).
+    String,
+    /// An asset path's text.
+    AssetPath,
+    /// A path expression's text (crate 0.10.0).
+    PathExpression,
+}
+
+/// The kind of text `rep` holds when it is one token, string, asset path
+/// or path expression, not an array or array edit; `None` otherwise.
+pub(crate) fn scalar_text_kind(rep: &RawValueRep) -> Option<TextKind> {
+    if rep.is_array() || rep.is_array_edit() {
+        return None;
+    }
+    Some(match rep.value_type().ok()? {
+        ValueType::Token => TextKind::Token,
+        ValueType::String => TextKind::String,
+        ValueType::AssetPath => TextKind::AssetPath,
+        ValueType::PathExpression => TextKind::PathExpression,
+        _ => return None,
+    })
+}
+
+/// The token-table index of the text of the scalar text value `rep`
+/// ([`scalar_text_kind`]), charged as [`decode_value_within`] charges
+/// decoding it: the value and its text. An index outside the tables,
+/// which [`decode_value`] reads as the empty string, is `u32::MAX`.
+///
+/// Like the generic decoder, a string is an index into the STRINGS table,
+/// and an asset path or path expression is a token when inlined and a
+/// string otherwise (AOUSD Core §16.3.10).
+pub(crate) fn decode_text_index(
+    rep: &RawValueRep,
+    data: &[u8],
+    sections: &CrateSections,
+    kind: TextKind,
+    budget: &mut DecodeBudget,
+) -> Result<u32, UsdcError> {
+    within_value_budget(budget, |budget| {
+        let index = decode_inlined_or_offset_u32(rep, data)?;
+        let string = match kind {
+            TextKind::Token => false,
+            TextKind::String => true,
+            TextKind::AssetPath | TextKind::PathExpression => !rep.is_inlined(),
+        };
+        let token = if string {
+            sections.strings.get(index as usize).copied()
+        } else {
+            Some(index)
+        };
+        match token.and_then(|token| Some((token, sections.tokens.text_len(token as usize)?))) {
+            Some((token, len)) => {
+                budget.charge_text(len)?;
+                Ok(token)
+            }
+            None => Ok(u32::MAX),
+        }
     })
 }
 
@@ -630,7 +700,7 @@ fn decode_nested(
             DecodedField::MathArray(array) => {
                 CrateValue::TypedArray(crate::numeric_array::math_array(&array))
             }
-            DecodedField::TokenArray(_) | DecodedField::PathListOp(_) => {
+            DecodedField::TokenArray(_) | DecodedField::PathListOp(_) | DecodedField::Text(..) => {
                 unreachable!("indices are decoded only for top-level fields")
             }
             #[cfg(feature = "std")]

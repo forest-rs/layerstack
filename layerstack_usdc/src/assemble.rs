@@ -191,12 +191,19 @@ enum PrimPathAt {
 }
 
 /// The prim specs a read builds, by their path's text, and by the path
-/// table index of each spec's path. Each spec is boxed, so the passes that
-/// fill them in move a pointer rather than a 960-byte `PrimSpec`, and the
-/// spec moves once more, into the layer.
+/// table index of each spec's path, in the order their paths were first
+/// spelled. Each spec is boxed, so it stays where it was built, in the
+/// layer too ([`Layer::insert_prims`]).
+#[expect(
+    clippy::vec_box,
+    reason = "a boxed spec moves into the layer as a pointer, without a copy"
+)]
 struct PrimSpecs<'a> {
     by_path: HashMap<&'a str, usize>,
-    specs: Vec<Option<Box<PrimSpec>>>,
+    specs: Vec<Box<PrimSpec>>,
+    /// The text and path table index each of `specs` was first placed
+    /// with.
+    placed: Vec<(&'a str, u32)>,
     /// The place in `specs` of the spec at each path table index; `NONE`
     /// where no prim spec's path is.
     at_index: Vec<u32>,
@@ -209,22 +216,24 @@ impl<'a> PrimSpecs<'a> {
         Self {
             by_path: HashMap::with_capacity(prims),
             specs: Vec::with_capacity(prims),
+            placed: Vec::with_capacity(prims),
             at_index: alloc::vec![Self::NONE; paths],
         }
     }
 
     /// Sets the spec at `path`, the text of path table entry `index`,
     /// replacing any there.
-    fn insert(&mut self, index: u32, path: &'a str, spec: PrimSpec) {
+    fn insert(&mut self, index: u32, path: &'a str, spec: Box<PrimSpec>) {
         let at = match self.by_path.get(path) {
             Some(&at) => {
-                self.specs[at] = Some(Box::new(spec));
+                self.specs[at] = spec;
                 at
             }
             None => {
                 let at = self.specs.len();
                 self.by_path.insert(path, at);
-                self.specs.push(Some(Box::new(spec)));
+                self.specs.push(spec);
+                self.placed.push((path, index));
                 at
             }
         };
@@ -233,37 +242,36 @@ impl<'a> PrimSpecs<'a> {
         }
     }
 
-    /// The text of the path `path` names, when a spec is there.
-    fn key(&self, path: &str) -> Option<&'a str> {
-        self.by_path.get_key_value(path).map(|(key, _)| *key)
-    }
-
     fn contains_key(&self, path: &str) -> bool {
         self.by_path.contains_key(path)
     }
 
     fn get_mut(&mut self, path: &str) -> Option<&mut PrimSpec> {
         let at = *self.by_path.get(path)?;
-        self.specs[at].as_deref_mut()
+        self.specs.get_mut(at).map(|spec| &mut **spec)
     }
 
     /// The spec at path table entry `index`, whose text is `path`.
     fn get_mut_at(&mut self, index: u32, path: &str) -> Option<&mut PrimSpec> {
         match self.at_index.get(index as usize) {
-            Some(&at) if at != Self::NONE => self.specs[at as usize].as_deref_mut(),
+            Some(&at) if at != Self::NONE => {
+                self.specs.get_mut(at as usize).map(|spec| &mut **spec)
+            }
             // Another entry may spell the same path.
             _ => self.get_mut(path),
         }
     }
 
-    /// Takes the spec at `path` out.
-    fn remove(&mut self, path: &str) -> Option<Box<PrimSpec>> {
-        let at = *self.by_path.get(path)?;
-        self.specs[at].take()
+    /// The text and path table index each spec was first placed with, in
+    /// the order of [`PrimSpecs::into_specs`].
+    fn placed(&self) -> &[(&'a str, u32)] {
+        &self.placed
     }
 
-    fn len(&self) -> usize {
-        self.by_path.len()
+    /// The specs, in the order their paths were first spelled.
+    #[expect(clippy::vec_box, reason = "the specs move into the layer boxed")]
+    fn into_specs(self) -> Vec<Box<PrimSpec>> {
+        self.specs
     }
 }
 
@@ -406,7 +414,7 @@ impl<'a> AssembleCtx<'a> {
                 if let Some(children) = children {
                     property_children.insert(path_str, children);
                 }
-                prim_specs_map.insert(spec.path_index, path_str, prim);
+                prim_specs_map.insert(spec.path_index, path_str, Box::new(prim));
             }
         }
 
@@ -547,37 +555,35 @@ impl<'a> AssembleCtx<'a> {
         // branch spec then joins the namespace spec at its path, as
         // `Layer::insert_prim` keeps them. Inserted as one change, so the
         // layer's map grows once.
-        let mut plain = Vec::with_capacity(prim_specs_map.len());
-        let mut branched: Vec<&str> = Vec::new();
-        for spec in &self.sections.specs {
-            if spec.form != SpecForm::Prim {
-                continue;
-            }
-            let Some(path_str) = self
-                .sections
-                .paths
-                .get(spec.path_index as usize)
-                .and_then(|path| prim_specs_map.key(path))
-            else {
-                continue;
-            };
-            if path_str.contains('{') {
-                branched.push(path_str);
-                continue;
-            }
-            // Taken by the first spec spelling the path.
-            let Some(prim) = prim_specs_map.remove(path_str) else {
-                continue;
-            };
-            if let Some(path) = self.prim_path_at(spec.path_index) {
-                plain.push((path, prim));
-            }
-        }
-        layer.insert_prims(plain.into_iter().map(|(path, prim)| (path, *prim)));
-        branched.sort_unstable();
-        branched.dedup();
-        for path_str in branched {
-            let mut prim = *prim_specs_map.remove(path_str).expect("a key of the map");
+        // Each spec is taken by the first spec spelling its path, which
+        // placed it, so the specs are in the file's order of those specs.
+        let placed: Vec<(&str, Option<PathId>)> = prim_specs_map
+            .placed()
+            .iter()
+            .map(|&(path_str, index)| {
+                let path = if path_str.contains('{') {
+                    None
+                } else {
+                    self.prim_path_at(index)
+                };
+                (path_str, path)
+            })
+            .collect();
+        let mut branched: Vec<(&str, Box<PrimSpec>)> = Vec::new();
+        let plain = prim_specs_map
+            .into_specs()
+            .into_iter()
+            .zip(&placed)
+            .filter_map(|(prim, &(path_str, path))| {
+                if path_str.contains('{') {
+                    branched.push((path_str, prim));
+                    return None;
+                }
+                Some((path?, prim))
+            });
+        layer.insert_prims(plain);
+        branched.sort_unstable_by_key(|(path, _)| *path);
+        for (path_str, mut prim) in branched {
             let namespace = match split_branch_path(path_str) {
                 Some((namespace, sites)) => {
                     prim.outer_variant_sites = self.branch_sites(&namespace, &sites)?;
@@ -587,7 +593,7 @@ impl<'a> AssembleCtx<'a> {
             };
             if let Ok(path) = Path::parse_absolute(&namespace, self.tokens) {
                 let path_id = self.paths.intern(path);
-                layer.insert_prim(path_id, prim);
+                layer.insert_prim(path_id, *prim);
             }
         }
 
@@ -1221,15 +1227,16 @@ impl<'a> AssembleCtx<'a> {
         // spec order, so names intern in the same order on every read.
         let mut parents: Vec<&str> = Vec::new();
         let mut children: HashMap<&str, Vec<(&str, TokenId)>> = HashMap::new();
-        for spec in &self.sections.specs {
+        let sections = self.sections;
+        for spec in &sections.specs {
             if spec.form != SpecForm::Prim {
                 continue;
             }
-            let Some(path) = self
-                .sections
+            let Some(path) = sections
                 .paths
                 .get(spec.path_index as usize)
-                .and_then(|path| prim_specs.key(path))
+                .map(String::as_str)
+                .filter(|path| prim_specs.contains_key(path))
             else {
                 continue;
             };

@@ -248,10 +248,10 @@ pub use composition_error::{
 pub use dependency_map::{ArcDependency, LayerDependencyStorage};
 pub use doc::{
     AssetAvailability, FieldEntry, FieldValue, InMemoryStore, InterpolationType, Layer, LayerId,
-    LayerOffset, LayerStore, MaybeSync, PrimSpec, Reference, ReferenceTarget, Relocate, Specifier,
-    SublayerEntry, Value, VariantBranch, VariantBranches, VariantSetSpec, VariantSpec,
-    combine_dictionaries, combine_dictionary_chain, get_field, get_field_mut,
-    insert_field_if_absent, remove_field, set_field_vec,
+    LayerOffset, LayerPrims, LayerPrimsIter, LayerPrimsIterMut, LayerStore, MaybeSync, PrimSpec,
+    Reference, ReferenceTarget, Relocate, Specifier, SublayerEntry, Value, VariantBranch,
+    VariantBranches, VariantSetSpec, VariantSpec, combine_dictionaries, combine_dictionary_chain,
+    get_field, get_field_mut, insert_field_if_absent, remove_field, set_field_vec,
 };
 pub use dynamic_format::{
     DynamicArgs, DynamicDependency, DynamicFileFormat, DynamicFormatContext,

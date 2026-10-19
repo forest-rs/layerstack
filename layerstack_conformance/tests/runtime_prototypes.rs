@@ -4,7 +4,7 @@
 //! Prototype grouping and occurrence target mapping against OpenUSD.
 //! AOUSD Core §11.4; OpenUSD `PcpInstanceKey`.
 
-use layerstack::{Stage, StageOptions};
+use layerstack::{Stage, StageOptions, Time};
 use layerstack_conformance::{usda_real::load_entry_usda, workspace_root};
 use serde_json::json;
 use std::process::Command;
@@ -107,11 +107,7 @@ fn native_clip_contexts_have_distinct_prototypes_and_animation() {
         .map(|name| store.property_path(&format!("/{name}/Child.x")))
         .iter()
         .map(|path| {
-            let value = stage.resolve_property_path_at_time(
-                *path,
-                5.,
-                layerstack::InterpolationType::Linear,
-            );
+            let value = stage.resolve_property_path_at_time(*path, Time::at(5.));
             assert!(
                 stage
                     .property_sample_times(path.prim_path(), path.property())

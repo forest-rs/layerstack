@@ -135,7 +135,7 @@
 //! use std::sync::Arc;
 //!
 //! use layerstack::edit::EditTarget;
-//! use layerstack::{InMemoryStore, InterpolationType, Layer, LayerId, LiveStage, StageOptions};
+//! use layerstack::{InMemoryStore, Layer, LayerId, LiveStage, StageOptions, Time};
 //! use layerstack_schemas::usd_geom::{Mesh, MeshSubdivisionScheme};
 //! use layerstack_schemas::{Scene, SchemaEdit};
 //!
@@ -158,7 +158,7 @@
 //! let scene = Scene::new(live.stage(), &store);
 //! let mesh = Mesh::new(&scene, path).expect("a mesh");
 //! assert_eq!(mesh.face_vertex_counts(), Some(vec![4].into()));
-//! assert_eq!(mesh.points_at(1.0, InterpolationType::Held).map(|p| p.len()), Some(4));
+//! assert_eq!(mesh.points_at(Time::held(1.0)).map(|p| p.len()), Some(4));
 //! // Nothing authored: the schema's fallback.
 //! assert_eq!(mesh.subdivision_scheme(), Some(MeshSubdivisionScheme::CatmullClark));
 //! ```

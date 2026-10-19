@@ -13,11 +13,11 @@ use core::fmt::Write as _;
 
 use super::{FindingKind, FlattenReport, Loss, ObjectPath, Transformation};
 use crate::{
-    doc::{InterpolationType, LayerStore, Value},
+    doc::{LayerStore, Value},
     interner::{TokenId, TokenInterner},
     path::{PathId, PathInterner, PropertyPath, TargetPath},
     prim_index::FieldKey,
-    property::Variability,
+    property::{Time, Variability},
     stage::{ResolvedValue, Stage, stage_time::map_leaves},
 };
 
@@ -618,7 +618,7 @@ impl Verifier<'_> {
             self.out.scope.values += 1;
             let value = |stage: &Stage| {
                 stage
-                    .resolve_property_path_at_time(property, time, InterpolationType::Linear)
+                    .resolve_property_path_at_time(property, Time::at(time))
                     .map(|r| r.value)
             };
             let (want, got) = (self.expected_value(&path, value(source)), value(flattened));

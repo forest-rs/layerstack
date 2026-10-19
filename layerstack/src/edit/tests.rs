@@ -7,7 +7,7 @@ use super::*;
 use crate::{
     ArcKind, FieldValue, HashMap, InMemoryStore, Layer, LayerId, LayerOffset, LayerStore, NodeId,
     PathId, PrimSpec, PropertySpec, PropertyType, Reference, SpecPath, Specifier, Stage,
-    StageOptions, SublayerEntry, TokenId, Value, VariantSetSpec, VariantSpec,
+    StageOptions, SublayerEntry, Time, TokenId, Value, VariantSetSpec, VariantSpec,
 };
 
 const SCENE: LayerId = LayerId(1);
@@ -877,10 +877,9 @@ fn assert_live_matches_fresh(live: &crate::LiveStage, store: &mut InMemoryStore,
                 store.tokens.resolve(name)
             );
             for time in [0.0, 2.0, 5.0, 14.0] {
-                let linear = crate::InterpolationType::Linear;
                 assert_eq!(
-                    stage.resolve_value_at_time(prim, name, time, linear),
-                    fresh.resolve_value_at_time(prim, name, time, linear),
+                    stage.resolve_value_at_time(prim, name, Time::at(time)),
+                    fresh.resolve_value_at_time(prim, name, Time::at(time)),
                     "{context}: {} at {time}",
                     store.tokens.resolve(name)
                 );
@@ -2189,16 +2188,9 @@ fn live_value_slots_preserve_mapping_and_undo() {
             );
             for time in [0.0, 5.0, 14.0] {
                 assert_eq!(
-                    live.stage().resolve_property_path_at_time(
-                        path,
-                        time,
-                        crate::InterpolationType::default()
-                    ),
-                    fresh.resolve_property_path_at_time(
-                        path,
-                        time,
-                        crate::InterpolationType::default()
-                    )
+                    live.stage()
+                        .resolve_property_path_at_time(path, Time::at(time)),
+                    fresh.resolve_property_path_at_time(path, Time::at(time))
                 );
             }
         }

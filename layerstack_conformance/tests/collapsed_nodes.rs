@@ -34,9 +34,7 @@
 use std::collections::BTreeMap;
 
 use layerstack::property::get_property_mut;
-use layerstack::{
-    InterpolationType, LayerId, ListOp, LiveStage, PathId, Stage, StageOptions, Value,
-};
+use layerstack::{LayerId, ListOp, LiveStage, PathId, Stage, StageOptions, Time, Value};
 use layerstack_conformance::{
     usda_real::{LoadedStage, load_entry_usda},
     workspace_root,
@@ -229,7 +227,7 @@ fn time_samples_use_the_strongest_occurrence_offset() {
         let property = loaded.store.property_path(attr);
         for &(time, expected) in probes {
             let value = stage
-                .resolve_property_path_at_time(property, time, InterpolationType::Linear)
+                .resolve_property_path_at_time(property, Time::at(time))
                 .map(|resolved| resolved.value);
             if value != Some(Value::Double(expected)) {
                 mismatches.push(format!(

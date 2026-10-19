@@ -4,7 +4,7 @@
 //! Save/reopen ownership probe: `save_retention source.usdc fresh.usdc [snapshot]`.
 //! The destination must not exist. Explicit reload is a measurement surrogate
 //! for releasing the document's old sources, not a silent post-save rebind API.
-use layerstack::{EditTarget, InterpolationType, PropertyPath, StageOptions, Transaction, Value};
+use layerstack::{EditTarget, PropertyPath, StageOptions, Time, Transaction, Value};
 use layerstack_io::{
     Filesystem, LoadOptions, ReloadPolicy, StageDocument, UsdcArrayLoading, UsdcReadOptions,
 };
@@ -103,11 +103,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .collect();
     let started = Instant::now();
     for &property in &properties {
-        black_box(document.stage().stage().try_resolve_property_path_at_time(
-            property,
-            5.,
-            InterpolationType::Linear,
-        )?);
+        black_box(
+            document
+                .stage()
+                .stage()
+                .try_resolve_property_path_at_time(property, Time::at(5.))?,
+        );
     }
     report(&document, root_layer, &old, "warm_all", started);
     let mut snapshot = keep_snapshot.then(|| document.store().snapshot());
@@ -177,11 +178,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let started = Instant::now();
     for &property in &properties {
-        black_box(document.stage().stage().try_resolve_property_path_at_time(
-            property,
-            5.,
-            InterpolationType::Linear,
-        )?);
+        black_box(
+            document
+                .stage()
+                .stage()
+                .try_resolve_property_path_at_time(property, Time::at(5.))?,
+        );
     }
     report(&document, root_layer, &old, "requery_all", started);
     let started = Instant::now();

@@ -8,7 +8,7 @@
 
 use layerstack::{
     AssetResolveError, AssetResolver, InMemoryStore, InterpolationType, LayerId, PathInterner,
-    ResolvedAsset, Stage, StageOptions, TokenInterner, Value,
+    ResolvedAsset, Stage, StageOptions, Time, TokenInterner, Value,
 };
 use serde::Deserialize;
 use std::{
@@ -213,9 +213,22 @@ fn check(
         .map(|&t| {
             scalar(
                 if schema {
-                    stage.resolve_value_at_time_with_schema(prim, field, t, interpolation)
+                    stage.resolve_value_at_time_with_schema(
+                        prim,
+                        field,
+                        Time::At {
+                            code: t,
+                            interpolation,
+                        },
+                    )
                 } else {
-                    stage.resolve_property_path_at_time(property, t, interpolation)
+                    stage.resolve_property_path_at_time(
+                        property,
+                        Time::At {
+                            code: t,
+                            interpolation,
+                        },
+                    )
                 }
                 .map(|r| r.value),
             )
@@ -252,7 +265,10 @@ fn check(
                 InterpolationType::Linear
             };
             close(
-                sphere.radius_at(time, interpolation),
+                sphere.radius_at(Time::At {
+                    code: time,
+                    interpolation,
+                }),
                 value,
                 &format!("{name} schema view at {time:?}"),
             );
@@ -1144,7 +1160,7 @@ fn live(store: &mut InMemoryStore) -> layerstack::LiveStage {
 fn at(stage: &Stage, property: layerstack::PropertyPath, time: f64) -> Option<f64> {
     scalar(
         stage
-            .resolve_property_path_at_time(property, time, InterpolationType::Linear)
+            .resolve_property_path_at_time(property, Time::at(time))
             .map(|r| r.value),
     )
 }
@@ -1160,12 +1176,7 @@ fn clip_sources_explain_both_actual_layers_and_do_not_define_properties() {
     let (store, stage) = compose(&layers);
     let property = store.property_path("/P.x");
     let source = stage
-        .property_clip_source(
-            property.prim_path(),
-            property.property(),
-            5.,
-            InterpolationType::Linear,
-        )
+        .property_clip_source(property.prim_path(), property.property(), Time::at(5.))
         .unwrap();
     assert_eq!(source.anchor_layer, LayerId(1));
     assert_eq!(source.lower.layer, Some(LayerId(2)));
@@ -1178,11 +1189,11 @@ fn clip_sources_explain_both_actual_layers_and_do_not_define_properties() {
         layerstack::SpecPath::from_property_path(raw)
     );
     let resolved = stage
-        .resolve_property_path_at_time(property, 5., InterpolationType::Linear)
+        .resolve_property_path_at_time(property, Time::at(5.))
         .unwrap();
     assert_eq!(resolved.value, Value::Double(50.));
     let explanation = stage
-        .explain_property_value_at_time(property, 5., InterpolationType::Linear)
+        .explain_property_value(property, Time::at(5.))
         .unwrap();
     assert_eq!(explanation.clip, Some(source));
     assert!(matches!(
@@ -1203,12 +1214,7 @@ fn clip_sources_explain_both_actual_layers_and_do_not_define_properties() {
     assert_eq!(at(&stage, property, 5.), None);
     assert!(
         stage
-            .property_clip_source(
-                property.prim_path(),
-                property.property(),
-                5.,
-                InterpolationType::Linear
-            )
+            .property_clip_source(property.prim_path(), property.property(), Time::at(5.))
             .is_none()
     );
 }
@@ -1595,12 +1601,7 @@ fn missing_clip_property_reports_manifest_default_source() {
     let property = store.property_path("/P.x");
     assert_eq!(at(&stage, property, 0.), Some(42.));
     let source = stage
-        .property_clip_source(
-            property.prim_path(),
-            property.property(),
-            0.,
-            InterpolationType::Linear,
-        )
+        .property_clip_source(property.prim_path(), property.property(), Time::at(0.))
         .unwrap();
     assert_eq!(source.lower.layer, Some(LayerId(4)));
     assert_eq!(source.upper.layer, Some(LayerId(4)));
@@ -1644,7 +1645,7 @@ fn review_sparse_anchor_keeps_authoring_provenance() {
         },
     );
     let resolved = stage
-        .resolve_property_path_at_time(property, 0., InterpolationType::Linear)
+        .resolve_property_path_at_time(property, Time::at(0.))
         .unwrap();
     assert_eq!(resolved.provenance.unwrap().layer, LayerId(1));
 }
@@ -1668,7 +1669,7 @@ fn review_invalid_clip_query_does_not_explain_weak_default_as_contributing() {
     let (store, stage) = compose(&layers);
     let property = store.property_path("/P.x");
     let explanation = stage
-        .explain_property_value_at_time(property, f64::NAN, InterpolationType::Linear)
+        .explain_property_value(property, Time::at(f64::NAN))
         .unwrap();
     assert_eq!(explanation.value, None);
     assert!(
@@ -1748,12 +1749,7 @@ fn review_manifest_blocked_spline_reports_manifest_default_source() {
     let (store, stage) = compose(&layers);
     let property = store.property_path("/P.x");
     let source = stage
-        .property_clip_source(
-            property.prim_path(),
-            property.property(),
-            5.,
-            InterpolationType::Linear,
-        )
+        .property_clip_source(property.prim_path(), property.property(), Time::at(5.))
         .unwrap();
     assert_eq!(source.lower.layer, Some(LayerId(4)));
 }

@@ -97,14 +97,10 @@ impl<'a> Field3DAsset<'a> {
         self.read_value("fieldPurpose", crate::value::read_token)
     }
 
-    #[doc = "[`Self::field_purpose`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::field_purpose`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn field_purpose_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<&'a str> {
-        self.read_value_at("fieldPurpose", time, interp, crate::value::read_token)
+    pub fn field_purpose_at(&self, time: ::layerstack::Time) -> Option<&'a str> {
+        self.read_value_at("fieldPurpose", time, crate::value::read_token)
     }
 }
 
@@ -147,14 +143,14 @@ impl Field3DAssetEdit {
     #[doc(alias = "CreateFieldPurposeAttr")]
     pub fn set_field_purpose(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value(edit, "fieldPurpose", None, value);
+        self.write_value(edit, "fieldPurpose", value);
         self
     }
 
     #[doc = "[`Self::set_field_purpose`] as a time sample at the time code `time`."]
     pub fn set_field_purpose_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &str) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value(edit, "fieldPurpose", Some(time), value);
+        self.write_value_at(edit, "fieldPurpose", time, value);
         self
     }
 }
@@ -455,14 +451,10 @@ impl<'a> OpenVDBAsset<'a> {
         self.read_value("fieldClass", OpenVDBAssetFieldClass::read)
     }
 
-    #[doc = "[`Self::field_class`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::field_class`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn field_class_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<OpenVDBAssetFieldClass> {
-        self.read_value_at("fieldClass", time, interp, OpenVDBAssetFieldClass::read)
+    pub fn field_class_at(&self, time: ::layerstack::Time) -> Option<OpenVDBAssetFieldClass> {
+        self.read_value_at("fieldClass", time, OpenVDBAssetFieldClass::read)
     }
 }
 
@@ -509,7 +501,7 @@ impl OpenVDBAssetEdit {
         value: OpenVDBAssetFieldClass,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "fieldClass", None, value);
+        self.write_value(edit, "fieldClass", value);
         self
     }
 
@@ -521,7 +513,7 @@ impl OpenVDBAssetEdit {
         value: OpenVDBAssetFieldClass,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "fieldClass", Some(time), value);
+        self.write_value_at(edit, "fieldClass", time, value);
         self
     }
 }
@@ -921,7 +913,7 @@ impl ParticleField3DGaussianSplatEdit {
         value: ParticleField3DGaussianSplatProjectionModeHint,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "projectionModeHint", None, value);
+        self.write_value(edit, "projectionModeHint", value);
         self
     }
 
@@ -937,7 +929,7 @@ impl ParticleField3DGaussianSplatEdit {
         value: ParticleField3DGaussianSplatSortingModeHint,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "sortingModeHint", None, value);
+        self.write_value(edit, "sortingModeHint", value);
         self
     }
 
@@ -1475,19 +1467,13 @@ impl<'a> ParticleFieldOpacityAttributeApi<'a> {
         self.read_value("opacities", crate::value::read_float_array_shared)
     }
 
-    #[doc = "[`Self::opacities`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::opacities`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn opacities_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<f32>>> {
-        self.read_value_at(
-            "opacities",
-            time,
-            interp,
-            crate::value::read_float_array_shared,
-        )
+        self.read_value_at("opacities", time, crate::value::read_float_array_shared)
     }
 
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -1513,14 +1499,10 @@ impl<'a> ParticleFieldOpacityAttributeApi<'a> {
         self.read_value("opacitiesh", crate::value::read_half_array)
     }
 
-    #[doc = "[`Self::opacitiesh`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::opacitiesh`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn opacitiesh_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<::alloc::vec::Vec<f32>> {
-        self.read_value_at("opacitiesh", time, interp, crate::value::read_half_array)
+    pub fn opacitiesh_at(&self, time: ::layerstack::Time) -> Option<::alloc::vec::Vec<f32>> {
+        self.read_value_at("opacitiesh", time, crate::value::read_half_array)
     }
 
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -1572,14 +1554,14 @@ impl ParticleFieldOpacityAttributeApiEdit {
     #[doc(alias = "CreateOpacitiesAttr")]
     pub fn set_opacities(&self, edit: &mut SchemaEdit<'_>, value: &[f32]) -> &Self {
         let value = crate::value::write_float_array(value, edit.tokens());
-        self.write_value(edit, "opacities", None, value);
+        self.write_value(edit, "opacities", value);
         self
     }
 
     #[doc = "[`Self::set_opacities`] as a time sample at the time code `time`."]
     pub fn set_opacities_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &[f32]) -> &Self {
         let value = crate::value::write_float_array(value, edit.tokens());
-        self.write_value(edit, "opacities", Some(time), value);
+        self.write_value_at(edit, "opacities", time, value);
         self
     }
 
@@ -1590,7 +1572,7 @@ impl ParticleFieldOpacityAttributeApiEdit {
         value: ::alloc::vec::Vec<f32>,
     ) -> &Self {
         let value = crate::value::write_float_array_owned(value, edit.tokens());
-        self.write_value(edit, "opacities", None, value);
+        self.write_value(edit, "opacities", value);
         self
     }
 
@@ -1602,7 +1584,7 @@ impl ParticleFieldOpacityAttributeApiEdit {
         value: ::alloc::vec::Vec<f32>,
     ) -> &Self {
         let value = crate::value::write_float_array_owned(value, edit.tokens());
-        self.write_value(edit, "opacities", Some(time), value);
+        self.write_value_at(edit, "opacities", time, value);
         self
     }
 
@@ -1613,7 +1595,7 @@ impl ParticleFieldOpacityAttributeApiEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f32>>,
     ) -> &Self {
         let value = crate::value::write_float_array_shared(value, edit.tokens());
-        self.write_value(edit, "opacities", None, value);
+        self.write_value(edit, "opacities", value);
         self
     }
 
@@ -1625,7 +1607,7 @@ impl ParticleFieldOpacityAttributeApiEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f32>>,
     ) -> &Self {
         let value = crate::value::write_float_array_shared(value, edit.tokens());
-        self.write_value(edit, "opacities", Some(time), value);
+        self.write_value_at(edit, "opacities", time, value);
         self
     }
 
@@ -1637,14 +1619,14 @@ impl ParticleFieldOpacityAttributeApiEdit {
     #[doc(alias = "CreateOpacitieshAttr")]
     pub fn set_opacitiesh(&self, edit: &mut SchemaEdit<'_>, value: &[f32]) -> &Self {
         let value = crate::value::write_half_array(value, edit.tokens());
-        self.write_value(edit, "opacitiesh", None, value);
+        self.write_value(edit, "opacitiesh", value);
         self
     }
 
     #[doc = "[`Self::set_opacitiesh`] as a time sample at the time code `time`."]
     pub fn set_opacitiesh_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &[f32]) -> &Self {
         let value = crate::value::write_half_array(value, edit.tokens());
-        self.write_value(edit, "opacitiesh", Some(time), value);
+        self.write_value_at(edit, "opacitiesh", time, value);
         self
     }
 }
@@ -1734,19 +1716,13 @@ impl<'a> ParticleFieldOrientationAttributeApi<'a> {
         self.read_value("orientations", crate::value::read_quatf_array_shared)
     }
 
-    #[doc = "[`Self::orientations`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::orientations`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn orientations_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 4]>>> {
-        self.read_value_at(
-            "orientations",
-            time,
-            interp,
-            crate::value::read_quatf_array_shared,
-        )
+        self.read_value_at("orientations", time, crate::value::read_quatf_array_shared)
     }
 
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -1772,19 +1748,13 @@ impl<'a> ParticleFieldOrientationAttributeApi<'a> {
         self.read_value("orientationsh", crate::value::read_quath_array)
     }
 
-    #[doc = "[`Self::orientationsh`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::orientationsh`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn orientationsh_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::vec::Vec<[f32; 4]>> {
-        self.read_value_at(
-            "orientationsh",
-            time,
-            interp,
-            crate::value::read_quath_array,
-        )
+        self.read_value_at("orientationsh", time, crate::value::read_quath_array)
     }
 
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -1836,7 +1806,7 @@ impl ParticleFieldOrientationAttributeApiEdit {
     #[doc(alias = "CreateOrientationsAttr")]
     pub fn set_orientations(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 4]]) -> &Self {
         let value = crate::value::write_quatf_array(value, edit.tokens());
-        self.write_value(edit, "orientations", None, value);
+        self.write_value(edit, "orientations", value);
         self
     }
 
@@ -1848,7 +1818,7 @@ impl ParticleFieldOrientationAttributeApiEdit {
         value: &[[f32; 4]],
     ) -> &Self {
         let value = crate::value::write_quatf_array(value, edit.tokens());
-        self.write_value(edit, "orientations", Some(time), value);
+        self.write_value_at(edit, "orientations", time, value);
         self
     }
 
@@ -1859,7 +1829,7 @@ impl ParticleFieldOrientationAttributeApiEdit {
         value: ::alloc::vec::Vec<[f32; 4]>,
     ) -> &Self {
         let value = crate::value::write_quatf_array_owned(value, edit.tokens());
-        self.write_value(edit, "orientations", None, value);
+        self.write_value(edit, "orientations", value);
         self
     }
 
@@ -1871,7 +1841,7 @@ impl ParticleFieldOrientationAttributeApiEdit {
         value: ::alloc::vec::Vec<[f32; 4]>,
     ) -> &Self {
         let value = crate::value::write_quatf_array_owned(value, edit.tokens());
-        self.write_value(edit, "orientations", Some(time), value);
+        self.write_value_at(edit, "orientations", time, value);
         self
     }
 
@@ -1882,7 +1852,7 @@ impl ParticleFieldOrientationAttributeApiEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 4]>>,
     ) -> &Self {
         let value = crate::value::write_quatf_array_shared(value, edit.tokens());
-        self.write_value(edit, "orientations", None, value);
+        self.write_value(edit, "orientations", value);
         self
     }
 
@@ -1894,7 +1864,7 @@ impl ParticleFieldOrientationAttributeApiEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 4]>>,
     ) -> &Self {
         let value = crate::value::write_quatf_array_shared(value, edit.tokens());
-        self.write_value(edit, "orientations", Some(time), value);
+        self.write_value_at(edit, "orientations", time, value);
         self
     }
 
@@ -1906,7 +1876,7 @@ impl ParticleFieldOrientationAttributeApiEdit {
     #[doc(alias = "CreateOrientationshAttr")]
     pub fn set_orientationsh(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 4]]) -> &Self {
         let value = crate::value::write_quath_array(value, edit.tokens());
-        self.write_value(edit, "orientationsh", None, value);
+        self.write_value(edit, "orientationsh", value);
         self
     }
 
@@ -1918,7 +1888,7 @@ impl ParticleFieldOrientationAttributeApiEdit {
         value: &[[f32; 4]],
     ) -> &Self {
         let value = crate::value::write_quath_array(value, edit.tokens());
-        self.write_value(edit, "orientationsh", Some(time), value);
+        self.write_value_at(edit, "orientationsh", time, value);
         self
     }
 }
@@ -2006,19 +1976,13 @@ impl<'a> ParticleFieldPositionAttributeApi<'a> {
         self.read_value("positions", crate::value::read_float3_array_shared)
     }
 
-    #[doc = "[`Self::positions`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::positions`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn positions_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>> {
-        self.read_value_at(
-            "positions",
-            time,
-            interp,
-            crate::value::read_float3_array_shared,
-        )
+        self.read_value_at("positions", time, crate::value::read_float3_array_shared)
     }
 
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -2044,14 +2008,10 @@ impl<'a> ParticleFieldPositionAttributeApi<'a> {
         self.read_value("positionsh", crate::value::read_half3_array)
     }
 
-    #[doc = "[`Self::positionsh`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::positionsh`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn positionsh_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<::alloc::vec::Vec<[f32; 3]>> {
-        self.read_value_at("positionsh", time, interp, crate::value::read_half3_array)
+    pub fn positionsh_at(&self, time: ::layerstack::Time) -> Option<::alloc::vec::Vec<[f32; 3]>> {
+        self.read_value_at("positionsh", time, crate::value::read_half3_array)
     }
 
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -2103,7 +2063,7 @@ impl ParticleFieldPositionAttributeApiEdit {
     #[doc(alias = "CreatePositionsAttr")]
     pub fn set_positions(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 3]]) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(edit, "positions", None, value);
+        self.write_value(edit, "positions", value);
         self
     }
 
@@ -2115,7 +2075,7 @@ impl ParticleFieldPositionAttributeApiEdit {
         value: &[[f32; 3]],
     ) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(edit, "positions", Some(time), value);
+        self.write_value_at(edit, "positions", time, value);
         self
     }
 
@@ -2126,7 +2086,7 @@ impl ParticleFieldPositionAttributeApiEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(edit, "positions", None, value);
+        self.write_value(edit, "positions", value);
         self
     }
 
@@ -2138,7 +2098,7 @@ impl ParticleFieldPositionAttributeApiEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(edit, "positions", Some(time), value);
+        self.write_value_at(edit, "positions", time, value);
         self
     }
 
@@ -2149,7 +2109,7 @@ impl ParticleFieldPositionAttributeApiEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(edit, "positions", None, value);
+        self.write_value(edit, "positions", value);
         self
     }
 
@@ -2161,7 +2121,7 @@ impl ParticleFieldPositionAttributeApiEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(edit, "positions", Some(time), value);
+        self.write_value_at(edit, "positions", time, value);
         self
     }
 
@@ -2173,7 +2133,7 @@ impl ParticleFieldPositionAttributeApiEdit {
     #[doc(alias = "CreatePositionshAttr")]
     pub fn set_positionsh(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 3]]) -> &Self {
         let value = crate::value::write_half3_array(value, edit.tokens());
-        self.write_value(edit, "positionsh", None, value);
+        self.write_value(edit, "positionsh", value);
         self
     }
 
@@ -2185,7 +2145,7 @@ impl ParticleFieldPositionAttributeApiEdit {
         value: &[[f32; 3]],
     ) -> &Self {
         let value = crate::value::write_half3_array(value, edit.tokens());
-        self.write_value(edit, "positionsh", Some(time), value);
+        self.write_value_at(edit, "positionsh", time, value);
         self
     }
 }
@@ -2471,19 +2431,13 @@ impl<'a> ParticleFieldScaleAttributeApi<'a> {
         self.read_value("scales", crate::value::read_float3_array_shared)
     }
 
-    #[doc = "[`Self::scales`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::scales`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn scales_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>> {
-        self.read_value_at(
-            "scales",
-            time,
-            interp,
-            crate::value::read_float3_array_shared,
-        )
+        self.read_value_at("scales", time, crate::value::read_float3_array_shared)
     }
 
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -2509,14 +2463,10 @@ impl<'a> ParticleFieldScaleAttributeApi<'a> {
         self.read_value("scalesh", crate::value::read_half3_array)
     }
 
-    #[doc = "[`Self::scalesh`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::scalesh`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn scalesh_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<::alloc::vec::Vec<[f32; 3]>> {
-        self.read_value_at("scalesh", time, interp, crate::value::read_half3_array)
+    pub fn scalesh_at(&self, time: ::layerstack::Time) -> Option<::alloc::vec::Vec<[f32; 3]>> {
+        self.read_value_at("scalesh", time, crate::value::read_half3_array)
     }
 
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -2568,14 +2518,14 @@ impl ParticleFieldScaleAttributeApiEdit {
     #[doc(alias = "CreateScalesAttr")]
     pub fn set_scales(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 3]]) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(edit, "scales", None, value);
+        self.write_value(edit, "scales", value);
         self
     }
 
     #[doc = "[`Self::set_scales`] as a time sample at the time code `time`."]
     pub fn set_scales_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &[[f32; 3]]) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(edit, "scales", Some(time), value);
+        self.write_value_at(edit, "scales", time, value);
         self
     }
 
@@ -2586,7 +2536,7 @@ impl ParticleFieldScaleAttributeApiEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(edit, "scales", None, value);
+        self.write_value(edit, "scales", value);
         self
     }
 
@@ -2598,7 +2548,7 @@ impl ParticleFieldScaleAttributeApiEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(edit, "scales", Some(time), value);
+        self.write_value_at(edit, "scales", time, value);
         self
     }
 
@@ -2609,7 +2559,7 @@ impl ParticleFieldScaleAttributeApiEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(edit, "scales", None, value);
+        self.write_value(edit, "scales", value);
         self
     }
 
@@ -2621,7 +2571,7 @@ impl ParticleFieldScaleAttributeApiEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(edit, "scales", Some(time), value);
+        self.write_value_at(edit, "scales", time, value);
         self
     }
 
@@ -2633,7 +2583,7 @@ impl ParticleFieldScaleAttributeApiEdit {
     #[doc(alias = "CreateScaleshAttr")]
     pub fn set_scalesh(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 3]]) -> &Self {
         let value = crate::value::write_half3_array(value, edit.tokens());
-        self.write_value(edit, "scalesh", None, value);
+        self.write_value(edit, "scalesh", value);
         self
     }
 
@@ -2645,7 +2595,7 @@ impl ParticleFieldScaleAttributeApiEdit {
         value: &[[f32; 3]],
     ) -> &Self {
         let value = crate::value::write_half3_array(value, edit.tokens());
-        self.write_value(edit, "scalesh", Some(time), value);
+        self.write_value_at(edit, "scalesh", time, value);
         self
     }
 }
@@ -2743,17 +2693,15 @@ impl<'a> ParticleFieldSphericalHarmonicsAttributeApi<'a> {
         )
     }
 
-    #[doc = "[`Self::radiance_spherical_harmonics_coefficients`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::radiance_spherical_harmonics_coefficients`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn radiance_spherical_harmonics_coefficients_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>> {
         self.read_value_at(
             "radiance:sphericalHarmonicsCoefficients",
             time,
-            interp,
             crate::value::read_float3_array_shared,
         )
     }
@@ -2793,17 +2741,15 @@ impl<'a> ParticleFieldSphericalHarmonicsAttributeApi<'a> {
         )
     }
 
-    #[doc = "[`Self::radiance_spherical_harmonics_coefficientsh`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::radiance_spherical_harmonics_coefficientsh`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn radiance_spherical_harmonics_coefficientsh_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::vec::Vec<[f32; 3]>> {
         self.read_value_at(
             "radiance:sphericalHarmonicsCoefficientsh",
             time,
-            interp,
             crate::value::read_half3_array,
         )
     }
@@ -2884,7 +2830,7 @@ impl ParticleFieldSphericalHarmonicsAttributeApiEdit {
         value: &[[f32; 3]],
     ) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(edit, "radiance:sphericalHarmonicsCoefficients", None, value);
+        self.write_value(edit, "radiance:sphericalHarmonicsCoefficients", value);
         self
     }
 
@@ -2896,12 +2842,7 @@ impl ParticleFieldSphericalHarmonicsAttributeApiEdit {
         value: &[[f32; 3]],
     ) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(
-            edit,
-            "radiance:sphericalHarmonicsCoefficients",
-            Some(time),
-            value,
-        );
+        self.write_value_at(edit, "radiance:sphericalHarmonicsCoefficients", time, value);
         self
     }
 
@@ -2912,7 +2853,7 @@ impl ParticleFieldSphericalHarmonicsAttributeApiEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(edit, "radiance:sphericalHarmonicsCoefficients", None, value);
+        self.write_value(edit, "radiance:sphericalHarmonicsCoefficients", value);
         self
     }
 
@@ -2924,12 +2865,7 @@ impl ParticleFieldSphericalHarmonicsAttributeApiEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(
-            edit,
-            "radiance:sphericalHarmonicsCoefficients",
-            Some(time),
-            value,
-        );
+        self.write_value_at(edit, "radiance:sphericalHarmonicsCoefficients", time, value);
         self
     }
 
@@ -2940,7 +2876,7 @@ impl ParticleFieldSphericalHarmonicsAttributeApiEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(edit, "radiance:sphericalHarmonicsCoefficients", None, value);
+        self.write_value(edit, "radiance:sphericalHarmonicsCoefficients", value);
         self
     }
 
@@ -2952,12 +2888,7 @@ impl ParticleFieldSphericalHarmonicsAttributeApiEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(
-            edit,
-            "radiance:sphericalHarmonicsCoefficients",
-            Some(time),
-            value,
-        );
+        self.write_value_at(edit, "radiance:sphericalHarmonicsCoefficients", time, value);
         self
     }
 
@@ -2975,12 +2906,7 @@ impl ParticleFieldSphericalHarmonicsAttributeApiEdit {
         value: &[[f32; 3]],
     ) -> &Self {
         let value = crate::value::write_half3_array(value, edit.tokens());
-        self.write_value(
-            edit,
-            "radiance:sphericalHarmonicsCoefficientsh",
-            None,
-            value,
-        );
+        self.write_value(edit, "radiance:sphericalHarmonicsCoefficientsh", value);
         self
     }
 
@@ -2992,10 +2918,10 @@ impl ParticleFieldSphericalHarmonicsAttributeApiEdit {
         value: &[[f32; 3]],
     ) -> &Self {
         let value = crate::value::write_half3_array(value, edit.tokens());
-        self.write_value(
+        self.write_value_at(
             edit,
             "radiance:sphericalHarmonicsCoefficientsh",
-            Some(time),
+            time,
             value,
         );
         self
@@ -3015,7 +2941,7 @@ impl ParticleFieldSphericalHarmonicsAttributeApiEdit {
         value: i32,
     ) -> &Self {
         let value = crate::value::write_int(value, edit.tokens());
-        self.write_value(edit, "radiance:sphericalHarmonicsDegree", None, value);
+        self.write_value(edit, "radiance:sphericalHarmonicsDegree", value);
         self
     }
 }
@@ -3238,14 +3164,10 @@ impl<'a> VolumeFieldAsset<'a> {
         self.read_value("fieldDataType", crate::value::read_token)
     }
 
-    #[doc = "[`Self::field_data_type`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::field_data_type`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn field_data_type_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<&'a str> {
-        self.read_value_at("fieldDataType", time, interp, crate::value::read_token)
+    pub fn field_data_type_at(&self, time: ::layerstack::Time) -> Option<&'a str> {
+        self.read_value_at("fieldDataType", time, crate::value::read_token)
     }
 
     /// The USD name of [`Self::field_index`].
@@ -3262,14 +3184,10 @@ impl<'a> VolumeFieldAsset<'a> {
         self.read_value("fieldIndex", crate::value::read_int)
     }
 
-    #[doc = "[`Self::field_index`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::field_index`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn field_index_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<i32> {
-        self.read_value_at("fieldIndex", time, interp, crate::value::read_int)
+    pub fn field_index_at(&self, time: ::layerstack::Time) -> Option<i32> {
+        self.read_value_at("fieldIndex", time, crate::value::read_int)
     }
 
     /// The USD name of [`Self::field_name`].
@@ -3286,14 +3204,10 @@ impl<'a> VolumeFieldAsset<'a> {
         self.read_value("fieldName", crate::value::read_token)
     }
 
-    #[doc = "[`Self::field_name`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::field_name`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn field_name_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<&'a str> {
-        self.read_value_at("fieldName", time, interp, crate::value::read_token)
+    pub fn field_name_at(&self, time: ::layerstack::Time) -> Option<&'a str> {
+        self.read_value_at("fieldName", time, crate::value::read_token)
     }
 
     /// The USD name of [`Self::file_path`].
@@ -3310,14 +3224,10 @@ impl<'a> VolumeFieldAsset<'a> {
         self.read_value("filePath", crate::value::read_asset)
     }
 
-    #[doc = "[`Self::file_path`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::file_path`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn file_path_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<::alloc::sync::Arc<str>> {
-        self.read_value_at("filePath", time, interp, crate::value::read_asset)
+    pub fn file_path_at(&self, time: ::layerstack::Time) -> Option<::alloc::sync::Arc<str>> {
+        self.read_value_at("filePath", time, crate::value::read_asset)
     }
 
     /// The USD name of [`Self::vector_data_role_hint`].
@@ -3337,17 +3247,15 @@ impl<'a> VolumeFieldAsset<'a> {
         )
     }
 
-    #[doc = "[`Self::vector_data_role_hint`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::vector_data_role_hint`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn vector_data_role_hint_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<VolumeFieldAssetVectorDataRoleHint> {
         self.read_value_at(
             "vectorDataRoleHint",
             time,
-            interp,
             VolumeFieldAssetVectorDataRoleHint::read,
         )
     }
@@ -3392,7 +3300,7 @@ impl VolumeFieldAssetEdit {
     #[doc(alias = "CreateFieldDataTypeAttr")]
     pub fn set_field_data_type(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value(edit, "fieldDataType", None, value);
+        self.write_value(edit, "fieldDataType", value);
         self
     }
 
@@ -3404,7 +3312,7 @@ impl VolumeFieldAssetEdit {
         value: &str,
     ) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value(edit, "fieldDataType", Some(time), value);
+        self.write_value_at(edit, "fieldDataType", time, value);
         self
     }
 
@@ -3416,14 +3324,14 @@ impl VolumeFieldAssetEdit {
     #[doc(alias = "CreateFieldIndexAttr")]
     pub fn set_field_index(&self, edit: &mut SchemaEdit<'_>, value: i32) -> &Self {
         let value = crate::value::write_int(value, edit.tokens());
-        self.write_value(edit, "fieldIndex", None, value);
+        self.write_value(edit, "fieldIndex", value);
         self
     }
 
     #[doc = "[`Self::set_field_index`] as a time sample at the time code `time`."]
     pub fn set_field_index_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: i32) -> &Self {
         let value = crate::value::write_int(value, edit.tokens());
-        self.write_value(edit, "fieldIndex", Some(time), value);
+        self.write_value_at(edit, "fieldIndex", time, value);
         self
     }
 
@@ -3435,14 +3343,14 @@ impl VolumeFieldAssetEdit {
     #[doc(alias = "CreateFieldNameAttr")]
     pub fn set_field_name(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value(edit, "fieldName", None, value);
+        self.write_value(edit, "fieldName", value);
         self
     }
 
     #[doc = "[`Self::set_field_name`] as a time sample at the time code `time`."]
     pub fn set_field_name_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &str) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value(edit, "fieldName", Some(time), value);
+        self.write_value_at(edit, "fieldName", time, value);
         self
     }
 
@@ -3454,14 +3362,14 @@ impl VolumeFieldAssetEdit {
     #[doc(alias = "CreateFilePathAttr")]
     pub fn set_file_path(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value(edit, "filePath", None, value);
+        self.write_value(edit, "filePath", value);
         self
     }
 
     #[doc = "[`Self::set_file_path`] as a time sample at the time code `time`."]
     pub fn set_file_path_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &str) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value(edit, "filePath", Some(time), value);
+        self.write_value_at(edit, "filePath", time, value);
         self
     }
 
@@ -3477,7 +3385,7 @@ impl VolumeFieldAssetEdit {
         value: VolumeFieldAssetVectorDataRoleHint,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "vectorDataRoleHint", None, value);
+        self.write_value(edit, "vectorDataRoleHint", value);
         self
     }
 
@@ -3489,7 +3397,7 @@ impl VolumeFieldAssetEdit {
         value: VolumeFieldAssetVectorDataRoleHint,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "vectorDataRoleHint", Some(time), value);
+        self.write_value_at(edit, "vectorDataRoleHint", time, value);
         self
     }
 }

@@ -1339,9 +1339,9 @@ mod default_prim_tests {
 mod property_snapshot_tests {
     use crate::edit::{EditTarget, Transaction};
     use crate::{
-        InMemoryStore, InterpolationType, Layer, LayerId, ListOp, LiveStage, OpinionValue,
-        PrimSpec, PropertyEntry, PropertyPath, PropertySpec, PropertyType, Reference, Stage,
-        StageOptions, TargetPath, Value,
+        InMemoryStore, Layer, LayerId, ListOp, LiveStage, OpinionValue, PrimSpec, PropertyEntry,
+        PropertyPath, PropertySpec, PropertyType, Reference, Stage, StageOptions, TargetPath, Time,
+        Value,
     };
     use alloc::{sync::Arc, vec};
 
@@ -1417,7 +1417,7 @@ mod property_snapshot_tests {
         );
         assert_eq!(
             fresh
-                .resolve_property_path_at_time(b_path, 0.0, InterpolationType::Linear)
+                .resolve_property_path_at_time(b_path, Time::at(0.0))
                 .unwrap()
                 .value,
             Value::Int64(9)

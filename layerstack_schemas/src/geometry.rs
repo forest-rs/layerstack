@@ -160,14 +160,8 @@ fn read<'a, T>(
     time: Time,
     convert: impl Fn(&Value, &'a layerstack::TokenInterner) -> Option<T>,
 ) -> Result<T, GeometryError> {
-    match time {
-        Time::Default => prim.read_value(name, convert),
-        Time::At {
-            code,
-            interpolation,
-        } => prim.read_value_at(name, code, interpolation, convert),
-    }
-    .ok_or(GeometryError::MissingAttribute(name))
+    prim.read_value_at(name, time, convert)
+        .ok_or(GeometryError::MissingAttribute(name))
 }
 impl TetMesh<'_> {
     /// Computes sorted boundary triangles at the requested time.
@@ -503,16 +497,10 @@ impl<'a> ConstraintTarget<'a> {
             .store()
             .tokens()
             .resolve(self.property.property());
-        let matrix = match time {
-            Time::Default => self.prim.read_value(name, crate::value::read_matrix4d),
-            Time::At {
-                code,
-                interpolation,
-            } => self
-                .prim
-                .read_value_at(name, code, interpolation, crate::value::read_matrix4d),
-        }
-        .ok_or(GeometryError::MissingAttribute("constraint target"))?;
+        let matrix = self
+            .prim
+            .read_value_at(name, time, crate::value::read_matrix4d)
+            .ok_or(GeometryError::MissingAttribute("constraint target"))?;
         if !matrix.iter().flatten().all(|v| v.is_finite()) {
             return Err(GeometryError::NonFinite);
         }

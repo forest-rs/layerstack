@@ -190,17 +190,12 @@ impl<'a> BackPlateApi<'a> {
         )
     }
 
-    #[doc = "[`Self::alpha_image`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::alpha_image`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn alpha_image_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<::alloc::sync::Arc<str>> {
+    pub fn alpha_image_at(&self, time: ::layerstack::Time) -> Option<::alloc::sync::Arc<str>> {
         self.read_value_at(
             "backPlate:__INSTANCE_NAME__:alpha:image",
             time,
-            interp,
             crate::value::read_asset,
         )
     }
@@ -217,17 +212,12 @@ impl<'a> BackPlateApi<'a> {
         )
     }
 
-    #[doc = "[`Self::depth_camera_space_offset`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::depth_camera_space_offset`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn depth_camera_space_offset_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<f32> {
+    pub fn depth_camera_space_offset_at(&self, time: ::layerstack::Time) -> Option<f32> {
         self.read_value_at(
             "backPlate:__INSTANCE_NAME__:depth:cameraSpaceOffset",
             time,
-            interp,
             crate::value::read_float,
         )
     }
@@ -246,17 +236,12 @@ impl<'a> BackPlateApi<'a> {
         )
     }
 
-    #[doc = "[`Self::depth_image`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::depth_image`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn depth_image_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<::alloc::sync::Arc<str>> {
+    pub fn depth_image_at(&self, time: ::layerstack::Time) -> Option<::alloc::sync::Arc<str>> {
         self.read_value_at(
             "backPlate:__INSTANCE_NAME__:depth:image",
             time,
-            interp,
             crate::value::read_asset,
         )
     }
@@ -273,17 +258,12 @@ impl<'a> BackPlateApi<'a> {
         )
     }
 
-    #[doc = "[`Self::depth_min_offset`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::depth_min_offset`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn depth_min_offset_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<f32> {
+    pub fn depth_min_offset_at(&self, time: ::layerstack::Time) -> Option<f32> {
         self.read_value_at(
             "backPlate:__INSTANCE_NAME__:depth:minOffset",
             time,
-            interp,
             crate::value::read_float,
         )
     }
@@ -300,17 +280,12 @@ impl<'a> BackPlateApi<'a> {
         )
     }
 
-    #[doc = "[`Self::depth_normalizing_factor`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::depth_normalizing_factor`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn depth_normalizing_factor_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<f32> {
+    pub fn depth_normalizing_factor_at(&self, time: ::layerstack::Time) -> Option<f32> {
         self.read_value_at(
             "backPlate:__INSTANCE_NAME__:depth:normalizingFactor",
             time,
-            interp,
             crate::value::read_float,
         )
     }
@@ -329,17 +304,12 @@ impl<'a> BackPlateApi<'a> {
         )
     }
 
-    #[doc = "[`Self::image`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::image`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn image_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<::alloc::sync::Arc<str>> {
+    pub fn image_at(&self, time: ::layerstack::Time) -> Option<::alloc::sync::Arc<str>> {
         self.read_value_at(
             "backPlate:__INSTANCE_NAME__:image",
             time,
-            interp,
             crate::value::read_asset,
         )
     }
@@ -356,17 +326,12 @@ impl<'a> BackPlateApi<'a> {
         )
     }
 
-    #[doc = "[`Self::luma_gain`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::luma_gain`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn luma_gain_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<[f32; 3]> {
+    pub fn luma_gain_at(&self, time: ::layerstack::Time) -> Option<[f32; 3]> {
         self.read_value_at(
             "backPlate:__INSTANCE_NAME__:luma:gain",
             time,
-            interp,
             crate::value::read_float3,
         )
     }
@@ -383,17 +348,12 @@ impl<'a> BackPlateApi<'a> {
         )
     }
 
-    #[doc = "[`Self::luma_gamma`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::luma_gamma`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn luma_gamma_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<[f32; 3]> {
+    pub fn luma_gamma_at(&self, time: ::layerstack::Time) -> Option<[f32; 3]> {
         self.read_value_at(
             "backPlate:__INSTANCE_NAME__:luma:gamma",
             time,
-            interp,
             crate::value::read_float3,
         )
     }
@@ -410,17 +370,12 @@ impl<'a> BackPlateApi<'a> {
         )
     }
 
-    #[doc = "[`Self::luma_lift`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::luma_lift`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn luma_lift_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<[f32; 3]> {
+    pub fn luma_lift_at(&self, time: ::layerstack::Time) -> Option<[f32; 3]> {
         self.read_value_at(
             "backPlate:__INSTANCE_NAME__:luma:lift",
             time,
-            interp,
             crate::value::read_float3,
         )
     }
@@ -439,17 +394,15 @@ impl<'a> BackPlateApi<'a> {
         )
     }
 
-    #[doc = "[`Self::plate_visibility`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::plate_visibility`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn plate_visibility_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<BackPlateApiPlateVisibility> {
         self.read_value_at(
             "backPlate:__INSTANCE_NAME__:plateVisibility",
             time,
-            interp,
             BackPlateApiPlateVisibility::read,
         )
     }
@@ -463,17 +416,12 @@ impl<'a> BackPlateApi<'a> {
         )
     }
 
-    #[doc = "[`Self::rotate_xyz_tweak`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::rotate_xyz_tweak`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn rotate_xyz_tweak_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<[f32; 3]> {
+    pub fn rotate_xyz_tweak_at(&self, time: ::layerstack::Time) -> Option<[f32; 3]> {
         self.read_value_at(
             "backPlate:__INSTANCE_NAME__:rotateXYZ:tweak",
             time,
-            interp,
             crate::value::read_float3,
         )
     }
@@ -490,17 +438,12 @@ impl<'a> BackPlateApi<'a> {
         )
     }
 
-    #[doc = "[`Self::scale_tweak`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::scale_tweak`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn scale_tweak_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<[f32; 2]> {
+    pub fn scale_tweak_at(&self, time: ::layerstack::Time) -> Option<[f32; 2]> {
         self.read_value_at(
             "backPlate:__INSTANCE_NAME__:scale:tweak",
             time,
-            interp,
             crate::value::read_float2,
         )
     }
@@ -517,17 +460,12 @@ impl<'a> BackPlateApi<'a> {
         )
     }
 
-    #[doc = "[`Self::translate_tweak`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::translate_tweak`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn translate_tweak_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<[f32; 3]> {
+    pub fn translate_tweak_at(&self, time: ::layerstack::Time) -> Option<[f32; 3]> {
         self.read_value_at(
             "backPlate:__INSTANCE_NAME__:translate:tweak",
             time,
-            interp,
             crate::value::read_float3,
         )
     }
@@ -571,19 +509,14 @@ impl BackPlateApiEdit {
     #[doc(alias = "CreateAlphaImageAttr")]
     pub fn set_alpha_image(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value(edit, "backPlate:__INSTANCE_NAME__:alpha:image", None, value);
+        self.write_value(edit, "backPlate:__INSTANCE_NAME__:alpha:image", value);
         self
     }
 
     #[doc = "[`Self::set_alpha_image`] as a time sample at the time code `time`."]
     pub fn set_alpha_image_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &str) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value(
-            edit,
-            "backPlate:__INSTANCE_NAME__:alpha:image",
-            Some(time),
-            value,
-        );
+        self.write_value_at(edit, "backPlate:__INSTANCE_NAME__:alpha:image", time, value);
         self
     }
 
@@ -596,7 +529,6 @@ impl BackPlateApiEdit {
         self.write_value(
             edit,
             "backPlate:__INSTANCE_NAME__:depth:cameraSpaceOffset",
-            None,
             value,
         );
         self
@@ -610,10 +542,10 @@ impl BackPlateApiEdit {
         value: f32,
     ) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(
+        self.write_value_at(
             edit,
             "backPlate:__INSTANCE_NAME__:depth:cameraSpaceOffset",
-            Some(time),
+            time,
             value,
         );
         self
@@ -627,19 +559,14 @@ impl BackPlateApiEdit {
     #[doc(alias = "CreateDepthImageAttr")]
     pub fn set_depth_image(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value(edit, "backPlate:__INSTANCE_NAME__:depth:image", None, value);
+        self.write_value(edit, "backPlate:__INSTANCE_NAME__:depth:image", value);
         self
     }
 
     #[doc = "[`Self::set_depth_image`] as a time sample at the time code `time`."]
     pub fn set_depth_image_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &str) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value(
-            edit,
-            "backPlate:__INSTANCE_NAME__:depth:image",
-            Some(time),
-            value,
-        );
+        self.write_value_at(edit, "backPlate:__INSTANCE_NAME__:depth:image", time, value);
         self
     }
 
@@ -649,12 +576,7 @@ impl BackPlateApiEdit {
     #[doc(alias = "CreateDepthMinOffsetAttr")]
     pub fn set_depth_min_offset(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(
-            edit,
-            "backPlate:__INSTANCE_NAME__:depth:minOffset",
-            None,
-            value,
-        );
+        self.write_value(edit, "backPlate:__INSTANCE_NAME__:depth:minOffset", value);
         self
     }
 
@@ -666,10 +588,10 @@ impl BackPlateApiEdit {
         value: f32,
     ) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(
+        self.write_value_at(
             edit,
             "backPlate:__INSTANCE_NAME__:depth:minOffset",
-            Some(time),
+            time,
             value,
         );
         self
@@ -684,7 +606,6 @@ impl BackPlateApiEdit {
         self.write_value(
             edit,
             "backPlate:__INSTANCE_NAME__:depth:normalizingFactor",
-            None,
             value,
         );
         self
@@ -698,10 +619,10 @@ impl BackPlateApiEdit {
         value: f32,
     ) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(
+        self.write_value_at(
             edit,
             "backPlate:__INSTANCE_NAME__:depth:normalizingFactor",
-            Some(time),
+            time,
             value,
         );
         self
@@ -715,14 +636,14 @@ impl BackPlateApiEdit {
     #[doc(alias = "CreateImageAttr")]
     pub fn set_image(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value(edit, "backPlate:__INSTANCE_NAME__:image", None, value);
+        self.write_value(edit, "backPlate:__INSTANCE_NAME__:image", value);
         self
     }
 
     #[doc = "[`Self::set_image`] as a time sample at the time code `time`."]
     pub fn set_image_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &str) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value(edit, "backPlate:__INSTANCE_NAME__:image", Some(time), value);
+        self.write_value_at(edit, "backPlate:__INSTANCE_NAME__:image", time, value);
         self
     }
 
@@ -732,19 +653,14 @@ impl BackPlateApiEdit {
     #[doc(alias = "CreateLumaGainAttr")]
     pub fn set_luma_gain(&self, edit: &mut SchemaEdit<'_>, value: [f32; 3]) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
-        self.write_value(edit, "backPlate:__INSTANCE_NAME__:luma:gain", None, value);
+        self.write_value(edit, "backPlate:__INSTANCE_NAME__:luma:gain", value);
         self
     }
 
     #[doc = "[`Self::set_luma_gain`] as a time sample at the time code `time`."]
     pub fn set_luma_gain_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: [f32; 3]) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
-        self.write_value(
-            edit,
-            "backPlate:__INSTANCE_NAME__:luma:gain",
-            Some(time),
-            value,
-        );
+        self.write_value_at(edit, "backPlate:__INSTANCE_NAME__:luma:gain", time, value);
         self
     }
 
@@ -754,7 +670,7 @@ impl BackPlateApiEdit {
     #[doc(alias = "CreateLumaGammaAttr")]
     pub fn set_luma_gamma(&self, edit: &mut SchemaEdit<'_>, value: [f32; 3]) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
-        self.write_value(edit, "backPlate:__INSTANCE_NAME__:luma:gamma", None, value);
+        self.write_value(edit, "backPlate:__INSTANCE_NAME__:luma:gamma", value);
         self
     }
 
@@ -766,12 +682,7 @@ impl BackPlateApiEdit {
         value: [f32; 3],
     ) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
-        self.write_value(
-            edit,
-            "backPlate:__INSTANCE_NAME__:luma:gamma",
-            Some(time),
-            value,
-        );
+        self.write_value_at(edit, "backPlate:__INSTANCE_NAME__:luma:gamma", time, value);
         self
     }
 
@@ -781,19 +692,14 @@ impl BackPlateApiEdit {
     #[doc(alias = "CreateLumaLiftAttr")]
     pub fn set_luma_lift(&self, edit: &mut SchemaEdit<'_>, value: [f32; 3]) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
-        self.write_value(edit, "backPlate:__INSTANCE_NAME__:luma:lift", None, value);
+        self.write_value(edit, "backPlate:__INSTANCE_NAME__:luma:lift", value);
         self
     }
 
     #[doc = "[`Self::set_luma_lift`] as a time sample at the time code `time`."]
     pub fn set_luma_lift_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: [f32; 3]) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
-        self.write_value(
-            edit,
-            "backPlate:__INSTANCE_NAME__:luma:lift",
-            Some(time),
-            value,
-        );
+        self.write_value_at(edit, "backPlate:__INSTANCE_NAME__:luma:lift", time, value);
         self
     }
 
@@ -809,12 +715,7 @@ impl BackPlateApiEdit {
         value: BackPlateApiPlateVisibility,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(
-            edit,
-            "backPlate:__INSTANCE_NAME__:plateVisibility",
-            None,
-            value,
-        );
+        self.write_value(edit, "backPlate:__INSTANCE_NAME__:plateVisibility", value);
         self
     }
 
@@ -826,10 +727,10 @@ impl BackPlateApiEdit {
         value: BackPlateApiPlateVisibility,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(
+        self.write_value_at(
             edit,
             "backPlate:__INSTANCE_NAME__:plateVisibility",
-            Some(time),
+            time,
             value,
         );
         self
@@ -838,12 +739,7 @@ impl BackPlateApiEdit {
     #[doc = "USD attribute `backPlate:<instance>:rotateXYZ:tweak` (`float3`; fallback `(0.0, 0.0, 0.0)`)."]
     pub fn set_rotate_xyz_tweak(&self, edit: &mut SchemaEdit<'_>, value: [f32; 3]) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
-        self.write_value(
-            edit,
-            "backPlate:__INSTANCE_NAME__:rotateXYZ:tweak",
-            None,
-            value,
-        );
+        self.write_value(edit, "backPlate:__INSTANCE_NAME__:rotateXYZ:tweak", value);
         self
     }
 
@@ -855,10 +751,10 @@ impl BackPlateApiEdit {
         value: [f32; 3],
     ) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
-        self.write_value(
+        self.write_value_at(
             edit,
             "backPlate:__INSTANCE_NAME__:rotateXYZ:tweak",
-            Some(time),
+            time,
             value,
         );
         self
@@ -870,7 +766,7 @@ impl BackPlateApiEdit {
     #[doc(alias = "CreateScaleTweakAttr")]
     pub fn set_scale_tweak(&self, edit: &mut SchemaEdit<'_>, value: [f32; 2]) -> &Self {
         let value = crate::value::write_float2(value, edit.tokens());
-        self.write_value(edit, "backPlate:__INSTANCE_NAME__:scale:tweak", None, value);
+        self.write_value(edit, "backPlate:__INSTANCE_NAME__:scale:tweak", value);
         self
     }
 
@@ -882,12 +778,7 @@ impl BackPlateApiEdit {
         value: [f32; 2],
     ) -> &Self {
         let value = crate::value::write_float2(value, edit.tokens());
-        self.write_value(
-            edit,
-            "backPlate:__INSTANCE_NAME__:scale:tweak",
-            Some(time),
-            value,
-        );
+        self.write_value_at(edit, "backPlate:__INSTANCE_NAME__:scale:tweak", time, value);
         self
     }
 
@@ -897,12 +788,7 @@ impl BackPlateApiEdit {
     #[doc(alias = "CreateTranslateTweakAttr")]
     pub fn set_translate_tweak(&self, edit: &mut SchemaEdit<'_>, value: [f32; 3]) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
-        self.write_value(
-            edit,
-            "backPlate:__INSTANCE_NAME__:translate:tweak",
-            None,
-            value,
-        );
+        self.write_value(edit, "backPlate:__INSTANCE_NAME__:translate:tweak", value);
         self
     }
 
@@ -914,10 +800,10 @@ impl BackPlateApiEdit {
         value: [f32; 3],
     ) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
-        self.write_value(
+        self.write_value_at(
             edit,
             "backPlate:__INSTANCE_NAME__:translate:tweak",
-            Some(time),
+            time,
             value,
         );
         self
@@ -1224,7 +1110,7 @@ impl BasisCurvesEdit {
     #[doc(alias = "CreateBasisAttr")]
     pub fn set_basis(&self, edit: &mut SchemaEdit<'_>, value: BasisCurvesBasis) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "basis", None, value);
+        self.write_value(edit, "basis", value);
         self
     }
 
@@ -1236,7 +1122,7 @@ impl BasisCurvesEdit {
     #[doc(alias = "CreateTypeAttr")]
     pub fn set_curve_type(&self, edit: &mut SchemaEdit<'_>, value: BasisCurvesCurveType) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "type", None, value);
+        self.write_value(edit, "type", value);
         self
     }
 
@@ -1248,7 +1134,7 @@ impl BasisCurvesEdit {
     #[doc(alias = "CreateWrapAttr")]
     pub fn set_wrap(&self, edit: &mut SchemaEdit<'_>, value: BasisCurvesWrap) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "wrap", None, value);
+        self.write_value(edit, "wrap", value);
         self
     }
 }
@@ -1318,19 +1204,13 @@ impl<'a> Boundable<'a> {
         self.read_value("extent", crate::value::read_float3_array_shared)
     }
 
-    #[doc = "[`Self::extent`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::extent`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn extent_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>> {
-        self.read_value_at(
-            "extent",
-            time,
-            interp,
-            crate::value::read_float3_array_shared,
-        )
+        self.read_value_at("extent", time, crate::value::read_float3_array_shared)
     }
 
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -1384,14 +1264,14 @@ impl BoundableEdit {
     #[doc(alias = "CreateExtentAttr")]
     pub fn set_extent(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 3]]) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(edit, "extent", None, value);
+        self.write_value(edit, "extent", value);
         self
     }
 
     #[doc = "[`Self::set_extent`] as a time sample at the time code `time`."]
     pub fn set_extent_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &[[f32; 3]]) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(edit, "extent", Some(time), value);
+        self.write_value_at(edit, "extent", time, value);
         self
     }
 
@@ -1402,7 +1282,7 @@ impl BoundableEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(edit, "extent", None, value);
+        self.write_value(edit, "extent", value);
         self
     }
 
@@ -1414,7 +1294,7 @@ impl BoundableEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(edit, "extent", Some(time), value);
+        self.write_value_at(edit, "extent", time, value);
         self
     }
 
@@ -1425,7 +1305,7 @@ impl BoundableEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(edit, "extent", None, value);
+        self.write_value(edit, "extent", value);
         self
     }
 
@@ -1437,7 +1317,7 @@ impl BoundableEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(edit, "extent", Some(time), value);
+        self.write_value_at(edit, "extent", time, value);
         self
     }
 }
@@ -1622,17 +1502,15 @@ impl<'a> Camera<'a> {
         self.read_value("clippingPlanes", crate::value::read_float4_array_shared)
     }
 
-    #[doc = "[`Self::clipping_planes`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::clipping_planes`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn clipping_planes_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 4]>>> {
         self.read_value_at(
             "clippingPlanes",
             time,
-            interp,
             crate::value::read_float4_array_shared,
         )
     }
@@ -1664,14 +1542,10 @@ impl<'a> Camera<'a> {
         self.read_value("clippingRange", crate::value::read_float2)
     }
 
-    #[doc = "[`Self::clipping_range`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::clipping_range`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn clipping_range_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<[f32; 2]> {
-        self.read_value_at("clippingRange", time, interp, crate::value::read_float2)
+    pub fn clipping_range_at(&self, time: ::layerstack::Time) -> Option<[f32; 2]> {
+        self.read_value_at("clippingRange", time, crate::value::read_float2)
     }
 
     /// The USD name of [`Self::exposure`].
@@ -1688,10 +1562,10 @@ impl<'a> Camera<'a> {
         self.read_value("exposure", crate::value::read_float)
     }
 
-    #[doc = "[`Self::exposure`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::exposure`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn exposure_at(&self, time: f64, interp: ::layerstack::InterpolationType) -> Option<f32> {
-        self.read_value_at("exposure", time, interp, crate::value::read_float)
+    pub fn exposure_at(&self, time: ::layerstack::Time) -> Option<f32> {
+        self.read_value_at("exposure", time, crate::value::read_float)
     }
 
     /// The USD name of [`Self::exposure_f_stop`].
@@ -1708,14 +1582,10 @@ impl<'a> Camera<'a> {
         self.read_value("exposure:fStop", crate::value::read_float)
     }
 
-    #[doc = "[`Self::exposure_f_stop`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::exposure_f_stop`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn exposure_f_stop_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<f32> {
-        self.read_value_at("exposure:fStop", time, interp, crate::value::read_float)
+    pub fn exposure_f_stop_at(&self, time: ::layerstack::Time) -> Option<f32> {
+        self.read_value_at("exposure:fStop", time, crate::value::read_float)
     }
 
     /// The USD name of [`Self::exposure_iso`].
@@ -1732,14 +1602,10 @@ impl<'a> Camera<'a> {
         self.read_value("exposure:iso", crate::value::read_float)
     }
 
-    #[doc = "[`Self::exposure_iso`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::exposure_iso`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn exposure_iso_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<f32> {
-        self.read_value_at("exposure:iso", time, interp, crate::value::read_float)
+    pub fn exposure_iso_at(&self, time: ::layerstack::Time) -> Option<f32> {
+        self.read_value_at("exposure:iso", time, crate::value::read_float)
     }
 
     /// The USD name of [`Self::exposure_responsivity`].
@@ -1756,19 +1622,10 @@ impl<'a> Camera<'a> {
         self.read_value("exposure:responsivity", crate::value::read_float)
     }
 
-    #[doc = "[`Self::exposure_responsivity`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::exposure_responsivity`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn exposure_responsivity_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<f32> {
-        self.read_value_at(
-            "exposure:responsivity",
-            time,
-            interp,
-            crate::value::read_float,
-        )
+    pub fn exposure_responsivity_at(&self, time: ::layerstack::Time) -> Option<f32> {
+        self.read_value_at("exposure:responsivity", time, crate::value::read_float)
     }
 
     /// The USD name of [`Self::exposure_time`].
@@ -1785,14 +1642,10 @@ impl<'a> Camera<'a> {
         self.read_value("exposure:time", crate::value::read_float)
     }
 
-    #[doc = "[`Self::exposure_time`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::exposure_time`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn exposure_time_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<f32> {
-        self.read_value_at("exposure:time", time, interp, crate::value::read_float)
+    pub fn exposure_time_at(&self, time: ::layerstack::Time) -> Option<f32> {
+        self.read_value_at("exposure:time", time, crate::value::read_float)
     }
 
     /// The USD name of [`Self::focal_length`].
@@ -1809,14 +1662,10 @@ impl<'a> Camera<'a> {
         self.read_value("focalLength", crate::value::read_float)
     }
 
-    #[doc = "[`Self::focal_length`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::focal_length`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn focal_length_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<f32> {
-        self.read_value_at("focalLength", time, interp, crate::value::read_float)
+    pub fn focal_length_at(&self, time: ::layerstack::Time) -> Option<f32> {
+        self.read_value_at("focalLength", time, crate::value::read_float)
     }
 
     /// The USD name of [`Self::focus_distance`].
@@ -1833,14 +1682,10 @@ impl<'a> Camera<'a> {
         self.read_value("focusDistance", crate::value::read_float)
     }
 
-    #[doc = "[`Self::focus_distance`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::focus_distance`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn focus_distance_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<f32> {
-        self.read_value_at("focusDistance", time, interp, crate::value::read_float)
+    pub fn focus_distance_at(&self, time: ::layerstack::Time) -> Option<f32> {
+        self.read_value_at("focusDistance", time, crate::value::read_float)
     }
 
     /// The USD name of [`Self::f_stop`].
@@ -1857,10 +1702,10 @@ impl<'a> Camera<'a> {
         self.read_value("fStop", crate::value::read_float)
     }
 
-    #[doc = "[`Self::f_stop`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::f_stop`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn f_stop_at(&self, time: f64, interp: ::layerstack::InterpolationType) -> Option<f32> {
-        self.read_value_at("fStop", time, interp, crate::value::read_float)
+    pub fn f_stop_at(&self, time: ::layerstack::Time) -> Option<f32> {
+        self.read_value_at("fStop", time, crate::value::read_float)
     }
 
     /// The USD name of [`Self::horizontal_aperture`].
@@ -1877,14 +1722,10 @@ impl<'a> Camera<'a> {
         self.read_value("horizontalAperture", crate::value::read_float)
     }
 
-    #[doc = "[`Self::horizontal_aperture`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::horizontal_aperture`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn horizontal_aperture_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<f32> {
-        self.read_value_at("horizontalAperture", time, interp, crate::value::read_float)
+    pub fn horizontal_aperture_at(&self, time: ::layerstack::Time) -> Option<f32> {
+        self.read_value_at("horizontalAperture", time, crate::value::read_float)
     }
 
     /// The USD name of [`Self::horizontal_aperture_offset`].
@@ -1901,19 +1742,10 @@ impl<'a> Camera<'a> {
         self.read_value("horizontalApertureOffset", crate::value::read_float)
     }
 
-    #[doc = "[`Self::horizontal_aperture_offset`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::horizontal_aperture_offset`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn horizontal_aperture_offset_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<f32> {
-        self.read_value_at(
-            "horizontalApertureOffset",
-            time,
-            interp,
-            crate::value::read_float,
-        )
+    pub fn horizontal_aperture_offset_at(&self, time: ::layerstack::Time) -> Option<f32> {
+        self.read_value_at("horizontalApertureOffset", time, crate::value::read_float)
     }
 
     /// The USD name of [`Self::projection`].
@@ -1928,14 +1760,10 @@ impl<'a> Camera<'a> {
         self.read_value("projection", CameraProjection::read)
     }
 
-    #[doc = "[`Self::projection`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::projection`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn projection_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<CameraProjection> {
-        self.read_value_at("projection", time, interp, CameraProjection::read)
+    pub fn projection_at(&self, time: ::layerstack::Time) -> Option<CameraProjection> {
+        self.read_value_at("projection", time, CameraProjection::read)
     }
 
     /// The USD name of [`Self::shutter_close`].
@@ -1952,14 +1780,10 @@ impl<'a> Camera<'a> {
         self.read_value("shutter:close", crate::value::read_double)
     }
 
-    #[doc = "[`Self::shutter_close`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::shutter_close`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn shutter_close_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<f64> {
-        self.read_value_at("shutter:close", time, interp, crate::value::read_double)
+    pub fn shutter_close_at(&self, time: ::layerstack::Time) -> Option<f64> {
+        self.read_value_at("shutter:close", time, crate::value::read_double)
     }
 
     /// The USD name of [`Self::shutter_open`].
@@ -1976,14 +1800,10 @@ impl<'a> Camera<'a> {
         self.read_value("shutter:open", crate::value::read_double)
     }
 
-    #[doc = "[`Self::shutter_open`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::shutter_open`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn shutter_open_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<f64> {
-        self.read_value_at("shutter:open", time, interp, crate::value::read_double)
+    pub fn shutter_open_at(&self, time: ::layerstack::Time) -> Option<f64> {
+        self.read_value_at("shutter:open", time, crate::value::read_double)
     }
 
     /// The USD name of [`Self::stereo_role`].
@@ -2014,14 +1834,10 @@ impl<'a> Camera<'a> {
         self.read_value("verticalAperture", crate::value::read_float)
     }
 
-    #[doc = "[`Self::vertical_aperture`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::vertical_aperture`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn vertical_aperture_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<f32> {
-        self.read_value_at("verticalAperture", time, interp, crate::value::read_float)
+    pub fn vertical_aperture_at(&self, time: ::layerstack::Time) -> Option<f32> {
+        self.read_value_at("verticalAperture", time, crate::value::read_float)
     }
 
     /// The USD name of [`Self::vertical_aperture_offset`].
@@ -2038,19 +1854,10 @@ impl<'a> Camera<'a> {
         self.read_value("verticalApertureOffset", crate::value::read_float)
     }
 
-    #[doc = "[`Self::vertical_aperture_offset`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::vertical_aperture_offset`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn vertical_aperture_offset_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<f32> {
-        self.read_value_at(
-            "verticalApertureOffset",
-            time,
-            interp,
-            crate::value::read_float,
-        )
+    pub fn vertical_aperture_offset_at(&self, time: ::layerstack::Time) -> Option<f32> {
+        self.read_value_at("verticalApertureOffset", time, crate::value::read_float)
     }
 }
 
@@ -2095,7 +1902,7 @@ impl CameraEdit {
     #[doc(alias = "CreateClippingPlanesAttr")]
     pub fn set_clipping_planes(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 4]]) -> &Self {
         let value = crate::value::write_float4_array(value, edit.tokens());
-        self.write_value(edit, "clippingPlanes", None, value);
+        self.write_value(edit, "clippingPlanes", value);
         self
     }
 
@@ -2107,7 +1914,7 @@ impl CameraEdit {
         value: &[[f32; 4]],
     ) -> &Self {
         let value = crate::value::write_float4_array(value, edit.tokens());
-        self.write_value(edit, "clippingPlanes", Some(time), value);
+        self.write_value_at(edit, "clippingPlanes", time, value);
         self
     }
 
@@ -2118,7 +1925,7 @@ impl CameraEdit {
         value: ::alloc::vec::Vec<[f32; 4]>,
     ) -> &Self {
         let value = crate::value::write_float4_array_owned(value, edit.tokens());
-        self.write_value(edit, "clippingPlanes", None, value);
+        self.write_value(edit, "clippingPlanes", value);
         self
     }
 
@@ -2130,7 +1937,7 @@ impl CameraEdit {
         value: ::alloc::vec::Vec<[f32; 4]>,
     ) -> &Self {
         let value = crate::value::write_float4_array_owned(value, edit.tokens());
-        self.write_value(edit, "clippingPlanes", Some(time), value);
+        self.write_value_at(edit, "clippingPlanes", time, value);
         self
     }
 
@@ -2141,7 +1948,7 @@ impl CameraEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 4]>>,
     ) -> &Self {
         let value = crate::value::write_float4_array_shared(value, edit.tokens());
-        self.write_value(edit, "clippingPlanes", None, value);
+        self.write_value(edit, "clippingPlanes", value);
         self
     }
 
@@ -2153,7 +1960,7 @@ impl CameraEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 4]>>,
     ) -> &Self {
         let value = crate::value::write_float4_array_shared(value, edit.tokens());
-        self.write_value(edit, "clippingPlanes", Some(time), value);
+        self.write_value_at(edit, "clippingPlanes", time, value);
         self
     }
 
@@ -2165,7 +1972,7 @@ impl CameraEdit {
     #[doc(alias = "CreateClippingRangeAttr")]
     pub fn set_clipping_range(&self, edit: &mut SchemaEdit<'_>, value: [f32; 2]) -> &Self {
         let value = crate::value::write_float2(value, edit.tokens());
-        self.write_value(edit, "clippingRange", None, value);
+        self.write_value(edit, "clippingRange", value);
         self
     }
 
@@ -2177,7 +1984,7 @@ impl CameraEdit {
         value: [f32; 2],
     ) -> &Self {
         let value = crate::value::write_float2(value, edit.tokens());
-        self.write_value(edit, "clippingRange", Some(time), value);
+        self.write_value_at(edit, "clippingRange", time, value);
         self
     }
 
@@ -2189,14 +1996,14 @@ impl CameraEdit {
     #[doc(alias = "CreateExposureAttr")]
     pub fn set_exposure(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "exposure", None, value);
+        self.write_value(edit, "exposure", value);
         self
     }
 
     #[doc = "[`Self::set_exposure`] as a time sample at the time code `time`."]
     pub fn set_exposure_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "exposure", Some(time), value);
+        self.write_value_at(edit, "exposure", time, value);
         self
     }
 
@@ -2208,7 +2015,7 @@ impl CameraEdit {
     #[doc(alias = "CreateExposureFStopAttr")]
     pub fn set_exposure_f_stop(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "exposure:fStop", None, value);
+        self.write_value(edit, "exposure:fStop", value);
         self
     }
 
@@ -2220,7 +2027,7 @@ impl CameraEdit {
         value: f32,
     ) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "exposure:fStop", Some(time), value);
+        self.write_value_at(edit, "exposure:fStop", time, value);
         self
     }
 
@@ -2232,14 +2039,14 @@ impl CameraEdit {
     #[doc(alias = "CreateExposureIsoAttr")]
     pub fn set_exposure_iso(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "exposure:iso", None, value);
+        self.write_value(edit, "exposure:iso", value);
         self
     }
 
     #[doc = "[`Self::set_exposure_iso`] as a time sample at the time code `time`."]
     pub fn set_exposure_iso_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "exposure:iso", Some(time), value);
+        self.write_value_at(edit, "exposure:iso", time, value);
         self
     }
 
@@ -2251,7 +2058,7 @@ impl CameraEdit {
     #[doc(alias = "CreateExposureResponsivityAttr")]
     pub fn set_exposure_responsivity(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "exposure:responsivity", None, value);
+        self.write_value(edit, "exposure:responsivity", value);
         self
     }
 
@@ -2263,7 +2070,7 @@ impl CameraEdit {
         value: f32,
     ) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "exposure:responsivity", Some(time), value);
+        self.write_value_at(edit, "exposure:responsivity", time, value);
         self
     }
 
@@ -2275,14 +2082,14 @@ impl CameraEdit {
     #[doc(alias = "CreateExposureTimeAttr")]
     pub fn set_exposure_time(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "exposure:time", None, value);
+        self.write_value(edit, "exposure:time", value);
         self
     }
 
     #[doc = "[`Self::set_exposure_time`] as a time sample at the time code `time`."]
     pub fn set_exposure_time_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "exposure:time", Some(time), value);
+        self.write_value_at(edit, "exposure:time", time, value);
         self
     }
 
@@ -2294,14 +2101,14 @@ impl CameraEdit {
     #[doc(alias = "CreateFocalLengthAttr")]
     pub fn set_focal_length(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "focalLength", None, value);
+        self.write_value(edit, "focalLength", value);
         self
     }
 
     #[doc = "[`Self::set_focal_length`] as a time sample at the time code `time`."]
     pub fn set_focal_length_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "focalLength", Some(time), value);
+        self.write_value_at(edit, "focalLength", time, value);
         self
     }
 
@@ -2313,14 +2120,14 @@ impl CameraEdit {
     #[doc(alias = "CreateFocusDistanceAttr")]
     pub fn set_focus_distance(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "focusDistance", None, value);
+        self.write_value(edit, "focusDistance", value);
         self
     }
 
     #[doc = "[`Self::set_focus_distance`] as a time sample at the time code `time`."]
     pub fn set_focus_distance_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "focusDistance", Some(time), value);
+        self.write_value_at(edit, "focusDistance", time, value);
         self
     }
 
@@ -2332,14 +2139,14 @@ impl CameraEdit {
     #[doc(alias = "CreateFStopAttr")]
     pub fn set_f_stop(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "fStop", None, value);
+        self.write_value(edit, "fStop", value);
         self
     }
 
     #[doc = "[`Self::set_f_stop`] as a time sample at the time code `time`."]
     pub fn set_f_stop_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "fStop", Some(time), value);
+        self.write_value_at(edit, "fStop", time, value);
         self
     }
 
@@ -2351,7 +2158,7 @@ impl CameraEdit {
     #[doc(alias = "CreateHorizontalApertureAttr")]
     pub fn set_horizontal_aperture(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "horizontalAperture", None, value);
+        self.write_value(edit, "horizontalAperture", value);
         self
     }
 
@@ -2363,7 +2170,7 @@ impl CameraEdit {
         value: f32,
     ) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "horizontalAperture", Some(time), value);
+        self.write_value_at(edit, "horizontalAperture", time, value);
         self
     }
 
@@ -2375,7 +2182,7 @@ impl CameraEdit {
     #[doc(alias = "CreateHorizontalApertureOffsetAttr")]
     pub fn set_horizontal_aperture_offset(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "horizontalApertureOffset", None, value);
+        self.write_value(edit, "horizontalApertureOffset", value);
         self
     }
 
@@ -2387,7 +2194,7 @@ impl CameraEdit {
         value: f32,
     ) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "horizontalApertureOffset", Some(time), value);
+        self.write_value_at(edit, "horizontalApertureOffset", time, value);
         self
     }
 
@@ -2397,7 +2204,7 @@ impl CameraEdit {
     #[doc(alias = "CreateProjectionAttr")]
     pub fn set_projection(&self, edit: &mut SchemaEdit<'_>, value: CameraProjection) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "projection", None, value);
+        self.write_value(edit, "projection", value);
         self
     }
 
@@ -2409,7 +2216,7 @@ impl CameraEdit {
         value: CameraProjection,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "projection", Some(time), value);
+        self.write_value_at(edit, "projection", time, value);
         self
     }
 
@@ -2421,14 +2228,14 @@ impl CameraEdit {
     #[doc(alias = "CreateShutterCloseAttr")]
     pub fn set_shutter_close(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "shutter:close", None, value);
+        self.write_value(edit, "shutter:close", value);
         self
     }
 
     #[doc = "[`Self::set_shutter_close`] as a time sample at the time code `time`."]
     pub fn set_shutter_close_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "shutter:close", Some(time), value);
+        self.write_value_at(edit, "shutter:close", time, value);
         self
     }
 
@@ -2440,14 +2247,14 @@ impl CameraEdit {
     #[doc(alias = "CreateShutterOpenAttr")]
     pub fn set_shutter_open(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "shutter:open", None, value);
+        self.write_value(edit, "shutter:open", value);
         self
     }
 
     #[doc = "[`Self::set_shutter_open`] as a time sample at the time code `time`."]
     pub fn set_shutter_open_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "shutter:open", Some(time), value);
+        self.write_value_at(edit, "shutter:open", time, value);
         self
     }
 
@@ -2459,7 +2266,7 @@ impl CameraEdit {
     #[doc(alias = "CreateStereoRoleAttr")]
     pub fn set_stereo_role(&self, edit: &mut SchemaEdit<'_>, value: CameraStereoRole) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "stereoRole", None, value);
+        self.write_value(edit, "stereoRole", value);
         self
     }
 
@@ -2471,7 +2278,7 @@ impl CameraEdit {
     #[doc(alias = "CreateVerticalApertureAttr")]
     pub fn set_vertical_aperture(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "verticalAperture", None, value);
+        self.write_value(edit, "verticalAperture", value);
         self
     }
 
@@ -2483,7 +2290,7 @@ impl CameraEdit {
         value: f32,
     ) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "verticalAperture", Some(time), value);
+        self.write_value_at(edit, "verticalAperture", time, value);
         self
     }
 
@@ -2495,7 +2302,7 @@ impl CameraEdit {
     #[doc(alias = "CreateVerticalApertureOffsetAttr")]
     pub fn set_vertical_aperture_offset(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "verticalApertureOffset", None, value);
+        self.write_value(edit, "verticalApertureOffset", value);
         self
     }
 
@@ -2507,7 +2314,7 @@ impl CameraEdit {
         value: f32,
     ) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "verticalApertureOffset", Some(time), value);
+        self.write_value_at(edit, "verticalApertureOffset", time, value);
         self
     }
 }
@@ -2654,10 +2461,10 @@ impl<'a> Capsule<'a> {
         self.read_value("height", crate::value::read_double)
     }
 
-    #[doc = "[`Self::height`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::height`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn height_at(&self, time: f64, interp: ::layerstack::InterpolationType) -> Option<f64> {
-        self.read_value_at("height", time, interp, crate::value::read_double)
+    pub fn height_at(&self, time: ::layerstack::Time) -> Option<f64> {
+        self.read_value_at("height", time, crate::value::read_double)
     }
 
     /// The USD name of [`Self::radius`].
@@ -2674,10 +2481,10 @@ impl<'a> Capsule<'a> {
         self.read_value("radius", crate::value::read_double)
     }
 
-    #[doc = "[`Self::radius`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::radius`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn radius_at(&self, time: f64, interp: ::layerstack::InterpolationType) -> Option<f64> {
-        self.read_value_at("radius", time, interp, crate::value::read_double)
+    pub fn radius_at(&self, time: ::layerstack::Time) -> Option<f64> {
+        self.read_value_at("radius", time, crate::value::read_double)
     }
 }
 
@@ -2720,7 +2527,7 @@ impl CapsuleEdit {
     #[doc(alias = "CreateAxisAttr")]
     pub fn set_axis(&self, edit: &mut SchemaEdit<'_>, value: CapsuleAxis) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "axis", None, value);
+        self.write_value(edit, "axis", value);
         self
     }
 
@@ -2732,14 +2539,14 @@ impl CapsuleEdit {
     #[doc(alias = "CreateHeightAttr")]
     pub fn set_height(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "height", None, value);
+        self.write_value(edit, "height", value);
         self
     }
 
     #[doc = "[`Self::set_height`] as a time sample at the time code `time`."]
     pub fn set_height_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "height", Some(time), value);
+        self.write_value_at(edit, "height", time, value);
         self
     }
 
@@ -2751,14 +2558,14 @@ impl CapsuleEdit {
     #[doc(alias = "CreateRadiusAttr")]
     pub fn set_radius(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "radius", None, value);
+        self.write_value(edit, "radius", value);
         self
     }
 
     #[doc = "[`Self::set_radius`] as a time sample at the time code `time`."]
     pub fn set_radius_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "radius", Some(time), value);
+        self.write_value_at(edit, "radius", time, value);
         self
     }
 }
@@ -2906,10 +2713,10 @@ impl<'a> Capsule1<'a> {
         self.read_value("height", crate::value::read_double)
     }
 
-    #[doc = "[`Self::height`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::height`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn height_at(&self, time: f64, interp: ::layerstack::InterpolationType) -> Option<f64> {
-        self.read_value_at("height", time, interp, crate::value::read_double)
+    pub fn height_at(&self, time: ::layerstack::Time) -> Option<f64> {
+        self.read_value_at("height", time, crate::value::read_double)
     }
 
     /// The USD name of [`Self::radius_bottom`].
@@ -2926,14 +2733,10 @@ impl<'a> Capsule1<'a> {
         self.read_value("radiusBottom", crate::value::read_double)
     }
 
-    #[doc = "[`Self::radius_bottom`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::radius_bottom`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn radius_bottom_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<f64> {
-        self.read_value_at("radiusBottom", time, interp, crate::value::read_double)
+    pub fn radius_bottom_at(&self, time: ::layerstack::Time) -> Option<f64> {
+        self.read_value_at("radiusBottom", time, crate::value::read_double)
     }
 
     /// The USD name of [`Self::radius_top`].
@@ -2950,10 +2753,10 @@ impl<'a> Capsule1<'a> {
         self.read_value("radiusTop", crate::value::read_double)
     }
 
-    #[doc = "[`Self::radius_top`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::radius_top`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn radius_top_at(&self, time: f64, interp: ::layerstack::InterpolationType) -> Option<f64> {
-        self.read_value_at("radiusTop", time, interp, crate::value::read_double)
+    pub fn radius_top_at(&self, time: ::layerstack::Time) -> Option<f64> {
+        self.read_value_at("radiusTop", time, crate::value::read_double)
     }
 }
 
@@ -2996,7 +2799,7 @@ impl Capsule1Edit {
     #[doc(alias = "CreateAxisAttr")]
     pub fn set_axis(&self, edit: &mut SchemaEdit<'_>, value: Capsule1Axis) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "axis", None, value);
+        self.write_value(edit, "axis", value);
         self
     }
 
@@ -3008,14 +2811,14 @@ impl Capsule1Edit {
     #[doc(alias = "CreateHeightAttr")]
     pub fn set_height(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "height", None, value);
+        self.write_value(edit, "height", value);
         self
     }
 
     #[doc = "[`Self::set_height`] as a time sample at the time code `time`."]
     pub fn set_height_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "height", Some(time), value);
+        self.write_value_at(edit, "height", time, value);
         self
     }
 
@@ -3027,14 +2830,14 @@ impl Capsule1Edit {
     #[doc(alias = "CreateRadiusBottomAttr")]
     pub fn set_radius_bottom(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "radiusBottom", None, value);
+        self.write_value(edit, "radiusBottom", value);
         self
     }
 
     #[doc = "[`Self::set_radius_bottom`] as a time sample at the time code `time`."]
     pub fn set_radius_bottom_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "radiusBottom", Some(time), value);
+        self.write_value_at(edit, "radiusBottom", time, value);
         self
     }
 
@@ -3046,14 +2849,14 @@ impl Capsule1Edit {
     #[doc(alias = "CreateRadiusTopAttr")]
     pub fn set_radius_top(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "radiusTop", None, value);
+        self.write_value(edit, "radiusTop", value);
         self
     }
 
     #[doc = "[`Self::set_radius_top`] as a time sample at the time code `time`."]
     pub fn set_radius_top_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "radiusTop", Some(time), value);
+        self.write_value_at(edit, "radiusTop", time, value);
         self
     }
 }
@@ -3200,10 +3003,10 @@ impl<'a> Cone<'a> {
         self.read_value("height", crate::value::read_double)
     }
 
-    #[doc = "[`Self::height`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::height`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn height_at(&self, time: f64, interp: ::layerstack::InterpolationType) -> Option<f64> {
-        self.read_value_at("height", time, interp, crate::value::read_double)
+    pub fn height_at(&self, time: ::layerstack::Time) -> Option<f64> {
+        self.read_value_at("height", time, crate::value::read_double)
     }
 
     /// The USD name of [`Self::radius`].
@@ -3220,10 +3023,10 @@ impl<'a> Cone<'a> {
         self.read_value("radius", crate::value::read_double)
     }
 
-    #[doc = "[`Self::radius`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::radius`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn radius_at(&self, time: f64, interp: ::layerstack::InterpolationType) -> Option<f64> {
-        self.read_value_at("radius", time, interp, crate::value::read_double)
+    pub fn radius_at(&self, time: ::layerstack::Time) -> Option<f64> {
+        self.read_value_at("radius", time, crate::value::read_double)
     }
 }
 
@@ -3266,7 +3069,7 @@ impl ConeEdit {
     #[doc(alias = "CreateAxisAttr")]
     pub fn set_axis(&self, edit: &mut SchemaEdit<'_>, value: ConeAxis) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "axis", None, value);
+        self.write_value(edit, "axis", value);
         self
     }
 
@@ -3278,14 +3081,14 @@ impl ConeEdit {
     #[doc(alias = "CreateHeightAttr")]
     pub fn set_height(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "height", None, value);
+        self.write_value(edit, "height", value);
         self
     }
 
     #[doc = "[`Self::set_height`] as a time sample at the time code `time`."]
     pub fn set_height_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "height", Some(time), value);
+        self.write_value_at(edit, "height", time, value);
         self
     }
 
@@ -3297,14 +3100,14 @@ impl ConeEdit {
     #[doc(alias = "CreateRadiusAttr")]
     pub fn set_radius(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "radius", None, value);
+        self.write_value(edit, "radius", value);
         self
     }
 
     #[doc = "[`Self::set_radius`] as a time sample at the time code `time`."]
     pub fn set_radius_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "radius", Some(time), value);
+        self.write_value_at(edit, "radius", time, value);
         self
     }
 }
@@ -3383,10 +3186,10 @@ impl<'a> Cube<'a> {
         self.read_value("size", crate::value::read_double)
     }
 
-    #[doc = "[`Self::size`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::size`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn size_at(&self, time: f64, interp: ::layerstack::InterpolationType) -> Option<f64> {
-        self.read_value_at("size", time, interp, crate::value::read_double)
+    pub fn size_at(&self, time: ::layerstack::Time) -> Option<f64> {
+        self.read_value_at("size", time, crate::value::read_double)
     }
 }
 
@@ -3429,14 +3232,14 @@ impl CubeEdit {
     #[doc(alias = "CreateSizeAttr")]
     pub fn set_size(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "size", None, value);
+        self.write_value(edit, "size", value);
         self
     }
 
     #[doc = "[`Self::set_size`] as a time sample at the time code `time`."]
     pub fn set_size_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "size", Some(time), value);
+        self.write_value_at(edit, "size", time, value);
         self
     }
 }
@@ -3506,17 +3309,15 @@ impl<'a> Curves<'a> {
         self.read_value("curveVertexCounts", crate::value::read_int_array_shared)
     }
 
-    #[doc = "[`Self::curve_vertex_counts`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::curve_vertex_counts`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn curve_vertex_counts_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<i32>>> {
         self.read_value_at(
             "curveVertexCounts",
             time,
-            interp,
             crate::value::read_int_array_shared,
         )
     }
@@ -3550,19 +3351,13 @@ impl<'a> Curves<'a> {
         self.read_value("widths", crate::value::read_float_array_shared)
     }
 
-    #[doc = "[`Self::widths`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::widths`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn widths_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<f32>>> {
-        self.read_value_at(
-            "widths",
-            time,
-            interp,
-            crate::value::read_float_array_shared,
-        )
+        self.read_value_at("widths", time, crate::value::read_float_array_shared)
     }
 
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -3616,7 +3411,7 @@ impl CurvesEdit {
     #[doc(alias = "CreateCurveVertexCountsAttr")]
     pub fn set_curve_vertex_counts(&self, edit: &mut SchemaEdit<'_>, value: &[i32]) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value(edit, "curveVertexCounts", None, value);
+        self.write_value(edit, "curveVertexCounts", value);
         self
     }
 
@@ -3628,7 +3423,7 @@ impl CurvesEdit {
         value: &[i32],
     ) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value(edit, "curveVertexCounts", Some(time), value);
+        self.write_value_at(edit, "curveVertexCounts", time, value);
         self
     }
 
@@ -3639,7 +3434,7 @@ impl CurvesEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value(edit, "curveVertexCounts", None, value);
+        self.write_value(edit, "curveVertexCounts", value);
         self
     }
 
@@ -3651,7 +3446,7 @@ impl CurvesEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value(edit, "curveVertexCounts", Some(time), value);
+        self.write_value_at(edit, "curveVertexCounts", time, value);
         self
     }
 
@@ -3662,7 +3457,7 @@ impl CurvesEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value(edit, "curveVertexCounts", None, value);
+        self.write_value(edit, "curveVertexCounts", value);
         self
     }
 
@@ -3674,7 +3469,7 @@ impl CurvesEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value(edit, "curveVertexCounts", Some(time), value);
+        self.write_value_at(edit, "curveVertexCounts", time, value);
         self
     }
 
@@ -3688,14 +3483,14 @@ impl CurvesEdit {
     #[doc(alias = "CreateWidthsAttr")]
     pub fn set_widths(&self, edit: &mut SchemaEdit<'_>, value: &[f32]) -> &Self {
         let value = crate::value::write_float_array(value, edit.tokens());
-        self.write_value(edit, "widths", None, value);
+        self.write_value(edit, "widths", value);
         self
     }
 
     #[doc = "[`Self::set_widths`] as a time sample at the time code `time`."]
     pub fn set_widths_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &[f32]) -> &Self {
         let value = crate::value::write_float_array(value, edit.tokens());
-        self.write_value(edit, "widths", Some(time), value);
+        self.write_value_at(edit, "widths", time, value);
         self
     }
 
@@ -3706,7 +3501,7 @@ impl CurvesEdit {
         value: ::alloc::vec::Vec<f32>,
     ) -> &Self {
         let value = crate::value::write_float_array_owned(value, edit.tokens());
-        self.write_value(edit, "widths", None, value);
+        self.write_value(edit, "widths", value);
         self
     }
 
@@ -3718,7 +3513,7 @@ impl CurvesEdit {
         value: ::alloc::vec::Vec<f32>,
     ) -> &Self {
         let value = crate::value::write_float_array_owned(value, edit.tokens());
-        self.write_value(edit, "widths", Some(time), value);
+        self.write_value_at(edit, "widths", time, value);
         self
     }
 
@@ -3729,7 +3524,7 @@ impl CurvesEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f32>>,
     ) -> &Self {
         let value = crate::value::write_float_array_shared(value, edit.tokens());
-        self.write_value(edit, "widths", None, value);
+        self.write_value(edit, "widths", value);
         self
     }
 
@@ -3741,7 +3536,7 @@ impl CurvesEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f32>>,
     ) -> &Self {
         let value = crate::value::write_float_array_shared(value, edit.tokens());
-        self.write_value(edit, "widths", Some(time), value);
+        self.write_value_at(edit, "widths", time, value);
         self
     }
 }
@@ -3888,10 +3683,10 @@ impl<'a> Cylinder<'a> {
         self.read_value("height", crate::value::read_double)
     }
 
-    #[doc = "[`Self::height`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::height`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn height_at(&self, time: f64, interp: ::layerstack::InterpolationType) -> Option<f64> {
-        self.read_value_at("height", time, interp, crate::value::read_double)
+    pub fn height_at(&self, time: ::layerstack::Time) -> Option<f64> {
+        self.read_value_at("height", time, crate::value::read_double)
     }
 
     /// The USD name of [`Self::radius`].
@@ -3908,10 +3703,10 @@ impl<'a> Cylinder<'a> {
         self.read_value("radius", crate::value::read_double)
     }
 
-    #[doc = "[`Self::radius`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::radius`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn radius_at(&self, time: f64, interp: ::layerstack::InterpolationType) -> Option<f64> {
-        self.read_value_at("radius", time, interp, crate::value::read_double)
+    pub fn radius_at(&self, time: ::layerstack::Time) -> Option<f64> {
+        self.read_value_at("radius", time, crate::value::read_double)
     }
 }
 
@@ -3954,7 +3749,7 @@ impl CylinderEdit {
     #[doc(alias = "CreateAxisAttr")]
     pub fn set_axis(&self, edit: &mut SchemaEdit<'_>, value: CylinderAxis) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "axis", None, value);
+        self.write_value(edit, "axis", value);
         self
     }
 
@@ -3966,14 +3761,14 @@ impl CylinderEdit {
     #[doc(alias = "CreateHeightAttr")]
     pub fn set_height(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "height", None, value);
+        self.write_value(edit, "height", value);
         self
     }
 
     #[doc = "[`Self::set_height`] as a time sample at the time code `time`."]
     pub fn set_height_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "height", Some(time), value);
+        self.write_value_at(edit, "height", time, value);
         self
     }
 
@@ -3985,14 +3780,14 @@ impl CylinderEdit {
     #[doc(alias = "CreateRadiusAttr")]
     pub fn set_radius(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "radius", None, value);
+        self.write_value(edit, "radius", value);
         self
     }
 
     #[doc = "[`Self::set_radius`] as a time sample at the time code `time`."]
     pub fn set_radius_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "radius", Some(time), value);
+        self.write_value_at(edit, "radius", time, value);
         self
     }
 }
@@ -4140,10 +3935,10 @@ impl<'a> Cylinder1<'a> {
         self.read_value("height", crate::value::read_double)
     }
 
-    #[doc = "[`Self::height`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::height`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn height_at(&self, time: f64, interp: ::layerstack::InterpolationType) -> Option<f64> {
-        self.read_value_at("height", time, interp, crate::value::read_double)
+    pub fn height_at(&self, time: ::layerstack::Time) -> Option<f64> {
+        self.read_value_at("height", time, crate::value::read_double)
     }
 
     /// The USD name of [`Self::radius_bottom`].
@@ -4160,14 +3955,10 @@ impl<'a> Cylinder1<'a> {
         self.read_value("radiusBottom", crate::value::read_double)
     }
 
-    #[doc = "[`Self::radius_bottom`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::radius_bottom`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn radius_bottom_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<f64> {
-        self.read_value_at("radiusBottom", time, interp, crate::value::read_double)
+    pub fn radius_bottom_at(&self, time: ::layerstack::Time) -> Option<f64> {
+        self.read_value_at("radiusBottom", time, crate::value::read_double)
     }
 
     /// The USD name of [`Self::radius_top`].
@@ -4184,10 +3975,10 @@ impl<'a> Cylinder1<'a> {
         self.read_value("radiusTop", crate::value::read_double)
     }
 
-    #[doc = "[`Self::radius_top`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::radius_top`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn radius_top_at(&self, time: f64, interp: ::layerstack::InterpolationType) -> Option<f64> {
-        self.read_value_at("radiusTop", time, interp, crate::value::read_double)
+    pub fn radius_top_at(&self, time: ::layerstack::Time) -> Option<f64> {
+        self.read_value_at("radiusTop", time, crate::value::read_double)
     }
 }
 
@@ -4230,7 +4021,7 @@ impl Cylinder1Edit {
     #[doc(alias = "CreateAxisAttr")]
     pub fn set_axis(&self, edit: &mut SchemaEdit<'_>, value: Cylinder1Axis) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "axis", None, value);
+        self.write_value(edit, "axis", value);
         self
     }
 
@@ -4242,14 +4033,14 @@ impl Cylinder1Edit {
     #[doc(alias = "CreateHeightAttr")]
     pub fn set_height(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "height", None, value);
+        self.write_value(edit, "height", value);
         self
     }
 
     #[doc = "[`Self::set_height`] as a time sample at the time code `time`."]
     pub fn set_height_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "height", Some(time), value);
+        self.write_value_at(edit, "height", time, value);
         self
     }
 
@@ -4261,14 +4052,14 @@ impl Cylinder1Edit {
     #[doc(alias = "CreateRadiusBottomAttr")]
     pub fn set_radius_bottom(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "radiusBottom", None, value);
+        self.write_value(edit, "radiusBottom", value);
         self
     }
 
     #[doc = "[`Self::set_radius_bottom`] as a time sample at the time code `time`."]
     pub fn set_radius_bottom_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "radiusBottom", Some(time), value);
+        self.write_value_at(edit, "radiusBottom", time, value);
         self
     }
 
@@ -4280,14 +4071,14 @@ impl Cylinder1Edit {
     #[doc(alias = "CreateRadiusTopAttr")]
     pub fn set_radius_top(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "radiusTop", None, value);
+        self.write_value(edit, "radiusTop", value);
         self
     }
 
     #[doc = "[`Self::set_radius_top`] as a time sample at the time code `time`."]
     pub fn set_radius_top_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "radiusTop", Some(time), value);
+        self.write_value_at(edit, "radiusTop", time, value);
         self
     }
 }
@@ -4569,19 +4360,13 @@ impl<'a> GeomModelApi<'a> {
         self.read_value("model:cardTextureXNeg", crate::value::read_asset)
     }
 
-    #[doc = "[`Self::model_card_texture_x_neg`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::model_card_texture_x_neg`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn model_card_texture_x_neg_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<str>> {
-        self.read_value_at(
-            "model:cardTextureXNeg",
-            time,
-            interp,
-            crate::value::read_asset,
-        )
+        self.read_value_at("model:cardTextureXNeg", time, crate::value::read_asset)
     }
 
     /// The USD name of [`Self::model_card_texture_x_pos`].
@@ -4598,19 +4383,13 @@ impl<'a> GeomModelApi<'a> {
         self.read_value("model:cardTextureXPos", crate::value::read_asset)
     }
 
-    #[doc = "[`Self::model_card_texture_x_pos`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::model_card_texture_x_pos`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn model_card_texture_x_pos_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<str>> {
-        self.read_value_at(
-            "model:cardTextureXPos",
-            time,
-            interp,
-            crate::value::read_asset,
-        )
+        self.read_value_at("model:cardTextureXPos", time, crate::value::read_asset)
     }
 
     /// The USD name of [`Self::model_card_texture_y_neg`].
@@ -4627,19 +4406,13 @@ impl<'a> GeomModelApi<'a> {
         self.read_value("model:cardTextureYNeg", crate::value::read_asset)
     }
 
-    #[doc = "[`Self::model_card_texture_y_neg`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::model_card_texture_y_neg`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn model_card_texture_y_neg_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<str>> {
-        self.read_value_at(
-            "model:cardTextureYNeg",
-            time,
-            interp,
-            crate::value::read_asset,
-        )
+        self.read_value_at("model:cardTextureYNeg", time, crate::value::read_asset)
     }
 
     /// The USD name of [`Self::model_card_texture_y_pos`].
@@ -4656,19 +4429,13 @@ impl<'a> GeomModelApi<'a> {
         self.read_value("model:cardTextureYPos", crate::value::read_asset)
     }
 
-    #[doc = "[`Self::model_card_texture_y_pos`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::model_card_texture_y_pos`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn model_card_texture_y_pos_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<str>> {
-        self.read_value_at(
-            "model:cardTextureYPos",
-            time,
-            interp,
-            crate::value::read_asset,
-        )
+        self.read_value_at("model:cardTextureYPos", time, crate::value::read_asset)
     }
 
     /// The USD name of [`Self::model_card_texture_z_neg`].
@@ -4685,19 +4452,13 @@ impl<'a> GeomModelApi<'a> {
         self.read_value("model:cardTextureZNeg", crate::value::read_asset)
     }
 
-    #[doc = "[`Self::model_card_texture_z_neg`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::model_card_texture_z_neg`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn model_card_texture_z_neg_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<str>> {
-        self.read_value_at(
-            "model:cardTextureZNeg",
-            time,
-            interp,
-            crate::value::read_asset,
-        )
+        self.read_value_at("model:cardTextureZNeg", time, crate::value::read_asset)
     }
 
     /// The USD name of [`Self::model_card_texture_z_pos`].
@@ -4714,19 +4475,13 @@ impl<'a> GeomModelApi<'a> {
         self.read_value("model:cardTextureZPos", crate::value::read_asset)
     }
 
-    #[doc = "[`Self::model_card_texture_z_pos`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::model_card_texture_z_pos`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn model_card_texture_z_pos_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<str>> {
-        self.read_value_at(
-            "model:cardTextureZPos",
-            time,
-            interp,
-            crate::value::read_asset,
-        )
+        self.read_value_at("model:cardTextureZPos", time, crate::value::read_asset)
     }
 
     /// The USD name of [`Self::model_card_visibility`].
@@ -4813,7 +4568,7 @@ impl GeomModelApiEdit {
     #[doc(alias = "CreateModelApplyDrawModeAttr")]
     pub fn set_model_apply_draw_mode(&self, edit: &mut SchemaEdit<'_>, value: bool) -> &Self {
         let value = crate::value::write_bool(value, edit.tokens());
-        self.write_value(edit, "model:applyDrawMode", None, value);
+        self.write_value(edit, "model:applyDrawMode", value);
         self
     }
 
@@ -4829,7 +4584,7 @@ impl GeomModelApiEdit {
         value: GeomModelApiModelCardGeometry,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "model:cardGeometry", None, value);
+        self.write_value(edit, "model:cardGeometry", value);
         self
     }
 
@@ -4841,7 +4596,7 @@ impl GeomModelApiEdit {
     #[doc(alias = "CreateModelCardTextureXNegAttr")]
     pub fn set_model_card_texture_x_neg(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value(edit, "model:cardTextureXNeg", None, value);
+        self.write_value(edit, "model:cardTextureXNeg", value);
         self
     }
 
@@ -4853,7 +4608,7 @@ impl GeomModelApiEdit {
         value: &str,
     ) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value(edit, "model:cardTextureXNeg", Some(time), value);
+        self.write_value_at(edit, "model:cardTextureXNeg", time, value);
         self
     }
 
@@ -4865,7 +4620,7 @@ impl GeomModelApiEdit {
     #[doc(alias = "CreateModelCardTextureXPosAttr")]
     pub fn set_model_card_texture_x_pos(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value(edit, "model:cardTextureXPos", None, value);
+        self.write_value(edit, "model:cardTextureXPos", value);
         self
     }
 
@@ -4877,7 +4632,7 @@ impl GeomModelApiEdit {
         value: &str,
     ) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value(edit, "model:cardTextureXPos", Some(time), value);
+        self.write_value_at(edit, "model:cardTextureXPos", time, value);
         self
     }
 
@@ -4889,7 +4644,7 @@ impl GeomModelApiEdit {
     #[doc(alias = "CreateModelCardTextureYNegAttr")]
     pub fn set_model_card_texture_y_neg(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value(edit, "model:cardTextureYNeg", None, value);
+        self.write_value(edit, "model:cardTextureYNeg", value);
         self
     }
 
@@ -4901,7 +4656,7 @@ impl GeomModelApiEdit {
         value: &str,
     ) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value(edit, "model:cardTextureYNeg", Some(time), value);
+        self.write_value_at(edit, "model:cardTextureYNeg", time, value);
         self
     }
 
@@ -4913,7 +4668,7 @@ impl GeomModelApiEdit {
     #[doc(alias = "CreateModelCardTextureYPosAttr")]
     pub fn set_model_card_texture_y_pos(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value(edit, "model:cardTextureYPos", None, value);
+        self.write_value(edit, "model:cardTextureYPos", value);
         self
     }
 
@@ -4925,7 +4680,7 @@ impl GeomModelApiEdit {
         value: &str,
     ) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value(edit, "model:cardTextureYPos", Some(time), value);
+        self.write_value_at(edit, "model:cardTextureYPos", time, value);
         self
     }
 
@@ -4937,7 +4692,7 @@ impl GeomModelApiEdit {
     #[doc(alias = "CreateModelCardTextureZNegAttr")]
     pub fn set_model_card_texture_z_neg(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value(edit, "model:cardTextureZNeg", None, value);
+        self.write_value(edit, "model:cardTextureZNeg", value);
         self
     }
 
@@ -4949,7 +4704,7 @@ impl GeomModelApiEdit {
         value: &str,
     ) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value(edit, "model:cardTextureZNeg", Some(time), value);
+        self.write_value_at(edit, "model:cardTextureZNeg", time, value);
         self
     }
 
@@ -4961,7 +4716,7 @@ impl GeomModelApiEdit {
     #[doc(alias = "CreateModelCardTextureZPosAttr")]
     pub fn set_model_card_texture_z_pos(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value(edit, "model:cardTextureZPos", None, value);
+        self.write_value(edit, "model:cardTextureZPos", value);
         self
     }
 
@@ -4973,7 +4728,7 @@ impl GeomModelApiEdit {
         value: &str,
     ) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value(edit, "model:cardTextureZPos", Some(time), value);
+        self.write_value_at(edit, "model:cardTextureZPos", time, value);
         self
     }
 
@@ -4989,7 +4744,7 @@ impl GeomModelApiEdit {
         value: GeomModelApiModelCardVisibility,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "model:cardVisibility", None, value);
+        self.write_value(edit, "model:cardVisibility", value);
         self
     }
 
@@ -5005,7 +4760,7 @@ impl GeomModelApiEdit {
         value: GeomModelApiModelDrawMode,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "model:drawMode", None, value);
+        self.write_value(edit, "model:drawMode", value);
         self
     }
 
@@ -5017,7 +4772,7 @@ impl GeomModelApiEdit {
     #[doc(alias = "CreateModelDrawModeColorAttr")]
     pub fn set_model_draw_mode_color(&self, edit: &mut SchemaEdit<'_>, value: [f32; 3]) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
-        self.write_value(edit, "model:drawModeColor", None, value);
+        self.write_value(edit, "model:drawModeColor", value);
         self
     }
 }
@@ -5189,14 +4944,13 @@ impl<'a> GeomSubset<'a> {
         self.read_value("indices", crate::value::read_int_array_shared)
     }
 
-    #[doc = "[`Self::indices`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::indices`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn indices_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<i32>>> {
-        self.read_value_at("indices", time, interp, crate::value::read_int_array_shared)
+        self.read_value_at("indices", time, crate::value::read_int_array_shared)
     }
 
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -5252,7 +5006,7 @@ impl GeomSubsetEdit {
         value: GeomSubsetElementType,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "elementType", None, value);
+        self.write_value(edit, "elementType", value);
         self
     }
 
@@ -5264,7 +5018,7 @@ impl GeomSubsetEdit {
     #[doc(alias = "CreateFamilyNameAttr")]
     pub fn set_family_name(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value(edit, "familyName", None, value);
+        self.write_value(edit, "familyName", value);
         self
     }
 
@@ -5278,14 +5032,14 @@ impl GeomSubsetEdit {
     #[doc(alias = "CreateIndicesAttr")]
     pub fn set_indices(&self, edit: &mut SchemaEdit<'_>, value: &[i32]) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value(edit, "indices", None, value);
+        self.write_value(edit, "indices", value);
         self
     }
 
     #[doc = "[`Self::set_indices`] as a time sample at the time code `time`."]
     pub fn set_indices_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &[i32]) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value(edit, "indices", Some(time), value);
+        self.write_value_at(edit, "indices", time, value);
         self
     }
 
@@ -5296,7 +5050,7 @@ impl GeomSubsetEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value(edit, "indices", None, value);
+        self.write_value(edit, "indices", value);
         self
     }
 
@@ -5308,7 +5062,7 @@ impl GeomSubsetEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value(edit, "indices", Some(time), value);
+        self.write_value_at(edit, "indices", time, value);
         self
     }
 
@@ -5319,7 +5073,7 @@ impl GeomSubsetEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value(edit, "indices", None, value);
+        self.write_value(edit, "indices", value);
         self
     }
 
@@ -5331,7 +5085,7 @@ impl GeomSubsetEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value(edit, "indices", Some(time), value);
+        self.write_value_at(edit, "indices", time, value);
         self
     }
 }
@@ -5482,17 +5236,15 @@ impl<'a> Gprim<'a> {
         )
     }
 
-    #[doc = "[`Self::display_color`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::display_color`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn display_color_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>> {
         self.read_value_at(
             "primvars:displayColor",
             time,
-            interp,
             crate::value::read_float3_array_shared,
         )
     }
@@ -5529,17 +5281,15 @@ impl<'a> Gprim<'a> {
         )
     }
 
-    #[doc = "[`Self::display_opacity`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::display_opacity`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn display_opacity_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<f32>>> {
         self.read_value_at(
             "primvars:displayOpacity",
             time,
-            interp,
             crate::value::read_float_array_shared,
         )
     }
@@ -5597,7 +5347,7 @@ impl GprimEdit {
     #[doc(alias = "CreateDoubleSidedAttr")]
     pub fn set_double_sided(&self, edit: &mut SchemaEdit<'_>, value: bool) -> &Self {
         let value = crate::value::write_bool(value, edit.tokens());
-        self.write_value(edit, "doubleSided", None, value);
+        self.write_value(edit, "doubleSided", value);
         self
     }
 
@@ -5609,7 +5359,7 @@ impl GprimEdit {
     #[doc(alias = "CreateOrientationAttr")]
     pub fn set_orientation(&self, edit: &mut SchemaEdit<'_>, value: GprimOrientation) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "orientation", None, value);
+        self.write_value(edit, "orientation", value);
         self
     }
 
@@ -5623,7 +5373,7 @@ impl GprimEdit {
     #[doc(alias = "CreateDisplayColorAttr")]
     pub fn set_display_color(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 3]]) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(edit, "primvars:displayColor", None, value);
+        self.write_value(edit, "primvars:displayColor", value);
         self
     }
 
@@ -5635,7 +5385,7 @@ impl GprimEdit {
         value: &[[f32; 3]],
     ) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(edit, "primvars:displayColor", Some(time), value);
+        self.write_value_at(edit, "primvars:displayColor", time, value);
         self
     }
 
@@ -5646,7 +5396,7 @@ impl GprimEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(edit, "primvars:displayColor", None, value);
+        self.write_value(edit, "primvars:displayColor", value);
         self
     }
 
@@ -5658,7 +5408,7 @@ impl GprimEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(edit, "primvars:displayColor", Some(time), value);
+        self.write_value_at(edit, "primvars:displayColor", time, value);
         self
     }
 
@@ -5669,7 +5419,7 @@ impl GprimEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(edit, "primvars:displayColor", None, value);
+        self.write_value(edit, "primvars:displayColor", value);
         self
     }
 
@@ -5681,7 +5431,7 @@ impl GprimEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(edit, "primvars:displayColor", Some(time), value);
+        self.write_value_at(edit, "primvars:displayColor", time, value);
         self
     }
 
@@ -5695,7 +5445,7 @@ impl GprimEdit {
     #[doc(alias = "CreateDisplayOpacityAttr")]
     pub fn set_display_opacity(&self, edit: &mut SchemaEdit<'_>, value: &[f32]) -> &Self {
         let value = crate::value::write_float_array(value, edit.tokens());
-        self.write_value(edit, "primvars:displayOpacity", None, value);
+        self.write_value(edit, "primvars:displayOpacity", value);
         self
     }
 
@@ -5707,7 +5457,7 @@ impl GprimEdit {
         value: &[f32],
     ) -> &Self {
         let value = crate::value::write_float_array(value, edit.tokens());
-        self.write_value(edit, "primvars:displayOpacity", Some(time), value);
+        self.write_value_at(edit, "primvars:displayOpacity", time, value);
         self
     }
 
@@ -5718,7 +5468,7 @@ impl GprimEdit {
         value: ::alloc::vec::Vec<f32>,
     ) -> &Self {
         let value = crate::value::write_float_array_owned(value, edit.tokens());
-        self.write_value(edit, "primvars:displayOpacity", None, value);
+        self.write_value(edit, "primvars:displayOpacity", value);
         self
     }
 
@@ -5730,7 +5480,7 @@ impl GprimEdit {
         value: ::alloc::vec::Vec<f32>,
     ) -> &Self {
         let value = crate::value::write_float_array_owned(value, edit.tokens());
-        self.write_value(edit, "primvars:displayOpacity", Some(time), value);
+        self.write_value_at(edit, "primvars:displayOpacity", time, value);
         self
     }
 
@@ -5741,7 +5491,7 @@ impl GprimEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f32>>,
     ) -> &Self {
         let value = crate::value::write_float_array_shared(value, edit.tokens());
-        self.write_value(edit, "primvars:displayOpacity", None, value);
+        self.write_value(edit, "primvars:displayOpacity", value);
         self
     }
 
@@ -5753,7 +5503,7 @@ impl GprimEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f32>>,
     ) -> &Self {
         let value = crate::value::write_float_array_shared(value, edit.tokens());
-        self.write_value(edit, "primvars:displayOpacity", Some(time), value);
+        self.write_value_at(edit, "primvars:displayOpacity", time, value);
         self
     }
 }
@@ -5834,19 +5584,13 @@ impl<'a> HermiteCurves<'a> {
         self.read_value("tangents", crate::value::read_float3_array_shared)
     }
 
-    #[doc = "[`Self::tangents`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::tangents`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn tangents_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>> {
-        self.read_value_at(
-            "tangents",
-            time,
-            interp,
-            crate::value::read_float3_array_shared,
-        )
+        self.read_value_at("tangents", time, crate::value::read_float3_array_shared)
     }
 
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -5900,7 +5644,7 @@ impl HermiteCurvesEdit {
     #[doc(alias = "CreateTangentsAttr")]
     pub fn set_tangents(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 3]]) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(edit, "tangents", None, value);
+        self.write_value(edit, "tangents", value);
         self
     }
 
@@ -5912,7 +5656,7 @@ impl HermiteCurvesEdit {
         value: &[[f32; 3]],
     ) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(edit, "tangents", Some(time), value);
+        self.write_value_at(edit, "tangents", time, value);
         self
     }
 
@@ -5923,7 +5667,7 @@ impl HermiteCurvesEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(edit, "tangents", None, value);
+        self.write_value(edit, "tangents", value);
         self
     }
 
@@ -5935,7 +5679,7 @@ impl HermiteCurvesEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(edit, "tangents", Some(time), value);
+        self.write_value_at(edit, "tangents", time, value);
         self
     }
 
@@ -5946,7 +5690,7 @@ impl HermiteCurvesEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(edit, "tangents", None, value);
+        self.write_value(edit, "tangents", value);
         self
     }
 
@@ -5958,7 +5702,7 @@ impl HermiteCurvesEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(edit, "tangents", Some(time), value);
+        self.write_value_at(edit, "tangents", time, value);
         self
     }
 }
@@ -6162,14 +5906,10 @@ impl<'a> Imageable<'a> {
         self.read_value("visibility", ImageableVisibility::read)
     }
 
-    #[doc = "[`Self::visibility`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::visibility`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn visibility_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<ImageableVisibility> {
-        self.read_value_at("visibility", time, interp, ImageableVisibility::read)
+    pub fn visibility_at(&self, time: ::layerstack::Time) -> Option<ImageableVisibility> {
+        self.read_value_at("visibility", time, ImageableVisibility::read)
     }
 }
 
@@ -6252,7 +5992,7 @@ impl ImageableEdit {
     #[doc(alias = "CreatePurposeAttr")]
     pub fn set_purpose(&self, edit: &mut SchemaEdit<'_>, value: ImageablePurpose) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "purpose", None, value);
+        self.write_value(edit, "purpose", value);
         self
     }
 
@@ -6264,7 +6004,7 @@ impl ImageableEdit {
     #[doc(alias = "CreateVisibilityAttr")]
     pub fn set_visibility(&self, edit: &mut SchemaEdit<'_>, value: ImageableVisibility) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "visibility", None, value);
+        self.write_value(edit, "visibility", value);
         self
     }
 
@@ -6276,7 +6016,7 @@ impl ImageableEdit {
         value: ImageableVisibility,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "visibility", Some(time), value);
+        self.write_value_at(edit, "visibility", time, value);
         self
     }
 }
@@ -6592,19 +6332,13 @@ impl<'a> Mesh<'a> {
         self.read_value("cornerIndices", crate::value::read_int_array_shared)
     }
 
-    #[doc = "[`Self::corner_indices`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::corner_indices`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn corner_indices_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<i32>>> {
-        self.read_value_at(
-            "cornerIndices",
-            time,
-            interp,
-            crate::value::read_int_array_shared,
-        )
+        self.read_value_at("cornerIndices", time, crate::value::read_int_array_shared)
     }
 
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -6632,17 +6366,15 @@ impl<'a> Mesh<'a> {
         self.read_value("cornerSharpnesses", crate::value::read_float_array_shared)
     }
 
-    #[doc = "[`Self::corner_sharpnesses`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::corner_sharpnesses`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn corner_sharpnesses_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<f32>>> {
         self.read_value_at(
             "cornerSharpnesses",
             time,
-            interp,
             crate::value::read_float_array_shared,
         )
     }
@@ -6676,19 +6408,13 @@ impl<'a> Mesh<'a> {
         self.read_value("creaseIndices", crate::value::read_int_array_shared)
     }
 
-    #[doc = "[`Self::crease_indices`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::crease_indices`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn crease_indices_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<i32>>> {
-        self.read_value_at(
-            "creaseIndices",
-            time,
-            interp,
-            crate::value::read_int_array_shared,
-        )
+        self.read_value_at("creaseIndices", time, crate::value::read_int_array_shared)
     }
 
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -6716,19 +6442,13 @@ impl<'a> Mesh<'a> {
         self.read_value("creaseLengths", crate::value::read_int_array_shared)
     }
 
-    #[doc = "[`Self::crease_lengths`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::crease_lengths`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn crease_lengths_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<i32>>> {
-        self.read_value_at(
-            "creaseLengths",
-            time,
-            interp,
-            crate::value::read_int_array_shared,
-        )
+        self.read_value_at("creaseLengths", time, crate::value::read_int_array_shared)
     }
 
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -6756,17 +6476,15 @@ impl<'a> Mesh<'a> {
         self.read_value("creaseSharpnesses", crate::value::read_float_array_shared)
     }
 
-    #[doc = "[`Self::crease_sharpnesses`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::crease_sharpnesses`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn crease_sharpnesses_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<f32>>> {
         self.read_value_at(
             "creaseSharpnesses",
             time,
-            interp,
             crate::value::read_float_array_shared,
         )
     }
@@ -6801,17 +6519,15 @@ impl<'a> Mesh<'a> {
         )
     }
 
-    #[doc = "[`Self::face_varying_linear_interpolation`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::face_varying_linear_interpolation`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn face_varying_linear_interpolation_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<MeshFaceVaryingLinearInterpolation> {
         self.read_value_at(
             "faceVaryingLinearInterpolation",
             time,
-            interp,
             MeshFaceVaryingLinearInterpolation::read,
         )
     }
@@ -6832,17 +6548,15 @@ impl<'a> Mesh<'a> {
         self.read_value("faceVertexCounts", crate::value::read_int_array_shared)
     }
 
-    #[doc = "[`Self::face_vertex_counts`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::face_vertex_counts`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn face_vertex_counts_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<i32>>> {
         self.read_value_at(
             "faceVertexCounts",
             time,
-            interp,
             crate::value::read_int_array_shared,
         )
     }
@@ -6876,17 +6590,15 @@ impl<'a> Mesh<'a> {
         self.read_value("faceVertexIndices", crate::value::read_int_array_shared)
     }
 
-    #[doc = "[`Self::face_vertex_indices`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::face_vertex_indices`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn face_vertex_indices_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<i32>>> {
         self.read_value_at(
             "faceVertexIndices",
             time,
-            interp,
             crate::value::read_int_array_shared,
         )
     }
@@ -6920,19 +6632,13 @@ impl<'a> Mesh<'a> {
         self.read_value("holeIndices", crate::value::read_int_array_shared)
     }
 
-    #[doc = "[`Self::hole_indices`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::hole_indices`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn hole_indices_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<i32>>> {
-        self.read_value_at(
-            "holeIndices",
-            time,
-            interp,
-            crate::value::read_int_array_shared,
-        )
+        self.read_value_at("holeIndices", time, crate::value::read_int_array_shared)
     }
 
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -6958,19 +6664,13 @@ impl<'a> Mesh<'a> {
         self.read_value("interpolateBoundary", MeshInterpolateBoundary::read)
     }
 
-    #[doc = "[`Self::interpolate_boundary`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::interpolate_boundary`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn interpolate_boundary_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<MeshInterpolateBoundary> {
-        self.read_value_at(
-            "interpolateBoundary",
-            time,
-            interp,
-            MeshInterpolateBoundary::read,
-        )
+        self.read_value_at("interpolateBoundary", time, MeshInterpolateBoundary::read)
     }
 
     /// The USD name of [`Self::subdivision_scheme`].
@@ -7001,17 +6701,15 @@ impl<'a> Mesh<'a> {
         self.read_value("triangleSubdivisionRule", MeshTriangleSubdivisionRule::read)
     }
 
-    #[doc = "[`Self::triangle_subdivision_rule`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::triangle_subdivision_rule`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn triangle_subdivision_rule_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<MeshTriangleSubdivisionRule> {
         self.read_value_at(
             "triangleSubdivisionRule",
             time,
-            interp,
             MeshTriangleSubdivisionRule::read,
         )
     }
@@ -7058,7 +6756,7 @@ impl MeshEdit {
     #[doc(alias = "CreateCornerIndicesAttr")]
     pub fn set_corner_indices(&self, edit: &mut SchemaEdit<'_>, value: &[i32]) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value(edit, "cornerIndices", None, value);
+        self.write_value(edit, "cornerIndices", value);
         self
     }
 
@@ -7070,7 +6768,7 @@ impl MeshEdit {
         value: &[i32],
     ) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value(edit, "cornerIndices", Some(time), value);
+        self.write_value_at(edit, "cornerIndices", time, value);
         self
     }
 
@@ -7081,7 +6779,7 @@ impl MeshEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value(edit, "cornerIndices", None, value);
+        self.write_value(edit, "cornerIndices", value);
         self
     }
 
@@ -7093,7 +6791,7 @@ impl MeshEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value(edit, "cornerIndices", Some(time), value);
+        self.write_value_at(edit, "cornerIndices", time, value);
         self
     }
 
@@ -7104,7 +6802,7 @@ impl MeshEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value(edit, "cornerIndices", None, value);
+        self.write_value(edit, "cornerIndices", value);
         self
     }
 
@@ -7116,7 +6814,7 @@ impl MeshEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value(edit, "cornerIndices", Some(time), value);
+        self.write_value_at(edit, "cornerIndices", time, value);
         self
     }
 
@@ -7130,7 +6828,7 @@ impl MeshEdit {
     #[doc(alias = "CreateCornerSharpnessesAttr")]
     pub fn set_corner_sharpnesses(&self, edit: &mut SchemaEdit<'_>, value: &[f32]) -> &Self {
         let value = crate::value::write_float_array(value, edit.tokens());
-        self.write_value(edit, "cornerSharpnesses", None, value);
+        self.write_value(edit, "cornerSharpnesses", value);
         self
     }
 
@@ -7142,7 +6840,7 @@ impl MeshEdit {
         value: &[f32],
     ) -> &Self {
         let value = crate::value::write_float_array(value, edit.tokens());
-        self.write_value(edit, "cornerSharpnesses", Some(time), value);
+        self.write_value_at(edit, "cornerSharpnesses", time, value);
         self
     }
 
@@ -7153,7 +6851,7 @@ impl MeshEdit {
         value: ::alloc::vec::Vec<f32>,
     ) -> &Self {
         let value = crate::value::write_float_array_owned(value, edit.tokens());
-        self.write_value(edit, "cornerSharpnesses", None, value);
+        self.write_value(edit, "cornerSharpnesses", value);
         self
     }
 
@@ -7165,7 +6863,7 @@ impl MeshEdit {
         value: ::alloc::vec::Vec<f32>,
     ) -> &Self {
         let value = crate::value::write_float_array_owned(value, edit.tokens());
-        self.write_value(edit, "cornerSharpnesses", Some(time), value);
+        self.write_value_at(edit, "cornerSharpnesses", time, value);
         self
     }
 
@@ -7176,7 +6874,7 @@ impl MeshEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f32>>,
     ) -> &Self {
         let value = crate::value::write_float_array_shared(value, edit.tokens());
-        self.write_value(edit, "cornerSharpnesses", None, value);
+        self.write_value(edit, "cornerSharpnesses", value);
         self
     }
 
@@ -7188,7 +6886,7 @@ impl MeshEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f32>>,
     ) -> &Self {
         let value = crate::value::write_float_array_shared(value, edit.tokens());
-        self.write_value(edit, "cornerSharpnesses", Some(time), value);
+        self.write_value_at(edit, "cornerSharpnesses", time, value);
         self
     }
 
@@ -7202,7 +6900,7 @@ impl MeshEdit {
     #[doc(alias = "CreateCreaseIndicesAttr")]
     pub fn set_crease_indices(&self, edit: &mut SchemaEdit<'_>, value: &[i32]) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value(edit, "creaseIndices", None, value);
+        self.write_value(edit, "creaseIndices", value);
         self
     }
 
@@ -7214,7 +6912,7 @@ impl MeshEdit {
         value: &[i32],
     ) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value(edit, "creaseIndices", Some(time), value);
+        self.write_value_at(edit, "creaseIndices", time, value);
         self
     }
 
@@ -7225,7 +6923,7 @@ impl MeshEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value(edit, "creaseIndices", None, value);
+        self.write_value(edit, "creaseIndices", value);
         self
     }
 
@@ -7237,7 +6935,7 @@ impl MeshEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value(edit, "creaseIndices", Some(time), value);
+        self.write_value_at(edit, "creaseIndices", time, value);
         self
     }
 
@@ -7248,7 +6946,7 @@ impl MeshEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value(edit, "creaseIndices", None, value);
+        self.write_value(edit, "creaseIndices", value);
         self
     }
 
@@ -7260,7 +6958,7 @@ impl MeshEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value(edit, "creaseIndices", Some(time), value);
+        self.write_value_at(edit, "creaseIndices", time, value);
         self
     }
 
@@ -7274,7 +6972,7 @@ impl MeshEdit {
     #[doc(alias = "CreateCreaseLengthsAttr")]
     pub fn set_crease_lengths(&self, edit: &mut SchemaEdit<'_>, value: &[i32]) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value(edit, "creaseLengths", None, value);
+        self.write_value(edit, "creaseLengths", value);
         self
     }
 
@@ -7286,7 +6984,7 @@ impl MeshEdit {
         value: &[i32],
     ) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value(edit, "creaseLengths", Some(time), value);
+        self.write_value_at(edit, "creaseLengths", time, value);
         self
     }
 
@@ -7297,7 +6995,7 @@ impl MeshEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value(edit, "creaseLengths", None, value);
+        self.write_value(edit, "creaseLengths", value);
         self
     }
 
@@ -7309,7 +7007,7 @@ impl MeshEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value(edit, "creaseLengths", Some(time), value);
+        self.write_value_at(edit, "creaseLengths", time, value);
         self
     }
 
@@ -7320,7 +7018,7 @@ impl MeshEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value(edit, "creaseLengths", None, value);
+        self.write_value(edit, "creaseLengths", value);
         self
     }
 
@@ -7332,7 +7030,7 @@ impl MeshEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value(edit, "creaseLengths", Some(time), value);
+        self.write_value_at(edit, "creaseLengths", time, value);
         self
     }
 
@@ -7346,7 +7044,7 @@ impl MeshEdit {
     #[doc(alias = "CreateCreaseSharpnessesAttr")]
     pub fn set_crease_sharpnesses(&self, edit: &mut SchemaEdit<'_>, value: &[f32]) -> &Self {
         let value = crate::value::write_float_array(value, edit.tokens());
-        self.write_value(edit, "creaseSharpnesses", None, value);
+        self.write_value(edit, "creaseSharpnesses", value);
         self
     }
 
@@ -7358,7 +7056,7 @@ impl MeshEdit {
         value: &[f32],
     ) -> &Self {
         let value = crate::value::write_float_array(value, edit.tokens());
-        self.write_value(edit, "creaseSharpnesses", Some(time), value);
+        self.write_value_at(edit, "creaseSharpnesses", time, value);
         self
     }
 
@@ -7369,7 +7067,7 @@ impl MeshEdit {
         value: ::alloc::vec::Vec<f32>,
     ) -> &Self {
         let value = crate::value::write_float_array_owned(value, edit.tokens());
-        self.write_value(edit, "creaseSharpnesses", None, value);
+        self.write_value(edit, "creaseSharpnesses", value);
         self
     }
 
@@ -7381,7 +7079,7 @@ impl MeshEdit {
         value: ::alloc::vec::Vec<f32>,
     ) -> &Self {
         let value = crate::value::write_float_array_owned(value, edit.tokens());
-        self.write_value(edit, "creaseSharpnesses", Some(time), value);
+        self.write_value_at(edit, "creaseSharpnesses", time, value);
         self
     }
 
@@ -7392,7 +7090,7 @@ impl MeshEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f32>>,
     ) -> &Self {
         let value = crate::value::write_float_array_shared(value, edit.tokens());
-        self.write_value(edit, "creaseSharpnesses", None, value);
+        self.write_value(edit, "creaseSharpnesses", value);
         self
     }
 
@@ -7404,7 +7102,7 @@ impl MeshEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f32>>,
     ) -> &Self {
         let value = crate::value::write_float_array_shared(value, edit.tokens());
-        self.write_value(edit, "creaseSharpnesses", Some(time), value);
+        self.write_value_at(edit, "creaseSharpnesses", time, value);
         self
     }
 
@@ -7420,7 +7118,7 @@ impl MeshEdit {
         value: MeshFaceVaryingLinearInterpolation,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "faceVaryingLinearInterpolation", None, value);
+        self.write_value(edit, "faceVaryingLinearInterpolation", value);
         self
     }
 
@@ -7432,7 +7130,7 @@ impl MeshEdit {
         value: MeshFaceVaryingLinearInterpolation,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "faceVaryingLinearInterpolation", Some(time), value);
+        self.write_value_at(edit, "faceVaryingLinearInterpolation", time, value);
         self
     }
 
@@ -7446,7 +7144,7 @@ impl MeshEdit {
     #[doc(alias = "CreateFaceVertexCountsAttr")]
     pub fn set_face_vertex_counts(&self, edit: &mut SchemaEdit<'_>, value: &[i32]) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value(edit, "faceVertexCounts", None, value);
+        self.write_value(edit, "faceVertexCounts", value);
         self
     }
 
@@ -7458,7 +7156,7 @@ impl MeshEdit {
         value: &[i32],
     ) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value(edit, "faceVertexCounts", Some(time), value);
+        self.write_value_at(edit, "faceVertexCounts", time, value);
         self
     }
 
@@ -7469,7 +7167,7 @@ impl MeshEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value(edit, "faceVertexCounts", None, value);
+        self.write_value(edit, "faceVertexCounts", value);
         self
     }
 
@@ -7481,7 +7179,7 @@ impl MeshEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value(edit, "faceVertexCounts", Some(time), value);
+        self.write_value_at(edit, "faceVertexCounts", time, value);
         self
     }
 
@@ -7492,7 +7190,7 @@ impl MeshEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value(edit, "faceVertexCounts", None, value);
+        self.write_value(edit, "faceVertexCounts", value);
         self
     }
 
@@ -7504,7 +7202,7 @@ impl MeshEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value(edit, "faceVertexCounts", Some(time), value);
+        self.write_value_at(edit, "faceVertexCounts", time, value);
         self
     }
 
@@ -7518,7 +7216,7 @@ impl MeshEdit {
     #[doc(alias = "CreateFaceVertexIndicesAttr")]
     pub fn set_face_vertex_indices(&self, edit: &mut SchemaEdit<'_>, value: &[i32]) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value(edit, "faceVertexIndices", None, value);
+        self.write_value(edit, "faceVertexIndices", value);
         self
     }
 
@@ -7530,7 +7228,7 @@ impl MeshEdit {
         value: &[i32],
     ) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value(edit, "faceVertexIndices", Some(time), value);
+        self.write_value_at(edit, "faceVertexIndices", time, value);
         self
     }
 
@@ -7541,7 +7239,7 @@ impl MeshEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value(edit, "faceVertexIndices", None, value);
+        self.write_value(edit, "faceVertexIndices", value);
         self
     }
 
@@ -7553,7 +7251,7 @@ impl MeshEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value(edit, "faceVertexIndices", Some(time), value);
+        self.write_value_at(edit, "faceVertexIndices", time, value);
         self
     }
 
@@ -7564,7 +7262,7 @@ impl MeshEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value(edit, "faceVertexIndices", None, value);
+        self.write_value(edit, "faceVertexIndices", value);
         self
     }
 
@@ -7576,7 +7274,7 @@ impl MeshEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value(edit, "faceVertexIndices", Some(time), value);
+        self.write_value_at(edit, "faceVertexIndices", time, value);
         self
     }
 
@@ -7590,7 +7288,7 @@ impl MeshEdit {
     #[doc(alias = "CreateHoleIndicesAttr")]
     pub fn set_hole_indices(&self, edit: &mut SchemaEdit<'_>, value: &[i32]) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value(edit, "holeIndices", None, value);
+        self.write_value(edit, "holeIndices", value);
         self
     }
 
@@ -7602,7 +7300,7 @@ impl MeshEdit {
         value: &[i32],
     ) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value(edit, "holeIndices", Some(time), value);
+        self.write_value_at(edit, "holeIndices", time, value);
         self
     }
 
@@ -7613,7 +7311,7 @@ impl MeshEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value(edit, "holeIndices", None, value);
+        self.write_value(edit, "holeIndices", value);
         self
     }
 
@@ -7625,7 +7323,7 @@ impl MeshEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value(edit, "holeIndices", Some(time), value);
+        self.write_value_at(edit, "holeIndices", time, value);
         self
     }
 
@@ -7636,7 +7334,7 @@ impl MeshEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value(edit, "holeIndices", None, value);
+        self.write_value(edit, "holeIndices", value);
         self
     }
 
@@ -7648,7 +7346,7 @@ impl MeshEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value(edit, "holeIndices", Some(time), value);
+        self.write_value_at(edit, "holeIndices", time, value);
         self
     }
 
@@ -7664,7 +7362,7 @@ impl MeshEdit {
         value: MeshInterpolateBoundary,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "interpolateBoundary", None, value);
+        self.write_value(edit, "interpolateBoundary", value);
         self
     }
 
@@ -7676,7 +7374,7 @@ impl MeshEdit {
         value: MeshInterpolateBoundary,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "interpolateBoundary", Some(time), value);
+        self.write_value_at(edit, "interpolateBoundary", time, value);
         self
     }
 
@@ -7692,7 +7390,7 @@ impl MeshEdit {
         value: MeshSubdivisionScheme,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "subdivisionScheme", None, value);
+        self.write_value(edit, "subdivisionScheme", value);
         self
     }
 
@@ -7708,7 +7406,7 @@ impl MeshEdit {
         value: MeshTriangleSubdivisionRule,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "triangleSubdivisionRule", None, value);
+        self.write_value(edit, "triangleSubdivisionRule", value);
         self
     }
 
@@ -7720,7 +7418,7 @@ impl MeshEdit {
         value: MeshTriangleSubdivisionRule,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "triangleSubdivisionRule", Some(time), value);
+        self.write_value_at(edit, "triangleSubdivisionRule", time, value);
         self
     }
 }
@@ -7803,14 +7501,10 @@ impl<'a> MotionApi<'a> {
         self.read_value("motion:blurScale", crate::value::read_float)
     }
 
-    #[doc = "[`Self::motion_blur_scale`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::motion_blur_scale`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn motion_blur_scale_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<f32> {
-        self.read_value_at("motion:blurScale", time, interp, crate::value::read_float)
+    pub fn motion_blur_scale_at(&self, time: ::layerstack::Time) -> Option<f32> {
+        self.read_value_at("motion:blurScale", time, crate::value::read_float)
     }
 
     /// The USD name of [`Self::nonlinear_sample_count`].
@@ -7827,19 +7521,10 @@ impl<'a> MotionApi<'a> {
         self.read_value("motion:nonlinearSampleCount", crate::value::read_int)
     }
 
-    #[doc = "[`Self::nonlinear_sample_count`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::nonlinear_sample_count`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn nonlinear_sample_count_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<i32> {
-        self.read_value_at(
-            "motion:nonlinearSampleCount",
-            time,
-            interp,
-            crate::value::read_int,
-        )
+    pub fn nonlinear_sample_count_at(&self, time: ::layerstack::Time) -> Option<i32> {
+        self.read_value_at("motion:nonlinearSampleCount", time, crate::value::read_int)
     }
 
     /// The USD name of [`Self::velocity_scale`].
@@ -7856,19 +7541,10 @@ impl<'a> MotionApi<'a> {
         self.read_value("motion:velocityScale", crate::value::read_float)
     }
 
-    #[doc = "[`Self::velocity_scale`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::velocity_scale`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn velocity_scale_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<f32> {
-        self.read_value_at(
-            "motion:velocityScale",
-            time,
-            interp,
-            crate::value::read_float,
-        )
+    pub fn velocity_scale_at(&self, time: ::layerstack::Time) -> Option<f32> {
+        self.read_value_at("motion:velocityScale", time, crate::value::read_float)
     }
 }
 
@@ -7910,7 +7586,7 @@ impl MotionApiEdit {
     #[doc(alias = "CreateMotionBlurScaleAttr")]
     pub fn set_motion_blur_scale(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "motion:blurScale", None, value);
+        self.write_value(edit, "motion:blurScale", value);
         self
     }
 
@@ -7922,7 +7598,7 @@ impl MotionApiEdit {
         value: f32,
     ) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "motion:blurScale", Some(time), value);
+        self.write_value_at(edit, "motion:blurScale", time, value);
         self
     }
 
@@ -7934,7 +7610,7 @@ impl MotionApiEdit {
     #[doc(alias = "CreateNonlinearSampleCountAttr")]
     pub fn set_nonlinear_sample_count(&self, edit: &mut SchemaEdit<'_>, value: i32) -> &Self {
         let value = crate::value::write_int(value, edit.tokens());
-        self.write_value(edit, "motion:nonlinearSampleCount", None, value);
+        self.write_value(edit, "motion:nonlinearSampleCount", value);
         self
     }
 
@@ -7946,7 +7622,7 @@ impl MotionApiEdit {
         value: i32,
     ) -> &Self {
         let value = crate::value::write_int(value, edit.tokens());
-        self.write_value(edit, "motion:nonlinearSampleCount", Some(time), value);
+        self.write_value_at(edit, "motion:nonlinearSampleCount", time, value);
         self
     }
 
@@ -7958,14 +7634,14 @@ impl MotionApiEdit {
     #[doc(alias = "CreateVelocityScaleAttr")]
     pub fn set_velocity_scale(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "motion:velocityScale", None, value);
+        self.write_value(edit, "motion:velocityScale", value);
         self
     }
 
     #[doc = "[`Self::set_velocity_scale`] as a time sample at the time code `time`."]
     pub fn set_velocity_scale_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "motion:velocityScale", Some(time), value);
+        self.write_value_at(edit, "motion:velocityScale", time, value);
         self
     }
 }
@@ -8046,19 +7722,13 @@ impl<'a> NurbsCurves<'a> {
         self.read_value("knots", crate::value::read_double_array_shared)
     }
 
-    #[doc = "[`Self::knots`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::knots`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn knots_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<f64>>> {
-        self.read_value_at(
-            "knots",
-            time,
-            interp,
-            crate::value::read_double_array_shared,
-        )
+        self.read_value_at("knots", time, crate::value::read_double_array_shared)
     }
 
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -8086,14 +7756,13 @@ impl<'a> NurbsCurves<'a> {
         self.read_value("order", crate::value::read_int_array_shared)
     }
 
-    #[doc = "[`Self::order`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::order`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn order_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<i32>>> {
-        self.read_value_at("order", time, interp, crate::value::read_int_array_shared)
+        self.read_value_at("order", time, crate::value::read_int_array_shared)
     }
 
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -8121,19 +7790,13 @@ impl<'a> NurbsCurves<'a> {
         self.read_value("pointWeights", crate::value::read_double_array_shared)
     }
 
-    #[doc = "[`Self::point_weights`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::point_weights`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn point_weights_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<f64>>> {
-        self.read_value_at(
-            "pointWeights",
-            time,
-            interp,
-            crate::value::read_double_array_shared,
-        )
+        self.read_value_at("pointWeights", time, crate::value::read_double_array_shared)
     }
 
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -8161,19 +7824,13 @@ impl<'a> NurbsCurves<'a> {
         self.read_value("ranges", crate::value::read_double2_array_shared)
     }
 
-    #[doc = "[`Self::ranges`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::ranges`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn ranges_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<[f64; 2]>>> {
-        self.read_value_at(
-            "ranges",
-            time,
-            interp,
-            crate::value::read_double2_array_shared,
-        )
+        self.read_value_at("ranges", time, crate::value::read_double2_array_shared)
     }
 
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -8227,14 +7884,14 @@ impl NurbsCurvesEdit {
     #[doc(alias = "CreateKnotsAttr")]
     pub fn set_knots(&self, edit: &mut SchemaEdit<'_>, value: &[f64]) -> &Self {
         let value = crate::value::write_double_array(value, edit.tokens());
-        self.write_value(edit, "knots", None, value);
+        self.write_value(edit, "knots", value);
         self
     }
 
     #[doc = "[`Self::set_knots`] as a time sample at the time code `time`."]
     pub fn set_knots_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &[f64]) -> &Self {
         let value = crate::value::write_double_array(value, edit.tokens());
-        self.write_value(edit, "knots", Some(time), value);
+        self.write_value_at(edit, "knots", time, value);
         self
     }
 
@@ -8245,7 +7902,7 @@ impl NurbsCurvesEdit {
         value: ::alloc::vec::Vec<f64>,
     ) -> &Self {
         let value = crate::value::write_double_array_owned(value, edit.tokens());
-        self.write_value(edit, "knots", None, value);
+        self.write_value(edit, "knots", value);
         self
     }
 
@@ -8257,7 +7914,7 @@ impl NurbsCurvesEdit {
         value: ::alloc::vec::Vec<f64>,
     ) -> &Self {
         let value = crate::value::write_double_array_owned(value, edit.tokens());
-        self.write_value(edit, "knots", Some(time), value);
+        self.write_value_at(edit, "knots", time, value);
         self
     }
 
@@ -8268,7 +7925,7 @@ impl NurbsCurvesEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f64>>,
     ) -> &Self {
         let value = crate::value::write_double_array_shared(value, edit.tokens());
-        self.write_value(edit, "knots", None, value);
+        self.write_value(edit, "knots", value);
         self
     }
 
@@ -8280,7 +7937,7 @@ impl NurbsCurvesEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f64>>,
     ) -> &Self {
         let value = crate::value::write_double_array_shared(value, edit.tokens());
-        self.write_value(edit, "knots", Some(time), value);
+        self.write_value_at(edit, "knots", time, value);
         self
     }
 
@@ -8294,14 +7951,14 @@ impl NurbsCurvesEdit {
     #[doc(alias = "CreateOrderAttr")]
     pub fn set_order(&self, edit: &mut SchemaEdit<'_>, value: &[i32]) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value(edit, "order", None, value);
+        self.write_value(edit, "order", value);
         self
     }
 
     #[doc = "[`Self::set_order`] as a time sample at the time code `time`."]
     pub fn set_order_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &[i32]) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value(edit, "order", Some(time), value);
+        self.write_value_at(edit, "order", time, value);
         self
     }
 
@@ -8312,7 +7969,7 @@ impl NurbsCurvesEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value(edit, "order", None, value);
+        self.write_value(edit, "order", value);
         self
     }
 
@@ -8324,7 +7981,7 @@ impl NurbsCurvesEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value(edit, "order", Some(time), value);
+        self.write_value_at(edit, "order", time, value);
         self
     }
 
@@ -8335,7 +7992,7 @@ impl NurbsCurvesEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value(edit, "order", None, value);
+        self.write_value(edit, "order", value);
         self
     }
 
@@ -8347,7 +8004,7 @@ impl NurbsCurvesEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value(edit, "order", Some(time), value);
+        self.write_value_at(edit, "order", time, value);
         self
     }
 
@@ -8361,7 +8018,7 @@ impl NurbsCurvesEdit {
     #[doc(alias = "CreatePointWeightsAttr")]
     pub fn set_point_weights(&self, edit: &mut SchemaEdit<'_>, value: &[f64]) -> &Self {
         let value = crate::value::write_double_array(value, edit.tokens());
-        self.write_value(edit, "pointWeights", None, value);
+        self.write_value(edit, "pointWeights", value);
         self
     }
 
@@ -8373,7 +8030,7 @@ impl NurbsCurvesEdit {
         value: &[f64],
     ) -> &Self {
         let value = crate::value::write_double_array(value, edit.tokens());
-        self.write_value(edit, "pointWeights", Some(time), value);
+        self.write_value_at(edit, "pointWeights", time, value);
         self
     }
 
@@ -8384,7 +8041,7 @@ impl NurbsCurvesEdit {
         value: ::alloc::vec::Vec<f64>,
     ) -> &Self {
         let value = crate::value::write_double_array_owned(value, edit.tokens());
-        self.write_value(edit, "pointWeights", None, value);
+        self.write_value(edit, "pointWeights", value);
         self
     }
 
@@ -8396,7 +8053,7 @@ impl NurbsCurvesEdit {
         value: ::alloc::vec::Vec<f64>,
     ) -> &Self {
         let value = crate::value::write_double_array_owned(value, edit.tokens());
-        self.write_value(edit, "pointWeights", Some(time), value);
+        self.write_value_at(edit, "pointWeights", time, value);
         self
     }
 
@@ -8407,7 +8064,7 @@ impl NurbsCurvesEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f64>>,
     ) -> &Self {
         let value = crate::value::write_double_array_shared(value, edit.tokens());
-        self.write_value(edit, "pointWeights", None, value);
+        self.write_value(edit, "pointWeights", value);
         self
     }
 
@@ -8419,7 +8076,7 @@ impl NurbsCurvesEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f64>>,
     ) -> &Self {
         let value = crate::value::write_double_array_shared(value, edit.tokens());
-        self.write_value(edit, "pointWeights", Some(time), value);
+        self.write_value_at(edit, "pointWeights", time, value);
         self
     }
 
@@ -8433,14 +8090,14 @@ impl NurbsCurvesEdit {
     #[doc(alias = "CreateRangesAttr")]
     pub fn set_ranges(&self, edit: &mut SchemaEdit<'_>, value: &[[f64; 2]]) -> &Self {
         let value = crate::value::write_double2_array(value, edit.tokens());
-        self.write_value(edit, "ranges", None, value);
+        self.write_value(edit, "ranges", value);
         self
     }
 
     #[doc = "[`Self::set_ranges`] as a time sample at the time code `time`."]
     pub fn set_ranges_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &[[f64; 2]]) -> &Self {
         let value = crate::value::write_double2_array(value, edit.tokens());
-        self.write_value(edit, "ranges", Some(time), value);
+        self.write_value_at(edit, "ranges", time, value);
         self
     }
 
@@ -8451,7 +8108,7 @@ impl NurbsCurvesEdit {
         value: ::alloc::vec::Vec<[f64; 2]>,
     ) -> &Self {
         let value = crate::value::write_double2_array_owned(value, edit.tokens());
-        self.write_value(edit, "ranges", None, value);
+        self.write_value(edit, "ranges", value);
         self
     }
 
@@ -8463,7 +8120,7 @@ impl NurbsCurvesEdit {
         value: ::alloc::vec::Vec<[f64; 2]>,
     ) -> &Self {
         let value = crate::value::write_double2_array_owned(value, edit.tokens());
-        self.write_value(edit, "ranges", Some(time), value);
+        self.write_value_at(edit, "ranges", time, value);
         self
     }
 
@@ -8474,7 +8131,7 @@ impl NurbsCurvesEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f64; 2]>>,
     ) -> &Self {
         let value = crate::value::write_double2_array_shared(value, edit.tokens());
-        self.write_value(edit, "ranges", None, value);
+        self.write_value(edit, "ranges", value);
         self
     }
 
@@ -8486,7 +8143,7 @@ impl NurbsCurvesEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f64; 2]>>,
     ) -> &Self {
         let value = crate::value::write_double2_array_shared(value, edit.tokens());
-        self.write_value(edit, "ranges", Some(time), value);
+        self.write_value_at(edit, "ranges", time, value);
         self
     }
 }
@@ -8675,19 +8332,13 @@ impl<'a> NurbsPatch<'a> {
         self.read_value("pointWeights", crate::value::read_double_array_shared)
     }
 
-    #[doc = "[`Self::point_weights`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::point_weights`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn point_weights_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<f64>>> {
-        self.read_value_at(
-            "pointWeights",
-            time,
-            interp,
-            crate::value::read_double_array_shared,
-        )
+        self.read_value_at("pointWeights", time, crate::value::read_double_array_shared)
     }
 
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -8715,17 +8366,15 @@ impl<'a> NurbsPatch<'a> {
         self.read_value("trimCurve:counts", crate::value::read_int_array_shared)
     }
 
-    #[doc = "[`Self::trim_curve_counts`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::trim_curve_counts`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn trim_curve_counts_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<i32>>> {
         self.read_value_at(
             "trimCurve:counts",
             time,
-            interp,
             crate::value::read_int_array_shared,
         )
     }
@@ -8759,17 +8408,15 @@ impl<'a> NurbsPatch<'a> {
         self.read_value("trimCurve:knots", crate::value::read_double_array_shared)
     }
 
-    #[doc = "[`Self::trim_curve_knots`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::trim_curve_knots`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn trim_curve_knots_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<f64>>> {
         self.read_value_at(
             "trimCurve:knots",
             time,
-            interp,
             crate::value::read_double_array_shared,
         )
     }
@@ -8803,17 +8450,15 @@ impl<'a> NurbsPatch<'a> {
         self.read_value("trimCurve:orders", crate::value::read_int_array_shared)
     }
 
-    #[doc = "[`Self::trim_curve_orders`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::trim_curve_orders`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn trim_curve_orders_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<i32>>> {
         self.read_value_at(
             "trimCurve:orders",
             time,
-            interp,
             crate::value::read_int_array_shared,
         )
     }
@@ -8847,17 +8492,15 @@ impl<'a> NurbsPatch<'a> {
         self.read_value("trimCurve:points", crate::value::read_double3_array_shared)
     }
 
-    #[doc = "[`Self::trim_curve_points`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::trim_curve_points`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn trim_curve_points_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<[f64; 3]>>> {
         self.read_value_at(
             "trimCurve:points",
             time,
-            interp,
             crate::value::read_double3_array_shared,
         )
     }
@@ -8891,17 +8534,15 @@ impl<'a> NurbsPatch<'a> {
         self.read_value("trimCurve:ranges", crate::value::read_double2_array_shared)
     }
 
-    #[doc = "[`Self::trim_curve_ranges`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::trim_curve_ranges`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn trim_curve_ranges_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<[f64; 2]>>> {
         self.read_value_at(
             "trimCurve:ranges",
             time,
-            interp,
             crate::value::read_double2_array_shared,
         )
     }
@@ -8938,17 +8579,15 @@ impl<'a> NurbsPatch<'a> {
         )
     }
 
-    #[doc = "[`Self::trim_curve_vertex_counts`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::trim_curve_vertex_counts`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn trim_curve_vertex_counts_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<i32>>> {
         self.read_value_at(
             "trimCurve:vertexCounts",
             time,
-            interp,
             crate::value::read_int_array_shared,
         )
     }
@@ -8996,19 +8635,13 @@ impl<'a> NurbsPatch<'a> {
         self.read_value("uKnots", crate::value::read_double_array_shared)
     }
 
-    #[doc = "[`Self::u_knots`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::u_knots`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn u_knots_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<f64>>> {
-        self.read_value_at(
-            "uKnots",
-            time,
-            interp,
-            crate::value::read_double_array_shared,
-        )
+        self.read_value_at("uKnots", time, crate::value::read_double_array_shared)
     }
 
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -9034,10 +8667,10 @@ impl<'a> NurbsPatch<'a> {
         self.read_value("uOrder", crate::value::read_int)
     }
 
-    #[doc = "[`Self::u_order`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::u_order`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn u_order_at(&self, time: f64, interp: ::layerstack::InterpolationType) -> Option<i32> {
-        self.read_value_at("uOrder", time, interp, crate::value::read_int)
+    pub fn u_order_at(&self, time: ::layerstack::Time) -> Option<i32> {
+        self.read_value_at("uOrder", time, crate::value::read_int)
     }
 
     /// The USD name of [`Self::u_range`].
@@ -9054,14 +8687,10 @@ impl<'a> NurbsPatch<'a> {
         self.read_value("uRange", crate::value::read_double2)
     }
 
-    #[doc = "[`Self::u_range`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::u_range`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn u_range_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<[f64; 2]> {
-        self.read_value_at("uRange", time, interp, crate::value::read_double2)
+    pub fn u_range_at(&self, time: ::layerstack::Time) -> Option<[f64; 2]> {
+        self.read_value_at("uRange", time, crate::value::read_double2)
     }
 
     /// The USD name of [`Self::u_vertex_count`].
@@ -9078,14 +8707,10 @@ impl<'a> NurbsPatch<'a> {
         self.read_value("uVertexCount", crate::value::read_int)
     }
 
-    #[doc = "[`Self::u_vertex_count`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::u_vertex_count`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn u_vertex_count_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<i32> {
-        self.read_value_at("uVertexCount", time, interp, crate::value::read_int)
+    pub fn u_vertex_count_at(&self, time: ::layerstack::Time) -> Option<i32> {
+        self.read_value_at("uVertexCount", time, crate::value::read_int)
     }
 
     /// The USD name of [`Self::v_form`].
@@ -9118,19 +8743,13 @@ impl<'a> NurbsPatch<'a> {
         self.read_value("vKnots", crate::value::read_double_array_shared)
     }
 
-    #[doc = "[`Self::v_knots`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::v_knots`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn v_knots_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<f64>>> {
-        self.read_value_at(
-            "vKnots",
-            time,
-            interp,
-            crate::value::read_double_array_shared,
-        )
+        self.read_value_at("vKnots", time, crate::value::read_double_array_shared)
     }
 
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -9156,10 +8775,10 @@ impl<'a> NurbsPatch<'a> {
         self.read_value("vOrder", crate::value::read_int)
     }
 
-    #[doc = "[`Self::v_order`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::v_order`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn v_order_at(&self, time: f64, interp: ::layerstack::InterpolationType) -> Option<i32> {
-        self.read_value_at("vOrder", time, interp, crate::value::read_int)
+    pub fn v_order_at(&self, time: ::layerstack::Time) -> Option<i32> {
+        self.read_value_at("vOrder", time, crate::value::read_int)
     }
 
     /// The USD name of [`Self::v_range`].
@@ -9176,14 +8795,10 @@ impl<'a> NurbsPatch<'a> {
         self.read_value("vRange", crate::value::read_double2)
     }
 
-    #[doc = "[`Self::v_range`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::v_range`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn v_range_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<[f64; 2]> {
-        self.read_value_at("vRange", time, interp, crate::value::read_double2)
+    pub fn v_range_at(&self, time: ::layerstack::Time) -> Option<[f64; 2]> {
+        self.read_value_at("vRange", time, crate::value::read_double2)
     }
 
     /// The USD name of [`Self::v_vertex_count`].
@@ -9200,14 +8815,10 @@ impl<'a> NurbsPatch<'a> {
         self.read_value("vVertexCount", crate::value::read_int)
     }
 
-    #[doc = "[`Self::v_vertex_count`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::v_vertex_count`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn v_vertex_count_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<i32> {
-        self.read_value_at("vVertexCount", time, interp, crate::value::read_int)
+    pub fn v_vertex_count_at(&self, time: ::layerstack::Time) -> Option<i32> {
+        self.read_value_at("vVertexCount", time, crate::value::read_int)
     }
 }
 
@@ -9252,7 +8863,7 @@ impl NurbsPatchEdit {
     #[doc(alias = "CreatePointWeightsAttr")]
     pub fn set_point_weights(&self, edit: &mut SchemaEdit<'_>, value: &[f64]) -> &Self {
         let value = crate::value::write_double_array(value, edit.tokens());
-        self.write_value(edit, "pointWeights", None, value);
+        self.write_value(edit, "pointWeights", value);
         self
     }
 
@@ -9264,7 +8875,7 @@ impl NurbsPatchEdit {
         value: &[f64],
     ) -> &Self {
         let value = crate::value::write_double_array(value, edit.tokens());
-        self.write_value(edit, "pointWeights", Some(time), value);
+        self.write_value_at(edit, "pointWeights", time, value);
         self
     }
 
@@ -9275,7 +8886,7 @@ impl NurbsPatchEdit {
         value: ::alloc::vec::Vec<f64>,
     ) -> &Self {
         let value = crate::value::write_double_array_owned(value, edit.tokens());
-        self.write_value(edit, "pointWeights", None, value);
+        self.write_value(edit, "pointWeights", value);
         self
     }
 
@@ -9287,7 +8898,7 @@ impl NurbsPatchEdit {
         value: ::alloc::vec::Vec<f64>,
     ) -> &Self {
         let value = crate::value::write_double_array_owned(value, edit.tokens());
-        self.write_value(edit, "pointWeights", Some(time), value);
+        self.write_value_at(edit, "pointWeights", time, value);
         self
     }
 
@@ -9298,7 +8909,7 @@ impl NurbsPatchEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f64>>,
     ) -> &Self {
         let value = crate::value::write_double_array_shared(value, edit.tokens());
-        self.write_value(edit, "pointWeights", None, value);
+        self.write_value(edit, "pointWeights", value);
         self
     }
 
@@ -9310,7 +8921,7 @@ impl NurbsPatchEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f64>>,
     ) -> &Self {
         let value = crate::value::write_double_array_shared(value, edit.tokens());
-        self.write_value(edit, "pointWeights", Some(time), value);
+        self.write_value_at(edit, "pointWeights", time, value);
         self
     }
 
@@ -9324,7 +8935,7 @@ impl NurbsPatchEdit {
     #[doc(alias = "CreateTrimCurveCountsAttr")]
     pub fn set_trim_curve_counts(&self, edit: &mut SchemaEdit<'_>, value: &[i32]) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value(edit, "trimCurve:counts", None, value);
+        self.write_value(edit, "trimCurve:counts", value);
         self
     }
 
@@ -9336,7 +8947,7 @@ impl NurbsPatchEdit {
         value: &[i32],
     ) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value(edit, "trimCurve:counts", Some(time), value);
+        self.write_value_at(edit, "trimCurve:counts", time, value);
         self
     }
 
@@ -9347,7 +8958,7 @@ impl NurbsPatchEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value(edit, "trimCurve:counts", None, value);
+        self.write_value(edit, "trimCurve:counts", value);
         self
     }
 
@@ -9359,7 +8970,7 @@ impl NurbsPatchEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value(edit, "trimCurve:counts", Some(time), value);
+        self.write_value_at(edit, "trimCurve:counts", time, value);
         self
     }
 
@@ -9370,7 +8981,7 @@ impl NurbsPatchEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value(edit, "trimCurve:counts", None, value);
+        self.write_value(edit, "trimCurve:counts", value);
         self
     }
 
@@ -9382,7 +8993,7 @@ impl NurbsPatchEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value(edit, "trimCurve:counts", Some(time), value);
+        self.write_value_at(edit, "trimCurve:counts", time, value);
         self
     }
 
@@ -9396,7 +9007,7 @@ impl NurbsPatchEdit {
     #[doc(alias = "CreateTrimCurveKnotsAttr")]
     pub fn set_trim_curve_knots(&self, edit: &mut SchemaEdit<'_>, value: &[f64]) -> &Self {
         let value = crate::value::write_double_array(value, edit.tokens());
-        self.write_value(edit, "trimCurve:knots", None, value);
+        self.write_value(edit, "trimCurve:knots", value);
         self
     }
 
@@ -9408,7 +9019,7 @@ impl NurbsPatchEdit {
         value: &[f64],
     ) -> &Self {
         let value = crate::value::write_double_array(value, edit.tokens());
-        self.write_value(edit, "trimCurve:knots", Some(time), value);
+        self.write_value_at(edit, "trimCurve:knots", time, value);
         self
     }
 
@@ -9419,7 +9030,7 @@ impl NurbsPatchEdit {
         value: ::alloc::vec::Vec<f64>,
     ) -> &Self {
         let value = crate::value::write_double_array_owned(value, edit.tokens());
-        self.write_value(edit, "trimCurve:knots", None, value);
+        self.write_value(edit, "trimCurve:knots", value);
         self
     }
 
@@ -9431,7 +9042,7 @@ impl NurbsPatchEdit {
         value: ::alloc::vec::Vec<f64>,
     ) -> &Self {
         let value = crate::value::write_double_array_owned(value, edit.tokens());
-        self.write_value(edit, "trimCurve:knots", Some(time), value);
+        self.write_value_at(edit, "trimCurve:knots", time, value);
         self
     }
 
@@ -9442,7 +9053,7 @@ impl NurbsPatchEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f64>>,
     ) -> &Self {
         let value = crate::value::write_double_array_shared(value, edit.tokens());
-        self.write_value(edit, "trimCurve:knots", None, value);
+        self.write_value(edit, "trimCurve:knots", value);
         self
     }
 
@@ -9454,7 +9065,7 @@ impl NurbsPatchEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f64>>,
     ) -> &Self {
         let value = crate::value::write_double_array_shared(value, edit.tokens());
-        self.write_value(edit, "trimCurve:knots", Some(time), value);
+        self.write_value_at(edit, "trimCurve:knots", time, value);
         self
     }
 
@@ -9468,7 +9079,7 @@ impl NurbsPatchEdit {
     #[doc(alias = "CreateTrimCurveOrdersAttr")]
     pub fn set_trim_curve_orders(&self, edit: &mut SchemaEdit<'_>, value: &[i32]) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value(edit, "trimCurve:orders", None, value);
+        self.write_value(edit, "trimCurve:orders", value);
         self
     }
 
@@ -9480,7 +9091,7 @@ impl NurbsPatchEdit {
         value: &[i32],
     ) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value(edit, "trimCurve:orders", Some(time), value);
+        self.write_value_at(edit, "trimCurve:orders", time, value);
         self
     }
 
@@ -9491,7 +9102,7 @@ impl NurbsPatchEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value(edit, "trimCurve:orders", None, value);
+        self.write_value(edit, "trimCurve:orders", value);
         self
     }
 
@@ -9503,7 +9114,7 @@ impl NurbsPatchEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value(edit, "trimCurve:orders", Some(time), value);
+        self.write_value_at(edit, "trimCurve:orders", time, value);
         self
     }
 
@@ -9514,7 +9125,7 @@ impl NurbsPatchEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value(edit, "trimCurve:orders", None, value);
+        self.write_value(edit, "trimCurve:orders", value);
         self
     }
 
@@ -9526,7 +9137,7 @@ impl NurbsPatchEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value(edit, "trimCurve:orders", Some(time), value);
+        self.write_value_at(edit, "trimCurve:orders", time, value);
         self
     }
 
@@ -9540,7 +9151,7 @@ impl NurbsPatchEdit {
     #[doc(alias = "CreateTrimCurvePointsAttr")]
     pub fn set_trim_curve_points(&self, edit: &mut SchemaEdit<'_>, value: &[[f64; 3]]) -> &Self {
         let value = crate::value::write_double3_array(value, edit.tokens());
-        self.write_value(edit, "trimCurve:points", None, value);
+        self.write_value(edit, "trimCurve:points", value);
         self
     }
 
@@ -9552,7 +9163,7 @@ impl NurbsPatchEdit {
         value: &[[f64; 3]],
     ) -> &Self {
         let value = crate::value::write_double3_array(value, edit.tokens());
-        self.write_value(edit, "trimCurve:points", Some(time), value);
+        self.write_value_at(edit, "trimCurve:points", time, value);
         self
     }
 
@@ -9563,7 +9174,7 @@ impl NurbsPatchEdit {
         value: ::alloc::vec::Vec<[f64; 3]>,
     ) -> &Self {
         let value = crate::value::write_double3_array_owned(value, edit.tokens());
-        self.write_value(edit, "trimCurve:points", None, value);
+        self.write_value(edit, "trimCurve:points", value);
         self
     }
 
@@ -9575,7 +9186,7 @@ impl NurbsPatchEdit {
         value: ::alloc::vec::Vec<[f64; 3]>,
     ) -> &Self {
         let value = crate::value::write_double3_array_owned(value, edit.tokens());
-        self.write_value(edit, "trimCurve:points", Some(time), value);
+        self.write_value_at(edit, "trimCurve:points", time, value);
         self
     }
 
@@ -9586,7 +9197,7 @@ impl NurbsPatchEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f64; 3]>>,
     ) -> &Self {
         let value = crate::value::write_double3_array_shared(value, edit.tokens());
-        self.write_value(edit, "trimCurve:points", None, value);
+        self.write_value(edit, "trimCurve:points", value);
         self
     }
 
@@ -9598,7 +9209,7 @@ impl NurbsPatchEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f64; 3]>>,
     ) -> &Self {
         let value = crate::value::write_double3_array_shared(value, edit.tokens());
-        self.write_value(edit, "trimCurve:points", Some(time), value);
+        self.write_value_at(edit, "trimCurve:points", time, value);
         self
     }
 
@@ -9612,7 +9223,7 @@ impl NurbsPatchEdit {
     #[doc(alias = "CreateTrimCurveRangesAttr")]
     pub fn set_trim_curve_ranges(&self, edit: &mut SchemaEdit<'_>, value: &[[f64; 2]]) -> &Self {
         let value = crate::value::write_double2_array(value, edit.tokens());
-        self.write_value(edit, "trimCurve:ranges", None, value);
+        self.write_value(edit, "trimCurve:ranges", value);
         self
     }
 
@@ -9624,7 +9235,7 @@ impl NurbsPatchEdit {
         value: &[[f64; 2]],
     ) -> &Self {
         let value = crate::value::write_double2_array(value, edit.tokens());
-        self.write_value(edit, "trimCurve:ranges", Some(time), value);
+        self.write_value_at(edit, "trimCurve:ranges", time, value);
         self
     }
 
@@ -9635,7 +9246,7 @@ impl NurbsPatchEdit {
         value: ::alloc::vec::Vec<[f64; 2]>,
     ) -> &Self {
         let value = crate::value::write_double2_array_owned(value, edit.tokens());
-        self.write_value(edit, "trimCurve:ranges", None, value);
+        self.write_value(edit, "trimCurve:ranges", value);
         self
     }
 
@@ -9647,7 +9258,7 @@ impl NurbsPatchEdit {
         value: ::alloc::vec::Vec<[f64; 2]>,
     ) -> &Self {
         let value = crate::value::write_double2_array_owned(value, edit.tokens());
-        self.write_value(edit, "trimCurve:ranges", Some(time), value);
+        self.write_value_at(edit, "trimCurve:ranges", time, value);
         self
     }
 
@@ -9658,7 +9269,7 @@ impl NurbsPatchEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f64; 2]>>,
     ) -> &Self {
         let value = crate::value::write_double2_array_shared(value, edit.tokens());
-        self.write_value(edit, "trimCurve:ranges", None, value);
+        self.write_value(edit, "trimCurve:ranges", value);
         self
     }
 
@@ -9670,7 +9281,7 @@ impl NurbsPatchEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f64; 2]>>,
     ) -> &Self {
         let value = crate::value::write_double2_array_shared(value, edit.tokens());
-        self.write_value(edit, "trimCurve:ranges", Some(time), value);
+        self.write_value_at(edit, "trimCurve:ranges", time, value);
         self
     }
 
@@ -9684,7 +9295,7 @@ impl NurbsPatchEdit {
     #[doc(alias = "CreateTrimCurveVertexCountsAttr")]
     pub fn set_trim_curve_vertex_counts(&self, edit: &mut SchemaEdit<'_>, value: &[i32]) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value(edit, "trimCurve:vertexCounts", None, value);
+        self.write_value(edit, "trimCurve:vertexCounts", value);
         self
     }
 
@@ -9696,7 +9307,7 @@ impl NurbsPatchEdit {
         value: &[i32],
     ) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value(edit, "trimCurve:vertexCounts", Some(time), value);
+        self.write_value_at(edit, "trimCurve:vertexCounts", time, value);
         self
     }
 
@@ -9707,7 +9318,7 @@ impl NurbsPatchEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value(edit, "trimCurve:vertexCounts", None, value);
+        self.write_value(edit, "trimCurve:vertexCounts", value);
         self
     }
 
@@ -9719,7 +9330,7 @@ impl NurbsPatchEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value(edit, "trimCurve:vertexCounts", Some(time), value);
+        self.write_value_at(edit, "trimCurve:vertexCounts", time, value);
         self
     }
 
@@ -9730,7 +9341,7 @@ impl NurbsPatchEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value(edit, "trimCurve:vertexCounts", None, value);
+        self.write_value(edit, "trimCurve:vertexCounts", value);
         self
     }
 
@@ -9742,7 +9353,7 @@ impl NurbsPatchEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value(edit, "trimCurve:vertexCounts", Some(time), value);
+        self.write_value_at(edit, "trimCurve:vertexCounts", time, value);
         self
     }
 
@@ -9754,7 +9365,7 @@ impl NurbsPatchEdit {
     #[doc(alias = "CreateUFormAttr")]
     pub fn set_u_form(&self, edit: &mut SchemaEdit<'_>, value: NurbsPatchUForm) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "uForm", None, value);
+        self.write_value(edit, "uForm", value);
         self
     }
 
@@ -9768,14 +9379,14 @@ impl NurbsPatchEdit {
     #[doc(alias = "CreateUKnotsAttr")]
     pub fn set_u_knots(&self, edit: &mut SchemaEdit<'_>, value: &[f64]) -> &Self {
         let value = crate::value::write_double_array(value, edit.tokens());
-        self.write_value(edit, "uKnots", None, value);
+        self.write_value(edit, "uKnots", value);
         self
     }
 
     #[doc = "[`Self::set_u_knots`] as a time sample at the time code `time`."]
     pub fn set_u_knots_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &[f64]) -> &Self {
         let value = crate::value::write_double_array(value, edit.tokens());
-        self.write_value(edit, "uKnots", Some(time), value);
+        self.write_value_at(edit, "uKnots", time, value);
         self
     }
 
@@ -9786,7 +9397,7 @@ impl NurbsPatchEdit {
         value: ::alloc::vec::Vec<f64>,
     ) -> &Self {
         let value = crate::value::write_double_array_owned(value, edit.tokens());
-        self.write_value(edit, "uKnots", None, value);
+        self.write_value(edit, "uKnots", value);
         self
     }
 
@@ -9798,7 +9409,7 @@ impl NurbsPatchEdit {
         value: ::alloc::vec::Vec<f64>,
     ) -> &Self {
         let value = crate::value::write_double_array_owned(value, edit.tokens());
-        self.write_value(edit, "uKnots", Some(time), value);
+        self.write_value_at(edit, "uKnots", time, value);
         self
     }
 
@@ -9809,7 +9420,7 @@ impl NurbsPatchEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f64>>,
     ) -> &Self {
         let value = crate::value::write_double_array_shared(value, edit.tokens());
-        self.write_value(edit, "uKnots", None, value);
+        self.write_value(edit, "uKnots", value);
         self
     }
 
@@ -9821,7 +9432,7 @@ impl NurbsPatchEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f64>>,
     ) -> &Self {
         let value = crate::value::write_double_array_shared(value, edit.tokens());
-        self.write_value(edit, "uKnots", Some(time), value);
+        self.write_value_at(edit, "uKnots", time, value);
         self
     }
 
@@ -9833,14 +9444,14 @@ impl NurbsPatchEdit {
     #[doc(alias = "CreateUOrderAttr")]
     pub fn set_u_order(&self, edit: &mut SchemaEdit<'_>, value: i32) -> &Self {
         let value = crate::value::write_int(value, edit.tokens());
-        self.write_value(edit, "uOrder", None, value);
+        self.write_value(edit, "uOrder", value);
         self
     }
 
     #[doc = "[`Self::set_u_order`] as a time sample at the time code `time`."]
     pub fn set_u_order_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: i32) -> &Self {
         let value = crate::value::write_int(value, edit.tokens());
-        self.write_value(edit, "uOrder", Some(time), value);
+        self.write_value_at(edit, "uOrder", time, value);
         self
     }
 
@@ -9852,14 +9463,14 @@ impl NurbsPatchEdit {
     #[doc(alias = "CreateURangeAttr")]
     pub fn set_u_range(&self, edit: &mut SchemaEdit<'_>, value: [f64; 2]) -> &Self {
         let value = crate::value::write_double2(value, edit.tokens());
-        self.write_value(edit, "uRange", None, value);
+        self.write_value(edit, "uRange", value);
         self
     }
 
     #[doc = "[`Self::set_u_range`] as a time sample at the time code `time`."]
     pub fn set_u_range_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: [f64; 2]) -> &Self {
         let value = crate::value::write_double2(value, edit.tokens());
-        self.write_value(edit, "uRange", Some(time), value);
+        self.write_value_at(edit, "uRange", time, value);
         self
     }
 
@@ -9871,14 +9482,14 @@ impl NurbsPatchEdit {
     #[doc(alias = "CreateUVertexCountAttr")]
     pub fn set_u_vertex_count(&self, edit: &mut SchemaEdit<'_>, value: i32) -> &Self {
         let value = crate::value::write_int(value, edit.tokens());
-        self.write_value(edit, "uVertexCount", None, value);
+        self.write_value(edit, "uVertexCount", value);
         self
     }
 
     #[doc = "[`Self::set_u_vertex_count`] as a time sample at the time code `time`."]
     pub fn set_u_vertex_count_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: i32) -> &Self {
         let value = crate::value::write_int(value, edit.tokens());
-        self.write_value(edit, "uVertexCount", Some(time), value);
+        self.write_value_at(edit, "uVertexCount", time, value);
         self
     }
 
@@ -9890,7 +9501,7 @@ impl NurbsPatchEdit {
     #[doc(alias = "CreateVFormAttr")]
     pub fn set_v_form(&self, edit: &mut SchemaEdit<'_>, value: NurbsPatchVForm) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "vForm", None, value);
+        self.write_value(edit, "vForm", value);
         self
     }
 
@@ -9904,14 +9515,14 @@ impl NurbsPatchEdit {
     #[doc(alias = "CreateVKnotsAttr")]
     pub fn set_v_knots(&self, edit: &mut SchemaEdit<'_>, value: &[f64]) -> &Self {
         let value = crate::value::write_double_array(value, edit.tokens());
-        self.write_value(edit, "vKnots", None, value);
+        self.write_value(edit, "vKnots", value);
         self
     }
 
     #[doc = "[`Self::set_v_knots`] as a time sample at the time code `time`."]
     pub fn set_v_knots_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &[f64]) -> &Self {
         let value = crate::value::write_double_array(value, edit.tokens());
-        self.write_value(edit, "vKnots", Some(time), value);
+        self.write_value_at(edit, "vKnots", time, value);
         self
     }
 
@@ -9922,7 +9533,7 @@ impl NurbsPatchEdit {
         value: ::alloc::vec::Vec<f64>,
     ) -> &Self {
         let value = crate::value::write_double_array_owned(value, edit.tokens());
-        self.write_value(edit, "vKnots", None, value);
+        self.write_value(edit, "vKnots", value);
         self
     }
 
@@ -9934,7 +9545,7 @@ impl NurbsPatchEdit {
         value: ::alloc::vec::Vec<f64>,
     ) -> &Self {
         let value = crate::value::write_double_array_owned(value, edit.tokens());
-        self.write_value(edit, "vKnots", Some(time), value);
+        self.write_value_at(edit, "vKnots", time, value);
         self
     }
 
@@ -9945,7 +9556,7 @@ impl NurbsPatchEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f64>>,
     ) -> &Self {
         let value = crate::value::write_double_array_shared(value, edit.tokens());
-        self.write_value(edit, "vKnots", None, value);
+        self.write_value(edit, "vKnots", value);
         self
     }
 
@@ -9957,7 +9568,7 @@ impl NurbsPatchEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f64>>,
     ) -> &Self {
         let value = crate::value::write_double_array_shared(value, edit.tokens());
-        self.write_value(edit, "vKnots", Some(time), value);
+        self.write_value_at(edit, "vKnots", time, value);
         self
     }
 
@@ -9969,14 +9580,14 @@ impl NurbsPatchEdit {
     #[doc(alias = "CreateVOrderAttr")]
     pub fn set_v_order(&self, edit: &mut SchemaEdit<'_>, value: i32) -> &Self {
         let value = crate::value::write_int(value, edit.tokens());
-        self.write_value(edit, "vOrder", None, value);
+        self.write_value(edit, "vOrder", value);
         self
     }
 
     #[doc = "[`Self::set_v_order`] as a time sample at the time code `time`."]
     pub fn set_v_order_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: i32) -> &Self {
         let value = crate::value::write_int(value, edit.tokens());
-        self.write_value(edit, "vOrder", Some(time), value);
+        self.write_value_at(edit, "vOrder", time, value);
         self
     }
 
@@ -9988,14 +9599,14 @@ impl NurbsPatchEdit {
     #[doc(alias = "CreateVRangeAttr")]
     pub fn set_v_range(&self, edit: &mut SchemaEdit<'_>, value: [f64; 2]) -> &Self {
         let value = crate::value::write_double2(value, edit.tokens());
-        self.write_value(edit, "vRange", None, value);
+        self.write_value(edit, "vRange", value);
         self
     }
 
     #[doc = "[`Self::set_v_range`] as a time sample at the time code `time`."]
     pub fn set_v_range_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: [f64; 2]) -> &Self {
         let value = crate::value::write_double2(value, edit.tokens());
-        self.write_value(edit, "vRange", Some(time), value);
+        self.write_value_at(edit, "vRange", time, value);
         self
     }
 
@@ -10007,14 +9618,14 @@ impl NurbsPatchEdit {
     #[doc(alias = "CreateVVertexCountAttr")]
     pub fn set_v_vertex_count(&self, edit: &mut SchemaEdit<'_>, value: i32) -> &Self {
         let value = crate::value::write_int(value, edit.tokens());
-        self.write_value(edit, "vVertexCount", None, value);
+        self.write_value(edit, "vVertexCount", value);
         self
     }
 
     #[doc = "[`Self::set_v_vertex_count`] as a time sample at the time code `time`."]
     pub fn set_v_vertex_count_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: i32) -> &Self {
         let value = crate::value::write_int(value, edit.tokens());
-        self.write_value(edit, "vVertexCount", Some(time), value);
+        self.write_value_at(edit, "vVertexCount", time, value);
         self
     }
 }
@@ -10161,10 +9772,10 @@ impl<'a> Plane<'a> {
         self.read_value("length", crate::value::read_double)
     }
 
-    #[doc = "[`Self::length`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::length`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn length_at(&self, time: f64, interp: ::layerstack::InterpolationType) -> Option<f64> {
-        self.read_value_at("length", time, interp, crate::value::read_double)
+    pub fn length_at(&self, time: ::layerstack::Time) -> Option<f64> {
+        self.read_value_at("length", time, crate::value::read_double)
     }
 
     /// The USD name of [`Self::width`].
@@ -10181,10 +9792,10 @@ impl<'a> Plane<'a> {
         self.read_value("width", crate::value::read_double)
     }
 
-    #[doc = "[`Self::width`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::width`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn width_at(&self, time: f64, interp: ::layerstack::InterpolationType) -> Option<f64> {
-        self.read_value_at("width", time, interp, crate::value::read_double)
+    pub fn width_at(&self, time: ::layerstack::Time) -> Option<f64> {
+        self.read_value_at("width", time, crate::value::read_double)
     }
 }
 
@@ -10227,7 +9838,7 @@ impl PlaneEdit {
     #[doc(alias = "CreateAxisAttr")]
     pub fn set_axis(&self, edit: &mut SchemaEdit<'_>, value: PlaneAxis) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "axis", None, value);
+        self.write_value(edit, "axis", value);
         self
     }
 
@@ -10239,14 +9850,14 @@ impl PlaneEdit {
     #[doc(alias = "CreateLengthAttr")]
     pub fn set_length(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "length", None, value);
+        self.write_value(edit, "length", value);
         self
     }
 
     #[doc = "[`Self::set_length`] as a time sample at the time code `time`."]
     pub fn set_length_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "length", Some(time), value);
+        self.write_value_at(edit, "length", time, value);
         self
     }
 
@@ -10258,14 +9869,14 @@ impl PlaneEdit {
     #[doc(alias = "CreateWidthAttr")]
     pub fn set_width(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "width", None, value);
+        self.write_value(edit, "width", value);
         self
     }
 
     #[doc = "[`Self::set_width`] as a time sample at the time code `time`."]
     pub fn set_width_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "width", Some(time), value);
+        self.write_value_at(edit, "width", time, value);
         self
     }
 }
@@ -10335,17 +9946,15 @@ impl<'a> PointBased<'a> {
         self.read_value("accelerations", crate::value::read_float3_array_shared)
     }
 
-    #[doc = "[`Self::accelerations`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::accelerations`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn accelerations_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>> {
         self.read_value_at(
             "accelerations",
             time,
-            interp,
             crate::value::read_float3_array_shared,
         )
     }
@@ -10379,19 +9988,13 @@ impl<'a> PointBased<'a> {
         self.read_value("normals", crate::value::read_float3_array_shared)
     }
 
-    #[doc = "[`Self::normals`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::normals`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn normals_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>> {
-        self.read_value_at(
-            "normals",
-            time,
-            interp,
-            crate::value::read_float3_array_shared,
-        )
+        self.read_value_at("normals", time, crate::value::read_float3_array_shared)
     }
 
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -10419,19 +10022,13 @@ impl<'a> PointBased<'a> {
         self.read_value("points", crate::value::read_float3_array_shared)
     }
 
-    #[doc = "[`Self::points`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::points`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn points_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>> {
-        self.read_value_at(
-            "points",
-            time,
-            interp,
-            crate::value::read_float3_array_shared,
-        )
+        self.read_value_at("points", time, crate::value::read_float3_array_shared)
     }
 
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -10459,19 +10056,13 @@ impl<'a> PointBased<'a> {
         self.read_value("velocities", crate::value::read_float3_array_shared)
     }
 
-    #[doc = "[`Self::velocities`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::velocities`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn velocities_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>> {
-        self.read_value_at(
-            "velocities",
-            time,
-            interp,
-            crate::value::read_float3_array_shared,
-        )
+        self.read_value_at("velocities", time, crate::value::read_float3_array_shared)
     }
 
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -10525,7 +10116,7 @@ impl PointBasedEdit {
     #[doc(alias = "CreateAccelerationsAttr")]
     pub fn set_accelerations(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 3]]) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(edit, "accelerations", None, value);
+        self.write_value(edit, "accelerations", value);
         self
     }
 
@@ -10537,7 +10128,7 @@ impl PointBasedEdit {
         value: &[[f32; 3]],
     ) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(edit, "accelerations", Some(time), value);
+        self.write_value_at(edit, "accelerations", time, value);
         self
     }
 
@@ -10548,7 +10139,7 @@ impl PointBasedEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(edit, "accelerations", None, value);
+        self.write_value(edit, "accelerations", value);
         self
     }
 
@@ -10560,7 +10151,7 @@ impl PointBasedEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(edit, "accelerations", Some(time), value);
+        self.write_value_at(edit, "accelerations", time, value);
         self
     }
 
@@ -10571,7 +10162,7 @@ impl PointBasedEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(edit, "accelerations", None, value);
+        self.write_value(edit, "accelerations", value);
         self
     }
 
@@ -10583,7 +10174,7 @@ impl PointBasedEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(edit, "accelerations", Some(time), value);
+        self.write_value_at(edit, "accelerations", time, value);
         self
     }
 
@@ -10597,7 +10188,7 @@ impl PointBasedEdit {
     #[doc(alias = "CreateNormalsAttr")]
     pub fn set_normals(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 3]]) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(edit, "normals", None, value);
+        self.write_value(edit, "normals", value);
         self
     }
 
@@ -10609,7 +10200,7 @@ impl PointBasedEdit {
         value: &[[f32; 3]],
     ) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(edit, "normals", Some(time), value);
+        self.write_value_at(edit, "normals", time, value);
         self
     }
 
@@ -10620,7 +10211,7 @@ impl PointBasedEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(edit, "normals", None, value);
+        self.write_value(edit, "normals", value);
         self
     }
 
@@ -10632,7 +10223,7 @@ impl PointBasedEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(edit, "normals", Some(time), value);
+        self.write_value_at(edit, "normals", time, value);
         self
     }
 
@@ -10643,7 +10234,7 @@ impl PointBasedEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(edit, "normals", None, value);
+        self.write_value(edit, "normals", value);
         self
     }
 
@@ -10655,7 +10246,7 @@ impl PointBasedEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(edit, "normals", Some(time), value);
+        self.write_value_at(edit, "normals", time, value);
         self
     }
 
@@ -10669,14 +10260,14 @@ impl PointBasedEdit {
     #[doc(alias = "CreatePointsAttr")]
     pub fn set_points(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 3]]) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(edit, "points", None, value);
+        self.write_value(edit, "points", value);
         self
     }
 
     #[doc = "[`Self::set_points`] as a time sample at the time code `time`."]
     pub fn set_points_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &[[f32; 3]]) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(edit, "points", Some(time), value);
+        self.write_value_at(edit, "points", time, value);
         self
     }
 
@@ -10687,7 +10278,7 @@ impl PointBasedEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(edit, "points", None, value);
+        self.write_value(edit, "points", value);
         self
     }
 
@@ -10699,7 +10290,7 @@ impl PointBasedEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(edit, "points", Some(time), value);
+        self.write_value_at(edit, "points", time, value);
         self
     }
 
@@ -10710,7 +10301,7 @@ impl PointBasedEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(edit, "points", None, value);
+        self.write_value(edit, "points", value);
         self
     }
 
@@ -10722,7 +10313,7 @@ impl PointBasedEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(edit, "points", Some(time), value);
+        self.write_value_at(edit, "points", time, value);
         self
     }
 
@@ -10736,7 +10327,7 @@ impl PointBasedEdit {
     #[doc(alias = "CreateVelocitiesAttr")]
     pub fn set_velocities(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 3]]) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(edit, "velocities", None, value);
+        self.write_value(edit, "velocities", value);
         self
     }
 
@@ -10748,7 +10339,7 @@ impl PointBasedEdit {
         value: &[[f32; 3]],
     ) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(edit, "velocities", Some(time), value);
+        self.write_value_at(edit, "velocities", time, value);
         self
     }
 
@@ -10759,7 +10350,7 @@ impl PointBasedEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(edit, "velocities", None, value);
+        self.write_value(edit, "velocities", value);
         self
     }
 
@@ -10771,7 +10362,7 @@ impl PointBasedEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(edit, "velocities", Some(time), value);
+        self.write_value_at(edit, "velocities", time, value);
         self
     }
 
@@ -10782,7 +10373,7 @@ impl PointBasedEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(edit, "velocities", None, value);
+        self.write_value(edit, "velocities", value);
         self
     }
 
@@ -10794,7 +10385,7 @@ impl PointBasedEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(edit, "velocities", Some(time), value);
+        self.write_value_at(edit, "velocities", time, value);
         self
     }
 }
@@ -10875,17 +10466,15 @@ impl<'a> PointInstancer<'a> {
         self.read_value("accelerations", crate::value::read_float3_array_shared)
     }
 
-    #[doc = "[`Self::accelerations`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::accelerations`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn accelerations_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>> {
         self.read_value_at(
             "accelerations",
             time,
-            interp,
             crate::value::read_float3_array_shared,
         )
     }
@@ -10919,17 +10508,15 @@ impl<'a> PointInstancer<'a> {
         self.read_value("angularVelocities", crate::value::read_float3_array_shared)
     }
 
-    #[doc = "[`Self::angular_velocities`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::angular_velocities`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn angular_velocities_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>> {
         self.read_value_at(
             "angularVelocities",
             time,
-            interp,
             crate::value::read_float3_array_shared,
         )
     }
@@ -10963,14 +10550,13 @@ impl<'a> PointInstancer<'a> {
         self.read_value("ids", crate::value::read_int64_array_shared)
     }
 
-    #[doc = "[`Self::ids`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::ids`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn ids_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<i64>>> {
-        self.read_value_at("ids", time, interp, crate::value::read_int64_array_shared)
+        self.read_value_at("ids", time, crate::value::read_int64_array_shared)
     }
 
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -10998,19 +10584,13 @@ impl<'a> PointInstancer<'a> {
         self.read_value("invisibleIds", crate::value::read_int64_array_shared)
     }
 
-    #[doc = "[`Self::invisible_ids`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::invisible_ids`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn invisible_ids_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<i64>>> {
-        self.read_value_at(
-            "invisibleIds",
-            time,
-            interp,
-            crate::value::read_int64_array_shared,
-        )
+        self.read_value_at("invisibleIds", time, crate::value::read_int64_array_shared)
     }
 
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -11036,14 +10616,10 @@ impl<'a> PointInstancer<'a> {
         self.read_value("orientations", crate::value::read_quath_array)
     }
 
-    #[doc = "[`Self::orientations`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::orientations`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn orientations_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<::alloc::vec::Vec<[f32; 4]>> {
-        self.read_value_at("orientations", time, interp, crate::value::read_quath_array)
+    pub fn orientations_at(&self, time: ::layerstack::Time) -> Option<::alloc::vec::Vec<[f32; 4]>> {
+        self.read_value_at("orientations", time, crate::value::read_quath_array)
     }
 
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -11070,19 +10646,13 @@ impl<'a> PointInstancer<'a> {
         self.read_value("orientationsf", crate::value::read_quatf_array_shared)
     }
 
-    #[doc = "[`Self::orientationsf`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::orientationsf`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn orientationsf_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 4]>>> {
-        self.read_value_at(
-            "orientationsf",
-            time,
-            interp,
-            crate::value::read_quatf_array_shared,
-        )
+        self.read_value_at("orientationsf", time, crate::value::read_quatf_array_shared)
     }
 
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -11110,19 +10680,13 @@ impl<'a> PointInstancer<'a> {
         self.read_value("positions", crate::value::read_float3_array_shared)
     }
 
-    #[doc = "[`Self::positions`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::positions`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn positions_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>> {
-        self.read_value_at(
-            "positions",
-            time,
-            interp,
-            crate::value::read_float3_array_shared,
-        )
+        self.read_value_at("positions", time, crate::value::read_float3_array_shared)
     }
 
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -11150,19 +10714,13 @@ impl<'a> PointInstancer<'a> {
         self.read_value("protoIndices", crate::value::read_int_array_shared)
     }
 
-    #[doc = "[`Self::proto_indices`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::proto_indices`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn proto_indices_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<i32>>> {
-        self.read_value_at(
-            "protoIndices",
-            time,
-            interp,
-            crate::value::read_int_array_shared,
-        )
+        self.read_value_at("protoIndices", time, crate::value::read_int_array_shared)
     }
 
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -11204,19 +10762,13 @@ impl<'a> PointInstancer<'a> {
         self.read_value("scales", crate::value::read_float3_array_shared)
     }
 
-    #[doc = "[`Self::scales`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::scales`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn scales_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>> {
-        self.read_value_at(
-            "scales",
-            time,
-            interp,
-            crate::value::read_float3_array_shared,
-        )
+        self.read_value_at("scales", time, crate::value::read_float3_array_shared)
     }
 
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -11244,19 +10796,13 @@ impl<'a> PointInstancer<'a> {
         self.read_value("velocities", crate::value::read_float3_array_shared)
     }
 
-    #[doc = "[`Self::velocities`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::velocities`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn velocities_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>> {
-        self.read_value_at(
-            "velocities",
-            time,
-            interp,
-            crate::value::read_float3_array_shared,
-        )
+        self.read_value_at("velocities", time, crate::value::read_float3_array_shared)
     }
 
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -11310,7 +10856,7 @@ impl PointInstancerEdit {
     #[doc(alias = "CreateAccelerationsAttr")]
     pub fn set_accelerations(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 3]]) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(edit, "accelerations", None, value);
+        self.write_value(edit, "accelerations", value);
         self
     }
 
@@ -11322,7 +10868,7 @@ impl PointInstancerEdit {
         value: &[[f32; 3]],
     ) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(edit, "accelerations", Some(time), value);
+        self.write_value_at(edit, "accelerations", time, value);
         self
     }
 
@@ -11333,7 +10879,7 @@ impl PointInstancerEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(edit, "accelerations", None, value);
+        self.write_value(edit, "accelerations", value);
         self
     }
 
@@ -11345,7 +10891,7 @@ impl PointInstancerEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(edit, "accelerations", Some(time), value);
+        self.write_value_at(edit, "accelerations", time, value);
         self
     }
 
@@ -11356,7 +10902,7 @@ impl PointInstancerEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(edit, "accelerations", None, value);
+        self.write_value(edit, "accelerations", value);
         self
     }
 
@@ -11368,7 +10914,7 @@ impl PointInstancerEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(edit, "accelerations", Some(time), value);
+        self.write_value_at(edit, "accelerations", time, value);
         self
     }
 
@@ -11382,7 +10928,7 @@ impl PointInstancerEdit {
     #[doc(alias = "CreateAngularVelocitiesAttr")]
     pub fn set_angular_velocities(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 3]]) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(edit, "angularVelocities", None, value);
+        self.write_value(edit, "angularVelocities", value);
         self
     }
 
@@ -11394,7 +10940,7 @@ impl PointInstancerEdit {
         value: &[[f32; 3]],
     ) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(edit, "angularVelocities", Some(time), value);
+        self.write_value_at(edit, "angularVelocities", time, value);
         self
     }
 
@@ -11405,7 +10951,7 @@ impl PointInstancerEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(edit, "angularVelocities", None, value);
+        self.write_value(edit, "angularVelocities", value);
         self
     }
 
@@ -11417,7 +10963,7 @@ impl PointInstancerEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(edit, "angularVelocities", Some(time), value);
+        self.write_value_at(edit, "angularVelocities", time, value);
         self
     }
 
@@ -11428,7 +10974,7 @@ impl PointInstancerEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(edit, "angularVelocities", None, value);
+        self.write_value(edit, "angularVelocities", value);
         self
     }
 
@@ -11440,7 +10986,7 @@ impl PointInstancerEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(edit, "angularVelocities", Some(time), value);
+        self.write_value_at(edit, "angularVelocities", time, value);
         self
     }
 
@@ -11454,21 +11000,21 @@ impl PointInstancerEdit {
     #[doc(alias = "CreateIdsAttr")]
     pub fn set_ids(&self, edit: &mut SchemaEdit<'_>, value: &[i64]) -> &Self {
         let value = crate::value::write_int64_array(value, edit.tokens());
-        self.write_value(edit, "ids", None, value);
+        self.write_value(edit, "ids", value);
         self
     }
 
     #[doc = "[`Self::set_ids`] as a time sample at the time code `time`."]
     pub fn set_ids_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &[i64]) -> &Self {
         let value = crate::value::write_int64_array(value, edit.tokens());
-        self.write_value(edit, "ids", Some(time), value);
+        self.write_value_at(edit, "ids", time, value);
         self
     }
 
     #[doc = "Transfers the vector allocation and capacity; allocates only its shared owner. Slice callers can use `set_ids`."]
     pub fn set_ids_owned(&self, edit: &mut SchemaEdit<'_>, value: ::alloc::vec::Vec<i64>) -> &Self {
         let value = crate::value::write_int64_array_owned(value, edit.tokens());
-        self.write_value(edit, "ids", None, value);
+        self.write_value(edit, "ids", value);
         self
     }
 
@@ -11480,7 +11026,7 @@ impl PointInstancerEdit {
         value: ::alloc::vec::Vec<i64>,
     ) -> &Self {
         let value = crate::value::write_int64_array_owned(value, edit.tokens());
-        self.write_value(edit, "ids", Some(time), value);
+        self.write_value_at(edit, "ids", time, value);
         self
     }
 
@@ -11491,7 +11037,7 @@ impl PointInstancerEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i64>>,
     ) -> &Self {
         let value = crate::value::write_int64_array_shared(value, edit.tokens());
-        self.write_value(edit, "ids", None, value);
+        self.write_value(edit, "ids", value);
         self
     }
 
@@ -11503,7 +11049,7 @@ impl PointInstancerEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i64>>,
     ) -> &Self {
         let value = crate::value::write_int64_array_shared(value, edit.tokens());
-        self.write_value(edit, "ids", Some(time), value);
+        self.write_value_at(edit, "ids", time, value);
         self
     }
 
@@ -11517,7 +11063,7 @@ impl PointInstancerEdit {
     #[doc(alias = "CreateInvisibleIdsAttr")]
     pub fn set_invisible_ids(&self, edit: &mut SchemaEdit<'_>, value: &[i64]) -> &Self {
         let value = crate::value::write_int64_array(value, edit.tokens());
-        self.write_value(edit, "invisibleIds", None, value);
+        self.write_value(edit, "invisibleIds", value);
         self
     }
 
@@ -11529,7 +11075,7 @@ impl PointInstancerEdit {
         value: &[i64],
     ) -> &Self {
         let value = crate::value::write_int64_array(value, edit.tokens());
-        self.write_value(edit, "invisibleIds", Some(time), value);
+        self.write_value_at(edit, "invisibleIds", time, value);
         self
     }
 
@@ -11540,7 +11086,7 @@ impl PointInstancerEdit {
         value: ::alloc::vec::Vec<i64>,
     ) -> &Self {
         let value = crate::value::write_int64_array_owned(value, edit.tokens());
-        self.write_value(edit, "invisibleIds", None, value);
+        self.write_value(edit, "invisibleIds", value);
         self
     }
 
@@ -11552,7 +11098,7 @@ impl PointInstancerEdit {
         value: ::alloc::vec::Vec<i64>,
     ) -> &Self {
         let value = crate::value::write_int64_array_owned(value, edit.tokens());
-        self.write_value(edit, "invisibleIds", Some(time), value);
+        self.write_value_at(edit, "invisibleIds", time, value);
         self
     }
 
@@ -11563,7 +11109,7 @@ impl PointInstancerEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i64>>,
     ) -> &Self {
         let value = crate::value::write_int64_array_shared(value, edit.tokens());
-        self.write_value(edit, "invisibleIds", None, value);
+        self.write_value(edit, "invisibleIds", value);
         self
     }
 
@@ -11575,7 +11121,7 @@ impl PointInstancerEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i64>>,
     ) -> &Self {
         let value = crate::value::write_int64_array_shared(value, edit.tokens());
-        self.write_value(edit, "invisibleIds", Some(time), value);
+        self.write_value_at(edit, "invisibleIds", time, value);
         self
     }
 
@@ -11587,7 +11133,7 @@ impl PointInstancerEdit {
     #[doc(alias = "CreateOrientationsAttr")]
     pub fn set_orientations(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 4]]) -> &Self {
         let value = crate::value::write_quath_array(value, edit.tokens());
-        self.write_value(edit, "orientations", None, value);
+        self.write_value(edit, "orientations", value);
         self
     }
 
@@ -11599,7 +11145,7 @@ impl PointInstancerEdit {
         value: &[[f32; 4]],
     ) -> &Self {
         let value = crate::value::write_quath_array(value, edit.tokens());
-        self.write_value(edit, "orientations", Some(time), value);
+        self.write_value_at(edit, "orientations", time, value);
         self
     }
 
@@ -11613,7 +11159,7 @@ impl PointInstancerEdit {
     #[doc(alias = "CreateOrientationsfAttr")]
     pub fn set_orientationsf(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 4]]) -> &Self {
         let value = crate::value::write_quatf_array(value, edit.tokens());
-        self.write_value(edit, "orientationsf", None, value);
+        self.write_value(edit, "orientationsf", value);
         self
     }
 
@@ -11625,7 +11171,7 @@ impl PointInstancerEdit {
         value: &[[f32; 4]],
     ) -> &Self {
         let value = crate::value::write_quatf_array(value, edit.tokens());
-        self.write_value(edit, "orientationsf", Some(time), value);
+        self.write_value_at(edit, "orientationsf", time, value);
         self
     }
 
@@ -11636,7 +11182,7 @@ impl PointInstancerEdit {
         value: ::alloc::vec::Vec<[f32; 4]>,
     ) -> &Self {
         let value = crate::value::write_quatf_array_owned(value, edit.tokens());
-        self.write_value(edit, "orientationsf", None, value);
+        self.write_value(edit, "orientationsf", value);
         self
     }
 
@@ -11648,7 +11194,7 @@ impl PointInstancerEdit {
         value: ::alloc::vec::Vec<[f32; 4]>,
     ) -> &Self {
         let value = crate::value::write_quatf_array_owned(value, edit.tokens());
-        self.write_value(edit, "orientationsf", Some(time), value);
+        self.write_value_at(edit, "orientationsf", time, value);
         self
     }
 
@@ -11659,7 +11205,7 @@ impl PointInstancerEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 4]>>,
     ) -> &Self {
         let value = crate::value::write_quatf_array_shared(value, edit.tokens());
-        self.write_value(edit, "orientationsf", None, value);
+        self.write_value(edit, "orientationsf", value);
         self
     }
 
@@ -11671,7 +11217,7 @@ impl PointInstancerEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 4]>>,
     ) -> &Self {
         let value = crate::value::write_quatf_array_shared(value, edit.tokens());
-        self.write_value(edit, "orientationsf", Some(time), value);
+        self.write_value_at(edit, "orientationsf", time, value);
         self
     }
 
@@ -11685,7 +11231,7 @@ impl PointInstancerEdit {
     #[doc(alias = "CreatePositionsAttr")]
     pub fn set_positions(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 3]]) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(edit, "positions", None, value);
+        self.write_value(edit, "positions", value);
         self
     }
 
@@ -11697,7 +11243,7 @@ impl PointInstancerEdit {
         value: &[[f32; 3]],
     ) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(edit, "positions", Some(time), value);
+        self.write_value_at(edit, "positions", time, value);
         self
     }
 
@@ -11708,7 +11254,7 @@ impl PointInstancerEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(edit, "positions", None, value);
+        self.write_value(edit, "positions", value);
         self
     }
 
@@ -11720,7 +11266,7 @@ impl PointInstancerEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(edit, "positions", Some(time), value);
+        self.write_value_at(edit, "positions", time, value);
         self
     }
 
@@ -11731,7 +11277,7 @@ impl PointInstancerEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(edit, "positions", None, value);
+        self.write_value(edit, "positions", value);
         self
     }
 
@@ -11743,7 +11289,7 @@ impl PointInstancerEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(edit, "positions", Some(time), value);
+        self.write_value_at(edit, "positions", time, value);
         self
     }
 
@@ -11757,7 +11303,7 @@ impl PointInstancerEdit {
     #[doc(alias = "CreateProtoIndicesAttr")]
     pub fn set_proto_indices(&self, edit: &mut SchemaEdit<'_>, value: &[i32]) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value(edit, "protoIndices", None, value);
+        self.write_value(edit, "protoIndices", value);
         self
     }
 
@@ -11769,7 +11315,7 @@ impl PointInstancerEdit {
         value: &[i32],
     ) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value(edit, "protoIndices", Some(time), value);
+        self.write_value_at(edit, "protoIndices", time, value);
         self
     }
 
@@ -11780,7 +11326,7 @@ impl PointInstancerEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value(edit, "protoIndices", None, value);
+        self.write_value(edit, "protoIndices", value);
         self
     }
 
@@ -11792,7 +11338,7 @@ impl PointInstancerEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value(edit, "protoIndices", Some(time), value);
+        self.write_value_at(edit, "protoIndices", time, value);
         self
     }
 
@@ -11803,7 +11349,7 @@ impl PointInstancerEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value(edit, "protoIndices", None, value);
+        self.write_value(edit, "protoIndices", value);
         self
     }
 
@@ -11815,7 +11361,7 @@ impl PointInstancerEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value(edit, "protoIndices", Some(time), value);
+        self.write_value_at(edit, "protoIndices", time, value);
         self
     }
 
@@ -11869,14 +11415,14 @@ impl PointInstancerEdit {
     #[doc(alias = "CreateScalesAttr")]
     pub fn set_scales(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 3]]) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(edit, "scales", None, value);
+        self.write_value(edit, "scales", value);
         self
     }
 
     #[doc = "[`Self::set_scales`] as a time sample at the time code `time`."]
     pub fn set_scales_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &[[f32; 3]]) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(edit, "scales", Some(time), value);
+        self.write_value_at(edit, "scales", time, value);
         self
     }
 
@@ -11887,7 +11433,7 @@ impl PointInstancerEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(edit, "scales", None, value);
+        self.write_value(edit, "scales", value);
         self
     }
 
@@ -11899,7 +11445,7 @@ impl PointInstancerEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(edit, "scales", Some(time), value);
+        self.write_value_at(edit, "scales", time, value);
         self
     }
 
@@ -11910,7 +11456,7 @@ impl PointInstancerEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(edit, "scales", None, value);
+        self.write_value(edit, "scales", value);
         self
     }
 
@@ -11922,7 +11468,7 @@ impl PointInstancerEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(edit, "scales", Some(time), value);
+        self.write_value_at(edit, "scales", time, value);
         self
     }
 
@@ -11936,7 +11482,7 @@ impl PointInstancerEdit {
     #[doc(alias = "CreateVelocitiesAttr")]
     pub fn set_velocities(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 3]]) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(edit, "velocities", None, value);
+        self.write_value(edit, "velocities", value);
         self
     }
 
@@ -11948,7 +11494,7 @@ impl PointInstancerEdit {
         value: &[[f32; 3]],
     ) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(edit, "velocities", Some(time), value);
+        self.write_value_at(edit, "velocities", time, value);
         self
     }
 
@@ -11959,7 +11505,7 @@ impl PointInstancerEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(edit, "velocities", None, value);
+        self.write_value(edit, "velocities", value);
         self
     }
 
@@ -11971,7 +11517,7 @@ impl PointInstancerEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(edit, "velocities", Some(time), value);
+        self.write_value_at(edit, "velocities", time, value);
         self
     }
 
@@ -11982,7 +11528,7 @@ impl PointInstancerEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(edit, "velocities", None, value);
+        self.write_value(edit, "velocities", value);
         self
     }
 
@@ -11994,7 +11540,7 @@ impl PointInstancerEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(edit, "velocities", Some(time), value);
+        self.write_value_at(edit, "velocities", time, value);
         self
     }
 }
@@ -12075,14 +11621,13 @@ impl<'a> Points<'a> {
         self.read_value("ids", crate::value::read_int64_array_shared)
     }
 
-    #[doc = "[`Self::ids`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::ids`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn ids_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<i64>>> {
-        self.read_value_at("ids", time, interp, crate::value::read_int64_array_shared)
+        self.read_value_at("ids", time, crate::value::read_int64_array_shared)
     }
 
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -12110,19 +11655,13 @@ impl<'a> Points<'a> {
         self.read_value("widths", crate::value::read_float_array_shared)
     }
 
-    #[doc = "[`Self::widths`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::widths`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn widths_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<f32>>> {
-        self.read_value_at(
-            "widths",
-            time,
-            interp,
-            crate::value::read_float_array_shared,
-        )
+        self.read_value_at("widths", time, crate::value::read_float_array_shared)
     }
 
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -12176,21 +11715,21 @@ impl PointsEdit {
     #[doc(alias = "CreateIdsAttr")]
     pub fn set_ids(&self, edit: &mut SchemaEdit<'_>, value: &[i64]) -> &Self {
         let value = crate::value::write_int64_array(value, edit.tokens());
-        self.write_value(edit, "ids", None, value);
+        self.write_value(edit, "ids", value);
         self
     }
 
     #[doc = "[`Self::set_ids`] as a time sample at the time code `time`."]
     pub fn set_ids_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &[i64]) -> &Self {
         let value = crate::value::write_int64_array(value, edit.tokens());
-        self.write_value(edit, "ids", Some(time), value);
+        self.write_value_at(edit, "ids", time, value);
         self
     }
 
     #[doc = "Transfers the vector allocation and capacity; allocates only its shared owner. Slice callers can use `set_ids`."]
     pub fn set_ids_owned(&self, edit: &mut SchemaEdit<'_>, value: ::alloc::vec::Vec<i64>) -> &Self {
         let value = crate::value::write_int64_array_owned(value, edit.tokens());
-        self.write_value(edit, "ids", None, value);
+        self.write_value(edit, "ids", value);
         self
     }
 
@@ -12202,7 +11741,7 @@ impl PointsEdit {
         value: ::alloc::vec::Vec<i64>,
     ) -> &Self {
         let value = crate::value::write_int64_array_owned(value, edit.tokens());
-        self.write_value(edit, "ids", Some(time), value);
+        self.write_value_at(edit, "ids", time, value);
         self
     }
 
@@ -12213,7 +11752,7 @@ impl PointsEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i64>>,
     ) -> &Self {
         let value = crate::value::write_int64_array_shared(value, edit.tokens());
-        self.write_value(edit, "ids", None, value);
+        self.write_value(edit, "ids", value);
         self
     }
 
@@ -12225,7 +11764,7 @@ impl PointsEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i64>>,
     ) -> &Self {
         let value = crate::value::write_int64_array_shared(value, edit.tokens());
-        self.write_value(edit, "ids", Some(time), value);
+        self.write_value_at(edit, "ids", time, value);
         self
     }
 
@@ -12239,14 +11778,14 @@ impl PointsEdit {
     #[doc(alias = "CreateWidthsAttr")]
     pub fn set_widths(&self, edit: &mut SchemaEdit<'_>, value: &[f32]) -> &Self {
         let value = crate::value::write_float_array(value, edit.tokens());
-        self.write_value(edit, "widths", None, value);
+        self.write_value(edit, "widths", value);
         self
     }
 
     #[doc = "[`Self::set_widths`] as a time sample at the time code `time`."]
     pub fn set_widths_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &[f32]) -> &Self {
         let value = crate::value::write_float_array(value, edit.tokens());
-        self.write_value(edit, "widths", Some(time), value);
+        self.write_value_at(edit, "widths", time, value);
         self
     }
 
@@ -12257,7 +11796,7 @@ impl PointsEdit {
         value: ::alloc::vec::Vec<f32>,
     ) -> &Self {
         let value = crate::value::write_float_array_owned(value, edit.tokens());
-        self.write_value(edit, "widths", None, value);
+        self.write_value(edit, "widths", value);
         self
     }
 
@@ -12269,7 +11808,7 @@ impl PointsEdit {
         value: ::alloc::vec::Vec<f32>,
     ) -> &Self {
         let value = crate::value::write_float_array_owned(value, edit.tokens());
-        self.write_value(edit, "widths", Some(time), value);
+        self.write_value_at(edit, "widths", time, value);
         self
     }
 
@@ -12280,7 +11819,7 @@ impl PointsEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f32>>,
     ) -> &Self {
         let value = crate::value::write_float_array_shared(value, edit.tokens());
-        self.write_value(edit, "widths", None, value);
+        self.write_value(edit, "widths", value);
         self
     }
 
@@ -12292,7 +11831,7 @@ impl PointsEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f32>>,
     ) -> &Self {
         let value = crate::value::write_float_array_shared(value, edit.tokens());
-        self.write_value(edit, "widths", Some(time), value);
+        self.write_value_at(edit, "widths", time, value);
         self
     }
 }
@@ -12464,10 +12003,10 @@ impl<'a> Sphere<'a> {
         self.read_value("radius", crate::value::read_double)
     }
 
-    #[doc = "[`Self::radius`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::radius`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn radius_at(&self, time: f64, interp: ::layerstack::InterpolationType) -> Option<f64> {
-        self.read_value_at("radius", time, interp, crate::value::read_double)
+    pub fn radius_at(&self, time: ::layerstack::Time) -> Option<f64> {
+        self.read_value_at("radius", time, crate::value::read_double)
     }
 }
 
@@ -12510,14 +12049,14 @@ impl SphereEdit {
     #[doc(alias = "CreateRadiusAttr")]
     pub fn set_radius(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "radius", None, value);
+        self.write_value(edit, "radius", value);
         self
     }
 
     #[doc = "[`Self::set_radius`] as a time sample at the time code `time`."]
     pub fn set_radius_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "radius", Some(time), value);
+        self.write_value_at(edit, "radius", time, value);
         self
     }
 }
@@ -12603,17 +12142,15 @@ impl<'a> TetMesh<'a> {
         )
     }
 
-    #[doc = "[`Self::surface_face_vertex_indices`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::surface_face_vertex_indices`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn surface_face_vertex_indices_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<[i32; 3]>>> {
         self.read_value_at(
             "surfaceFaceVertexIndices",
             time,
-            interp,
             crate::value::read_int3_array_shared,
         )
     }
@@ -12647,17 +12184,15 @@ impl<'a> TetMesh<'a> {
         self.read_value("tetVertexIndices", crate::value::read_int4_array_shared)
     }
 
-    #[doc = "[`Self::tet_vertex_indices`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::tet_vertex_indices`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn tet_vertex_indices_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<[i32; 4]>>> {
         self.read_value_at(
             "tetVertexIndices",
             time,
-            interp,
             crate::value::read_int4_array_shared,
         )
     }
@@ -12721,7 +12256,7 @@ impl TetMeshEdit {
         value: &[[i32; 3]],
     ) -> &Self {
         let value = crate::value::write_int3_array(value, edit.tokens());
-        self.write_value(edit, "surfaceFaceVertexIndices", None, value);
+        self.write_value(edit, "surfaceFaceVertexIndices", value);
         self
     }
 
@@ -12733,7 +12268,7 @@ impl TetMeshEdit {
         value: &[[i32; 3]],
     ) -> &Self {
         let value = crate::value::write_int3_array(value, edit.tokens());
-        self.write_value(edit, "surfaceFaceVertexIndices", Some(time), value);
+        self.write_value_at(edit, "surfaceFaceVertexIndices", time, value);
         self
     }
 
@@ -12744,7 +12279,7 @@ impl TetMeshEdit {
         value: ::alloc::vec::Vec<[i32; 3]>,
     ) -> &Self {
         let value = crate::value::write_int3_array_owned(value, edit.tokens());
-        self.write_value(edit, "surfaceFaceVertexIndices", None, value);
+        self.write_value(edit, "surfaceFaceVertexIndices", value);
         self
     }
 
@@ -12756,7 +12291,7 @@ impl TetMeshEdit {
         value: ::alloc::vec::Vec<[i32; 3]>,
     ) -> &Self {
         let value = crate::value::write_int3_array_owned(value, edit.tokens());
-        self.write_value(edit, "surfaceFaceVertexIndices", Some(time), value);
+        self.write_value_at(edit, "surfaceFaceVertexIndices", time, value);
         self
     }
 
@@ -12767,7 +12302,7 @@ impl TetMeshEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[i32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_int3_array_shared(value, edit.tokens());
-        self.write_value(edit, "surfaceFaceVertexIndices", None, value);
+        self.write_value(edit, "surfaceFaceVertexIndices", value);
         self
     }
 
@@ -12779,7 +12314,7 @@ impl TetMeshEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[i32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_int3_array_shared(value, edit.tokens());
-        self.write_value(edit, "surfaceFaceVertexIndices", Some(time), value);
+        self.write_value_at(edit, "surfaceFaceVertexIndices", time, value);
         self
     }
 
@@ -12793,7 +12328,7 @@ impl TetMeshEdit {
     #[doc(alias = "CreateTetVertexIndicesAttr")]
     pub fn set_tet_vertex_indices(&self, edit: &mut SchemaEdit<'_>, value: &[[i32; 4]]) -> &Self {
         let value = crate::value::write_int4_array(value, edit.tokens());
-        self.write_value(edit, "tetVertexIndices", None, value);
+        self.write_value(edit, "tetVertexIndices", value);
         self
     }
 
@@ -12805,7 +12340,7 @@ impl TetMeshEdit {
         value: &[[i32; 4]],
     ) -> &Self {
         let value = crate::value::write_int4_array(value, edit.tokens());
-        self.write_value(edit, "tetVertexIndices", Some(time), value);
+        self.write_value_at(edit, "tetVertexIndices", time, value);
         self
     }
 
@@ -12816,7 +12351,7 @@ impl TetMeshEdit {
         value: ::alloc::vec::Vec<[i32; 4]>,
     ) -> &Self {
         let value = crate::value::write_int4_array_owned(value, edit.tokens());
-        self.write_value(edit, "tetVertexIndices", None, value);
+        self.write_value(edit, "tetVertexIndices", value);
         self
     }
 
@@ -12828,7 +12363,7 @@ impl TetMeshEdit {
         value: ::alloc::vec::Vec<[i32; 4]>,
     ) -> &Self {
         let value = crate::value::write_int4_array_owned(value, edit.tokens());
-        self.write_value(edit, "tetVertexIndices", Some(time), value);
+        self.write_value_at(edit, "tetVertexIndices", time, value);
         self
     }
 
@@ -12839,7 +12374,7 @@ impl TetMeshEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[i32; 4]>>,
     ) -> &Self {
         let value = crate::value::write_int4_array_shared(value, edit.tokens());
-        self.write_value(edit, "tetVertexIndices", None, value);
+        self.write_value(edit, "tetVertexIndices", value);
         self
     }
 
@@ -12851,7 +12386,7 @@ impl TetMeshEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[i32; 4]>>,
     ) -> &Self {
         let value = crate::value::write_int4_array_shared(value, edit.tokens());
-        self.write_value(edit, "tetVertexIndices", Some(time), value);
+        self.write_value_at(edit, "tetVertexIndices", time, value);
         self
     }
 }
@@ -13170,7 +12705,7 @@ impl VisibilityApiEdit {
         value: VisibilityApiGuideVisibility,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "guideVisibility", None, value);
+        self.write_value(edit, "guideVisibility", value);
         self
     }
 
@@ -13186,7 +12721,7 @@ impl VisibilityApiEdit {
         value: VisibilityApiProxyVisibility,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "proxyVisibility", None, value);
+        self.write_value(edit, "proxyVisibility", value);
         self
     }
 
@@ -13202,7 +12737,7 @@ impl VisibilityApiEdit {
         value: VisibilityApiRenderVisibility,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "renderVisibility", None, value);
+        self.write_value(edit, "renderVisibility", value);
         self
     }
 }
@@ -13415,7 +12950,7 @@ impl XformableEdit {
     #[doc(alias = "CreateXformOpOrderAttr")]
     pub fn set_xform_op_order(&self, edit: &mut SchemaEdit<'_>, value: &[&str]) -> &Self {
         let value = crate::value::write_array(value, edit.tokens(), crate::value::write_token);
-        self.write_value(edit, "xformOpOrder", None, value);
+        self.write_value(edit, "xformOpOrder", value);
         self
     }
 }

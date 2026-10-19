@@ -570,17 +570,7 @@ pub(super) fn check_decode(
     path: PropertyPath,
     time: Time,
 ) -> Result<(), crate::ArrayReadError> {
-    match time {
-        Time::Default => {
-            stage.try_resolve_property_path(path)?;
-        }
-        Time::At {
-            code,
-            interpolation,
-        } => {
-            stage.try_resolve_property_path_at_time(path, code, interpolation)?;
-        }
-    }
+    stage.try_resolve_property_path_at_time(path, time)?;
     Ok(())
 }
 fn checked_read(

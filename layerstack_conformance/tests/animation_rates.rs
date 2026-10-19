@@ -6,7 +6,7 @@
 //! `Pcp_BuildPrimIndex` (reference/payload TCPS scaling).
 
 use layerstack::stage::ResolvedValue;
-use layerstack::{InMemoryStore, InterpolationType, LiveStage, Stage, StageOptions, Value};
+use layerstack::{InMemoryStore, LiveStage, Stage, StageOptions, Time, Value};
 use layerstack_conformance::{usda_real::load_entry_usda, workspace_root};
 use serde_json::{Value as Json, json};
 use std::process::Command;
@@ -61,7 +61,7 @@ fn snapshot(stage: &Stage, store: &mut InMemoryStore) -> Json {
             .iter()
             .map(|&time| {
                 stage
-                    .resolve_property_path_at_time(property, time, InterpolationType::Linear)
+                    .resolve_property_path_at_time(property, Time::at(time))
                     .map_or(Json::Null, |v| number(&v.value))
             })
             .collect();
@@ -233,8 +233,7 @@ fn animation_block_distinguishes_weaker_defaults_and_same_site_samples() {
             stage
                 .resolve_property_path_at_time(
                     layerstack::PropertyPath::new(prim, token),
-                    5.,
-                    InterpolationType::Linear
+                    Time::at(5.)
                 )
                 .map(|r| r.value),
             expected,

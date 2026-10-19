@@ -189,18 +189,17 @@ fn invalid_clip_queries_remain_masked_and_report_the_evaluation_error() {
             stage.property_clip_evaluation_error(
                 property.prim_path(),
                 property.property(),
-                time,
-                layerstack::InterpolationType::Held
+                Time::held(time)
             ),
             Some(layerstack::value_clips::ClipEvalError::InvalidQuery)
         );
         assert!(
             stage
-                .resolve_property_path_at_time(property, time, layerstack::InterpolationType::Held)
+                .resolve_property_path_at_time(property, Time::held(time))
                 .is_none()
         );
         let explained = stage
-            .explain_property_value_at_time(property, time, layerstack::InterpolationType::Held)
+            .explain_property_value(property, Time::held(time))
             .unwrap();
         assert_eq!(explained.source, layerstack::ValueSource::ValueClips);
         assert!(explained.value.is_none());

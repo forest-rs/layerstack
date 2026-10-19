@@ -30,7 +30,7 @@
 
 use std::collections::BTreeMap;
 
-use layerstack::{InterpolationType, Stage, StageOptions, Value};
+use layerstack::{Stage, StageOptions, Time, Value};
 use layerstack_conformance::{
     usda_real::{LoadedStage, load_entry_usda},
     workspace_root,
@@ -163,7 +163,7 @@ fn values_match_openusd() {
     for (attr, expected) in &oracle.samples {
         let property = loaded.store.property_path(attr);
         let value = stage
-            .resolve_property_path_at_time(property, oracle.time, InterpolationType::Held)
+            .resolve_property_path_at_time(property, Time::held(oracle.time))
             .map(|resolved| resolved.value);
         if value != Some(Value::Int(*expected)) {
             mismatches.push(format!(

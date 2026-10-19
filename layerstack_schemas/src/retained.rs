@@ -322,7 +322,7 @@ impl RetainedQueries {
     /// Returns None before the first poll or after removal. Evidence can be
     /// stale until the next poll after an edit. For authored-value explanations,
     /// inspect the reported properties through `scene().stage()`'s existing
-    /// `explain_value_with_schema` / `explain_value_at_time_with_schema` APIs.
+    /// `explain_value_with_schema` API.
     /// Those describe current source opinions, not an historical transaction log.
     pub fn dependencies(&self, id: QueryId) -> Option<QueryDependencies<'_>> {
         let held = self.held.get(&id)?;
@@ -834,12 +834,9 @@ fn provider_value(
                 ResolvedValue::Scalar(value) => Some((value, v.provenance)),
                 _ => None,
             }),
-        Time::At {
-            code,
-            interpolation,
-        } => scene
+        Time::At { .. } => scene
             .stage()
-            .resolve_value_at_time_with_schema(p.prim_path(), p.property(), code, interpolation)
+            .resolve_value_at_time_with_schema(p.prim_path(), p.property(), time)
             .map(|v| (v.value, v.provenance)),
     };
     resolved.map_or((None, None), |(value, provenance)| {

@@ -30,7 +30,7 @@ use std::sync::Arc;
 use layerstack::{
     AssetResolveError, AssetResolver, InMemoryStore, InterpolationType, Layer, LayerId,
     PathInterner, PropertyDefinition, PropertyPath, ResolvedAsset, SchemaDefinition,
-    SchemaRegistry, Stage, StageOptions, TokenInterner, Value,
+    SchemaRegistry, Stage, StageOptions, Time, TokenInterner, Value,
 };
 use layerstack_usda::{emit, lower, parser::parse_cst};
 use serde::Deserialize;
@@ -422,13 +422,26 @@ impl Composed {
         let value = match (query.time, self.schema) {
             (Some(time), false) => {
                 self.stage
-                    .resolve_property_path_at_time(path, time, query.interpolation())?
+                    .resolve_property_path_at_time(
+                        path,
+                        Time::At {
+                            code: time,
+                            interpolation: query.interpolation(),
+                        },
+                    )?
                     .value
             }
             (None, false) => self.stage.resolve_field_path(path)?.value,
             (Some(time), true) => {
                 self.stage
-                    .resolve_value_at_time_with_schema(prim, property, time, query.interpolation())?
+                    .resolve_value_at_time_with_schema(
+                        prim,
+                        property,
+                        Time::At {
+                            code: time,
+                            interpolation: query.interpolation(),
+                        },
+                    )?
                     .value
             }
             (None, true) => self.stage.resolve_field_with_schema(prim, property)?.value,

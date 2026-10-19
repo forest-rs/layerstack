@@ -328,13 +328,7 @@ fn read<'a, T>(
     time: Time,
     decode: impl Fn(&Value, &'a TokenInterner) -> Option<T>,
 ) -> Option<T> {
-    match time {
-        Time::Default => prim.read_value(name, decode),
-        Time::At {
-            code,
-            interpolation,
-        } => prim.read_value_at(name, code, interpolation, decode),
-    }
+    prim.read_value_at(name, time, decode)
 }
 
 #[cfg(test)]

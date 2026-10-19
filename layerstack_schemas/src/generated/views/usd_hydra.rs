@@ -104,17 +104,12 @@ impl<'a> HydraGenerativeProceduralApi<'a> {
         self.read_value("primvars:hdGp:proceduralType", crate::value::read_token)
     }
 
-    #[doc = "[`Self::procedural_type`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::procedural_type`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn procedural_type_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<&'a str> {
+    pub fn procedural_type_at(&self, time: ::layerstack::Time) -> Option<&'a str> {
         self.read_value_at(
             "primvars:hdGp:proceduralType",
             time,
-            interp,
             crate::value::read_token,
         )
     }
@@ -133,14 +128,10 @@ impl<'a> HydraGenerativeProceduralApi<'a> {
         self.read_value("proceduralSystem", crate::value::read_token)
     }
 
-    #[doc = "[`Self::procedural_system`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::procedural_system`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn procedural_system_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<&'a str> {
-        self.read_value_at("proceduralSystem", time, interp, crate::value::read_token)
+    pub fn procedural_system_at(&self, time: ::layerstack::Time) -> Option<&'a str> {
+        self.read_value_at("proceduralSystem", time, crate::value::read_token)
     }
 }
 
@@ -182,7 +173,7 @@ impl HydraGenerativeProceduralApiEdit {
     #[doc(alias = "CreateProceduralTypeAttr")]
     pub fn set_procedural_type(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value(edit, "primvars:hdGp:proceduralType", None, value);
+        self.write_value(edit, "primvars:hdGp:proceduralType", value);
         self
     }
 
@@ -194,7 +185,7 @@ impl HydraGenerativeProceduralApiEdit {
         value: &str,
     ) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value(edit, "primvars:hdGp:proceduralType", Some(time), value);
+        self.write_value_at(edit, "primvars:hdGp:proceduralType", time, value);
         self
     }
 
@@ -206,7 +197,7 @@ impl HydraGenerativeProceduralApiEdit {
     #[doc(alias = "CreateProceduralSystemAttr")]
     pub fn set_procedural_system(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value(edit, "proceduralSystem", None, value);
+        self.write_value(edit, "proceduralSystem", value);
         self
     }
 
@@ -218,7 +209,7 @@ impl HydraGenerativeProceduralApiEdit {
         value: &str,
     ) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value(edit, "proceduralSystem", Some(time), value);
+        self.write_value_at(edit, "proceduralSystem", time, value);
         self
     }
 }
@@ -343,7 +334,7 @@ impl HydraRenderPassApiEdit {
     #[doc(alias = "CreateHydraRendererNameAttr")]
     pub fn set_hydra_renderer_name(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value(edit, "hydra:rendererName", None, value);
+        self.write_value(edit, "hydra:rendererName", value);
         self
     }
 }

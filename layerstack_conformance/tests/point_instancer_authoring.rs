@@ -88,10 +88,7 @@ fn id_edits_preserve_future_weaker_opinions_and_group_rollback() {
     );
     assert_eq!(point.invisible_ids().unwrap().as_slice(), &[20]);
     assert_eq!(
-        point
-            .invisible_ids_at(1., layerstack::InterpolationType::Held)
-            .unwrap()
-            .as_slice(),
+        point.invisible_ids_at(Time::held(1.)).unwrap().as_slice(),
         &[99],
         "default visibility helpers preserve numeric samples"
     );

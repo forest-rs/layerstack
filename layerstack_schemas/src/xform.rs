@@ -796,13 +796,10 @@ impl PreparedTransform {
                             _ => return None,
                         }
                     }
-                    Time::At {
-                        code,
-                        interpolation,
-                    } => {
+                    Time::At { .. } => {
                         scene
                             .stage()
-                            .resolve_value_at_time_with_schema(path, token, code, interpolation)?
+                            .resolve_value_at_time_with_schema(path, token, time)?
                             .value
                     }
                 };

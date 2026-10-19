@@ -97,14 +97,10 @@ impl<'a> GenerativeProcedural<'a> {
         self.read_value("proceduralSystem", crate::value::read_token)
     }
 
-    #[doc = "[`Self::procedural_system`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::procedural_system`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn procedural_system_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<&'a str> {
-        self.read_value_at("proceduralSystem", time, interp, crate::value::read_token)
+    pub fn procedural_system_at(&self, time: ::layerstack::Time) -> Option<&'a str> {
+        self.read_value_at("proceduralSystem", time, crate::value::read_token)
     }
 }
 
@@ -147,7 +143,7 @@ impl GenerativeProceduralEdit {
     #[doc(alias = "CreateProceduralSystemAttr")]
     pub fn set_procedural_system(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value(edit, "proceduralSystem", None, value);
+        self.write_value(edit, "proceduralSystem", value);
         self
     }
 
@@ -159,7 +155,7 @@ impl GenerativeProceduralEdit {
         value: &str,
     ) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value(edit, "proceduralSystem", Some(time), value);
+        self.write_value_at(edit, "proceduralSystem", time, value);
         self
     }
 }

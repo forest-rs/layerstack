@@ -97,7 +97,7 @@ fn numeric_writeback_matches_native_parent_conversion_and_undo() {
     );
     let old = Camera::new(&scene, path)
         .unwrap()
-        .horizontal_aperture_at(1., layerstack::InterpolationType::Linear);
+        .horizontal_aperture_at(Time::at(1.));
     assert_eq!(old, Some(35.), "other numeric samples remain");
     live.apply(&mut store, &report.inverse).unwrap();
     assert_eq!(
@@ -123,7 +123,7 @@ fn default_writeback_keeps_numeric_slots() {
     let dest = Camera::new(&scene, path).unwrap();
     assert_eq!(dest.horizontal_aperture(), Some(40.), "default is replaced");
     assert_eq!(
-        dest.horizontal_aperture_at(1., layerstack::InterpolationType::Linear),
+        dest.horizontal_aperture_at(Time::at(1.)),
         Some(35.),
         "default writes retain numeric samples"
     );

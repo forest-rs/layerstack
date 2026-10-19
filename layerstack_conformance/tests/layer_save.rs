@@ -621,7 +621,7 @@ fn sparse_end_index_survives_signed_text_and_binary() {
 
 #[test]
 fn text_refuses_sparse_edit_kind_changes_while_binary_preserves_retiming() {
-    use layerstack::{InterpolationType, LayerOffset, PropertyType, Value};
+    use layerstack::{LayerOffset, PropertyType, Time, Value};
     use layerstack_usda::{save::SaveError, writer::WriteError};
     for (kind, declaration, expected) in [
         ("double", "timecode", Value::from(vec![5_f64])),
@@ -669,7 +669,7 @@ fn text_refuses_sparse_edit_kind_changes_while_binary_preserves_retiming() {
             let x = store.property_path("/P.x");
             let stage = Stage::compose(&mut store, LayerId(2), StageOptions::default());
             let resolved = stage
-                .resolve_property_path_at_time(x, 8., InterpolationType::Held)
+                .resolve_property_path_at_time(x, Time::held(8.))
                 .unwrap();
             assert_eq!(
                 resolved.value, expected,

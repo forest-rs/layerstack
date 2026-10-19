@@ -14,7 +14,7 @@ mod threaded_open;
 
 #[test]
 fn sparse_clip_preparation_covers_advanced_weaker_queries_and_set_reordering() {
-    use layerstack::InterpolationType;
+    use layerstack::Time;
     for reorder in [false, true] {
         let root = format!(
             r#"#usda 1.0
@@ -60,12 +60,12 @@ clips = {{
         let mut document =
             StageDocument::open(memory, "root.usda", StageOptions::default()).unwrap();
         let property = document.store_mut().property_path("/P.x");
-        let prepared = document.prepare_clip_query(property, 2., InterpolationType::Linear, 8, 16);
+        let prepared = document.prepare_clip_query(property, Time::at(2.), 8, 16);
         assert!(prepared.plan.is_complete(), "{prepared:?}");
         let resolved = document
             .stage()
             .stage()
-            .resolve_property_path_at_time(property, 2., InterpolationType::Linear)
+            .resolve_property_path_at_time(property, Time::at(2.))
             .unwrap()
             .value;
         let expected = if reorder {
@@ -92,7 +92,7 @@ clips = {{
 
 #[test]
 fn dense_clip_preparation_does_not_load_masked_sets_or_dormant_assets() {
-    use layerstack::InterpolationType;
+    use layerstack::Time;
     for (source, manifest, expected) in [
         (
             Some("#usda 1.0\ndef \"C\" {\n double x.timeSamples={0:42,3:42}\n}"),
@@ -147,7 +147,7 @@ def "P" (clips = {
         let mut document =
             StageDocument::open(memory, "root.usda", StageOptions::default()).unwrap();
         let property = document.store_mut().property_path("/P.x");
-        let prepared = document.prepare_clip_query(property, 2., InterpolationType::Linear, 8, 16);
+        let prepared = document.prepare_clip_query(property, Time::at(2.), 8, 16);
         assert!(prepared.plan.is_complete(), "{prepared:?}");
         assert!(prepared.failures.is_empty(), "{prepared:?}");
         assert_eq!(prepared.load_attempts, 2);
@@ -161,7 +161,7 @@ def "P" (clips = {
             document
                 .stage()
                 .stage()
-                .resolve_property_path_at_time(property, 2., InterpolationType::Linear)
+                .resolve_property_path_at_time(property, Time::at(2.))
                 .map(|resolved| resolved.value),
             expected
         );
@@ -171,7 +171,7 @@ def "P" (clips = {
 #[cfg(feature = "std")]
 #[test]
 fn clip_query_planning_does_not_decode_retained_interpolation_endpoints() {
-    use layerstack::{InterpolationType, TypedArray};
+    use layerstack::{Time, TypedArray};
     let values = |value: &str| vec![value; 64].join(",");
     let source = format!(
         "#usda 1.0\ndef \"C\" {{\n float[] x.timeSamples={{0:[{}],10:[{}]}}\n}}",
@@ -214,7 +214,7 @@ def "P" (clips = { dictionary default = {
     )
     .unwrap();
     let property = document.store_mut().property_path("/P.x");
-    let prepared = document.prepare_clip_query(property, 5., InterpolationType::Linear, 2, 16);
+    let prepared = document.prepare_clip_query(property, Time::at(5.), 2, 16);
     assert!(prepared.plan.is_complete(), "{prepared:?}");
     assert_eq!(prepared.load_attempts, 2);
     let clip = document.catalog.ids["clip.usdc"];
@@ -227,13 +227,13 @@ def "P" (clips = { dictionary default = {
         0,
         "residency planning must not evaluate the numeric interpolation"
     );
-    let prepared = document.prepare_clip_query(property, 5., InterpolationType::Linear, 0, 16);
+    let prepared = document.prepare_clip_query(property, Time::at(5.), 0, 16);
     assert!(prepared.plan.is_complete(), "{prepared:?}");
     assert_eq!(prepared.load_attempts, 0);
     let resolved = document
         .stage()
         .stage()
-        .try_resolve_property_path_at_time(property, 5., InterpolationType::Linear)
+        .try_resolve_property_path_at_time(property, Time::at(5.))
         .unwrap()
         .unwrap();
     let Value::TypedArray(TypedArray::Float(values)) = resolved.value else {
@@ -252,7 +252,7 @@ def "P" (clips = { dictionary default = {
 
 #[test]
 fn demanded_clip_failures_distinguish_missing_from_malformed_and_allow_retry() {
-    use layerstack::InterpolationType;
+    use layerstack::Time;
     let memory = Memory::with(&[
         (
             "root.usda",
@@ -271,7 +271,7 @@ def "P" (clips = { dictionary default = {
     let mut doc =
         StageDocument::open(memory.clone(), "root.usda", StageOptions::default()).unwrap();
     let property = doc.store.property_path("/P.x");
-    let failed = doc.prepare_clip_query(property, 2., InterpolationType::Linear, 4, 16);
+    let failed = doc.prepare_clip_query(property, Time::at(2.), 4, 16);
     assert!(!failed.plan.is_complete());
     assert_eq!(failed.failures.len(), 1);
     assert_ne!(failed.failures[0].error.kind, IoErrorKind::NotFound);
@@ -292,7 +292,7 @@ def "P" (clips = { dictionary default = {
     )
     .unwrap();
     doc.storage.files.insert("needed.usdc".into(), bytes);
-    let retried = doc.prepare_clip_query(property, 2., InterpolationType::Linear, 4, 16);
+    let retried = doc.prepare_clip_query(property, Time::at(2.), 4, 16);
     assert!(retried.plan.is_complete(), "{retried:?}");
     assert_eq!(retried.load_attempts, 1);
     assert!(retried.failures.is_empty());
@@ -301,7 +301,7 @@ def "P" (clips = { dictionary default = {
     memory.files.remove("needed.usdc");
     let mut missing = StageDocument::open(memory, "root.usda", StageOptions::default()).unwrap();
     let property = missing.store.property_path("/P.x");
-    let gap = missing.prepare_clip_query(property, 2., InterpolationType::Linear, 4, 16);
+    let gap = missing.prepare_clip_query(property, Time::at(2.), 4, 16);
     assert!(gap.plan.is_complete(), "{gap:?}");
     assert!(gap.failures.is_empty());
     assert!(gap.plan.demands.iter().any(|d| matches!(
@@ -409,7 +409,7 @@ fn external_package_resources_keep_their_original_filesystem_anchor() {
 
 #[test]
 fn query_preparation_resumes_and_leaves_dormant_malformed_clips_unread() {
-    use layerstack::{InterpolationType, PropertyPath};
+    use layerstack::{PropertyPath, Time};
     let memory = Memory::with(&[
         (
             "root.usda",
@@ -435,7 +435,7 @@ def "P" (clips = { dictionary default = {
     ]);
     let mut doc = StageDocument::open(memory, "root.usda", StageOptions::default()).unwrap();
     let property = doc.store.property_path("/P.x");
-    let first = doc.prepare_clip_query(property, 2., InterpolationType::Linear, 2, 16);
+    let first = doc.prepare_clip_query(property, Time::at(2.), 2, 16);
     assert!(first.plan.is_complete(), "{first:?}");
     assert_eq!(first.load_attempts, 2);
     assert!(
@@ -444,9 +444,9 @@ def "P" (clips = { dictionary default = {
             .iter()
             .any(|s| s == "next.usda" || s == "dormant.usdc")
     );
-    let held = doc.prepare_clip_query(property, 5., InterpolationType::Held, 0, 16);
+    let held = doc.prepare_clip_query(property, Time::held(5.), 0, 16);
     assert!(held.plan.is_complete(), "{held:?}");
-    let pending = doc.prepare_clip_query(property, 5., InterpolationType::Linear, 0, 16);
+    let pending = doc.prepare_clip_query(property, Time::at(5.), 0, 16);
     assert!(pending.budget_exhausted);
     assert_eq!(
         pending
@@ -459,20 +459,20 @@ def "P" (clips = { dictionary default = {
             .as_ref(),
         "next.usda"
     );
-    let next = doc.prepare_clip_query(property, 5., InterpolationType::Linear, 1, 16);
+    let next = doc.prepare_clip_query(property, Time::at(5.), 1, 16);
     assert!(next.plan.is_complete(), "{next:?}");
     assert_eq!(next.load_attempts, 1);
     assert_eq!(
         doc.stage
             .stage()
-            .resolve_property_path_at_time(property, 5., InterpolationType::Linear)
+            .resolve_property_path_at_time(property, Time::at(5.))
             .unwrap()
             .value,
         Value::Double(5.)
     );
     assert!(!doc.storage.reads.iter().any(|s| s == "dormant.usdc"));
     assert_eq!(
-        doc.prepare_clip_query(property, 5., InterpolationType::Linear, 0, 16)
+        doc.prepare_clip_query(property, Time::at(5.), 0, 16)
             .load_attempts,
         0
     );
@@ -480,19 +480,19 @@ def "P" (clips = { dictionary default = {
     assert!(
         doc.stage
             .stage()
-            .plan_clip_query(unknown, 5., InterpolationType::Linear, 16)
+            .plan_clip_query(unknown, Time::at(5.), 16)
             .is_complete()
     );
     assert!(
         !doc.stage
             .stage()
-            .plan_clip_query(property, f64::NAN, InterpolationType::Linear, 16)
+            .plan_clip_query(property, Time::at(f64::NAN), 16)
             .is_complete()
     );
     assert!(
         doc.stage
             .stage()
-            .plan_clip_query(property, 5., InterpolationType::Linear, 0)
+            .plan_clip_query(property, Time::at(5.), 0)
             .budget_exhausted
     );
 }

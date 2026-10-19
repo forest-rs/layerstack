@@ -4,7 +4,7 @@
 //! Explicit bounded host orchestration for clip query demands.
 use super::*;
 use layerstack::{
-    InterpolationType, PropertyPath,
+    PropertyPath, Time,
     value_clips::{ClipAssetRequest, ClipQueryPlan},
 };
 
@@ -34,24 +34,25 @@ impl<B: Storage> StageDocument<B> {
     /// arcs); `max_demands` bounds each returned plan. Missing files are confirmed
     /// to the store; malformed files retain typed failures and may be retried on
     /// a later call. Already complete queries perform no I/O. Numeric evaluation
-    /// remains separate. AOUSD Core §12.3, §12.5.
+    /// remains separate. Clips hold time samples only: at [`Time::Default`] the
+    /// plan demands nothing and no load is attempted. AOUSD Core §12.3, §12.5.
     ///
     /// ```no_run
     /// # #[cfg(feature = "std")]
     /// # fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// use layerstack::{InterpolationType, StageOptions};
+    /// use layerstack::{StageOptions, Time};
     /// use layerstack_io::{Filesystem, StageDocument};
     /// let mut document = StageDocument::open(
     ///     Filesystem::new(".", [])?, "motion.usda", StageOptions::default())?;
     /// let property = document.store_mut().property_path("/Model.height");
-    /// let prepared = document.prepare_clip_query(property, 5., InterpolationType::Linear, 8, 32);
+    /// let prepared = document.prepare_clip_query(property, Time::at(5.), 8, 32);
     /// if !prepared.plan.is_complete() {
     ///     // Inspect failures, pending anchored demands and budget exhaustion;
     ///     // retry after fixing transport or increasing the explicit budget.
     ///     println!("{prepared:?}");
     /// } else {
     ///     let value = document.stage().stage().try_resolve_property_path_at_time(
-    ///         property, 5., InterpolationType::Linear)?;
+    ///         property, Time::at(5.))?;
     ///     println!("{value:?}"); // Complete gaps remain `None`.
     /// }
     /// # Ok(())
@@ -60,8 +61,7 @@ impl<B: Storage> StageDocument<B> {
     pub fn prepare_clip_query(
         &mut self,
         property: PropertyPath,
-        time: f64,
-        interpolation: InterpolationType,
+        time: Time,
         max_loads: usize,
         max_demands: usize,
     ) -> ClipQueryPreparation {
@@ -69,10 +69,10 @@ impl<B: Storage> StageDocument<B> {
         let mut attempted = BTreeSet::new();
         let mut failures = Vec::new();
         loop {
-            let plan =
-                self.stage
-                    .stage()
-                    .plan_clip_query(property, time, interpolation, max_demands);
+            let plan = self
+                .stage
+                .stage()
+                .plan_clip_query(property, time, max_demands);
             let next = plan
                 .pending()
                 .find(|d| !attempted.contains(&(d.request.anchor, d.request.identifier.clone())))

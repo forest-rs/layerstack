@@ -41,8 +41,8 @@ use layerstack::path::{Path, PathInterner, PropertyPath};
 use layerstack::property::PropertyEntry;
 use layerstack::spec_path::SpecPath;
 use layerstack::{
-    AssetResolveError, AssetResolver, InMemoryStore, InterpolationType, ResolvedAsset,
-    ResolvedValue, Stage, StageOptions,
+    AssetResolveError, AssetResolver, InMemoryStore, ResolvedAsset, ResolvedValue, Stage,
+    StageOptions, Time,
 };
 use layerstack_usda::save::{SaveError, Unsupported};
 
@@ -845,7 +845,7 @@ pub fn composed(root: Root<'_>, assets: &[(&str, &str)]) -> String {
             let _ = write!(out, "  .{name} = {value}");
             for time in PROBE_TIMES {
                 let at = stage
-                    .resolve_property_path_at_time(path, time, InterpolationType::Held)
+                    .resolve_property_path_at_time(path, Time::held(time))
                     .map(|r| spell(&r.value, &store.tokens));
                 let _ = write!(out, " @{time}: {at:?}");
             }

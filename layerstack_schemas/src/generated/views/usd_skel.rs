@@ -204,7 +204,7 @@ impl BlendShapeEdit {
     #[doc(alias = "CreateNormalOffsetsAttr")]
     pub fn set_normal_offsets(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 3]]) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(edit, "normalOffsets", None, value);
+        self.write_value(edit, "normalOffsets", value);
         self
     }
 
@@ -215,7 +215,7 @@ impl BlendShapeEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(edit, "normalOffsets", None, value);
+        self.write_value(edit, "normalOffsets", value);
         self
     }
 
@@ -226,7 +226,7 @@ impl BlendShapeEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(edit, "normalOffsets", None, value);
+        self.write_value(edit, "normalOffsets", value);
         self
     }
 
@@ -240,7 +240,7 @@ impl BlendShapeEdit {
     #[doc(alias = "CreateOffsetsAttr")]
     pub fn set_offsets(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 3]]) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(edit, "offsets", None, value);
+        self.write_value(edit, "offsets", value);
         self
     }
 
@@ -251,7 +251,7 @@ impl BlendShapeEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(edit, "offsets", None, value);
+        self.write_value(edit, "offsets", value);
         self
     }
 
@@ -262,7 +262,7 @@ impl BlendShapeEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(edit, "offsets", None, value);
+        self.write_value(edit, "offsets", value);
         self
     }
 
@@ -276,7 +276,7 @@ impl BlendShapeEdit {
     #[doc(alias = "CreatePointIndicesAttr")]
     pub fn set_point_indices(&self, edit: &mut SchemaEdit<'_>, value: &[i32]) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value(edit, "pointIndices", None, value);
+        self.write_value(edit, "pointIndices", value);
         self
     }
 
@@ -287,7 +287,7 @@ impl BlendShapeEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value(edit, "pointIndices", None, value);
+        self.write_value(edit, "pointIndices", value);
         self
     }
 
@@ -298,7 +298,7 @@ impl BlendShapeEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value(edit, "pointIndices", None, value);
+        self.write_value(edit, "pointIndices", value);
         self
     }
 }
@@ -405,17 +405,15 @@ impl<'a> SkelAnimation<'a> {
         self.read_value("blendShapeWeights", crate::value::read_float_array_shared)
     }
 
-    #[doc = "[`Self::blend_shape_weights`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::blend_shape_weights`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn blend_shape_weights_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<f32>>> {
         self.read_value_at(
             "blendShapeWeights",
             time,
-            interp,
             crate::value::read_float_array_shared,
         )
     }
@@ -475,19 +473,13 @@ impl<'a> SkelAnimation<'a> {
         self.read_value("rotations", crate::value::read_quatf_array_shared)
     }
 
-    #[doc = "[`Self::rotations`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::rotations`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn rotations_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 4]>>> {
-        self.read_value_at(
-            "rotations",
-            time,
-            interp,
-            crate::value::read_quatf_array_shared,
-        )
+        self.read_value_at("rotations", time, crate::value::read_quatf_array_shared)
     }
 
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -513,14 +505,10 @@ impl<'a> SkelAnimation<'a> {
         self.read_value("scales", crate::value::read_half3_array)
     }
 
-    #[doc = "[`Self::scales`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::scales`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn scales_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<::alloc::vec::Vec<[f32; 3]>> {
-        self.read_value_at("scales", time, interp, crate::value::read_half3_array)
+    pub fn scales_at(&self, time: ::layerstack::Time) -> Option<::alloc::vec::Vec<[f32; 3]>> {
+        self.read_value_at("scales", time, crate::value::read_half3_array)
     }
 
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -547,19 +535,13 @@ impl<'a> SkelAnimation<'a> {
         self.read_value("translations", crate::value::read_float3_array_shared)
     }
 
-    #[doc = "[`Self::translations`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::translations`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn translations_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>> {
-        self.read_value_at(
-            "translations",
-            time,
-            interp,
-            crate::value::read_float3_array_shared,
-        )
+        self.read_value_at("translations", time, crate::value::read_float3_array_shared)
     }
 
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
@@ -611,7 +593,7 @@ impl SkelAnimationEdit {
     #[doc(alias = "CreateBlendShapesAttr")]
     pub fn set_blend_shapes(&self, edit: &mut SchemaEdit<'_>, value: &[&str]) -> &Self {
         let value = crate::value::write_array(value, edit.tokens(), crate::value::write_token);
-        self.write_value(edit, "blendShapes", None, value);
+        self.write_value(edit, "blendShapes", value);
         self
     }
 
@@ -625,7 +607,7 @@ impl SkelAnimationEdit {
     #[doc(alias = "CreateBlendShapeWeightsAttr")]
     pub fn set_blend_shape_weights(&self, edit: &mut SchemaEdit<'_>, value: &[f32]) -> &Self {
         let value = crate::value::write_float_array(value, edit.tokens());
-        self.write_value(edit, "blendShapeWeights", None, value);
+        self.write_value(edit, "blendShapeWeights", value);
         self
     }
 
@@ -637,7 +619,7 @@ impl SkelAnimationEdit {
         value: &[f32],
     ) -> &Self {
         let value = crate::value::write_float_array(value, edit.tokens());
-        self.write_value(edit, "blendShapeWeights", Some(time), value);
+        self.write_value_at(edit, "blendShapeWeights", time, value);
         self
     }
 
@@ -648,7 +630,7 @@ impl SkelAnimationEdit {
         value: ::alloc::vec::Vec<f32>,
     ) -> &Self {
         let value = crate::value::write_float_array_owned(value, edit.tokens());
-        self.write_value(edit, "blendShapeWeights", None, value);
+        self.write_value(edit, "blendShapeWeights", value);
         self
     }
 
@@ -660,7 +642,7 @@ impl SkelAnimationEdit {
         value: ::alloc::vec::Vec<f32>,
     ) -> &Self {
         let value = crate::value::write_float_array_owned(value, edit.tokens());
-        self.write_value(edit, "blendShapeWeights", Some(time), value);
+        self.write_value_at(edit, "blendShapeWeights", time, value);
         self
     }
 
@@ -671,7 +653,7 @@ impl SkelAnimationEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f32>>,
     ) -> &Self {
         let value = crate::value::write_float_array_shared(value, edit.tokens());
-        self.write_value(edit, "blendShapeWeights", None, value);
+        self.write_value(edit, "blendShapeWeights", value);
         self
     }
 
@@ -683,7 +665,7 @@ impl SkelAnimationEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f32>>,
     ) -> &Self {
         let value = crate::value::write_float_array_shared(value, edit.tokens());
-        self.write_value(edit, "blendShapeWeights", Some(time), value);
+        self.write_value_at(edit, "blendShapeWeights", time, value);
         self
     }
 
@@ -695,7 +677,7 @@ impl SkelAnimationEdit {
     #[doc(alias = "CreateJointsAttr")]
     pub fn set_joints(&self, edit: &mut SchemaEdit<'_>, value: &[&str]) -> &Self {
         let value = crate::value::write_array(value, edit.tokens(), crate::value::write_token);
-        self.write_value(edit, "joints", None, value);
+        self.write_value(edit, "joints", value);
         self
     }
 
@@ -709,7 +691,7 @@ impl SkelAnimationEdit {
     #[doc(alias = "CreateRotationsAttr")]
     pub fn set_rotations(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 4]]) -> &Self {
         let value = crate::value::write_quatf_array(value, edit.tokens());
-        self.write_value(edit, "rotations", None, value);
+        self.write_value(edit, "rotations", value);
         self
     }
 
@@ -721,7 +703,7 @@ impl SkelAnimationEdit {
         value: &[[f32; 4]],
     ) -> &Self {
         let value = crate::value::write_quatf_array(value, edit.tokens());
-        self.write_value(edit, "rotations", Some(time), value);
+        self.write_value_at(edit, "rotations", time, value);
         self
     }
 
@@ -732,7 +714,7 @@ impl SkelAnimationEdit {
         value: ::alloc::vec::Vec<[f32; 4]>,
     ) -> &Self {
         let value = crate::value::write_quatf_array_owned(value, edit.tokens());
-        self.write_value(edit, "rotations", None, value);
+        self.write_value(edit, "rotations", value);
         self
     }
 
@@ -744,7 +726,7 @@ impl SkelAnimationEdit {
         value: ::alloc::vec::Vec<[f32; 4]>,
     ) -> &Self {
         let value = crate::value::write_quatf_array_owned(value, edit.tokens());
-        self.write_value(edit, "rotations", Some(time), value);
+        self.write_value_at(edit, "rotations", time, value);
         self
     }
 
@@ -755,7 +737,7 @@ impl SkelAnimationEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 4]>>,
     ) -> &Self {
         let value = crate::value::write_quatf_array_shared(value, edit.tokens());
-        self.write_value(edit, "rotations", None, value);
+        self.write_value(edit, "rotations", value);
         self
     }
 
@@ -767,7 +749,7 @@ impl SkelAnimationEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 4]>>,
     ) -> &Self {
         let value = crate::value::write_quatf_array_shared(value, edit.tokens());
-        self.write_value(edit, "rotations", Some(time), value);
+        self.write_value_at(edit, "rotations", time, value);
         self
     }
 
@@ -779,14 +761,14 @@ impl SkelAnimationEdit {
     #[doc(alias = "CreateScalesAttr")]
     pub fn set_scales(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 3]]) -> &Self {
         let value = crate::value::write_half3_array(value, edit.tokens());
-        self.write_value(edit, "scales", None, value);
+        self.write_value(edit, "scales", value);
         self
     }
 
     #[doc = "[`Self::set_scales`] as a time sample at the time code `time`."]
     pub fn set_scales_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &[[f32; 3]]) -> &Self {
         let value = crate::value::write_half3_array(value, edit.tokens());
-        self.write_value(edit, "scales", Some(time), value);
+        self.write_value_at(edit, "scales", time, value);
         self
     }
 
@@ -800,7 +782,7 @@ impl SkelAnimationEdit {
     #[doc(alias = "CreateTranslationsAttr")]
     pub fn set_translations(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 3]]) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(edit, "translations", None, value);
+        self.write_value(edit, "translations", value);
         self
     }
 
@@ -812,7 +794,7 @@ impl SkelAnimationEdit {
         value: &[[f32; 3]],
     ) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(edit, "translations", Some(time), value);
+        self.write_value_at(edit, "translations", time, value);
         self
     }
 
@@ -823,7 +805,7 @@ impl SkelAnimationEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(edit, "translations", None, value);
+        self.write_value(edit, "translations", value);
         self
     }
 
@@ -835,7 +817,7 @@ impl SkelAnimationEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(edit, "translations", Some(time), value);
+        self.write_value_at(edit, "translations", time, value);
         self
     }
 
@@ -846,7 +828,7 @@ impl SkelAnimationEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(edit, "translations", None, value);
+        self.write_value(edit, "translations", value);
         self
     }
 
@@ -858,7 +840,7 @@ impl SkelAnimationEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(edit, "translations", Some(time), value);
+        self.write_value_at(edit, "translations", time, value);
         self
     }
 }
@@ -997,17 +979,12 @@ impl<'a> SkelBindingApi<'a> {
         )
     }
 
-    #[doc = "[`Self::geom_bind_transform`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::geom_bind_transform`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn geom_bind_transform_at(
-        &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
-    ) -> Option<[[f64; 4]; 4]> {
+    pub fn geom_bind_transform_at(&self, time: ::layerstack::Time) -> Option<[[f64; 4]; 4]> {
         self.read_value_at(
             "primvars:skel:geomBindTransform",
             time,
-            interp,
             crate::value::read_matrix4d,
         )
     }
@@ -1031,17 +1008,15 @@ impl<'a> SkelBindingApi<'a> {
         )
     }
 
-    #[doc = "[`Self::joint_indices`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::joint_indices`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn joint_indices_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<i32>>> {
         self.read_value_at(
             "primvars:skel:jointIndices",
             time,
-            interp,
             crate::value::read_int_array_shared,
         )
     }
@@ -1078,17 +1053,15 @@ impl<'a> SkelBindingApi<'a> {
         )
     }
 
-    #[doc = "[`Self::joint_weights`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::joint_weights`] at `time`, interpolating time samples as it says."]
     #[must_use]
     pub fn joint_weights_at(
         &self,
-        time: f64,
-        interp: ::layerstack::InterpolationType,
+        time: ::layerstack::Time,
     ) -> Option<::alloc::sync::Arc<::alloc::vec::Vec<f32>>> {
         self.read_value_at(
             "primvars:skel:jointWeights",
             time,
-            interp,
             crate::value::read_float_array_shared,
         )
     }
@@ -1260,7 +1233,7 @@ impl SkelBindingApiEdit {
         value: [[f64; 4]; 4],
     ) -> &Self {
         let value = crate::value::write_matrix4d(value, edit.tokens());
-        self.write_value(edit, "primvars:skel:geomBindTransform", None, value);
+        self.write_value(edit, "primvars:skel:geomBindTransform", value);
         self
     }
 
@@ -1272,7 +1245,7 @@ impl SkelBindingApiEdit {
         value: [[f64; 4]; 4],
     ) -> &Self {
         let value = crate::value::write_matrix4d(value, edit.tokens());
-        self.write_value(edit, "primvars:skel:geomBindTransform", Some(time), value);
+        self.write_value_at(edit, "primvars:skel:geomBindTransform", time, value);
         self
     }
 
@@ -1286,7 +1259,7 @@ impl SkelBindingApiEdit {
     #[doc(alias = "CreateJointIndicesAttr")]
     pub fn set_joint_indices(&self, edit: &mut SchemaEdit<'_>, value: &[i32]) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value(edit, "primvars:skel:jointIndices", None, value);
+        self.write_value(edit, "primvars:skel:jointIndices", value);
         self
     }
 
@@ -1298,7 +1271,7 @@ impl SkelBindingApiEdit {
         value: &[i32],
     ) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value(edit, "primvars:skel:jointIndices", Some(time), value);
+        self.write_value_at(edit, "primvars:skel:jointIndices", time, value);
         self
     }
 
@@ -1309,7 +1282,7 @@ impl SkelBindingApiEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value(edit, "primvars:skel:jointIndices", None, value);
+        self.write_value(edit, "primvars:skel:jointIndices", value);
         self
     }
 
@@ -1321,7 +1294,7 @@ impl SkelBindingApiEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value(edit, "primvars:skel:jointIndices", Some(time), value);
+        self.write_value_at(edit, "primvars:skel:jointIndices", time, value);
         self
     }
 
@@ -1332,7 +1305,7 @@ impl SkelBindingApiEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value(edit, "primvars:skel:jointIndices", None, value);
+        self.write_value(edit, "primvars:skel:jointIndices", value);
         self
     }
 
@@ -1344,7 +1317,7 @@ impl SkelBindingApiEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value(edit, "primvars:skel:jointIndices", Some(time), value);
+        self.write_value_at(edit, "primvars:skel:jointIndices", time, value);
         self
     }
 
@@ -1358,7 +1331,7 @@ impl SkelBindingApiEdit {
     #[doc(alias = "CreateJointWeightsAttr")]
     pub fn set_joint_weights(&self, edit: &mut SchemaEdit<'_>, value: &[f32]) -> &Self {
         let value = crate::value::write_float_array(value, edit.tokens());
-        self.write_value(edit, "primvars:skel:jointWeights", None, value);
+        self.write_value(edit, "primvars:skel:jointWeights", value);
         self
     }
 
@@ -1370,7 +1343,7 @@ impl SkelBindingApiEdit {
         value: &[f32],
     ) -> &Self {
         let value = crate::value::write_float_array(value, edit.tokens());
-        self.write_value(edit, "primvars:skel:jointWeights", Some(time), value);
+        self.write_value_at(edit, "primvars:skel:jointWeights", time, value);
         self
     }
 
@@ -1381,7 +1354,7 @@ impl SkelBindingApiEdit {
         value: ::alloc::vec::Vec<f32>,
     ) -> &Self {
         let value = crate::value::write_float_array_owned(value, edit.tokens());
-        self.write_value(edit, "primvars:skel:jointWeights", None, value);
+        self.write_value(edit, "primvars:skel:jointWeights", value);
         self
     }
 
@@ -1393,7 +1366,7 @@ impl SkelBindingApiEdit {
         value: ::alloc::vec::Vec<f32>,
     ) -> &Self {
         let value = crate::value::write_float_array_owned(value, edit.tokens());
-        self.write_value(edit, "primvars:skel:jointWeights", Some(time), value);
+        self.write_value_at(edit, "primvars:skel:jointWeights", time, value);
         self
     }
 
@@ -1404,7 +1377,7 @@ impl SkelBindingApiEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f32>>,
     ) -> &Self {
         let value = crate::value::write_float_array_shared(value, edit.tokens());
-        self.write_value(edit, "primvars:skel:jointWeights", None, value);
+        self.write_value(edit, "primvars:skel:jointWeights", value);
         self
     }
 
@@ -1416,7 +1389,7 @@ impl SkelBindingApiEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f32>>,
     ) -> &Self {
         let value = crate::value::write_float_array_shared(value, edit.tokens());
-        self.write_value(edit, "primvars:skel:jointWeights", Some(time), value);
+        self.write_value_at(edit, "primvars:skel:jointWeights", time, value);
         self
     }
 
@@ -1432,7 +1405,7 @@ impl SkelBindingApiEdit {
         value: SkelBindingApiSkinningMethod,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "primvars:skel:skinningMethod", None, value);
+        self.write_value(edit, "primvars:skel:skinningMethod", value);
         self
     }
 
@@ -1484,7 +1457,7 @@ impl SkelBindingApiEdit {
     #[doc(alias = "CreateBlendShapesAttr")]
     pub fn set_blend_shapes(&self, edit: &mut SchemaEdit<'_>, value: &[&str]) -> &Self {
         let value = crate::value::write_array(value, edit.tokens(), crate::value::write_token);
-        self.write_value(edit, "skel:blendShapes", None, value);
+        self.write_value(edit, "skel:blendShapes", value);
         self
     }
 
@@ -1536,7 +1509,7 @@ impl SkelBindingApiEdit {
     #[doc(alias = "CreateJointsAttr")]
     pub fn set_joints(&self, edit: &mut SchemaEdit<'_>, value: &[&str]) -> &Self {
         let value = crate::value::write_array(value, edit.tokens(), crate::value::write_token);
-        self.write_value(edit, "skel:joints", None, value);
+        self.write_value(edit, "skel:joints", value);
         self
     }
 
@@ -1870,7 +1843,7 @@ impl SkeletonEdit {
     #[doc(alias = "CreateBindTransformsAttr")]
     pub fn set_bind_transforms(&self, edit: &mut SchemaEdit<'_>, value: &[[[f64; 4]; 4]]) -> &Self {
         let value = crate::value::write_matrix4d_array(value, edit.tokens());
-        self.write_value(edit, "bindTransforms", None, value);
+        self.write_value(edit, "bindTransforms", value);
         self
     }
 
@@ -1882,7 +1855,7 @@ impl SkeletonEdit {
     #[doc(alias = "CreateJointNamesAttr")]
     pub fn set_joint_names(&self, edit: &mut SchemaEdit<'_>, value: &[&str]) -> &Self {
         let value = crate::value::write_array(value, edit.tokens(), crate::value::write_token);
-        self.write_value(edit, "jointNames", None, value);
+        self.write_value(edit, "jointNames", value);
         self
     }
 
@@ -1894,7 +1867,7 @@ impl SkeletonEdit {
     #[doc(alias = "CreateJointsAttr")]
     pub fn set_joints(&self, edit: &mut SchemaEdit<'_>, value: &[&str]) -> &Self {
         let value = crate::value::write_array(value, edit.tokens(), crate::value::write_token);
-        self.write_value(edit, "joints", None, value);
+        self.write_value(edit, "joints", value);
         self
     }
 
@@ -1906,7 +1879,7 @@ impl SkeletonEdit {
     #[doc(alias = "CreateRestTransformsAttr")]
     pub fn set_rest_transforms(&self, edit: &mut SchemaEdit<'_>, value: &[[[f64; 4]; 4]]) -> &Self {
         let value = crate::value::write_matrix4d_array(value, edit.tokens());
-        self.write_value(edit, "restTransforms", None, value);
+        self.write_value(edit, "restTransforms", value);
         self
     }
 }

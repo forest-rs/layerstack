@@ -19,8 +19,8 @@ use std::path::{Path, PathBuf};
 use layerstack::interner::TokenInterner;
 use layerstack::path::PathInterner;
 use layerstack::{
-    AssetResolveError, AssetResolver, FieldValue, InMemoryStore, InterpolationType, LayerId,
-    PropertyPath, ResolvedAsset, ResolvedValue, Stage, StageOptions, Value, Variability,
+    AssetResolveError, AssetResolver, FieldValue, InMemoryStore, LayerId, PropertyPath,
+    ResolvedAsset, ResolvedValue, Stage, StageOptions, Time, Value, Variability,
 };
 use layerstack_conformance::authored::{Names, dump_layer, render_value};
 use layerstack_conformance::workspace_root;
@@ -231,13 +231,13 @@ fn probe_keeps_every_authored_slot() {
     assert_eq!(default_of(b), Some(Value::Float(4.0)));
     assert_eq!(
         stage
-            .resolve_property_path_at_time(a, 1.0, InterpolationType::Held)
+            .resolve_property_path_at_time(a, Time::held(1.0))
             .map(|r| r.value),
         Some(Value::Float(3.0))
     );
     assert_eq!(
         stage
-            .resolve_property_path_at_time(b, 1.0, InterpolationType::Held)
+            .resolve_property_path_at_time(b, Time::held(1.0))
             .map(|r| r.value),
         Some(Value::Float(4.0)),
         "a connection does not replace the attribute's value"
@@ -260,7 +260,7 @@ fn probe_keeps_every_authored_slot() {
     assert_eq!(stage.resolve_field_path(a), None, "no default left on `a`");
     assert_eq!(
         stage
-            .resolve_property_path_at_time(a, 0.0, InterpolationType::Held)
+            .resolve_property_path_at_time(a, Time::held(0.0))
             .map(|r| r.value),
         Some(Value::Float(2.0)),
         "the samples survive removing the default"

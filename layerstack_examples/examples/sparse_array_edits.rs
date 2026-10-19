@@ -13,8 +13,8 @@ use layerstack::doc::{InMemoryStore, Layer, LayerId};
 use layerstack::interner::TokenInterner;
 use layerstack::path::PathInterner;
 use layerstack::{
-    AssetResolveError, AssetResolver, InterpolationType, LayerOffset, ResolvedAsset, Stage,
-    StageOptions, SublayerEntry, Value,
+    AssetResolveError, AssetResolver, LayerOffset, ResolvedAsset, Stage, StageOptions,
+    SublayerEntry, Time, Value,
 };
 use layerstack_usda::emit;
 use layerstack_usda::lower;
@@ -145,10 +145,10 @@ over "Mesh" {
     );
 
     let animated_mid = stage
-        .resolve_property_path_at_time(animated, 2.5, InterpolationType::Held)
+        .resolve_property_path_at_time(animated, Time::held(2.5))
         .expect("held sparse sample at t=2.5");
     let animated_reset = stage
-        .resolve_property_path_at_time(animated, 3.5, InterpolationType::Held)
+        .resolve_property_path_at_time(animated, Time::held(3.5))
         .expect("held sparse sample at t=3.5");
 
     println!("Held time-sampled sparse edits over the same dense base:");

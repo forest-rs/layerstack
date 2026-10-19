@@ -37,13 +37,7 @@ impl Scene<'_> {
             if !prim.has_authored_value(name) {
                 continue;
             }
-            let value = match time {
-                Time::Default => prim.read_value(name, &read),
-                Time::At {
-                    code,
-                    interpolation,
-                } => prim.read_value_at(name, code, interpolation, &read),
-            };
+            let value = prim.read_value_at(name, time, &read);
             if let Some(value) = value {
                 return value;
             }

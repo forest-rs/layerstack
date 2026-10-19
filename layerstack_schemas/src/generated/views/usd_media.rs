@@ -356,10 +356,10 @@ impl<'a> SpatialAudio<'a> {
         self.read_value("gain", crate::value::read_double)
     }
 
-    #[doc = "[`Self::gain`] at the time code `time`, interpolated with `interp`."]
+    #[doc = "[`Self::gain`] at `time`, interpolating time samples as it says."]
     #[must_use]
-    pub fn gain_at(&self, time: f64, interp: ::layerstack::InterpolationType) -> Option<f64> {
-        self.read_value_at("gain", time, interp, crate::value::read_double)
+    pub fn gain_at(&self, time: ::layerstack::Time) -> Option<f64> {
+        self.read_value_at("gain", time, crate::value::read_double)
     }
 
     /// The USD name of [`Self::media_offset`].
@@ -444,7 +444,7 @@ impl SpatialAudioEdit {
     #[doc(alias = "CreateAuralModeAttr")]
     pub fn set_aural_mode(&self, edit: &mut SchemaEdit<'_>, value: SpatialAudioAuralMode) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "auralMode", None, value);
+        self.write_value(edit, "auralMode", value);
         self
     }
 
@@ -456,7 +456,7 @@ impl SpatialAudioEdit {
     #[doc(alias = "CreateEndTimeAttr")]
     pub fn set_end_time(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
         let value = crate::value::write_timecode(value, edit.tokens());
-        self.write_value(edit, "endTime", None, value);
+        self.write_value(edit, "endTime", value);
         self
     }
 
@@ -468,7 +468,7 @@ impl SpatialAudioEdit {
     #[doc(alias = "CreateFilePathAttr")]
     pub fn set_file_path(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value(edit, "filePath", None, value);
+        self.write_value(edit, "filePath", value);
         self
     }
 
@@ -480,14 +480,14 @@ impl SpatialAudioEdit {
     #[doc(alias = "CreateGainAttr")]
     pub fn set_gain(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "gain", None, value);
+        self.write_value(edit, "gain", value);
         self
     }
 
     #[doc = "[`Self::set_gain`] as a time sample at the time code `time`."]
     pub fn set_gain_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "gain", Some(time), value);
+        self.write_value_at(edit, "gain", time, value);
         self
     }
 
@@ -499,7 +499,7 @@ impl SpatialAudioEdit {
     #[doc(alias = "CreateMediaOffsetAttr")]
     pub fn set_media_offset(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "mediaOffset", None, value);
+        self.write_value(edit, "mediaOffset", value);
         self
     }
 
@@ -515,7 +515,7 @@ impl SpatialAudioEdit {
         value: SpatialAudioPlaybackMode,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "playbackMode", None, value);
+        self.write_value(edit, "playbackMode", value);
         self
     }
 
@@ -527,7 +527,7 @@ impl SpatialAudioEdit {
     #[doc(alias = "CreateStartTimeAttr")]
     pub fn set_start_time(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
         let value = crate::value::write_timecode(value, edit.tokens());
-        self.write_value(edit, "startTime", None, value);
+        self.write_value(edit, "startTime", value);
         self
     }
 }

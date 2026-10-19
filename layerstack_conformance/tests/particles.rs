@@ -129,7 +129,7 @@ fn builtin_particle_apis_author_read_and_change_precision_with_undo() {
     assert_eq!(
         splat
             .particle_field_position_attribute_api()
-            .positions_at(2., layerstack::InterpolationType::Held),
+            .positions_at(layerstack::Time::held(2.)),
         Some(vec![[4., 5., 6.]].into())
     );
     live.apply(&mut store, &applied.inverse).unwrap();

@@ -588,7 +588,7 @@ impl<B: Storage> StageDocument<B> {
             ));
         }
         let mut catalog = Catalog {
-            reserved: store.layers.keys().copied().collect(),
+            reserved: store.layer_ids().into_iter().collect(),
             ..Default::default()
         };
         let root = catalog.allocate()?;
@@ -690,7 +690,7 @@ impl<B: Storage> StageDocument<B> {
         }
         let import_policy = loading.import_policy;
         let mut catalog = Catalog {
-            reserved: store.layers.keys().copied().collect(),
+            reserved: store.layer_ids().into_iter().collect(),
             ..Default::default()
         };
         let mut reader = Reader::new(
@@ -775,7 +775,7 @@ impl<B: Storage> StageDocument<B> {
                 return Ok(report);
             }
             let mut catalog = self.catalog.clone();
-            catalog.reserved.extend(self.store.layers.keys().copied());
+            catalog.reserved.extend(self.store.layer_ids());
             let mut reader = Reader::new(
                 &mut self.storage,
                 &mut catalog,
@@ -833,7 +833,7 @@ impl<B: Storage> StageDocument<B> {
         anchor: Option<LayerId>,
     ) -> Result<(LayerId, LoadReport), IoError> {
         let mut catalog = self.catalog.clone();
-        catalog.reserved.extend(self.store.layers.keys().copied());
+        catalog.reserved.extend(self.store.layer_ids());
         let mut reader = Reader::new(
             &mut self.storage,
             &mut catalog,
@@ -948,9 +948,7 @@ impl<B: Storage> StageDocument<B> {
     }
     /// Creates an anonymous layer without colliding with imported identities.
     pub fn create_anonymous_layer(&mut self) -> Result<LayerId, IoError> {
-        self.catalog
-            .reserved
-            .extend(self.store.layers.keys().copied());
+        self.catalog.reserved.extend(self.store.layer_ids());
         let id = self.catalog.allocate()?;
         self.store.insert_layer(Layer::new(id));
         Ok(id)
@@ -991,7 +989,7 @@ impl<B: Storage> StageDocument<B> {
     pub fn save_layers(&mut self, layers: &[LayerId]) -> SaveReport {
         let mut report = SaveReport::default();
         for id in layers.iter().copied().collect::<BTreeSet<_>>() {
-            if !self.store.layers.contains_key(&id) {
+            if !self.store.contains_layer(id) {
                 report.failures.push(LayerFailure {
                     layer: id,
                     error: IoError::new(IoErrorKind::MissingLayer, "selected layer is absent"),
@@ -1026,7 +1024,7 @@ impl<B: Storage> StageDocument<B> {
                 Ok(()) => {
                     self.catalog
                         .saved
-                        .insert(id, self.store.layers[&id].generation());
+                        .insert(id, self.store.layer(id).unwrap().generation());
                     report.saved.push(id);
                 }
                 Err(error) => report.failures.push(LayerFailure { layer: id, error }),
@@ -1191,7 +1189,7 @@ impl<'a, B: Storage> Reader<'a, B> {
         if !self
             .pending
             .iter()
-            .chain(store.layers.values())
+            .chain(store.layers())
             .any(authors_expressions)
         {
             return Ok(());
@@ -1291,12 +1289,12 @@ impl<'a, B: Storage> Reader<'a, B> {
         for id in clean_anchors {
             self.catalog
                 .saved
-                .insert(id, store.layers[&id].generation());
+                .insert(id, store.layer(id).unwrap().generation());
         }
         for &id in &layers {
             self.catalog
                 .saved
-                .insert(id, store.layers[&id].generation());
+                .insert(id, store.layer(id).unwrap().generation());
         }
         LoadReport {
             layers: layers.into_iter().collect(),
@@ -2029,7 +2027,7 @@ struct Overlay<'a> {
     store: &'a InMemoryStore,
     layers: &'a [Layer],
     /// Where each of `layers` is, by ID: the last one read for an ID wins.
-    index: layerstack::HashMap<LayerId, usize>,
+    index: hashbrown::HashMap<LayerId, usize>,
     bindings: &'a BTreeMap<(LayerId, String), LayerId>,
 }
 impl LayerStore for Overlay<'_> {

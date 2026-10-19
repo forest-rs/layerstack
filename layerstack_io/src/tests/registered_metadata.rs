@@ -73,17 +73,25 @@ fn stage_registry_types_initial_recursive_explicit_reload_and_package_reads() {
     let base = document.catalog.ids["base.usda"];
     let asset = document.catalog.ids["asset.usda"];
     assert_eq!(
-        scale(&document.store.layers[&base], &document.store, "/P"),
+        scale(document.store.layer(base).unwrap(), &document.store, "/P"),
         FieldValue::Value(Value::Float(1.))
     );
     assert_eq!(
-        scale(&document.store.layers[&asset], &document.store, "/Source"),
+        scale(
+            document.store.layer(asset).unwrap(),
+            &document.store,
+            "/Source"
+        ),
         FieldValue::Value(Value::Float(2.))
     );
     let (extra, report) = document.load_asset("extra.usda", None).unwrap();
     assert!(report.diagnostics.is_empty());
     assert_eq!(
-        scale(&document.store.layers[&extra], &document.store, "/Extra"),
+        scale(
+            document.store.layer(extra).unwrap(),
+            &document.store,
+            "/Extra"
+        ),
         FieldValue::Value(Value::Float(4.))
     );
     document.storage.files.insert(
@@ -92,7 +100,7 @@ fn stage_registry_types_initial_recursive_explicit_reload_and_package_reads() {
     );
     document.reload(ReloadPolicy::DiscardDirty).unwrap();
     assert_eq!(
-        scale(&document.store.layers[&base], &document.store, "/P"),
+        scale(document.store.layer(base).unwrap(), &document.store, "/P"),
         FieldValue::Value(Value::Float(7.))
     );
 
@@ -134,7 +142,7 @@ fn stage_registry_types_initial_recursive_explicit_reload_and_package_reads() {
         !document.catalog.ids.contains_key("metadata.usda"),
         "package preparation keeps import state isolated"
     );
-    let before = document.store.layers.clone();
+    let before: Vec<_> = document.store.layers().cloned().collect();
     document.storage.files.insert(
         "base.usda".into(),
         b"#usda 1.0\nover \"P\" (hostScale = \"bad\") {}\n".to_vec(),
@@ -147,7 +155,8 @@ fn stage_registry_types_initial_recursive_explicit_reload_and_package_reads() {
         IoErrorKind::Rejected
     );
     assert_eq!(
-        document.store.layers, before,
+        document.store.layers().cloned().collect::<Vec<_>>(),
+        before,
         "invalid metadata in a reload publishes no partial layer"
     );
 }

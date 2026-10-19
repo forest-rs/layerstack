@@ -116,10 +116,10 @@ fn render(
         )
         .unwrap();
     }
-    let mut ids: Vec<LayerId> = doc.store.layers.keys().copied().collect();
+    let mut ids: Vec<LayerId> = doc.store.layer_ids().into_iter().collect();
     ids.sort();
     for id in ids {
-        let layer = &doc.store.layers[&id];
+        let layer = &doc.store.layer(id).unwrap();
         writeln!(
             out,
             "layer {id:?} {:?} {:?}",

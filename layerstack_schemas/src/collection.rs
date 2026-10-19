@@ -34,11 +34,12 @@ use alloc::{
     vec::Vec,
 };
 
+use hashbrown::{HashMap, HashSet};
 use layerstack::path_expression::{
     ExpressionReference, MatchResult, MatcherError, ParseError, PathExpression, PathMatcher,
     ReferenceProblem, ReferenceResolver, Searcher,
 };
-use layerstack::{HashMap, HashSet, Path, PathId, PropertyPath, TargetPath, Value};
+use layerstack::{Path, PathId, PropertyPath, TargetPath, Value};
 
 use crate::predicate::{CollectionPredicate, CollectionPredicates, is_abstract, is_defined};
 use crate::usd::{CollectionApi, CollectionApiExpansionRule, CollectionApiMode};

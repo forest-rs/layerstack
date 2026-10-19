@@ -170,7 +170,7 @@ fn main() {
             .count();
         println!(
             "{{\"run\":{run},\"layers\":{},\"bytes\":{},\"prims\":{prims},\"instances\":{instances},\"import_ms\":{import_ms:.3},\"compose_ms\":{compose_ms:.3}}}",
-            store.layers.len(),
+            store.layer_count(),
             files.bytes
         );
         if let Some(directory) = &audit {
@@ -183,7 +183,7 @@ fn main() {
                     "manifest requires one path per line"
                 );
                 let bytes = layerstack_usdc::writer::save_layer(
-                    &store.layers[id],
+                    store.layer(*id).unwrap(),
                     &store.tokens,
                     &store.paths,
                 )

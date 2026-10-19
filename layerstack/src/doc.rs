@@ -2093,6 +2093,51 @@ pub fn remove_field(fields: &mut Vec<FieldEntry>, name: TokenId) -> Option<Field
     Some(fields.remove(index).value)
 }
 
+/// The prim specs of a layer inside variant branches, by prim path
+/// ([`Layer::variant_prims`]): for each path, one spec per branch that
+/// authors it, each identified by its [`PrimSpec::outer_variant_sites`].
+///
+/// Paths come in no particular order; [`Layer::prim_specs_in_order`] lists
+/// every spec in namespace order. Two views are equal when they hold the
+/// same specs at the same paths, in the same order at each path.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct VariantPrims<'a>(&'a HashMap<PathId, Vec<PrimSpec>>);
+
+impl<'a> VariantPrims<'a> {
+    /// The specs at `path`, one per branch that authors it.
+    #[must_use]
+    pub fn get(self, path: &PathId) -> Option<&'a [PrimSpec]> {
+        self.0.get(path).map(Vec::as_slice)
+    }
+
+    /// The number of paths.
+    #[must_use]
+    pub fn len(self) -> usize {
+        self.0.len()
+    }
+
+    /// Whether no variant branch authors a prim spec.
+    #[must_use]
+    pub fn is_empty(self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// The paths and their specs, in no particular order.
+    pub fn iter(self) -> impl ExactSizeIterator<Item = (&'a PathId, &'a [PrimSpec])> {
+        self.0.iter().map(|(path, specs)| (path, specs.as_slice()))
+    }
+
+    /// The paths, in no particular order.
+    pub fn keys(self) -> impl ExactSizeIterator<Item = &'a PathId> {
+        self.0.keys()
+    }
+
+    /// The specs at each path, in no particular order of paths.
+    pub fn values(self) -> impl ExactSizeIterator<Item = &'a [PrimSpec]> {
+        self.0.values().map(Vec::as_slice)
+    }
+}
+
 /// The prim specs of a layer outside variant branches, keyed by prim path
 /// ([`Layer::prims`]), read and changed as a map of them.
 ///
@@ -2104,17 +2149,67 @@ pub struct LayerPrims {
     specs: HashMap<PathId, Box<PrimSpec>>,
 }
 
-/// An iterator over the paths and specs of a [`LayerPrims`].
-pub type LayerPrimsIter<'a> = core::iter::Map<
-    hashbrown::hash_map::Iter<'a, PathId, Box<PrimSpec>>,
-    fn((&'a PathId, &'a Box<PrimSpec>)) -> (&'a PathId, &'a PrimSpec),
->;
+/// An iterator over the paths and specs of a [`LayerPrims`], in no
+/// particular order.
+#[derive(Clone, Debug)]
+pub struct LayerPrimsIter<'a>(hashbrown::hash_map::Iter<'a, PathId, Box<PrimSpec>>);
 
-/// An iterator over the paths and specs of a [`LayerPrims`], for editing.
-pub type LayerPrimsIterMut<'a> = core::iter::Map<
-    hashbrown::hash_map::IterMut<'a, PathId, Box<PrimSpec>>,
-    fn((&'a PathId, &'a mut Box<PrimSpec>)) -> (&'a PathId, &'a mut PrimSpec),
->;
+impl<'a> Iterator for LayerPrimsIter<'a> {
+    type Item = (&'a PathId, &'a PrimSpec);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next().map(|(path, spec)| (path, &**spec))
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.0.size_hint()
+    }
+}
+
+impl ExactSizeIterator for LayerPrimsIter<'_> {}
+
+impl core::iter::FusedIterator for LayerPrimsIter<'_> {}
+
+/// An iterator over the paths and specs of a [`LayerPrims`], for editing,
+/// in no particular order.
+#[derive(Debug)]
+pub struct LayerPrimsIterMut<'a>(hashbrown::hash_map::IterMut<'a, PathId, Box<PrimSpec>>);
+
+impl<'a> Iterator for LayerPrimsIterMut<'a> {
+    type Item = (&'a PathId, &'a mut PrimSpec);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next().map(|(path, spec)| (path, &mut **spec))
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.0.size_hint()
+    }
+}
+
+impl ExactSizeIterator for LayerPrimsIterMut<'_> {}
+
+impl core::iter::FusedIterator for LayerPrimsIterMut<'_> {}
+
+/// The paths and specs a [`LayerPrims`] held, in no particular order.
+#[derive(Debug)]
+pub struct LayerPrimsIntoIter(hashbrown::hash_map::IntoIter<PathId, Box<PrimSpec>>);
+
+impl Iterator for LayerPrimsIntoIter {
+    type Item = (PathId, PrimSpec);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next().map(|(path, spec)| (path, *spec))
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.0.size_hint()
+    }
+}
+
+impl ExactSizeIterator for LayerPrimsIntoIter {}
+
+impl core::iter::FusedIterator for LayerPrimsIntoIter {}
 
 impl LayerPrims {
     /// The spec at `path`, if there is one.
@@ -2148,14 +2243,12 @@ impl LayerPrims {
 
     /// The paths and specs, in no particular order.
     pub fn iter(&self) -> LayerPrimsIter<'_> {
-        self.specs.iter().map(|(path, spec)| (path, &**spec))
+        LayerPrimsIter(self.specs.iter())
     }
 
     /// The paths and specs for editing, in no particular order.
     pub fn iter_mut(&mut self) -> LayerPrimsIterMut<'_> {
-        self.specs
-            .iter_mut()
-            .map(|(path, spec)| (path, &mut **spec))
+        LayerPrimsIterMut(self.specs.iter_mut())
     }
 
     /// The paths, in no particular order.
@@ -2232,13 +2325,10 @@ impl<'a> IntoIterator for &'a LayerPrims {
 
 impl IntoIterator for LayerPrims {
     type Item = (PathId, PrimSpec);
-    type IntoIter = core::iter::Map<
-        hashbrown::hash_map::IntoIter<PathId, Box<PrimSpec>>,
-        fn((PathId, Box<PrimSpec>)) -> (PathId, PrimSpec),
-    >;
+    type IntoIter = LayerPrimsIntoIter;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.specs.into_iter().map(|(path, spec)| (path, *spec))
+        LayerPrimsIntoIter(self.specs.into_iter())
     }
 }
 
@@ -2592,8 +2682,8 @@ impl Layer {
     /// Spec: AOUSD Core §7.3.6 (variant specs contain their own prim specs),
     /// §10.5 (only the selected variant contributes).
     #[must_use]
-    pub fn variant_prims(&self) -> &HashMap<PathId, Vec<PrimSpec>> {
-        &self.variant_prims
+    pub fn variant_prims(&self) -> VariantPrims<'_> {
+        VariantPrims(&self.variant_prims)
     }
 
     /// Every prim spec of this layer, those inside variant branches
@@ -2641,15 +2731,6 @@ impl Layer {
                 .then_with(|| site(x).cmp(&site(y)))
         });
         specs
-    }
-
-    /// Returns the variant branch prim specs for bulk editing.
-    ///
-    /// Records a structural change of the whole layer, as
-    /// [`Layer::prims_mut`] does.
-    pub fn variant_prims_mut(&mut self) -> &mut HashMap<PathId, Vec<PrimSpec>> {
-        self.touch_structure();
-        &mut self.variant_prims
     }
 
     /// The layer's time rate: authored `timeCodesPerSecond`, otherwise
@@ -3363,14 +3444,14 @@ pub struct InMemoryStore {
     pub tokens: TokenInterner,
     /// Shared path interner for all layers in the store.
     pub paths: PathInterner,
-    /// Layers keyed by [`LayerId`].
-    pub layers: HashMap<LayerId, Layer>,
+    /// Layers by id ([`Self::layer`], [`Self::layers`]): looked up on
+    /// every composition and query path, so kept hashed, and listed in id
+    /// order on demand.
+    pub(crate) layers: HashMap<LayerId, Layer>,
     /// The layers asset paths resolve to, by the layer each path is
     /// anchored to, then by path, for [`LayerStore::asset_layer`].
-    /// [`LayerId::UNRESOLVED`] records a confirmed missing asset. Use
-    /// [`Self::insert_asset_layer`] and [`Self::mark_asset_missing`] to make
-    /// binding changes visible to live-stage generation checks.
-    pub asset_layers: HashMap<LayerId, HashMap<Arc<str>, LayerId>>,
+    /// [`LayerId::UNRESOLVED`] records a confirmed missing asset.
+    pub(crate) asset_layers: HashMap<LayerId, HashMap<Arc<str>, LayerId>>,
 }
 
 impl InMemoryStore {
@@ -3410,6 +3491,79 @@ impl InMemoryStore {
                 .expect("layer structural generation exhausted");
         }
         self.layers.insert(layer.id, layer);
+    }
+
+    /// The layer `id`, if the store holds it.
+    #[must_use]
+    pub fn layer(&self, id: LayerId) -> Option<&Layer> {
+        self.layers.get(&id)
+    }
+
+    /// The layer `id` for editing, if the store holds it. Edits through
+    /// it are the host's: tell a live stage about them
+    /// ([`crate::LiveStage::notify_layer_edit`] and its siblings).
+    #[must_use]
+    pub fn layer_mut(&mut self, id: LayerId) -> Option<&mut Layer> {
+        self.layers.get_mut(&id)
+    }
+
+    /// Whether the store holds the layer `id`.
+    #[must_use]
+    pub fn contains_layer(&self, id: LayerId) -> bool {
+        self.layers.contains_key(&id)
+    }
+
+    /// The number of layers the store holds.
+    #[must_use]
+    pub fn layer_count(&self) -> usize {
+        self.layers.len()
+    }
+
+    /// The ids of the layers the store holds, in id order.
+    #[must_use]
+    pub fn layer_ids(&self) -> Vec<LayerId> {
+        let mut ids: Vec<LayerId> = self.layers.keys().copied().collect();
+        ids.sort_unstable();
+        ids
+    }
+
+    /// The layers the store holds, in id order.
+    pub fn layers(&self) -> impl Iterator<Item = &Layer> + '_ {
+        self.layer_ids()
+            .into_iter()
+            .filter_map(move |id| self.layers.get(&id))
+    }
+
+    /// Removes the layer `id`, returning it. Bindings that name it stay.
+    pub fn remove_layer(&mut self, id: LayerId) -> Option<Layer> {
+        self.layers.remove(&id)
+    }
+
+    /// Every recorded asset binding, `(anchor, asset path, layer)`, sorted
+    /// by anchor and path; [`LayerId::UNRESOLVED`] marks a confirmed missing
+    /// asset.
+    #[must_use]
+    pub fn asset_bindings(&self) -> Vec<(LayerId, Arc<str>, LayerId)> {
+        let mut bindings: Vec<_> = self
+            .asset_layers
+            .iter()
+            .flat_map(|(anchor, assets)| {
+                assets
+                    .iter()
+                    .map(|(path, layer)| (*anchor, path.clone(), *layer))
+            })
+            .collect();
+        bindings.sort_unstable();
+        bindings
+    }
+
+    /// Forgets every asset recorded missing, so composition asks for each
+    /// again (as `PcpCache::Reload` retries invalid assets). Bindings to
+    /// loaded layers stay.
+    pub fn forget_missing_assets(&mut self) {
+        for assets in self.asset_layers.values_mut() {
+            assets.retain(|_, layer| *layer != LayerId::UNRESOLVED);
+        }
     }
 
     /// Records that `asset_path`, anchored to the layer `anchor`, resolves
@@ -3929,8 +4083,6 @@ mod tests {
         step(&layer, "prim_mut", true);
         let _ = layer.prims_mut();
         step(&layer, "prims_mut", true);
-        let _ = layer.variant_prims_mut();
-        step(&layer, "variant_prims_mut", true);
         let _ = layer.sublayers_mut();
         step(&layer, "sublayers_mut", true);
         let _ = layer.relocates_mut();

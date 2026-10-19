@@ -6,7 +6,8 @@
 use super::{BoundingBox, PurposeBounds, Range3d};
 use crate::{gf, usd_geom::ImageablePurpose};
 use alloc::{vec, vec::Vec};
-use layerstack::{HashSet, PathId};
+use hashbrown::HashSet;
+use layerstack::PathId;
 
 pub(super) const MIN_CHILDREN: usize = 64;
 

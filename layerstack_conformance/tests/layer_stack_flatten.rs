@@ -77,7 +77,7 @@ fn properties(properties: &mut [PropertyEntry]) {
         fields(property.metadata.make_mut());
     }
 }
-fn variants(sets: &mut layerstack::HashMap<layerstack::TokenId, VariantSetSpec>, output: LayerId) {
+fn variants(sets: &mut hashbrown::HashMap<layerstack::TokenId, VariantSetSpec>, output: LayerId) {
     for set in sets.values_mut() {
         for variant in set.variants.values_mut() {
             fields(&mut variant.fields);

@@ -150,11 +150,7 @@ fn direct_source_edits_and_other_stages_need_no_query_session() {
         layerstack::PropertyType::parse("double").unwrap(),
     )
     .with_default(Value::Double(2.0));
-    store
-        .layers
-        .get_mut(&layer)
-        .unwrap()
-        .set_property(size, spec);
+    store.layer_mut(layer).unwrap().set_property(size, spec);
     assert_eq!(
         *a.view(&mut live, &mut store)
             .unwrap()
@@ -203,14 +199,17 @@ fn history_loss_is_explicit_and_refreshes_slow_queries() {
 #[test]
 fn replacement_and_recompose_paths_publish_without_manual_delivery() {
     let (mut store, layer, mut live, size) = fixture();
-    let mut replacement = store.layers[&layer].clone();
+    let mut replacement = store.layer(layer).unwrap().clone();
     replacement.prims_mut().clear();
     // Moving the stored layer's counters as clearing moved the replacement's
     // gives the replacement exactly the counters the stage last saw;
     // insert_layer must detect reload.
-    store.layers.get_mut(&layer).unwrap().touch();
+    store.layer_mut(layer).unwrap().touch();
     live.synchronize(&mut store);
-    assert_eq!(store.layers[&layer].generation(), replacement.generation());
+    assert_eq!(
+        store.layer(layer).unwrap().generation(),
+        replacement.generation()
+    );
     let mut cursor = live.change_cursor();
     let mut a = queries();
     let q = a.observe(Query::WorldBound(size.prim_path()));
@@ -226,7 +225,7 @@ fn replacement_and_recompose_paths_publish_without_manual_delivery() {
             .answer,
         QueryAnswer::WorldBound(Err(_))
     ));
-    store.layers.get_mut(&layer).unwrap().touch();
+    store.layer_mut(layer).unwrap().touch();
     live.notify_changed_layers(&store);
     live.recompose(&mut store);
     // Full rebuild reports the pseudo-root even for an empty stage.

@@ -99,7 +99,12 @@ fn main() {
         "shared opinion reaches client B"
     );
     assert_eq!(
-        store.layers[&LayerId(1)].property(prop).unwrap().default,
+        store
+            .layer(LayerId(1))
+            .unwrap()
+            .property(prop)
+            .unwrap()
+            .default,
         Some(Value::Double(1.0)),
         "shared and session edits leave the published root unchanged"
     );

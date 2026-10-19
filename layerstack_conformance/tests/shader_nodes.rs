@@ -46,14 +46,14 @@ fn every_node_default_and_port_type_matches_composed_cpp_definitions() {
         .iter()
         .map(|id| store.path(&format!("/{id}")))
         .collect();
-    let before = store.layers[&LayerId(1)].clone();
+    let before = store.layer(LayerId(1)).unwrap().clone();
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
     generated::author(&mut edit, &paths);
     let transaction = edit.finish();
     let applied = live.apply(&mut store, &transaction).unwrap();
     generated::compare(&Scene::new(live.stage(), &store), &paths, &oracle["nodes"]);
     live.apply(&mut store, &applied.inverse).unwrap();
-    assert_eq!(store.layers[&LayerId(1)], before);
+    assert_eq!(*store.layer(LayerId(1)).unwrap(), before);
 }
 
 #[test]
@@ -62,7 +62,7 @@ fn identifier_checks_defaults_connections_samples_and_undo_are_explicit() {
     let surface = store.path("/Surface");
     let texture = store.path("/Texture");
     let missing = store.path("/Missing");
-    let before = store.layers[&LayerId(1)].clone();
+    let before = store.layer(LayerId(1)).unwrap().clone();
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
     PreviewSurface::define(&mut edit, surface);
     UvTexture::define(&mut edit, texture);
@@ -127,7 +127,7 @@ fn identifier_checks_defaults_connections_samples_and_undo_are_explicit() {
     live.apply(&mut store, &blocked.inverse).unwrap();
     live.apply(&mut store, &edits.inverse).unwrap();
     live.apply(&mut store, &applied.inverse).unwrap();
-    assert_eq!(store.layers[&LayerId(1)], before);
+    assert_eq!(*store.layer(LayerId(1)).unwrap(), before);
 }
 
 #[test]
@@ -167,8 +167,7 @@ fn defining_a_node_overrides_a_weaker_source_asset_implementation() {
     );
     store.insert_layer(weak);
     store
-        .layers
-        .get_mut(&LayerId(1))
+        .layer_mut(LayerId(1))
         .unwrap()
         .sublayers_mut()
         .push(layerstack::SublayerEntry::new(LayerId(2)));

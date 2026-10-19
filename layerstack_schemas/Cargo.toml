@@ -54,6 +54,8 @@ simd = ["usd-skel", "dep:fearless_simd"]
 
 [dependencies]
 layerstack = { workspace = true }
+# Hash maps for internal indexes; `layerstack` already depends on it.
+hashbrown = { workspace = true }
 # Sines, cosines, arccosines and square roots for transforms in `no_std`;
 # `layerstack` already depends on it.
 fearless_simd = { optional = true, workspace = true }

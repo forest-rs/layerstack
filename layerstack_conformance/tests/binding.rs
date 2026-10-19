@@ -391,8 +391,7 @@ fn binding_caches_follow_edits() {
     let a = store.tokens.intern("material:binding:collection:a");
     let z = store.tokens.intern("material:binding:collection:z");
     store
-        .layers
-        .get_mut(&layer)
+        .layer_mut(layer)
         .and_then(|layer| layer.prim_mut(ordered))
         .expect("the `/Ordered` spec")
         .property_order = Some(vec![a, z]);

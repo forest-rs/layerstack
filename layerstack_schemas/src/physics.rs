@@ -10,7 +10,8 @@ use crate::{
     InstanceView, PrimView, Scene, usd::CollectionApi, usd_physics::PhysicsCollisionGroup,
 };
 use alloc::{sync::Arc, vec, vec::Vec};
-use layerstack::{HashMap, HashSet, PathId, TargetPath};
+use hashbrown::{HashMap, HashSet};
+use layerstack::{PathId, TargetPath};
 
 /// A malformed filtering relationship or unrepresentable table size.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

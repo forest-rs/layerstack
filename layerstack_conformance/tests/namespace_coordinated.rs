@@ -69,7 +69,7 @@ fn stage_snapshot(stage: &Stage, store: &InMemoryStore) -> Json {
     json!({"prims":prims,"values":values,"targets":targets,"connections":connections,"expressions":expressions})
 }
 fn layer_snapshot(store: &InMemoryStore, layer: LayerId) -> Json {
-    let layer = &store.layers[&layer];
+    let layer = &store.layer(layer).unwrap();
     let mut specs: Vec<_> = layer
         .prims()
         .keys()
@@ -110,9 +110,8 @@ fn coordinated_namespace_matches_native_usd_and_restores_every_layer() {
         let root = named[evidence["root"].as_str().unwrap()];
         let before: Vec<_> = loaded
             .store
-            .layers
-            .iter()
-            .map(|(id, l)| (*id, l.clone()))
+            .layers()
+            .map(|layer| (layer.id(), layer.clone()))
             .collect();
         let mut primary = LiveStage::compose(&mut loaded.store, root, StageOptions::default());
         let mut dependents: Vec<_> = evidence["dependents"]
@@ -147,7 +146,7 @@ fn coordinated_namespace_matches_native_usd_and_restores_every_layer() {
         )
         .unwrap();
         for (id, layer) in &before {
-            assert_eq!(&loaded.store.layers[id], layer, "{case} preview");
+            assert_eq!(loaded.store.layer(*id).unwrap(), layer, "{case} preview");
         }
         let inverse = primary
             .apply(&mut loaded.store, edit.transaction())
@@ -174,7 +173,11 @@ fn coordinated_namespace_matches_native_usd_and_restores_every_layer() {
         }
         primary.apply(&mut loaded.store, &inverse).unwrap();
         for (id, layer) in before {
-            assert_eq!(loaded.store.layers[&id], layer, "{case} undo layer {id:?}");
+            assert_eq!(
+                *loaded.store.layer(id).unwrap(),
+                layer,
+                "{case} undo layer {id:?}"
+            );
         }
     }
 }
@@ -185,9 +188,8 @@ fn relocation_expression_map_domains_match_native_usd() {
     let mut loaded = load_entry_usda(&directory.join("expression_maps/root.usda"));
     let before: Vec<_> = loaded
         .store
-        .layers
-        .iter()
-        .map(|(id, l)| (*id, l.clone()))
+        .layers()
+        .map(|layer| (layer.id(), layer.clone()))
         .collect();
     let stage = Stage::compose(
         &mut loaded.store,
@@ -217,7 +219,8 @@ fn relocation_expression_map_domains_match_native_usd() {
     }
     for (id, layer) in before {
         assert_eq!(
-            loaded.store.layers[&id], layer,
+            *loaded.store.layer(id).unwrap(),
+            layer,
             "expression mapping must preserve authored sources"
         );
     }

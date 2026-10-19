@@ -220,7 +220,7 @@ fn authored() -> (
 ) {
     let (mut store, mut live) = stage();
     let paths: BTreeMap<&str, PathId> = PRIMS.iter().map(|p| (*p, store.path(p))).collect();
-    let before = store.layers[&LayerId(1)].clone();
+    let before = store.layer(LayerId(1)).unwrap().clone();
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
     author(&mut edit, &paths);
     let transaction = edit.finish();
@@ -337,7 +337,7 @@ fn authored_ops(store: &InMemoryStore, path: PathId) -> Json {
     let tokens = &store.tokens;
     let mut order = Json::Null;
     let mut attributes = serde_json::Map::new();
-    if let Some(prim) = store.layers[&LayerId(1)].prim(path) {
+    if let Some(prim) = store.layer(LayerId(1)).unwrap().prim(path) {
         for entry in &prim.properties {
             let name = tokens.resolve(entry.name);
             let spec: &PropertySpec = &entry.spec;
@@ -391,9 +391,12 @@ fn close(a: &Json, b: &Json) -> bool {
 #[test]
 fn the_op_api_authors_the_fixture_scene() {
     let (mut store, mut live, _, applied, before) = authored();
-    let text =
-        layerstack_usda::save::save_usda(&store.layers[&LayerId(1)], &store.tokens, &store.paths)
-            .expect("saves");
+    let text = layerstack_usda::save::save_usda(
+        store.layer(LayerId(1)).unwrap(),
+        &store.tokens,
+        &store.paths,
+    )
+    .expect("saves");
     if text != SCENE {
         let out = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("xform_ops.usda");
         std::fs::write(&out, &text).expect("writes");
@@ -403,14 +406,14 @@ fn the_op_api_authors_the_fixture_scene() {
             out.display()
         );
     }
-    let after = store.layers[&LayerId(1)].clone();
+    let after = store.layer(LayerId(1)).unwrap().clone();
     let redo = live
         .apply(&mut store, &applied.inverse)
         .expect("undoes")
         .inverse;
-    assert_eq!(store.layers[&LayerId(1)], before);
+    assert_eq!(*store.layer(LayerId(1)).unwrap(), before);
     live.apply(&mut store, &redo).expect("redoes");
-    assert_eq!(store.layers[&LayerId(1)], after);
+    assert_eq!(*store.layer(LayerId(1)).unwrap(), after);
 }
 
 /// OpenUSD reads the authored ops and local transforms as the views do,
@@ -485,7 +488,7 @@ fn authored_ops_read_and_add_as_in_openusd() {
         let text = |i: usize| call[i].as_str().expect("text");
         let suffix = |i: usize| Some(text(i)).filter(|s| !s.is_empty());
         let context = format!("{call:?}");
-        let before = store.layers[&LayerId(1)].clone();
+        let before = store.layer(LayerId(1)).unwrap().clone();
         let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
         let handle = XformableEdit::new(&edit, path).expect("on the stage");
         let untouched = edit.transaction().clone();
@@ -550,7 +553,7 @@ fn authored_ops_read_and_add_as_in_openusd() {
         }
         live.apply(&mut store, &applied.inverse).expect("undoes");
         assert_eq!(
-            store.layers[&LayerId(1)].prims(),
+            store.layer(LayerId(1)).unwrap().prims(),
             before.prims(),
             "{context}: undone"
         );

@@ -21,7 +21,7 @@ fn inherited_ports_compile_and_author_through_the_public_api() {
         },
     );
     let path = store.path("/Paint");
-    let before = store.layers[&LayerId(1)].clone();
+    let before = store.layer(LayerId(1)).unwrap().clone();
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
     let node = custom::StudioWetPaint::define(&mut edit, path);
     node.set_tint(&mut edit, custom::StudioWetPaint::tint_default())
@@ -48,7 +48,7 @@ fn inherited_ports_compile_and_author_through_the_public_api() {
     assert_eq!(custom::StudioWetPaint::roughness_default(), 0.4);
     assert!(node.surface_output().is_some());
     live.apply(&mut store, &applied.inverse).unwrap();
-    assert_eq!(store.layers[&LayerId(1)], before);
+    assert_eq!(*store.layer(LayerId(1)).unwrap(), before);
 }
 
 #[test]

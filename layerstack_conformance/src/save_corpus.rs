@@ -872,7 +872,7 @@ fn stack_properties<'a>(
     layer_id: LayerId,
     spec_path: &SpecPath,
 ) -> Option<&'a [PropertyEntry]> {
-    let layer = store.layers.get(&layer_id)?;
+    let layer = store.layer(layer_id)?;
     if !spec_path.variant_chain().is_empty() {
         return Some(&layer.variant_spec_at(spec_path, &store.paths)?.properties);
     }

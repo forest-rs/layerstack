@@ -27,9 +27,10 @@ use super::{
     source_format, source_identifier, strict_failure, strict_rejects,
 };
 use alloc::sync::Arc;
+use hashbrown::{HashMap, HashSet};
 use layerstack::{
-    AssetResolveError, AssetResolver, HashMap, HashSet, LayerId, PathInterner, ResolvedAsset,
-    TokenInterner, asset::PackagePath,
+    AssetResolveError, AssetResolver, LayerId, PathInterner, ResolvedAsset, TokenInterner,
+    asset::PackagePath,
 };
 
 /// The first provisional layer id; the real ones a store hands out stay

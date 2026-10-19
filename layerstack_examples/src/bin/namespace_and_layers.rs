@@ -56,7 +56,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         PrimSpec::over().with_property(size_name, size(3.)),
     );
     store.insert_layer(assembly);
-    let original = store.layers.clone();
+    let original = store.layers().cloned().collect::<Vec<_>>();
     let mut primary = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
     let mut dependent = LiveStage::compose(&mut store, LayerId(3), StageOptions::default());
     let edit = NamespaceEdit::prepare_with_dependents(
@@ -68,7 +68,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         TargetPath::Prim(renamed),
     )?;
     assert_eq!(
-        store.layers, original,
+        store.layers().cloned().collect::<Vec<_>>(),
+        original,
         "preparation only produces a guarded transaction"
     );
     println!("layers to edit: {:?}", edit.layers_to_edit());
@@ -95,8 +96,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "the original dependent path is removed"
     );
     assert_eq!(
-        store.layers[&LayerId(5)],
-        original[&LayerId(5)],
+        store.layer(LayerId(5)).unwrap(),
+        original
+            .iter()
+            .find(|layer| layer.id() == LayerId(5))
+            .unwrap(),
         "source geometry stays intact"
     );
     assert_eq!(
@@ -150,9 +154,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     primary.apply(&mut store, &inverse)?;
     dependent.synchronize(&mut store);
-    for (id, layer) in original {
+    for layer in original {
         assert_eq!(
-            store.layers[&id], layer,
+            *store.layer(layer.id()).unwrap(),
+            layer,
             "undo restores each edited source layer"
         );
     }

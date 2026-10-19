@@ -16,6 +16,8 @@ default = ["std"]
 std = ["layerstack/std", "layerstack_usdc/std", "layerstack_usdz/std"]
 
 [dependencies]
+# Hash maps for internal indexes; `layerstack` already depends on it.
+hashbrown = { workspace = true }
 layerstack = { workspace = true }
 layerstack_usda = { workspace = true }
 layerstack_usdc = { workspace = true }

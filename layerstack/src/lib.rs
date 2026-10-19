@@ -171,7 +171,8 @@ extern crate alloc;
 #[cfg(any(test, feature = "std"))]
 extern crate std;
 
-pub use hashbrown::{HashMap, HashSet};
+// Internal maps; the public API names no hash map type.
+pub(crate) use hashbrown::{HashMap, HashSet};
 
 pub(crate) mod arcs;
 pub mod array_edit;
@@ -248,11 +249,11 @@ pub use composition_error::{
 pub use dependency_map::{ArcDependency, LayerDependencyStorage};
 pub use doc::{
     AssetAvailability, FieldEntry, FieldValue, InMemoryStore, InterpolationType, Layer, LayerId,
-    LayerOffset, LayerPrims, LayerPrimsIter, LayerPrimsIterMut, LayerStore, MaybeSync, PrimSpec,
-    Reference, ReferenceSource, ReferenceTarget, Relocate, Specifier, SublayerEntry, Value,
-    VariantBranch, VariantBranches, VariantSetSpec, VariantSpec, combine_dictionaries,
-    combine_dictionary_chain, get_field, get_field_mut, insert_field_if_absent, remove_field,
-    set_field_vec,
+    LayerOffset, LayerPrims, LayerPrimsIntoIter, LayerPrimsIter, LayerPrimsIterMut, LayerStore,
+    MaybeSync, PrimSpec, Reference, ReferenceSource, ReferenceTarget, Relocate, Specifier,
+    SublayerEntry, Value, VariantBranch, VariantBranches, VariantPrims, VariantSetSpec,
+    VariantSpec, combine_dictionaries, combine_dictionary_chain, get_field, get_field_mut,
+    insert_field_if_absent, remove_field, set_field_vec,
 };
 pub use dynamic_format::{
     DynamicArgs, DynamicDependency, DynamicFileFormat, DynamicFormatContext,

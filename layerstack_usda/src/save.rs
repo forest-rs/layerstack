@@ -96,6 +96,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use core::fmt;
 
+use hashbrown::{HashMap, HashSet};
 use layerstack::doc::{
     FieldEntry, FieldValue, Layer, LayerOffset as LayerLayerOffset, PrimSpec,
     Reference as LayerReference, ReferenceSource, ReferenceTarget, Specifier, Value as LayerValue,
@@ -106,7 +107,6 @@ use layerstack::listop::ListOp as LayerListOp;
 use layerstack::path::{Path, PathId, PathInterner, TargetPath};
 use layerstack::property::{PropertyEntry, PropertyKind, Variability};
 use layerstack::spec_path::VariantSelectionSite;
-use layerstack::{HashMap, HashSet};
 
 use crate::writer::{
     Attribute, Document, LayerOffset, ListOp, Metadatum, Prim, Property, Reference, Relationship,

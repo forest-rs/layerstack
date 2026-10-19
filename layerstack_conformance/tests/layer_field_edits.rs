@@ -118,7 +118,7 @@ fn transaction(loaded: &mut LoadedStage, step: &Json) -> Transaction {
 /// prims, as the oracle records them.
 fn snapshot(loaded: &LoadedStage, stage: &Stage) -> Json {
     let store = &loaded.store;
-    let layer = &store.layers[&loaded.root_layer];
+    let layer = &store.layer(loaded.root_layer).unwrap();
     let path = |p: layerstack::PathId| store.paths.display(p, &store.tokens);
     let root = store.paths.lookup(&Path::root()).unwrap();
     json!({
@@ -150,7 +150,7 @@ fn layer_field_edits_agree_with_openusd_call_by_call() {
     for case in cases {
         let name = case["name"].as_str().unwrap();
         let mut loaded = load();
-        let original = loaded.store.layers[&loaded.root_layer].clone();
+        let original = loaded.store.layer(loaded.root_layer).unwrap().clone();
         let mut live = LiveStage::compose(
             &mut loaded.store,
             loaded.root_layer,
@@ -192,7 +192,7 @@ fn layer_field_edits_agree_with_openusd_call_by_call() {
                 .unwrap_or_else(|e| panic!("{name}: undo: {e}"));
         }
         assert_fresh(&live, &mut loaded, &format!("{name}: undo recomposes"));
-        let layer = &loaded.store.layers[&loaded.root_layer];
+        let layer = &loaded.store.layer(loaded.root_layer).unwrap();
         assert_eq!(layer.sublayers(), original.sublayers(), "{name}: undo");
         assert_eq!(layer.relocates(), original.relocates(), "{name}: undo");
     }

@@ -82,14 +82,13 @@ fn external_authoring_reload_and_recompose_publish_reports() {
     live.synchronize(&mut store);
     assert_eq!(live.changes_since(&mut cursor).unwrap().count(), 1);
     store
-        .layers
-        .get_mut(&LayerId(1))
+        .layer_mut(LayerId(1))
         .unwrap()
         .set_property(path, spec(4.0));
     live.notify_changed_layers(&store);
     live.recompose(&mut store);
     assert_eq!(live.changes_since(&mut cursor).unwrap().count(), 1);
-    let mut replacement = store.layers[&LayerId(1)].clone();
+    let mut replacement = store.layer(LayerId(1)).unwrap().clone();
     replacement.prims_mut().clear(); // Identical counters must not hide this reload.
     store.insert_layer(replacement);
     live.synchronize(&mut store);

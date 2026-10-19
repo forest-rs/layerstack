@@ -820,9 +820,9 @@ pub(crate) fn forwarded_targets(scene: &Scene<'_>, root: PropertyPath) -> Vec<Ta
     // OpenUSD: UsdRelationship::GetForwardedTargets. Stack traversal avoids
     // recursion on adversarial relationship chains; visited edges stop cycles.
     let mut stack = alloc::vec![TargetPath::Property(root)];
-    let mut seen = layerstack::HashSet::new();
+    let mut seen = hashbrown::HashSet::new();
     let mut out = Vec::new();
-    let mut unique = layerstack::HashSet::new();
+    let mut unique = hashbrown::HashSet::new();
     while let Some(target) = stack.pop() {
         if let TargetPath::Property(path) = target
             && is_relationship(scene, path)

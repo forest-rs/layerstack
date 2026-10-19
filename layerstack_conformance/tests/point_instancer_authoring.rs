@@ -32,7 +32,7 @@ fn authored_id_sequence() -> (layerstack::InMemoryStore, layerstack::LiveStage) 
         ),
     );
     store.insert_layer(weak);
-    let root = store.layers.get_mut(&LayerId(1)).unwrap();
+    let root = store.layer_mut(LayerId(1)).unwrap();
     root.sublayers_mut()
         .push(layerstack::SublayerEntry::new(LayerId(2)));
     root.prim_mut(path).unwrap().set_field(
@@ -94,7 +94,7 @@ fn id_edits_preserve_future_weaker_opinions_and_group_rollback() {
     );
     let inactive = store.tokens.lookup("inactiveIds").unwrap();
     let Some(FieldValue::Int64ListOp(op)) =
-        store.layers[&LayerId(1)].prims()[&path].field(inactive)
+        store.layer(LayerId(1)).unwrap().prims()[&path].field(inactive)
     else {
         panic!("authored int64 list operation")
     };
@@ -128,8 +128,7 @@ fn explicit_inactive_lists_keep_their_cutoff_after_id_edits() {
     let path = store.path("/P");
     let inactive = store.tokens.intern("inactiveIds");
     store
-        .layers
-        .get_mut(&LayerId(1))
+        .layer_mut(LayerId(1))
         .unwrap()
         .prim_mut(path)
         .unwrap()
@@ -145,7 +144,7 @@ fn explicit_inactive_lists_keep_their_cutoff_after_id_edits() {
     let transaction = edit.finish();
     live.apply(&mut store, &transaction).unwrap();
     let Some(FieldValue::Int64ListOp(op)) =
-        store.layers[&LayerId(1)].prims()[&path].field(inactive)
+        store.layer(LayerId(1)).unwrap().prims()[&path].field(inactive)
     else {
         panic!("inactive list")
     };
@@ -159,7 +158,7 @@ fn explicit_inactive_lists_keep_their_cutoff_after_id_edits() {
         ),
     );
     store.insert_layer(weak);
-    let root = store.layers.get_mut(&LayerId(1)).unwrap();
+    let root = store.layer_mut(LayerId(1)).unwrap();
     root.sublayers_mut()
         .push(layerstack::SublayerEntry::new(LayerId(2)));
     live.synchronize(&mut store);
@@ -197,7 +196,9 @@ fn variant_id_edits_read_only_the_mapped_target_site() {
     let transaction = edit.finish();
     live.apply(&mut store, &transaction).unwrap();
     let inactive = store.tokens.lookup("inactiveIds").unwrap();
-    let branch = store.layers[&LayerId(1)]
+    let branch = store
+        .layer(LayerId(1))
+        .unwrap()
         .variant_spec_at(&variant, &store.paths)
         .unwrap();
     let Some(FieldValue::Int64ListOp(op)) = layerstack::get_field(&branch.fields, &inactive) else {

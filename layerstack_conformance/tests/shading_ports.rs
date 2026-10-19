@@ -4,8 +4,8 @@
 //! Port authoring preserves layered opinions and authored-state undo.
 #![allow(missing_docs, reason = "integration tests")]
 use layerstack::{
-    InMemoryStore, Layer, LayerId, LayerStore, LiveStage, PropertyPath, PropertyType, StageOptions,
-    Value, edit::EditTarget,
+    InMemoryStore, Layer, LayerId, LiveStage, PropertyPath, PropertyType, StageOptions, Value,
+    edit::EditTarget,
 };
 use layerstack_schemas::{
     Scene, SchemaEdit, Time,

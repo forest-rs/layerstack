@@ -93,7 +93,7 @@ fn values(stage: &Stage, store: &mut InMemoryStore) -> Vec<i32> {
 fn session_stack_and_external_self_reference_match_openusd() {
     let mut store = fixture();
     let prop = store.property_path("/Asset.x");
-    store.layers.get_mut(&LayerId(3)).unwrap().insert_prim(
+    store.layer_mut(LayerId(3)).unwrap().insert_prim(
         prop.prim_path(),
         PrimSpec::over().with_property(prop.property(), attr(10)),
     );
@@ -175,7 +175,7 @@ fn two_clients_keep_private_overrides_and_reject_stale_shared_edits() {
     assert_eq!(values(a.stage(), &mut store), [10, 10, 2]);
     assert_eq!(values(b.stage(), &mut store), [8, 8, 2]);
     assert_eq!(b.changes_since(&mut cb).unwrap().count(), 0);
-    let generation = store.layers[&LayerId(2)].generation();
+    let generation = store.layer(LayerId(2)).unwrap().generation();
     let mut shared = Transaction::new();
     shared.expect_generation(LayerId(2), generation);
     shared.set_default(
@@ -221,7 +221,7 @@ fn session_time_domains_include_authoring_offsets_and_root_default_prim() {
             (LayerId(1), root_tcps, root_fps),
             (LayerId(3), session_tcps, session_fps),
         ] {
-            let layer = store.layers.get_mut(&id).unwrap();
+            let layer = store.layer_mut(id).unwrap();
             if let Some(value) = tc {
                 layer.set_metadata(tcps, Value::Double(value));
             }
@@ -235,20 +235,17 @@ fn session_time_domains_include_authoring_offsets_and_root_default_prim() {
         prop.time_samples = Some(vec![(root_rate, Value::Double(2.0))].into());
         let asset = store.path("/Asset");
         store
-            .layers
-            .get_mut(&LayerId(1))
+            .layer_mut(LayerId(1))
             .unwrap()
             .set_property(layerstack::PropertyPath::new(asset, x), prop);
         let root_default = store.tokens.intern("Asset");
         let session_default = store.tokens.intern("Internal");
         store
-            .layers
-            .get_mut(&LayerId(1))
+            .layer_mut(LayerId(1))
             .unwrap()
             .set_default_prim(Some(root_default));
         store
-            .layers
-            .get_mut(&LayerId(3))
+            .layer_mut(LayerId(3))
             .unwrap()
             .set_default_prim(Some(session_default));
         let stage = Stage::compose(
@@ -283,7 +280,7 @@ fn session_time_domains_include_authoring_offsets_and_root_default_prim() {
 fn session_expression_variables_override_root_and_flow_into_external_stacks() {
     let mut store = fixture();
     let variables = store.tokens.intern("expressionVariables");
-    let root = store.layers.get_mut(&LayerId(1)).unwrap();
+    let root = store.layer_mut(LayerId(1)).unwrap();
     root.set_metadata(
         variables,
         Value::Dictionary(vec![("ASSET".into(), Value::String("red.usda".into()))]),
@@ -292,7 +289,7 @@ fn session_expression_variables_override_root_and_flow_into_external_stacks() {
         "`${ASSET}`",
         layerstack::LayerOffset::IDENTITY,
     ));
-    store.layers.get_mut(&LayerId(3)).unwrap().set_metadata(
+    store.layer_mut(LayerId(3)).unwrap().set_metadata(
         variables,
         Value::Dictionary(vec![("ASSET".into(), Value::String("blue.usda".into()))]),
     );
@@ -324,11 +321,11 @@ fn session_expression_variables_override_root_and_flow_into_external_stacks() {
         );
     }
     let custom = store.tokens.intern("customLayerData");
-    store.layers.get_mut(&LayerId(1)).unwrap().set_metadata(
+    store.layer_mut(LayerId(1)).unwrap().set_metadata(
         custom,
         Value::Dictionary(vec![("shared".into(), Value::Int(1))]),
     );
-    store.layers.get_mut(&LayerId(3)).unwrap().set_metadata(
+    store.layer_mut(LayerId(3)).unwrap().set_metadata(
         custom,
         Value::Dictionary(vec![("private".into(), Value::Int(2))]),
     );
@@ -340,7 +337,7 @@ fn session_expression_variables_override_root_and_flow_into_external_stacks() {
             ("shared".into(), Value::Int(1))
         ]))
     );
-    store.layers.get_mut(&LayerId(3)).unwrap().set_metadata(
+    store.layer_mut(LayerId(3)).unwrap().set_metadata(
         variables,
         Value::Dictionary(vec![("ASSET".into(), Value::String("red.usda".into()))]),
     );
@@ -366,8 +363,7 @@ fn flatten_preserves_session_metadata_and_effective_time_domain() {
     let tcps = store.tokens.intern("timeCodesPerSecond");
     let custom = store.tokens.intern("customLayerData");
     store
-        .layers
-        .get_mut(&LayerId(1))
+        .layer_mut(LayerId(1))
         .unwrap()
         .set_metadata(tcps, Value::Double(48.0))
         .set_metadata(
@@ -375,8 +371,7 @@ fn flatten_preserves_session_metadata_and_effective_time_domain() {
             Value::Dictionary(vec![("shared".into(), Value::Int(1))]),
         );
     store
-        .layers
-        .get_mut(&LayerId(3))
+        .layer_mut(LayerId(3))
         .unwrap()
         .set_metadata(tcps, Value::Double(96.0))
         .set_metadata(
@@ -385,8 +380,7 @@ fn flatten_preserves_session_metadata_and_effective_time_domain() {
         );
     let session_default = store.tokens.intern("Internal");
     store
-        .layers
-        .get_mut(&LayerId(3))
+        .layer_mut(LayerId(3))
         .unwrap()
         .set_default_prim(Some(session_default));
     let stage = Stage::compose(
@@ -421,13 +415,11 @@ fn edit_targets_use_captured_offsets_and_exclude_muted_session_layers() {
     let mut store = fixture();
     let tcps = store.tokens.intern("timeCodesPerSecond");
     store
-        .layers
-        .get_mut(&LayerId(1))
+        .layer_mut(LayerId(1))
         .unwrap()
         .set_metadata(tcps, Value::Double(48.0));
     store
-        .layers
-        .get_mut(&LayerId(3))
+        .layer_mut(LayerId(3))
         .unwrap()
         .set_metadata(tcps, Value::Double(96.0));
     let options = StageOptions {
@@ -453,8 +445,7 @@ fn edit_targets_use_captured_offsets_and_exclude_muted_session_layers() {
     // Direct mutation of source rates cannot retime an existing snapshot's edit
     // map. A host synchronizes before choosing current targets and guards writes.
     store
-        .layers
-        .get_mut(&LayerId(1))
+        .layer_mut(LayerId(1))
         .unwrap()
         .set_metadata(tcps, Value::Double(12.0));
     assert_eq!(target.map_to_spec_time(48.0), 48.0);

@@ -328,7 +328,7 @@ fn reference_edit_target_maps_relationship_and_target_paths_and_undo() {
         .find(|id| graph.node(*id).unwrap().arc_kind() == layerstack::ArcKind::References)
         .unwrap();
     let target = EditTarget::for_node(live.stage(), path, node).unwrap();
-    let before = store.layers[&LayerId(1)].clone();
+    let before = store.layer(LayerId(1)).unwrap().clone();
     let mut edit = SchemaEdit::new(live.stage(), &mut store, target);
     let handle = layerstack_schemas::usd_vol::VolumeEdit::new(&edit, path).unwrap();
     handle
@@ -351,5 +351,5 @@ fn reference_edit_target_maps_relationship_and_target_paths_and_undo() {
         Some(source_field)
     );
     live.apply(&mut store, &applied.inverse).unwrap();
-    assert_eq!(store.layers[&LayerId(1)], before);
+    assert_eq!(*store.layer(LayerId(1)).unwrap(), before);
 }

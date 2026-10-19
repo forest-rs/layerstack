@@ -33,8 +33,8 @@ use std::collections::BTreeMap;
 
 use layerstack::edit::{EditError, EditTarget, Rejection, Transaction};
 use layerstack::{
-    ArcKind, HashMap, InMemoryStore, Layer, LayerId, ListOp, PathId, PrimSpec, PropertyPath,
-    Reference, SpecPath, Stage, StageOptions, TargetPath, VariantSetSpec, VariantSpec,
+    ArcKind, InMemoryStore, Layer, LayerId, ListOp, PathId, PrimSpec, PropertyPath, Reference,
+    SpecPath, Stage, StageOptions, TargetPath, VariantSetSpec, VariantSpec,
 };
 use serde_json::{Value as Json, json};
 
@@ -50,7 +50,7 @@ const ASSET_LAYER: LayerId = LayerId(2);
 fn with_variant(store: &mut InMemoryStore, spec: PrimSpec, set: &str, variant: &str) -> PrimSpec {
     let (set, variant) = (store.tokens.intern(set), store.tokens.intern(variant));
     let mut spec = spec;
-    let mut variants = HashMap::new();
+    let mut variants = hashbrown::HashMap::new();
     variants.insert(variant, VariantSpec::default());
     spec.variant_sets.insert(set, VariantSetSpec { variants });
     spec.variant_set_names.prepend.push(set);
@@ -126,7 +126,7 @@ fn edit_target(store: &mut InMemoryStore, stage: &Stage, prim: PathId, arc: &str
 /// The explicit targets authored on the property spec at `path`, which is
 /// on a prim or directly inside one variant of it.
 fn authored_targets(store: &InMemoryStore, layer: LayerId, path: &SpecPath) -> Option<Vec<String>> {
-    let prim = &store.layers[&layer].prims()[&path.prim_path()];
+    let prim = &store.layer(layer).unwrap().prims()[&path.prim_path()];
     let properties = match path.variant_chain().last() {
         Some((set, variant)) => &prim.variant_sets[set].variants[variant].properties,
         _ => &prim.properties,
@@ -149,8 +149,8 @@ fn authored_targets(store: &InMemoryStore, layer: LayerId, path: &SpecPath) -> O
 
 fn layers(store: &InMemoryStore) -> Vec<Layer> {
     vec![
-        store.layers[&ROOT].clone(),
-        store.layers[&ASSET_LAYER].clone(),
+        store.layer(ROOT).unwrap().clone(),
+        store.layer(ASSET_LAYER).unwrap().clone(),
     ]
 }
 
@@ -159,7 +159,7 @@ fn layers(store: &InMemoryStore) -> Vec<Layer> {
 fn the_scene_is_the_fixture() {
     let store = scene();
     let save = |id| {
-        layerstack_usda::save::save_usda(&store.layers[&id], &store.tokens, &store.paths)
+        layerstack_usda::save::save_usda(store.layer(id).unwrap(), &store.tokens, &store.paths)
             .expect("saves")
     };
     for (name, text, fixture) in [
@@ -318,8 +318,9 @@ fn authored_targets_compose_as_openusd_composes_them() {
     }
     let before = layers(&store);
     let undo = edit.apply(&mut store).expect("every accepted target maps");
-    let text = layerstack_usda::save::save_usda(&store.layers[&ROOT], &store.tokens, &store.paths)
-        .expect("saves");
+    let text =
+        layerstack_usda::save::save_usda(store.layer(ROOT).unwrap(), &store.tokens, &store.paths)
+            .expect("saves");
     if text != AUTHORED {
         let out = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("edit_target_maps.usda");
         std::fs::write(&out, &text).expect("writes");

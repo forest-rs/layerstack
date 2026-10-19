@@ -186,7 +186,7 @@ fn clip_query_planning_does_not_decode_retained_interpolation_endpoints() {
     .unwrap();
     let root = source.stage().stage().root_layer().unwrap();
     let bytes = layerstack_usdc::writer::save_layer(
-        &source.store.layers[&root],
+        source.store.layer(root).unwrap(),
         &source.store.tokens,
         &source.store.paths,
     )
@@ -286,7 +286,7 @@ def "P" (clips = { dictionary default = {
     .unwrap();
     let id = source.stage.stage().root_layer().unwrap();
     let bytes = layerstack_usdc::writer::save_layer(
-        &source.store.layers[&id],
+        source.store.layer(id).unwrap(),
         &source.store.tokens,
         &source.store.paths,
     )
@@ -541,7 +541,7 @@ def "Root" (
     ]));
     let mut doc = StageDocument::open(memory, "source/root.usda", StageOptions::default()).unwrap();
     let root = doc.stage.stage().root_layer().unwrap();
-    let original = doc.store.layers[&root].clone();
+    let original = doc.store.layer(root).unwrap().clone();
     let package = doc
         .prepare_package(
             root,
@@ -567,10 +567,14 @@ def "Root" (
             .all(|dependency| dependency.identifier.starts_with("../assets/"))
     );
     assert_eq!(
-        doc.store.layers[&root], original,
+        *doc.store.layer(root).unwrap(),
+        original,
         "preparation leaves source data intact"
     );
-    assert_eq!(doc.store.layers[&root].generation(), original.generation());
+    assert_eq!(
+        doc.store.layer(root).unwrap().generation(),
+        original.generation()
+    );
     assert!(doc.storage.0.writes.is_empty());
     doc.export_package("out.usdz", &package).unwrap();
 
@@ -581,7 +585,7 @@ def "Root" (
     let mut reopened = StageDocument::open(output, "out.usdz", StageOptions::default()).unwrap();
     let reopened_root = reopened.stage.stage().root_layer().unwrap();
     let dependencies = layerstack::asset_dependencies::extract_layer_dependencies(
-        &reopened.store.layers[&reopened_root],
+        reopened.store.layer(reopened_root).unwrap(),
         &reopened.store.paths,
         &reopened.store.tokens,
     );
@@ -637,8 +641,11 @@ def "Root" (
     assert!(doc.export_package("missing.usdz", &missing).is_err());
     assert!(!doc.storage.0.files.contains_key("missing.usdz"));
     assert_eq!(doc.storage.0.writes, vec!["out.usdz"]);
-    assert_eq!(doc.store.layers[&root], original);
-    assert_eq!(doc.store.layers[&root].generation(), original.generation());
+    assert_eq!(*doc.store.layer(root).unwrap(), original);
+    assert_eq!(
+        doc.store.layer(root).unwrap().generation(),
+        original.generation()
+    );
 }
 
 #[test]
@@ -659,7 +666,7 @@ fn package_preparation_includes_unsaved_layers_and_reports_missing_resources_wit
     let child = *doc.catalog.ids.get("child.usda").unwrap();
     let source = doc.store.path("/Child");
     let answer = doc.store.tokens.intern("answer");
-    let layer = doc.store.layers.get_mut(&child).unwrap();
+    let layer = doc.store.layer_mut(child).unwrap();
     let property = layer
         .prim_mut(source)
         .unwrap()
@@ -680,7 +687,7 @@ fn package_preparation_includes_unsaved_layers_and_reports_missing_resources_wit
     assert!(package.report().is_complete(), "{:?}", package.report());
     assert_eq!(package.plan().unwrap().layers.len(), 2);
     assert_eq!(package.plan().unwrap().assets.len(), 1);
-    assert_eq!(doc.store.layers[&child].generation(), generation);
+    assert_eq!(doc.store.layer(child).unwrap().generation(), generation);
     assert!(doc.is_dirty(child));
     assert!(doc.storage.writes.is_empty());
     doc.export_package("out.usdz", &package).unwrap();
@@ -758,7 +765,7 @@ fn nested_packages_resolve_defaults_explicit_layers_relative_dependencies_and_re
                     "{:?} {:?} {:?}",
                     document.stage.stage().composition_errors(),
                     document.load_report,
-                    document.store.layers
+                    document.store.layer_ids()
                 ))
                 .value,
             Value::Int(42)
@@ -946,10 +953,10 @@ fn rejecting_a_prepared_reload_preserves_sources_bindings_and_freshness() {
     )
     .unwrap();
     let root = doc.stage.stage().root_layer().unwrap();
-    let generation = doc.store.layers[&root].generation();
+    let generation = doc.store.layer(root).unwrap().generation();
     let ids = doc.catalog.ids.clone();
     let saved = doc.catalog.saved.clone();
-    let bindings = doc.store.asset_layers.clone();
+    let bindings = doc.store.asset_bindings();
     let identity = doc.store.identity();
     let mut cursor = doc.stage.change_cursor();
     doc.storage.files.insert(
@@ -965,7 +972,7 @@ fn rejecting_a_prepared_reload_preserves_sources_bindings_and_freshness() {
             .copied()
             .find(|id| candidate.identifier(*id) == Some("new.usda"))
             .unwrap();
-        assert!(candidate.store().layers.contains_key(&new));
+        assert!(candidate.store().contains_layer(new));
         let property = layerstack::PropertyPath::new(
             candidate
                 .store()
@@ -991,10 +998,10 @@ fn rejecting_a_prepared_reload_preserves_sources_bindings_and_freshness() {
             Value::Int(9)
         );
     }
-    assert_eq!(doc.store.layers[&root].generation(), generation);
+    assert_eq!(doc.store.layer(root).unwrap().generation(), generation);
     assert_eq!(doc.catalog.ids, ids);
     assert_eq!(doc.catalog.saved, saved);
-    assert_eq!(doc.store.asset_layers, bindings);
+    assert_eq!(doc.store.asset_bindings(), bindings);
     assert_eq!(doc.store.identity(), identity);
     assert_eq!(value(&doc), Value::Int(1));
     doc.synchronize();
@@ -1289,7 +1296,7 @@ fn retained_budget_errors_are_distinct_from_missing_geometry() {
             layers: vec![layerstack_usdz::localize::LocalizedLayer {
                 source: root,
                 member: member.into(),
-                layer: document.store().layers[&root].clone(),
+                layer: document.store().layer(root).unwrap().clone(),
             }],
             assets: vec![],
             resolved_uses: 0,
@@ -1548,13 +1555,14 @@ fn staged_reload_protects_edits_and_preserves_layer_identities() {
         IoErrorKind::DirtyReload
     );
     assert_eq!(value(&doc), Value::Int(3));
-    let before = doc.store.layers.clone();
+    let before: Vec<_> = doc.store.layers().cloned().collect();
     doc.storage_mut()
         .files
         .insert("base.usda".into(), b"bad USD".to_vec());
     assert!(doc.reload(ReloadPolicy::DiscardDirty).is_err());
     assert_eq!(
-        doc.store.layers, before,
+        doc.store.layers().cloned().collect::<Vec<_>>(),
+        before,
         "failed staged reload publishes no layers"
     );
     assert!(doc.is_dirty(base));
@@ -1585,7 +1593,7 @@ fn binary_export_reopens_and_package_reload_keeps_member_ids() {
     let report = doc.reload(ReloadPolicy::PreserveDirty).unwrap();
     assert!(report.layers.contains(&member));
     assert_eq!(doc.catalog.ids["scene.usdz[base.usda]"], member);
-    assert_eq!(doc.store.layers.len(), 2);
+    assert_eq!(doc.store.layer_count(), 2);
     set_value(&mut doc, member, 11);
     let saved = doc.save();
     assert_eq!(saved.failures.len(), 1);
@@ -1652,8 +1660,8 @@ fn value_edits_in_one_variant_branch_refresh_without_recomposing_sibling_branche
     let mut doc = StageDocument::open(backend, "root.usda", StageOptions::default()).unwrap();
     let asset = *doc
         .store
-        .layers
-        .keys()
+        .layer_ids()
+        .iter()
         .find(|&&id| doc.identifier(id) == Some("asset.usda"))
         .unwrap();
     let red = doc.store.property_path("/Red/Geom.size");
@@ -1738,8 +1746,8 @@ fn package_reload_reads_unreferenced_resident_members_and_allows_root_rename() {
     );
     let new = doc.store.path("/New");
     let old = doc.store.path("/Old");
-    assert!(doc.store.layers[&member].prims().contains_key(&new));
-    assert!(!doc.store.layers[&member].prims().contains_key(&old));
+    assert!(doc.store.layer(member).unwrap().prims().contains_key(&new));
+    assert!(!doc.store.layer(member).unwrap().prims().contains_key(&old));
     doc.storage_mut().files.insert(
         "scene.usdz".into(),
         package(
@@ -1895,8 +1903,8 @@ fn promoted_members_retain_distinct_identity_from_the_outer_package() {
     let new = doc.store.path("/NewMember");
     let old = doc.store.path("/OldMember");
     for id in [member_id, root_id] {
-        assert!(doc.store.layers[&id].prims().contains_key(&new));
-        assert!(!doc.store.layers[&id].prims().contains_key(&old));
+        assert!(doc.store.layer(id).unwrap().prims().contains_key(&new));
+        assert!(!doc.store.layer(id).unwrap().prims().contains_key(&old));
     }
 }
 #[test]
@@ -1960,7 +1968,7 @@ fn nested_promoted_members_refresh_with_member_relative_anchors() {
         .unwrap();
     assert!(report.layers.contains(&member));
     let new = doc.store.path("/NewMember");
-    assert!(doc.store.layers[&member].prims().contains_key(&new));
+    assert!(doc.store.layer(member).unwrap().prims().contains_key(&new));
 }
 #[test]
 fn promoted_self_references_follow_the_explicit_member_identity() {
@@ -1988,8 +1996,7 @@ fn promoted_self_references_follow_the_explicit_member_identity() {
     let asset = doc.store.property_path("/Asset.x");
     let host = doc.store.property_path("/Host.x");
     doc.store
-        .layers
-        .get_mut(&member)
+        .layer_mut(member)
         .unwrap()
         .set_property(asset, PropertySpec::attribute().with_default(Value::Int(9)));
     doc.synchronize();
@@ -2122,8 +2129,8 @@ fn asset_bytes_use_package_member_provenance_without_importing_assets() {
     let mut doc = StageDocument::open(backend, "scene.usdz", StageOptions::default()).unwrap();
     let root = doc.stage.stage().root_layer().unwrap();
     let member = doc.catalog.ids["scene.usdz[layers/member.usda]"];
-    let generation = doc.store.layers[&member].generation();
-    let layers = doc.store.layers.len();
+    let generation = doc.store.layer(member).unwrap().generation();
+    let layers = doc.store.layer_count();
     let reads = doc.storage.reads.len();
     let bytes = doc
         .read_asset_bytes("textures/color.png", Some(member))
@@ -2210,8 +2217,8 @@ fn asset_bytes_use_package_member_provenance_without_importing_assets() {
             .kind,
         IoErrorKind::NotFound
     );
-    assert_eq!(doc.store.layers.len(), layers);
-    assert_eq!(doc.store.layers[&member].generation(), generation);
+    assert_eq!(doc.store.layer_count(), layers);
+    assert_eq!(doc.store.layer(member).unwrap().generation(), generation);
     assert!(!doc.is_dirty(member));
 }
 
@@ -2281,7 +2288,7 @@ fn explicit_package_bytes_work_without_a_loaded_package_and_keep_decode_errors()
         .files
         .insert("broken.usdz".into(), b"not a zip archive".to_vec());
     let mut doc = StageDocument::open(backend, "root.usda", StageOptions::default()).unwrap();
-    let count = doc.store.layers.len();
+    let count = doc.store.layer_count();
     assert_eq!(
         doc.read_asset_bytes("images.usdz[./image.exr]", None)
             .unwrap()
@@ -2301,7 +2308,7 @@ fn explicit_package_bytes_work_without_a_loaded_package_and_keep_decode_errors()
             .kind,
         IoErrorKind::Rejected
     );
-    assert_eq!(doc.store.layers.len(), count);
+    assert_eq!(doc.store.layer_count(), count);
 }
 
 #[test]
@@ -2487,7 +2494,7 @@ fn root_reload_refreshes_resident_dependencies_and_protects_required_dirty_layer
         doc.storage.reads,
         vec![String::from("root.usda"), String::from("a.usda")]
     );
-    let mut layer = doc.store.layers[&a].clone();
+    let mut layer = doc.store.layer(a).unwrap().clone();
     layer.set_property(
         property,
         PropertySpec::attribute().with_default(Value::Int(9)),
@@ -2578,7 +2585,7 @@ fn root_reload_refreshes_expression_dependencies_and_rejects_dirty_sources() {
     ).unwrap();
     let asset = doc.catalog.ids["asset.usda"];
     let property = doc.store.property_path("/Host.value");
-    let original_bindings = doc.store.asset_layers.clone();
+    let original_bindings = doc.store.asset_bindings();
     doc.storage.files.insert(
         "asset.usda".into(),
         b"#usda 1.0\ndef \"Asset\" { int value=2 }".to_vec(),
@@ -2600,7 +2607,7 @@ fn root_reload_refreshes_expression_dependencies_and_rejects_dirty_sources() {
         );
         assert!(candidate.load_report().layers.contains(&asset));
     }
-    assert_eq!(doc.store.asset_layers, original_bindings);
+    assert_eq!(doc.store.asset_bindings(), original_bindings);
     assert_eq!(
         doc.view()
             .attribute(property)
@@ -2614,7 +2621,7 @@ fn root_reload_refreshes_expression_dependencies_and_rejects_dirty_sources() {
         vec![String::from("root.usda"), String::from("asset.usda")]
     );
     let authored = doc.store.property_path("/Asset.value");
-    let mut layer = doc.store.layers[&asset].clone();
+    let mut layer = doc.store.layer(asset).unwrap().clone();
     layer.set_property(
         authored,
         PropertySpec::attribute().with_default(Value::Int(9)),

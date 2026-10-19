@@ -99,7 +99,7 @@ fn names(store: &InMemoryStore) -> Names {
         types: BTreeSet::new(),
     };
     let is_array = |value: &Value| value.array_ref().is_some() || value.array_edit_ref().is_some();
-    for layer in store.layers.values() {
+    for layer in store.layers() {
         for spec in prim_specs(layer) {
             names.types.extend(spec.type_name);
             let variants = spec.variant_branches().map(|branch| branch.spec);

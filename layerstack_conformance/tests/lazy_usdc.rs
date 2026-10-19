@@ -125,7 +125,7 @@ fn retained_defaults_and_selected_endpoints_share_one_cache() {
         3,
         "unselected last frame stays encoded"
     );
-    let snapshot = store.layers[&LayerId(1)].clone();
+    let snapshot = store.layer(LayerId(1)).unwrap().clone();
     drop(stage);
     drop(store);
     assert_eq!(read.values.stats().materialized_arrays, 3);
@@ -297,7 +297,7 @@ fn failures_never_select_weaker_defaults_or_hold_a_good_endpoint() {
             .value,
         Value::from(vec![0_f32])
     );
-    let mut to_save = store.layers[&LayerId(1)].clone();
+    let mut to_save = store.layer(LayerId(1)).unwrap().clone();
     to_save.sublayers_mut().clear();
     to_save.insert_prim(
         store.path("/"),

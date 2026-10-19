@@ -79,8 +79,8 @@ use std::path::PathBuf;
 use layerstack::property::get_property;
 use layerstack::spec_path::VariantSelectionSite;
 use layerstack::{
-    LayerId, LayerStack, LayerStore, PropertyEntry, PropertyPath, SpecComponent, SpecPath, Stage,
-    StageOptions, TokenId, Value,
+    LayerId, LayerStack, PropertyEntry, PropertyPath, SpecComponent, SpecPath, Stage, StageOptions,
+    TokenId, Value,
 };
 use layerstack_conformance::{
     pcp_txt::{PcpSite, PcpTxt, load_pcp_txt},

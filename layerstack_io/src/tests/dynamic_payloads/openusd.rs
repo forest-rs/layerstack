@@ -94,9 +94,8 @@ fn assert_read(doc: &StageDocument<Fixtures>, dir: &str, file: &str, args: &[(&s
 fn layer_id(doc: &StageDocument<Fixtures>, dir: &str, identifier: &str) -> LayerId {
     let full = format!("{dir}/{identifier}");
     doc.store()
-        .layers
-        .keys()
-        .copied()
+        .layer_ids()
+        .into_iter()
         .find(|&id| doc.identifier(id) == Some(full.as_str()))
         .unwrap_or_else(|| panic!("{identifier} was not read"))
 }
@@ -456,9 +455,8 @@ fn test_ancestral_payloads2() {
         let full = format!("{dir}/{}", layer("cone.testpcpdynamic", &CONE_4_3_50));
         let cone = doc
             .store()
-            .layers
-            .keys()
-            .copied()
+            .layer_ids()
+            .into_iter()
             .find(|&id| doc.identifier(id) == Some(full.as_str()))
             .unwrap();
         assert!(in_prim_stack(&doc, "/Root", cone, "/Root/Xform__3_2"));
@@ -476,7 +474,13 @@ fn test_ancestral_payloads3() {
         let args = [(DEPTH, "4"), (NUM, "4"), (RADIUS, "50")];
         let cone = layer_id(&doc, &dir, &layer("cone.testpcpdynamic", &args));
         let xform = prim_id(&doc, "/Root/Xform__3_3");
-        assert!(doc.store().layers[&cone].prims().contains_key(&xform));
+        assert!(
+            doc.store()
+                .layer(cone)
+                .unwrap()
+                .prims()
+                .contains_key(&xform)
+        );
     }
 }
 

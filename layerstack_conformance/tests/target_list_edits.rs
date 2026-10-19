@@ -180,7 +180,7 @@ fn addressed(
         return Json::Null;
     };
     property_at(
-        &store.layers[&target.layer()],
+        store.layer(target.layer()).unwrap(),
         &path,
         name,
         &store.paths,
@@ -261,7 +261,7 @@ fn target_edits_agree_with_openusd_call_by_call() {
     for case in cases {
         let name = case["name"].as_str().unwrap();
         let mut loaded = load("edits.usda");
-        let original = loaded.store.layers.clone();
+        let original = loaded.store.layers().cloned().collect::<Vec<_>>();
         let mut live = live_of(&mut loaded);
         let target = edit_target(&mut loaded, &live, &case["target"]);
         let prim = loaded.store.path(case["prim"].as_str().unwrap());
@@ -290,8 +290,9 @@ fn target_edits_agree_with_openusd_call_by_call() {
             live.apply(&mut loaded.store, inverse)
                 .unwrap_or_else(|e| panic!("{name}: undo: {e}"));
         }
-        for (id, layer) in &original {
-            let now = &loaded.store.layers[id];
+        for layer in &original {
+            let id = &layer.id();
+            let now = loaded.store.layer(*id).unwrap();
             assert_eq!(now.prims(), layer.prims(), "{name}: undo restores {id:?}");
             assert_eq!(
                 now.variant_prims(),

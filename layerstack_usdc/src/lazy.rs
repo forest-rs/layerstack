@@ -18,10 +18,11 @@ use core::{
     fmt,
     sync::atomic::{AtomicUsize, Ordering},
 };
+use hashbrown::HashMap;
 use layerstack::encoded_bytes::EncodedBytes;
 use layerstack::{
     ArrayReadError, AssetResolver, DeferredArraySource, DeferredValue, DeferredValueSource,
-    HashMap, LayerId, PathInterner, TokenId, TokenInterner, TypedArray, Value,
+    LayerId, PathInterner, TokenId, TokenInterner, TypedArray, Value,
 };
 use std::sync::{Mutex, OnceLock};
 

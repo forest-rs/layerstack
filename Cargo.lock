@@ -316,6 +316,7 @@ dependencies = [
 name = "layerstack_conformance"
 version = "0.1.0"
 dependencies = [
+ "hashbrown",
  "layerstack",
  "layerstack_custom_schemas",
  "layerstack_io",
@@ -357,6 +358,7 @@ dependencies = [
 name = "layerstack_io"
 version = "0.1.0"
 dependencies = [
+ "hashbrown",
  "layerstack",
  "layerstack_usda",
  "layerstack_usdc",
@@ -390,6 +392,7 @@ name = "layerstack_schemas"
 version = "0.1.0"
 dependencies = [
  "fearless_simd",
+ "hashbrown",
  "layerstack",
  "libm",
 ]
@@ -398,6 +401,7 @@ dependencies = [
 name = "layerstack_usda"
 version = "0.1.0"
 dependencies = [
+ "hashbrown",
  "layerstack",
  "smallvec",
 ]
@@ -406,6 +410,7 @@ dependencies = [
 name = "layerstack_usdc"
 version = "0.1.0"
 dependencies = [
+ "hashbrown",
  "layerstack",
  "layerstack_usda",
  "lz4_flex",
@@ -804,6 +809,7 @@ dependencies = [
  "criterion",
  "fearless_simd",
  "glam",
+ "hashbrown",
  "layerstack",
  "layerstack_conformance",
  "layerstack_io",

@@ -354,7 +354,7 @@ enum Spec<'a> {
 }
 
 fn spec_at<'a>(loaded: &'a LoadedStage, layer: LayerId, path: &SpecPath) -> Option<Spec<'a>> {
-    let layer = &loaded.store.layers[&layer];
+    let layer = &loaded.store.layer(layer).unwrap();
     if let Some(variant) = layer.variant_spec_at(path, &loaded.store.paths) {
         return Some(Spec::Variant(variant));
     }
@@ -405,7 +405,7 @@ fn prim_field_edits_agree_with_openusd_call_by_call() {
     for case in cases {
         let name = case["name"].as_str().unwrap();
         let mut loaded = load();
-        let original = loaded.store.layers.clone();
+        let original = loaded.store.layers().cloned().collect::<Vec<_>>();
         let mut live = LiveStage::compose(
             &mut loaded.store,
             loaded.root_layer,
@@ -460,8 +460,9 @@ fn prim_field_edits_agree_with_openusd_call_by_call() {
             loaded.root_layer,
             &format!("{name}: undo recomposes"),
         );
-        for (id, layer) in &original {
-            let now = &loaded.store.layers[id];
+        for layer in &original {
+            let id = &layer.id();
+            let now = loaded.store.layer(*id).unwrap();
             assert_eq!(
                 now.prims(),
                 layer.prims(),

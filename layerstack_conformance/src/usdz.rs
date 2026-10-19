@@ -8,7 +8,7 @@
 
 use std::path::Path;
 
-use layerstack::{AssetResolver, InMemoryStore, LayerStore};
+use layerstack::{AssetResolver, InMemoryStore};
 
 use crate::usda_real::{FileResolver, LoadedStage};
 

@@ -365,10 +365,10 @@ impl GeneratedScene {
                 &self.publication.properties,
             )
             .unwrap();
-        let output_generation = self.store.layers[&ASSET].generation();
+        let output_generation = self.store.layer(ASSET).unwrap().generation();
         let terrain_points = self.store.property_path("/World/Terrain.points");
         // Replace an entire source layer behind the live stage, keeping its LayerId.
-        let mut replacement = self.store.layers[&TERRAIN].clone();
+        let mut replacement = self.store.layer(TERRAIN).unwrap().clone();
         replacement.set_property(
             terrain_points,
             PropertySpec::typed_attribute(
@@ -380,7 +380,7 @@ impl GeneratedScene {
         );
         self.store.insert_layer(replacement);
         assert_eq!(
-            self.store.layers[&ASSET].generation(),
+            self.store.layer(ASSET).unwrap().generation(),
             output_generation,
             "source replacement does not touch output layer"
         );
@@ -413,8 +413,7 @@ impl GeneratedScene {
             max_retained_bytes: 4096,
         });
         self.store
-            .layers
-            .get_mut(&TERRAIN)
+            .layer_mut(TERRAIN)
             .unwrap()
             .set_change_history_budget(ChangeHistoryBudget {
                 max_batches: 0,
@@ -460,7 +459,9 @@ impl GeneratedScene {
             "composed evictions are measurable"
         );
         assert!(
-            self.store.layers[&TERRAIN]
+            self.store
+                .layer(TERRAIN)
+                .unwrap()
                 .change_history_stats()
                 .discarded_batches
                 > 0,
@@ -704,7 +705,7 @@ def Scope "Recipes" {
                 .expect("asset generator supplies a texture reference"),
         );
         // Compare this producer's authored site, even when a stronger opinion masks it.
-        if let Some(local) = self.store.layers[&ASSET].property(file) {
+        if let Some(local) = self.store.layer(ASSET).unwrap().property(file) {
             if local.kind != PropertyKind::Attribute
                 || local
                     .type_name
@@ -742,7 +743,7 @@ def Scope "Recipes" {
         if !update.transaction.is_empty() {
             update
                 .transaction
-                .expect_generation(ASSET, self.store.layers[&ASSET].generation());
+                .expect_generation(ASSET, self.store.layer(ASSET).unwrap().generation());
         }
         let applied = output
             .evidence()

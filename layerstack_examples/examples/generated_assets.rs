@@ -113,7 +113,7 @@ fn main() {
         (support::TERRAIN, "terrain.usd"),
     ] {
         let text = layerstack_usda::save::save_usda(
-            generated.store.layers.get(&id).unwrap(),
+            generated.store.layer(id).unwrap(),
             &generated.store.tokens,
             &generated.store.paths,
         )

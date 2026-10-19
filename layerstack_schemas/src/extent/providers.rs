@@ -5,8 +5,9 @@
 
 use crate::{PrimView, Scene, Time, bounds::Range3d};
 use alloc::{sync::Arc, vec::Vec};
+use hashbrown::HashMap;
 use layerstack::{
-    ArrayReadError, HashMap, PathId, PropertyPath, SchemaRegistry, TokenId, TokenInterner, Value,
+    ArrayReadError, PathId, PropertyPath, SchemaRegistry, TokenId, TokenInterner, Value,
 };
 
 /// A provider cannot produce a complete local extent.

@@ -16,7 +16,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use core::hash::BuildHasher;
 
-use layerstack::HashMap;
+use hashbrown::HashMap;
 use smallvec::SmallVec;
 
 use super::array_dedup::{Array, ArrayDedup};

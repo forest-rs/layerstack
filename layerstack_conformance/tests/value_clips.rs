@@ -1265,8 +1265,7 @@ fn live_raw_clip_and_manifest_edits_refresh_descendants_but_preserve_snapshots()
     let unrelated = store.path("/Unrelated");
     assert_eq!(at(live.stage(), &store, property, 5.), Some(5.));
     store
-        .layers
-        .get_mut(&LayerId(2))
+        .layer_mut(LayerId(2))
         .unwrap()
         .property_mut(raw)
         .unwrap()
@@ -1294,8 +1293,7 @@ fn live_raw_clip_and_manifest_edits_refresh_descendants_but_preserve_snapshots()
     assert_eq!(at(live.stage(), &store, property, 5.), Some(25.));
     assert_eq!(at(&snapshot, &store, property, 5.), Some(5.));
     store
-        .layers
-        .get_mut(&LayerId(4))
+        .layer_mut(LayerId(4))
         .unwrap()
         .property_mut(raw)
         .unwrap()
@@ -1328,7 +1326,7 @@ fn live_anchor_metadata_retimes_and_new_asset_bindings_become_visible() {
     let mut live = live(&mut store);
     let property = store.property_path("/P.x");
     let clips_token = store.tokens.lookup("clips").unwrap();
-    let layer = store.layers.get_mut(&LayerId(1)).unwrap();
+    let layer = store.layer_mut(LayerId(1)).unwrap();
     let prim = layer.prim_mut(property.prim_path()).unwrap();
     let layerstack::FieldValue::Value(Value::Dictionary(mut sets)) =
         prim.field(clips_token).unwrap().clone()
@@ -1562,8 +1560,7 @@ fn live_newly_selected_resident_clip_is_watched_on_the_next_edit() {
     assert_eq!(at(live.stage(), &store, property, 0.), Some(1.));
     let clips_token = store.tokens.lookup("clips").unwrap();
     let prim = store
-        .layers
-        .get_mut(&LayerId(1))
+        .layer_mut(LayerId(1))
         .unwrap()
         .prim_mut(property.prim_path())
         .unwrap();
@@ -1591,8 +1588,7 @@ fn live_newly_selected_resident_clip_is_watched_on_the_next_edit() {
     assert_eq!(at(live.stage(), &store, property, 0.), Some(2.));
     let raw = store.property_path("/C.x");
     store
-        .layers
-        .get_mut(&LayerId(3))
+        .layer_mut(LayerId(3))
         .unwrap()
         .property_mut(raw)
         .unwrap()
@@ -1654,8 +1650,7 @@ fn review_sparse_anchor_keeps_authoring_provenance() {
     ));
     let property = store.property_path("/P.x");
     store
-        .layers
-        .get_mut(&LayerId(1))
+        .layer_mut(LayerId(1))
         .unwrap()
         .property_mut(property)
         .unwrap()

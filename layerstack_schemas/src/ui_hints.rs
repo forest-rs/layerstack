@@ -627,7 +627,9 @@ mod tests {
             Some(Value::Int(17))
         );
         let key = store.tokens.lookup("uiHints").unwrap();
-        let local = store.layers[&LayerId(2)].prims()[&path].field(key).unwrap();
+        let local = store.layer(LayerId(2)).unwrap().prims()[&path]
+            .field(key)
+            .unwrap();
         let layerstack::FieldValue::Value(local) = local else {
             panic!("dictionary")
         };
@@ -672,8 +674,7 @@ mod tests {
                 .with_field(ui, Value::Dictionary(vec![("weak".into(), Value::Int(4))])),
         );
         store
-            .layers
-            .get_mut(&LayerId(1))
+            .layer_mut(LayerId(1))
             .unwrap()
             .sublayers_mut()
             .push(layerstack::SublayerEntry::new(LayerId(3)));
@@ -716,7 +717,8 @@ mod tests {
         assert_eq!(hints.hint(&["weak"]), Some(Value::Int(4)));
         assert_eq!(hints.display_name(), "Reference");
         assert!(hints.hidden());
-        let layerstack::FieldValue::Value(local) = store.layers[&LayerId(1)].prims()[&source]
+        let layerstack::FieldValue::Value(local) = store.layer(LayerId(1)).unwrap().prims()
+            [&source]
             .field(ui)
             .unwrap()
         else {
@@ -725,7 +727,7 @@ mod tests {
         assert!(entry(local, &["weak"]).is_none());
         assert!(entry(local, &["unrelated"]).is_some());
         assert!(
-            store.layers[&LayerId(2)].prims()[&instance]
+            store.layer(LayerId(2)).unwrap().prims()[&instance]
                 .field(ui)
                 .is_none()
         );

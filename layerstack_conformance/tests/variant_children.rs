@@ -244,8 +244,7 @@ fn switching_branches_recomposes_like_a_full_compose() {
         let variant = loaded.store.tokens.intern(variant);
         loaded
             .store
-            .layers
-            .get_mut(&root)
+            .layer_mut(root)
             .and_then(|layer| layer.prim_mut(prim))
             .expect("prim spec")
             .variant_selections
@@ -265,8 +264,7 @@ fn switching_branches_recomposes_like_a_full_compose() {
         let variant = loaded.store.tokens.intern(variant);
         loaded
             .store
-            .layers
-            .get_mut(&root)
+            .layer_mut(root)
             .and_then(|layer| layer.prim_mut(prim))
             .expect("prim spec")
             .variant_selections

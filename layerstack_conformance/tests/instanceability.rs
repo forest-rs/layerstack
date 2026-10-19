@@ -193,8 +193,7 @@ fn first_and_last_class_specs_change_instanceability_incrementally() {
     // Replacing a class with an empty over still leaves a contributing spec.
     loaded
         .store
-        .layers
-        .get_mut(&root)
+        .layer_mut(root)
         .unwrap()
         .insert_prim(target, PrimSpec::over());
     live.synchronize(&mut loaded.store);

@@ -5,7 +5,8 @@
 use super::{SkelError, SkeletonQuery, SkinningQuery, invalid, length, read, tokens};
 use crate::{PrimView, Scene, Time, usd_skel::BlendShape};
 use alloc::{string::String, sync::Arc, vec, vec::Vec};
-use layerstack::{HashSet, PathId, TargetPath};
+use hashbrown::HashSet;
+use layerstack::{PathId, TargetPath};
 
 fn validate_offsets(offsets: &[[f32; 3]], indices: &[i32], count: usize) -> Result<(), SkelError> {
     if (indices.is_empty() && offsets.len() != count)

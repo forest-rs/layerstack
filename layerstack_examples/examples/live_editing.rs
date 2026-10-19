@@ -76,7 +76,7 @@ fn main() {
 
     println!("\n--- Edit: Hero takes 30 damage ---");
     {
-        let layer = store.layers.get_mut(&LayerId(1)).unwrap();
+        let layer = store.layer_mut(LayerId(1)).unwrap();
         let spec = layer.prim_mut(hero).unwrap();
         spec.set_field(field_hp, 70_i64);
     }
@@ -92,7 +92,7 @@ fn main() {
 
     println!("\n--- Edit: Enchant the sword ---");
     {
-        let layer = store.layers.get_mut(&LayerId(1)).unwrap();
+        let layer = store.layer_mut(LayerId(1)).unwrap();
         let spec = layer.prim_mut(sword).unwrap();
         spec.set_field(field_color, "glowing blue");
     }
@@ -109,7 +109,7 @@ fn main() {
 
     println!("\n--- Edit: Power gem upgrade (speed 10 → 20) ---");
     {
-        let layer = store.layers.get_mut(&LayerId(2)).unwrap();
+        let layer = store.layer_mut(LayerId(2)).unwrap();
         let spec = layer.prim_mut(power_gem).unwrap();
         spec.set_field(field_speed, 20.0);
     }
@@ -131,7 +131,7 @@ fn main() {
 
     println!("\n--- Batch edit: enemy takes damage + shield upgrade ---");
     {
-        let layer = store.layers.get_mut(&LayerId(1)).unwrap();
+        let layer = store.layer_mut(LayerId(1)).unwrap();
         let e_spec = layer.prim_mut(enemy).unwrap();
         e_spec.set_field(field_hp, 25_i64);
         let s_spec = layer.prim_mut(shield).unwrap();
@@ -154,11 +154,9 @@ fn main() {
     println!("\n--- Structural change: add /Treasure ---");
     let treasure = store.path("/Treasure");
     {
-        let layer = store.layers.get_mut(&LayerId(1)).unwrap();
-        layer.insert_prim(
-            treasure,
-            PrimSpec::def().with_field(store.tokens.intern("value"), 500_i64),
-        );
+        let value = store.tokens.intern("value");
+        let layer = store.layer_mut(LayerId(1)).unwrap();
+        layer.insert_prim(treasure, PrimSpec::def().with_field(value, 500_i64));
     }
 
     live.notify_structural_change();

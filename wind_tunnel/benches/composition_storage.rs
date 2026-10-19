@@ -102,7 +102,7 @@ fn bench_storage(c: &mut Criterion) {
     for (properties, samples) in [(32, 0), (128, 0), (32, 64), (128, 64)] {
         let authored = fixture(properties, samples, 128);
         let bytes = layerstack_usdc::writer::save_layer(
-            &authored.layers[&LayerId(1)],
+            authored.layer(LayerId(1)).unwrap(),
             &authored.tokens,
             &authored.paths,
         )

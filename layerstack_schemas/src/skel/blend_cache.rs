@@ -8,7 +8,8 @@ use super::{
 };
 use crate::{PrimView, Scene, Time};
 use alloc::{string::String, vec::Vec};
-use layerstack::{Changes, HashMap, HashSet, PathId};
+use hashbrown::{HashMap, HashSet};
+use layerstack::{Changes, PathId};
 
 /// Borrowed morph definitions and mapped animation weights at an explicit time.
 /// No points or normals are read. Compare revisions only within the same cache;

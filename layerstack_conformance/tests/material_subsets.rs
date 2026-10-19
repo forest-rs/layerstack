@@ -165,8 +165,7 @@ fn snapshot_subset_query_does_not_decode_unselected_topology_samples() {
     let counts = store.tokens.lookup("faceVertexCounts").unwrap();
     let calls = Arc::new(AtomicUsize::new(0));
     let spec = store
-        .layers
-        .get_mut(&LayerId(1))
+        .layer_mut(LayerId(1))
         .unwrap()
         .prim_mut(path)
         .unwrap()
@@ -245,8 +244,7 @@ fn material_subsets_preserve_decode_failure_paths() {
             let error = ArrayReadError::InvalidData("invalid retained subset input".into());
             let value = Value::TypedArray(TypedArray::Deferred(Arc::new(Failed(error.clone()))));
             let attribute = store
-                .layers
-                .get_mut(&LayerId(1))
+                .layer_mut(LayerId(1))
                 .unwrap()
                 .prim_mut(path)
                 .unwrap()

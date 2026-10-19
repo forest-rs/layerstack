@@ -105,7 +105,7 @@ fn main() {
         let prims = stage.traverse(root).count();
         let start = Instant::now();
         if mode == "retained-all" {
-            for layer in store.layers.values() {
+            for layer in store.layers() {
                 for prim in layer.prims().values() {
                     for property in &prim.properties {
                         for value in property.spec.default.iter().chain(

@@ -3,9 +3,7 @@
 
 //! Common stack authoring agrees with C++ and remains an undoable source edit.
 #![allow(missing_docs, reason = "integration tests")]
-use layerstack::{
-    InMemoryStore, Layer, LayerId, LayerStore, LiveStage, StageOptions, edit::EditTarget,
-};
+use layerstack::{InMemoryStore, Layer, LayerId, LiveStage, StageOptions, edit::EditTarget};
 use layerstack_conformance::matrices;
 use layerstack_schemas::{
     CommonTransform, RotationOrder, Scene, SchemaEdit, Time, XformOpPrecision as P,

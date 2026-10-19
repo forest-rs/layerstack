@@ -353,8 +353,7 @@ fn edits_to_a_shared_site_recompose_every_occurrence() {
         let name = loaded.store.tokens.intern(attr);
         let spec = loaded
             .store
-            .layers
-            .get_mut(&source)
+            .layer_mut(source)
             .and_then(|layer| layer.prim_mut(prim))
             .expect("prim spec");
         get_property_mut(&mut spec.properties, name)
@@ -387,8 +386,7 @@ fn edits_to_a_shared_site_recompose_every_occurrence() {
     let right_prim = loaded.store.path("/Right");
     loaded
         .store
-        .layers
-        .get_mut(&right)
+        .layer_mut(right)
         .and_then(|layer| layer.prim_mut(right_prim))
         .expect("prim spec")
         .references = ListOp::default();

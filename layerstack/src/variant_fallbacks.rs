@@ -32,7 +32,7 @@ use crate::{
 /// Variant fallback selections: for each variant set name, the variant
 /// names to select, in order of preference, where no selection is
 /// authored.
-pub type VariantFallbacks = HashMap<TokenId, Vec<TokenId>>;
+pub type VariantFallbacks = alloc::collections::BTreeMap<TokenId, Vec<TokenId>>;
 
 /// Completes `selections`, the variant selections composition found for a
 /// prim whose specs are `specs`, with `fallbacks`.

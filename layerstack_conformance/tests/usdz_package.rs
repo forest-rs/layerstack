@@ -217,8 +217,7 @@ fn expect_value(
         .lookup(&path)
         .unwrap_or_else(|| panic!("path not interned: {prim_path}"));
     let layer = store
-        .layers
-        .get(&layer_id)
+        .layer(layer_id)
         .unwrap_or_else(|| panic!("layer not found: {layer_id:?}"));
     let prim = layer
         .prim(path_id)
@@ -235,7 +234,7 @@ fn has_prim(store: &mut InMemoryStore, layer_id: LayerId, prim_path: &str) -> bo
     let Some(path_id) = store.paths.lookup(&path) else {
         return false;
     };
-    let Some(layer) = store.layers.get(&layer_id) else {
+    let Some(layer) = store.layer(layer_id) else {
         return false;
     };
     layer.prims().contains_key(&path_id)

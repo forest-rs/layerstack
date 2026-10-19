@@ -323,7 +323,7 @@ fn sublayers_match_openusd() {
     // The authored asset path, offset and scale are recorded on the
     // sublayer entry.
     let loaded = load_entry_usdc(&fixtures_dir().join("sublayers_root.usdc"));
-    let root = &loaded.store.layers[&loaded.root_layer];
+    let root = &loaded.store.layer(loaded.root_layer).unwrap();
     assert_eq!(root.sublayers().len(), 1);
     assert_eq!(root.sublayers()[0].offset.offset, 10.0);
     assert_eq!(root.sublayers()[0].offset.scale, 2.0);

@@ -51,7 +51,7 @@
 
 use crate::Scene;
 use alloc::{sync::Arc, vec::Vec};
-use layerstack::{CompositionError, LayerId, PathId, SpecPath, Time, TokenId};
+use layerstack::{CompositionError, LayerId, LayerStore, PathId, SpecPath, Time, TokenId};
 
 mod custom;
 pub use custom::{
@@ -272,6 +272,129 @@ pub struct ValidationProblem {
     pub time: Option<Time>,
     /// Machine-readable error details.
     pub kind: ValidationProblemKind,
+}
+impl ValidationProblem {
+    /// The problem in words, its paths and names written as text with
+    /// `store`, the store the stage was composed from: the rule, the
+    /// prim or property and the spec that authors it, the time, and what
+    /// is wrong (that an attribute is authored as `float` but resolves as
+    /// `double`).
+    #[must_use]
+    pub fn display<'a>(&'a self, store: &'a dyn LayerStore) -> impl core::fmt::Display + 'a {
+        crate::diagnostic::Shown(move |f: &mut core::fmt::Formatter<'_>| {
+            let (paths, tokens) = (store.paths(), store.tokens());
+            match &self.rule {
+                ValidatorId::Builtin(rule) => write!(f, "{rule:?}: ")?,
+                ValidatorId::Custom(id) => write!(f, "{id}: ")?,
+            }
+            match (self.site.prim, self.site.property) {
+                (Some(prim), Some(property)) => write!(
+                    f,
+                    "{}",
+                    layerstack::PropertyPath::new(prim, property).display(paths, tokens)
+                )?,
+                (Some(prim), None) => f.write_str(&paths.display(prim, tokens))?,
+                (None, _) => f.write_str("the stage")?,
+            }
+            if let Some(source) = &self.site.source {
+                match &source.spec {
+                    Some(spec) => write!(
+                        f,
+                        " (authored at {} in layer {})",
+                        spec.display(paths, tokens),
+                        source.layer.0
+                    )?,
+                    None => write!(f, " (in layer {})", source.layer.0)?,
+                }
+            }
+            match self.time {
+                Some(Time::At { code, .. }) => write!(f, " at time {code}")?,
+                Some(Time::Default) => f.write_str(" at the default time")?,
+                None => {}
+            }
+            f.write_str(": ")?;
+            let type_name = |name: &Option<AttributeTypeName>| match name {
+                Some(name) if name.is_array => alloc::format!("`{}[]`", name.name),
+                Some(name) => alloc::format!("`{}`", name.name),
+                None => alloc::string::String::from("no type"),
+            };
+            match &self.kind {
+                ValidationProblemKind::Custom { code, message, .. } => {
+                    write!(f, "{code}: {message}")
+                }
+                ValidationProblemKind::Composition(error) => {
+                    write!(f, "{}", error.display(store))
+                }
+                ValidationProblemKind::InvalidDefaultPrim => f.write_str(
+                    "the root layer's `defaultPrim` is absent, malformed or names no composed \
+                     root prim",
+                ),
+                ValidationProblemKind::AttributeTypeMismatch {
+                    expected, authored, ..
+                } => write!(
+                    f,
+                    "authored as {}, but it resolves as {}",
+                    type_name(authored),
+                    type_name(expected)
+                ),
+                ValidationProblemKind::DisallowedToken {
+                    value,
+                    index,
+                    allowed,
+                } => {
+                    write!(f, "the token `{value}`")?;
+                    if let Some(index) = index {
+                        write!(f, " at index {index}")?;
+                    }
+                    write!(f, " is not one of its `allowedTokens` {allowed:?}")
+                }
+                #[cfg(feature = "usd-geom")]
+                ValidationProblemKind::MissingGeometryMetadata(key) => {
+                    write!(f, "the root layer authors no `{key}`")
+                }
+                #[cfg(feature = "usd-geom")]
+                ValidationProblemKind::MeshTopology(error) => write!(f, "{error}"),
+                #[cfg(feature = "usd-geom")]
+                ValidationProblemKind::SubsetFamily { family, problem } => {
+                    write!(f, "the `{family}` subset family: {problem:?}")
+                }
+                #[cfg(feature = "usd-geom")]
+                ValidationProblemKind::SubsetParentNotImageable => {
+                    f.write_str("the subset's parent is not imageable")
+                }
+                #[cfg(feature = "usd-geom")]
+                ValidationProblemKind::GprimAncestor(ancestor) => write!(
+                    f,
+                    "a boundable beneath the Gprim {}",
+                    paths.display(*ancestor, tokens)
+                ),
+                #[cfg(feature = "usd-shade")]
+                ValidationProblemKind::MissingMaterialBindingApi => {
+                    f.write_str("material binding relationships without `MaterialBindingAPI`")
+                }
+                #[cfg(feature = "usd-shade")]
+                ValidationProblemKind::MaterialBindingNotRelationship => {
+                    f.write_str("a `material:binding` property that is an attribute")
+                }
+                #[cfg(all(feature = "usd-shade", feature = "usd-geom"))]
+                ValidationProblemKind::MissingMaterialSubsetFamilyName => {
+                    f.write_str("a bound subset authors no `familyName`")
+                }
+                #[cfg(all(feature = "usd-shade", feature = "usd-geom"))]
+                ValidationProblemKind::UnrestrictedMaterialSubsetFamily => {
+                    f.write_str("the `materialBind` subset family is unrestricted")
+                }
+                #[cfg(feature = "usd-shade")]
+                ValidationProblemKind::ShadingConnection(error) => write!(f, "{error}"),
+                #[cfg(feature = "usd-shade")]
+                ValidationProblemKind::ShadingSourceNotProperty(source) => write!(
+                    f,
+                    "the connection source {} is a prim, not a property",
+                    source.display(paths, tokens)
+                ),
+            }
+        })
+    }
 }
 /// Work counters count actual explicit operations, not estimated elapsed time.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

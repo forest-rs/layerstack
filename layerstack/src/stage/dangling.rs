@@ -16,7 +16,6 @@
 //! Spec: AOUSD Core §7.3.3 (properties), §11.3 (population: inactive prims
 //! and unloaded payloads), §12.4 (target list resolution).
 
-use alloc::string::String;
 use alloc::vec::Vec;
 
 use hashbrown::HashMap;
@@ -132,14 +131,26 @@ pub struct DanglingTarget {
 }
 
 impl DanglingTarget {
-    /// The example as text: `/Placements/Spot.shade -> /Plants/Fern/Petal
-    /// (NoPrim)`.
+    /// The example in words, its paths written as text with `store`, the
+    /// store the stage was composed from: `/Placements/Spot.shade ->
+    /// /Plants/Fern/Petal (NoPrim)`.
     #[must_use]
-    pub fn display(&self, paths: &PathInterner, tokens: &crate::TokenInterner) -> String {
-        alloc::format!(
+    pub fn display<'a>(&'a self, store: &'a dyn LayerStore) -> impl core::fmt::Display + 'a {
+        crate::diagnostic::with_store(self, store)
+    }
+}
+
+impl crate::diagnostic::Describe for DanglingTarget {
+    fn describe(
+        &self,
+        f: &mut core::fmt::Formatter<'_>,
+        names: crate::diagnostic::Names<'_>,
+    ) -> core::fmt::Result {
+        write!(
+            f,
             "{} -> {} ({:?})",
-            self.source.display(paths, tokens),
-            self.target.display(paths, tokens),
+            names.property(self.source),
+            names.target(self.target),
             self.kind
         )
     }

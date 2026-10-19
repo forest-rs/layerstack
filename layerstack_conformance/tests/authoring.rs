@@ -521,13 +521,13 @@ fn rocks_authoring_session_matches_openusd() {
     batch
         .set_default(root.property(size_b), Value::Double(10.0))
         .set_default(through_b.property(size_a), Value::Double(11.0));
-    assert!(matches!(
-        s.live.apply(&mut s.store, &batch),
+    assert_eq!(
+        s.live.apply(&mut s.store, &batch).map(|_| ()),
         Err(EditError::Rejected {
             op: 1,
-            reason: Rejection::Unmappable
+            reason: Rejection::Unmappable(layerstack::TargetPath::Property(size_a))
         })
-    ));
+    );
     assert_eq!(
         (
             s.store.layers[&SCENE].clone(),

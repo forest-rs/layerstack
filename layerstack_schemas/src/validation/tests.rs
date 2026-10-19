@@ -1010,6 +1010,12 @@ fn tokens_outside_allowed_tokens_are_reported_with_the_allowed_set() {
     );
     assert_eq!(report.work.token_values, 5);
     assert_eq!(
+        alloc::string::ToString::to_string(&report.problems[1].display(&store)),
+        "AllowedTokens: /Rock.rock:tags (authored at /Rock.rock:tags in layer 1) at the \
+         default time: the token `crumbly` at index 1 is not one of its `allowedTokens` \
+         [\"mossy\", \"smooth\"]"
+    );
+    assert_eq!(
         BuiltinRule::AllowedTokens.time_domain(),
         RuleTimeDomain::RequestedTimes
     );

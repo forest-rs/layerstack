@@ -425,6 +425,8 @@ mod collection;
 pub mod color;
 #[cfg(feature = "usd-geom")]
 mod common_xform;
+#[cfg(feature = "usd")]
+mod diagnostic;
 mod edit;
 mod metadata;
 #[cfg(feature = "usd")]

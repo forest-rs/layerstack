@@ -207,6 +207,36 @@ over "Other"
     assert_eq!(Imported::new(&text).save().unwrap(), text, "stable");
 }
 
+/// Native `token[]` and `string[]` arrays, empty ones included, save as
+/// the arrays they hold.
+///
+/// Spec: AOUSD Core §6.2 (text value types and their arrays).
+#[test]
+fn saves_native_text_arrays() {
+    let source = "#usda 1.0\ndef \"A\"\n{\n    token[] t = []\n    string[] s = []\n    token[] e = []\n    string[] f = []\n}\n";
+    let mut imported = Imported::new(source);
+    let names = vec![imported.tokens.intern("x"), imported.tokens.intern("y z")];
+    imported.property("/A.t").default = Some(LayerValue::from(names));
+    let texts: layerstack::StringArray = ["", "a \"b\"", "c"].into_iter().collect();
+    imported.property("/A.s").default = Some(LayerValue::from(texts));
+    imported.property("/A.e").default = Some(LayerValue::from(Vec::<TokenId>::new()));
+    imported.property("/A.f").default = Some(LayerValue::from(layerstack::StringArray::new()));
+    let text = imported.save().unwrap();
+    let expected = r#"#usda 1.0
+
+def "A"
+{
+    token[] t = ["x", "y z"]
+    string[] s = ["", 'a "b"', "c"]
+    token[] e = []
+    string[] f = []
+}
+
+"#;
+    assert_eq!(text, expected, "saved text");
+    assert_eq!(Imported::new(&text).save().unwrap(), text, "stable");
+}
+
 /// Each unsupported feature is reported with its source path, and nothing
 /// is written.
 #[test]

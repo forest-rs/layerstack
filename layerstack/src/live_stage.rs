@@ -1916,6 +1916,8 @@ impl LiveStage {
     /// the layers the stage reads ([`Self::generations`]) when it reflects
     /// them, nothing being pending, or that it may not otherwise.
     fn publish_preparation(&mut self, store: &dyn LayerStore) {
+        #[cfg(test)]
+        self.check_sources();
         let pending = self.needs_full_rebuild
             || self.controls_pending
             || self.tracker.has_invalidated(OPINION_EDIT)
@@ -1930,6 +1932,43 @@ impl LiveStage {
         });
         self.stage
             .record_preparation_generations(store, generations);
+    }
+
+    /// Checks that every prim drawing on a site of a layer is recorded as
+    /// drawing on it, which [`Self::sources`] finds the layer's share from,
+    /// and that every share found is what finding it afresh would give.
+    #[cfg(test)]
+    fn check_sources(&self) {
+        for prim in self.stage.prim_paths() {
+            for (layer, site) in self.stage.source_sites(prim) {
+                assert!(
+                    self.layer_to_prims
+                        .get(&layer)
+                        .is_some_and(|prims| prims.contains(&prim)),
+                    "{prim:?} draws on {site:?} of {layer:?}, not recorded"
+                );
+            }
+        }
+        self.sources.read(|index| {
+            let mut held: HashMap<PathId, Vec<LayerId>> = HashMap::new();
+            for (&layer, share) in &index.layers {
+                let mut fresh = SourceIndex::default();
+                let found = fresh.layer(&self.stage, layer, &self.layer_to_prims);
+                assert_eq!(share, found, "the share of {layer:?} is stale");
+                for &prim in share.prim_to_sites.keys() {
+                    held.entry(prim).or_default().push(layer);
+                }
+            }
+            let mut recorded: HashMap<PathId, Vec<LayerId>> = index
+                .prim_layers
+                .iter()
+                .map(|(prim, layers)| (*prim, layers.to_vec()))
+                .collect();
+            for layers in held.values_mut().chain(recorded.values_mut()) {
+                layers.sort_unstable();
+            }
+            assert_eq!(held, recorded, "the layers holding each prim differ");
+        });
     }
 
     /// Replaces the source-site index entries for `prim` with those of its
@@ -3466,6 +3505,15 @@ mod tests {
         index
     }
 
+    /// The layers whose shares `live` has found, sorted.
+    fn found_layers(live: &LiveStage) -> Vec<LayerId> {
+        let mut layers: Vec<LayerId> = live
+            .sources
+            .read(|index| index.layers.keys().copied().collect());
+        layers.sort_unstable();
+        layers
+    }
+
     fn assert_matches_fresh(live: &LiveStage, store: &mut InMemoryStore, fields: &[TokenId]) {
         let fresh_opts = StageOptions {
             with_dependencies: true,
@@ -3556,6 +3604,233 @@ mod tests {
             whole_stage_sources(fresh_live.stage()),
             "source site → prim index differs"
         );
+    }
+
+    /// Layer 1 sublayers layer 4 and references `/Source` of layer 2 from
+    /// `/A` and `/Part` of layer 3 from `/B`; layer 4 adds an opinion to
+    /// `/C` and defines `/E`.
+    fn four_layer_scene(store: &mut InMemoryStore) -> FourLayers {
+        let x = store.tokens.intern("x");
+        let source = p(store, "/Source");
+        let part = p(store, "/Part");
+        let (a, b, c, e) = (
+            p(store, "/A"),
+            p(store, "/B"),
+            p(store, "/C"),
+            p(store, "/E"),
+        );
+        let mut root = Layer::new(LayerId(1));
+        root.sublayers.push(SublayerEntry::new(LayerId(4)));
+        root.insert_prim(
+            a,
+            PrimSpec::def().with_reference(Reference::new(LayerId(2), source)),
+        );
+        root.insert_prim(
+            b,
+            PrimSpec::def().with_reference(Reference::new(LayerId(3), part)),
+        );
+        root.insert_prim(c, PrimSpec::def().with_property(x, attr(1)));
+        store.insert_layer(root);
+        let mut library = Layer::new(LayerId(2));
+        library.insert_prim(source, PrimSpec::def().with_property(x, attr(2)));
+        library.insert_prim(p(store, "/Source/Child"), PrimSpec::def());
+        store.insert_layer(library);
+        let mut parts = Layer::new(LayerId(3));
+        parts.insert_prim(part, PrimSpec::def().with_property(x, attr(3)));
+        store.insert_layer(parts);
+        let mut sublayer = Layer::new(LayerId(4));
+        sublayer.insert_prim(c, PrimSpec::over().with_property(x, attr(4)));
+        sublayer.insert_prim(e, PrimSpec::def());
+        store.insert_layer(sublayer);
+        FourLayers {
+            x,
+            source,
+            part,
+            a,
+            b,
+            c,
+            e,
+        }
+    }
+
+    /// The paths [`four_layer_scene`] authors.
+    struct FourLayers {
+        x: TokenId,
+        source: PathId,
+        part: PathId,
+        a: PathId,
+        b: PathId,
+        c: PathId,
+        e: PathId,
+    }
+
+    /// The source index finds the share of each layer an edit asks for,
+    /// and only those, each as a whole-stage walk would find it.
+    #[test]
+    fn source_shares_are_found_for_the_layers_asked() {
+        let mut store = InMemoryStore::default();
+        let scene = four_layer_scene(&mut store);
+        let child = p(&mut store, "/Source/Child");
+        let a_child = p(&mut store, "/A/Child");
+        let live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+        assert!(found_layers(&live).is_empty());
+
+        assert_eq!(
+            live.composed_prims_for_source(LayerId(2), scene.source, &store),
+            [scene.a]
+        );
+        assert_eq!(
+            live.composed_prims_for_source(LayerId(2), child, &store),
+            [a_child]
+        );
+        assert_eq!(found_layers(&live), [LayerId(2)]);
+        assert_eq!(
+            live.composed_prims_for_source(LayerId(3), scene.part, &store),
+            [scene.b]
+        );
+        assert_eq!(found_layers(&live), [LayerId(2), LayerId(3)]);
+        assert!(
+            live.composed_prims_for_source(LayerId(9), scene.part, &store)
+                .is_empty(),
+            "a layer the stage does not read has an empty share"
+        );
+        live.check_sources();
+        assert_eq!(
+            every_layer_sources(&live),
+            whole_stage_sources(live.stage())
+        );
+    }
+
+    /// Shares found before edits that move arcs between layers, remove a
+    /// prim and rename one stay as finding them afresh gives.
+    ///
+    /// Spec: AOUSD Core §10.3.2 (references), §10.4 (namespace edits).
+    #[test]
+    fn source_shares_follow_edits_across_layers() {
+        use crate::{EditTarget, NamespaceEdit, TargetPath, edit::Transaction};
+        let mut store = InMemoryStore::default();
+        let scene = four_layer_scene(&mut store);
+        let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+        let target = EditTarget::for_layer(LayerId(1));
+        for (layer, site) in [
+            (LayerId(1), scene.c),
+            (LayerId(2), scene.source),
+            (LayerId(3), scene.part),
+            (LayerId(4), scene.c),
+        ] {
+            assert!(
+                !live
+                    .composed_prims_for_source(layer, site, &store)
+                    .is_empty()
+            );
+        }
+        assert_eq!(
+            found_layers(&live),
+            [LayerId(1), LayerId(2), LayerId(3), LayerId(4)]
+        );
+
+        // `/B` now references the library layer instead of the parts layer.
+        let mut txn = Transaction::new();
+        txn.remove_reference(target.prim(scene.b), Reference::new(LayerId(3), scene.part));
+        txn.add_reference(
+            target.prim(scene.b),
+            Reference::new(LayerId(2), scene.source),
+            crate::ListPosition::default(),
+        );
+        live.apply(&mut store, &txn).unwrap();
+        assert_eq!(
+            live.composed_prims_for_source(LayerId(2), scene.source, &store),
+            [scene.a, scene.b]
+        );
+        assert!(
+            live.composed_prims_for_source(LayerId(3), scene.part, &store)
+                .is_empty()
+        );
+        assert_matches_fresh(&live, &mut store, &[scene.x]);
+
+        let mut txn = Transaction::new();
+        txn.remove_spec(target.prim(scene.a));
+        live.apply(&mut store, &txn).unwrap();
+        assert_eq!(
+            live.composed_prims_for_source(LayerId(2), scene.source, &store),
+            [scene.b]
+        );
+        assert_matches_fresh(&live, &mut store, &[scene.x]);
+
+        let d = p(&mut store, "/D");
+        let edit = NamespaceEdit::prepare(
+            live.stage(),
+            &mut store,
+            &target,
+            TargetPath::Prim(scene.b),
+            TargetPath::Prim(d),
+        )
+        .unwrap();
+        live.apply(&mut store, edit.transaction()).unwrap();
+        assert_eq!(
+            live.composed_prims_for_source(LayerId(2), scene.source, &store),
+            [d]
+        );
+        assert_matches_fresh(&live, &mut store, &[scene.x]);
+        assert_eq!(
+            found_layers(&live),
+            [LayerId(1), LayerId(2), LayerId(3), LayerId(4)],
+            "edits keep the shares found"
+        );
+    }
+
+    /// Muting, unmuting and removing a sublayer leave its share as finding
+    /// it afresh gives: empty while the layer is out of the stage.
+    ///
+    /// Spec: AOUSD Core §10.3.1 (layer stacks). OpenUSD:
+    /// `UsdStage::MuteLayer`, `SdfLayer::SetSubLayerPaths`.
+    #[test]
+    fn source_shares_follow_layer_muting_and_removal() {
+        use crate::edit::Transaction;
+        let mut store = InMemoryStore::default();
+        let scene = four_layer_scene(&mut store);
+        let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+        assert_eq!(
+            live.composed_prims_for_source(LayerId(4), scene.c, &store),
+            [scene.c]
+        );
+        assert_eq!(
+            live.composed_prims_for_source(LayerId(4), scene.e, &store),
+            [scene.e]
+        );
+
+        live.mute_layer(LayerId(4)).unwrap();
+        live.recompose(&mut store);
+        assert!(
+            live.composed_prims_for_source(LayerId(4), scene.c, &store)
+                .is_empty()
+        );
+        assert!(
+            live.composed_prims_for_source(LayerId(4), scene.e, &store)
+                .is_empty()
+        );
+        assert_matches_fresh(&live, &mut store, &[scene.x]);
+
+        live.unmute_layer(LayerId(4));
+        live.recompose(&mut store);
+        assert_eq!(
+            live.composed_prims_for_source(LayerId(4), scene.c, &store),
+            [scene.c]
+        );
+        assert_matches_fresh(&live, &mut store, &[scene.x]);
+
+        let mut txn = Transaction::new();
+        txn.set_sublayers(LayerId(1), Vec::new());
+        live.apply(&mut store, &txn).unwrap();
+        assert!(
+            live.composed_prims_for_source(LayerId(4), scene.c, &store)
+                .is_empty()
+        );
+        assert_eq!(
+            live.composed_prims_for_source(LayerId(1), scene.c, &store),
+            [scene.c]
+        );
+        assert_matches_fresh(&live, &mut store, &[scene.x]);
     }
 
     /// Regression: `notify_layer_prim_edits` documented paths "within the

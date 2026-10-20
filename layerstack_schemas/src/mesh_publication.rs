@@ -59,6 +59,8 @@ fn numeric_type_matches(name: &str, array: &TypedArray) -> bool {
         TypedArray::Matrix2d(_) => name == "matrix2d",
         TypedArray::Matrix3d(_) => name == "matrix3d",
         TypedArray::Matrix4d(_) => matches!(name, "matrix4d" | "frame4d"),
+        TypedArray::Token(_) => name == "token",
+        TypedArray::String(_) => name == "string",
         TypedArray::Deferred(_) => false, // The caller materializes before checking.
     }
 }

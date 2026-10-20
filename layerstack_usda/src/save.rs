@@ -945,14 +945,21 @@ impl Lowering<'_> {
             ),
             L::Array(items) => self.array(items, site, path)?,
             L::TypedArray(items) => {
-                typed_array(
-                    items
-                        .try_materialize()
-                        .map_err(|error| SaveError::ArrayRead {
-                            path: path.into(),
-                            error: error.clone(),
-                        })?,
-                )
+                let items = items
+                    .try_materialize()
+                    .map_err(|error| SaveError::ArrayRead {
+                        path: path.into(),
+                        error: error.clone(),
+                    })?;
+                match items {
+                    layerstack::TypedArray::Token(items) => {
+                        Value::TokenArray(items.iter().map(|&token| self.name(token)).collect())
+                    }
+                    layerstack::TypedArray::String(items) => {
+                        Value::StringArray(items.iter().map(String::from).collect())
+                    }
+                    items => typed_array(items),
+                }
             }
             L::ArrayEdit(edit) => self.array_edit(edit, None, site, path)?,
             L::TypedArrayEdit(edit) => self.array_edit(
@@ -1063,6 +1070,7 @@ fn typed_array(array: &layerstack::TypedArray) -> Value {
     use layerstack::TypedArray as A;
     match array {
         A::Deferred(_) => unreachable!("save preflight materializes retained arrays"),
+        A::Token(_) | A::String(_) => unreachable!("text arrays name their tokens in `value`"),
         A::Bool(items) => Value::BoolArray(items.as_ref().clone()),
         A::UChar(items) => Value::UCharArray(items.as_ref().clone()),
         A::Int(items) => Value::IntArray(items.as_ref().clone()),

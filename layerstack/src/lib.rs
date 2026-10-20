@@ -196,7 +196,7 @@ mod store_identity;
 pub use store_identity::StoreIdentity;
 mod value_array;
 pub mod value_clips;
-pub use value_array::{ArrayReadError, ArrayRef, DeferredArraySource, TypedArray};
+pub use value_array::{ArrayReadError, ArrayRef, DeferredArraySource, StringArray, TypedArray};
 pub mod edit;
 pub(crate) mod expression_variables;
 pub mod half;

@@ -8,7 +8,7 @@ use alloc::{string::String, sync::Arc, vec::Vec};
 
 use super::{Attribute, Prim, PrimPredicate, Property, Relationship, Stage};
 use crate::{
-    Value,
+    TypedArray, Value,
     doc::LayerStore,
     interner::{TokenId, TokenInterner},
     path::{PathId, PathInterner, PropertyPath},
@@ -306,10 +306,26 @@ pub trait FromValue: Sized {
     /// Converts `value`, or returns `None` when it is of another type.
     /// `tokens` resolves token values.
     fn from_value(value: &Value, tokens: &TokenInterner) -> Option<Self>;
+
+    /// Converts every element of a nonempty native array, or returns `None`
+    /// when they are of another type; `Vec<Self>` reads arrays with it.
+    ///
+    /// The default converts each element as [`Self::from_value`] converts a
+    /// scalar. The library's element types copy the borrowed buffer instead,
+    /// without making a [`Value`] per element.
+    fn from_array(array: &TypedArray, tokens: &TokenInterner) -> Option<Vec<Self>> {
+        // Sized up front: collecting an `Option` iterator would grow the
+        // vector by reallocating, the element count being unknown to it.
+        let mut out = Vec::with_capacity(array.len());
+        for item in array.values() {
+            out.push(Self::from_value(&item, tokens)?);
+        }
+        Some(out)
+    }
 }
 
 macro_rules! scalar_from_value {
-    ($($ty:ty => $variant:ident),* $(,)?) => {$(
+    ($($ty:ty => $variant:ident, $slice:ident),* $(,)?) => {$(
         impl FromValue for $ty {
             fn from_value(value: &Value, _: &TokenInterner) -> Option<Self> {
                 match value {
@@ -317,28 +333,32 @@ macro_rules! scalar_from_value {
                     _ => None,
                 }
             }
+
+            fn from_array(array: &TypedArray, _: &TokenInterner) -> Option<Vec<Self>> {
+                array.$slice().map(<[Self]>::to_vec)
+            }
         }
     )*};
 }
 
 scalar_from_value! {
-    bool => Bool,
-    u8 => UChar,
-    i32 => Int,
-    u32 => UInt,
-    i64 => Int64,
-    u64 => UInt64,
-    f32 => Float,
-    f64 => Double,
-    [f32; 2] => Vec2f,
-    [f32; 3] => Vec3f,
-    [f32; 4] => Vec4f,
-    [f64; 2] => Vec2d,
-    [f64; 3] => Vec3d,
-    [f64; 4] => Vec4d,
-    [i32; 2] => Vec2i,
-    [i32; 3] => Vec3i,
-    [i32; 4] => Vec4i,
+    bool => Bool, as_bool,
+    u8 => UChar, as_uchar,
+    i32 => Int, as_int,
+    u32 => UInt, as_uint,
+    i64 => Int64, as_int64,
+    u64 => UInt64, as_uint64,
+    f32 => Float, as_float,
+    f64 => Double, as_double,
+    [f32; 2] => Vec2f, as_vec2f,
+    [f32; 3] => Vec3f, as_vec3f,
+    [f32; 4] => Vec4f, as_vec4f,
+    [f64; 2] => Vec2d, as_vec2d,
+    [f64; 3] => Vec3d, as_vec3d,
+    [f64; 4] => Vec4d, as_vec4d,
+    [i32; 2] => Vec2i, as_vec2i,
+    [i32; 3] => Vec3i, as_vec3i,
+    [i32; 4] => Vec4i, as_vec4i,
 }
 
 impl FromValue for [f64; 16] {
@@ -347,6 +367,10 @@ impl FromValue for [f64; 16] {
             Value::Matrix4d(m) => Some(**m),
             _ => None,
         }
+    }
+
+    fn from_array(array: &TypedArray, _: &TokenInterner) -> Option<Vec<Self>> {
+        array.as_matrix4d().map(<[Self]>::to_vec)
     }
 }
 
@@ -359,6 +383,10 @@ impl FromValue for String {
             _ => None,
         }
     }
+
+    fn from_array(array: &TypedArray, _: &TokenInterner) -> Option<Vec<Self>> {
+        Some(array.as_string()?.iter().map(Self::from).collect())
+    }
 }
 
 /// A `token` value, as an id; resolve it with the store's tokens.
@@ -368,6 +396,10 @@ impl FromValue for TokenId {
             Value::Token(token) => Some(*token),
             _ => None,
         }
+    }
+
+    fn from_array(array: &TypedArray, _: &TokenInterner) -> Option<Vec<Self>> {
+        array.as_token().map(<[Self]>::to_vec)
     }
 }
 
@@ -385,12 +417,9 @@ impl<T: FromValue> FromValue for Vec<T> {
                     out.push(T::from_value(item, tokens)?);
                 }
             }
-            Value::TypedArray(array) => {
-                out.reserve_exact(array.len());
-                for item in array.values() {
-                    out.push(T::from_value(&item, tokens)?);
-                }
-            }
+            // An empty array of any element type converts, as a generic one does.
+            Value::TypedArray(array) if array.is_empty() => {}
+            Value::TypedArray(array) => return T::from_array(array, tokens),
             _ => return None,
         }
         Some(out)
@@ -405,12 +434,17 @@ impl FromValue for Arc<str> {
             _ => None,
         }
     }
+
+    fn from_array(array: &TypedArray, _: &TokenInterner) -> Option<Vec<Self>> {
+        Some(array.as_string()?.iter().map(Self::from).collect())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use alloc::{
         string::{String, ToString},
+        sync::Arc,
         vec,
         vec::Vec,
     };
@@ -566,7 +600,7 @@ mod tests {
             ),
         );
         let options = StageOptions {
-            schemas: Some(alloc::sync::Arc::new(builder.build(&store.tokens))),
+            schemas: Some(Arc::new(builder.build(&store.tokens))),
             ..StageOptions::default()
         };
         let mut top = Layer::new(LayerId(1));
@@ -617,6 +651,53 @@ mod tests {
         );
     }
 
+    /// Native arrays read as the vectors their generic forms read as.
+    #[test]
+    fn native_arrays_convert_as_generic_ones() {
+        use super::FromValue;
+        let tokens = crate::TokenInterner::default();
+        let ids = vec![tokens.intern("a"), tokens.intern("b")];
+        let native = Value::from(ids.clone());
+        let generic = Value::Array(ids.iter().copied().map(Value::Token).collect());
+        for value in [&native, &generic] {
+            assert_eq!(
+                Vec::<TokenId>::from_value(value, &tokens),
+                Some(ids.clone())
+            );
+            assert_eq!(Vec::<String>::from_value(value, &tokens), None);
+        }
+        let texts: crate::StringArray = ["x", "", "y z"].into_iter().collect();
+        let native = Value::from(texts.clone());
+        let generic = Value::Array(texts.iter().map(Value::string).collect());
+        for value in [&native, &generic] {
+            assert_eq!(
+                Vec::<String>::from_value(value, &tokens),
+                Some(vec!["x".to_string(), String::new(), "y z".to_string()])
+            );
+            assert_eq!(
+                Vec::<Arc<str>>::from_value(value, &tokens)
+                    .unwrap()
+                    .iter()
+                    .map(|text| &**text)
+                    .collect::<Vec<_>>(),
+                ["x", "", "y z"]
+            );
+            assert_eq!(Vec::<TokenId>::from_value(value, &tokens), None);
+        }
+        let floats = Value::from(vec![1.5_f32, -0.0]);
+        assert_eq!(
+            Vec::<f32>::from_value(&floats, &tokens),
+            Some(vec![1.5, -0.0])
+        );
+        assert_eq!(Vec::<f64>::from_value(&floats, &tokens), None);
+        // An empty array converts whatever its element type, as a generic one.
+        let empty = Value::from(Vec::<f32>::new());
+        assert_eq!(
+            Vec::<TokenId>::from_value(&empty, &tokens),
+            Some(Vec::new())
+        );
+    }
+
     #[test]
     fn handles_name_and_display_themselves() {
         let (store, stage) = scene();
@@ -662,7 +743,7 @@ mod tests {
                 .with_property(PropertyDefinition::attribute(size).with_fallback(1.5_f64)),
         );
         let options = StageOptions {
-            schemas: Some(alloc::sync::Arc::new(builder.build(&store.tokens))),
+            schemas: Some(Arc::new(builder.build(&store.tokens))),
             ..StageOptions::default()
         };
         let mut custom = double(4.0);
@@ -818,7 +899,7 @@ mod tests {
                 .with_property(PropertyDefinition::attribute(size).with_fallback(1.5_f64)),
         );
         let options = StageOptions {
-            schemas: Some(alloc::sync::Arc::new(builder.build(&store.tokens))),
+            schemas: Some(Arc::new(builder.build(&store.tokens))),
             ..StageOptions::default()
         };
         let mut layer = Layer::new(LayerId(1));

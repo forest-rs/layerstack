@@ -908,6 +908,10 @@ impl Catalog {
             .filter_map(|&(path, name)| (path == prim).then_some(name))
             .collect()
     }
+    /// The `(layer, prim path)` sites the clips of `prim` read, in no order.
+    pub(crate) fn prim_sites(&self, prim: PathId) -> impl Iterator<Item = (LayerId, PathId)> + '_ {
+        self.sites.get(&prim).into_iter().flatten().copied()
+    }
     pub(crate) fn source_sites(&self, prim: PathId) -> Vec<(LayerId, PathId)> {
         let mut sites: Vec<_> = self
             .sites

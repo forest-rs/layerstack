@@ -23,6 +23,7 @@ pub use notices::{ChangeCursor, ChangeHistoryError, ChangeNotice, ChangeSubscrip
 
 use hashbrown::{HashMap, HashSet};
 use invalidation::{Channel, CycleHandling, InvalidationTracker, TraversalScratch};
+use smallvec::SmallVec;
 
 use crate::{
     dependency_map::{ArcDependency, CompositionDeps},
@@ -234,14 +235,19 @@ pub struct LiveStage {
     traversal_scratch: TraversalScratch<PathId>,
     /// Arc metadata for incremental edge updates and diagnostics.
     arc_metadata: HashSet<ArcDependency>,
-    /// Layer → prims that receive opinions from that layer.
+    /// Layer → prims that receive opinions from that layer, or that a
+    /// reference or payload authored in it reaches. Every prim drawing on a
+    /// site of the layer ([`Stage::layer_source_sites`]) is among them,
+    /// which [`Self::sources`] builds a layer's share from.
     layer_to_prims: HashMap<LayerId, HashSet<PathId>>,
     /// Prim → layers that contribute opinions to it.
     prim_to_layers: crate::dependency_map::LayerSets,
     /// The composed prims by the source sites their prim indexes draw on,
-    /// found when an edit first asks ([`Self::sources`]) and kept current
-    /// from then on: an open that is never edited never finds them.
-    sources: crate::sync::Memo<SourceIndex>,
+    /// a layer at a time: a layer's share is found when an edit first asks
+    /// for one of its sites ([`Self::prims_for_source`]) and kept current
+    /// from then on. An open that is never edited finds none, and an edit
+    /// finds only the shares of the layers it touches.
+    sources: crate::sync::ReadLock<SourceIndex>,
     /// Site `(layer, prim path)` → composed prims whose dynamic payload
     /// arguments were composed from its specs ([`Prim::dynamic_dependency`](crate::Prim::dynamic_dependency)).
     dynamic_to_prims: HashMap<(LayerId, PathId), HashSet<PathId>>,
@@ -308,7 +314,7 @@ impl LiveStage {
             arc_metadata: deps.arcs,
             layer_to_prims: deps.layer_to_prims,
             prim_to_layers: deps.prim_to_layers,
-            sources: crate::sync::Memo::default(),
+            sources: crate::sync::ReadLock::default(),
             dynamic_to_prims: HashMap::new(),
             prim_to_dynamic: HashMap::new(),
             default_prim_dependents: deps.default_prim_dependents,
@@ -630,7 +636,7 @@ impl LiveStage {
             && let Some(properties) = &outcome.properties
         {
             for &(layer, source, field) in properties {
-                for prim in self.prims_for_source(layer, source) {
+                for &prim in self.source_share(layer).prims(source) {
                     property_changes
                         .entry(prim)
                         .or_insert_with(Vec::new)
@@ -638,11 +644,10 @@ impl LiveStage {
                 }
             }
         }
-        let declaration_resyncs: Vec<_> = outcome
-            .resync_sites
-            .iter()
-            .flat_map(|&(layer, path)| self.prims_for_source(layer, path))
-            .collect();
+        let mut declaration_resyncs = Vec::new();
+        for &(layer, path) in &outcome.resync_sites {
+            declaration_resyncs.extend(self.source_share(layer).prims(path).copied());
+        }
         if outcome.structural
             && local_current
             && outcome.layers.iter().all(|layer| *layer == self.root)
@@ -680,7 +685,9 @@ impl LiveStage {
             let dependents: Vec<Vec<PathId>> = edits
                 .iter()
                 .map(|edit| {
-                    self.prims_for_source(edit.layer, edit.path.prim_path())
+                    self.source_share(edit.layer)
+                        .prims(edit.path.prim_path())
+                        .copied()
                         .collect()
                 })
                 .collect();
@@ -1120,12 +1127,14 @@ impl LiveStage {
         if self.options.muted_layers.contains(&layer) {
             return;
         }
-        let sources = self.sources.get_or_init(|| SourceIndex::of(&self.stage));
+        // The share and the tracker are separate fields: borrow them apart.
+        let share = self
+            .sources
+            .get_mut()
+            .layer(&self.stage, layer, &self.layer_to_prims);
         for &source in prims {
-            if let Some(dests) = sources.source_to_prims.get(&(layer, source)) {
-                for &prim in dests {
-                    self.tracker.mark(prim, OPINION_EDIT);
-                }
+            for &prim in share.prims(source) {
+                self.tracker.mark(prim, OPINION_EDIT);
             }
         }
     }
@@ -1196,18 +1205,35 @@ impl LiveStage {
         source: PathId,
         store: &dyn LayerStore,
     ) -> Vec<PathId> {
-        let mut prims: Vec<PathId> = self.prims_for_source(layer, source).collect();
+        let mut prims = self.prims_for_source(layer, source);
         store.paths().sort_paths(&mut prims, store.tokens());
         prims
     }
 
     /// The prims of [`Self::composed_prims_for_source`], in no order.
-    fn prims_for_source(&self, layer: LayerId, source: PathId) -> impl Iterator<Item = PathId> {
-        self.sources()
-            .source_to_prims
-            .get(&(layer, source))
-            .into_iter()
-            .flat_map(|set| set.iter().copied())
+    ///
+    /// The first ask of a site of `layer` finds the layer's share of
+    /// [`Self::sources`] ([`Self::source_share`]), under the lock a shared
+    /// borrow needs to find it.
+    fn prims_for_source(&self, layer: LayerId, source: PathId) -> Vec<PathId> {
+        let collect = |share: &LayerSources| share.prims(source).copied().collect();
+        self.sources
+            .read(|index| index.get(layer).map(collect))
+            .unwrap_or_else(|| {
+                self.sources
+                    .write(|index| collect(index.layer(&self.stage, layer, &self.layer_to_prims)))
+            })
+    }
+
+    /// The share of `layer` in [`Self::sources`]: the composed prims by the
+    /// sites of `layer` they draw on, found from the prims recorded as
+    /// drawing on the layer the first time an edit asks for it, so the
+    /// cost is that of those prims, whatever the number of layers. An
+    /// exclusive borrow reads it without locking.
+    fn source_share(&mut self, layer: LayerId) -> &LayerSources {
+        self.sources
+            .get_mut()
+            .layer(&self.stage, layer, &self.layer_to_prims)
     }
 
     /// Notifies that a specific prim's opinions have changed (any layer).
@@ -1868,8 +1894,8 @@ impl LiveStage {
     /// Rebuilds the source-site index and the stage's preparation evidence
     /// from the whole stage.
     fn reindex_all_sources(&mut self) {
-        // Found again when next asked.
-        self.sources = crate::sync::Memo::default();
+        // Every layer's share is found again when next asked.
+        self.sources = crate::sync::ReadLock::default();
         self.dynamic_to_prims.clear();
         self.prim_to_dynamic.clear();
         let prims: Vec<PathId> = self.stage.prim_paths().collect();
@@ -1916,73 +1942,161 @@ impl LiveStage {
             prim,
             dynamic,
         );
-        if let Some(sources) = self.sources.get_mut() {
-            sources.reindex(&self.stage, prim);
-        }
-    }
-
-    /// The composed prims by the source sites their prim indexes draw on,
-    /// found from the stage's prim indexes when first asked.
-    fn sources(&self) -> &SourceIndex {
-        self.sources.get_or_init(|| SourceIndex::of(&self.stage))
+        self.sources
+            .get_mut()
+            .reindex(&self.stage, prim, &self.prim_to_layers);
     }
 }
 
 /// The source sites `(layer, prim path in that layer)` composed prims draw
-/// specs or opinions from, both ways.
+/// specs or opinions from, both ways, one layer at a time.
+///
+/// Only the layers asked for hold a share, each found from the prims
+/// recorded as drawing on the layer ([`LiveStage::layer_to_prims`]):
+/// finding one costs its prims, not those of the stage, and the shares
+/// are kept current as prims are recomposed ([`Self::reindex`]).
 #[derive(Debug, Default)]
 struct SourceIndex {
-    /// Source site → composed prims whose prim index draws specs or
-    /// opinions from it.
-    source_to_prims: HashMap<(LayerId, PathId), HashSet<PathId>>,
-    /// Composed prim → source sites recorded in `source_to_prims`.
-    prim_to_sources: HashMap<PathId, Vec<(LayerId, PathId)>>,
+    /// Layer → its share, for each layer asked for since the index was
+    /// last emptied.
+    layers: HashMap<LayerId, LayerSources>,
+    /// Composed prim → the layers of `layers` whose shares hold it.
+    prim_layers: HashMap<PathId, SmallVec<[LayerId; 2]>>,
 }
 
 impl SourceIndex {
-    /// The sites of every prim of `stage`.
-    fn of(stage: &Stage) -> Self {
-        let mut index = Self::default();
-        for prim in stage.prim_paths() {
-            let sites = stage.source_sites(prim);
-            for &site in &sites {
-                index.source_to_prims.entry(site).or_default().insert(prim);
-            }
-            if !sites.is_empty() {
-                index.prim_to_sources.insert(prim, sites);
-            }
-        }
-        index
+    /// The share of `layer`, if it was asked for.
+    fn get(&self, layer: LayerId) -> Option<&LayerSources> {
+        self.layers.get(&layer)
+    }
+
+    /// The share of `layer`, found when first asked from the prims
+    /// `recorded` records as drawing on it.
+    fn layer(
+        &mut self,
+        stage: &Stage,
+        layer: LayerId,
+        recorded: &HashMap<LayerId, HashSet<PathId>>,
+    ) -> &LayerSources {
+        let Self {
+            layers,
+            prim_layers,
+        } = self;
+        layers
+            .entry(layer)
+            .or_insert_with(|| find_share(stage, layer, recorded.get(&layer), prim_layers))
     }
 
     /// Replaces the entries for `prim` with those of its current prim
-    /// index in `stage`.
-    fn reindex(&mut self, stage: &Stage, prim: PathId) {
-        let sites = stage.source_sites(prim);
-        if self
-            .prim_to_sources
-            .get(&prim)
-            .is_some_and(|old| *old == sites)
-        {
+    /// index in `stage`, in the shares that held it and those of the
+    /// layers `recorded` now records it as drawing on.
+    fn reindex(
+        &mut self,
+        stage: &Stage,
+        prim: PathId,
+        recorded: &crate::dependency_map::LayerSets,
+    ) {
+        if self.layers.is_empty() {
             return;
         }
+        let mut layers: SmallVec<[LayerId; 2]> =
+            self.prim_layers.get(&prim).cloned().unwrap_or_default();
+        layers.extend(
+            recorded
+                .get(&prim)
+                .into_iter()
+                .flat_map(|recorded| recorded.iter().copied())
+                .filter(|layer| self.layers.contains_key(layer)),
+        );
+        // Most prims draw on no layer an edit has asked for.
+        if layers.is_empty() {
+            return;
+        }
+        layers.sort_unstable();
+        layers.dedup();
+        layers.retain(|layer| {
+            let share = self.layers.get_mut(layer).expect("asked-for layer");
+            share.replace(prim, stage.layer_source_sites(prim, *layer))
+        });
+        match self.prim_layers.get_mut(&prim) {
+            Some(_) if layers.is_empty() => {
+                self.prim_layers.remove(&prim);
+            }
+            Some(held) => {
+                if *held != layers {
+                    *held = layers;
+                }
+            }
+            None if !layers.is_empty() => {
+                self.prim_layers.insert(prim, layers);
+            }
+            None => {}
+        }
+    }
+}
 
-        if let Some(old) = self.prim_to_sources.remove(&prim) {
+/// The share of `layer` in a [`SourceIndex`], from `prims`, those recorded
+/// as drawing on it, adding `layer` to the held layers of each prim it
+/// holds. Out of line: an edit asks for a layer's share far more often
+/// than it finds one.
+#[cold]
+#[inline(never)]
+fn find_share(
+    stage: &Stage,
+    layer: LayerId,
+    prims: Option<&HashSet<PathId>>,
+    prim_layers: &mut HashMap<PathId, SmallVec<[LayerId; 2]>>,
+) -> LayerSources {
+    let mut share = LayerSources::default();
+    for &prim in prims.into_iter().flatten() {
+        if share.replace(prim, stage.layer_source_sites(prim, layer)) {
+            prim_layers.entry(prim).or_default().push(layer);
+        }
+    }
+    share
+}
+
+/// One layer's share of a [`SourceIndex`]: its prim paths that composed
+/// prims draw specs or opinions from, both ways.
+#[derive(Debug, Default, PartialEq)]
+struct LayerSources {
+    /// Prim path in the layer → composed prims whose prim index draws
+    /// specs or opinions from it.
+    site_to_prims: HashMap<PathId, HashSet<PathId>>,
+    /// Composed prim → its sites in `site_to_prims`, sorted.
+    prim_to_sites: HashMap<PathId, Vec<PathId>>,
+}
+
+impl LayerSources {
+    /// The composed prims drawing on `site`, in no order.
+    fn prims(&self, site: PathId) -> impl Iterator<Item = &PathId> {
+        self.site_to_prims.get(&site).into_iter().flatten()
+    }
+
+    /// Replaces the sites of `prim` with `sites`, sorted; whether it has
+    /// any.
+    fn replace(&mut self, prim: PathId, sites: Vec<PathId>) -> bool {
+        if self.prim_to_sites.get(&prim) == Some(&sites) {
+            return true;
+        }
+        if let Some(old) = self.prim_to_sites.remove(&prim) {
             for site in old {
-                if let Some(dests) = self.source_to_prims.get_mut(&site) {
+                if let Some(dests) = self.site_to_prims.get_mut(&site) {
                     dests.remove(&prim);
                     if dests.is_empty() {
-                        self.source_to_prims.remove(&site);
+                        self.site_to_prims.remove(&site);
                     }
                 }
             }
         }
+        if sites.is_empty() {
+            return false;
+        }
         for &site in &sites {
-            self.source_to_prims.entry(site).or_default().insert(prim);
+            self.site_to_prims.entry(site).or_default().insert(prim);
         }
-        if !sites.is_empty() {
-            self.prim_to_sources.insert(prim, sites);
-        }
+        self.prim_to_sites.insert(prim, sites);
+        true
     }
 }
 
@@ -3326,6 +3440,32 @@ mod tests {
     /// Asserts that `live` is indistinguishable from a fresh composition:
     /// prim set, traversal order, children, resolved values with provenance,
     /// opinion stacks, and the dependency data used for later invalidation.
+    /// The source index as one whole-stage walk finds it: every site of
+    /// every composed prim of `stage`.
+    fn whole_stage_sources(stage: &Stage) -> HashMap<(LayerId, PathId), HashSet<PathId>> {
+        let mut index: HashMap<(LayerId, PathId), HashSet<PathId>> = HashMap::new();
+        for prim in stage.prim_paths() {
+            for site in stage.source_sites(prim) {
+                index.entry(site).or_default().insert(prim);
+            }
+        }
+        index
+    }
+
+    /// The source index of `live` as the shares of all its layers find
+    /// it, without finding them in `live` itself.
+    fn every_layer_sources(live: &LiveStage) -> HashMap<(LayerId, PathId), HashSet<PathId>> {
+        let mut shares = SourceIndex::default();
+        let mut index = HashMap::new();
+        for &layer in live.layer_to_prims.keys() {
+            let share = shares.layer(&live.stage, layer, &live.layer_to_prims);
+            for (&site, prims) in &share.site_to_prims {
+                index.insert((layer, site), prims.clone());
+            }
+        }
+        index
+    }
+
     fn assert_matches_fresh(live: &LiveStage, store: &mut InMemoryStore, fields: &[TokenId]) {
         let fresh_opts = StageOptions {
             with_dependencies: true,
@@ -3412,8 +3552,8 @@ mod tests {
 
         let fresh_live = LiveStage::compose(store, live.root, live.options.clone());
         assert_eq!(
-            live.sources().source_to_prims,
-            fresh_live.sources().source_to_prims,
+            every_layer_sources(live),
+            whole_stage_sources(fresh_live.stage()),
             "source site → prim index differs"
         );
     }
@@ -3459,7 +3599,7 @@ mod tests {
         };
         let mut live = LiveStage::compose(&mut store, LayerId(1), options);
         assert!(
-            live.sources.get_mut().is_none(),
+            live.sources.get_mut().layers.is_empty(),
             "the sites are found when first asked"
         );
         assert_eq!(

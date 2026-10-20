@@ -53,6 +53,34 @@ impl<T> ReadLock<T> {
         let mut value = self.0.borrow_mut();
         f(&mut value)
     }
+
+    /// The value, to change in place without locking: the exclusive
+    /// borrow already keeps everyone else out.
+    pub(crate) fn get_mut(&mut self) -> &mut T {
+        #[cfg(feature = "std")]
+        let value = self
+            .0
+            .get_mut()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        #[cfg(not(feature = "std"))]
+        let value = self.0.get_mut();
+        value
+    }
+}
+
+impl<T: core::fmt::Debug> core::fmt::Debug for ReadLock<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        // A writer holding the value, perhaps this very thread, is not
+        // waited for.
+        #[cfg(feature = "std")]
+        let value = self.0.try_read().ok();
+        #[cfg(not(feature = "std"))]
+        let value = self.0.try_borrow().ok();
+        match value {
+            Some(value) => f.debug_tuple("ReadLock").field(&*value).finish(),
+            None => f.write_str("ReadLock(<locked>)"),
+        }
+    }
 }
 
 impl<T: Default> Default for ReadLock<T> {

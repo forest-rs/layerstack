@@ -379,7 +379,14 @@ fn value_json(value: &Value, tokens: &TokenInterner) -> Json {
         Value::String(v) | Value::Asset(v) => json!(&**v),
         Value::Token(v) => json!(tokens.resolve(*v)),
         Value::Vec2i(v) => json!(v),
-        Value::Array(items) => Json::Array(items.iter().map(|v| value_json(v, tokens)).collect()),
+        Value::Array(_) | Value::TypedArray(_) => Json::Array(
+            value
+                .array_ref()
+                .expect("an array")
+                .iter()
+                .map(|v| value_json(&v, tokens))
+                .collect(),
+        ),
         other => panic!("no JSON form for {other:?}"),
     }
 }

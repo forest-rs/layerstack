@@ -473,14 +473,16 @@ pub(crate) fn schema_of(
         allowed_tokens: property_spec(p.name)
             .and_then(|s| s.metadata(allowed_tokens))
             .map(|allowed| match allowed {
-                FieldValue::Value(Value::Array(items)) => items
-                    .iter()
-                    .filter_map(|item| match item {
-                        Value::Token(token) => Some(tokens.resolve(*token).to_string()),
-                        Value::String(text) => Some(text.to_string()),
-                        _ => None,
-                    })
-                    .collect(),
+                FieldValue::Value(value) => value.array_ref().map_or_else(Vec::new, |items| {
+                    items
+                        .iter()
+                        .filter_map(|item| match &*item {
+                            Value::Token(token) => Some(tokens.resolve(*token).to_string()),
+                            Value::String(text) => Some(text.to_string()),
+                            _ => None,
+                        })
+                        .collect()
+                }),
                 _ => Vec::new(),
             })
             .unwrap_or_default(),

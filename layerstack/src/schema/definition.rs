@@ -3,7 +3,7 @@
 
 //! Prim definitions: the schemas a prim has and the properties they define.
 
-use alloc::{format, vec::Vec};
+use alloc::{borrow::Cow, format, vec::Vec};
 
 use hashbrown::HashMap;
 
@@ -261,16 +261,22 @@ impl PropertyDefinition {
                         *strong = crate::doc::combine_dictionaries(strong, weak);
                     }
                 }
-                Some(crate::FieldValue::Value(crate::Value::Array(strong)))
+                Some(crate::FieldValue::Value(strong))
                     if tokens.resolve(field.name) == "propertyOrder" =>
                 {
-                    if let crate::FieldValue::Value(crate::Value::Array(weak)) = &field.value {
+                    if let (Some(names), crate::FieldValue::Value(weak)) =
+                        (strong.array_ref(), &field.value)
+                        && let Some(weak) = weak.array_ref()
+                    {
                         // Core §13.3.2.3: propertyOrder appends unique names.
-                        for value in weak {
-                            if !strong.contains(value) {
-                                strong.push(value.clone());
+                        let mut merged: Vec<crate::Value> =
+                            names.iter().map(Cow::into_owned).collect();
+                        for value in weak.iter() {
+                            if !merged.contains(&value) {
+                                merged.push(value.into_owned());
                             }
                         }
+                        *strong = crate::Value::array(merged);
                     }
                 }
                 Some(_) => {}

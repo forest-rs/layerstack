@@ -1022,10 +1022,11 @@ pub(crate) fn value_strings(
     value: &Value,
     tokens: &layerstack::TokenInterner,
 ) -> Option<Vec<String>> {
-    match value {
-        Value::Array(items) => items.iter().map(|item| value_str(item, tokens)).collect(),
-        _ => None,
-    }
+    value
+        .array_ref()?
+        .iter()
+        .map(|item| value_str(&item, tokens))
+        .collect()
 }
 
 /// The string or token value of `key`.
@@ -1062,7 +1063,7 @@ pub(crate) fn is_truthy(value: &Value, tokens: &layerstack::TokenInterner) -> bo
         Value::Float(v) => *v != 0.0,
         Value::Double(v) => *v != 0.0,
         Value::String(text) | Value::Asset(text) => !text.is_empty(),
-        Value::Array(items) => !items.is_empty(),
+        Value::Array(_) | Value::TypedArray(_) => value.array_ref().is_some_and(|a| !a.is_empty()),
         Value::Dictionary(entries) => !entries.is_empty(),
         Value::Null | Value::Blocked => false,
         _ => true,

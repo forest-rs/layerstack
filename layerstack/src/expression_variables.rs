@@ -113,6 +113,9 @@ fn variable_value(value: &Value) -> VariableValue {
                 }
                 crate::TypedArray::Int64(items) => ExpressionValue::IntList(items.as_ref().clone()),
                 crate::TypedArray::Bool(items) => ExpressionValue::BoolList(items.as_ref().clone()),
+                crate::TypedArray::String(items) => {
+                    ExpressionValue::StringList(items.iter().map(String::from).collect())
+                }
                 _ => return VariableValue::Unsupported(String::from("array")),
             };
             VariableValue::Value(if items.is_empty() {

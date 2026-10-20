@@ -198,15 +198,16 @@ fn override_names(custom_data: Option<&FieldValue>, tokens: &TokenInterner) -> V
     let Some(FieldValue::Value(Value::Dictionary(entries))) = custom_data else {
         return Vec::new();
     };
-    let Some((_, Value::Array(names))) = entries
+    let Some(names) = entries
         .iter()
         .find(|(key, _)| &**key == "apiSchemaOverridePropertyNames")
+        .and_then(|(_, names)| names.array_ref())
     else {
         return Vec::new();
     };
     names
         .iter()
-        .filter_map(|name| match name {
+        .filter_map(|name| match &*name {
             Value::Token(token) => Some(*token),
             Value::String(text) => Some(tokens.intern(&**text)),
             _ => None,

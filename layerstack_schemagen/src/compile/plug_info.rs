@@ -248,10 +248,11 @@ fn to_json(value: &Value, tokens: &layerstack::TokenInterner) -> Option<Json> {
         Value::Double(v) => Json::Number(Number::from_f64(*v)?),
         Value::String(text) => Json::String(text.to_string()),
         Value::Token(token) => Json::String(tokens.resolve(*token).to_owned()),
-        Value::Array(items) => Json::Array(
-            items
+        Value::Array(_) | Value::TypedArray(_) => Json::Array(
+            value
+                .array_ref()?
                 .iter()
-                .map(|item| to_json(item, tokens))
+                .map(|item| to_json(&item, tokens))
                 .collect::<Option<_>>()?,
         ),
         Value::Dictionary(entries) => Json::Object(

@@ -102,7 +102,7 @@ impl LiveStage {
             let mut mapped = false;
             while let Some(path) = ancestor {
                 if let Some(id) = store.paths().lookup(&path) {
-                    let dests: Vec<PathId> = self.prims_for_source(layer, id).collect();
+                    let dests: Vec<PathId> = self.source_share(layer).prims(id).copied().collect();
                     if !dests.is_empty() {
                         let suffix = source_path.strip_prefix(&path).expect("ancestor");
                         for dest in dests {
@@ -128,7 +128,8 @@ impl LiveStage {
                     return;
                 };
                 for (author, site) in hosts {
-                    let prims: Vec<PathId> = self.prims_for_source(author, site).collect();
+                    let prims: Vec<PathId> =
+                        self.source_share(author).prims(site).copied().collect();
                     self.structural_roots.extend(prims);
                 }
                 if let Some(hosts) = self.layer_to_prims.get(&layer) {
@@ -195,7 +196,7 @@ impl LiveStage {
                 .collect();
             for layer in changed {
                 for (author, site) in self.layer_discovery.hosts_reaching(store, &stacks, layer)? {
-                    roots.extend(self.prims_for_source(author, site));
+                    roots.extend(self.source_share(author).prims(site).copied());
                 }
             }
         }

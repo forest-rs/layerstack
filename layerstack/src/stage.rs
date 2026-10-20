@@ -1959,23 +1959,48 @@ impl Stage {
             != partial.prims.get(&prim).map(|index| &index.sources)
     }
 
-    /// Returns the source sites that contribute specs or opinions to `prim`,
-    /// as `(layer, prim path within that layer)` pairs, deduplicated.
+    /// Returns the source sites in `layer` that contribute specs or
+    /// opinions to `prim`, as prim paths within that layer, sorted and
+    /// deduplicated: what a source index of that layer records for it.
     ///
     /// Both the lookup path and the namespace path of each provenance spec
     /// path are reported: variant-branch opinions are looked up on the variant
     /// host but authored at the child path. Over-reporting is intended; this
     /// feeds invalidation, where a missed site is a correctness bug and an
     /// extra site only costs recomposition.
+    ///
+    /// Only the keys of `layer` are read past their layer, so the cost is
+    /// that of comparing each key's layer, not of collecting and sorting
+    /// every site of the prim.
+    pub(crate) fn layer_source_sites(&self, prim: PathId, layer: LayerId) -> Vec<PathId> {
+        self.collect_source_sites(prim, |found, path| (found == layer).then_some(path))
+    }
+
+    /// The [`Self::layer_source_sites`] of `prim` in every layer, as
+    /// `(layer, prim path within that layer)` pairs, sorted.
+    #[cfg(test)]
     pub(crate) fn source_sites(&self, prim: PathId) -> Vec<(LayerId, PathId)> {
+        self.collect_source_sites(prim, |layer, path| Some((layer, path)))
+    }
+
+    /// The sites `site` makes of the `(layer, prim path)` source sites of
+    /// `prim` ([`Self::layer_source_sites`]), skipping those it returns
+    /// `None` for, sorted and deduplicated.
+    fn collect_source_sites<T: Copy + Ord>(
+        &self,
+        prim: PathId,
+        site: impl Fn(LayerId, PathId) -> Option<T>,
+    ) -> Vec<T> {
         let Some(index) = self.prims.get(&prim) else {
             return Vec::new();
         };
-        let push = |sites: &mut Vec<(LayerId, PathId)>, key: &OpinionKey| {
-            sites.push((key.layer_id, key.lookup_path));
+        let push = |sites: &mut Vec<T>, lookup: T, key: &OpinionKey| {
+            sites.push(lookup);
             let spec_prim = key.spec_path.prim_path();
-            if spec_prim != key.lookup_path {
-                sites.push((key.layer_id, spec_prim));
+            if spec_prim != key.lookup_path
+                && let Some(spec) = site(key.layer_id, spec_prim)
+            {
+                sites.push(spec);
             }
         };
         // Sorted and deduplicated rather than hashed: a prim has few sites,
@@ -1984,21 +2009,30 @@ impl Stage {
         // sources do; only one naming another is added.
         let mut sites = Vec::with_capacity(2 * index.sources.len() + 2);
         for key in &index.sources {
-            push(&mut sites, key);
+            if let Some(lookup) = site(key.layer_id, key.lookup_path) {
+                push(&mut sites, lookup, key);
+            }
         }
         sites.sort_unstable();
         sites.dedup();
         let of_sources = sites.len();
         for opinion in &index.opinions {
             let key = &opinion.key;
-            let named = |site| sites[..of_sources].binary_search(&site).is_ok();
-            if !named((key.layer_id, key.lookup_path))
-                || !named((key.layer_id, key.spec_path.prim_path()))
-            {
-                push(&mut sites, key);
+            let Some(lookup) = site(key.layer_id, key.lookup_path) else {
+                continue;
+            };
+            let named = |found: Option<T>| {
+                found.is_some_and(|found| sites[..of_sources].binary_search(&found).is_ok())
+            };
+            if !named(Some(lookup)) || !named(site(key.layer_id, key.spec_path.prim_path())) {
+                push(&mut sites, lookup, key);
             }
         }
-        sites.extend(self.clips.source_sites(prim));
+        sites.extend(
+            self.clips
+                .prim_sites(prim)
+                .filter_map(|(layer, path)| site(layer, path)),
+        );
         sites.sort_unstable();
         sites.dedup();
         sites

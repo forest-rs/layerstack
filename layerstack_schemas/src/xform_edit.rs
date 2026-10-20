@@ -497,15 +497,15 @@ impl XformableEdit {
 
     /// The prim's `xformOpOrder` as the edit leaves it.
     pub(crate) fn order(&self, edit: &mut SchemaEdit<'_>) -> Vec<String> {
-        let tokens = |edit: &mut SchemaEdit<'_>, value: Value| match value {
-            Value::Array(items) => items
+        let tokens = |edit: &mut SchemaEdit<'_>, value: Value| match value.array_ref() {
+            Some(items) => items
                 .iter()
-                .filter_map(|item| match item {
-                    Value::Token(token) => Some(edit.tokens().resolve(*token).to_string()),
+                .filter_map(|item| match *item {
+                    Value::Token(token) => Some(edit.tokens().resolve(token).to_string()),
                     _ => None,
                 })
                 .collect(),
-            _ => Vec::new(),
+            None => Vec::new(),
         };
         edit.default_value(self.path(), Xformable::XFORM_OP_ORDER)
             .map(|value| tokens(edit, value))

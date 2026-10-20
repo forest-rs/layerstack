@@ -57,7 +57,7 @@ use layerstack::spec_path::VariantSelectionSite;
 use layerstack::variable_expression::is_expression;
 use layerstack::{
     ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex, AssetResolver, MetadataTarget,
-    PropertyType, ReferenceTarget, ResolvedAsset, SchemaRegistry,
+    PropertyType, ReferenceTarget, ResolvedAsset, SchemaRegistry, StringArray,
 };
 
 use crate::Span;
@@ -1611,6 +1611,9 @@ impl EmitCtx<'_> {
                 // For array types like "float3[]", pass "float3" (not "float")
                 // so inner tuples are recognized as dimensioned types.
                 let arr_elem_hint = type_hint.strip_suffix("[]").unwrap_or(type_hint);
+                if let Some(text) = self.text_array(items, arr_elem_hint) {
+                    return text;
+                }
                 let prototype = default_scalar_for_type(arr_elem_hint);
                 let elements = items.iter().map(|v| self.convert_value(v, arr_elem_hint));
                 Value::array_from_iter(elements, Some(&prototype))
@@ -1620,6 +1623,41 @@ impl EmitCtx<'_> {
                 let value_type = Self::declared_property_type(element_hint, true);
                 Value::typed_array_edit(self.convert_array_edit(edit, element_hint), value_type)
             }
+        }
+    }
+
+    /// A `token[]` or `string[]` of quoted elements, built straight into
+    /// its native buffer, without a value per element; `None` for another
+    /// type or any other element, which converts element by element.
+    ///
+    /// Spec: AOUSD Core §6.2 (`token[]` and `string[]`), §16.2 (USDA).
+    fn text_array(&mut self, items: &[ast::Value<'_>], element_hint: &str) -> Option<Value> {
+        fn text<'v>(item: &'v ast::Value<'_>) -> Option<&'v str> {
+            match item {
+                ast::Value::String(text) => Some(text),
+                _ => None,
+            }
+        }
+        match element_hint {
+            "token" => {
+                let ids = items
+                    .iter()
+                    .map(|item| text(item).map(|text| self.tokens.intern(text)))
+                    .collect::<Option<Vec<TokenId>>>()?;
+                Some(Value::from(ids))
+            }
+            "string" => {
+                let bytes = items
+                    .iter()
+                    .map(|item| text(item).map_or(0, str::len))
+                    .sum();
+                let mut out = StringArray::with_capacity(items.len(), bytes);
+                for item in items {
+                    out.push(text(item)?);
+                }
+                Some(Value::from(out))
+            }
+            _ => None,
         }
     }
 

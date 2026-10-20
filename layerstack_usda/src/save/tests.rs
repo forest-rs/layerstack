@@ -235,6 +235,10 @@ def "A"
 "#;
     assert_eq!(text, expected, "saved text");
     assert_eq!(Imported::new(&text).save().unwrap(), text, "stable");
+
+    // A dictionary's empty text arrays keep the type they are read with.
+    let source = "#usda 1.0\n\ndef \"A\" (\n    customData = {\n        string[] e = []\n        token[] f = []\n        string[] g = [\"x\"]\n    }\n)\n{\n}\n\n";
+    assert_eq!(Imported::new(source).save().unwrap(), source);
 }
 
 /// Each unsupported feature is reported with its source path, and nothing
@@ -242,7 +246,7 @@ def "A"
 #[test]
 fn rejects_unsupported_features_with_their_source_paths() {
     let cases: &[(&str, &str, Unsupported)] = &[(
-        "#usda 1.0\ndef \"A\" (\n    customData = {\n        string[] e = []\n    }\n)\n{\n}\n",
+        "#usda 1.0\ndef \"A\" (\n    customData = {\n        asset[] e = []\n    }\n)\n{\n}\n",
         "/A#customData/e",
         Unsupported::Value("untyped empty array"),
     )];

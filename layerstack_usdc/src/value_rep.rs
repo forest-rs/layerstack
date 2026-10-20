@@ -13,13 +13,14 @@ use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 
+use layerstack::StringArray;
 use layerstack::spline::{
     CurveType, Extrapolation, Knot, KnotInterp, LoopParams, SplineData, SplineDataType,
 };
 
 use crate::compression::{read_compressed_ints, read_compressed_ints_as};
 use crate::error::UsdcError;
-use crate::section::CrateSections;
+use crate::section::{CrateSections, TokenTable};
 use crate::value_type::ValueType;
 use crate::version::CrateVersion;
 
@@ -357,6 +358,10 @@ pub(crate) enum DecodedField<'a> {
     /// or a token vector's ([`decode_token_vector_indices`]), which assembly
     /// maps to token ids without copying their text.
     TokenArray(Vec<u32>),
+    /// A `string[]` value as the token-table indices of its elements' text
+    /// ([`decode_text_indices`]), which assembly gathers into one
+    /// [`layerstack::StringArray`] ([`string_array`]).
+    StringArray(Vec<u32>),
     /// A path list op as path table indices
     /// ([`decode_path_list_op_indices`]), which assembly maps to paths
     /// through the path tree without copying their text.
@@ -377,6 +382,7 @@ impl DecodedField<'_> {
             Self::MathArray(_)
             | Self::FloatArray(_)
             | Self::TokenArray(_)
+            | Self::StringArray(_)
             | Self::PathListOp(_)
             | Self::Text(..) => None,
             #[cfg(feature = "std")]
@@ -431,6 +437,23 @@ pub(crate) fn decode_text_indices(
         budget.charge_elements(text_units)?;
         Ok(indices)
     })
+}
+
+/// The `string[]` elements whose text `indices` index in the token table
+/// ([`decode_text_indices`]), gathered into one buffer: the empty string
+/// for an index outside the table, as [`decode_value`] reads it.
+///
+/// Spec: AOUSD Core §16.3.10 (crate values), §6.2 (`string[]`).
+pub(crate) fn string_array(tokens: &TokenTable, indices: &[u32]) -> StringArray {
+    let text_bytes = indices
+        .iter()
+        .map(|&index| tokens.text_len(index as usize).unwrap_or(0))
+        .sum();
+    let mut items = StringArray::with_capacity(indices.len(), text_bytes);
+    for &index in indices {
+        items.push(tokens.get(index as usize).unwrap_or_default());
+    }
+    items
 }
 
 /// What a scalar text value names ([`scalar_text_kind`]).
@@ -711,7 +734,10 @@ fn decode_nested(
             DecodedField::MathArray(array) => {
                 CrateValue::TypedArray(crate::numeric_array::math_array(&array))
             }
-            DecodedField::TokenArray(_) | DecodedField::PathListOp(_) | DecodedField::Text(..) => {
+            DecodedField::TokenArray(_)
+            | DecodedField::StringArray(_)
+            | DecodedField::PathListOp(_)
+            | DecodedField::Text(..) => {
                 unreachable!("indices are decoded only for top-level fields")
             }
             #[cfg(feature = "std")]
@@ -766,8 +792,8 @@ fn decode_one(
         ValueType::Half | ValueType::Float | ValueType::Double | ValueType::TimeCode => {
             decode_float(rep, data, vtype, budget)
         }
-        ValueType::String => decode_string(rep, data, sections, budget),
-        ValueType::Token => decode_token(rep, data, sections, budget),
+        ValueType::String => decode_string(rep, data, sections, budget, mode),
+        ValueType::Token => decode_token(rep, data, sections, budget, mode),
         ValueType::AssetPath => decode_asset_path(rep, data, sections, budget),
         // Stored like an asset path (Core §16.3.10.14), but typed apart:
         // the text is an `SdfPathExpression`, not an asset to resolve.
@@ -1375,7 +1401,15 @@ fn decode_string(
     data: &[u8],
     sections: &CrateSections,
     budget: &mut DecodeBudget,
+    mode: DecodeMode,
 ) -> Result<CrateValue, UsdcError> {
+    if rep.is_array() && matches!(mode, DecodeMode::Compact) {
+        // Assembly holds a `string[]` in one text buffer (AOUSD Core §6.2).
+        let indices = decode_text_indices(rep, data, sections, budget)?;
+        return Ok(CrateValue::TypedArray(layerstack::TypedArray::String(
+            alloc::sync::Arc::new(string_array(&sections.tokens, &indices)),
+        )));
+    }
     if rep.is_array() {
         let indices = read_u32_array_or_inlined(rep, data, budget)?;
         let arr = indices
@@ -1401,9 +1435,17 @@ fn decode_token(
     data: &[u8],
     sections: &CrateSections,
     budget: &mut DecodeBudget,
+    mode: DecodeMode,
 ) -> Result<CrateValue, UsdcError> {
     if rep.is_array() {
         let indices = read_u32_array_or_inlined(rep, data, budget)?;
+        if indices.is_empty() && matches!(mode, DecodeMode::Compact) {
+            // An empty `token[]` keeps its element kind for assembly; other
+            // tokens are interned there (AOUSD Core §6.2).
+            return Ok(CrateValue::TypedArray(layerstack::TypedArray::Token(
+                alloc::sync::Arc::default(),
+            )));
+        }
         let arr = indices
             .into_iter()
             .map(|i| {

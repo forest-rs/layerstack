@@ -191,10 +191,6 @@ macro_rules! array_types {
             }
 
             pub(crate) fn pack_iter(kind: &Value, values: impl Iterator<Item = Value>) -> Value {
-                // Text arrays stay general until every reader takes native ones.
-                if matches!(kind, Value::Token(_) | Value::String(_)) {
-                    return Value::Array(values.collect());
-                }
                 match kind {
                     $(Value::$variant(_) => {
                         let mut values = values;

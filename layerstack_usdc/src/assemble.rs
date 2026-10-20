@@ -43,7 +43,7 @@ use crate::value_rep::{
     CrateArrayEdit, CrateArrayEditOp, CrateListOp, CrateValue, DecodeBudget, DecodedField,
     FloatArray, Items, ListOpParts, RawValueRep, TextKind, decode_field_within,
     decode_path_list_op_indices, decode_text_index, decode_text_indices,
-    decode_token_vector_indices, scalar_text_kind,
+    decode_token_vector_indices, scalar_text_kind, string_array,
 };
 use crate::value_type::{SpecForm, ValueType};
 
@@ -1262,6 +1262,13 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
                         self.sections,
                         self.budget,
                     )?)
+                } else if is_string_array(&rep) {
+                    DecodedField::StringArray(decode_text_indices(
+                        &rep,
+                        self.data,
+                        self.sections,
+                        self.budget,
+                    )?)
                 } else if is_token_vector(&rep) {
                     DecodedField::TokenArray(decode_token_vector_indices(
                         &rep,
@@ -2047,13 +2054,14 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
                     TextKind::PathExpression => Value::PathExpression(Arc::from(text)),
                 }
             }
-            // What `Value::array` packs tokens into, without its copy.
-            DecodedField::TokenArray(indices) => Value::Array(
-                indices
-                    .iter()
-                    .map(|&index| Value::Token(self.token_id(index)))
-                    .collect(),
-            ),
+            // Spec: AOUSD Core §6.2 (`token[]` and `string[]`); the ids
+            // are collected straight into their shared allocation.
+            DecodedField::TokenArray(indices) => Value::TypedArray(layerstack::TypedArray::Token(
+                indices.iter().map(|&index| self.token_id(index)).collect(),
+            )),
+            DecodedField::StringArray(indices) => {
+                Value::from(string_array(&self.sections.tokens, indices))
+            }
             #[cfg(feature = "std")]
             DecodedField::Retained(rep) => {
                 let pool = self
@@ -2392,11 +2400,8 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
         if let Some(property_type) = spec.type_name.as_ref() {
             let compact = |value: &mut Value| {
                 if let Value::Array(items) = value {
-                    // Text arrays keep their representation; skip the copy.
-                    if matches!(
-                        items.first(),
-                        Some(Value::Token(_) | Value::String(_) | Value::Asset(_))
-                    ) {
+                    // Asset path arrays keep their representation; skip the copy.
+                    if matches!(items.first(), Some(Value::Asset(_))) {
                         return;
                     }
                     let items = core::mem::take(items);
@@ -2912,7 +2917,11 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
             Some(CrateValue::ListOp(listop)) => self.convert_token_listop(listop),
             Some(_) => ListOp::explicit(self.extract_token_names(field)),
             None if matches!(field, DecodedField::Text(..)) => ListOp::explicit(Vec::new()),
-            None if matches!(field, DecodedField::TokenArray(_)) => {
+            None if matches!(
+                field,
+                DecodedField::TokenArray(_) | DecodedField::StringArray(_)
+            ) =>
+            {
                 ListOp::explicit(self.extract_token_names(field))
             }
             None => ListOp::default(),
@@ -2922,7 +2931,7 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
     /// Extracts token names from a [`CrateValue`] (typically a `TokenVector`
     /// or `Array` of tokens).
     fn extract_token_names(&mut self, field: &DecodedField<'_>) -> Vec<TokenId> {
-        if let DecodedField::TokenArray(indices) = field {
+        if let DecodedField::TokenArray(indices) | DecodedField::StringArray(indices) = field {
             return indices.iter().map(|&index| self.token_id(index)).collect();
         }
         let Some(value) = field.value() else {
@@ -3456,6 +3465,12 @@ fn sort_by_children(properties: &mut [PropertyEntry], children: &[TokenId]) {
 /// indices ([`decode_text_indices`]).
 fn is_token_array(rep: &RawValueRep) -> bool {
     rep.is_array() && !rep.is_array_edit() && rep.value_type().ok() == Some(ValueType::Token)
+}
+
+/// Whether `rep` is a `string[]` value, which assembly decodes to the
+/// token-table indices of its text ([`decode_text_indices`]).
+fn is_string_array(rep: &RawValueRep) -> bool {
+    rep.is_array() && !rep.is_array_edit() && rep.value_type().ok() == Some(ValueType::String)
 }
 
 /// Whether `rep` is a token vector, which decodes as one whatever its

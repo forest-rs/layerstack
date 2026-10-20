@@ -189,14 +189,17 @@ pub enum Value {
     Blocked,
     /// An ordered sequence of values (tuples and arrays).
     ///
-    /// Stores both fixed-size tuples (e.g. `(1.0, 2.0, 3.0)` from a
-    /// `float3` attribute) and variable-length arrays (e.g. `[1, 2, 3]`
-    /// from an `int[]` attribute). Type semantics are carried externally
-    /// by the attribute's type name, not by the value itself.
+    /// Stores fixed-size tuples (e.g. `(1.0, 2.0, 3.0)` from a `float3`
+    /// attribute) and arrays no native buffer holds: heterogeneous ones and
+    /// arrays of asset paths or path expressions. Readers hold numeric,
+    /// token and string arrays as [`Self::TypedArray`]; [`Self::array`]
+    /// packs elements into one. Type semantics are carried externally by
+    /// the attribute's type name, not by the value itself.
     ///
     /// Spec: AOUSD Core §6.2 (scene description data types).
     Array(Vec<Self>),
-    /// Shared homogeneous numeric array, with native element storage.
+    /// Shared homogeneous numeric, token or string array, with native
+    /// element storage.
     ///
     /// Cloning shares the buffer; mutation uses copy-on-write. USD aliases
     /// remain on the property type. See [`crate::TypedArray`].
@@ -458,8 +461,11 @@ impl Value {
         }
     }
 
-    /// Packs a homogeneous numeric array into native storage. Heterogeneous,
-    /// string and token arrays keep their general value representation.
+    /// Packs a homogeneous numeric, token or string array into native
+    /// storage. Heterogeneous arrays, and asset path and path expression
+    /// arrays, keep their general value representation.
+    ///
+    /// Spec: AOUSD Core §6.2–§6.3 (array values).
     #[must_use]
     pub fn array(values: Vec<Self>) -> Self {
         Self::array_with_element(values, None)

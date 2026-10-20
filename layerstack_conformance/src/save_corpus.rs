@@ -470,7 +470,7 @@ pub fn cases() -> Vec<SaveCase> {
                 let labels = ["Q15026", "Q11707"].map(|l| Value::Token(layer.tokens.intern(l)));
                 layer
                     .property("/World/Chair.semantics:labels:wikidata")
-                    .default = Some(Value::Array(labels.to_vec()));
+                    .default = Some(Value::array(labels.to_vec()));
             },
             expected: SCHEMAS_AS_DATA_EDITED,
             weaker: None,
@@ -697,7 +697,7 @@ pub fn unsupported_cases() -> Vec<(&'static str, &'static str, SaveError)> {
     };
     vec![(
         "untyped_empty_array",
-        "#usda 1.0\ndef \"A\" (\n    customData = {\n        dictionary profilesInfo = {\n            dictionary profileCompatibility = {\n                string[] \"profile.studio.vfx.25.08\" = []\n            }\n        }\n    }\n)\n{\n}\n",
+        "#usda 1.0\ndef \"A\" (\n    customData = {\n        dictionary profilesInfo = {\n            dictionary profileCompatibility = {\n                asset[] \"profile.studio.vfx.25.08\" = []\n            }\n        }\n    }\n)\n{\n}\n",
         unsupported(
             "/A#customData/profilesInfo/profileCompatibility/profile.studio.vfx.25.08",
             Unsupported::Value("untyped empty array"),

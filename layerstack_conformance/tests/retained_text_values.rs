@@ -14,7 +14,7 @@ use layerstack::edit::{Address, Transaction};
 use layerstack::{
     ArrayReadError, AssetResolveError, AssetResolver, FromValue, InMemoryStore, Layer, LayerId,
     PathInterner, PropertyPath, ResolvedAsset, Stage, StageOptions, Time, TokenId, TokenInterner,
-    Value,
+    TypedArray, Value,
 };
 use layerstack_conformance::library_scene::{LibraryFormat, LibraryScene, LibraryShape};
 use layerstack_usdc::writer::{Spec, SpecForm, Specifier, Value as W, write_crate};
@@ -310,13 +310,14 @@ fn composition_and_raw_queries_read_text_arrays_without_decoding_them() {
     assert!(!first.is_empty());
     assert_eq!(read.values.stats().decode_attempts, 1);
     assert_eq!(read.values.stats().materialized_values, 1);
-    let Value::Array(items) = authored(&stage, &store, tagged[0], Time::Default)
-        .unwrap()
-        .value
+    let Value::TypedArray(TypedArray::Token(items)) =
+        authored(&stage, &store, tagged[0], Time::Default)
+            .unwrap()
+            .value
     else {
-        panic!("the decoded array, as an eager read holds it");
+        panic!("the decoded native array, as an eager read holds it");
     };
-    assert_eq!(items.len(), first.len());
+    assert_eq!(items[..], first[..]);
     assert_eq!(read.values.stats().decode_attempts, 1, "decoded once");
 }
 
@@ -358,8 +359,8 @@ fn retained_text_arrays_decode_once_across_threads() {
                         .map(
                             |path| match view.attribute(*path).unwrap().try_get(Time::Default) {
                                 Ok(Some(resolved)) => match resolved.value {
-                                    Value::Array(items) => items.len(),
-                                    other => panic!("a decoded array, not {other:?}"),
+                                    Value::TypedArray(TypedArray::Token(items)) => items.len(),
+                                    other => panic!("a decoded native array, not {other:?}"),
                                 },
                                 other => panic!("a value, not {other:?}"),
                             },

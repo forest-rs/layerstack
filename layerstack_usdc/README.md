@@ -76,7 +76,9 @@ responsibility.
 With the existing `std` feature, `read_usdc_lazy` takes immutable `Arc<[u8]>`
 input and assembles the same `Layer`, retaining numeric defaults and time
 samples as `TypedArray::Deferred`, and `token[]` and `string[]` attribute
-defaults of at least `MIN_RETAINED_TEXT_ARRAY` elements as `Value::Deferred`.
+defaults of at least `MIN_RETAINED_TEXT_ARRAY` elements as `Value::Deferred`,
+which decode into the native `TypedArray::Token` and `TypedArray::String` an
+eager read holds.
 Everything composition reads stays eager. Composition and raw value inspection
 can keep payloads encoded. `TypedArray::try_materialize` and
 `Value::try_materialize` borrow a cached decoded value or cached error; value

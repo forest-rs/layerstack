@@ -272,8 +272,8 @@ impl DeferredValueSource for LazyValue {
             _ => None,
         }
     }
-    /// Decodes to the value an eager read assembles: a `Value::Array` of
-    /// tokens or strings, an index outside the tables reading as empty text.
+    /// Decodes to the value an eager read assembles: a native token or
+    /// string array, an index outside the tables reading as empty text.
     fn materialize(&self) -> Result<&Value, &ArrayReadError> {
         self.cached
             .get_or_init(|| {
@@ -299,19 +299,19 @@ impl DeferredValueSource for LazyValue {
                     ))),
                 })?;
                 drop(budget);
-                let tokens = matches!(self.rep.value_type(), Ok(ValueType::Token));
-                let items = indices.into_iter().map(|index| {
-                    let index = index as usize;
-                    if tokens {
-                        let ids = pool.token_ids.get().map_or(&[][..], |ids| &ids[..]);
-                        Value::Token(ids.get(index).copied().unwrap_or(TokenId::EMPTY))
-                    } else {
-                        Value::String(Arc::from(
-                            pool.sections.tokens.get(index).unwrap_or_default(),
-                        ))
-                    }
-                });
-                Ok(Value::Array(items.collect()))
+                // Spec: AOUSD Core §6.2 (`token[]` and `string[]`).
+                if matches!(self.rep.value_type(), Ok(ValueType::Token)) {
+                    let ids = pool.token_ids.get().map_or(&[][..], |ids| &ids[..]);
+                    let items = indices
+                        .iter()
+                        .map(|&index| ids.get(index as usize).copied().unwrap_or(TokenId::EMPTY));
+                    Ok(Value::TypedArray(TypedArray::Token(items.collect())))
+                } else {
+                    Ok(Value::from(crate::value_rep::string_array(
+                        &pool.sections.tokens,
+                        &indices,
+                    )))
+                }
             })
             .as_ref()
     }
@@ -374,6 +374,7 @@ impl DeferredArraySource for LazyArray {
                     DecodedField::Value(crate::value_rep::CrateValue::TypedArray(array)) => array,
                     DecodedField::Value(_)
                     | DecodedField::TokenArray(_)
+                    | DecodedField::StringArray(_)
                     | DecodedField::PathListOp(_)
                     | DecodedField::Text(..)
                     | DecodedField::Retained(_) => {

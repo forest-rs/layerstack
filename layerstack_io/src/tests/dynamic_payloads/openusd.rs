@@ -22,7 +22,7 @@
 use super::*;
 use std::path::PathBuf;
 
-/// The fixture directory, canonical as the filesystem identifies it, when
+/// The fixture directory, absolute as the filesystem identifies it, when
 /// `LAYERSTACK_OPENUSD_SOURCE` names an OpenUSD checkout.
 fn fixtures() -> Option<String> {
     let Some(source) = std::env::var_os("LAYERSTACK_OPENUSD_SOURCE").map(PathBuf::from) else {
@@ -30,7 +30,7 @@ fn fixtures() -> Option<String> {
         return None;
     };
     let dir = source.join("pxr/usd/pcp/testenv/testPcpDynamicFileFormatPlugin.testenv");
-    let dir = std::fs::canonicalize(&dir).unwrap_or_else(|e| panic!("{}: {e}", dir.display()));
+    let dir = std::path::absolute(&dir).unwrap_or_else(|e| panic!("{}: {e}", dir.display()));
     Some(dir.to_str().unwrap().into())
 }
 

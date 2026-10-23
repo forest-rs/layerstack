@@ -13,9 +13,22 @@ use std::{
 /// Filesystem transport with an explicit root and ordered search directories.
 /// Relative assets first try their authoring file's directory, then search
 /// directories, then `root`. No process-global resolver context is modified.
+///
+/// An identifier is the absolute path of the file found, with `.` and `..`
+/// segments removed from its spelling: identifying asks the filesystem
+/// only which candidate exists, and nothing when there is one candidate.
+/// Symbolic links are not resolved and names keep their authored case, so
+/// a file reached through two different spellings, such as a link and its
+/// target, is two layers.
+///
+/// Spec: AOUSD Core §9.4 (anchored and search-path identifiers), §9.5
+/// (relative resolution and normalization, RFC 3986 §5.2 and §6). OpenUSD's
+/// `ArDefaultResolver` identifies files the same way (`TfAbsPath`,
+/// `TfNormPath`).
+///
 /// Writes stage a complete sibling file, sync its contents, then rename it over
 /// the destination. Errors before replacement leave the destination intact.
-/// Existing symlinks are followed. Replacement changes file identity (and breaks
+/// Writes follow existing symlinks. Replacement changes file identity (and breaks
 /// hard links); this is not a transaction across files or a power-loss durability
 /// guarantee for the directory entry. Existing permissions are copied on native
 /// platforms; WASI relies on host-granted filesystem rights. On macOS
@@ -60,30 +73,21 @@ impl Storage for Filesystem {
         }
         let path = Path::new(asset);
         let file_relative = asset.starts_with("./") || asset.starts_with("../");
-        let candidates = if path.is_absolute() {
-            alloc::vec![path.to_path_buf()]
+        let anchor_directory = || anchor.and_then(|a| Path::new(a).parent());
+        let selected = if path.is_absolute() {
+            normalize(path)
         } else if file_relative {
-            alloc::vec![
-                anchor
-                    .and_then(|a| Path::new(a).parent())
-                    .unwrap_or(&self.root)
-                    .join(path)
-            ]
+            normalize(&anchor_directory().unwrap_or(&self.root).join(path))
         } else {
-            anchor
-                .and_then(|a| Path::new(a).parent())
-                .map(|p| p.join(path))
+            // The first candidate that is a file, or else the root's.
+            let mut candidates = anchor_directory()
                 .into_iter()
-                .chain(self.search_paths.iter().map(|p| p.join(path)))
-                .chain(core::iter::once(self.root.join(path)))
-                .collect()
+                .chain(self.search_paths.iter().map(PathBuf::as_path))
+                .map(|directory| normalize(&directory.join(path)));
+            candidates
+                .find(|candidate| candidate.is_file())
+                .unwrap_or_else(|| normalize(&self.root.join(path)))
         };
-        let selected = candidates
-            .iter()
-            .find(|p| p.is_file())
-            .or_else(|| candidates.last())
-            .expect("root candidate");
-        let selected = fs::canonicalize(selected).unwrap_or_else(|_| normalize(selected));
         selected.to_str().map(ToString::to_string).ok_or_else(|| {
             IoError::new(
                 IoErrorKind::Unsupported,
@@ -282,6 +286,8 @@ fn storage_error(error: std::io::Error) -> IoError {
     };
     IoError::new(kind, error.to_string())
 }
+/// `path` with its `.` and `..` segments removed, as RFC 3986 §5.2.4 removes
+/// dot segments: a `..` drops the segment before it, whatever that names.
 fn normalize(path: &Path) -> PathBuf {
     let mut result = PathBuf::new();
     for component in path.components() {
@@ -514,16 +520,55 @@ mod tests {
         let anchor = authored.join("root.usda");
         let anchor = anchor.to_str().unwrap();
         let search_path = storage.identify("asset.usda", Some(anchor)).unwrap();
-        assert_eq!(
-            Path::new(&search_path),
-            fs::canonicalize(search.join("asset.usda")).unwrap()
-        );
+        assert_eq!(Path::new(&search_path), search.join("asset.usda"));
         let file_relative = storage.identify("./asset.usda", Some(anchor)).unwrap();
         assert_eq!(Path::new(&file_relative), authored.join("asset.usda"));
         assert_eq!(
             storage.read(&file_relative).unwrap_err().kind,
             IoErrorKind::NotFound
         );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    /// Identifiers are spellings with their dot segments removed: a link
+    /// keeps its own path, so a file reached through a link and through
+    /// its target is two identifiers, and so two layers.
+    #[cfg(unix)]
+    #[test]
+    fn identifiers_remove_dot_segments_and_keep_links() {
+        use std::os::unix::fs::symlink;
+        let root = std::env::temp_dir().join(alloc::format!(
+            "layerstack-filesystem-lexical-{}",
+            std::process::id()
+        ));
+        let real = root.join("real");
+        fs::create_dir_all(real.join("nested")).unwrap();
+        fs::write(real.join("asset.usda"), b"#usda 1.0\n").unwrap();
+        symlink(&real, root.join("link")).unwrap();
+        let storage = Filesystem::new(&root, []).unwrap();
+        let anchor = real.join("nested/root.usda");
+        let anchor = anchor.to_str().unwrap();
+        assert_eq!(
+            Path::new(&storage.identify("../asset.usda", Some(anchor)).unwrap()),
+            real.join("asset.usda")
+        );
+        assert_eq!(
+            Path::new(
+                &storage
+                    .identify("./sub/.././../asset.usda", Some(anchor))
+                    .unwrap()
+            ),
+            real.join("asset.usda")
+        );
+        let through_link = storage.identify("link/asset.usda", None).unwrap();
+        assert_eq!(Path::new(&through_link), root.join("link/asset.usda"));
+        assert_eq!(storage.read(&through_link).unwrap(), b"#usda 1.0\n");
+        // A search candidate is chosen by whether its file exists.
+        let found = storage.identify("asset.usda", Some(anchor)).unwrap();
+        assert_eq!(Path::new(&found), root.join("asset.usda"));
+        let storage = Filesystem::new(&root, [real.clone()]).unwrap();
+        let found = storage.identify("asset.usda", Some(anchor)).unwrap();
+        assert_eq!(Path::new(&found), real.join("asset.usda"));
         fs::remove_dir_all(root).unwrap();
     }
 }
@@ -578,10 +623,7 @@ mod asset_byte_tests {
             .read_asset_bytes("./image.png", Some(layer))
             .unwrap();
         assert_eq!(bytes.bytes.as_ref(), b"member directory");
-        assert_eq!(
-            Path::new(&bytes.identifier),
-            fs::canonicalize(root.join("layers/image.png")).unwrap()
-        );
+        assert_eq!(Path::new(&bytes.identifier), root.join("layers/image.png"));
         let mut package = StageDocument::open(
             Filesystem::new(&root, []).unwrap(),
             "scene.usdz",

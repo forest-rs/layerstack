@@ -1,0 +1,388 @@
+{
+  "openusd_version": "26.8",
+  "prims": {
+    "/World": {
+      "find": {
+        "modelSpace": null,
+        "paintSpace": null,
+        "projection": null,
+        "unapplied": null,
+        "worldSpace": {
+          "name": "worldSpace:binding",
+          "relationship": "/World.coordSys:worldSpace:binding",
+          "target": "/World/Space"
+        }
+      },
+      "inherited": [
+        {
+          "name": "worldSpace:binding",
+          "relationship": "/World.coordSys:worldSpace:binding",
+          "target": "/World/Space"
+        }
+      ],
+      "local": [
+        {
+          "name": "worldSpace:binding",
+          "relationship": "/World.coordSys:worldSpace:binding",
+          "target": "/World/Space"
+        }
+      ]
+    },
+    "/World/Model": {
+      "find": {
+        "modelSpace": {
+          "name": "modelSpace:binding",
+          "relationship": "/World/Model.coordSys:modelSpace:binding",
+          "target": "/World/Model/Space"
+        },
+        "paintSpace": {
+          "name": "paintSpace:binding",
+          "relationship": "/World/Model.coordSys:paintSpace:binding",
+          "target": "/World/Model/Paint"
+        },
+        "projection": null,
+        "unapplied": null,
+        "worldSpace": {
+          "name": "worldSpace:binding",
+          "relationship": "/World.coordSys:worldSpace:binding",
+          "target": "/World/Space"
+        }
+      },
+      "inherited": [
+        {
+          "name": "modelSpace:binding",
+          "relationship": "/World/Model.coordSys:modelSpace:binding",
+          "target": "/World/Model/Space"
+        },
+        {
+          "name": "paintSpace:binding",
+          "relationship": "/World/Model.coordSys:paintSpace:binding",
+          "target": "/World/Model/Paint"
+        },
+        {
+          "name": "worldSpace:binding",
+          "relationship": "/World.coordSys:worldSpace:binding",
+          "target": "/World/Space"
+        }
+      ],
+      "local": [
+        {
+          "name": "modelSpace:binding",
+          "relationship": "/World/Model.coordSys:modelSpace:binding",
+          "target": "/World/Model/Space"
+        },
+        {
+          "name": "paintSpace:binding",
+          "relationship": "/World/Model.coordSys:paintSpace:binding",
+          "target": "/World/Model/Paint"
+        }
+      ]
+    },
+    "/World/Model/Geom": {
+      "find": {
+        "modelSpace": {
+          "name": "modelSpace:binding",
+          "relationship": "/World/Model.coordSys:modelSpace:binding",
+          "target": "/World/Model/Space"
+        },
+        "paintSpace": {
+          "name": "paintSpace:binding",
+          "relationship": "/World/Model.coordSys:paintSpace:binding",
+          "target": "/World/Model/Paint"
+        },
+        "projection": null,
+        "unapplied": null,
+        "worldSpace": {
+          "name": "worldSpace:binding",
+          "relationship": "/World/Model/Geom.coordSys:worldSpace:binding",
+          "target": "/World/Model/Other"
+        }
+      },
+      "inherited": [
+        {
+          "name": "worldSpace:binding",
+          "relationship": "/World/Model/Geom.coordSys:worldSpace:binding",
+          "target": "/World/Model/Other"
+        },
+        {
+          "name": "modelSpace:binding",
+          "relationship": "/World/Model.coordSys:modelSpace:binding",
+          "target": "/World/Model/Space"
+        },
+        {
+          "name": "paintSpace:binding",
+          "relationship": "/World/Model.coordSys:paintSpace:binding",
+          "target": "/World/Model/Paint"
+        }
+      ],
+      "local": [
+        {
+          "name": "worldSpace:binding",
+          "relationship": "/World/Model/Geom.coordSys:worldSpace:binding",
+          "target": "/World/Model/Other"
+        }
+      ]
+    },
+    "/World/Model/Geom/Box": {
+      "find": {
+        "modelSpace": {
+          "name": "modelSpace:binding",
+          "relationship": "/World/Model.coordSys:modelSpace:binding",
+          "target": "/World/Model/Space"
+        },
+        "paintSpace": {
+          "name": "paintSpace:binding",
+          "relationship": "/World/Model.coordSys:paintSpace:binding",
+          "target": "/World/Model/Paint"
+        },
+        "projection": null,
+        "unapplied": null,
+        "worldSpace": {
+          "name": "worldSpace:binding",
+          "relationship": "/World/Model/Geom.coordSys:worldSpace:binding",
+          "target": "/World/Model/Other"
+        }
+      },
+      "inherited": [
+        {
+          "name": "worldSpace:binding",
+          "relationship": "/World/Model/Geom.coordSys:worldSpace:binding",
+          "target": "/World/Model/Other"
+        },
+        {
+          "name": "modelSpace:binding",
+          "relationship": "/World/Model.coordSys:modelSpace:binding",
+          "target": "/World/Model/Space"
+        },
+        {
+          "name": "paintSpace:binding",
+          "relationship": "/World/Model.coordSys:paintSpace:binding",
+          "target": "/World/Model/Paint"
+        }
+      ],
+      "local": []
+    },
+    "/World/Model/Geom/Inner": {
+      "find": {
+        "modelSpace": {
+          "name": "modelSpace:binding",
+          "relationship": "/World/Model.coordSys:modelSpace:binding",
+          "target": "/World/Model/Space"
+        },
+        "paintSpace": {
+          "name": "paintSpace:binding",
+          "relationship": "/World/Model/Geom/Inner.coordSys:paintSpace:binding",
+          "target": "/World/Space"
+        },
+        "projection": null,
+        "unapplied": null,
+        "worldSpace": {
+          "name": "worldSpace:binding",
+          "relationship": "/World/Model/Geom.coordSys:worldSpace:binding",
+          "target": "/World/Model/Other"
+        }
+      },
+      "inherited": [
+        {
+          "name": "paintSpace:binding",
+          "relationship": "/World/Model/Geom/Inner.coordSys:paintSpace:binding",
+          "target": "/World/Space"
+        },
+        {
+          "name": "worldSpace:binding",
+          "relationship": "/World/Model/Geom.coordSys:worldSpace:binding",
+          "target": "/World/Model/Other"
+        },
+        {
+          "name": "modelSpace:binding",
+          "relationship": "/World/Model.coordSys:modelSpace:binding",
+          "target": "/World/Model/Space"
+        }
+      ],
+      "local": [
+        {
+          "name": "paintSpace:binding",
+          "relationship": "/World/Model/Geom/Inner.coordSys:paintSpace:binding",
+          "target": "/World/Space"
+        }
+      ]
+    },
+    "/World/Model/Geom/Inner/Leaf": {
+      "find": {
+        "modelSpace": {
+          "name": "modelSpace:binding",
+          "relationship": "/World/Model.coordSys:modelSpace:binding",
+          "target": "/World/Model/Space"
+        },
+        "paintSpace": {
+          "name": "paintSpace:binding",
+          "relationship": "/World/Model/Geom/Inner.coordSys:paintSpace:binding",
+          "target": "/World/Space"
+        },
+        "projection": null,
+        "unapplied": null,
+        "worldSpace": {
+          "name": "worldSpace:binding",
+          "relationship": "/World/Model/Geom.coordSys:worldSpace:binding",
+          "target": "/World/Model/Other"
+        }
+      },
+      "inherited": [
+        {
+          "name": "paintSpace:binding",
+          "relationship": "/World/Model/Geom/Inner.coordSys:paintSpace:binding",
+          "target": "/World/Space"
+        },
+        {
+          "name": "worldSpace:binding",
+          "relationship": "/World/Model/Geom.coordSys:worldSpace:binding",
+          "target": "/World/Model/Other"
+        },
+        {
+          "name": "modelSpace:binding",
+          "relationship": "/World/Model.coordSys:modelSpace:binding",
+          "target": "/World/Model/Space"
+        }
+      ],
+      "local": []
+    },
+    "/World/Model/Other": {
+      "find": {
+        "modelSpace": {
+          "name": "modelSpace:binding",
+          "relationship": "/World/Model.coordSys:modelSpace:binding",
+          "target": "/World/Model/Space"
+        },
+        "paintSpace": {
+          "name": "paintSpace:binding",
+          "relationship": "/World/Model.coordSys:paintSpace:binding",
+          "target": "/World/Model/Paint"
+        },
+        "projection": null,
+        "unapplied": null,
+        "worldSpace": {
+          "name": "worldSpace:binding",
+          "relationship": "/World.coordSys:worldSpace:binding",
+          "target": "/World/Space"
+        }
+      },
+      "inherited": [
+        {
+          "name": "modelSpace:binding",
+          "relationship": "/World/Model.coordSys:modelSpace:binding",
+          "target": "/World/Model/Space"
+        },
+        {
+          "name": "paintSpace:binding",
+          "relationship": "/World/Model.coordSys:paintSpace:binding",
+          "target": "/World/Model/Paint"
+        },
+        {
+          "name": "worldSpace:binding",
+          "relationship": "/World.coordSys:worldSpace:binding",
+          "target": "/World/Space"
+        }
+      ],
+      "local": []
+    },
+    "/World/Model/Paint": {
+      "find": {
+        "modelSpace": {
+          "name": "modelSpace:binding",
+          "relationship": "/World/Model.coordSys:modelSpace:binding",
+          "target": "/World/Model/Space"
+        },
+        "paintSpace": {
+          "name": "paintSpace:binding",
+          "relationship": "/World/Model.coordSys:paintSpace:binding",
+          "target": "/World/Model/Paint"
+        },
+        "projection": null,
+        "unapplied": null,
+        "worldSpace": {
+          "name": "worldSpace:binding",
+          "relationship": "/World.coordSys:worldSpace:binding",
+          "target": "/World/Space"
+        }
+      },
+      "inherited": [
+        {
+          "name": "modelSpace:binding",
+          "relationship": "/World/Model.coordSys:modelSpace:binding",
+          "target": "/World/Model/Space"
+        },
+        {
+          "name": "paintSpace:binding",
+          "relationship": "/World/Model.coordSys:paintSpace:binding",
+          "target": "/World/Model/Paint"
+        },
+        {
+          "name": "worldSpace:binding",
+          "relationship": "/World.coordSys:worldSpace:binding",
+          "target": "/World/Space"
+        }
+      ],
+      "local": []
+    },
+    "/World/Model/Space": {
+      "find": {
+        "modelSpace": {
+          "name": "modelSpace:binding",
+          "relationship": "/World/Model.coordSys:modelSpace:binding",
+          "target": "/World/Model/Space"
+        },
+        "paintSpace": {
+          "name": "paintSpace:binding",
+          "relationship": "/World/Model.coordSys:paintSpace:binding",
+          "target": "/World/Model/Paint"
+        },
+        "projection": null,
+        "unapplied": null,
+        "worldSpace": {
+          "name": "worldSpace:binding",
+          "relationship": "/World.coordSys:worldSpace:binding",
+          "target": "/World/Space"
+        }
+      },
+      "inherited": [
+        {
+          "name": "modelSpace:binding",
+          "relationship": "/World/Model.coordSys:modelSpace:binding",
+          "target": "/World/Model/Space"
+        },
+        {
+          "name": "paintSpace:binding",
+          "relationship": "/World/Model.coordSys:paintSpace:binding",
+          "target": "/World/Model/Paint"
+        },
+        {
+          "name": "worldSpace:binding",
+          "relationship": "/World.coordSys:worldSpace:binding",
+          "target": "/World/Space"
+        }
+      ],
+      "local": []
+    },
+    "/World/Space": {
+      "find": {
+        "modelSpace": null,
+        "paintSpace": null,
+        "projection": null,
+        "unapplied": null,
+        "worldSpace": {
+          "name": "worldSpace:binding",
+          "relationship": "/World.coordSys:worldSpace:binding",
+          "target": "/World/Space"
+        }
+      },
+      "inherited": [
+        {
+          "name": "worldSpace:binding",
+          "relationship": "/World.coordSys:worldSpace:binding",
+          "target": "/World/Space"
+        }
+      ],
+      "local": []
+    }
+  }
+}

@@ -1,0 +1,57 @@
+#usda 1.0
+
+def Xform "World" (
+    prepend apiSchemas = ["CoordSysAPI:worldSpace"]
+)
+{
+    rel coordSys:worldSpace:binding = </World/Space>
+
+    def Xform "Space"
+    {
+    }
+
+    def Xform "Model" (
+        prepend apiSchemas = ["CoordSysAPI:modelSpace", "CoordSysAPI:paintSpace"]
+    )
+    {
+        rel coordSys:modelSpace:binding = </World/Model/Space>
+        rel coordSys:paintSpace:binding = </World/Model/Paint>
+
+        def Xform "Space"
+        {
+        }
+
+        def Xform "Paint"
+        {
+        }
+
+        def Xform "Geom" (
+            prepend apiSchemas = ["CoordSysAPI:worldSpace", "CoordSysAPI:modelSpace"]
+        )
+        {
+            rel coordSys:worldSpace:binding = </World/Model/Other>
+            rel coordSys:modelSpace:binding = None
+            rel coordSys:unapplied:binding = </World/Space>
+
+            def Mesh "Box"
+            {
+            }
+
+            def Xform "Inner" (
+                prepend apiSchemas = ["CoordSysAPI:paintSpace", "CoordSysAPI:projection"]
+            )
+            {
+                rel coordSys:paintSpace:binding = </World/Model/Geom/Inner.forward>
+                rel forward = </World/Space>
+
+                def Mesh "Leaf"
+                {
+                }
+            }
+        }
+
+        def Xform "Other"
+        {
+        }
+    }
+}

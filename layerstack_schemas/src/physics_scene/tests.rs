@@ -65,6 +65,7 @@ fn captures_scaled_shapes_bodies_scene_defaults_and_graph() {
             includes: &[root],
             excludes: &[],
             simulation_owners: None,
+            custom: CustomPhysicsTypes::default(),
         },
     )
     .unwrap();
@@ -153,6 +154,7 @@ fn scope_exclusions_and_owner_filter_follow_body_for_attached_shapes() {
             includes: &[root, root, s1, s2],
             excludes: &[],
             simulation_owners: Some(&[SimulationOwner::Scene(s1)]),
+            custom: CustomPhysicsTypes::default(),
         },
     )
     .unwrap();
@@ -169,6 +171,7 @@ fn scope_exclusions_and_owner_filter_follow_body_for_attached_shapes() {
             includes: &[root],
             excludes: &[a],
             simulation_owners: None,
+            custom: CustomPhysicsTypes::default(),
         },
     )
     .unwrap();
@@ -180,6 +183,7 @@ fn scope_exclusions_and_owner_filter_follow_body_for_attached_shapes() {
             includes: &[root, shape],
             excludes: &[a],
             simulation_owners: None,
+            custom: CustomPhysicsTypes::default(),
         },
     )
     .unwrap();
@@ -198,7 +202,8 @@ fn scope_exclusions_and_owner_filter_follow_body_for_attached_shapes() {
             PhysicsSceneOptions {
                 includes: &[],
                 excludes: &[],
-                simulation_owners: None
+                simulation_owners: None,
+                custom: CustomPhysicsTypes::default(),
             }
         ),
         Err(PhysicsSceneError::EmptyIncludes)
@@ -223,6 +228,7 @@ fn unsupported_collisions_and_nested_articulations_retain_errors() {
             includes: &[root],
             excludes: &[],
             simulation_owners: None,
+            custom: CustomPhysicsTypes::default(),
         },
     )
     .unwrap();
@@ -294,6 +300,7 @@ fn joint_limits_drives_and_descendant_anchor_conversion() {
             includes: &[root],
             excludes: &[],
             simulation_owners: None,
+            custom: CustomPhysicsTypes::default(),
         },
     )
     .unwrap();
@@ -415,6 +422,7 @@ fn mesh_points_group_and_material_capture_are_owned_and_checked() {
             includes: &[root],
             excludes: &[],
             simulation_owners: None,
+            custom: CustomPhysicsTypes::default(),
         },
     )
     .unwrap();
@@ -497,6 +505,7 @@ fn mixed_material_api_order_matches_native_parser_classification() {
             includes: &[body_first, material_first],
             excludes: &[],
             simulation_owners: None,
+            custom: CustomPhysicsTypes::default(),
         },
     )
     .unwrap();
@@ -571,6 +580,7 @@ fn world_scaled_shape_dimension_overflow_is_explicit() {
             includes: &[sphere, cube, capsule, points],
             excludes: &[],
             simulation_owners: None,
+            custom: CustomPhysicsTypes::default(),
         },
     )
     .unwrap();
@@ -602,6 +612,7 @@ fn large_finite_rotation_and_gravity_are_normalized_without_overflow() {
             includes: &[physics, joint],
             excludes: &[],
             simulation_owners: None,
+            custom: CustomPhysicsTypes::default(),
         },
     )
     .unwrap();
@@ -633,6 +644,7 @@ fn units_that_underflow_physics_descriptor_precision_are_errors() {
             includes: &[physics],
             excludes: &[],
             simulation_owners: None,
+            custom: CustomPhysicsTypes::default(),
         },
     )
     .unwrap();
@@ -673,6 +685,7 @@ fn articulation_joint_root_ties_use_lexical_body_order_and_errors_survive_owners
             includes: &[root],
             excludes: &[],
             simulation_owners: None,
+            custom: CustomPhysicsTypes::default(),
         },
     )
     .unwrap();
@@ -690,6 +703,7 @@ fn articulation_joint_root_ties_use_lexical_body_order_and_errors_survive_owners
             includes: &[root],
             excludes: &[],
             simulation_owners: Some(&[SimulationOwner::Default]),
+            custom: CustomPhysicsTypes::default(),
         },
     )
     .unwrap();
@@ -702,4 +716,65 @@ fn articulation_joint_root_ties_use_lexical_body_order_and_errors_survive_owners
             .descriptor,
         Err(PhysicsSceneError::NestedArticulation)
     );
+}
+
+/// A host joint type is captured as `JointKind::Custom` only when the
+/// options name it; otherwise it is a D6 joint, as in OpenUSD's parser.
+#[test]
+fn custom_joint_types_are_reported_when_named() {
+    let mut store = InMemoryStore::default();
+    store.insert_layer(Layer::new(LayerId(1)));
+    let mut builder = layerstack::SchemaRegistry::builder();
+    crate::register(&mut builder, &[crate::Domain::UsdPhysics], &store.tokens).unwrap();
+    let joint_type = store.tokens.intern("HostHingeJoint");
+    builder.register(
+        layerstack::SchemaDefinition::typed(joint_type)
+            .with_parent(store.tokens.lookup("PhysicsJoint").unwrap()),
+    );
+    let schemas = Arc::new(builder.build(&store.tokens));
+    let mut stage = LiveStage::compose(
+        &mut store,
+        LayerId(1),
+        StageOptions {
+            schemas: Some(schemas),
+            ..StageOptions::default()
+        },
+    );
+    let root = store.path("/World");
+    let joint = store.path("/World/Hinge");
+    let fixed = store.path("/World/Fixed");
+    let mut edit = SchemaEdit::new(stage.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
+    Xform::define(&mut edit, root);
+    edit.define_prim(joint, "HostHingeJoint");
+    PhysicsFixedJoint::define(&mut edit, fixed);
+    let transaction = edit.finish();
+    stage.apply(&mut store, &transaction).unwrap();
+    let scene = Scene::new(stage.stage(), &store);
+    let kinds = |custom: CustomPhysicsTypes<'_>| -> Vec<(PathId, JointKind)> {
+        PhysicsSceneSnapshot::capture(
+            &scene,
+            PhysicsSceneOptions {
+                includes: &[root],
+                excludes: &[],
+                simulation_owners: None,
+                custom,
+            },
+        )
+        .unwrap()
+        .joints
+        .into_iter()
+        .map(|j| (j.path, j.descriptor.unwrap().kind))
+        .collect()
+    };
+    let named = kinds(CustomPhysicsTypes {
+        joints: &["HostHingeJoint", "PhysicsFixedJoint"],
+        ..CustomPhysicsTypes::default()
+    });
+    assert_eq!(
+        named,
+        [(joint, JointKind::Custom), (fixed, JointKind::Fixed)],
+        "a UsdPhysics joint type is never custom"
+    );
+    let unnamed = kinds(CustomPhysicsTypes::default());
+    assert!(matches!(unnamed[0], (path, JointKind::D6 { .. }) if path == joint));
 }

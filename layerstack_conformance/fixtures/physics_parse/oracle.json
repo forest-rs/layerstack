@@ -1,0 +1,194 @@
+{
+  "openusd_version": "26.8",
+  "scenes": {
+    "custom.usda": {
+      "collision_groups": {},
+      "joints": {},
+      "rigid_bodies": {
+        "/World/Body": {
+          "collisions": [
+            "/World/Body/Box",
+            "/World/Body/Convex"
+          ]
+        },
+        "/World/Other/Proto": {
+          "collisions": [
+            "/World/Other/Proto/Ball"
+          ]
+        },
+        "/World/Spawner/Proto": {
+          "collisions": [
+            "/World/Spawner/Proto/Ball"
+          ]
+        }
+      },
+      "shapes": {
+        "/World/Body/Box": {
+          "collision_groups": [],
+          "kind": "cube",
+          "materials": [],
+          "rigid_body": "/World/Body",
+          "token": null
+        },
+        "/World/Body/Convex": {
+          "collision_groups": [],
+          "kind": "cube",
+          "materials": [],
+          "rigid_body": "/World/Body",
+          "token": null
+        },
+        "/World/Other/Proto/Ball": {
+          "collision_groups": [],
+          "kind": "sphere",
+          "materials": [],
+          "rigid_body": "/World/Other/Proto",
+          "token": null
+        },
+        "/World/Spawner/Proto/Ball": {
+          "collision_groups": [],
+          "kind": "sphere",
+          "materials": [],
+          "rigid_body": "/World/Spawner/Proto",
+          "token": null
+        }
+      }
+    },
+    "custom.usda+tokens": {
+      "collision_groups": {},
+      "joints": {},
+      "rigid_bodies": {
+        "/World/Body": {
+          "collisions": [
+            "/World/Body/Box",
+            "/World/Body/Convex",
+            "/World/Body/Typed"
+          ]
+        },
+        "/World/Other/Proto": {
+          "collisions": [
+            "/World/Other/Proto/Ball"
+          ]
+        }
+      },
+      "shapes": {
+        "/World/Body/Box": {
+          "collision_groups": [],
+          "kind": "cube",
+          "materials": [],
+          "rigid_body": "/World/Body",
+          "token": null
+        },
+        "/World/Body/Convex": {
+          "collision_groups": [],
+          "kind": "custom",
+          "materials": [],
+          "rigid_body": "/World/Body",
+          "token": "MyConvexAPI"
+        },
+        "/World/Body/Typed": {
+          "collision_groups": [],
+          "kind": "custom",
+          "materials": [],
+          "rigid_body": "/World/Body",
+          "token": "MyShape"
+        },
+        "/World/Other/Proto/Ball": {
+          "collision_groups": [],
+          "kind": "sphere",
+          "materials": [],
+          "rigid_body": "/World/Other/Proto",
+          "token": null
+        }
+      }
+    },
+    "groups.usda": {
+      "collision_groups": {
+        "/World/G0": {
+          "filtered_groups": [
+            "/World/G1"
+          ],
+          "invert": false,
+          "merged_groups": []
+        },
+        "/World/G1": {
+          "filtered_groups": [
+            "/World/G0",
+            "/World/G2"
+          ],
+          "invert": false,
+          "merged_groups": [
+            "/World/G1",
+            "/World/G3"
+          ]
+        },
+        "/World/G2": {
+          "filtered_groups": [
+            "/World/G0"
+          ],
+          "invert": false,
+          "merged_groups": []
+        },
+        "/World/G4": {
+          "filtered_groups": [
+            "/World/G0"
+          ],
+          "invert": false,
+          "merged_groups": []
+        },
+        "/World/G5": {
+          "filtered_groups": [],
+          "invert": false,
+          "merged_groups": [
+            "/World/G5"
+          ]
+        },
+        "/World/G6": {
+          "filtered_groups": [],
+          "invert": false,
+          "merged_groups": []
+        }
+      },
+      "joints": {},
+      "rigid_bodies": {
+        "/World/Body": {
+          "collisions": [
+            "/World/Body/Ball",
+            "/World/Body/Box"
+          ]
+        }
+      },
+      "shapes": {
+        "/World/Body/Ball": {
+          "collision_groups": [
+            "/World/G1",
+            "/World/G4",
+            "/World/G5"
+          ],
+          "kind": "sphere",
+          "materials": [],
+          "rigid_body": "/World/Body",
+          "token": null
+        },
+        "/World/Body/Box": {
+          "collision_groups": [
+            "/World/G1",
+            "/World/G5"
+          ],
+          "kind": "cube",
+          "materials": [],
+          "rigid_body": "/World/Body",
+          "token": null
+        },
+        "/World/Static": {
+          "collision_groups": [
+            "/World/G0"
+          ],
+          "kind": "cube",
+          "materials": [],
+          "rigid_body": null,
+          "token": null
+        }
+      }
+    }
+  }
+}

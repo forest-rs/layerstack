@@ -1,0 +1,70 @@
+#usda 1.0
+(
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "World"
+{
+    def PhysicsScene "Scene"
+    {
+    }
+
+    def Xform "Body" (
+        prepend apiSchemas = ["PhysicsRigidBodyAPI"]
+    )
+    {
+        def Cube "Box" (
+            prepend apiSchemas = ["PhysicsCollisionAPI"]
+        )
+        {
+            double size = 2
+        }
+
+        def Cube "Convex" (
+            prepend apiSchemas = ["MyConvexAPI", "PhysicsCollisionAPI"]
+        )
+        {
+            double3 xformOp:translate = (3, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+
+        def MyShape "Typed" (
+            prepend apiSchemas = ["PhysicsCollisionAPI"]
+        )
+        {
+            double3 xformOp:translate = (0, 3, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+    }
+
+    def MyInstancer "Spawner"
+    {
+        def Xform "Proto" (
+            prepend apiSchemas = ["PhysicsRigidBodyAPI"]
+        )
+        {
+            def Sphere "Ball" (
+                prepend apiSchemas = ["PhysicsCollisionAPI"]
+            )
+            {
+                double radius = 0.5
+            }
+        }
+    }
+
+    def Xform "Other"
+    {
+        def Xform "Proto" (
+            prepend apiSchemas = ["PhysicsRigidBodyAPI"]
+        )
+        {
+            def Sphere "Ball" (
+                prepend apiSchemas = ["PhysicsCollisionAPI"]
+            )
+            {
+                double radius = 0.5
+            }
+        }
+    }
+}

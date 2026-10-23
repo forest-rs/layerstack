@@ -1,0 +1,188 @@
+#usda 1.0
+
+def SkelRoot "Root"
+{
+    def Skeleton "Skel" (
+        prepend apiSchemas = ["SkelBindingAPI"]
+    )
+    {
+        uniform token[] joints = ["A"]
+        uniform matrix4d[] bindTransforms = [( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1) )]
+        uniform matrix4d[] restTransforms = [( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1) )]
+        rel skel:animationSource = </Root/Skel/Anim>
+
+        def SkelAnimation "Anim"
+        {
+            uniform token[] joints = ["A"]
+            float3[] translations = [(0, 10, 0)]
+            quatf[] rotations = [(1, 0, 0, 0)]
+            half3[] scales = [(1, 1, 1)]
+            uniform token[] blendShapes = ["up", "side"]
+            float[] blendShapeWeights = [0.5, 1]
+        }
+    }
+
+    def BlendShape "Up"
+    {
+        uniform vector3f[] offsets = [(0, 2, 0)]
+        uniform int[] pointIndices = [0]
+        uniform vector3f[] normalOffsets = [(0, 2, 0)]
+    }
+
+    def BlendShape "Side"
+    {
+        uniform vector3f[] offsets = [(4, 0, 0)]
+        uniform int[] pointIndices = [0]
+        uniform vector3f[] inbetweens:bad = [(9, 9, 9)] (
+            weight = 1
+        )
+    }
+
+    def Mesh "Good" (
+        prepend apiSchemas = ["SkelBindingAPI"]
+    )
+    {
+        point3f[] points = [(0, 0, 0)]
+        int[] primvars:skel:jointIndices = [0] (
+            interpolation = "constant"
+            elementSize = 1
+        )
+        float[] primvars:skel:jointWeights = [1] (
+            interpolation = "constant"
+            elementSize = 1
+        )
+        rel skel:skeleton = </Root/Skel>
+    }
+
+    def Mesh "MorphOnly" (
+        prepend apiSchemas = ["SkelBindingAPI"]
+    )
+    {
+        point3f[] points = [(0, 0, 0)]
+        normal3f[] normals = [(1, 0, 0)] (
+            interpolation = "vertex"
+        )
+        uniform token[] skel:blendShapes = ["up"]
+        rel skel:blendShapeTargets = [</Root/Up>]
+        rel skel:skeleton = </Root/Skel>
+    }
+
+    def Mesh "BadInbetween" (
+        prepend apiSchemas = ["SkelBindingAPI"]
+    )
+    {
+        point3f[] points = [(0, 0, 0)]
+        int[] primvars:skel:jointIndices = [0] (
+            interpolation = "constant"
+            elementSize = 1
+        )
+        float[] primvars:skel:jointWeights = [1] (
+            interpolation = "constant"
+            elementSize = 1
+        )
+        uniform token[] skel:blendShapes = ["side"]
+        rel skel:blendShapeTargets = [</Root/Side>]
+        rel skel:skeleton = </Root/Skel>
+    }
+
+    def Mesh "Mismatched" (
+        prepend apiSchemas = ["SkelBindingAPI"]
+    )
+    {
+        point3f[] points = [(0, 0, 0)]
+        int[] primvars:skel:jointIndices = [0] (
+            interpolation = "constant"
+            elementSize = 1
+        )
+        float[] primvars:skel:jointWeights = [1] (
+            interpolation = "vertex"
+            elementSize = 1
+        )
+        rel skel:skeleton = </Root/Skel>
+    }
+}
+
+def SkelRoot "Root2" (
+    prepend apiSchemas = ["SkelBindingAPI"]
+)
+{
+    rel skel:animationSource = </Root/Skel/Anim>
+
+    def Skeleton "Skel"
+    {
+        uniform token[] joints = ["A"]
+        uniform matrix4d[] bindTransforms = [( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1) )]
+        uniform matrix4d[] restTransforms = [( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1) )]
+    }
+
+    def Mesh "MorphOnly" (
+        prepend apiSchemas = ["SkelBindingAPI"]
+    )
+    {
+        point3f[] points = [(0, 0, 0)]
+        uniform token[] skel:blendShapes = ["up"]
+        rel skel:blendShapeTargets = [</Root/Up>]
+        rel skel:skeleton = </Root2/Skel>
+    }
+}
+
+def SkelRoot "Root3"
+{
+    def Skeleton "Skel" (
+        prepend apiSchemas = ["SkelBindingAPI"]
+    )
+    {
+        uniform token[] joints = ["A"]
+        uniform matrix4d[] bindTransforms = [( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1) )]
+        uniform matrix4d[] restTransforms = [( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1) )]
+        rel skel:animationSource = </Root/Skel/Anim>
+    }
+
+    def Skeleton "Inactive" (
+        active = false
+    )
+    {
+        uniform token[] joints = ["A"]
+    }
+
+    def Mesh "Plain" (
+        prepend apiSchemas = ["SkelBindingAPI"]
+    )
+    {
+        point3f[] points = [(1, 1, 1)]
+        rel skel:skeleton = </Root3/Skel>
+    }
+
+    def Mesh "HalfBound" (
+        prepend apiSchemas = ["SkelBindingAPI"]
+    )
+    {
+        point3f[] points = [(0, 0, 0)]
+        int[] primvars:skel:jointIndices = [0] (
+            interpolation = "vertex"
+            elementSize = 1
+        )
+        rel skel:skeleton = </Root3/Skel>
+    }
+
+    def Mesh "ToInactive" (
+        prepend apiSchemas = ["SkelBindingAPI"]
+    )
+    {
+        point3f[] points = [(0, 0, 0)]
+        int[] primvars:skel:jointIndices = [0] (
+            interpolation = "constant"
+            elementSize = 1
+        )
+        float[] primvars:skel:jointWeights = [1] (
+            interpolation = "constant"
+            elementSize = 1
+        )
+        rel skel:skeleton = </Root3/Inactive>
+    }
+
+    def Mesh "Unbound"
+    {
+        point3f[] points = [(0, 0, 0)]
+    }
+}

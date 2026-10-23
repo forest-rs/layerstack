@@ -131,10 +131,12 @@ impl Binding {
                 .any(|n| prim.property_might_vary(n));
     }
 }
-/// Retains standalone blend-shape bindings and outputs for one stage/store pair.
-/// `skel:animationSource` inherits from the geometry's applied binding APIs,
-/// including empty relationships and forwarding. No skeleton or joint influences
-/// are required. Pass every successful edit (including undo) to `apply_changes`;
+/// Retains blend-shape bindings and outputs for one stage/store pair.
+/// Weights come from the animation of the skeleton the geometry binds through
+/// `skel:skeleton`, as OpenUSD's `UsdSkelCache` reads them; geometry bound to no
+/// skeleton uses its own inherited `skel:animationSource`. Both inherit through
+/// applied binding APIs, including empty relationships and forwarding. No joint
+/// influences are required. Pass every successful edit (including undo) to `apply_changes`;
 /// clear before switching scenes. Normal results stay in geometry space without
 /// normalization. AOUSD Core §12.3–12.5; `UsdSkelBlendShapeQuery` accumulation.
 pub struct BlendShapeCache {
@@ -231,7 +233,19 @@ impl BlendShapeCache {
         let Some(query) = BlendShapeQuery::new(scene, path)? else {
             return Ok(false);
         };
-        let animation = inherited_target(scene, path, "skel:animationSource", "SkelAnimation")?;
+        // A prim bound to a skeleton takes its weights from the skeleton's
+        // animation, as UsdSkelCache builds its skinning query from the
+        // skeleton query's animation (UsdSkel_CacheImpl
+        // `_FindOrCreateSkinningQuery`); `skel:animationSource` binds to
+        // skeletons at or beneath its prim. Without a skeleton, the prim's
+        // own inherited animation source applies.
+        let skeleton = inherited_target(scene, path, "skel:skeleton", "Skeleton")?;
+        let animation = inherited_target(
+            scene,
+            skeleton.unwrap_or(path),
+            "skel:animationSource",
+            "SkelAnimation",
+        )?;
         let order = animation
             .and_then(|p| tokens(&PrimView::new(*scene, p), "blendShapes"))
             .unwrap_or_default();
@@ -250,15 +264,26 @@ impl BlendShapeCache {
             .collect();
         let mut definitions = Dependencies::default();
         definitions.add(path, &["skel:blendShapes", "skel:blendShapeTargets"]);
-        definitions.ancestry(scene, path, &["skel:animationSource"]);
-        let mut parent = Some(path);
-        while let Some(p) = parent {
-            for name in ["skel:animationSource", "skel:blendShapeTargets"] {
-                if let Some(property) = PrimView::new(*scene, p).property_path(name) {
-                    definitions.relationship(scene, property);
+        definitions.ancestry(scene, path, &["skel:animationSource", "skel:skeleton"]);
+        let mut chains = alloc::vec![path];
+        chains.extend(skeleton);
+        if let Some(skeleton) = skeleton {
+            definitions.ancestry(scene, skeleton, &["skel:animationSource"]);
+        }
+        for start in chains {
+            let mut parent = Some(start);
+            while let Some(p) = parent {
+                for name in [
+                    "skel:animationSource",
+                    "skel:skeleton",
+                    "skel:blendShapeTargets",
+                ] {
+                    if let Some(property) = PrimView::new(*scene, p).property_path(name) {
+                        definitions.relationship(scene, property);
+                    }
                 }
+                parent = scene.parent(p);
             }
-            parent = scene.parent(p);
         }
         for &target in query.targets() {
             definitions.add(target, &[]);

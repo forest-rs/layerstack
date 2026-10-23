@@ -586,7 +586,6 @@ impl<'s> SchemaEdit<'s> {
             .and_then(|d| d.type_name)
     }
 
-    #[cfg(any(feature = "usd-shade", feature = "usd-geom", feature = "usd-ui"))]
     pub(crate) fn property_kind(&mut self, path: PathId, name: &str) -> Option<PropertyKind> {
         let token = self.store.tokens_mut().intern(name);
         if let Some((_, _, ty)) = self
@@ -651,7 +650,8 @@ impl<'s> SchemaEdit<'s> {
         self.created.push((path, token, Some(ty)));
     }
 
-    #[cfg(feature = "usd-geom")]
+    /// Authors the metadata `key` of the property `name` of `path`, with no
+    /// check: the caller knows the field and its type.
     pub(crate) fn set_property_metadata(
         &mut self,
         path: PathId,
@@ -660,10 +660,105 @@ impl<'s> SchemaEdit<'s> {
         value: Value,
     ) {
         let token = self.tokens().intern(name);
-        self.ensure_property(PropertyPath::new(path, token));
+        let property = PropertyPath::new(path, token);
+        self.ensure_property(property);
         let key = self.tokens().intern(key);
-        let at = self.target.property(PropertyPath::new(path, token));
+        let at = self.target.property(property);
         self.transaction.set_metadata(at, key, value.into());
+    }
+
+    /// Checks and authors (`Some`) or clears (`None`) the metadata field
+    /// `key` of the property `name` of `path`. See
+    /// [`crate::PrimEdit::write_property_metadata`].
+    pub(crate) fn author_property_metadata(
+        &mut self,
+        path: PathId,
+        name: &str,
+        key: &str,
+        value: Option<Value>,
+    ) -> Result<(), PropertyMetadataError> {
+        let kind = self
+            .property_kind(path, name)
+            .ok_or(PropertyMetadataError::NoSuchProperty)?;
+        let expected = self.metadata_field_type(key, kind)?;
+        if let Some(value) = &value
+            && !value_fits(&expected, value)
+        {
+            return Err(PropertyMetadataError::ValueType { expected });
+        }
+        match value {
+            Some(value) => self.set_property_metadata(path, name, key, value),
+            None => {
+                let token = self.tokens().intern(name);
+                let property = PropertyPath::new(path, token);
+                let key = self.tokens().intern(key);
+                // Only a spec this edit or the target layer holds has the
+                // field to clear; no spec is created to clear nothing.
+                let created = self
+                    .created
+                    .iter()
+                    .any(|(p, n, _)| (*p, *n) == (path, token));
+                if created || self.has_local_property(path, token) {
+                    let at = self.target.property(property);
+                    self.transaction.clear_metadata(at, key);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// The registered type of the metadata field `key` on a property of
+    /// `kind`: a core Sdf field (`pxr/usd/sdf/schema.cpp`,
+    /// `_RegisterStandardFields` and the property spec definitions), else
+    /// one the stage's schema registry has from a plugin's `SdfMetadata`.
+    ///
+    /// Spec: AOUSD Core §7.4 (metadata), §7.6.4–§7.6.5 (property fields).
+    fn metadata_field_type(
+        &self,
+        key: &str,
+        kind: PropertyKind,
+    ) -> Result<alloc::sync::Arc<str>, PropertyMetadataError> {
+        let attribute = kind == PropertyKind::Attribute;
+        let core = match key {
+            "typeName" | "custom" | "variability" | "default" | "timeSamples" | "spline"
+            | "connectionPaths" | "targetPaths" | "displayUnit" | "permission" => {
+                return Err(PropertyMetadataError::SpecField);
+            }
+            "comment" | "displayGroup" | "displayName" | "documentation" | "prefix" | "suffix"
+            | "symmetricPeer" => Some((true, "string")),
+            "assetInfo" | "customData" | "symmetryArguments" => Some((true, "dictionary")),
+            "hidden" => Some((true, "bool")),
+            "symmetryFunction" => Some((true, "token")),
+            "allowedTokens" => Some((attribute, "token[]")),
+            "arraySizeConstraint" => Some((attribute, "int64")),
+            "colorSpace" => Some((attribute, "token")),
+            "limits" => Some((attribute, "dictionary")),
+            "noLoadHint" => Some((!attribute, "bool")),
+            _ => None,
+        };
+        if let Some((applies, type_name)) = core {
+            return if applies {
+                Ok(alloc::sync::Arc::from(type_name))
+            } else {
+                Err(PropertyMetadataError::NotValidForProperty(kind))
+            };
+        }
+        let definition = self
+            .store
+            .tokens()
+            .lookup(key)
+            .zip(self.stage.schemas())
+            .and_then(|(key, registry)| registry.metadata(key))
+            .ok_or(PropertyMetadataError::UnknownField)?;
+        let target = if attribute {
+            layerstack::MetadataTarget::Attribute
+        } else {
+            layerstack::MetadataTarget::Relationship
+        };
+        if !definition.applies_to(target) {
+            return Err(PropertyMetadataError::NotValidForProperty(kind));
+        }
+        Ok(definition.type_name.clone())
     }
 
     // AOUSD Core §12.2.5: update only the mapped target layer's dictionary;
@@ -1109,4 +1204,76 @@ impl<'s> SchemaEdit<'s> {
 /// The default value a created property spec holds.
 fn value_of(spec: &PropertySpec) -> Value {
     spec.default.clone().unwrap_or(Value::Null)
+}
+
+/// Why a property metadata field cannot be authored. Nothing is collected.
+///
+/// OpenUSD: the errors `UsdObject::SetMetadata` raises, except
+/// [`Self::SpecField`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PropertyMetadataError {
+    /// The prim has no property of that name: none is authored, created
+    /// earlier in this edit, or defined by the prim's schemas.
+    NoSuchProperty,
+    /// No metadata field of that name is registered, by Sdf or a plugin
+    /// ("Unregistered metadata key").
+    UnknownField,
+    /// The field is registered, but not for this kind of property, as
+    /// `bindMaterialAs` is only for relationships ("not registered as valid
+    /// metadata for spec type").
+    NotValidForProperty(PropertyKind),
+    /// The field is part of the property spec itself (`typeName`, `custom`,
+    /// `variability`, `default`, `timeSamples`, targets, connections),
+    /// which its own edits author. C++ writes these through `SetMetadata`
+    /// too, even where the spec kind has no such field.
+    SpecField,
+    /// The value is not of the field's registered type.
+    ValueType {
+        /// The registered type name (`string`, `token`, `float`,
+        /// `dictionary`, `token[]`, …).
+        expected: alloc::sync::Arc<str>,
+    },
+}
+
+impl fmt::Display for PropertyMetadataError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NoSuchProperty => f.write_str("no such property"),
+            Self::UnknownField => f.write_str("unregistered metadata field"),
+            Self::NotValidForProperty(kind) => {
+                write!(f, "metadata field not registered for a {kind:?}")
+            }
+            Self::SpecField => f.write_str("a property spec field, not metadata"),
+            Self::ValueType { expected } => write!(f, "metadata value must be a {expected}"),
+        }
+    }
+}
+
+impl core::error::Error for PropertyMetadataError {}
+
+/// Whether `value` is a value of the registered type `type_name`, a value
+/// type name (`token[]` included) or `dictionary`. List-op typed fields
+/// take no value here.
+fn value_fits(type_name: &str, value: &Value) -> bool {
+    use core::mem::discriminant;
+    if type_name == "dictionary" {
+        return matches!(value, Value::Dictionary(_));
+    }
+    let Some((ty, array)) = layerstack::ValueType::parse(type_name) else {
+        return false;
+    };
+    let zero = ty.zero();
+    if matches!(zero, Value::Null) {
+        return false;
+    }
+    if !array {
+        return discriminant(value) == discriminant(&zero);
+    }
+    match value {
+        Value::Array(items) => items
+            .iter()
+            .all(|item| discriminant(item) == discriminant(&zero)),
+        Value::TypedArray(items) => discriminant(&items.element_kind()) == discriminant(&zero),
+        _ => false,
+    }
 }

@@ -1,0 +1,332 @@
+{
+  "calls": [
+    {
+      "accepted": true,
+      "key": "documentation",
+      "property": "a",
+      "read": "x",
+      "type": "string",
+      "value": "x"
+    },
+    {
+      "accepted": false,
+      "key": "documentation",
+      "property": "a",
+      "read": null,
+      "type": "int",
+      "value": 5
+    },
+    {
+      "accepted": true,
+      "key": "displayName",
+      "property": "a",
+      "read": "Name",
+      "type": "string",
+      "value": "Name"
+    },
+    {
+      "accepted": true,
+      "key": "hidden",
+      "property": "a",
+      "read": true,
+      "type": "bool",
+      "value": true
+    },
+    {
+      "accepted": true,
+      "key": "customData",
+      "property": "a",
+      "read": {
+        "a": 1
+      },
+      "type": "dictionary",
+      "value": {
+        "a": 1
+      }
+    },
+    {
+      "accepted": true,
+      "key": "comment",
+      "property": "a",
+      "read": "note",
+      "type": "string",
+      "value": "note"
+    },
+    {
+      "accepted": true,
+      "key": "weight",
+      "property": "a",
+      "read": 0.5,
+      "type": "float",
+      "value": 0.5
+    },
+    {
+      "accepted": false,
+      "key": "bindMaterialAs",
+      "property": "a",
+      "read": null,
+      "type": "token",
+      "value": "strongerThanDescendants"
+    },
+    {
+      "accepted": true,
+      "key": "connectability",
+      "property": "a",
+      "read": "interfaceOnly",
+      "type": "token",
+      "value": "interfaceOnly"
+    },
+    {
+      "accepted": true,
+      "key": "elementSize",
+      "property": "a",
+      "read": 2,
+      "type": "int",
+      "value": 2
+    },
+    {
+      "accepted": true,
+      "key": "interpolation",
+      "property": "a",
+      "read": "vertex",
+      "type": "token",
+      "value": "vertex"
+    },
+    {
+      "accepted": true,
+      "key": "allowedTokens",
+      "property": "a",
+      "read": [
+        "a",
+        "b"
+      ],
+      "type": "token[]",
+      "value": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "accepted": true,
+      "key": "colorSpace",
+      "property": "a",
+      "read": "raw",
+      "type": "token",
+      "value": "raw"
+    },
+    {
+      "accepted": false,
+      "key": "noLoadHint",
+      "property": "a",
+      "read": null,
+      "type": "bool",
+      "value": true
+    },
+    {
+      "accepted": false,
+      "key": "unknownKey",
+      "property": "a",
+      "read": null,
+      "type": "int",
+      "value": 1
+    },
+    {
+      "accepted": true,
+      "key": "typeName",
+      "property": "a",
+      "read": "int",
+      "type": "token",
+      "value": "int"
+    },
+    {
+      "accepted": true,
+      "key": "custom",
+      "property": "a",
+      "read": true,
+      "type": "bool",
+      "value": true
+    },
+    {
+      "accepted": true,
+      "key": "default",
+      "property": "a",
+      "read": 1.0,
+      "type": "double",
+      "value": 1.0
+    },
+    {
+      "accepted": true,
+      "key": "documentation",
+      "property": "r",
+      "read": "x",
+      "type": "string",
+      "value": "x"
+    },
+    {
+      "accepted": false,
+      "key": "documentation",
+      "property": "r",
+      "read": null,
+      "type": "int",
+      "value": 5
+    },
+    {
+      "accepted": true,
+      "key": "displayName",
+      "property": "r",
+      "read": "Name",
+      "type": "string",
+      "value": "Name"
+    },
+    {
+      "accepted": true,
+      "key": "hidden",
+      "property": "r",
+      "read": true,
+      "type": "bool",
+      "value": true
+    },
+    {
+      "accepted": true,
+      "key": "customData",
+      "property": "r",
+      "read": {
+        "a": 1
+      },
+      "type": "dictionary",
+      "value": {
+        "a": 1
+      }
+    },
+    {
+      "accepted": true,
+      "key": "comment",
+      "property": "r",
+      "read": "note",
+      "type": "string",
+      "value": "note"
+    },
+    {
+      "accepted": false,
+      "key": "weight",
+      "property": "r",
+      "read": null,
+      "type": "float",
+      "value": 0.5
+    },
+    {
+      "accepted": true,
+      "key": "bindMaterialAs",
+      "property": "r",
+      "read": "strongerThanDescendants",
+      "type": "token",
+      "value": "strongerThanDescendants"
+    },
+    {
+      "accepted": false,
+      "key": "connectability",
+      "property": "r",
+      "read": null,
+      "type": "token",
+      "value": "interfaceOnly"
+    },
+    {
+      "accepted": false,
+      "key": "elementSize",
+      "property": "r",
+      "read": null,
+      "type": "int",
+      "value": 2
+    },
+    {
+      "accepted": false,
+      "key": "interpolation",
+      "property": "r",
+      "read": null,
+      "type": "token",
+      "value": "vertex"
+    },
+    {
+      "accepted": false,
+      "key": "allowedTokens",
+      "property": "r",
+      "read": null,
+      "type": "token[]",
+      "value": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "accepted": false,
+      "key": "colorSpace",
+      "property": "r",
+      "read": null,
+      "type": "token",
+      "value": "raw"
+    },
+    {
+      "accepted": true,
+      "key": "noLoadHint",
+      "property": "r",
+      "read": true,
+      "type": "bool",
+      "value": true
+    },
+    {
+      "accepted": false,
+      "key": "unknownKey",
+      "property": "r",
+      "read": null,
+      "type": "int",
+      "value": 1
+    },
+    {
+      "accepted": false,
+      "key": "typeName",
+      "property": "r",
+      "read": null,
+      "type": "token",
+      "value": "int"
+    },
+    {
+      "accepted": true,
+      "key": "custom",
+      "property": "r",
+      "read": true,
+      "type": "bool",
+      "value": true
+    },
+    {
+      "accepted": true,
+      "key": "default",
+      "property": "r",
+      "read": 1.0,
+      "type": "double",
+      "value": 1.0
+    },
+    {
+      "accepted": true,
+      "key": "documentation",
+      "property": "doubleSided",
+      "read": "schema",
+      "type": "string",
+      "value": "schema"
+    },
+    {
+      "accepted": false,
+      "key": "documentation",
+      "property": "nope",
+      "read": null,
+      "type": "string",
+      "value": "missing"
+    }
+  ],
+  "openusd_version": "26.8",
+  "schema_spec": {
+    "custom": false,
+    "exists": true,
+    "type_name": "bool",
+    "variability": "Sdf.VariabilityUniform"
+  }
+}

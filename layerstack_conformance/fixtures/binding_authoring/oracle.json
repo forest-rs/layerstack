@@ -1,0 +1,439 @@
+{
+  "calls": [
+    {
+      "accepted": true,
+      "call": "bind A",
+      "specs": {
+        "/Set/Mesh.material:binding": {
+          "custom": false,
+          "explicit": true,
+          "strength": null,
+          "targets": [
+            "/Looks/A"
+          ]
+        }
+      }
+    },
+    {
+      "accepted": true,
+      "call": "bind A stronger",
+      "specs": {
+        "/Set/Mesh.material:binding": {
+          "custom": false,
+          "explicit": true,
+          "strength": "strongerThanDescendants",
+          "targets": [
+            "/Looks/A"
+          ]
+        }
+      }
+    },
+    {
+      "accepted": true,
+      "call": "bind B fallback",
+      "specs": {
+        "/Set/Mesh.material:binding": {
+          "custom": false,
+          "explicit": true,
+          "strength": "weakerThanDescendants",
+          "targets": [
+            "/Looks/B"
+          ]
+        }
+      }
+    },
+    {
+      "accepted": true,
+      "call": "bind A weaker preview",
+      "specs": {
+        "/Set/Mesh.material:binding": {
+          "custom": false,
+          "explicit": true,
+          "strength": "weakerThanDescendants",
+          "targets": [
+            "/Looks/B"
+          ]
+        },
+        "/Set/Mesh.material:binding:preview": {
+          "custom": false,
+          "explicit": true,
+          "strength": "weakerThanDescendants",
+          "targets": [
+            "/Looks/A"
+          ]
+        }
+      }
+    },
+    {
+      "accepted": false,
+      "call": "bind A purpose 'a b'",
+      "specs": {
+        "/Set/Mesh.material:binding": {
+          "custom": false,
+          "explicit": true,
+          "strength": "weakerThanDescendants",
+          "targets": [
+            "/Looks/B"
+          ]
+        },
+        "/Set/Mesh.material:binding:preview": {
+          "custom": false,
+          "explicit": true,
+          "strength": "weakerThanDescendants",
+          "targets": [
+            "/Looks/A"
+          ]
+        }
+      }
+    },
+    {
+      "accepted": true,
+      "call": "bind collection metalBits",
+      "specs": {
+        "/Set.material:binding:collection:metalBits": {
+          "custom": false,
+          "explicit": true,
+          "strength": null,
+          "targets": [
+            "/Set.collection:metal",
+            "/Looks/B"
+          ]
+        },
+        "/Set/Mesh.material:binding": {
+          "custom": false,
+          "explicit": true,
+          "strength": "weakerThanDescendants",
+          "targets": [
+            "/Looks/B"
+          ]
+        },
+        "/Set/Mesh.material:binding:preview": {
+          "custom": false,
+          "explicit": true,
+          "strength": "weakerThanDescendants",
+          "targets": [
+            "/Looks/A"
+          ]
+        }
+      }
+    },
+    {
+      "accepted": true,
+      "call": "bind collection unnamed preview",
+      "specs": {
+        "/Set.material:binding:collection:metalBits": {
+          "custom": false,
+          "explicit": true,
+          "strength": null,
+          "targets": [
+            "/Set.collection:metal",
+            "/Looks/B"
+          ]
+        },
+        "/Set.material:binding:collection:preview:metal": {
+          "custom": false,
+          "explicit": true,
+          "strength": null,
+          "targets": [
+            "/Set.collection:metal",
+            "/Looks/B"
+          ]
+        },
+        "/Set/Mesh.material:binding": {
+          "custom": false,
+          "explicit": true,
+          "strength": "weakerThanDescendants",
+          "targets": [
+            "/Looks/B"
+          ]
+        },
+        "/Set/Mesh.material:binding:preview": {
+          "custom": false,
+          "explicit": true,
+          "strength": "weakerThanDescendants",
+          "targets": [
+            "/Looks/A"
+          ]
+        }
+      }
+    },
+    {
+      "accepted": false,
+      "call": "bind collection bad:name",
+      "specs": {
+        "/Set.material:binding:collection:metalBits": {
+          "custom": false,
+          "explicit": true,
+          "strength": null,
+          "targets": [
+            "/Set.collection:metal",
+            "/Looks/B"
+          ]
+        },
+        "/Set.material:binding:collection:preview:metal": {
+          "custom": false,
+          "explicit": true,
+          "strength": null,
+          "targets": [
+            "/Set.collection:metal",
+            "/Looks/B"
+          ]
+        },
+        "/Set/Mesh.material:binding": {
+          "custom": false,
+          "explicit": true,
+          "strength": "weakerThanDescendants",
+          "targets": [
+            "/Looks/B"
+          ]
+        },
+        "/Set/Mesh.material:binding:preview": {
+          "custom": false,
+          "explicit": true,
+          "strength": "weakerThanDescendants",
+          "targets": [
+            "/Looks/A"
+          ]
+        }
+      }
+    },
+    {
+      "accepted": false,
+      "call": "bind collection '1x'",
+      "specs": {
+        "/Set.material:binding:collection:metalBits": {
+          "custom": false,
+          "explicit": true,
+          "strength": null,
+          "targets": [
+            "/Set.collection:metal",
+            "/Looks/B"
+          ]
+        },
+        "/Set.material:binding:collection:preview:metal": {
+          "custom": false,
+          "explicit": true,
+          "strength": null,
+          "targets": [
+            "/Set.collection:metal",
+            "/Looks/B"
+          ]
+        },
+        "/Set/Mesh.material:binding": {
+          "custom": false,
+          "explicit": true,
+          "strength": "weakerThanDescendants",
+          "targets": [
+            "/Looks/B"
+          ]
+        },
+        "/Set/Mesh.material:binding:preview": {
+          "custom": false,
+          "explicit": true,
+          "strength": "weakerThanDescendants",
+          "targets": [
+            "/Looks/A"
+          ]
+        }
+      }
+    },
+    {
+      "accepted": true,
+      "call": "unbind",
+      "specs": {
+        "/Set.material:binding:collection:metalBits": {
+          "custom": false,
+          "explicit": true,
+          "strength": null,
+          "targets": [
+            "/Set.collection:metal",
+            "/Looks/B"
+          ]
+        },
+        "/Set.material:binding:collection:preview:metal": {
+          "custom": false,
+          "explicit": true,
+          "strength": null,
+          "targets": [
+            "/Set.collection:metal",
+            "/Looks/B"
+          ]
+        },
+        "/Set/Mesh.material:binding": {
+          "custom": false,
+          "explicit": true,
+          "strength": "weakerThanDescendants",
+          "targets": []
+        },
+        "/Set/Mesh.material:binding:preview": {
+          "custom": false,
+          "explicit": true,
+          "strength": "weakerThanDescendants",
+          "targets": [
+            "/Looks/A"
+          ]
+        }
+      }
+    },
+    {
+      "accepted": true,
+      "call": "unbind full",
+      "specs": {
+        "/Set.material:binding:collection:metalBits": {
+          "custom": false,
+          "explicit": true,
+          "strength": null,
+          "targets": [
+            "/Set.collection:metal",
+            "/Looks/B"
+          ]
+        },
+        "/Set.material:binding:collection:preview:metal": {
+          "custom": false,
+          "explicit": true,
+          "strength": null,
+          "targets": [
+            "/Set.collection:metal",
+            "/Looks/B"
+          ]
+        },
+        "/Set/Mesh.material:binding": {
+          "custom": false,
+          "explicit": true,
+          "strength": "weakerThanDescendants",
+          "targets": []
+        },
+        "/Set/Mesh.material:binding:full": {
+          "custom": false,
+          "explicit": true,
+          "strength": null,
+          "targets": []
+        },
+        "/Set/Mesh.material:binding:preview": {
+          "custom": false,
+          "explicit": true,
+          "strength": "weakerThanDescendants",
+          "targets": [
+            "/Looks/A"
+          ]
+        }
+      }
+    },
+    {
+      "accepted": true,
+      "call": "unbind collection metalBits",
+      "specs": {
+        "/Set.material:binding:collection:metalBits": {
+          "custom": false,
+          "explicit": true,
+          "strength": null,
+          "targets": []
+        },
+        "/Set.material:binding:collection:preview:metal": {
+          "custom": false,
+          "explicit": true,
+          "strength": null,
+          "targets": [
+            "/Set.collection:metal",
+            "/Looks/B"
+          ]
+        },
+        "/Set/Mesh.material:binding": {
+          "custom": false,
+          "explicit": true,
+          "strength": "weakerThanDescendants",
+          "targets": []
+        },
+        "/Set/Mesh.material:binding:full": {
+          "custom": false,
+          "explicit": true,
+          "strength": null,
+          "targets": []
+        },
+        "/Set/Mesh.material:binding:preview": {
+          "custom": false,
+          "explicit": true,
+          "strength": "weakerThanDescendants",
+          "targets": [
+            "/Looks/A"
+          ]
+        }
+      }
+    },
+    {
+      "accepted": true,
+      "call": "unbind all /Set",
+      "specs": {
+        "/Set.material:binding:collection:metalBits": {
+          "custom": false,
+          "explicit": true,
+          "strength": null,
+          "targets": []
+        },
+        "/Set.material:binding:collection:preview:metal": {
+          "custom": false,
+          "explicit": true,
+          "strength": null,
+          "targets": []
+        },
+        "/Set/Mesh.material:binding": {
+          "custom": false,
+          "explicit": true,
+          "strength": "weakerThanDescendants",
+          "targets": []
+        },
+        "/Set/Mesh.material:binding:full": {
+          "custom": false,
+          "explicit": true,
+          "strength": null,
+          "targets": []
+        },
+        "/Set/Mesh.material:binding:preview": {
+          "custom": false,
+          "explicit": true,
+          "strength": "weakerThanDescendants",
+          "targets": [
+            "/Looks/A"
+          ]
+        }
+      }
+    },
+    {
+      "accepted": true,
+      "call": "unbind all /Set/Mesh",
+      "specs": {
+        "/Set.material:binding:collection:metalBits": {
+          "custom": false,
+          "explicit": true,
+          "strength": null,
+          "targets": []
+        },
+        "/Set.material:binding:collection:preview:metal": {
+          "custom": false,
+          "explicit": true,
+          "strength": null,
+          "targets": []
+        },
+        "/Set/Mesh.material:binding": {
+          "custom": false,
+          "explicit": true,
+          "strength": "weakerThanDescendants",
+          "targets": []
+        },
+        "/Set/Mesh.material:binding:full": {
+          "custom": false,
+          "explicit": true,
+          "strength": null,
+          "targets": []
+        },
+        "/Set/Mesh.material:binding:preview": {
+          "custom": false,
+          "explicit": true,
+          "strength": "weakerThanDescendants",
+          "targets": []
+        }
+      }
+    }
+  ],
+  "openusd_version": "26.8"
+}

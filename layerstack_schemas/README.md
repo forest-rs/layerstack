@@ -420,7 +420,10 @@ resolution for each subset and the parent fallback. It preserves binding
 strength, collection and purpose rules and retains shared face indices. An
 unauthored family type reads as `unrestricted`, and requested-time family
 validation is reported beside the subsets rather than failing the read.
-`MaterialBindingApiEdit::create_material_bind_subset` authors a subset and
+`MaterialBindingApiEdit::bind`, `bind_collection`, `unbind`,
+`unbind_collection` and `unbind_all` author bindings as C++
+`UsdShadeMaterialBindingAPI` does, with non-`custom` relationships and its
+`fallbackStrength` rule. `MaterialBindingApiEdit::create_material_bind_subset` authors a subset and
 types its family `nonOverlapping`, as C++ `CreateMaterialBindSubset` does.
 Engines own triangulation and draw grouping.
 After relevant edits, invalidate changed binding inputs and collection queries

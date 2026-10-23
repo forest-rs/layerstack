@@ -425,6 +425,8 @@ mod collection;
 pub mod color;
 #[cfg(feature = "usd-geom")]
 mod common_xform;
+#[cfg(feature = "usd-shade")]
+mod coord_sys;
 #[cfg(feature = "usd")]
 mod diagnostic;
 mod edit;
@@ -519,6 +521,8 @@ pub use collection::{
     MembershipIndexUpdate, MembershipProblem, MembershipQuery, MembershipRevisions, MembershipRule,
     MembershipSample,
 };
+#[cfg(feature = "usd-shade")]
+pub use coord_sys::{CoordSysBinding, CoordSysCache, CoordSysCacheStats, local_coord_sys_bindings};
 pub use edit::{PropertyMetadataError, SchemaEdit};
 pub use generated::views::*;
 pub use generated::{Domain, OPENUSD_VERSION};

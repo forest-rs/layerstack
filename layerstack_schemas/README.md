@@ -429,6 +429,10 @@ Engines own triangulation and draw grouping.
 After relevant edits, invalidate changed binding inputs and collection queries
 explicitly. Clear the cache when precise dependency tracking is unavailable.
 
+`CoordSysCache` resolves the coordinate systems a prim binds and inherits
+through `CoordSysAPI`, as C++ `FindBindingsWithInheritanceForPrim` does,
+sharing each ancestor's resolved list.
+
 The `usd-shade` feature also resolves composed connections and material surface,
 displacement and volume sources through node graphs and ordered render contexts.
 Results retain the selected endpoint, other candidates, diagnostics and dependencies.

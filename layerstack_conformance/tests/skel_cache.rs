@@ -469,8 +469,12 @@ fn instanced_rigs_discover_remapped_bindings_and_refresh_shared_source_edits() {
     );
     let scene = Scene::new(live.stage(), &store);
     let root = SkelRoot::new(&scene, root).unwrap();
-    assert!(root.skinning_queries().unwrap().is_empty());
-    let discovered = root.skinning_queries_with_instance_proxies().unwrap();
+    assert!(root.bindings().bindings.is_empty());
+    let discovered: Vec<_> = root
+        .bindings_with_instance_proxies()
+        .skinning_queries()
+        .cloned()
+        .collect();
     assert_eq!(
         discovered
             .iter()

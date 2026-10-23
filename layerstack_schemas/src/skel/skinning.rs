@@ -3,7 +3,8 @@
 
 //! CPU skinning with explicit methods, joint order and geometry spaces.
 use super::{
-    BlendShapeQuery, SkelError, SkeletonQuery, inherited_target_with_root, invalid, read, tokens,
+    BlendShapeQuery, SkelError, SkelProblem, SkelProblemReason, SkeletonQuery,
+    inherited_target_with_root, invalid, read, tokens,
 };
 use crate::{
     PrimView, Scene, Time, gf,
@@ -288,7 +289,7 @@ pub(super) fn transform_point(point: [f32; 3], matrix: &gf::Matrix4, project: bo
 // Binding properties inherit separately, only from API-bearing ancestors with
 // authored values. Blocks and empty declarations do not replace a parent input
 // (UsdSkel_CacheImpl::_Populate, AOUSD Core §12.3.6).
-fn inherited_property(
+pub(super) fn inherited_property(
     scene: &Scene<'_>,
     mut path: PathId,
     name: &str,
@@ -368,13 +369,16 @@ impl<'a> SkinningQuery<'a> {
         geometry: PathId,
         load: impl FnOnce(PathId) -> Result<SkeletonQuery<'a>, SkelError>,
     ) -> Result<Option<Self>, SkelError> {
-        Self::prepare_with_root(scene, geometry, None, load)
+        Self::prepare_with_root(scene, geometry, None, load, || {
+            BlendShapeQuery::new(scene, geometry)
+        })
     }
     fn prepare_with_root(
         scene: &Scene<'a>,
         geometry: PathId,
         root: Option<PathId>,
         load: impl FnOnce(PathId) -> Result<SkeletonQuery<'a>, SkelError>,
+        shapes: impl FnOnce() -> Result<Option<BlendShapeQuery>, SkelError>,
     ) -> Result<Option<Self>, SkelError> {
         // AOUSD Core §12.3.6; UsdSkelCache::Populate starts binding inheritance
         // at the supplied traversal root, which remains inclusive.
@@ -435,7 +439,7 @@ impl<'a> SkinningQuery<'a> {
         let mut dependencies = vec![geometry, skeleton_path, indices, weights];
         dependencies.extend(skeleton.animation_path());
         dependencies.extend([geom_bind, method, order_source].into_iter().flatten());
-        let blend_shapes = BlendShapeQuery::new(scene, geometry)?;
+        let blend_shapes = shapes()?;
         if let Some(shapes) = &blend_shapes {
             dependencies.extend(shapes.targets());
         }
@@ -673,30 +677,83 @@ impl<'a> SkinningQuery<'a> {
         self.skin_points(&points, time)
     }
 }
+/// One skinnable prim bound to an active skeleton, as skel discovery finds
+/// it: every such prim, with or without valid joint influences or blend
+/// shapes, as C++ `UsdSkelBinding::GetSkinningTargets` lists it.
+#[derive(Clone, Debug)]
+pub struct SkelBinding<'a> {
+    /// The bound geometry.
+    pub geometry: PathId,
+    /// The skeleton it binds through `skel:skeleton`.
+    pub skeleton: PathId,
+    /// Its joint influences, skinning it with the skeleton; `None` when it has
+    /// none or they are malformed (see [`Self::problems`]). C++:
+    /// `UsdSkelSkinningQuery::HasJointInfluences`.
+    pub skinning: Option<SkinningQuery<'a>>,
+    /// Its own blend shapes; `None` when it binds none or the binding is
+    /// malformed. Weights come from the skeleton's animation, as
+    /// [`super::BlendShapeCache`] reads them. C++:
+    /// `UsdSkelSkinningQuery::HasBlendShapes`.
+    pub blend_shapes: Option<BlendShapeQuery>,
+    /// What was skipped or left out of this binding, including skipped
+    /// inbetweens, in discovery order.
+    pub problems: Vec<SkelProblem>,
+}
+
+/// Every binding skel discovery found under a `SkelRoot`, and the prims it
+/// could not bind. Discovery itself does not fail: each problem stays with
+/// the binding, or prim, it belongs to.
+#[derive(Clone, Debug, Default)]
+pub struct SkelBindings<'a> {
+    /// Bound skinnable prims, in traversal order.
+    pub bindings: Vec<SkelBinding<'a>>,
+    /// Prims left unbound, such as one whose `skel:skeleton` targets
+    /// something other than a skeleton.
+    pub problems: Vec<SkelProblem>,
+}
+
+impl<'a> SkelBindings<'a> {
+    /// The bindings' skinning queries: the bound prims with valid joint
+    /// influences.
+    pub fn skinning_queries(&self) -> impl Iterator<Item = &SkinningQuery<'a>> {
+        self.bindings
+            .iter()
+            .filter_map(|binding| binding.skinning.as_ref())
+    }
+
+    /// Every problem: the unbound prims', then each binding's.
+    pub fn problems(&self) -> impl Iterator<Item = &SkelProblem> {
+        self.problems
+            .iter()
+            .chain(self.bindings.iter().flat_map(|binding| &binding.problems))
+    }
+}
+
 impl<'a> SkelRoot<'a> {
-    /// Discovers skinning bindings in default defined, non-abstract imageable
-    /// traversal. Boundables prune children; native instance proxies are omitted.
-    /// Binding inputs inherit only within this root, including the root itself.
-    /// Each returned query exposes its geometry, skeleton and dependency roots.
-    pub fn skinning_queries(&self) -> Result<Vec<SkinningQuery<'a>>, SkelError> {
-        self.discover_skinning_queries(false)
+    /// Discovers skel bindings in default defined, non-abstract imageable
+    /// traversal. Boundables prune children; native instance proxies are
+    /// omitted. Binding inputs inherit only within this root, including the
+    /// root itself. Every skinnable prim bound to an active skeleton is a
+    /// binding, as in C++: one with malformed influences is bound without
+    /// them, and a malformed blend-shape binding or skeleton is reported on
+    /// its binding rather than failing discovery.
+    /// OpenUSD: `UsdSkelCache::Populate`, `ComputeSkelBindings`.
+    pub fn bindings(&self) -> SkelBindings<'a> {
+        self.discover(false)
     }
-    /// Discovers bindings inside native instances as well as ordinary geometry.
-    /// Equivalent to applying `UsdTraverseInstanceProxies` to default traversal;
-    /// geometry and relationship targets use each instance's composed namespace.
-    /// AOUSD Core §11.3.3; OpenUSD `UsdSkelCache::ComputeSkelBindings` predicate.
-    pub fn skinning_queries_with_instance_proxies(
-        &self,
-    ) -> Result<Vec<SkinningQuery<'a>>, SkelError> {
-        self.discover_skinning_queries(true)
+    /// [`Self::bindings`], inside native instances as well as ordinary
+    /// geometry. Equivalent to applying `UsdTraverseInstanceProxies` to
+    /// default traversal; geometry and relationship targets use each
+    /// instance's composed namespace. AOUSD Core §11.3.3.
+    pub fn bindings_with_instance_proxies(&self) -> SkelBindings<'a> {
+        self.discover(true)
     }
-    fn discover_skinning_queries(
-        &self,
-        instance_proxies: bool,
-    ) -> Result<Vec<SkinningQuery<'a>>, SkelError> {
+    fn discover(&self, instance_proxies: bool) -> SkelBindings<'a> {
         let scene = self.scene();
-        let mut pending = vec![self.path()];
-        let mut result = Vec::new();
+        let root = self.path();
+        let mut pending = vec![root];
+        let mut found = SkelBindings::default();
+        let mut skeletons: HashMap<PathId, Result<SkeletonQuery<'a>, SkelError>> = HashMap::new();
         while let Some(path) = pending.pop() {
             let Some(prim) = scene.prim(path) else {
                 continue;
@@ -707,24 +764,102 @@ impl<'a> SkelRoot<'a> {
             {
                 continue;
             }
-            if scene.is_a(path, "Boundable")
+            if !(scene.is_a(path, "Boundable")
                 && !scene.is_a(path, "Skeleton")
-                && !scene.is_a(path, "SkelRoot")
+                && !scene.is_a(path, "SkelRoot"))
             {
-                if let Some(query) =
-                    SkinningQuery::prepare_with_root(&scene, path, Some(self.path()), |skeleton| {
-                        Skeleton::new(&scene, skeleton)
-                            .expect("validated skeleton target")
-                            .query()
-                    })?
-                {
-                    result.push(query);
+                if instance_proxies || !prim.is_instance() {
+                    pending.extend(prim.child_paths().iter().rev().copied());
                 }
-            } else if instance_proxies || !prim.is_instance() {
-                pending.extend(prim.child_paths().iter().rev().copied());
+                continue;
             }
+            let skeleton = match inherited_target_with_root(
+                &scene,
+                path,
+                "skel:skeleton",
+                "Skeleton",
+                Some(root),
+            ) {
+                Ok(Some(skeleton)) => skeleton,
+                Ok(None) => continue,
+                Err(error) => {
+                    found.problems.push(SkelProblem::from_error(
+                        &scene,
+                        path,
+                        error,
+                        SkelProblemReason::SkeletonTarget,
+                    ));
+                    continue;
+                }
+            };
+            if !scene
+                .prim(skeleton)
+                .is_some_and(layerstack::Prim::is_active)
+            {
+                continue;
+            }
+            let mut problems = Vec::new();
+            let blend_shapes = match BlendShapeQuery::new(&scene, path) {
+                Ok(shapes) => shapes,
+                Err(error) => {
+                    problems.push(SkelProblem::from_error(
+                        &scene,
+                        path,
+                        error,
+                        SkelProblemReason::BlendShapes,
+                    ));
+                    None
+                }
+            };
+            if let Some(shapes) = &blend_shapes {
+                problems.extend(shapes.problems().iter().cloned());
+            }
+            let query = skeletons
+                .entry(skeleton)
+                .or_insert_with(|| {
+                    Skeleton::new(&scene, skeleton)
+                        .expect("validated skeleton target")
+                        .query()
+                })
+                .clone();
+            let skinning = match query {
+                Err(error) => {
+                    problems.push(SkelProblem::from_error(
+                        &scene,
+                        skeleton,
+                        error,
+                        SkelProblemReason::Skeleton,
+                    ));
+                    None
+                }
+                Ok(query) => match SkinningQuery::prepare_with_root(
+                    &scene,
+                    path,
+                    Some(root),
+                    |_| Ok(query),
+                    || Ok(blend_shapes.clone()),
+                ) {
+                    Ok(skinning) => skinning,
+                    Err(error) => {
+                        problems.push(SkelProblem::from_error(
+                            &scene,
+                            path,
+                            error,
+                            SkelProblemReason::JointInfluences,
+                        ));
+                        None
+                    }
+                },
+            };
+            found.bindings.push(SkelBinding {
+                geometry: path,
+                skeleton,
+                skinning,
+                blend_shapes,
+                problems,
+            });
         }
-        Ok(result)
+        found
     }
 }
 

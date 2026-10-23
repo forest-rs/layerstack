@@ -168,8 +168,10 @@ fn retained_custom_subsets_keep_scale_flags_local_and_refresh_pose_edits() {
             let time = cache.time();
             for q in SkelRoot::new(&scene, root)
                 .unwrap()
+                .bindings()
                 .skinning_queries()
-                .unwrap()
+                .cloned()
+                .collect::<Vec<_>>()
             {
                 assert_eq!(
                     cache

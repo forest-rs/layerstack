@@ -32,8 +32,10 @@ fn inherited_indexed_and_constant_influences_match_cpp() {
     let scene = Scene::new(live.stage(), &store);
     let queries = SkelRoot::new(&scene, root)
         .unwrap()
+        .bindings()
         .skinning_queries()
-        .unwrap();
+        .cloned()
+        .collect::<Vec<_>>();
     assert_eq!(queries.len(), 2);
     for (row, path) in expected.as_array().unwrap().iter().zip(paths) {
         let query = SkinningQuery::new(&scene, path).unwrap().unwrap();
@@ -171,8 +173,10 @@ fn discovery_inherits_binding_inputs_only_within_its_requested_root() {
     for (root, expected) in rows {
         let queries = SkelRoot::new(&scene, root)
             .unwrap()
+            .bindings()
             .skinning_queries()
-            .unwrap();
+            .cloned()
+            .collect::<Vec<_>>();
         assert_eq!(queries.len(), expected.len(), "root {root:?}");
         for (query, (path, points)) in queries.iter().zip(expected) {
             assert_eq!(query.geometry_path(), path);

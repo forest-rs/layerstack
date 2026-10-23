@@ -74,6 +74,15 @@ def "Yard" (
 {
 }
 
+# Reordered targets outside the referenced prim cannot be mapped to
+# `/Arbor` either, and are reported as added ones are; the others are
+# reordered. A deleted one is dropped silently.
+def "Arbor" (
+    references = @./garden.usda@</Trellis>
+)
+{
+}
+
 # A stronger explicit target list replaces the referenced one, so the
 # referenced path that cannot be mapped reports nothing.
 def "Hedge" (

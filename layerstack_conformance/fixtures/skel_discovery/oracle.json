@@ -1,0 +1,97 @@
+{
+  "openusd_version": "26.8",
+  "roots": {
+    "/Root": [
+      {
+        "blend_points": [
+          [
+            4.0,
+            0.0,
+            0.0
+          ]
+        ],
+        "blend_shapes": true,
+        "joint_influences": true,
+        "path": "/Root/BadInbetween",
+        "skeleton": "/Root/Skel",
+        "skinned_points": [
+          [
+            0.0,
+            10.0,
+            0.0
+          ]
+        ]
+      },
+      {
+        "blend_points": null,
+        "blend_shapes": false,
+        "joint_influences": true,
+        "path": "/Root/Good",
+        "skeleton": "/Root/Skel",
+        "skinned_points": [
+          [
+            0.0,
+            10.0,
+            0.0
+          ]
+        ]
+      },
+      {
+        "blend_points": null,
+        "blend_shapes": false,
+        "joint_influences": false,
+        "path": "/Root/Mismatched",
+        "skeleton": "/Root/Skel",
+        "skinned_points": null
+      },
+      {
+        "blend_points": [
+          [
+            0.0,
+            1.0,
+            0.0
+          ]
+        ],
+        "blend_shapes": true,
+        "joint_influences": false,
+        "path": "/Root/MorphOnly",
+        "skeleton": "/Root/Skel",
+        "skinned_points": null
+      }
+    ],
+    "/Root2": [
+      {
+        "blend_points": [
+          [
+            0.0,
+            1.0,
+            0.0
+          ]
+        ],
+        "blend_shapes": true,
+        "joint_influences": false,
+        "path": "/Root2/MorphOnly",
+        "skeleton": "/Root2/Skel",
+        "skinned_points": null
+      }
+    ],
+    "/Root3": [
+      {
+        "blend_points": null,
+        "blend_shapes": false,
+        "joint_influences": false,
+        "path": "/Root3/HalfBound",
+        "skeleton": "/Root3/Skel",
+        "skinned_points": null
+      },
+      {
+        "blend_points": null,
+        "blend_shapes": false,
+        "joint_influences": false,
+        "path": "/Root3/Plain",
+        "skeleton": "/Root3/Skel",
+        "skinned_points": null
+      }
+    ]
+  }
+}

@@ -39,7 +39,7 @@ use crate::{
     prim_index::{ArcKind, Opinion, OpinionKey, PrimIndex},
     prim_index_graph::{NodeArc, NodeId, PrimIndexGraph},
     spec_path::SpecPath,
-    stage::StageOptions,
+    stage::{InstanceIndexKey, InstanceIndexKeys, StageOptions},
     sync::ReadLock,
 };
 
@@ -72,6 +72,10 @@ pub(crate) struct Composition {
     /// The whole child list of each requested boundary parent the
     /// composition indexed, whatever its scope lists ([`compose`]).
     pub(crate) boundary_children: HashMap<PathId, Vec<PathId>>,
+    /// The [`InstanceIndexKey`] of each active instance root kept that was
+    /// indexed rather than copied from another instance's descendants,
+    /// found on the thread that indexed it.
+    pub(crate) instance_keys: InstanceIndexKeys,
     /// What each composed prim depends on, applied to `deps` at the end.
     records: HashMap<PathId, PrimRecord>,
     /// The layer stacks whose errors a prim has reported.
@@ -370,6 +374,9 @@ struct Indexed {
     active: bool,
     /// The key of an active instance, while instances share prototypes.
     key: Option<InstanceKey>,
+    /// The prototype key part of an active instance
+    /// ([`Composition::instance_keys`]).
+    index_key: Option<Box<InstanceIndexKey>>,
     /// Whether the children it composes were indexed with it.
     descended: bool,
     /// The children the scope lists.
@@ -486,6 +493,17 @@ fn index_prim(
     let dynamic = core::mem::take(&mut outputs.dynamic);
     index.dynamic = (!dynamic.is_empty()).then(|| Arc::new(dynamic));
     let active = path == ctx.root_path || is_active(ctx, &graph);
+    // Found here, while the index is at hand, rather than for every
+    // instance on one thread once the walk is done.
+    let index_key = (active && graph.instanceable).then(|| {
+        let depth = ctx.store.paths().resolve(path).depth();
+        Box::new(InstanceIndexKey::of(
+            &index,
+            depth,
+            ctx.store,
+            ctx.fallbacks,
+        ))
+    });
     // An exact scope lists every child but composes only the listed
     // prims and their ancestors: the live stage merges whole child
     // lists. A population mask lists only the children it includes.
@@ -558,6 +576,7 @@ fn index_prim(
         reports,
         active,
         key,
+        index_key,
         descended,
         children,
         composed_children,
@@ -669,6 +688,7 @@ impl Walk<'_, '_, '_> {
             reports,
             active,
             key,
+            index_key,
             descended,
             children,
             composed_children,
@@ -734,6 +754,9 @@ impl Walk<'_, '_, '_> {
         let keep = self.scope.keeps(ctx.store.paths(), path);
         if keep {
             out.prims.insert(path, index);
+            if let Some(index_key) = index_key {
+                out.instance_keys.insert(path, *index_key);
+            }
         }
         if !active {
             if keep {

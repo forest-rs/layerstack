@@ -77,7 +77,7 @@ use layerstack::{
     AssetResolveError, AssetResolver, InMemoryStore, Layer, LayerId, LayerStore, LiveStage,
     PathInterner, ResolvedAsset, StageOptions, TokenInterner,
 };
-use layerstack::{asset::PackagePath, encoded_bytes::EncodedBytes};
+use layerstack::{asset::PackagePath, encoded_bytes::EncodedBytes, parallel::Threads};
 use layerstack_usdz::snapshot::{PackageLimits, PackageSnapshot, PackageStats};
 use layerstack_usdz::{ImportDiagnostic, MemberDiagnostic};
 pub use layerstack_usdz::{UsdcArrayLoading, UsdcReadOptions};
@@ -674,6 +674,12 @@ impl<B: Storage> StageDocument<B> {
     /// The dynamic sides of [`LoadOptions::formats`] ([`FileFormat::dynamic`])
     /// join `options.dynamic_formats`; one claiming an extension a format
     /// there claims is rejected ([`IoErrorKind::Rejected`]).
+    ///
+    /// With `options.threads` above one, the layers are read on a pool of
+    /// that many threads ([`layerstack::parallel::Threads`]), and a USDC
+    /// layer on the threads the pool leaves idle while it is read: reading
+    /// runs at most `options.threads` threads at once, as composing after it
+    /// does.
     pub fn open_in_with(
         mut storage: B,
         mut store: InMemoryStore,
@@ -1339,7 +1345,7 @@ impl<'a, B: Storage> Reader<'a, B> {
                     schemas.as_deref(),
                     usdc_options,
                     &formats,
-                    1,
+                    &Threads::new(1),
                 );
                 self.pending.extend(read.resolved_layers);
                 self.diagnostics.extend(read.diagnostics);
@@ -1482,8 +1488,8 @@ struct LooseRead {
 }
 
 /// Reads the USDA, USDC or registered-format layer `data`, `identifier`
-/// read as `id`, resolving its arcs through `resolver`, a USDC layer on up
-/// to `threads` threads.
+/// read as `id`, resolving its arcs through `resolver`, a USDC layer on the
+/// calling thread and the threads `threads` spares.
 #[expect(
     clippy::too_many_arguments,
     reason = "one reader's inputs, passed through"
@@ -1499,7 +1505,7 @@ fn read_loose(
     schemas: Option<&layerstack::SchemaRegistry>,
     usdc_options: UsdcReadOptions,
     formats: &FileFormats,
-    threads: usize,
+    threads: &Threads,
 ) -> LooseRead {
     let mut read = LooseRead {
         layer: Err(IoError::new(IoErrorKind::Rejected, "unread layer")),

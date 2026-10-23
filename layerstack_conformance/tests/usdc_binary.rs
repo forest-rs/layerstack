@@ -20,6 +20,7 @@ use std::path::{Path, PathBuf};
 
 use layerstack::doc::{LayerId, Value};
 use layerstack::interner::TokenInterner;
+use layerstack::parallel::Threads;
 use layerstack::path::PathInterner;
 use layerstack::{AssetResolveError, AssetResolver, InMemoryStore, PropertySpec, ResolvedAsset};
 use layerstack_conformance::workspace_root;
@@ -709,7 +710,7 @@ fn read_within(
         &PathInterner::default(),
         &mut StubResolver,
         budget,
-        1,
+        &Threads::new(1),
     )
 }
 

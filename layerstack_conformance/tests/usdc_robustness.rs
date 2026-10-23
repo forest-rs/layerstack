@@ -28,6 +28,7 @@ use std::path::PathBuf;
 use layerstack::doc::{FieldEntry, FieldValue, Layer, LayerId, Value};
 use layerstack::interner::TokenInterner;
 use layerstack::listop::ListOp;
+use layerstack::parallel::Threads;
 use layerstack::path::PathInterner;
 use layerstack::property::PropertyEntry;
 use layerstack::{AssetResolveError, AssetResolver, ResolvedAsset};
@@ -236,7 +237,7 @@ fn read_counting(
             &PathInterner::default(),
             &mut NoAssets,
             budget,
-            1,
+            &Threads::new(1),
         )
     })
 }
@@ -400,7 +401,7 @@ fn the_path_tree_reads_what_the_text_does() {
                 &paths,
                 &mut NoAssets,
                 &mut budget,
-                1,
+                &Threads::new(1),
             );
             (
                 read.map(|read| (read.layer, read.diagnostics)),

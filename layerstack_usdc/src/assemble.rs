@@ -18,6 +18,7 @@ use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
+use layerstack::parallel::Threads;
 
 use hashbrown::{HashMap, HashSet};
 
@@ -83,9 +84,11 @@ pub struct AssembleDiagnostic {
 /// that several fields share, and every use of a field name or spec path,
 /// which many specs may share.
 ///
-/// Prim and property specs are converted on up to `threads` threads (with
-/// the `std` feature): one converts them in file order, more in chunks of
-/// a fixed number of specs. The layer, its diagnostics and the budget
+/// Prim and property specs are converted on the calling thread and the
+/// threads `threads` spares (with the `std` feature): one thread converts
+/// them in file order, more in chunks of a fixed number of specs, when
+/// the budget spares a thread as assembly starts and the file holds more
+/// than a chunk. The layer, its diagnostics and the budget
 /// charged, or the error, are the same on any number of threads; only the
 /// order in which new tokens and paths are interned, and so their ids,
 /// depends on them. Arcs are resolved on the calling thread, in file
@@ -104,7 +107,7 @@ pub fn assemble(
     paths: &PathInterner,
     resolver: &mut dyn AssetResolver,
     budget: &mut DecodeBudget,
-    threads: usize,
+    threads: &Threads,
 ) -> Result<AssembleResult, UsdcError> {
     let chunk = SPECS_PER_CHUNK;
     assemble_in_chunks(
@@ -125,7 +128,7 @@ fn assemble_in_chunks(
     paths: &PathInterner,
     resolver: &mut dyn AssetResolver,
     budget: &mut DecodeBudget,
-    threads: usize,
+    threads: &Threads,
     chunk: usize,
 ) -> Result<AssembleResult, UsdcError> {
     let tables = ReadTables::for_read(sections);
@@ -141,7 +144,7 @@ fn assemble_in_chunks(
     };
     let mut ctx = inputs.ctx(budget, Some(resolver));
 
-    let layer = ctx.assemble_layer(inputs, threads.max(1))?;
+    let layer = ctx.assemble_layer(inputs, threads)?;
 
     Ok(AssembleResult {
         layer,
@@ -678,11 +681,11 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
     }
 
     /// Assembles all specs into a [`Layer`], converting prim and property
-    /// specs on up to `threads` threads ([`Self::run_pass`]).
+    /// specs on the threads of `threads` ([`Self::run_pass`]).
     fn assemble_layer(
         &mut self,
         inputs: ReadInputs<'a>,
-        threads: usize,
+        threads: &Threads,
     ) -> Result<Layer, UsdcError> {
         let mut layer = Layer::new(self.layer_id);
 
@@ -727,7 +730,7 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
         // parent prim: on one thread each in turn, on more in chunks
         // (`Self::run_pass`). Specs under variant paths are handled with
         // the variant specs below.
-        if threads <= 1 {
+        if !crate::threads::pooled(threads, self.sections.specs.len() > inputs.chunk) {
             let mut decoded = Visits {
                 first: 0,
                 seen: &mut seen,
@@ -921,8 +924,8 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
     }
 
     /// Converts the specs of `forms` in the file with `convert`, in chunks
-    /// of `inputs.chunk` specs of `forms` ([`SPECS_PER_CHUNK`]) on up to
-    /// `threads` threads, each chunk within what is left of this context's
+    /// of `inputs.chunk` specs of `forms` ([`SPECS_PER_CHUNK`]) on the
+    /// threads of `threads`, each chunk within what is left of this context's
     /// budget and without the resolver. A spec asking for the resolver is
     /// converted again here, with it, after the chunks. Returns what the
     /// specs converted to, by chunk, in spec order; charges their budget
@@ -932,7 +935,7 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
     fn run_pass<T: SpecItem + Send>(
         &mut self,
         inputs: ReadInputs<'a>,
-        threads: usize,
+        threads: &Threads,
         seen: &mut [bool],
         forms: &[SpecForm],
         convert: &Convert<'_, 'a, T>,
@@ -3686,7 +3689,7 @@ def "Other" {}
                 &paths,
                 &mut NoAssets,
                 &mut budget,
-                1,
+                &Threads::new(1),
             )
             .unwrap()
         };
@@ -3918,7 +3921,7 @@ def "Other" {}
                 &paths,
                 &mut resolver,
                 &mut budget,
-                threads,
+                &Threads::new(threads),
                 chunk,
             );
             (result, resolver.0, budget.used())
@@ -4036,7 +4039,7 @@ def "T" {}
             &paths,
             &mut NoAssets,
             &mut budget,
-            1,
+            &Threads::new(1),
         )
         .unwrap();
         assert!(
@@ -4187,7 +4190,7 @@ def "T" {}
                 &PathInterner::default(),
                 &mut NoAssets,
                 &mut DecodeBudget::with_limit(10_000),
-                1,
+                &Threads::new(1),
             )
             .unwrap();
             let property = &read.layer.prims().values().next().unwrap().properties[0].spec;
@@ -4369,7 +4372,7 @@ def "T" {}
                 &paths,
                 &mut NoAssets,
                 &mut DecodeBudget::with_limit(100),
-                1,
+                &Threads::new(1),
             )
             .unwrap();
             assert!(result.diagnostics.is_empty());
@@ -4475,7 +4478,7 @@ def "T" {}
             &PathInterner::default(),
             &mut NoAssets,
             budget,
-            1,
+            &Threads::new(1),
         )
     }
 

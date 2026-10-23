@@ -19,6 +19,7 @@ use crate::toc::{SectionEntry, Toc};
 use crate::value_rep::DecodeBudget;
 use crate::value_type::SpecForm;
 use crate::version::CrateVersion;
+use layerstack::parallel::Threads;
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -499,11 +500,18 @@ pub fn parse_sections(
     })
 }
 
+/// The size, in bytes, from which [`parse_sections_on`] parses a file's
+/// sections on more than the calling thread.
+pub const THREADED_SECTIONS_MIN: usize = 64 * 1024;
+
 /// Parses the sections as [`parse_sections`] does, decompressing and
-/// decoding them on up to `threads` threads (with the `std` feature): each
-/// table, and each of the integer arrays of the PATHS and SPECS sections,
-/// is a task of its own. The paths are then placed in the tree, which
-/// needs the tokens, on the calling thread.
+/// decoding them on the calling thread and the threads `threads` spares
+/// (with the `std` feature): each table, and each of the integer arrays of
+/// the PATHS and SPECS sections, is a task of its own. The paths are then
+/// placed in the tree, which needs the tokens, on the calling thread. A
+/// file smaller than [`THREADED_SECTIONS_MIN`] bytes, or one parsed when
+/// the budget spares no thread, is parsed on the calling thread alone:
+/// the tasks of a small file take less time than starting a thread.
 ///
 /// The result, the budget charged and the error, if any, are those of
 /// parsing the sections one after another, in file order: each task is
@@ -515,9 +523,22 @@ pub fn parse_sections_on(
     toc: &Toc,
     version: CrateVersion,
     budget: &mut DecodeBudget,
-    threads: usize,
+    threads: &Threads,
 ) -> Result<CrateSections, UsdcError> {
-    if threads <= 1 {
+    parse_sections_from(data, toc, version, budget, threads, THREADED_SECTIONS_MIN)
+}
+
+/// [`parse_sections_on`], parsing a file of at least `threaded_min` bytes
+/// on more than the calling thread.
+fn parse_sections_from(
+    data: &[u8],
+    toc: &Toc,
+    version: CrateVersion,
+    budget: &mut DecodeBudget,
+    threads: &Threads,
+    threaded_min: usize,
+) -> Result<CrateSections, UsdcError> {
+    if !crate::threads::pooled(threads, data.len() >= threaded_min) {
         return parse_sections(data, toc, version, budget);
     }
     let tasks: Vec<SectionTask> = [
@@ -1419,7 +1440,8 @@ mod tests {
         let version = header.crate_version();
         let parse = |limit: u64, threads: usize| {
             let mut budget = DecodeBudget::with_limit(limit);
-            let parsed = parse_sections_on(&bytes, &toc, version, &mut budget, threads);
+            let threads = Threads::new(threads);
+            let parsed = parse_sections_from(&bytes, &toc, version, &mut budget, &threads, 0);
             (parsed, budget.used())
         };
         let (one, used) = parse(u64::MAX, 1);

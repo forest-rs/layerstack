@@ -30,7 +30,7 @@ use alloc::sync::Arc;
 use hashbrown::{HashMap, HashSet};
 use layerstack::{
     AssetResolveError, AssetResolver, LayerId, PathInterner, ResolvedAsset, TokenInterner,
-    asset::PackagePath,
+    asset::PackagePath, parallel::Threads,
 };
 
 /// The first provisional layer id; the real ones a store hands out stay
@@ -83,8 +83,9 @@ struct Shared<'a, B> {
     usdc_options: super::UsdcReadOptions,
     formats: &'a FileFormats,
     defers_variant_arcs: bool,
-    /// The threads a USDC source is read on ([`read_loose`]).
-    threads: usize,
+    /// The threads of the open: the pool reading sources runs on them, and
+    /// a USDC source is read on those it leaves idle ([`read_loose`]).
+    threads: &'a Threads,
     /// [`Reader::identify`]'s cache.
     identities: Mutex<Identities>,
     /// Each source found so far, by identifier, with its provisional id.
@@ -332,6 +333,7 @@ impl<B: Storage> Reader<'_, B> {
         if self.catalog.ids.contains_key(&identifier) {
             return None;
         }
+        let budget = Threads::new(threads);
         let shared = Shared {
             storage: &*self.storage,
             tokens,
@@ -340,7 +342,7 @@ impl<B: Storage> Reader<'_, B> {
             usdc_options: self.usdc_options,
             formats: &self.formats,
             defers_variant_arcs: self.defers_variant_arcs(),
-            threads,
+            threads: &budget,
             identities: Mutex::new(self.identities.clone()),
             sources: Mutex::default(),
         };
@@ -348,7 +350,7 @@ impl<B: Storage> Reader<'_, B> {
         let root_id = shared.source(&identifier, &mut root);
         let work = |task: Task, added: &mut Vec<Task>| shared.read(task, added);
         let reads: HashMap<LayerId, Read> =
-            layerstack::parallel::with_pool(threads, &work, |pool| pool.run(root))
+            layerstack::parallel::with_pool_in(&budget, &work, |pool| pool.run(root))
                 .into_iter()
                 .collect();
         if reads

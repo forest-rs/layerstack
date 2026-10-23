@@ -36,7 +36,13 @@ it does not copy the elements. `as_slice()` borrows that storage.
 `as_ref().clone()` explicitly materializes an independently mutable vector;
 `Arc::make_mut` copies only when another owner retains the buffer.
 Half values exposed as `f32` and matrices exposed as nested rows still require
-representation conversion and return vectors. Text arrays retain their previous types.
+representation conversion and return vectors.
+
+A `string[]` getter returns `Option<Arc<StringArray>>`, the value's one text
+buffer, shared the same way (`value::read_string_array_shared`;
+`value::borrow_string_array` borrows it), and its slice setter writes one buffer
+(`value::write_string_array`). Other text arrays (`token[]`, `asset[]`, path
+expressions) return vectors.
 
 | Operation | Element allocation/copy cost |
 | --- | --- |

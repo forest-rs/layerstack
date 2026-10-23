@@ -29,7 +29,9 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use layerstack::edit::EditTarget;
-use layerstack::{InMemoryStore, Layer, LayerId, LiveStage, PathId, StageOptions, TargetPath};
+use layerstack::{
+    InMemoryStore, Layer, LayerId, LiveStage, PathId, StageOptions, StringArray, TargetPath,
+};
 use layerstack_schemas::{OPENUSD_VERSION, Scene, SchemaEdit};
 use serde_json::{Value as Json, json};
 
@@ -123,6 +125,12 @@ impl<T: Canon> Canon for Vec<T> {
 impl<T: Canon> Canon for Arc<Vec<T>> {
     fn canon(&self) -> Json {
         self.as_ref().canon()
+    }
+}
+
+impl Canon for Arc<StringArray> {
+    fn canon(&self) -> Json {
+        Json::Array(self.iter().map(|text| json!(text)).collect())
     }
 }
 

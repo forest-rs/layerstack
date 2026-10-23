@@ -194,6 +194,30 @@ fn default_literal(
     })
 }
 
+/// The Rust expression of a `string[]` default: its shared text buffer,
+/// the type a `string[]` port reads as.
+fn string_array_literal(value: &Value, external: bool) -> Result<String, String> {
+    let array = value
+        .array_ref()
+        .ok_or("a string[] default must be an array")?;
+    let items = array
+        .iter()
+        .map(|item| match &*item {
+            Value::String(text) => Ok(format!("{text:?}")),
+            other => Err(format!("unsupported string[] default element {other:?}")),
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    let (arc, layerstack) = if external {
+        ("Arc", "layerstack")
+    } else {
+        ("::alloc::sync::Arc", "::layerstack")
+    };
+    Ok(format!(
+        "{arc}::new([{}].into_iter().collect::<{layerstack}::StringArray>())",
+        items.join(", ")
+    ))
+}
+
 pub(crate) fn files(model: &Model) -> Result<Vec<(String, String)>, String> {
     render(model, false)
 }
@@ -377,7 +401,13 @@ pub(crate) fn render(model: &Model, external: bool) -> Result<Vec<(String, Strin
                     );
                 }
                 if let Some(value) = &port.default {
-                    let mut literal = default_literal(value, &model.tokens, external)?;
+                    let mut literal = if port.ty.is_array()
+                        && matches!(port.ty.default_scalar(), Value::String(_))
+                    {
+                        string_array_literal(value, external)?
+                    } else {
+                        default_literal(value, &model.tokens, external)?
+                    };
                     if port.ty.is_array() && crate::views::shared_array(port.ty.default_scalar()) {
                         literal.push_str(".into()");
                     }
@@ -606,6 +636,44 @@ mod tests {
             }],
         };
         assert!(render(&model, true).unwrap()[0].1.contains(doc));
+    }
+    #[test]
+    fn string_array_ports_read_their_shared_buffer() {
+        let model = |external: bool| {
+            let model = Model {
+                version: "custom".into(),
+                files: Vec::new(),
+                domains: Vec::new(),
+                tokens: TokenInterner::default(),
+                nodes: vec![Node {
+                    id: "Text".into(),
+                    ports: vec![NodePort {
+                        name: "inputs:lines".into(),
+                        ty: PropertyType::parse("string[]").unwrap(),
+                        variability: Variability::Varying,
+                        default: Some(Value::array(vec![
+                            Value::string("a"),
+                            Value::string("b\"c"),
+                        ])),
+                        doc: String::new(),
+                    }],
+                }],
+            };
+            render(&model, external).unwrap().remove(0).1
+        };
+        let built_in = model(false);
+        assert!(built_in.contains("Option<::alloc::sync::Arc<::layerstack::StringArray>>"));
+        assert!(built_in.contains("crate::value::read_string_array_shared"));
+        assert!(built_in.contains("crate::value::write_string_array"));
+        assert!(built_in.contains(
+            "::alloc::sync::Arc::new([\"a\", \"b\\\"c\"].into_iter().collect::<::layerstack::StringArray>())"
+        ));
+        let external = model(true);
+        assert!(external.contains("Option<Arc<::layerstack::StringArray>>"));
+        assert!(external.contains("layerstack_schemas::value::read_string_array_shared"));
+        assert!(external.contains(
+            "Arc::new([\"a\", \"b\\\"c\"].into_iter().collect::<layerstack::StringArray>())"
+        ));
     }
     #[test]
     fn nonfinite_defaults_fail_instead_of_emitting_uncompilable_identifiers() {

@@ -609,11 +609,11 @@ impl core::fmt::Debug for ChildIndex {
 }
 
 /// The children of a layer's parent sites, keyed by the parent's prim
-/// names (rather than interned paths, since a spec's ancestors need not be
-/// interned), then by the variant selections enclosing them, which most
-/// parents have one set of. Each list is sorted by name.
+/// path (interning a spec's path interns its ancestors), then by the
+/// variant selections enclosing them, which most parents have one set of.
+/// Each list is sorted by name.
 type LayerChildren =
-    HashMap<Vec<TokenId>, Vec<(Vec<crate::spec_path::VariantSelectionSite>, Vec<TokenId>)>>;
+    HashMap<PathId, Vec<(Vec<crate::spec_path::VariantSelectionSite>, Vec<TokenId>)>>;
 
 impl ChildIndex {
     /// Forgets every entry when `store` interns names in other domains
@@ -654,11 +654,11 @@ impl ChildIndex {
         memo: Option<&ChildListing>,
         f: impl FnOnce(&[TokenId]) -> R,
     ) -> R {
-        let segments = store.paths().resolve(site.prim_path()).segments();
+        let parent = site.prim_path();
         if let Some(branches) = self
             .overrides
             .get(&layer.id)
-            .and_then(|overrides| overrides.get(segments))
+            .and_then(|overrides| overrides.get(&parent))
         {
             let names = branches
                 .iter()
@@ -675,7 +675,7 @@ impl ChildIndex {
             }
         };
         let names = entry
-            .get(segments)
+            .get(&parent)
             .and_then(|branches| {
                 branches
                     .iter()
@@ -696,9 +696,8 @@ impl ChildIndex {
     ) -> Vec<TokenId> {
         debug_assert!(self.overrides.is_empty(), "a projected index is not listed");
         let entry = self.layer_children(store, layer);
-        let segments = store.paths().resolve(parent).segments();
         let mut names: Vec<TokenId> = entry
-            .get(segments)
+            .get(&parent)
             .into_iter()
             .flatten()
             .flat_map(|(_, names)| names.iter().copied())
@@ -918,37 +917,41 @@ fn projected_children(
             .get(&path)
             .is_some_and(|spec| spec.outer_variant_sites.is_empty())
     };
-    // Whether the projected layer authors a spec at or beneath `segments`.
-    let holds = |segments: &[TokenId]| -> bool {
-        let mut pending = alloc::vec![segments.to_vec()];
-        while let Some(segments) = pending.pop() {
-            if paths.lookup_segments(&segments).is_some_and(projected_spec) {
+    // Whether the projected layer authors a spec at or beneath `path`. A
+    // child path not interned is neither a spec's path nor an ancestor of
+    // one, and holds none.
+    let holds = |path: PathId| -> bool {
+        let mut pending = alloc::vec![path];
+        while let Some(path) = pending.pop() {
+            if projected_spec(path) {
                 return true;
             }
-            for (sites, names) in base.get(&segments).into_iter().flatten() {
+            for (sites, names) in base.get(&path).into_iter().flatten() {
                 if sites.is_empty() {
-                    for name in names {
-                        let mut child = segments.clone();
-                        child.push(*name);
-                        pending.push(child);
-                    }
+                    pending.extend(
+                        names
+                            .iter()
+                            .filter_map(|name| paths.lookup_joined(path, &[*name])),
+                    );
                 }
             }
         }
-        changed.iter().any(|path| {
-            paths.resolve(*path).segments().starts_with(segments) && projected_spec(*path)
+        let segments = paths.resolve(path).segments();
+        changed.iter().any(|changed| {
+            paths.resolve(*changed).segments().starts_with(segments) && projected_spec(*changed)
         })
     };
     // Each parent above a changed slot, with the names of its children
     // on the way to one.
-    let mut parents: HashMap<Vec<TokenId>, HashSet<TokenId>> = HashMap::new();
-    for path in changed {
-        let segments = paths.resolve(*path).segments();
-        for depth in 0..segments.len() {
+    let mut parents: HashMap<PathId, HashSet<TokenId>> = HashMap::new();
+    for &path in changed {
+        let mut child = path;
+        while let Some(parent) = paths.parent(child) {
             parents
-                .entry(segments[..depth].to_vec())
+                .entry(parent)
                 .or_default()
-                .insert(segments[depth]);
+                .insert(prim_name(paths, child));
+            child = parent;
         }
     }
     let mut out = LayerChildren::new();
@@ -962,11 +965,7 @@ fn projected_children(
             }
         };
         let names = &mut branches[at].1;
-        let keep = |name: TokenId| {
-            let mut child = parent.clone();
-            child.push(name);
-            holds(&child)
-        };
+        let keep = |name: TokenId| paths.lookup_joined(parent, &[name]).is_some_and(holds);
         names.retain(|name| !touched.contains(name) || keep(*name));
         for name in touched {
             if let Err(at) = find_name(names, name, tokens)
@@ -999,11 +998,12 @@ fn listings_hold(
 ) -> bool {
     let (paths, tokens) = (store.paths(), store.tokens());
     changed.iter().all(|&path| {
-        let Some((&name, parent)) = paths.resolve(path).segments().split_last() else {
+        let Some(parent) = paths.parent(path) else {
             return true;
         };
+        let name = prim_name(paths, path);
         index
-            .get(parent)
+            .get(&parent)
             .into_iter()
             .flatten()
             .all(|(sites, names)| {
@@ -1022,25 +1022,13 @@ fn add_specs(store: &dyn LayerStore, layer: &Layer, index: &mut LayerChildren, c
     // Each list grown, with the length of its sorted prefix: names not in
     // the prefix are appended, then sorted in once all are known, so a
     // patch adding many names to one list stays linear.
-    let mut grown: HashMap<(Vec<TokenId>, usize), usize> = HashMap::new();
+    let mut grown: HashMap<(PathId, usize), usize> = HashMap::new();
     for &path in changed {
-        let segments = paths.resolve(path).segments();
-        if segments.is_empty() {
-            continue;
-        }
         for spec in layer.prim_specs(path) {
             let outer = &spec.outer_variant_sites;
-            let first = if outer.is_empty() {
-                0
-            } else {
-                segments.len() - 1
-            };
-            for depth in first..segments.len() {
-                let parent = &segments[..depth];
-                if !index.contains_key(parent) {
-                    index.insert(parent.to_vec(), Vec::new());
-                }
-                let branches = index.get_mut(parent).expect("inserted above");
+            // An unchanged ancestor spec is listed already.
+            for (parent, name) in listings(paths, layer, path, outer) {
+                let branches = index.entry(parent).or_default();
                 let at = match branches.iter().position(|(sites, _)| sites == outer) {
                     Some(at) => at,
                     None => {
@@ -1049,17 +1037,15 @@ fn add_specs(store: &dyn LayerStore, layer: &Layer, index: &mut LayerChildren, c
                     }
                 };
                 let names = &mut branches[at].1;
-                let sorted = *grown
-                    .entry((parent.to_vec(), at))
-                    .or_insert_with(|| names.len());
-                if find_name(&names[..sorted], segments[depth], tokens).is_err() {
-                    names.push(segments[depth]);
+                let sorted = *grown.entry((parent, at)).or_insert_with(|| names.len());
+                if find_name(&names[..sorted], name, tokens).is_err() {
+                    names.push(name);
                 }
             }
         }
     }
     for ((parent, at), sorted) in grown {
-        let names = &mut index.get_mut(&parent[..]).expect("grown above")[at].1;
+        let names = &mut index.get_mut(&parent).expect("grown above")[at].1;
         if names.len() - sorted <= 16 {
             for name in names.split_off(sorted) {
                 if let Err(slot) = find_name(names, name, tokens) {
@@ -1074,38 +1060,114 @@ fn add_specs(store: &dyn LayerStore, layer: &Layer, index: &mut LayerChildren, c
     }
 }
 
+/// The last name of the prim path `path`, which is not the root.
+fn prim_name(paths: &PathInterner, path: PathId) -> TokenId {
+    *paths
+        .resolve(path)
+        .segments()
+        .last()
+        .expect("a prim path below the root")
+}
+
+/// Each parent the spec of `layer` at `path`, outside variant branches
+/// when `outer` is empty, is listed under, with the name listed: its own
+/// parent, and for a spec outside variant branches, each ancestor up to
+/// the nearest one with a spec of its own outside them, which lists the
+/// rest. Specs authored without their ancestors still form a hierarchy;
+/// most specs have a parent spec, and are listed once.
+fn listings<'a>(
+    paths: &'a PathInterner,
+    layer: &'a Layer,
+    path: PathId,
+    outer: &[crate::spec_path::VariantSelectionSite],
+) -> impl Iterator<Item = (PathId, TokenId)> + 'a {
+    let plain = outer.is_empty();
+    let mut next = Some(path);
+    core::iter::from_fn(move || {
+        let child = next?;
+        let parent = paths.parent(child)?;
+        next = (plain
+            && paths.parent(parent).is_some()
+            && !layer
+                .prims
+                .get(&parent)
+                .is_some_and(|spec| spec.outer_variant_sites.is_empty()))
+        .then_some(parent);
+        Some((parent, prim_name(paths, child)))
+    })
+}
+
 /// Every prim spec of `layer` listed under its parent site, by name; the
 /// ancestors of a spec outside variant branches are listed too, so specs
-/// authored without their ancestors still form a hierarchy.
+/// authored without their ancestors still form a hierarchy
+/// ([`listings`]).
 fn index_layer(store: &dyn LayerStore, layer: &Layer) -> LayerChildren {
     let paths = store.paths();
     let mut index: LayerChildren = HashMap::new();
-    for spec_path in layer.prims.keys().chain(layer.variant_prims.keys()) {
-        let segments = paths.resolve(*spec_path).segments();
-        for spec in layer.prim_specs(*spec_path) {
-            let outer = &spec.outer_variant_sites;
-            let first = if outer.is_empty() {
-                0
-            } else {
-                segments.len() - 1
-            };
-            for depth in first..segments.len() {
-                // Keyed by value only when first listed: most parents list
-                // many specs.
-                let branches = index.entry_ref(&segments[..depth]).or_default();
-                let at = match branches.iter().position(|(sites, _)| sites == outer) {
-                    Some(at) => at,
-                    None => {
-                        branches.push((outer.clone(), Vec::new()));
-                        branches.len() - 1
-                    }
-                };
-                branches[at].1.push(segments[depth]);
+    fn list(
+        index: &mut LayerChildren,
+        parent: PathId,
+        outer: &[crate::spec_path::VariantSelectionSite],
+        name: TokenId,
+    ) {
+        let branches = index.entry(parent).or_default();
+        let at = match branches.iter().position(|(sites, _)| sites == outer) {
+            Some(at) => at,
+            None => {
+                branches.push((outer.to_vec(), Vec::new()));
+                branches.len() - 1
             }
+        };
+        branches[at].1.push(name);
+    }
+    // Each spec under its own parent first.
+    let specs = layer.prims.iter().chain(
+        layer
+            .variant_prims
+            .iter()
+            .flat_map(|(path, specs)| specs.iter().map(move |spec| (path, spec))),
+    );
+    for (&path, spec) in specs {
+        if let Some(parent) = paths.parent(path) {
+            list(
+                &mut index,
+                parent,
+                &spec.outer_variant_sites,
+                prim_name(paths, path),
+            );
         }
     }
-    // Names repeat once per spec beneath them; deduplicating after sorting
-    // keeps a parent with many children linear.
+    // Then each parent listing a spec outside variant branches, without
+    // such a spec of its own, under its parent in turn: one lookup per
+    // parent rather than per spec.
+    let mut pending: Vec<PathId> = index
+        .iter()
+        .filter(|(_, branches)| branches.iter().any(|(sites, _)| sites.is_empty()))
+        .map(|(&parent, _)| parent)
+        .collect();
+    while let Some(path) = pending.pop() {
+        let Some(parent) = paths.parent(path) else {
+            continue;
+        };
+        if layer
+            .prims
+            .get(&path)
+            .is_some_and(|spec| spec.outer_variant_sites.is_empty())
+        {
+            continue;
+        }
+        let listed_plain = index
+            .get(&parent)
+            .is_some_and(|branches| branches.iter().any(|(sites, _)| sites.is_empty()));
+        list(&mut index, parent, &[], prim_name(paths, path));
+        if !listed_plain {
+            pending.push(parent);
+        }
+    }
+    // A name repeats once per spec listing it (each of a prim's variant
+    // branches, its specs without a parent spec). Sorted by token first:
+    // tokens are mostly interned in the order of their names, so the
+    // stable sort by name then mostly finds the names in order.
     let tokens = store.tokens();
     for (_, names) in index.values_mut().flatten() {
         names.sort_unstable();
@@ -1195,12 +1257,15 @@ mod tests {
         store: &InMemoryStore,
     ) -> alloc::collections::BTreeMap<Vec<TokenId>, Vec<Branch>> {
         let layer = store.layers.get(&LayerId(1)).unwrap();
-        ordered(&index.layer_children(store, layer))
+        ordered(store, &index.layer_children(store, layer))
     }
 
     type Branch = (Vec<VariantSelectionSite>, Vec<TokenId>);
 
+    /// `children` by each parent's names, each parent's branches in a
+    /// fixed order.
     fn ordered(
+        store: &InMemoryStore,
         children: &super::LayerChildren,
     ) -> alloc::collections::BTreeMap<Vec<TokenId>, Vec<Branch>> {
         children
@@ -1208,17 +1273,77 @@ mod tests {
             .map(|(parent, branches)| {
                 let mut branches = branches.clone();
                 branches.sort();
-                (parent.clone(), branches)
+                (store.paths.resolve(*parent).segments().to_vec(), branches)
             })
             .collect()
     }
 
     /// The entry layer 1 of `store` would be indexed with afresh.
     fn fresh(store: &InMemoryStore) -> alloc::collections::BTreeMap<Vec<TokenId>, Vec<Branch>> {
-        ordered(&super::index_layer(
+        ordered(
             store,
-            store.layers.get(&LayerId(1)).unwrap(),
-        ))
+            &super::index_layer(store, store.layers.get(&LayerId(1)).unwrap()),
+        )
+    }
+
+    /// The child index lists each spec under its parent, and the ancestors
+    /// of a spec outside variant branches that have no spec of their own
+    /// under theirs; an ancestor that has one, or has one only in a variant
+    /// branch, is listed as every other spec is.
+    #[test]
+    fn child_index_lists_ancestors_without_specs() {
+        let mut store = InMemoryStore::default();
+        let [a, deep, other, branch_host, in_branch] =
+            ["/A", "/A/B/C/D", "/A/B/E", "/A/V", "/A/V/W/X"].map(|path| store.path(path));
+        let [size, big] = ["size", "big"].map(|name| store.tokens.intern(name));
+        let name = |store: &mut InMemoryStore, names: &[&str]| -> Vec<TokenId> {
+            names.iter().map(|n| store.tokens.intern(n)).collect()
+        };
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(a, PrimSpec::def());
+        layer.insert_prim(deep, PrimSpec::def());
+        layer.insert_prim(other, PrimSpec::def());
+        // A spec only inside a variant branch of `/A`: `/A/V` has no spec
+        // outside the branches, so `/A/V/W/X` lists `V` under `/A` too.
+        let mut inside = PrimSpec::def();
+        inside.outer_variant_sites = vec![VariantSelectionSite {
+            host_path: a,
+            set: size,
+            variant: big,
+        }];
+        layer.insert_prim(branch_host, inside);
+        layer.insert_prim(in_branch, PrimSpec::def());
+        store.insert_layer(layer);
+        let site = VariantSelectionSite {
+            host_path: a,
+            set: size,
+            variant: big,
+        };
+        let mut expected = alloc::collections::BTreeMap::new();
+        expected.insert(Vec::new(), vec![(Vec::new(), name(&mut store, &["A"]))]);
+        let mut under_a = vec![
+            (Vec::new(), name(&mut store, &["B", "V"])),
+            (vec![site], name(&mut store, &["V"])),
+        ];
+        under_a.sort();
+        expected.insert(name(&mut store, &["A"]), under_a);
+        expected.insert(
+            name(&mut store, &["A", "B"]),
+            vec![(Vec::new(), name(&mut store, &["C", "E"]))],
+        );
+        expected.insert(
+            name(&mut store, &["A", "B", "C"]),
+            vec![(Vec::new(), name(&mut store, &["D"]))],
+        );
+        expected.insert(
+            name(&mut store, &["A", "V"]),
+            vec![(Vec::new(), name(&mut store, &["W"]))],
+        );
+        expected.insert(
+            name(&mut store, &["A", "V", "W"]),
+            vec![(Vec::new(), name(&mut store, &["X"]))],
+        );
+        assert_eq!(fresh(&store), expected);
     }
 
     /// A kept child index patches the specs a layer adds, in and out of

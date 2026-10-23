@@ -78,6 +78,7 @@ pub mod assemble;
 use layerstack::AssetResolver;
 use layerstack::doc::LayerId;
 use layerstack::interner::TokenInterner;
+use layerstack::parallel::Threads;
 use layerstack::path::PathInterner;
 
 pub use assemble::AssembleResult;
@@ -132,7 +133,15 @@ pub fn read_usdc(
     resolver: &mut dyn AssetResolver,
 ) -> Result<AssembleResult, UsdcError> {
     let mut budget = DecodeBudget::for_input(data.len());
-    read_usdc_within(data, layer_id, tokens, paths, resolver, &mut budget, 1)
+    read_usdc_within(
+        data,
+        layer_id,
+        tokens,
+        paths,
+        resolver,
+        &mut budget,
+        &Threads::new(1),
+    )
 }
 
 /// Reads a USDC binary file like [`read_usdc`], charging everything it
@@ -143,8 +152,10 @@ pub fn read_usdc(
 /// each reference would otherwise cost its own copy; the budget bounds the
 /// total. Exceeding it fails with [`UsdcError::DecodeBudgetExceeded`].
 ///
-/// The read uses up to `threads` threads, the calling thread among them
-/// (with the `std` feature); it reads the same layer on any number
+/// The read runs on the calling thread and the threads `threads` spares
+/// while it runs (with the `std` feature): a read started from a pool
+/// shares that pool's budget, and uses only the threads its other tasks
+/// leave idle. It reads the same layer on any number of threads
 /// ([`assemble::assemble`]).
 pub fn read_usdc_within(
     data: &[u8],
@@ -153,7 +164,7 @@ pub fn read_usdc_within(
     paths: &PathInterner,
     resolver: &mut dyn AssetResolver,
     budget: &mut DecodeBudget,
-    threads: usize,
+    threads: &Threads,
 ) -> Result<AssembleResult, UsdcError> {
     let hdr = header::parse_header(data)?;
     let toc_sections = toc::parse_toc(data, hdr.toc_offset)?;

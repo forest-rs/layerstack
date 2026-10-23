@@ -20,6 +20,7 @@ use core::{
 };
 use hashbrown::HashMap;
 use layerstack::encoded_bytes::EncodedBytes;
+use layerstack::parallel::Threads;
 use layerstack::{
     ArrayReadError, AssetResolver, DeferredArraySource, DeferredValue, DeferredValueSource,
     LayerId, PathInterner, TokenId, TokenInterner, TypedArray, Value,
@@ -464,11 +465,11 @@ pub fn read_usdc_lazy(
     resolver: &mut dyn AssetResolver,
 ) -> Result<LazyReadResult, UsdcError> {
     let budget = DecodeBudget::for_input(bytes.len());
-    read_usdc_lazy_within(bytes, id, tokens, paths, resolver, budget, 1)
+    read_usdc_lazy_within(bytes, id, tokens, paths, resolver, budget, &Threads::new(1))
 }
 /// Retained import with one explicitly owned budget covering assembly and all
 /// future decodes. A cached failure never consumes the budget a second time.
-/// The read uses up to `threads` threads, as [`crate::read_usdc_within`]
+/// The read uses the threads of `threads`, as [`crate::read_usdc_within`]
 /// does.
 pub fn read_usdc_lazy_within(
     bytes: Arc<[u8]>,
@@ -477,7 +478,7 @@ pub fn read_usdc_lazy_within(
     paths: &PathInterner,
     resolver: &mut dyn AssetResolver,
     budget: DecodeBudget,
-    threads: usize,
+    threads: &Threads,
 ) -> Result<LazyReadResult, UsdcError> {
     read_usdc_lazy_range_within(bytes.into(), id, tokens, paths, resolver, budget, threads)
 }
@@ -485,7 +486,7 @@ pub fn read_usdc_lazy_within(
 /// The budget and once-only cache have the same semantics as
 /// [`read_usdc_lazy_within`]. A small file view may retain a large archive;
 /// pass [`EncodedBytes::detached`] when independent ownership is preferable.
-/// The read uses up to `threads` threads, as [`crate::read_usdc_within`]
+/// The read uses the threads of `threads`, as [`crate::read_usdc_within`]
 /// does.
 pub fn read_usdc_lazy_range_within(
     bytes: EncodedBytes,
@@ -494,7 +495,7 @@ pub fn read_usdc_lazy_range_within(
     paths: &PathInterner,
     resolver: &mut dyn AssetResolver,
     mut budget: DecodeBudget,
-    threads: usize,
+    threads: &Threads,
 ) -> Result<LazyReadResult, UsdcError> {
     let header = crate::header::parse_header(&bytes)?;
     let toc = crate::toc::parse_toc(&bytes, header.toc_offset)?;

@@ -4,6 +4,7 @@
 //! Retained numeric layers exercise ordinary composition, animation and saving.
 //! AOUSD Core §16.3.9–§16.3.10, §12.3 and §12.5.
 
+use layerstack::parallel::Threads;
 use layerstack::{
     ArrayReadError, AssetResolveError, AssetResolver, InMemoryStore, LayerId, PathInterner,
     ResolvedAsset, Stage, StageOptions, Time, TokenInterner, TypedArray, Value,
@@ -180,7 +181,7 @@ fn source_budget_failure_is_cached_across_threads() {
         &paths,
         &mut NoAssets,
         DecodeBudget::with_limit(structural),
-        1,
+        &Threads::new(1),
     )
     .unwrap();
     let p = paths

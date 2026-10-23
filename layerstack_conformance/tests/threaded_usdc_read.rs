@@ -13,6 +13,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
+use layerstack::parallel::Threads;
 use layerstack::{
     AssetResolveError, AssetResolver, LayerId, PathInterner, ResolvedAsset, TokenInterner,
 };
@@ -75,7 +76,7 @@ fn render(bytes: &[u8], threads: usize, retained: bool) -> (String, Vec<String>)
             &paths,
             &mut NoAssets,
             budget,
-            threads,
+            &Threads::new(threads),
         );
         read.expect("the layer reads").assembled
     } else {
@@ -87,7 +88,7 @@ fn render(bytes: &[u8], threads: usize, retained: bool) -> (String, Vec<String>)
             &paths,
             &mut NoAssets,
             &mut budget,
-            threads,
+            &Threads::new(threads),
         );
         read.expect("the layer reads")
     };

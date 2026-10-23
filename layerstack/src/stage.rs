@@ -392,7 +392,9 @@ pub struct StageOptions {
     /// it runs, and reads the store from all of them. Without the `std`
     /// feature composition always runs on the calling thread. A host that
     /// opens stages from storage may read their layers on as many threads
-    /// too, as `layerstack_io::StageDocument` does.
+    /// too, as `layerstack_io::StageDocument` does: its loader and the
+    /// readers it runs share one budget of `threads`
+    /// ([`crate::parallel::Threads`]).
     ///
     /// The composed stage is the same for every count: its prims, values
     /// and the order of its composition errors. Only the order in which

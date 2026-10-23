@@ -566,6 +566,9 @@ impl PrimEdit {
 
     /// Authors `targets`, stage paths, as the explicit targets of the
     /// relationship `name` (its USD name), mapped through the edit target.
+    /// A relationship no layer authors and no schema defines is created
+    /// `custom`, as C++ creates it; a schema's own edits, such as
+    /// `MaterialBindingApiEdit::bind`, create theirs not `custom`.
     ///
     /// OpenUSD: `UsdRelationship::SetTargets`.
     ///

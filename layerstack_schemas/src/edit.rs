@@ -69,10 +69,24 @@ pub struct SchemaEdit<'s> {
     /// Prim metadata this edit authors, including target-local list operations.
     #[cfg(feature = "usd-geom")]
     metadata: Vec<(PathId, TokenId, layerstack::FieldValue)>,
+    /// Property metadata this edit authors (`None` clears it), latest last.
+    property_metadata: Vec<PropertyMetadataEdit>,
     /// Local property specs removed during this edit.
     removed: Vec<(PathId, TokenId)>,
     #[cfg(feature = "usd-ui")]
     ui_hints: Vec<(TargetPath, Value)>,
+}
+
+/// One property metadata field an edit authors or clears.
+#[derive(Clone, Debug)]
+#[cfg_attr(
+    not(feature = "usd-shade"),
+    expect(dead_code, reason = "read back by the shading edits")
+)]
+struct PropertyMetadataEdit {
+    property: PropertyPath,
+    key: TokenId,
+    value: Option<Value>,
 }
 
 impl fmt::Debug for SchemaEdit<'_> {
@@ -99,6 +113,7 @@ impl<'s> SchemaEdit<'s> {
             defaults: Vec::new(),
             #[cfg(feature = "usd-geom")]
             metadata: Vec::new(),
+            property_metadata: Vec::new(),
             removed: Vec::new(),
             #[cfg(feature = "usd-ui")]
             ui_hints: Vec::new(),
@@ -191,6 +206,7 @@ impl<'s> SchemaEdit<'s> {
             defaults: self.defaults.clone(),
             #[cfg(feature = "usd-geom")]
             metadata: self.metadata.clone(),
+            property_metadata: self.property_metadata.clone(),
             removed: self.removed.clone(),
             #[cfg(feature = "usd-ui")]
             ui_hints: self.ui_hints.clone(),
@@ -205,6 +221,7 @@ impl<'s> SchemaEdit<'s> {
         {
             self.metadata = child.metadata;
         }
+        self.property_metadata = child.property_metadata;
         self.removed = child.removed;
         #[cfg(feature = "usd-ui")]
         {
@@ -218,7 +235,7 @@ impl<'s> SchemaEdit<'s> {
         self.store.tokens_mut()
     }
 
-    #[cfg(feature = "usd-geom")]
+    #[cfg(any(feature = "usd-geom", feature = "usd-shade"))]
     pub(crate) fn scene(&self) -> crate::Scene<'_> {
         crate::Scene::new(self.stage, self.store)
     }
@@ -664,7 +681,77 @@ impl<'s> SchemaEdit<'s> {
         self.ensure_property(property);
         let key = self.tokens().intern(key);
         let at = self.target.property(property);
-        self.transaction.set_metadata(at, key, value.into());
+        self.transaction.set_metadata(at, key, value.clone().into());
+        self.property_metadata.push(PropertyMetadataEdit {
+            property,
+            key,
+            value: Some(value),
+        });
+    }
+
+    /// The metadata `key` of the property `name` of `path` as this edit
+    /// leaves it: the last value this edit authors or clears, else the
+    /// stage's composed scalar value.
+    #[cfg(feature = "usd-shade")]
+    pub(crate) fn property_metadata_value(
+        &mut self,
+        path: PathId,
+        name: &str,
+        key: &str,
+    ) -> Option<Value> {
+        let property = PropertyPath::new(path, self.tokens().intern(name));
+        let key = self.tokens().intern(key);
+        if let Some(edit) = self
+            .property_metadata
+            .iter()
+            .rev()
+            .find(|edit| edit.property == property && edit.key == key)
+        {
+            return edit.value.clone();
+        }
+        if self.removed.contains(&(path, property.property())) {
+            return None;
+        }
+        match self.stage_property(property)?.metadata(key)?.value {
+            ResolvedValue::Scalar(value) => Some(value),
+            _ => None,
+        }
+    }
+
+    /// The relationships of the prim at `path` named `name` or inside its
+    /// namespace (`name:…`), as this edit leaves them: the stage's, then
+    /// those this edit creates, in that order and without repeats.
+    #[cfg(feature = "usd-shade")]
+    pub(crate) fn relationships_in(&mut self, path: PathId, name: &str) -> Vec<String> {
+        let inside = |candidate: &str| {
+            candidate == name
+                || candidate
+                    .strip_prefix(name)
+                    .is_some_and(|rest| rest.starts_with(':'))
+        };
+        let mut names: Vec<String> = self
+            .stage_prim(path)
+            .map(layerstack::Prim::properties)
+            .into_iter()
+            .flatten()
+            .filter(|property| {
+                property
+                    .declaration()
+                    .map_or_else(|| property.kind(), |declaration| declaration.kind)
+                    == PropertyKind::Relationship
+            })
+            .map(|property| String::from(property.name()))
+            .filter(|candidate| inside(candidate))
+            .collect();
+        let tokens = self.store.tokens();
+        for (p, n, ty) in &self.created {
+            let created = tokens.resolve(*n);
+            if *p == path && ty.is_none() && inside(created) && !names.iter().any(|n| n == created)
+            {
+                names.push(String::from(created));
+            }
+        }
+        names
     }
 
     /// Checks and authors (`Some`) or clears (`None`) the metadata field
@@ -702,6 +789,11 @@ impl<'s> SchemaEdit<'s> {
                     let at = self.target.property(property);
                     self.transaction.clear_metadata(at, key);
                 }
+                self.property_metadata.push(PropertyMetadataEdit {
+                    property,
+                    key,
+                    value: None,
+                });
             }
         }
         Ok(())
@@ -988,7 +1080,7 @@ impl<'s> SchemaEdit<'s> {
     /// declarations keep their custom qualifier and metadata, including across
     /// reference and variant edit targets and repeated calls within this edit.
     /// OpenUSD: `UsdPrim::CreateRelationship`; AOUSD Core §12.2.4.
-    #[cfg(any(feature = "usd-vol", feature = "usd-lux"))]
+    #[cfg(any(feature = "usd-vol", feature = "usd-lux", feature = "usd-shade"))]
     pub(crate) fn ensure_relationship(&mut self, path: PathId, name: &str, custom: bool) {
         let token = self.store.tokens_mut().intern(name);
         if self

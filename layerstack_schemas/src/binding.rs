@@ -23,9 +23,10 @@ use alloc::{
 use hashbrown::HashMap;
 use layerstack::{PathId, PropertyPath, ResolvedValue, TargetPath, Value};
 
+use crate::SchemaEdit;
 use crate::collection::{Membership, MembershipQuery, collection_name};
 use crate::usd::CollectionApi;
-use crate::usd_shade::{Material, MaterialBindingApi};
+use crate::usd_shade::{Material, MaterialBindingApi, MaterialBindingApiEdit};
 use crate::view::{PrimView, Scene, forwarded_targets, is_relationship};
 
 /// `material:binding`.
@@ -640,5 +641,207 @@ impl<'a> PrimView<'a> {
     ) -> BoundMaterial {
         BindingCache::new(purpose.clone(), options)
             .compute_bound_material(&self.scene(), self.path())
+    }
+}
+
+/// Why a material binding cannot be authored. Nothing is collected.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum MaterialBindingError {
+    /// The binding relationship's name is not a property name: the purpose
+    /// or binding name holds something other than identifiers. C++ fails to
+    /// create the relationship.
+    InvalidName(String),
+    /// A collection binding's name has a namespace (`bad:name`). C++
+    /// refuses it with a coding error.
+    NamespacedBindingName(String),
+}
+
+impl core::fmt::Display for MaterialBindingError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::InvalidName(name) => write!(f, "invalid binding relationship name `{name}`"),
+            Self::NamespacedBindingName(name) => {
+                write!(f, "collection binding name `{name}` has a namespace")
+            }
+        }
+    }
+}
+
+impl core::error::Error for MaterialBindingError {}
+
+/// Whether `name` is a property name: identifiers joined by `:`.
+fn is_property_name(name: &str) -> bool {
+    name.split(':').all(layerstack::ident::is_identifier)
+}
+
+impl MaterialBindingApiEdit {
+    /// Binds `material` directly to this prim for `purpose`: the
+    /// relationship `material:binding[:<purpose>]`, created not `custom`,
+    /// gets `material` as its only target. `strength` `Some` authors
+    /// `bindMaterialAs`; `None` is C++'s `fallbackStrength`, which leaves
+    /// it unauthored, or rewrites an authored `strongerThanDescendants` to
+    /// `weakerThanDescendants`. The prim should have `MaterialBindingAPI`
+    /// applied ([`MaterialBindingApi::apply`]); this does not apply it.
+    ///
+    /// OpenUSD: `UsdShadeMaterialBindingAPI::Bind` (direct) and
+    /// `SetMaterialBindingStrength`.
+    ///
+    /// # Errors
+    ///
+    /// [`MaterialBindingError::InvalidName`] for a purpose that is not an
+    /// identifier.
+    #[doc(alias = "Bind")]
+    #[doc(alias = "UsdShadeMaterialBindingAPI::Bind")]
+    pub fn bind(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        material: PathId,
+        strength: Option<BindingStrength>,
+        purpose: &MaterialPurpose,
+    ) -> Result<(), MaterialBindingError> {
+        let name = purpose.direct_name();
+        self.author_binding(edit, &name, &[TargetPath::Prim(material)], strength)
+    }
+
+    /// Binds `material` to the prims of `collection` (a collection's path,
+    /// `/Set.collection:metal`) for `purpose`, through the relationship
+    /// `material:binding:collection[:<purpose>]:<binding_name>`, targeting
+    /// the collection and then the material. `binding_name` `None` takes
+    /// the collection's own name, without its namespace. `strength` is as
+    /// [`Self::bind`] takes it.
+    ///
+    /// OpenUSD: `UsdShadeMaterialBindingAPI::Bind` (collection).
+    ///
+    /// # Errors
+    ///
+    /// [`MaterialBindingError::NamespacedBindingName`] for a binding name
+    /// with a `:`, and [`MaterialBindingError::InvalidName`] for a purpose
+    /// or name that is not an identifier.
+    #[doc(alias = "Bind")]
+    #[doc(alias = "UsdShadeMaterialBindingAPI::Bind")]
+    pub fn bind_collection(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        collection: PropertyPath,
+        material: PathId,
+        binding_name: Option<&str>,
+        strength: Option<BindingStrength>,
+        purpose: &MaterialPurpose,
+    ) -> Result<(), MaterialBindingError> {
+        let binding_name = match binding_name {
+            Some(name) if name.contains(':') => {
+                return Err(MaterialBindingError::NamespacedBindingName(name.into()));
+            }
+            Some(name) => String::from(name),
+            None => {
+                let property = edit.tokens().resolve(collection.property());
+                let instance = property.strip_prefix("collection:").unwrap_or(property);
+                String::from(instance.rsplit(':').next().unwrap_or(instance))
+            }
+        };
+        let name = format!("{}:{binding_name}", purpose.collection_prefix());
+        let targets = [TargetPath::Property(collection), TargetPath::Prim(material)];
+        self.author_binding(edit, &name, &targets, strength)
+    }
+
+    /// Unbinds this prim's direct binding for `purpose`: the relationship,
+    /// created not `custom` if needed, gets an explicit empty target list,
+    /// which blocks weaker bindings. Its `bindMaterialAs` stays.
+    ///
+    /// OpenUSD: `UsdShadeMaterialBindingAPI::UnbindDirectBinding`.
+    ///
+    /// # Errors
+    ///
+    /// [`MaterialBindingError::InvalidName`] for a purpose that is not an
+    /// identifier.
+    #[doc(alias = "UnbindDirectBinding")]
+    pub fn unbind(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        purpose: &MaterialPurpose,
+    ) -> Result<(), MaterialBindingError> {
+        let name = purpose.direct_name();
+        self.clear_binding(edit, &name)
+    }
+
+    /// Unbinds the collection binding `binding_name` for `purpose`, as
+    /// [`Self::unbind`] unbinds a direct one.
+    ///
+    /// OpenUSD: `UsdShadeMaterialBindingAPI::UnbindCollectionBinding`.
+    ///
+    /// # Errors
+    ///
+    /// [`MaterialBindingError::InvalidName`] when the relationship name is
+    /// not a property name. A namespaced binding name is a property name,
+    /// and C++ accepts it here.
+    #[doc(alias = "UnbindCollectionBinding")]
+    pub fn unbind_collection(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        binding_name: &str,
+        purpose: &MaterialPurpose,
+    ) -> Result<(), MaterialBindingError> {
+        let name = format!("{}:{binding_name}", purpose.collection_prefix());
+        self.clear_binding(edit, &name)
+    }
+
+    /// Unbinds every binding relationship of this prim, `material:binding`
+    /// and every relationship inside its namespace, as this edit leaves
+    /// them, by [`Self::unbind`]'s explicit empty target list.
+    ///
+    /// OpenUSD: `UsdShadeMaterialBindingAPI::UnbindAllBindings`.
+    #[doc(alias = "UnbindAllBindings")]
+    pub fn unbind_all(&self, edit: &mut SchemaEdit<'_>) {
+        for name in edit.relationships_in(self.path(), BINDING) {
+            edit.set_targets(self.path(), &name, &[]);
+        }
+    }
+
+    fn author_binding(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        name: &str,
+        targets: &[TargetPath],
+        strength: Option<BindingStrength>,
+    ) -> Result<(), MaterialBindingError> {
+        if !is_property_name(name) {
+            return Err(MaterialBindingError::InvalidName(name.into()));
+        }
+        edit.ensure_relationship(self.path(), name, false);
+        let strength = match strength {
+            Some(BindingStrength::StrongerThanDescendants) => Some("strongerThanDescendants"),
+            Some(BindingStrength::WeakerThanDescendants) => Some("weakerThanDescendants"),
+            // `fallbackStrength`: leave an unauthored or weaker strength,
+            // and weaken any other.
+            None => edit
+                .property_metadata_value(self.path(), name, BIND_MATERIAL_AS)
+                .filter(|value| match value {
+                    Value::Token(token) => {
+                        let token = edit.tokens().resolve(*token);
+                        !token.is_empty() && token != "weakerThanDescendants"
+                    }
+                    _ => false,
+                })
+                .map(|_| "weakerThanDescendants"),
+        };
+        if let Some(strength) = strength {
+            let value = Value::Token(edit.tokens().intern(strength));
+            edit.set_property_metadata(self.path(), name, BIND_MATERIAL_AS, value);
+        }
+        edit.set_targets(self.path(), name, targets);
+        Ok(())
+    }
+
+    fn clear_binding(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        name: &str,
+    ) -> Result<(), MaterialBindingError> {
+        if !is_property_name(name) {
+            return Err(MaterialBindingError::InvalidName(name.into()));
+        }
+        edit.ensure_relationship(self.path(), name, false);
+        edit.set_targets(self.path(), name, &[]);
+        Ok(())
     }
 }

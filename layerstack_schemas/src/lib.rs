@@ -506,7 +506,8 @@ mod material_subsets;
 #[cfg(feature = "usd-shade")]
 pub use binding::{
     Binding, BindingCache, BindingCacheStats, BindingInputs, BindingKind, BindingOptions,
-    BindingStrength, BoundMaterial, CollectionBinding, DirectBinding, MaterialPurpose,
+    BindingStrength, BoundMaterial, CollectionBinding, DirectBinding, MaterialBindingError,
+    MaterialPurpose,
 };
 #[cfg(feature = "usd")]
 pub use collection::{

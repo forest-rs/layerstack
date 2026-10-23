@@ -143,6 +143,41 @@ impl core::error::Error for SkelError {
     }
 }
 
+/// A malformed skeletal input that was skipped or left out, where OpenUSD
+/// warns and goes on, so one bad input does not hide a whole rig.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SkelProblem {
+    /// The prim the input belongs to.
+    pub prim: PathId,
+    /// The property at fault, when one is.
+    pub property: Option<PropertyPath>,
+    /// What is wrong, and what was left out.
+    pub reason: SkelProblemReason,
+}
+
+/// What a [`SkelProblem`] left out.
+#[derive(Clone, Debug, PartialEq)]
+pub enum SkelProblemReason {
+    /// An inbetween's `weight` is 0 or 1 (within `1e-6`), not finite, or
+    /// repeats another inbetween's of the same shape: the inbetween is
+    /// skipped and the shape blends without it.
+    /// OpenUSD: `UsdSkelBlendShapeQuery` ("skipping inbetween with invalid
+    /// weight").
+    InvalidInbetweenWeight(f32),
+    /// The prim's joint influences are incomplete or malformed: it is bound
+    /// with no joint influences, as C++ `HasJointInfluences` reports false.
+    JointInfluences(SkelError),
+    /// The prim's blend-shape binding is malformed: it is bound without
+    /// blend shapes.
+    BlendShapes(SkelError),
+    /// The bound skeleton cannot be queried: the prim is bound but cannot be
+    /// skinned.
+    Skeleton(SkelError),
+    /// The prim's `skel:skeleton` target is not a skeleton: the prim is not
+    /// bound.
+    SkeletonTarget(SkelError),
+}
+
 /// Validated parent-first forest. Missing intermediate paths attach to the
 /// closest listed ancestor, as `UsdSkelTopology` does; multiple roots are valid.
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -102,14 +102,42 @@ fn bindings_are_local_and_malformed_active_shapes_return_no_partial_result() {
         [[0.; 3]; 2]
     );
 }
+/// An inbetween at weight 0 or 1, or not finite, is skipped and reported,
+/// as C++ `UsdSkelBlendShapeQuery` skips it with a warning; the shape still
+/// blends with its other samples.
 #[test]
-fn inbetween_knots_are_validated() {
+fn invalid_inbetween_knots_are_skipped_and_reported() {
+    use layerstack_schemas::skel::SkelProblemReason;
+    let (store, live) = support::scene(include_str!("../fixtures/skel_blend_shapes.usda"));
+    let path = store.path("/Rig/Geometry/Mesh");
+    let valid = BlendShapeQuery::new(&Scene::new(live.stage(), &store), path)
+        .unwrap()
+        .unwrap();
     for weight in ["0", "1", "nan"] {
         let source = include_str!("../fixtures/skel_blend_shapes.usda")
             .replace("weight = 0.5", &format!("weight = {weight}"));
         let (store, live) = support::scene(&source);
         let path = store.path("/Rig/Geometry/Mesh");
-        assert!(BlendShapeQuery::new(&Scene::new(live.stage(), &store), path).is_err());
+        let query = BlendShapeQuery::new(&Scene::new(live.stage(), &store), path)
+            .unwrap()
+            .unwrap();
+        assert_eq!(query.sample_count(), valid.sample_count() - 1, "{weight}");
+        let [problem] = query.problems() else {
+            panic!("one skipped inbetween at weight {weight}");
+        };
+        assert!(matches!(
+            problem.reason,
+            SkelProblemReason::InvalidInbetweenWeight(_)
+        ));
+        assert_eq!(
+            problem
+                .property
+                .map(|p| p.display(&store.paths, &store.tokens).to_string()),
+            Some(format!(
+                "{}.inbetweens:half",
+                store.paths.display(problem.prim, &store.tokens)
+            ))
+        );
     }
 }
 

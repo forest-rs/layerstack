@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 //! Dense/sparse point and normal offsets, with weighted inbetween interpolation.
-use super::{SkelError, SkeletonQuery, SkinningQuery, invalid, length, read, tokens};
+use super::{
+    SkelError, SkelProblem, SkelProblemReason, SkeletonQuery, SkinningQuery, invalid, length, read,
+    tokens,
+};
 use crate::{PrimView, Scene, Time, usd_skel::BlendShape};
 use alloc::{string::String, sync::Arc, vec, vec::Vec};
 use hashbrown::HashSet;
@@ -132,11 +135,14 @@ pub struct BlendShapeQuery {
     names: Vec<String>,
     targets: Vec<PathId>,
     shapes: Vec<Shape>,
+    problems: Vec<SkelProblem>,
 }
 impl BlendShapeQuery {
     /// Captures local names, target offsets and authored inbetween weights.
     /// Absent local blend-shape bindings return `None`; malformed definitions
-    /// error. Reserved/duplicate/nonfinite inbetween knots are rejected.
+    /// error. An inbetween whose weight is 0 or 1, not finite, or repeats
+    /// another's is skipped, as C++ `UsdSkelBlendShapeQuery` skips it, and
+    /// listed in [`Self::problems`].
     pub fn new(scene: &Scene<'_>, geometry: PathId) -> Result<Option<Self>, SkelError> {
         if !scene.has_api(geometry, "SkelBindingAPI", None) {
             return Ok(None);
@@ -161,6 +167,7 @@ impl BlendShapeQuery {
         drop(unique);
         let mut paths = Vec::with_capacity(targets.len());
         let mut shapes = Vec::with_capacity(targets.len());
+        let mut problems = Vec::new();
         for target in targets {
             let TargetPath::Prim(path) = target else {
                 return Err(SkelError::InvalidTarget {
@@ -217,8 +224,22 @@ impl BlendShapeQuery {
                 let Some(weight) = shape.property_metadata(name).and_then(|m| m.weight()) else {
                     continue;
                 };
-                if !weight.is_finite() || weight.abs() <= 1e-6 || (weight - 1.).abs() <= 1e-6 {
-                    return Err(invalid(path, "inbetweens"));
+                let skipped = || SkelProblem {
+                    prim: path,
+                    property: scene
+                        .store()
+                        .tokens()
+                        .lookup(name)
+                        .map(|token| layerstack::PropertyPath::new(path, token)),
+                    reason: SkelProblemReason::InvalidInbetweenWeight(weight),
+                };
+                if !weight.is_finite()
+                    || weight.abs() <= 1e-6
+                    || (weight - 1.).abs() <= 1e-6
+                    || samples.iter().any(|sample| sample.weight == weight)
+                {
+                    problems.push(skipped());
+                    continue;
                 }
                 let offsets = read(
                     &shape,
@@ -241,12 +262,6 @@ impl BlendShapeQuery {
                 });
             }
             samples.sort_by(|a, b| a.weight.total_cmp(&b.weight));
-            if samples
-                .windows(2)
-                .any(|pair| pair[0].weight == pair[1].weight)
-            {
-                return Err(invalid(path, "inbetweens"));
-            }
             paths.push(path);
             shapes.push(Shape { indices, samples });
         }
@@ -255,7 +270,13 @@ impl BlendShapeQuery {
             names,
             targets: paths,
             shapes,
+            problems,
         }))
+    }
+    /// The inbetweens skipped while capturing, in binding and property order.
+    #[must_use]
+    pub fn problems(&self) -> &[SkelProblem] {
+        &self.problems
     }
     /// Geometry owning this local binding.
     #[must_use]

@@ -420,12 +420,13 @@ the schema APIs remain usable with `no_std` + `alloc`.
 Each domain is a Cargo feature (`usd-geom`, `usd-lux`, …); `all`, the
 default, enables every one.
 
-With `usd-geom` and `usd-shade`, `BindingCache::material_binding_subsets` joins
-requested-time face-family validation with material resolution for each subset
-and the parent fallback. It preserves binding strength, collection and purpose
-rules and retains shared face indices. Nonempty `materialBind` families must be
-`nonOverlapping` or `partition`; an unauthored family type reads as
-`unrestricted`, matching C++ USD. Engines own triangulation and draw grouping.
+With `usd-geom` and `usd-shade`, `BindingCache::material_binding_subsets` reads
+a mesh's `materialBind` face subsets as C++ USD renders them, with material
+resolution for each subset and the parent fallback. It preserves binding
+strength, collection and purpose rules and retains shared face indices. An
+unauthored family type reads as `unrestricted`, and requested-time family
+validation is reported beside the subsets rather than failing the read.
+Engines own triangulation and draw grouping.
 After relevant edits, invalidate changed binding inputs and collection queries
 explicitly. Clear the cache when precise dependency tracking is unavailable.
 

@@ -85,7 +85,7 @@ pub struct SceneRecord {
     /// Whether primvar capture inspected string ID-target relationships, including
     /// unresolved ones. Their forwarding can depend outside this namespace.
     pub has_id_target_primvars: bool,
-    /// Occurrence-local material binding and validated face subsets.
+    /// Occurrence-local material binding and face subsets with their validation.
     pub materials: Arc<SceneMaterials>,
     /// Captured point-instance data, when applicable.
     pub point_instances: Option<Arc<ScenePointInstances>>,
@@ -176,11 +176,11 @@ impl PartialEq for ScenePrimvar {
 }
 
 /// Resolved bindings with winning relationship provenance and missing targets.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct SceneMaterials {
     /// Whole-prim binding, including its unresolved target when any.
     pub binding: BoundMaterial,
-    /// Validated materialBind face family for meshes.
+    /// The materialBind face family for meshes, with its validation.
     pub subsets: Option<MaterialBindingSubsets>,
 }
 impl SceneMaterials {
@@ -405,11 +405,11 @@ pub enum SceneError {
         /// Validation failure.
         source: PrimvarError,
     },
-    /// Material subset family failed validation.
+    /// Material subsets could not be read.
     Materials {
         /// Concrete geometry.
         prim: PathId,
-        /// Validation failure.
+        /// Why the material subsets could not be read.
         source: MaterialSubsetError,
     },
     /// Invalid point instancer; no partial transforms are committed.

@@ -26,8 +26,17 @@ use crate::{
     prim_index::{OpinionKey, PrimIndex},
     prim_index_graph::{NodeId, PrimIndexGraph},
     prim_indexing::ChildIndex,
-    stage::{Stage, StageOptions},
+    stage::{InstanceIndexKeys, Stage, StageOptions},
 };
+
+/// A composed stage, with what composition found for the prototype
+/// inventory ([`Stage::prepare_prototypes`]) to start from.
+pub(crate) struct Composed {
+    /// The stage.
+    pub(crate) stage: Stage,
+    /// The key part of each instance root composition indexed itself.
+    pub(crate) instance_keys: InstanceIndexKeys,
+}
 
 /// Shares opinion composition and finalization with local namespace updates.
 /// `Some` requires the generation-checked `LocalNamespace` contract: one layer,
@@ -42,7 +51,7 @@ pub(crate) fn compose_stage_with_paths(
     populated: Option<BTreeSet<PathId>>,
     boundaries: &HashSet<PathId>,
     child_index: &ChildIndex,
-) -> Stage {
+) -> Composed {
     compose_stage_retained(
         store,
         root,
@@ -65,7 +74,7 @@ pub(crate) fn compose_stage_retained(
     exact_mask: bool,
     boundaries: &HashSet<PathId>,
     child_index: &ChildIndex,
-) -> Stage {
+) -> Composed {
     let listed: Option<HashSet<PathId>> = populated.map(|paths| paths.into_iter().collect());
     compose_indexed(
         store,
@@ -89,7 +98,7 @@ fn compose_indexed(
     listed: Option<&HashSet<PathId>>,
     boundaries: &HashSet<PathId>,
     child_index: &ChildIndex,
-) -> Stage {
+) -> Composed {
     let scope = match (listed, options.mask.as_ref()) {
         (Some(paths), _) => crate::prim_indexing::Scope::listed(store.paths_mut(), paths),
         (None, None) => crate::prim_indexing::Scope::All,
@@ -134,7 +143,7 @@ fn compose_indexed(
         .filter(|request| prims.contains_key(&request.prim))
         .collect();
     let used_layers = composed.used_layers.into_iter().collect();
-    Stage::from_parts(
+    let stage = Stage::from_parts(
         prims,
         composed.children,
         options.with_provenance,
@@ -155,7 +164,11 @@ fn compose_indexed(
     .with_asset_requests(asset_requests)
     .with_instances(composed.instances)
     .with_boundary_children(composed.boundary_children)
-    .with_variant_fallbacks(options.variant_fallbacks.clone())
+    .with_variant_fallbacks(options.variant_fallbacks.clone());
+    Composed {
+        stage,
+        instance_keys: composed.instance_keys,
+    }
 }
 
 /// Resolves the variant selections that govern a composed prim, in strength

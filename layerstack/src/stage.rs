@@ -40,6 +40,7 @@ pub use loading::{LayerMuteError, LoadPolicy, PayloadLoadRules, PayloadRule};
 pub(crate) mod preparation;
 mod prototypes;
 pub use prototypes::{CompositionStorage, CompositionWork, Prototype, PrototypeId, PrototypePrim};
+pub(crate) use prototypes::{InstanceIndexKey, InstanceIndexKeys};
 pub mod flatten;
 pub(crate) mod stage_time;
 
@@ -590,7 +591,10 @@ impl Stage {
             muted: &captured.muted_layers,
         };
         let store: &mut dyn LayerStore = &mut controlled;
-        let mut stage = crate::compose::compose_stage_retained(
+        let crate::compose::Composed {
+            mut stage,
+            instance_keys,
+        } = crate::compose::compose_stage_retained(
             store,
             root,
             options,
@@ -611,7 +615,7 @@ impl Stage {
         }
         stage.prepare_type_info(store);
         stage.prepare_clips(store);
-        stage.prepare_prototypes(store);
+        stage.prepare_prototypes(store, instance_keys);
         stage
     }
 
@@ -646,7 +650,10 @@ impl Stage {
         // the full composition reported the foreign registry.
         Self::drop_foreign_schemas(&mut options, store);
         let schemas = options.schemas.clone();
-        let mut stage = crate::compose::compose_stage_with_paths(
+        let crate::compose::Composed {
+            mut stage,
+            instance_keys,
+        } = crate::compose::compose_stage_with_paths(
             store,
             root,
             options,
@@ -660,7 +667,7 @@ impl Stage {
         stage.schemas = schemas;
         stage.prepare_type_info(store);
         stage.prepare_clips(store);
-        stage.prepare_prototypes(store);
+        stage.prepare_prototypes(store, instance_keys);
         stage
     }
 
@@ -760,7 +767,7 @@ impl Stage {
             }
         }
         self.order_errors(store);
-        self.prepare_prototypes(store);
+        self.prepare_prototypes(store, InstanceIndexKeys::new());
         orders
     }
 
@@ -1752,7 +1759,7 @@ impl Stage {
                 .filter(|request| recomposed.contains(&request.prim)),
         );
         sort_asset_requests(&mut self.asset_requests);
-        self.prepare_prototypes(store);
+        self.prepare_prototypes(store, InstanceIndexKeys::new());
     }
 
     /// Refreshes existing value slots without rebuilding prim graphs. The

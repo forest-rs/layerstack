@@ -85,14 +85,94 @@ fn hash_expression_paths<H: Hasher>(value: &Value, state: &mut H) {
 
 /// What makes two instances share a prototype: the arcs that bring in the
 /// instance's descendants, each with its kind, site and offset, and the
-/// variant selections, clip definitions and populated descendants. OpenUSD:
-/// `PcpInstanceKey`, `Usd_InstanceKey` (`usd/instanceKey.cpp`).
+/// variant selections ([`InstanceIndexKey`]), clip definitions and populated
+/// descendants. OpenUSD: `PcpInstanceKey`, `Usd_InstanceKey`
+/// (`usd/instanceKey.cpp`).
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(super) struct InstanceKey {
-    arcs: Vec<(ArcKind, crate::LayerStackIdentifier, SpecPath, u64, u64)>,
-    selections: Vec<(TokenId, TokenId)>,
+    index: InstanceIndexKey,
     clips: Vec<crate::value_clips::ClipInstanceKey>,
     topology: Vec<(Vec<TokenId>, bool)>,
+}
+
+/// The part of an instance's [`InstanceKey`] that the instance root's own
+/// prim index decides: its strongest-first contributing direct arc
+/// subtrees, each with its kind, layer stack, site and offset, and its
+/// variant selections.
+///
+/// Composition finds it on the thread that indexes the root, while the
+/// index is at hand ([`InstanceIndexKeys`]); [`Stage::instance_key`] finds
+/// it again for an index built otherwise.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(crate) struct InstanceIndexKey {
+    arcs: Vec<(ArcKind, crate::LayerStackIdentifier, SpecPath, u64, u64)>,
+    selections: Vec<(TokenId, TokenId)>,
+}
+
+/// The [`InstanceIndexKey`] of each instance root a composition indexed
+/// itself, for [`Stage::prepare_prototypes`]; roots it copied from another
+/// instance's descendants have none.
+pub(crate) type InstanceIndexKeys = HashMap<PathId, InstanceIndexKey>;
+
+impl InstanceIndexKey {
+    /// The key part of the instance root `index`, at namespace depth
+    /// `depth`, with the stage's variant `fallbacks`.
+    ///
+    /// Nested contributing nodes are included when payload participation can
+    /// distinguish otherwise equal outer arcs. OpenUSD:
+    /// `PcpInstanceKey::_Collector`, which records each instanceable node,
+    /// pruning below it only when there are no payload arcs
+    /// (`pxr/usd/pcp/instanceKey.cpp`).
+    pub(crate) fn of(
+        index: &PrimIndex,
+        depth: usize,
+        store: &dyn LayerStore,
+        fallbacks: &VariantFallbacks,
+    ) -> Self {
+        let depth = u16::try_from(depth).unwrap_or(u16::MAX);
+        let mut arcs = Vec::new();
+        let graph = &index.graph;
+        let nodes: HashSet<NodeId> = graph
+            .instanceable_nodes(store.paths(), &index.sources, depth)
+            .collect();
+        // Loaded payload participation is part of the key even beneath
+        // another contributing arc (OpenUSD PcpInstanceKey::_Collector).
+        let has_payload = graph
+            .nodes()
+            .any(|(_, node)| node.arc_kind() == ArcKind::Payloads);
+        for id in graph.strength_order() {
+            let Some(node) = graph.node(id) else { continue };
+            if !nodes.contains(&id) {
+                continue;
+            }
+            let mut parent = node.parent();
+            let mut parent_instanceable = false;
+            while let Some(id) = parent {
+                if nodes.contains(&id) {
+                    parent_instanceable = true;
+                    break;
+                }
+                parent = graph.node(id).and_then(|node| node.parent());
+            }
+            if !has_payload && parent_instanceable {
+                continue;
+            }
+            let offset = node.layer_offset();
+            arcs.push((
+                node.arc_kind(),
+                node.layer_stack_identifier(),
+                node.site().clone(),
+                offset.offset.to_bits(),
+                offset.scale.to_bits(),
+            ));
+        }
+        let mut selections: Vec<(TokenId, TokenId)> =
+            crate::compose::strength_ordered_variant_selections(store, fallbacks, index)
+                .into_iter()
+                .collect();
+        selections.sort_unstable();
+        Self { arcs, selections }
+    }
 }
 
 /// Identifies a prototype within one composed stage snapshot.
@@ -189,59 +269,33 @@ impl Stage {
         self
     }
 
-    /// The [`InstanceKey`] of `instance`: its strongest-first contributing
-    /// direct arc subtrees, variant selections and populated namespace.
-    /// Nested contributing nodes are included when payload participation can
-    /// distinguish otherwise equal outer arcs.
-    ///
-    /// OpenUSD: `PcpInstanceKey::_Collector`, which records each instanceable
-    /// node, pruning below it only when there are no payload arcs
-    /// (`pxr/usd/pcp/instanceKey.cpp`).
-    pub(super) fn instance_key(&self, instance: PathId, store: &dyn LayerStore) -> InstanceKey {
-        let depth = u16::try_from(store.paths().resolve(instance).depth()).unwrap_or(u16::MAX);
-        let mut arcs = Vec::new();
-        if let Some(index) = self.prims.get(&instance) {
-            let graph = &index.graph;
-            let nodes: HashSet<NodeId> = graph
-                .instanceable_nodes(store.paths(), &index.sources, depth)
-                .collect();
-            // Loaded payload participation is part of the key even beneath
-            // another contributing arc (OpenUSD PcpInstanceKey::_Collector).
-            let has_payload = graph
-                .nodes()
-                .any(|(_, node)| node.arc_kind() == ArcKind::Payloads);
-            for id in graph.strength_order() {
-                let Some(node) = graph.node(id) else { continue };
-                if !nodes.contains(&id) {
-                    continue;
-                }
-                let mut parent = node.parent();
-                let mut parent_instanceable = false;
-                while let Some(id) = parent {
-                    if nodes.contains(&id) {
-                        parent_instanceable = true;
-                        break;
-                    }
-                    parent = graph.node(id).and_then(|node| node.parent());
-                }
-                if !has_payload && parent_instanceable {
-                    continue;
-                }
-                let offset = node.layer_offset();
-                arcs.push((
-                    node.arc_kind(),
-                    node.layer_stack_identifier(),
-                    node.site().clone(),
-                    offset.offset.to_bits(),
-                    offset.scale.to_bits(),
-                ));
-            }
+    /// The [`InstanceIndexKey`] of the instance root `instance`.
+    fn instance_index_key(&self, instance: PathId, store: &dyn LayerStore) -> InstanceIndexKey {
+        let depth = store.paths().resolve(instance).depth();
+        match self.prims.get(&instance) {
+            Some(index) => InstanceIndexKey::of(index, depth, store, &self.variant_fallbacks),
+            None => InstanceIndexKey {
+                arcs: Vec::new(),
+                selections: Vec::new(),
+            },
         }
-        let mut selections: Vec<(TokenId, TokenId)> = self
-            .variant_selections(instance, store)
-            .into_iter()
-            .collect();
-        selections.sort_unstable();
+    }
+
+    /// The [`InstanceKey`] of `instance`: its [`InstanceIndexKey`], clip
+    /// definitions and populated namespace.
+    pub(super) fn instance_key(&self, instance: PathId, store: &dyn LayerStore) -> InstanceKey {
+        let index = self.instance_index_key(instance, store);
+        self.instance_key_with(instance, index, store)
+    }
+
+    /// The [`InstanceKey`] of `instance`, whose [`InstanceIndexKey`] is
+    /// `index`.
+    fn instance_key_with(
+        &self,
+        instance: PathId,
+        index: InstanceIndexKey,
+        store: &dyn LayerStore,
+    ) -> InstanceKey {
         let clips = self.prims.get(&instance).map_or_else(Vec::new, |index| {
             crate::value_clips::instance_keys(instance, index, store)
         });
@@ -266,8 +320,7 @@ impl Stage {
             .collect();
         topology.sort_unstable();
         InstanceKey {
-            arcs,
-            selections,
+            index,
             clips,
             topology,
         }
@@ -304,7 +357,18 @@ impl Stage {
         }
         result
     }
-    pub(super) fn prepare_prototypes(&mut self, store: &dyn LayerStore) {
+    /// Groups the stage's instances into prototypes by [`InstanceKey`], in
+    /// traversal order, reading each root's [`InstanceIndexKey`] from
+    /// `keys` when composition found it, and shares equal descendant
+    /// records.
+    ///
+    /// Spec: AOUSD Core §11.3.3 (instances share prototypes). OpenUSD:
+    /// `Usd_InstanceCache`.
+    pub(super) fn prepare_prototypes(
+        &mut self,
+        store: &dyn LayerStore,
+        mut keys: InstanceIndexKeys,
+    ) {
         let mut table = PrototypeTable::default();
         if self.instances.is_empty() {
             self.prototypes = table;
@@ -319,7 +383,18 @@ impl Stage {
             .filter(|p| self.instances.contains(p))
             .collect();
         for instance in instances {
-            let key = self.instance_key(instance, store);
+            let index = match keys.remove(&instance) {
+                Some(index) => {
+                    debug_assert_eq!(
+                        index,
+                        self.instance_index_key(instance, store),
+                        "composition's key of an instance root"
+                    );
+                    index
+                }
+                None => self.instance_index_key(instance, store),
+            };
+            let key = self.instance_key_with(instance, index, store);
             let id = *identities.entry(key).or_insert_with(|| {
                 let id = PrototypeId(table.records.len());
                 table.records.push(PrototypeRecord::default());
@@ -639,6 +714,124 @@ mod tests {
         );
         let sizes: Vec<_> = stage.prototypes().map(|p| p.prims().len()).collect();
         assert_eq!(sizes, [1, 2]);
+    }
+
+    /// A stage's prototypes: each one's instances and descendants.
+    #[derive(Debug, PartialEq)]
+    struct Inventory {
+        instances: Vec<PathId>,
+        prims: Vec<(Vec<TokenId>, PathId)>,
+    }
+
+    fn inventory(stage: &Stage) -> Vec<Inventory> {
+        stage
+            .prototypes()
+            .map(|prototype| Inventory {
+                instances: prototype.instances().to_vec(),
+                prims: prototype
+                    .prims()
+                    .iter()
+                    .map(|prim| (prim.relative_path().to_vec(), prim.representative()))
+                    .collect(),
+            })
+            .collect()
+    }
+
+    /// Instances of `/Asset`, which holds an instance of `/Leaf`.
+    fn nested_scene() -> (InMemoryStore, Vec<PathId>) {
+        let mut store = InMemoryStore::default();
+        let asset = store.path("/Asset");
+        let inner = store.path("/Asset/Inner");
+        let leaf = store.path("/Leaf");
+        let bit = store.path("/Leaf/Bit");
+        let inner_name = store.tokens.intern("Inner");
+        let bit_name = store.tokens.intern("Bit");
+        let mut source = Layer::new(LayerId(2));
+        source.insert_prim(asset, PrimSpec::def().with_children(vec![inner_name]));
+        source.insert_prim(
+            inner,
+            PrimSpec::def()
+                .with_instanceable(true)
+                .with_reference(Reference::with_asset(LayerId(2), leaf, "asset.usda")),
+        );
+        source.insert_prim(leaf, PrimSpec::def().with_children(vec![bit_name]));
+        source.insert_prim(bit, PrimSpec::def());
+        store.insert_layer(source);
+        let mut root = Layer::new(LayerId(1));
+        let instances = (0..8)
+            .map(|n| {
+                let path = store.path(&alloc::format!("/I{n}"));
+                root.insert_prim(
+                    path,
+                    PrimSpec::def()
+                        .with_instanceable(true)
+                        .with_reference(Reference::with_asset(LayerId(2), asset, "asset.usda")),
+                );
+                path
+            })
+            .collect();
+        store.insert_layer(root);
+        (store, instances)
+    }
+
+    #[test]
+    fn composition_keys_indexed_roots_and_prototypes_match_serial_keys() {
+        let (mut store, instances) = nested_scene();
+        let first_inner = store.path("/I0/Inner");
+        let copied_inner = store.path("/I1/Inner");
+        let composed = crate::compose::compose_stage_retained(
+            &mut store,
+            LayerId(1),
+            StageOptions::default(),
+            None,
+            false,
+            &HashSet::new(),
+            &crate::prim_indexing::ChildIndex::default(),
+        );
+        // Every outer root is indexed; only the first one's descendants
+        // are, and the rest are copies of them.
+        for instance in &instances {
+            assert!(composed.instance_keys.contains_key(instance));
+        }
+        assert!(composed.instance_keys.contains_key(&first_inner));
+        assert!(!composed.instance_keys.contains_key(&copied_inner));
+
+        let expected = {
+            let mut stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+            let found = inventory(&stage);
+            // Records are shared among the occurrences of one relative path,
+            // one in each instance of a prototype: each outer instance's
+            // `Inner` and `Inner/Bit`, and each inner instance's `Bit`.
+            let mut members = stage.prototypes.members.clone();
+            members.sort();
+            let occurrences = |suffix: &str| -> Vec<PathId> {
+                (0..instances.len())
+                    .map(|n| store.path(&alloc::format!("/I{n}{suffix}")))
+                    .collect()
+            };
+            let mut expected_members = vec![
+                occurrences("/Inner"),
+                occurrences("/Inner/Bit"),
+                occurrences("/Inner/Bit"),
+            ];
+            expected_members.sort();
+            assert_eq!(members, expected_members);
+            stage.prepare_prototypes(&store, InstanceIndexKeys::new());
+            assert_eq!(inventory(&stage), found, "keys found again on one thread");
+            found
+        };
+        assert_eq!(expected.len(), 2);
+        assert_eq!(expected[0].instances, instances);
+        assert_eq!(expected[1].instances.len(), instances.len());
+        assert_eq!(expected[1].instances[0], first_inner);
+        for threads in [2, 4, 16] {
+            let options = StageOptions {
+                threads,
+                ..StageOptions::default()
+            };
+            let stage = Stage::compose(&mut store, LayerId(1), options);
+            assert_eq!(inventory(&stage), expected, "{threads} threads");
+        }
     }
 
     #[test]

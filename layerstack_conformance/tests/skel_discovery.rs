@@ -9,6 +9,12 @@
 //! influences and blend shapes, and its blend-shaped and skinned points at
 //! default time. Blend-shape weights come from the bound skeleton's
 //! animation, wherever `skel:animationSource` is authored.
+//!
+//! C++ binds every skinnable prim bound to an active skeleton: with valid
+//! influences or not, with blend shapes or not, skipping an inbetween at
+//! weight 1 and dropping mismatched influence interpolation with warnings.
+//! `SkelRoot::bindings` lists the same prims, and reports what it left out
+//! on each binding.
 
 #![allow(missing_docs, reason = "integration tests")]
 
@@ -18,7 +24,11 @@ mod support;
 use std::collections::BTreeMap;
 
 use layerstack::{EditTarget, LayerId, ListOp, TargetPath, Time, Transaction};
-use layerstack_schemas::{Scene, skel::BlendShapeCache};
+use layerstack_schemas::{
+    Scene,
+    skel::{BlendShapeCache, SkelProblemReason},
+    usd_skel::SkelRoot,
+};
 use serde::Deserialize;
 
 const ORACLE: &str = include_str!("../fixtures/skel_discovery/oracle.json");
@@ -27,8 +37,11 @@ const SCENE: &str = include_str!("../fixtures/skel_discovery/scene.usda");
 #[derive(Debug, Deserialize)]
 struct Target {
     path: String,
+    skeleton: String,
     joint_influences: bool,
+    blend_shapes: bool,
     blend_points: Option<Vec<[f32; 3]>>,
+    skinned_points: Option<Vec<[f32; 3]>>,
 }
 
 #[derive(Deserialize)]
@@ -89,4 +102,102 @@ fn blend_shape_weights_follow_the_skeleton_animation_source() {
         [[0., 0., 0.]],
         "no animation, no weights"
     );
+}
+
+#[test]
+fn skel_bindings_match_openusd_and_report_problems() {
+    let oracle: Oracle = serde_json::from_str(ORACLE).unwrap();
+    let (store, live) = support::scene(SCENE);
+    let scene = Scene::new(live.stage(), &store);
+    let text = |path| store.paths.display(path, &store.tokens).to_string();
+    let mut shapes = BlendShapeCache::new(Time::Default);
+    for (root, expected) in &oracle.roots {
+        let found = SkelRoot::new(&scene, store.path(root)).unwrap().bindings();
+        assert!(found.problems.is_empty(), "{root}: {:?}", found.problems);
+        let mut bindings: Vec<_> = found.bindings.iter().collect();
+        bindings.sort_by_key(|binding| text(binding.geometry));
+        assert_eq!(bindings.len(), expected.len(), "{root}");
+        for (binding, target) in bindings.into_iter().zip(expected) {
+            let path = &target.path;
+            assert_eq!(text(binding.geometry), *path);
+            assert_eq!(text(binding.skeleton), target.skeleton, "{path}");
+            assert_eq!(
+                binding.skinning.is_some(),
+                target.joint_influences,
+                "{path}"
+            );
+            assert_eq!(
+                binding.blend_shapes.is_some(),
+                target.blend_shapes,
+                "{path}"
+            );
+            let skinned = binding
+                .skinning
+                .as_ref()
+                .map(|query| query.compute_skinned_points(Time::Default).unwrap());
+            assert_eq!(skinned, target.skinned_points, "{path}");
+            let blended = binding.blend_shapes.as_ref().map(|_| {
+                shapes
+                    .deformed_points(&scene, binding.geometry)
+                    .unwrap()
+                    .unwrap()
+                    .to_vec()
+            });
+            assert_eq!(blended, target.blend_points, "{path}");
+            // Each problem C++ warns about stays with its binding.
+            let reasons: Vec<_> = binding
+                .problems
+                .iter()
+                .map(|problem| {
+                    let property = problem
+                        .property
+                        .map(|p| p.display(&store.paths, &store.tokens).to_string());
+                    match &problem.reason {
+                        SkelProblemReason::InvalidInbetweenWeight(weight) => {
+                            format!("inbetween {weight} {property:?}")
+                        }
+                        SkelProblemReason::JointInfluences(_) => format!("influences {property:?}"),
+                        other => format!("{other:?}"),
+                    }
+                })
+                .collect();
+            let expected: &[&str] = match path.as_str() {
+                "/Root/BadInbetween" => &[r#"inbetween 1 Some("/Root/Side.inbetweens:bad")"#],
+                "/Root/Mismatched" => {
+                    &[r#"influences Some("/Root/Mismatched.primvars:skel:jointWeights")"#]
+                }
+                "/Root3/HalfBound" => {
+                    &[r#"influences Some("/Root3/HalfBound.primvars:skel:jointWeights")"#]
+                }
+                _ => &[],
+            };
+            assert_eq!(reasons, expected, "{path}");
+        }
+    }
+}
+
+/// A `skel:skeleton` that targets something other than a skeleton leaves
+/// that prim unbound and reported, and its siblings bound.
+#[test]
+fn an_invalid_skeleton_target_is_reported_beside_the_other_bindings() {
+    let source = SCENE.replace(
+        "rel skel:skeleton = </Root3/Skel>\n    }\n\n    def Mesh \"HalfBound\"",
+        "rel skel:skeleton = </Root3>\n    }\n\n    def Mesh \"HalfBound\"",
+    );
+    assert_ne!(source, SCENE);
+    let (store, live) = support::scene(&source);
+    let scene = Scene::new(live.stage(), &store);
+    let found = SkelRoot::new(&scene, store.path("/Root3"))
+        .unwrap()
+        .bindings();
+    let [problem] = found.problems.as_slice() else {
+        panic!("{:?}", found.problems);
+    };
+    assert_eq!(problem.prim, store.path("/Root3/Plain"));
+    assert!(matches!(
+        problem.reason,
+        SkelProblemReason::SkeletonTarget(_)
+    ));
+    assert_eq!(found.bindings.len(), 1, "HalfBound stays bound");
+    assert_eq!(found.problems().count(), 2);
 }

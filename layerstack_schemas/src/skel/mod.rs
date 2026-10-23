@@ -44,8 +44,9 @@ pub use inputs::{
 };
 mod skinning;
 pub use skinning::{
-    InfluenceInterpolation, JointInfluences, SkinningMethod, SkinningQuery, skin_points,
-    skin_points_in_place, skin_points_in_place_with_method, skin_points_with_method,
+    InfluenceInterpolation, JointInfluences, SkelBinding, SkelBindings, SkinningMethod,
+    SkinningQuery, skin_points, skin_points_in_place, skin_points_in_place_with_method,
+    skin_points_with_method,
 };
 
 use alloc::{
@@ -176,6 +177,39 @@ pub enum SkelProblemReason {
     /// The prim's `skel:skeleton` target is not a skeleton: the prim is not
     /// bound.
     SkeletonTarget(SkelError),
+}
+
+impl SkelProblem {
+    /// The problem `error` caused at `prim`, naming the property it names.
+    pub(super) fn from_error(
+        scene: &Scene<'_>,
+        prim: PathId,
+        error: SkelError,
+        reason: fn(SkelError) -> SkelProblemReason,
+    ) -> Self {
+        let named = |prim: PathId, name: &str| {
+            scene
+                .store()
+                .tokens()
+                .lookup(name)
+                .map(|name| PropertyPath::new(prim, name))
+        };
+        let (prim, property) = match &error {
+            SkelError::Decode { property, .. } => (property.prim_path(), Some(*property)),
+            SkelError::InvalidInput { prim, property }
+            | SkelError::ArrayLength { prim, property, .. } => (*prim, named(*prim, property)),
+            SkelError::InvalidTarget {
+                prim, relationship, ..
+            } => (*prim, named(*prim, relationship)),
+            SkelError::Primvar { prim, .. } => (*prim, None),
+            _ => (prim, None),
+        };
+        Self {
+            prim,
+            property,
+            reason: reason(error),
+        }
+    }
 }
 
 /// Validated parent-first forest. Missing intermediate paths attach to the

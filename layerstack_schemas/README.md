@@ -679,8 +679,11 @@ inverse-bind skinning transforms at explicit times, retaining rest defaults for
 unanimated joints. `SkelBindingApi` resolves inherited skeleton and animation
 bindings, including explicit empty relationships. Definition snapshots must be
 rebuilt after scene edits; animation reads use normal stage value resolution.
-`SkelRoot::skinning_queries` discovers geometry bindings;
-`skinning_queries_with_instance_proxies` also visits native instanced rigs. `SkinningQuery` handles
+`SkelRoot::bindings` discovers every prim bound to an active skeleton, as C++
+`UsdSkelCache` does, with or without joint influences or blend shapes; a
+malformed input is reported on its binding as a `SkelProblem` instead of failing
+discovery. `bindings_with_instance_proxies` also visits native instanced rigs.
+`SkinningQuery` handles
 independently inherited, indexed constant/vertex influence primvars, custom
 joint order and geometry bind transforms. CPU points are returned in skeleton
 space. Bindings honor both `classicLinear` and `dualQuaternion`; unknown tokens

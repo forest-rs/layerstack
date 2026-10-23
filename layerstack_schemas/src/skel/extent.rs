@@ -13,7 +13,7 @@ use alloc::vec::Vec;
 
 use layerstack::PathId;
 
-use super::{SkelError, SkeletonQuery, SkinningQuery};
+use super::{SkelError, SkeletonQuery, skinning::inherited_property};
 use crate::{
     PrimView, Scene, Time, XformCache,
     bounds::{BoundingBox, Range3d},
@@ -58,23 +58,27 @@ pub(crate) fn skel_root(context: &mut ExtentContext<'_>) -> Result<Range3d, Exte
         return Ok(Range3d::default());
     };
     // Discovery reads bindings anywhere under the root; the root's own
-    // dependency covers its namespace.
-    let bindings = skel_root
-        .skinning_queries_with_instance_proxies()
-        .unwrap_or_default();
-    // Skeletons in order of first use, each with the bindings it skins.
-    let mut skeletons: Vec<(SkeletonQuery<'_>, Vec<&SkinningQuery<'_>>)> = Vec::new();
-    for binding in &bindings {
-        let skeleton = binding.skeleton_query();
-        match skeletons
+    // dependency covers its namespace. Every bound prim pads its skeleton,
+    // with or without joint influences, as C++'s skinning targets do.
+    let bindings = skel_root.bindings_with_instance_proxies();
+    // Skeletons in order of first use, each with the geometry it binds.
+    let mut skeletons: Vec<(SkeletonQuery<'_>, Vec<PathId>)> = Vec::new();
+    let mut seen: Vec<PathId> = Vec::new();
+    for binding in &bindings.bindings {
+        if let Some((_, targets)) = skeletons
             .iter_mut()
-            .find(|(query, _)| query.skeleton_path() == skeleton.skeleton_path())
+            .find(|(query, _)| query.skeleton_path() == binding.skeleton)
         {
-            Some((_, targets)) => targets.push(binding),
-            None => skeletons.push((skeleton.clone(), alloc::vec![binding])),
+            targets.push(binding.geometry);
+        } else if !seen.contains(&binding.skeleton) {
+            seen.push(binding.skeleton);
+            let skeleton = Skeleton::new(&scene, binding.skeleton).expect("a bound Skeleton");
+            if let Some(query) = query(context, skeleton)? {
+                skeletons.push((query, alloc::vec![binding.geometry]));
+            }
         }
     }
-    if skeletons.is_empty() {
+    if bindings.bindings.is_empty() {
         for path in descendant_skeletons(&scene, root) {
             let skeleton = Skeleton::new(&scene, path).expect("a Skeleton prim");
             if let Some(query) = query(context, skeleton)? {
@@ -96,9 +100,9 @@ pub(crate) fn skel_root(context: &mut ExtentContext<'_>) -> Result<Range3d, Exte
             .ok()
             .and_then(|rest| query.topology().concatenate(&rest))
         {
-            for target in targets {
-                context.track_prim(target.geometry_path());
-                padding = padding.max(extents_padding(&scene, target, &rest));
+            for &target in targets {
+                context.track_prim(target);
+                padding = padding.max(extents_padding(&scene, root, target, &rest));
             }
         }
         let placement = xforms
@@ -116,26 +120,25 @@ pub(crate) fn skel_root(context: &mut ExtentContext<'_>) -> Result<Range3d, Exte
 /// transforms). A prim without a two-element `extent` adds no padding.
 ///
 /// OpenUSD: `UsdSkelSkinningQuery::ComputeExtentsPadding`.
-fn extents_padding(scene: &Scene<'_>, target: &SkinningQuery<'_>, rest: &[gf::Matrix4]) -> f32 {
+fn extents_padding(scene: &Scene<'_>, root: PathId, target: PathId, rest: &[gf::Matrix4]) -> f32 {
     let earliest = Time::held(f64::MIN);
-    let prim = PrimView::new(*scene, target.geometry_path());
+    let prim = PrimView::new(*scene, target);
     let Some(extent) = prim
         .read_value_at("extent", earliest, crate::value::read_float3_array)
         .filter(|extent| extent.len() == 2)
     else {
         return 0.;
     };
-    let geom_bind = target
-        .definition
-        .geom_bind
-        .and_then(|source| {
-            PrimView::new(*scene, source).read_value_at(
-                "primvars:skel:geomBindTransform",
-                earliest,
-                crate::value::read_matrix4d,
-            )
-        })
-        .unwrap_or(gf::IDENTITY);
+    let geom_bind =
+        inherited_property(scene, target, "primvars:skel:geomBindTransform", Some(root))
+            .and_then(|source| {
+                PrimView::new(*scene, source).read_value_at(
+                    "primvars:skel:geomBindTransform",
+                    earliest,
+                    crate::value::read_matrix4d,
+                )
+            })
+            .unwrap_or(gf::IDENTITY);
     let joints = joints_extent(rest, 0., None);
     let geometry = BoundingBox {
         range: Range3d {

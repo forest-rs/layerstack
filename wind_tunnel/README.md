@@ -246,6 +246,13 @@ The `usdc_open` target includes `usdc_integer_import`: signed and unsigned
 32/64-bit arrays at small and mesh-buffer sizes. Input files are prepared outside
 measurement, and complete layer import is timed separately from destruction.
 
+The `text_arrays` benchmark reads a crate file of 256 prims, each with a
+`token[]` of 24 time samples of eight tokens and a `token[]` in its
+`customData` (`usdc_sampled_tokens`, complete import), and calls a schema
+getter of a `string[]` attribute of 8 and 1,000 elements (`RenderPass`
+`command`, `schema_strings`). The file and the stage are prepared outside
+measurement.
+
 The `library_membership` benchmark opens the generated parts library
 (`layerstack_conformance::library_scene`, full shape, with 150 of the 15,000
 slot relationships and two paths of each rule-map collection naming nothing)

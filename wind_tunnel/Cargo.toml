@@ -28,7 +28,7 @@ hashbrown = { workspace = true }
 # The generated parts library of `library_membership`.
 layerstack_conformance = { path = "../layerstack_conformance" }
 layerstack_io = { features = ["std"], workspace = true }
-layerstack_schemas = { default-features = false, features = ["usd-geom", "usd-proc", "usd-shade", "usd-skel"], workspace = true }
+layerstack_schemas = { default-features = false, features = ["usd-geom", "usd-proc", "usd-render", "usd-shade", "usd-skel"], workspace = true }
 layerstack_usda = { workspace = true }
 layerstack_usdc = { features = ["std"], workspace = true }
 layerstack_usdz = { workspace = true }
@@ -140,4 +140,8 @@ harness = false
 
 [[bench]]
 name = "library_membership"
+harness = false
+
+[[bench]]
+name = "text_arrays"
 harness = false

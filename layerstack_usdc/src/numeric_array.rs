@@ -237,6 +237,7 @@ mod tests {
             &bytes,
             &sections,
             &mut DecodeBudget::with_limit(u64::MAX),
+            None,
         )
         .unwrap();
         let DecodedField::Value(CrateValue::TimeSamples(samples)) = samples else {
@@ -253,6 +254,7 @@ mod tests {
             &bytes,
             &sections,
             &mut DecodeBudget::with_limit(u64::MAX),
+            None,
         )
         .unwrap();
         let DecodedField::Value(CrateValue::Dictionary(dictionary)) = dictionary else {
@@ -275,7 +277,8 @@ mod tests {
                 &rep("timeSamples"),
                 &bytes,
                 &sections,
-                &mut DecodeBudget::with_limit(1)
+                &mut DecodeBudget::with_limit(1),
+                None
             )
             .is_err()
         );

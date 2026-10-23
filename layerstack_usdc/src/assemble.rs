@@ -41,7 +41,7 @@ use crate::numeric_array::*;
 use crate::section::{CrateSections, OnceSlot, PathNode};
 use crate::value_rep::{
     CrateArrayEdit, CrateArrayEditOp, CrateListOp, CrateValue, DecodeBudget, DecodedField,
-    FloatArray, Items, ListOpParts, RawValueRep, TextKind, decode_field_within,
+    FloatArray, Items, ListOpParts, RawValueRep, TextKind, TokenIds, decode_field_within,
     decode_path_list_op_indices, decode_text_index, decode_text_indices,
     decode_token_vector_indices, scalar_text_kind, string_array,
 };
@@ -1293,7 +1293,8 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
                         decode_text_index(&rep, self.data, self.sections, kind, self.budget)?;
                     DecodedField::Text(kind, index)
                 } else {
-                    decode_field_within(&rep, self.data, self.sections, self.budget)?
+                    let tokens = self.token_ids();
+                    decode_field_within(&rep, self.data, self.sections, self.budget, Some(tokens))?
                 };
                 // This is the ownership boundary: assembly subsequently borrows
                 // fields, so retain decoded numeric allocations before that borrow.
@@ -2078,12 +2079,16 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
     /// first use; the empty token outside the table, as the generic decoder
     /// reads it.
     fn token_id(&mut self, index: u32) -> TokenId {
-        let Some(text) = self.sections.tokens.get(index as usize) else {
-            return TokenId::EMPTY;
-        };
-        found_once(&self.tables.token_ids[index as usize], || {
-            self.tokens.intern(text)
-        })
+        self.token_ids().id(index)
+    }
+
+    /// What converts token-table indices to token ids, for this read.
+    fn token_ids(&self) -> TokenIds<'a> {
+        TokenIds {
+            table: &self.sections.tokens,
+            ids: &self.tables.token_ids,
+            interner: self.tokens,
+        }
     }
 
     /// Converts a [`CrateValue`] to a [`Value`].
@@ -4298,6 +4303,7 @@ def "T" {}
                 &data,
                 &sections,
                 &mut DecodeBudget::with_limit(100),
+                None,
             )
             .unwrap();
             let DecodedField::Value(CrateValue::TypedArray(array)) = decoded else {

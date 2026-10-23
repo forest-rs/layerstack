@@ -172,20 +172,27 @@ pub struct ShapeDescriptor {
     /// Physics-purpose materials, subset materials then mesh material.
     /// `None` means `usd-shade` is disabled; an empty vector means no material.
     pub materials: Option<Vec<PathId>>,
-    /// Parsed collision groups whose colliders collection includes this shape.
+    /// Captured collision groups that include this shape, directly or
+    /// through a group merged into them.
     pub collision_groups: Vec<PathId>,
 }
-/// Collision group configuration; merging and pair evaluation are available
-/// separately through `physics::compute_collision_group_table`.
+/// Collision group configuration, with groups that share a merge name merged
+/// into the first of them, as OpenUSD's parser merges them. Pair evaluation
+/// is available separately through `physics::compute_collision_group_table`.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CollisionGroupDescriptor {
     /// Invert authored filters to permit only the named groups.
     pub invert_filtered_groups: bool,
-    /// Authored filtered-group targets.
+    /// Filtered-group targets: this group's, then each merged group's.
     pub filtered_groups: Vec<TargetPath>,
     /// Optional authored merge name; empty names are retained.
     pub merge_group_name: Option<Arc<str>>,
-    /// Captured collider paths in this scoped group.
+    /// The groups merged into this one, this group first, when its merge
+    /// name is not empty; empty otherwise. Merged groups have no record of
+    /// their own. OpenUSD: `UsdPhysicsCollisionGroupDesc::mergedGroups`.
+    pub merged_groups: Vec<PathId>,
+    /// Captured collider paths in this group and the groups merged into it,
+    /// in traversal order.
     pub colliders: Vec<PathId>,
 }
 /// All captured object families, each retaining its source prim and validity.
@@ -291,6 +298,7 @@ impl PhysicsSceneSnapshot {
                         invert_filtered_groups: api.invert_filtered_groups().unwrap_or(false),
                         filtered_groups: api.filtered_groups(),
                         merge_group_name: api.merge_group_name(),
+                        merged_groups: Vec::new(),
                         colliders,
                     }),
                 ));
@@ -321,6 +329,7 @@ impl PhysicsSceneSnapshot {
                 }
             }
         }
+        merge_collision_groups(&mut snapshot.collision_groups, &paths);
         for &path in &paths {
             if shape_paths.contains(&path) {
                 let api = PhysicsCollisionApi::get(scene, path)
@@ -390,6 +399,70 @@ impl PhysicsSceneSnapshot {
             }
         }
         Ok(snapshot)
+    }
+}
+/// Merges each captured group with a nonempty merge name into the first
+/// group with that name: it gains their filters and colliders, lists them
+/// in `merged_groups`, and they leave the captured groups. A group whose
+/// capture failed keeps its own record and merges nothing.
+/// OpenUSD: `parseUtils.cpp`, `LoadUsdPhysicsFromRange` group merging (an
+/// empty merge name does not merge, unlike `ComputeCollisionGroupTable`).
+fn merge_collision_groups(
+    groups: &mut Vec<PhysicsRecord<CollisionGroupDescriptor>>,
+    paths: &[PathId],
+) {
+    let mut representatives: Vec<(Arc<str>, usize)> = Vec::new();
+    let mut merged = Vec::new();
+    for index in 0..groups.len() {
+        let Ok(desc) = &groups[index].descriptor else {
+            continue;
+        };
+        let Some(name) = desc
+            .merge_group_name
+            .clone()
+            .filter(|name| !name.is_empty())
+        else {
+            continue;
+        };
+        let path = groups[index].path;
+        match representatives.iter().find(|(known, _)| *known == name) {
+            Some(&(_, first)) => {
+                let member = groups[index]
+                    .descriptor
+                    .as_ref()
+                    .expect("a captured group")
+                    .clone();
+                let Ok(target) = &mut groups[first].descriptor else {
+                    unreachable!("representatives are captured groups");
+                };
+                target.merged_groups.push(path);
+                target.filtered_groups.extend(member.filtered_groups);
+                target.colliders.extend(member.colliders);
+                merged.push(index);
+            }
+            None => {
+                representatives.push((name, index));
+                let Ok(desc) = &mut groups[index].descriptor else {
+                    unreachable!("checked above");
+                };
+                desc.merged_groups.push(path);
+            }
+        }
+    }
+    for &(_, index) in &representatives {
+        if let Ok(desc) = &mut groups[index].descriptor
+            && desc.merged_groups.len() > 1
+        {
+            let members: HashSet<PathId> = desc.colliders.drain(..).collect();
+            desc.colliders = paths
+                .iter()
+                .copied()
+                .filter(|p| members.contains(p))
+                .collect();
+        }
+    }
+    for index in merged.into_iter().rev() {
+        groups.remove(index);
     }
 }
 fn record<T>(path: PathId, descriptor: Result<T, PhysicsSceneError>) -> PhysicsRecord<T> {

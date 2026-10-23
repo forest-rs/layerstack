@@ -1,0 +1,86 @@
+#usda 1.0
+(
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "World"
+{
+    def PhysicsScene "Scene"
+    {
+    }
+
+    def PhysicsCollisionGroup "G0"
+    {
+        rel physics:filteredGroups = </World/G1>
+        rel collection:colliders:includes = </World/Static>
+    }
+
+    def PhysicsCollisionGroup "G1"
+    {
+        string physics:mergeGroup = "m"
+        rel physics:filteredGroups = </World/G0>
+        rel collection:colliders:includes = </World/Body/Box>
+    }
+
+    def PhysicsCollisionGroup "G2"
+    {
+        rel physics:filteredGroups = </World/G0>
+    }
+
+    def PhysicsCollisionGroup "G3"
+    {
+        string physics:mergeGroup = "m"
+        bool physics:invertFilteredGroups = 1
+        rel physics:filteredGroups = </World/G2>
+        rel collection:colliders:includes = </World/Body/Ball>
+    }
+
+    def PhysicsCollisionGroup "G4"
+    {
+        string physics:mergeGroup = ""
+        rel physics:filteredGroups = </World/G0>
+        rel collection:colliders:includes = </World/Body/Ball>
+    }
+
+    def PhysicsCollisionGroup "G5"
+    {
+        string physics:mergeGroup = "alone"
+        rel collection:colliders:includes = </World/Body>
+    }
+
+    def PhysicsCollisionGroup "G6"
+    {
+        string physics:mergeGroup = ""
+    }
+
+    def Xform "Body" (
+        prepend apiSchemas = ["PhysicsRigidBodyAPI"]
+    )
+    {
+        def Cube "Box" (
+            prepend apiSchemas = ["PhysicsCollisionAPI"]
+        )
+        {
+            double size = 2
+        }
+
+        def Sphere "Ball" (
+            prepend apiSchemas = ["PhysicsCollisionAPI"]
+        )
+        {
+            double radius = 0.5
+            double3 xformOp:translate = (3, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+    }
+
+    def Cube "Static" (
+        prepend apiSchemas = ["PhysicsCollisionAPI"]
+    )
+    {
+        double size = 10
+        double3 xformOp:translate = (0, 0, -6)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+}

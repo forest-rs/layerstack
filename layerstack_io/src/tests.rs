@@ -399,10 +399,7 @@ fn external_package_resources_keep_their_original_filesystem_anchor() {
         .unwrap();
     assert_eq!(
         image.identifier.as_ref(),
-        fs::canonicalize(directory.join("image.png"))
-            .unwrap()
-            .to_str()
-            .unwrap()
+        directory.join("image.png").to_str().unwrap()
     );
     fs::remove_dir_all(directory).unwrap();
 }

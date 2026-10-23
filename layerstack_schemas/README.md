@@ -531,6 +531,12 @@ It validates complete ranges for `elementSize` without allocating flattened data
 String `:idFrom` primvars resolve forwarded relationship targets with native USD
 cardinality rules; invalid target cardinality returns no value.
 
+`PrimEdit::write_property_metadata` and `clear_property_metadata` author a
+property's metadata (`doc`, `displayName`, `customData`, `bindMaterialAs`,
+`connectability`, an inbetween's `weight`, or a field a custom schema's
+plugin registers), refusing an unregistered field, a field registered for the
+other property kind, or a value of the wrong type, as C++ `SetMetadata` does.
+
 Edit handles expose `create_primvar` with a declared `PropertyType`.
 `PrimvarEdit` authors values, samples, interpolation, element size and indices
 through `SchemaEdit`; invalid names, metadata and incompatible declarations

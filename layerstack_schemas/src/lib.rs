@@ -518,7 +518,7 @@ pub use collection::{
     MembershipIndexUpdate, MembershipProblem, MembershipQuery, MembershipRevisions, MembershipRule,
     MembershipSample,
 };
-pub use edit::SchemaEdit;
+pub use edit::{PropertyMetadataError, SchemaEdit};
 pub use generated::views::*;
 pub use generated::{Domain, OPENUSD_VERSION};
 #[cfg(feature = "usd-geom")]

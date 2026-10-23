@@ -604,6 +604,63 @@ impl PrimEdit {
     pub fn remove_target(&self, edit: &mut SchemaEdit<'_>, name: &str, target: TargetPath) {
         edit.remove_target(self.path, name, target);
     }
+
+    /// Authors `value` as the metadata field `key` of the property `name`
+    /// (both USD names), such as `documentation` (USDA `doc`),
+    /// `displayName`, `customData`, `bindMaterialAs` on a binding
+    /// relationship, `connectability` on a shading input, `weight` on a
+    /// blend-shape inbetween, or a field a custom schema's plugin registers.
+    /// A schema-defined property no layer authors yet gets a spec from its
+    /// definition, as C++ creates one. Read it back with
+    /// [`PrimView::property_metadata`].
+    ///
+    /// The field must be registered for the property's kind, by Sdf or by
+    /// a plugin's `SdfMetadata` in the stage's schema registry, and `value`
+    /// must be of its registered type: a `token` field takes
+    /// [`Value::Token`], a `string` field [`Value::String`], a `float` field
+    /// [`Value::Float`]. Fields of the spec itself (`typeName`, `custom`,
+    /// `default`, …) have their own edits and are refused. A refusal
+    /// collects nothing.
+    ///
+    /// OpenUSD: `UsdObject::SetMetadata`.
+    ///
+    /// Spec: AOUSD Core §7.4 (metadata), §12.2 (metadata resolution).
+    ///
+    /// # Errors
+    ///
+    /// Why the field cannot be authored on that property.
+    #[doc(alias = "SetMetadata")]
+    #[doc(alias = "UsdObject::SetMetadata")]
+    pub fn write_property_metadata(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        name: &str,
+        key: &str,
+        value: Value,
+    ) -> Result<(), crate::PropertyMetadataError> {
+        edit.author_property_metadata(self.path, name, key, Some(value))
+    }
+
+    /// Clears the metadata field `key` of the property `name` in the edit
+    /// target, so weaker opinions or the field's fallback show through. The
+    /// field is checked as [`Self::write_property_metadata`] checks it; a
+    /// property with no spec in the edit target has nothing to clear.
+    ///
+    /// OpenUSD: `UsdObject::ClearMetadata`.
+    ///
+    /// # Errors
+    ///
+    /// Why the field cannot be authored on that property.
+    #[doc(alias = "ClearMetadata")]
+    #[doc(alias = "UsdObject::ClearMetadata")]
+    pub fn clear_property_metadata(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        name: &str,
+        key: &str,
+    ) -> Result<(), crate::PropertyMetadataError> {
+        edit.author_property_metadata(self.path, name, key, None)
+    }
 }
 
 /// One instance of a multiple-apply schema on a composed prim: the root

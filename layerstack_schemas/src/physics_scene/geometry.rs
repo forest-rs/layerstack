@@ -93,6 +93,13 @@ pub enum ShapeGeometry {
         /// Local centers and world-scaled radii.
         spheres: Vec<SpherePoint>,
     },
+    /// A host-defined shape, named by one of
+    /// [`CustomPhysicsTypes::shapes`](super::CustomPhysicsTypes::shapes); the
+    /// host reads its geometry. OpenUSD: `UsdPhysicsCustomShapeDesc`.
+    Custom {
+        /// The applied schema or type name that matched.
+        token: Arc<str>,
+    },
 }
 fn double(prim: &PrimView<'_>, name: &'static str) -> Result<f32, PhysicsSceneError> {
     #[allow(
@@ -112,6 +119,20 @@ fn finite(value: f32, name: &'static str) -> Result<f32, PhysicsSceneError> {
     } else {
         Err(PhysicsSceneError::InvalidAttribute(name))
     }
+}
+/// The custom shape token a collider matches: for each token in order, one
+/// of its authored applied schemas, then its type name.
+/// OpenUSD: `parseUtils.cpp` `_GetCollisionType`.
+pub(super) fn custom(prim: &PrimView<'_>, tokens: &[&str]) -> Option<Arc<str>> {
+    if tokens.is_empty() {
+        return None;
+    }
+    let applied = prim.api_schemas().unwrap_or_default();
+    let type_name = prim.prim().and_then(layerstack::Prim::type_name);
+    tokens
+        .iter()
+        .find(|&&token| applied.contains(&token) || type_name == Some(token))
+        .map(|&token| Arc::from(token))
 }
 pub(super) fn capture(
     prim: &PrimView<'_>,

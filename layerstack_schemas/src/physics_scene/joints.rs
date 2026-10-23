@@ -89,6 +89,10 @@ pub enum JointKind {
         /// Whether the maximum is nonnegative.
         maximum_enabled: bool,
     },
+    /// A host-defined joint type, named by one of
+    /// [`CustomPhysicsTypes::joints`](super::CustomPhysicsTypes::joints); the
+    /// host reads its parameters. OpenUSD: `UsdPhysicsCustomJointDesc`.
+    Custom,
     /// Generic USD joint with applied limits/drives for seven degrees of freedom.
     D6 {
         /// Applied per-axis limits, in canonical DOF order.
@@ -248,6 +252,7 @@ fn pose(
 pub(super) fn capture(
     scene: &Scene<'_>,
     path: PathId,
+    custom: &[&str],
     xforms: &mut XformCache,
 ) -> Result<JointDescriptor, PhysicsSceneError> {
     let prim = PrimView::new(*scene, path);
@@ -312,6 +317,14 @@ pub(super) fn capture(
             minimum_enabled: minimum >= 0.,
             maximum_enabled: maximum >= 0.,
         }
+    } else if scene
+        .prim(path)
+        .and_then(layerstack::Prim::type_name)
+        .is_some_and(|name| custom.contains(&name))
+    {
+        // OpenUSD parseUtils.cpp: a joint of none of the UsdPhysics joint
+        // types whose type is a custom joint token is not a D6 joint.
+        JointKind::Custom
     } else {
         let dofs = [
             (JointDof::Distance, "distance"),

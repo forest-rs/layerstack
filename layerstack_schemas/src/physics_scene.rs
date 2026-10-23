@@ -58,6 +58,28 @@ pub struct PhysicsSceneOptions<'a> {
     /// `None` selects all owners. An empty slice follows OpenUSD: scenes are
     /// omitted while bodies/shapes/joints are not owner-filtered.
     pub simulation_owners: Option<&'a [SimulationOwner]>,
+    /// Host-defined shapes, joints and instancers; the default has none.
+    pub custom: CustomPhysicsTypes<'a>,
+}
+/// Physics types a host defines beyond the `UsdPhysics` schemas, so the
+/// parse can report them instead of misreading them.
+///
+/// OpenUSD: `UsdPhysicsCustomUsdPhysicsTokens`.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CustomPhysicsTypes<'a> {
+    /// Applied API schema names (as authored, `Name` or `Name:instance`) or
+    /// prim type names that make a collider a [`ShapeGeometry::Custom`]
+    /// shape, whatever its geometry type. Tried in order; on each token a
+    /// collider's applied schemas are checked before its type.
+    pub shapes: &'a [&'a str],
+    /// Prim type names, of `PhysicsJoint` subtypes other than the
+    /// `UsdPhysics` joints, captured as [`JointKind::Custom`] instead of a
+    /// D6 joint.
+    pub joints: &'a [&'a str],
+    /// Prim type names whose subtrees are not traversed, as a
+    /// `PointInstancer`'s is not: their prototypes are instanced by the host,
+    /// not simulated where they are authored.
+    pub instancers: &'a [&'a str],
 }
 /// Structured capture failure; an individual bad object does not discard peers.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -243,8 +265,13 @@ impl PhysicsSceneSnapshot {
                 if !root {
                     paths.push(path);
                 }
+                // OpenUSD parseUtils.cpp prunes point instancers and the
+                // host's custom instancer types below the instancer itself.
                 if let Some(prim) = prim
                     && !scene.is_a(path, "PointInstancer")
+                    && !prim
+                        .type_name()
+                        .is_some_and(|name| options.custom.instancers.contains(&name))
                 {
                     pending.extend(prim.child_paths().iter().rev().copied());
                 }
@@ -307,9 +334,10 @@ impl PhysicsSceneSnapshot {
                     .expect("material flag derives from the applied schema");
                 snapshot.materials.push(record(path, material(api)));
             } else if scene.is_a(path, "PhysicsJoint") {
-                snapshot
-                    .joints
-                    .push(record(path, joints::capture(scene, path, &mut xforms)));
+                snapshot.joints.push(record(
+                    path,
+                    joints::capture(scene, path, options.custom.joints, &mut xforms),
+                ));
                 if flags & 4 != 0 {
                     articulation_paths.insert(path);
                 }
@@ -340,6 +368,7 @@ impl PhysicsSceneSnapshot {
                         api,
                         &snapshot.rigid_bodies,
                         &snapshot.collision_groups,
+                        options.custom.shapes,
                         &mut xforms,
                     ),
                 ));
@@ -640,6 +669,7 @@ fn shape(
     api: PhysicsCollisionApi<'_>,
     bodies: &[PhysicsRecord<RigidBodyDescriptor>],
     groups: &[PhysicsRecord<CollisionGroupDescriptor>],
+    custom: &[&str],
     xforms: &mut XformCache,
 ) -> Result<ShapeDescriptor, PhysicsSceneError> {
     let scene = api.scene();
@@ -679,7 +709,10 @@ fn shape(
             scale: [1.; 3],
         };
     }
-    let geometry = geometry::capture(&api, world_transform.scale)?;
+    let geometry = match geometry::custom(&api, custom) {
+        Some(token) => ShapeGeometry::Custom { token },
+        None => geometry::capture(&api, world_transform.scale)?,
+    };
     #[cfg(feature = "usd-shade")]
     let materials = Some(geometry::materials(&api));
     #[cfg(not(feature = "usd-shade"))]

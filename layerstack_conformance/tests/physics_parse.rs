@@ -6,8 +6,11 @@
 //! `scripts/physics_parse_oracle.py` parses each scene in
 //! `fixtures/physics_parse` with C++ 26.08 and records rigid bodies, shapes
 //! (kind, custom token, body, collision groups, materials), joints and
-//! collision groups (merged groups, filters, inversion). The test captures
-//! each scene with `PhysicsSceneSnapshot::capture` and compares. Records
+//! collision groups (merged groups, filters, inversion). `custom.usda` is
+//! parsed twice, the second time with custom tokens for a shape API, a
+//! shape type and an instancer type, as `CustomPhysicsTypes` takes them.
+//! The test captures each scene with `PhysicsSceneSnapshot::capture` and
+//! compares. Records
 //! layerstack keeps as explicit errors where C++ drops the prim (a collider
 //! of a type with no physics geometry) are compared as absent.
 
@@ -20,7 +23,10 @@ use layerstack::{Stage, StageOptions, TargetPath};
 use layerstack_conformance::{usda_real::load_entry_usda, workspace_root};
 use layerstack_schemas::{
     Scene,
-    physics_scene::{PhysicsSceneError, PhysicsSceneOptions, PhysicsSceneSnapshot, ShapeGeometry},
+    physics_scene::{
+        CustomPhysicsTypes, JointKind, PhysicsSceneError, PhysicsSceneOptions,
+        PhysicsSceneSnapshot, ShapeGeometry,
+    },
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -41,6 +47,7 @@ fn kind(geometry: &ShapeGeometry) -> (String, Option<String>) {
         ShapeGeometry::Plane { .. } => ("plane".into(), None),
         ShapeGeometry::Mesh { .. } => ("mesh".into(), None),
         ShapeGeometry::SpherePoints { .. } => ("sphere_points".into(), None),
+        ShapeGeometry::Custom { token } => ("custom".into(), Some(token.to_string())),
     }
 }
 
@@ -64,6 +71,16 @@ fn parse(scene_name: &str) -> BTreeMap<String, BTreeMap<String, Value>> {
             includes: &[store.path("/")],
             excludes: &[],
             simulation_owners: None,
+            // As the oracle's `CustomUsdPhysicsTokens` for `+tokens`.
+            custom: if scene_name.ends_with("+tokens") {
+                CustomPhysicsTypes {
+                    shapes: &["MyConvexAPI", "MyShape"],
+                    joints: &[],
+                    instancers: &["MyInstancer"],
+                }
+            } else {
+                CustomPhysicsTypes::default()
+            },
         },
     )
     .unwrap();
@@ -114,9 +131,18 @@ fn parse(scene_name: &str) -> BTreeMap<String, BTreeMap<String, Value>> {
         );
     }
     for joint in &snapshot.joints {
+        let kind = match &joint.descriptor.as_ref().unwrap().kind {
+            JointKind::Fixed => "fixed",
+            JointKind::Revolute { .. } => "revolute",
+            JointKind::Prismatic { .. } => "prismatic",
+            JointKind::Spherical { .. } => "spherical",
+            JointKind::Distance { .. } => "distance",
+            JointKind::Custom => "custom",
+            JointKind::D6 { .. } => "d6",
+        };
         out.get_mut("joints")
             .unwrap()
-            .insert(text(joint.path), json!({"kind": "?"}));
+            .insert(text(joint.path), json!({ "kind": kind }));
     }
     out
 }
@@ -126,9 +152,6 @@ fn physics_parse_matches_openusd() {
     let oracle: Oracle = serde_json::from_str(ORACLE).unwrap();
     assert_eq!(oracle.openusd_version, layerstack_schemas::OPENUSD_VERSION);
     for (name, expected) in &oracle.scenes {
-        if name.contains('+') {
-            continue;
-        }
         let actual = parse(name);
         for (key, records) in expected {
             assert_eq!(&actual[key], records, "{name} {key}");

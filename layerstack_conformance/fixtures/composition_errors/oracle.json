@@ -300,6 +300,104 @@
      "properties": []
     },
     {
+     "path": "/Arbor",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/Arbor"
+      ],
+      [
+       "garden.usda",
+       "/Trellis"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "height",
+       "kind": "attribute",
+       "stack": [
+        [
+         "garden.usda",
+         "/Trellis.height"
+        ]
+       ],
+       "targets": [],
+       "value": 3
+      },
+      {
+       "name": "span",
+       "kind": "attribute",
+       "stack": [
+        [
+         "garden.usda",
+         "/Trellis.span"
+        ]
+       ],
+       "targets": [
+        "/Arbor.width",
+        "/Arbor.height"
+       ]
+      },
+      {
+       "name": "stakes",
+       "kind": "relationship",
+       "stack": [
+        [
+         "garden.usda",
+         "/Trellis.stakes"
+        ]
+       ],
+       "targets": []
+      },
+      {
+       "name": "vines",
+       "kind": "relationship",
+       "stack": [
+        [
+         "garden.usda",
+         "/Trellis.vines"
+        ]
+       ],
+       "targets": [
+        "/Arbor/Right",
+        "/Arbor/Left"
+       ]
+      },
+      {
+       "name": "width",
+       "kind": "attribute",
+       "stack": [
+        [
+         "garden.usda",
+         "/Trellis.width"
+        ]
+       ],
+       "targets": [],
+       "value": 4
+      }
+     ]
+    },
+    {
+     "path": "/Arbor/Left",
+     "prim_stack": [
+      [
+       "garden.usda",
+       "/Trellis/Left"
+      ]
+     ],
+     "properties": []
+    },
+    {
+     "path": "/Arbor/Right",
+     "prim_stack": [
+      [
+       "garden.usda",
+       "/Trellis/Right"
+      ]
+     ],
+     "properties": []
+    },
+    {
      "path": "/Hedge",
      "prim_stack": [
       [
@@ -895,6 +993,10 @@
     [
      "InconsistentPropertyType",
      "/Lantern"
+    ],
+    [
+     "InvalidExternalTargetPath",
+     "/Arbor"
     ],
     [
      "InvalidExternalTargetPath",

@@ -208,9 +208,10 @@ pub(crate) struct TargetOwner {
 /// spec brought in across `map`'s arc, into the arc's destination.
 ///
 /// A path the arc cannot map is removed and reported as
-/// [`InvalidExternalTargetPath`]; a deleted or reordered path that cannot
-/// be mapped is removed silently, since it names nothing mapped. Values other than a
-/// property spec's targets are mapped where they can be and otherwise kept.
+/// [`InvalidExternalTargetPath`], reordered paths included; a deleted path
+/// that cannot be mapped is removed silently, since it names nothing
+/// mapped. Values other than a property spec's targets are mapped where
+/// they can be and otherwise kept.
 ///
 /// Spec: AOUSD Core §10.3.2, §10.6. OpenUSD: `_PathTranslateCallback` in
 /// `pxr/usd/pcp/targetIndex.cpp` and `PcpMapFunction`'s bijection check in
@@ -268,16 +269,31 @@ pub(crate) fn map_arc_targets(
             })
             .collect();
     }
+    // A deleted path that cannot be mapped names nothing mapped, and is
+    // dropped silently.
+    list.delete = list
+        .delete
+        .iter()
+        .filter_map(|item| map.map_target(store, *item))
+        .collect();
+    // A reordered one is reported as an inserted one is (OpenUSD
+    // `_PathTranslateCallback` reports every operation but a delete); an
+    // explicit list applies no reorder, so its reorder is not checked
+    // (`SdfListOp::ApplyOperations`).
+    let explicit = list.explicit.is_some();
+    list.reorder = list
+        .reorder
+        .iter()
+        .filter_map(|item| {
+            let mapped = map.map_target(store, *item);
+            if mapped.is_none() && !explicit {
+                report(*item);
+            }
+            mapped
+        })
+        .collect();
     for target in internal {
         findings.note_class_internal_target(owner.prim, owner.property, target);
-    }
-    // A deleted or reordered path that cannot be mapped names nothing
-    // mapped, and is dropped silently.
-    for items in [&mut list.delete, &mut list.reorder] {
-        *items = items
-            .iter()
-            .filter_map(|item| map.map_target(store, *item))
-            .collect();
     }
 }
 

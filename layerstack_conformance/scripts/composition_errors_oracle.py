@@ -113,6 +113,15 @@ def "Yard" (
 {
 }
 
+# Reordered targets outside the referenced prim cannot be mapped to
+# `/Arbor` either, and are reported as added ones are; the others are
+# reordered. A deleted one is dropped silently.
+def "Arbor" (
+    references = @./garden.usda@</Trellis>
+)
+{
+}
+
 # A stronger explicit target list replaces the referenced one, so the
 # referenced path that cannot be mapped reports nothing.
 def "Hedge" (
@@ -307,6 +316,26 @@ def "Garden"
 def "Plot"
 {
     rel border = </Outside>
+}
+
+def "Trellis"
+{
+    int height = 3
+    int width = 4
+    int span
+    prepend int span.connect = [</Trellis.height>, </Trellis.width>]
+    reorder int span.connect = [</Outside.level>, </Trellis.width>, </Trellis.height>]
+    prepend rel vines = [</Trellis/Left>, </Trellis/Right>]
+    reorder rel vines = [</Outside>, </Trellis/Right>, </Trellis/Left>]
+    delete rel stakes = </Outside>
+
+    def "Left"
+    {
+    }
+
+    def "Right"
+    {
+    }
 }
 
 def "Outside"

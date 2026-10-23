@@ -20,7 +20,8 @@
 //!   kind is dropped ([`CompositionError::InconsistentPropertyType`]).
 //! - `/Yard`, `/Shed`, `/Orchard` and `/Grove/Oak` drop target paths that
 //!   cannot be mapped across the arc that brings them in
-//!   ([`CompositionError::InvalidExternalTargetPath`]), and `/Grove/Elm`
+//!   ([`CompositionError::InvalidExternalTargetPath`]), `/Arbor` reordered
+//!   ones as well, though a deleted one silently, and `/Grove/Elm`
 //!   one that a class authors to an instance of itself
 //!   ([`CompositionError::InvalidInstanceTargetPath`]). `/Hedge` and
 //!   `/Tracing` report nothing: their explicit targets replace the

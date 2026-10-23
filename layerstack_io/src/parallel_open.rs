@@ -6,7 +6,9 @@
 //!
 //! Every layer the root reaches is identified, read and parsed by whichever
 //! thread takes it, each of its arcs resolved to a provisional id without
-//! waiting for the target. One pass then walks the layers depth first, in
+//! waiting for the target, and each target found for the first time
+//! offered to the pool at once, so an idle thread reads it while the layer
+//! naming it is still being read ([`layerstack::parallel::Added::offer`]). One pass then walks the layers depth first, in
 //! the order their arcs asked for their targets, recording them as reading
 //! them one at a time does ([`Reader::load`]): the same layer ids, bindings,
 //! failures, diagnostics and pending layers, in the same order. Last, each
@@ -30,7 +32,8 @@ use alloc::sync::Arc;
 use hashbrown::{HashMap, HashSet};
 use layerstack::{
     AssetResolveError, AssetResolver, Layer, LayerId, PathInterner, ResolvedAsset, TokenInterner,
-    asset::PackagePath, parallel::Threads,
+    asset::PackagePath,
+    parallel::{Added, Threads, with_offering_pool_in},
 };
 
 /// The first provisional layer id; the real ones a store hands out stay
@@ -112,23 +115,23 @@ impl<B: Storage> Shared<'_, B> {
         lock(&self.identities).entry(key).or_insert(found).clone()
     }
 
-    /// The provisional id of the source `identifier`, adding a task to
-    /// read it the first time it is found.
-    fn source(&self, identifier: &str, added: &mut Vec<Task>) -> LayerId {
+    /// The provisional id of the source `identifier`, and the first time
+    /// it is found, the task to read it.
+    fn source(&self, identifier: &str) -> (LayerId, Option<Task>) {
         let mut sources = lock(&self.sources);
         if let Some(&id) = sources.get(identifier) {
-            return id;
+            return (id, None);
         }
         let provisional = LayerId(PROVISIONAL + sources.len() as u64);
         sources.insert(String::from(identifier), provisional);
-        added.push(Task {
+        let task = Task {
             identifier: String::from(identifier),
             provisional,
-        });
-        provisional
+        };
+        (provisional, Some(task))
     }
 
-    fn read(&self, task: Task, added: &mut Vec<Task>) -> (LayerId, Read) {
+    fn read(&self, task: Task, added: &mut Added<'_, Task>) -> (LayerId, Read) {
         let mut read = Read {
             calls: Vec::new(),
             outcome: Outcome::Package,
@@ -190,7 +193,7 @@ impl<B: Storage> Shared<'_, B> {
 
 /// The resolver one source is read with: it identifies each arc's asset,
 /// queues new sources and records the arcs in order.
-struct TaskResolver<'s, 'a, B> {
+struct TaskResolver<'s, 'p, 'a, B> {
     shared: &'s Shared<'a, B>,
     /// The identifier of the source being read, which its arcs anchor to.
     anchor: &'s str,
@@ -199,12 +202,15 @@ struct TaskResolver<'s, 'a, B> {
     /// one asset many times, as a scene's root names each asset it places,
     /// resolves it once.
     asked: HashMap<String, usize>,
-    added: &'s mut Vec<Task>,
+    /// The sources first found by this layer's arcs, each offered to the
+    /// pool as it is found, so another thread may read it while this layer
+    /// is still being read.
+    added: &'s mut Added<'p, Task>,
     /// Whether an arc reached into a package.
     package: bool,
 }
 
-impl<B: Storage> TaskResolver<'_, '_, B> {
+impl<B: Storage> TaskResolver<'_, '_, '_, B> {
     /// Resolves an asset path this layer has not asked for yet.
     fn resolve_new(&mut self, asset: &str) -> Result<ResolvedAsset, AssetResolveError> {
         let failed = |calls: &mut Vec<Call>, error: IoError| {
@@ -234,7 +240,11 @@ impl<B: Storage> TaskResolver<'_, '_, B> {
             Err(error) => return failed(&mut self.calls, error),
         };
         let identifier = source_identifier(self.shared.formats, &path, &outer, args);
-        let provisional = self.shared.source(&identifier, self.added);
+        let (provisional, task) = self.shared.source(&identifier);
+        if let Some(task) = task {
+            self.added.push(task);
+            self.added.offer();
+        }
         let identifier: Arc<str> = Arc::from(identifier);
         self.calls.push(Call::Target {
             asset: String::from(asset),
@@ -249,7 +259,7 @@ impl<B: Storage> TaskResolver<'_, '_, B> {
     }
 }
 
-impl<B: Storage> AssetResolver for TaskResolver<'_, '_, B> {
+impl<B: Storage> AssetResolver for TaskResolver<'_, '_, '_, B> {
     fn resolve(
         &mut self,
         asset: &str,
@@ -344,13 +354,13 @@ impl<B: Storage> Reader<'_, B> {
             identities: Mutex::new(self.identities.clone()),
             sources: Mutex::default(),
         };
-        let mut root = Vec::new();
-        let root_id = shared.source(&identifier, &mut root);
-        let work = |task: Task, added: &mut Vec<Task>| shared.read(task, added);
-        let reads: HashMap<LayerId, Read> =
-            layerstack::parallel::with_pool_in(&self.threads, &work, |pool| pool.run(root))
-                .into_iter()
-                .collect();
+        let (root_id, root) = shared.source(&identifier);
+        let work = |task: Task, added: &mut Added<'_, Task>| shared.read(task, added);
+        let reads: HashMap<LayerId, Read> = with_offering_pool_in(&self.threads, &work, |pool| {
+            pool.run(root.into_iter().collect())
+        })
+        .into_iter()
+        .collect();
         if reads
             .values()
             .any(|read| matches!(read.outcome, Outcome::Package))

@@ -119,6 +119,98 @@ pub type Work<'w, T, R> = dyn Fn(T, &mut Vec<T>) -> R + Sync + 'w;
 #[cfg(not(feature = "std"))]
 pub type Work<'w, T, R> = dyn Fn(T, &mut Vec<T>) -> R + 'w;
 
+/// What a pool started with [`with_offering_pool_in`] does with each task:
+/// returns its result and adds tasks to [`Added`], which may hand them to
+/// the pool before the task returns. Shared by every worker, so [`Sync`]
+/// with `std`.
+#[cfg(feature = "std")]
+pub type Offering<'w, T, R> = dyn Fn(T, &mut Added<'_, T>) -> R + Sync + 'w;
+/// What a pool started with [`with_offering_pool_in`] does with each task:
+/// returns its result and adds tasks to [`Added`].
+#[cfg(not(feature = "std"))]
+pub type Offering<'w, T, R> = dyn Fn(T, &mut Added<'_, T>) -> R + 'w;
+
+/// The tasks a task of an offering pool adds ([`with_offering_pool_in`]):
+/// done by the thread that added them, depth first, after the task
+/// returns, unless [`Self::offer`] hands them to the pool sooner.
+pub struct Added<'a, T> {
+    tasks: &'a mut Vec<T>,
+    #[cfg(feature = "std")]
+    pool: Option<&'a dyn Offer<T>>,
+}
+
+impl<T> Added<'_, T> {
+    /// Adds `task`.
+    pub fn push(&mut self, task: T) {
+        self.tasks.push(task);
+    }
+
+    /// Hands the tasks added so far to the pool now, if a thread is idle to
+    /// take them or the pool can start one, so that they need not wait for
+    /// the rest of the task: a task that finds the tasks it adds while it
+    /// runs, as reading a layer finds the layers its arcs name, offers each
+    /// as it finds it. Does nothing on one thread.
+    pub fn offer(&mut self) {
+        #[cfg(feature = "std")]
+        if let Some(pool) = self.pool
+            && !self.tasks.is_empty()
+        {
+            pool.offer(self.tasks);
+        }
+    }
+}
+
+impl<T> fmt::Debug for Added<'_, T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Added")
+            .field("tasks", &self.tasks.len())
+            .finish_non_exhaustive()
+    }
+}
+
+/// Hands tasks to a pool from inside one of its tasks ([`Added::offer`]).
+#[cfg(feature = "std")]
+trait Offer<T> {
+    fn offer(&self, tasks: &mut Vec<T>);
+}
+
+/// A pool's work, either kind.
+enum Job<'w, T, R> {
+    Plain(&'w Work<'w, T, R>),
+    Offering(&'w Offering<'w, T, R>),
+}
+
+impl<T, R> Clone for Job<'_, T, R> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T, R> Copy for Job<'_, T, R> {}
+
+impl<T, R> Job<'_, T, R> {
+    /// Does `task`, adding the tasks it adds to `added`; an offering task
+    /// may hand them to `pool` first.
+    fn call(
+        self,
+        task: T,
+        added: &mut Vec<T>,
+        #[cfg(feature = "std")] pool: Option<&dyn Offer<T>>,
+    ) -> R {
+        match self {
+            Self::Plain(work) => work(task, added),
+            Self::Offering(work) => work(
+                task,
+                &mut Added {
+                    tasks: added,
+                    #[cfg(feature = "std")]
+                    pool,
+                },
+            ),
+        }
+    }
+}
+
 /// Runs `body` with a pool of up to `threads` threads doing `work`, on a
 /// budget of its own ([`with_pool_in`]).
 ///
@@ -175,6 +267,50 @@ where
     T: Send,
     R: Send,
 {
+    pool_in(threads, Job::Plain(work), body)
+}
+
+/// Runs `body` with a pool doing `work` on the threads of `threads`, as
+/// [`with_pool_in`] does, whose tasks may hand the tasks they add to the
+/// pool before they return ([`Added::offer`]).
+///
+/// ```
+/// use layerstack::parallel::{Added, Threads, with_offering_pool_in};
+///
+/// // Task `n` adds `n - 1` twice and offers them at once, down to 0.
+/// let tree = |n: u32, added: &mut Added<'_, u32>| {
+///     if n > 0 {
+///         added.push(n - 1);
+///         added.push(n - 1);
+///         added.offer();
+///     }
+///     n
+/// };
+/// let threads = Threads::new(4);
+/// let results = with_offering_pool_in(&threads, &tree, |pool| pool.run(vec![3]));
+/// assert_eq!(results.len(), 15);
+/// ```
+pub fn with_offering_pool_in<T, R, B>(
+    threads: &Threads,
+    work: &Offering<'_, T, R>,
+    body: impl FnOnce(&Pool<'_, T, R>) -> B,
+) -> B
+where
+    T: Send,
+    R: Send,
+{
+    pool_in(threads, Job::Offering(work), body)
+}
+
+fn pool_in<T, R, B>(
+    threads: &Threads,
+    work: Job<'_, T, R>,
+    body: impl FnOnce(&Pool<'_, T, R>) -> B,
+) -> B
+where
+    T: Send,
+    R: Send,
+{
     #[cfg(feature = "std")]
     if threads.limit > 1 {
         let threaded = Threaded {
@@ -217,7 +353,7 @@ where
 
 /// A pool of threads doing one kind of task (see [`with_pool`]).
 pub struct Pool<'s, T, R> {
-    work: &'s Work<'s, T, R>,
+    work: Job<'s, T, R>,
     #[cfg(feature = "std")]
     threaded: Option<(&'s Threaded<'s, T, R>, &'s dyn Spawn)>,
 }
@@ -231,19 +367,33 @@ trait Spawn {
     fn spawn_worker(&self) -> bool;
 }
 
+/// What starts a worker: copied into each worker, so that a task on any
+/// thread can start one for the tasks it offers ([`Added::offer`]).
 #[cfg(feature = "std")]
 struct Spawner<'s, 'e, T, R> {
     scope: &'s std::thread::Scope<'s, 'e>,
-    work: &'e Work<'e, T, R>,
+    work: Job<'e, T, R>,
     threaded: &'e Threaded<'e, T, R>,
 }
 
 #[cfg(feature = "std")]
+impl<T, R> Clone for Spawner<'_, '_, T, R> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+#[cfg(feature = "std")]
+impl<T, R> Copy for Spawner<'_, '_, T, R> {}
+
+#[cfg(feature = "std")]
 impl<T: Send, R: Send> Spawn for Spawner<'_, '_, T, R> {
     fn spawn_worker(&self) -> bool {
-        let (work, threaded) = (self.work, self.threaded);
+        let spawner = *self;
         std::thread::Builder::new()
-            .spawn_scoped(self.scope, move || serve(work, threaded))
+            .spawn_scoped(self.scope, move || {
+                serve(spawner.work, spawner.threaded, &spawner);
+            })
             .is_ok()
     }
 }
@@ -326,7 +476,7 @@ impl<T: Send, R: Send> Pool<'_, T, R> {
             threaded.changed.notify_all();
             loop {
                 if !shared.pending.is_empty() {
-                    shared = work_on(self.work, threaded, Some(spawner), shared);
+                    shared = work_on(self.work, threaded, spawner, true, shared);
                 } else if shared.busy == 0 {
                     return core::mem::take(&mut shared.results);
                 } else {
@@ -343,7 +493,12 @@ impl<T: Send, R: Send> Pool<'_, T, R> {
         let mut results = Vec::new();
         let mut added = Vec::new();
         while let Some(task) = pending.pop() {
-            results.push((self.work)(task, &mut added));
+            results.push(self.work.call(
+                task,
+                &mut added,
+                #[cfg(feature = "std")]
+                None,
+            ));
             pending.extend(added.drain(..).rev());
         }
         results
@@ -391,13 +546,15 @@ fn spawn_worker<T, R>(
 /// tasks they add without the lock, depth first, then records their
 /// results. Pending tasks go back to the pool while a thread waits for
 /// one, all but the next: the oldest, nearest the subtree's root, hold the
-/// most work. `spawner`, the calling thread's, starts a worker to take them
-/// when no thread waits and the pool and budget have room for one.
+/// most work. On the pool's `caller`, `spawner` starts a worker to take
+/// them when none waits and the pool and budget have room for one. Tasks
+/// offered from a task ([`Added::offer`]) may start one on any thread.
 #[cfg(feature = "std")]
 fn work_on<'s, T, R>(
-    work: &Work<'_, T, R>,
+    work: Job<'_, T, R>,
     threaded: &'s Threaded<'_, T, R>,
-    spawner: Option<&dyn Spawn>,
+    spawner: &dyn Spawn,
+    caller: bool,
     mut shared: std::sync::MutexGuard<'s, Shared<T, R>>,
 ) -> std::sync::MutexGuard<'s, Shared<T, R>> {
     // An even share for each thread, so many small tasks, as a wide
@@ -410,12 +567,13 @@ fn work_on<'s, T, R>(
         // Tasks are left for the threads waiting.
         threaded.changed.notify_all();
     }
-    let mut can_spawn = spawner.is_some() && shared.workers < threaded.max_workers;
+    let mut can_spawn = caller && shared.workers < threaded.max_workers;
     drop(shared);
     let mut results = Vec::new();
     let mut added = Vec::new();
+    let offered = Offered { threaded, spawner };
     while let Some(task) = local.pop() {
-        results.push(work(task, &mut added));
+        results.push(work.call(task, &mut added, Some(&offered)));
         local.extend(added.drain(..).rev());
         if local.len() < 2 {
             continue;
@@ -427,9 +585,7 @@ fn work_on<'s, T, R>(
         let mut shared = lock(&threaded.shared);
         let next = local.pop().expect("two tasks pending");
         let handed = local.len();
-        if takers == 0
-            && let Some(spawner) = spawner
-        {
+        if takers == 0 && can_spawn {
             // Tasks wait with no thread idle to take them: start one.
             spawn_worker(threaded, spawner, &mut shared);
             can_spawn = shared.workers < threaded.max_workers;
@@ -455,18 +611,53 @@ fn work_on<'s, T, R>(
     shared
 }
 
+/// What a thread doing a pool's task offers the tasks it adds to.
+#[cfg(feature = "std")]
+struct Offered<'a, 'b, T, R> {
+    threaded: &'a Threaded<'b, T, R>,
+    spawner: &'a dyn Spawn,
+}
+
+#[cfg(feature = "std")]
+impl<T, R> Offer<T> for Offered<'_, '_, T, R> {
+    /// Moves `tasks` to the pool when a thread waits to take them or the
+    /// budget spares one to start, as handing tasks over in [`work_on`]
+    /// does.
+    fn offer(&self, tasks: &mut Vec<T>) {
+        let threaded = self.threaded;
+        let takers = threaded.takers();
+        if takers == 0 && threaded.budget.spare() == 0 {
+            return;
+        }
+        let mut shared = lock(&threaded.shared);
+        if takers == 0 {
+            spawn_worker(threaded, self.spawner, &mut shared);
+        }
+        let handed = tasks.len();
+        shared.pending.extend(tasks.drain(..).rev());
+        drop(shared);
+        if handed >= threaded.takers() {
+            threaded.changed.notify_all();
+        } else {
+            for _ in 0..handed {
+                threaded.changed.notify_one();
+            }
+        }
+    }
+}
+
 /// A worker's loop: does tasks as they come until the pool shuts down,
 /// holding a thread of the budget while it has tasks to do, and giving it
 /// back while it waits for them.
 #[cfg(feature = "std")]
-fn serve<T, R>(work: &Work<'_, T, R>, threaded: &Threaded<'_, T, R>) {
+fn serve<T, R>(work: Job<'_, T, R>, threaded: &Threaded<'_, T, R>, spawner: &dyn Spawn) {
     // Started on a thread claimed for it.
     let mut holds = true;
     let mut shared = lock(&threaded.shared);
     loop {
         if !shared.pending.is_empty() && (holds || threaded.budget.claim()) {
             holds = true;
-            shared = work_on(work, threaded, None, shared);
+            shared = work_on(work, threaded, spawner, false, shared);
             continue;
         }
         if holds {
@@ -623,5 +814,42 @@ mod tests {
         let ran = with_pool_in(&threads, &outer, |pool| pool.run(alloc::vec![0]));
         let overlapped: Vec<_> = ran.into_iter().flatten().flatten().collect();
         assert_eq!(overlapped, [true, true]);
+    }
+
+    /// A task offered while the task that added it runs starts before that
+    /// task returns, on a thread the budget spares; on one thread it runs
+    /// after.
+    #[cfg(feature = "std")]
+    #[test]
+    #[cfg_attr(target_os = "wasi", ignore = "WASI runs tests without threads")]
+    fn offered_tasks_start_before_their_task_returns() {
+        for limit in [1, 2] {
+            let started = core::sync::atomic::AtomicBool::new(false);
+            let work = |n: u32, added: &mut Added<'_, u32>| {
+                if n == 1 {
+                    started.store(true, Ordering::SeqCst);
+                    return None;
+                }
+                added.push(1);
+                added.offer();
+                if limit == 1 {
+                    return Some(started.load(Ordering::SeqCst));
+                }
+                // Waits, for a long while at most, for the offered task.
+                let start = std::time::Instant::now();
+                while !started.load(Ordering::SeqCst) {
+                    if start.elapsed() > std::time::Duration::from_secs(10) {
+                        return Some(false);
+                    }
+                    core::hint::spin_loop();
+                }
+                Some(true)
+            };
+            let threads = Threads::new(limit);
+            let ran = with_offering_pool_in(&threads, &work, |pool| pool.run(alloc::vec![0]));
+            let ran: Vec<bool> = ran.into_iter().flatten().collect();
+            assert_eq!(ran, [limit == 2], "{limit} threads");
+            assert!(started.load(Ordering::SeqCst));
+        }
     }
 }

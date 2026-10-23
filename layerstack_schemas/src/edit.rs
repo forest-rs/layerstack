@@ -269,6 +269,13 @@ impl<'s> SchemaEdit<'s> {
         None
     }
 
+    /// The interned path of `parent`'s child `name`.
+    #[cfg(feature = "usd-geom")]
+    pub(crate) fn child_path(&mut self, parent: PathId, name: TokenId) -> PathId {
+        let path = self.store.paths().resolve(parent).join(&[name]);
+        self.store.paths_mut().intern(path)
+    }
+
     /// The target site's authored metadata, never a flattened composed list.
     #[cfg(feature = "usd-geom")]
     pub(crate) fn local_prim_metadata(

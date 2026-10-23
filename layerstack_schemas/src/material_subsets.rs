@@ -4,9 +4,14 @@
 //! Material face subsets combine `UsdGeom` family validation and `UsdShade` binding.
 //! Draw ranges, triangulation and renderer grouping belong to the consumer.
 use crate::{
-    BindingCache, BindingOptions, BoundMaterial, MaterialPurpose, PrimView, Scene, Time,
-    subset::{SubsetError, SubsetProblem, SubsetProblemKind, SubsetValidation},
-    usd_geom::{GeomSubsetElementType, Imageable},
+    BindingCache, BindingOptions, BoundMaterial, MaterialPurpose, PrimEdit, PrimView, Scene,
+    SchemaEdit, Time,
+    subset::{
+        SubsetAuthoringError, SubsetError, SubsetFamilyType, SubsetProblem, SubsetProblemKind,
+        SubsetValidation,
+    },
+    usd_geom::{GeomSubsetEdit, GeomSubsetElementType, Imageable, ImageableEdit},
+    usd_shade::MaterialBindingApiEdit,
 };
 use alloc::{string::String, sync::Arc, vec::Vec};
 use layerstack::{ArrayReadError, PathId, PropertyPath};
@@ -170,6 +175,64 @@ impl PrimView<'_> {
             &self.scene(),
             self.path(),
             time,
+        )
+    }
+}
+
+impl MaterialBindingApiEdit {
+    /// Collects the `materialBind` subset `name` of this prim's geometry, as
+    /// [`GeomSubsetEdit::create`] does: an existing subset of that name is
+    /// reused, with its indices re-authored. When the family's type, as this
+    /// edit leaves it, is unauthored, empty or `unrestricted`, it becomes
+    /// `nonOverlapping`, since faces bound to different materials must not
+    /// overlap; `partition` and `nonOverlapping` stay.
+    ///
+    /// Indices are checked against the mesh's default-time topology, where
+    /// C++ authors any indices. Rejection collects no edits.
+    /// OpenUSD: `UsdShadeMaterialBindingAPI::CreateMaterialBindSubset`.
+    /// AOUSD Core §12.3–12.5.
+    #[doc(alias = "CreateMaterialBindSubset")]
+    #[doc(alias = "UsdShadeMaterialBindingAPI::CreateMaterialBindSubset")]
+    pub fn create_material_bind_subset(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        name: &str,
+        element: GeomSubsetElementType,
+        indices: &[i32],
+    ) -> Result<GeomSubsetEdit, SubsetAuthoringError> {
+        edit.group(|edit| {
+            let subset =
+                GeomSubsetEdit::create(edit, self.path(), name, element, indices, MATERIAL_BIND)?;
+            let current = edit.default_value(self.path(), FAMILY_TYPE);
+            let current = current
+                .as_ref()
+                .and_then(|value| crate::value::read_token(value, edit.tokens()));
+            if matches!(current, None | Some("" | "unrestricted")) {
+                self.set_material_bind_subsets_family_type(edit, SubsetFamilyType::NonOverlapping)?;
+            }
+            Ok(subset)
+        })
+    }
+
+    /// Authors the `materialBind` family's type. `unrestricted` is refused
+    /// with [`SubsetAuthoringError::UnrestrictedMaterialBindFamily`], as C++
+    /// refuses it; [`ImageableEdit::set_subset_family_type`] authors any
+    /// type. Rejection collects no edits.
+    /// OpenUSD: `UsdShadeMaterialBindingAPI::SetMaterialBindSubsetsFamilyType`.
+    #[doc(alias = "SetMaterialBindSubsetsFamilyType")]
+    #[doc(alias = "UsdShadeMaterialBindingAPI::SetMaterialBindSubsetsFamilyType")]
+    pub fn set_material_bind_subsets_family_type(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        family_type: SubsetFamilyType,
+    ) -> Result<(), SubsetAuthoringError> {
+        if family_type == SubsetFamilyType::Unrestricted {
+            return Err(SubsetAuthoringError::UnrestrictedMaterialBindFamily);
+        }
+        ImageableEdit::from_prim(PrimEdit::from_path_unchecked(self.path())).set_subset_family_type(
+            edit,
+            MATERIAL_BIND,
+            family_type,
         )
     }
 }

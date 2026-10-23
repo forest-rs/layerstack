@@ -14,13 +14,14 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use layerstack::StringArray;
+use layerstack::interner::{TokenId, TokenInterner};
 use layerstack::spline::{
     CurveType, Extrapolation, Knot, KnotInterp, LoopParams, SplineData, SplineDataType,
 };
 
 use crate::compression::{read_compressed_ints, read_compressed_ints_as};
 use crate::error::UsdcError;
-use crate::section::{CrateSections, TokenTable};
+use crate::section::{CrateSections, OnceSlot, TokenTable};
 use crate::value_type::ValueType;
 use crate::version::CrateVersion;
 
@@ -404,39 +405,81 @@ pub(crate) fn decode_text_indices(
     budget: &mut DecodeBudget,
 ) -> Result<Vec<u32>, UsdcError> {
     within_value_budget(budget, |budget| {
-        let strings = match rep.value_type()? {
-            ValueType::Token => false,
-            ValueType::String => true,
-            _ => {
-                return Err(UsdcError::Inconsistent {
-                    message: "text indices of a value that is not text",
-                });
-            }
-        };
-        let mut indices = read_integer_array_as(rep, data, 4, budget, |index| {
-            u32::try_from(index).unwrap_or(u32::MAX)
-        })?;
-        if strings {
-            for index in &mut indices {
-                *index = sections
-                    .strings
-                    .get(*index as usize)
-                    .copied()
-                    .unwrap_or(u32::MAX);
-            }
-        }
-        // Each element's text is charged as copying it would be charged,
-        // all at once; an index outside the table names the empty text.
-        let mut text_units = 0_usize;
-        for index in &mut indices {
-            match sections.tokens.text_len(*index as usize) {
-                Some(len) => text_units = text_units.saturating_add(len / 16),
-                None => *index = u32::MAX,
-            }
-        }
-        budget.charge_elements(text_units)?;
-        Ok(indices)
+        text_indices_in(rep, data, sections, budget)
     })
+}
+
+/// [`decode_text_indices`] of a value whose own unit `budget` has already
+/// charged ([`within_value_budget`]): a value nested in another.
+fn text_indices_in(
+    rep: &RawValueRep,
+    data: &[u8],
+    sections: &CrateSections,
+    budget: &mut DecodeBudget,
+) -> Result<Vec<u32>, UsdcError> {
+    let strings = match rep.value_type()? {
+        ValueType::Token => false,
+        ValueType::String => true,
+        _ => {
+            return Err(UsdcError::Inconsistent {
+                message: "text indices of a value that is not text",
+            });
+        }
+    };
+    let mut indices = read_integer_array_as(rep, data, 4, budget, |index| {
+        u32::try_from(index).unwrap_or(u32::MAX)
+    })?;
+    if strings {
+        for index in &mut indices {
+            *index = sections
+                .strings
+                .get(*index as usize)
+                .copied()
+                .unwrap_or(u32::MAX);
+        }
+    }
+    // Each element's text is charged as copying it would be charged, all at
+    // once; an index outside the table names the empty text.
+    let mut text_units = 0_usize;
+    for index in &mut indices {
+        match sections.tokens.text_len(*index as usize) {
+            Some(len) => text_units = text_units.saturating_add(len / 16),
+            None => *index = u32::MAX,
+        }
+    }
+    budget.charge_elements(text_units)?;
+    Ok(indices)
+}
+
+/// The token id of each entry of a read's token table, interned when a
+/// value first names it and found again from `ids` after: what assembly
+/// converts a token-table index with, nested values included.
+#[derive(Clone, Copy)]
+pub(crate) struct TokenIds<'a> {
+    /// The read's token table.
+    pub(crate) table: &'a TokenTable,
+    /// The id of each entry of `table`, once interned.
+    pub(crate) ids: &'a [OnceSlot<TokenId>],
+    /// The interner the ids belong to.
+    pub(crate) interner: &'a TokenInterner,
+}
+
+impl TokenIds<'_> {
+    /// The token id of entry `index`, interning it on first use; the empty
+    /// token outside the table, as the generic decoder reads it.
+    pub(crate) fn id(&self, index: u32) -> TokenId {
+        let (Some(text), Some(slot)) =
+            (self.table.get(index as usize), self.ids.get(index as usize))
+        else {
+            return TokenId::EMPTY;
+        };
+        if let Some(&id) = slot.get() {
+            return id;
+        }
+        let id = self.interner.intern(text);
+        let _ = slot.set(id);
+        id
+    }
 }
 
 /// The `string[]` elements whose text `indices` index in the token table
@@ -534,11 +577,16 @@ pub(crate) fn array_len(rep: &RawValueRep, data: &[u8]) -> Option<u64> {
 
 /// Decodes one field with the same validation and budget as the public decoder,
 /// retaining compact array data instead of allocating type-erased elements.
+///
+/// With `tokens`, a `token[]` nested in the value (in time samples or a
+/// dictionary) decodes straight to [`layerstack::TypedArray::Token`];
+/// without, to a [`CrateValue::Array`] of its tokens' text.
 pub(crate) fn decode_field_within<'a>(
     rep: &RawValueRep,
     data: &'a [u8],
     sections: &CrateSections,
     budget: &mut DecodeBudget,
+    tokens: Option<TokenIds<'_>>,
 ) -> Result<DecodedField<'a>, UsdcError> {
     within_value_budget(budget, |budget| {
         let vtype = rep.value_type()?;
@@ -576,7 +624,8 @@ pub(crate) fn decode_field_within<'a>(
                     .map(DecodedField::Value);
             }
         }
-        decode_one(rep, data, sections, budget, DecodeMode::Compact).map(DecodedField::Value)
+        decode_one(rep, data, sections, budget, DecodeMode::Compact(tokens))
+            .map(DecodedField::Value)
     })
 }
 
@@ -711,11 +760,13 @@ impl DecodeBudget {
     }
 }
 
-/// Decodes a value nested in another, within `budget`.
-#[derive(Clone, Copy, Debug)]
-enum DecodeMode {
+/// How a value decodes: as [`decode_value`] returns it, or compact, as
+/// assembly takes it ([`decode_field_within`]), with the token ids nested
+/// `token[]` values decode to when given.
+#[derive(Clone, Copy)]
+enum DecodeMode<'t> {
     Generic,
-    Compact,
+    Compact(Option<TokenIds<'t>>),
 }
 
 fn decode_nested(
@@ -723,26 +774,28 @@ fn decode_nested(
     data: &[u8],
     sections: &CrateSections,
     budget: &mut DecodeBudget,
-    mode: DecodeMode,
+    mode: DecodeMode<'_>,
 ) -> Result<CrateValue, UsdcError> {
-    if matches!(mode, DecodeMode::Compact) {
-        return Ok(match decode_field_within(rep, data, sections, budget)? {
-            DecodedField::Value(value) => value,
-            DecodedField::FloatArray(array) => {
-                CrateValue::TypedArray(crate::numeric_array::float_array(array))
-            }
-            DecodedField::MathArray(array) => {
-                CrateValue::TypedArray(crate::numeric_array::math_array(&array))
-            }
-            DecodedField::TokenArray(_)
-            | DecodedField::StringArray(_)
-            | DecodedField::PathListOp(_)
-            | DecodedField::Text(..) => {
-                unreachable!("indices are decoded only for top-level fields")
-            }
-            #[cfg(feature = "std")]
-            DecodedField::Retained(_) => unreachable!("only top-level fields are retained"),
-        });
+    if let DecodeMode::Compact(tokens) = mode {
+        return Ok(
+            match decode_field_within(rep, data, sections, budget, tokens)? {
+                DecodedField::Value(value) => value,
+                DecodedField::FloatArray(array) => {
+                    CrateValue::TypedArray(crate::numeric_array::float_array(array))
+                }
+                DecodedField::MathArray(array) => {
+                    CrateValue::TypedArray(crate::numeric_array::math_array(&array))
+                }
+                DecodedField::TokenArray(_)
+                | DecodedField::StringArray(_)
+                | DecodedField::PathListOp(_)
+                | DecodedField::Text(..) => {
+                    unreachable!("indices are decoded only for top-level fields")
+                }
+                #[cfg(feature = "std")]
+                DecodedField::Retained(_) => unreachable!("only top-level fields are retained"),
+            },
+        );
     }
     within_value_budget(budget, |budget| {
         decode_one(rep, data, sections, budget, mode)
@@ -770,7 +823,7 @@ fn decode_one(
     data: &[u8],
     sections: &CrateSections,
     budget: &mut DecodeBudget,
-    mode: DecodeMode,
+    mode: DecodeMode<'_>,
 ) -> Result<CrateValue, UsdcError> {
     let vtype = rep.value_type()?;
     if rep.is_array_edit() {
@@ -1401,11 +1454,11 @@ fn decode_string(
     data: &[u8],
     sections: &CrateSections,
     budget: &mut DecodeBudget,
-    mode: DecodeMode,
+    mode: DecodeMode<'_>,
 ) -> Result<CrateValue, UsdcError> {
-    if rep.is_array() && matches!(mode, DecodeMode::Compact) {
+    if rep.is_array() && matches!(mode, DecodeMode::Compact(_)) {
         // Assembly holds a `string[]` in one text buffer (AOUSD Core §6.2).
-        let indices = decode_text_indices(rep, data, sections, budget)?;
+        let indices = text_indices_in(rep, data, sections, budget)?;
         return Ok(CrateValue::TypedArray(layerstack::TypedArray::String(
             alloc::sync::Arc::new(string_array(&sections.tokens, &indices)),
         )));
@@ -1435,11 +1488,19 @@ fn decode_token(
     data: &[u8],
     sections: &CrateSections,
     budget: &mut DecodeBudget,
-    mode: DecodeMode,
+    mode: DecodeMode<'_>,
 ) -> Result<CrateValue, UsdcError> {
     if rep.is_array() {
+        if let DecodeMode::Compact(Some(tokens)) = mode {
+            // Assembly holds a `token[]` as token ids (AOUSD Core §6.2),
+            // mapped from the token table without copying its text.
+            let indices = text_indices_in(rep, data, sections, budget)?;
+            return Ok(CrateValue::TypedArray(layerstack::TypedArray::Token(
+                indices.iter().map(|&index| tokens.id(index)).collect(),
+            )));
+        }
         let indices = read_u32_array_or_inlined(rep, data, budget)?;
-        if indices.is_empty() && matches!(mode, DecodeMode::Compact) {
+        if indices.is_empty() && matches!(mode, DecodeMode::Compact(_)) {
             // An empty `token[]` keeps its element kind for assembly; other
             // tokens are interned there (AOUSD Core §6.2).
             return Ok(CrateValue::TypedArray(layerstack::TypedArray::Token(
@@ -1705,7 +1766,7 @@ fn decode_dictionary(
     data: &[u8],
     sections: &CrateSections,
     budget: &mut DecodeBudget,
-    mode: DecodeMode,
+    mode: DecodeMode<'_>,
 ) -> Result<CrateValue, UsdcError> {
     // Only the empty dictionary is inlined (`_EncodeInline`,
     // `pxr/usd/sdf/crateValueInliners.h`).
@@ -1735,7 +1796,7 @@ fn decode_dictionary_at_in(
     off: usize,
     sections: &CrateSections,
     budget: &mut DecodeBudget,
-    mode: DecodeMode,
+    mode: DecodeMode<'_>,
 ) -> Result<(Vec<(String, CrateValue)>, usize), UsdcError> {
     // Each entry advances past at least 12 bytes, so the loop ends at the
     // end of the data.
@@ -2010,7 +2071,7 @@ fn read_vt_value_in(
     pos: &mut usize,
     sections: &CrateSections,
     budget: &mut DecodeBudget,
-    mode: DecodeMode,
+    mode: DecodeMode<'_>,
 ) -> Result<CrateValue, UsdcError> {
     let mut rep_offset = relative_offset(data, *pos)?;
     let child_rep = RawValueRep::new(read_bytes(data, &mut rep_offset)?);
@@ -2121,7 +2182,7 @@ fn decode_time_samples(
     data: &[u8],
     sections: &CrateSections,
     budget: &mut DecodeBudget,
-    mode: DecodeMode,
+    mode: DecodeMode<'_>,
 ) -> Result<CrateValue, UsdcError> {
     let off = payload_offset_usize(rep, data)?;
     if off == 0 {
@@ -2349,7 +2410,7 @@ fn decode_value_indirection(
     data: &[u8],
     sections: &CrateSections,
     budget: &mut DecodeBudget,
-    mode: DecodeMode,
+    mode: DecodeMode<'_>,
 ) -> Result<CrateValue, UsdcError> {
     let mut pos = payload_offset_usize(rep, data)?;
     read_vt_value_in(data, &mut pos, sections, budget, mode)
@@ -2362,7 +2423,7 @@ fn decode_unregistered_value(
     data: &[u8],
     sections: &CrateSections,
     budget: &mut DecodeBudget,
-    mode: DecodeMode,
+    mode: DecodeMode<'_>,
 ) -> Result<CrateValue, UsdcError> {
     let mut pos = payload_offset_usize(rep, data)?;
     read_vt_value_in(data, &mut pos, sections, budget, mode)
@@ -3108,7 +3169,7 @@ mod tests {
                             let ordinary =
                                 decode_value_within(&rep, &data[..end], &sections, &mut a);
                             let compact =
-                                decode_field_within(&rep, &data[..end], &sections, &mut b);
+                                decode_field_within(&rep, &data[..end], &sections, &mut b, None);
                             assert_eq!(ordinary.as_ref().err(), compact.as_ref().err());
                             assert_eq!(a.used(), b.used());
                             if let Ok(CrateValue::Array(values)) = ordinary {
@@ -3194,7 +3255,7 @@ mod tests {
                             let ordinary =
                                 decode_value_within(&rep, &data[..end], &sections, &mut a);
                             let compact =
-                                decode_field_within(&rep, &data[..end], &sections, &mut b);
+                                decode_field_within(&rep, &data[..end], &sections, &mut b, None);
                             assert_eq!(ordinary.as_ref().err(), compact.as_ref().err());
                             assert_eq!(a.used(), b.used());
                             if let Ok(CrateValue::Array(values)) = ordinary {
@@ -3220,8 +3281,14 @@ mod tests {
                                     assert_eq!(expected, *compact);
                                 }
                                 assert!(
-                                    decode_field_within(&rep, &data[..end], &sections, &mut b)
-                                        .is_err(),
+                                    decode_field_within(
+                                        &rep,
+                                        &data[..end],
+                                        &sections,
+                                        &mut b,
+                                        None
+                                    )
+                                    .is_err(),
                                     "each reference is charged"
                                 );
                             }
@@ -3258,7 +3325,8 @@ mod tests {
                     };
                     let mut borrowed_budget = DecodeBudget::with_limit(1 + count as u64);
                     let DecodedField::MathArray(borrowed) =
-                        decode_field_within(&rep, &data, &sections, &mut borrowed_budget).unwrap()
+                        decode_field_within(&rep, &data, &sections, &mut borrowed_budget, None)
+                            .unwrap()
                     else {
                         panic!("borrowed array");
                     };
@@ -3273,7 +3341,7 @@ mod tests {
                     }
                     assert!(
                         matches!(
-                            decode_field_within(&rep, &data, &sections, &mut borrowed_budget),
+                            decode_field_within(&rep, &data, &sections, &mut borrowed_budget, None),
                             Err(UsdcError::DecodeBudgetExceeded { .. })
                         ),
                         "every reference is charged"
@@ -3301,7 +3369,8 @@ mod tests {
                         let mut a = DecodeBudget::with_limit(limit);
                         let mut b = DecodeBudget::with_limit(limit);
                         let ordinary = decode_value_within(&rep, &data[..end], &sections, &mut a);
-                        let borrowed = decode_field_within(&rep, &data[..end], &sections, &mut b);
+                        let borrowed =
+                            decode_field_within(&rep, &data[..end], &sections, &mut b, None);
                         assert_eq!(ordinary.as_ref().err(), borrowed.as_ref().err());
                         assert_eq!(a.used(), b.used());
                         if flags & 0x10 != 0
@@ -3335,7 +3404,7 @@ mod tests {
         let mut b = DecodeBudget::with_limit(100);
         let ordinary = decode_value_within(&rep, &data, &sections, &mut a).unwrap();
         let DecodedField::Value(field) =
-            decode_field_within(&rep, &data, &sections, &mut b).unwrap()
+            decode_field_within(&rep, &data, &sections, &mut b, None).unwrap()
         else {
             panic!("nested fallback");
         };
@@ -3356,7 +3425,144 @@ mod tests {
         b.depth = MAX_VALUE_DEPTH;
         assert_eq!(
             decode_value_within(&rep, &data, &sections, &mut a).err(),
-            decode_field_within(&rep, &data, &sections, &mut b).err()
+            decode_field_within(&rep, &data, &sections, &mut b, None).err()
+        );
+    }
+
+    /// A `token[]` in time samples or a dictionary decodes compact to
+    /// token ids when assembly passes them, and to its tokens' text without
+    /// them; nested text arrays are charged as the generic decoder charges
+    /// them.
+    #[test]
+    fn nested_token_arrays_decode_to_token_ids() {
+        use crate::value_type::SpecForm;
+        use crate::writer::{Spec, Specifier, Value as W, write_crate};
+        use crate::{header::parse_header, section::parse_sections, toc::parse_toc};
+
+        let long = "a_token_long_enough_to_charge_text_units";
+        let specs = vec![
+            Spec::new("/", SpecForm::PseudoRoot)
+                .with_field("primChildren", W::TokenVector(vec!["Root".into()])),
+            Spec::new("/Root", SpecForm::Prim)
+                .with_field("specifier", W::Specifier(Specifier::Def))
+                .with_field(
+                    "customData",
+                    W::Dictionary(vec![
+                        (
+                            "tags".into(),
+                            W::TokenArray(vec!["red".into(), long.into()]),
+                        ),
+                        (
+                            "names".into(),
+                            W::StringArray(vec![long.into(), "blue".into()]),
+                        ),
+                    ]),
+                ),
+            Spec::new("/Root.tags", SpecForm::Attribute)
+                .with_field("typeName", W::Token("token[]".into()))
+                .with_field(
+                    "timeSamples",
+                    W::TimeSamples(vec![
+                        (
+                            1.0,
+                            W::TokenArray(vec![long.into(), "red".into(), long.into()]),
+                        ),
+                        (2.0, W::TokenArray(vec![])),
+                    ]),
+                ),
+        ];
+        let bytes = write_crate(&specs).unwrap();
+        let header = parse_header(&bytes).unwrap();
+        let toc = parse_toc(&bytes, header.toc_offset).unwrap();
+        let sections = parse_sections(
+            &bytes,
+            &toc,
+            header.crate_version(),
+            &mut DecodeBudget::with_limit(u64::MAX),
+        )
+        .unwrap();
+        let rep = |name: &str| {
+            RawValueRep::new(
+                sections
+                    .fields
+                    .iter()
+                    .find(|field| sections.tokens.get(field.token_index as usize) == Some(name))
+                    .unwrap()
+                    .value_rep,
+            )
+        };
+        let interner = TokenInterner::default();
+        let ids: Vec<OnceSlot<TokenId>> = (0..sections.tokens.len())
+            .map(|_| OnceSlot::new())
+            .collect();
+        let tokens = TokenIds {
+            table: &sections.tokens,
+            ids: &ids,
+            interner: &interner,
+        };
+        let token_ids = |names: &[&str]| -> Vec<TokenId> {
+            names.iter().map(|name| interner.intern(name)).collect()
+        };
+        let decode = |name: &str, tokens: Option<TokenIds<'_>>| {
+            let mut budget = DecodeBudget::with_limit(u64::MAX);
+            let DecodedField::Value(value) =
+                decode_field_within(&rep(name), &bytes, &sections, &mut budget, tokens).unwrap()
+            else {
+                panic!("{name} decodes to a value");
+            };
+            (value, budget.used())
+        };
+        let generic_used = |name: &str| {
+            let mut budget = DecodeBudget::with_limit(u64::MAX);
+            decode_value_within(&rep(name), &bytes, &sections, &mut budget).unwrap();
+            budget.used()
+        };
+
+        let (samples, used) = decode("timeSamples", Some(tokens));
+        assert_eq!(used, generic_used("timeSamples"));
+        let CrateValue::TimeSamples(samples) = samples else {
+            panic!("samples");
+        };
+        let as_ids = |value: &CrateValue| match value {
+            CrateValue::TypedArray(layerstack::TypedArray::Token(ids)) => ids.to_vec(),
+            other => panic!("native token array, not {other:?}"),
+        };
+        assert_eq!(as_ids(&samples[0].1), token_ids(&[long, "red", long]));
+        assert_eq!(as_ids(&samples[1].1), token_ids(&[]));
+
+        let (dictionary, used) = decode("customData", Some(tokens));
+        assert_eq!(used, generic_used("customData"));
+        let CrateValue::Dictionary(dictionary) = dictionary else {
+            panic!("dictionary");
+        };
+        let tags = dictionary.iter().find(|(key, _)| key == "tags").unwrap();
+        assert_eq!(as_ids(&tags.1), token_ids(&["red", long]));
+        let names = dictionary.iter().find(|(key, _)| key == "names").unwrap();
+        assert!(
+            matches!(&names.1, CrateValue::TypedArray(layerstack::TypedArray::String(names)) if names.iter().eq([long, "blue"]))
+        );
+
+        // Without token ids, the elements stay text.
+        let (CrateValue::TimeSamples(samples), _) = decode("timeSamples", None) else {
+            panic!("samples");
+        };
+        assert!(
+            matches!(&samples[0].1, CrateValue::Array(items) if matches!(&items[1], CrateValue::Token(text) if text == "red"))
+        );
+
+        // A budget too small for the text fails as the generic decoder does.
+        let mut generic = DecodeBudget::with_limit(generic_used("timeSamples") - 1);
+        let mut compact = generic.clone();
+        assert_eq!(
+            decode_value_within(&rep("timeSamples"), &bytes, &sections, &mut generic).err(),
+            decode_field_within(
+                &rep("timeSamples"),
+                &bytes,
+                &sections,
+                &mut compact,
+                Some(tokens)
+            )
+            .err()
         );
     }
 

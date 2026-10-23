@@ -358,6 +358,7 @@ impl DeferredArraySource for LazyArray {
                     &self.pool.bytes,
                     &self.pool.sections,
                     &mut budget,
+                    None,
                 )
                 .map_err(|e| match e {
                     UsdcError::DecodeBudgetExceeded { limit } => {

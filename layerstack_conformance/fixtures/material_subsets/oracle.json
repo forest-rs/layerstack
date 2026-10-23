@@ -1,0 +1,233 @@
+{
+  "authoring": {
+    "calls": [
+      {
+        "accepted": true,
+        "call": "create red [0, 1]",
+        "result": {
+          "family_type": "nonOverlapping",
+          "indices": [
+            0,
+            1
+          ],
+          "path": "/M/red"
+        }
+      },
+      {
+        "accepted": true,
+        "call": "create red [2]",
+        "result": {
+          "family_type": "nonOverlapping",
+          "indices": [
+            2
+          ],
+          "path": "/M/red"
+        }
+      },
+      {
+        "accepted": false,
+        "call": "set unrestricted",
+        "result": null
+      },
+      {
+        "accepted": true,
+        "call": "set partition",
+        "result": {
+          "family_type": "partition"
+        }
+      },
+      {
+        "accepted": true,
+        "call": "create blue [3]",
+        "result": {
+          "family_type": "partition",
+          "indices": [
+            3
+          ],
+          "path": "/M/blue"
+        }
+      },
+      {
+        "accepted": true,
+        "call": "create green [0]",
+        "result": {
+          "family_type": "nonOverlapping",
+          "indices": [
+            0
+          ],
+          "path": "/M/green"
+        }
+      },
+      {
+        "accepted": true,
+        "call": "set nonOverlapping",
+        "result": {
+          "family_type": "nonOverlapping"
+        }
+      }
+    ],
+    "family_custom": false,
+    "family_variability": "Sdf.VariabilityUniform",
+    "subset_specifier": "Sdf.SpecifierDef",
+    "subset_type": "GeomSubset",
+    "subsets": [
+      "/M/red",
+      "/M/blue",
+      "/M/green"
+    ]
+  },
+  "meshes": {
+    "/Empty": {
+      "fallback": "/Looks/Blue",
+      "family_type": "unrestricted",
+      "members": [],
+      "subsets": [],
+      "valid": false
+    },
+    "/MistypedFamily": {
+      "fallback": null,
+      "family_type": "unrestricted",
+      "members": [
+        "/MistypedFamily/a",
+        "/MistypedFamily/b"
+      ],
+      "subsets": [
+        {
+          "indices": [
+            0
+          ],
+          "material": "/Looks/Red",
+          "path": "/MistypedFamily/a"
+        },
+        {
+          "indices": [
+            0
+          ],
+          "material": null,
+          "path": "/MistypedFamily/b"
+        }
+      ],
+      "valid": true
+    },
+    "/Mixed": {
+      "fallback": null,
+      "family_type": "nonOverlapping",
+      "members": [
+        "/Mixed/faces",
+        "/Mixed/points"
+      ],
+      "subsets": [
+        {
+          "indices": [
+            1
+          ],
+          "material": "/Looks/Red",
+          "path": "/Mixed/faces"
+        }
+      ],
+      "valid": false
+    },
+    "/OutOfRange": {
+      "fallback": null,
+      "family_type": "partition",
+      "members": [
+        "/OutOfRange/a"
+      ],
+      "subsets": [
+        {
+          "indices": [
+            0,
+            5
+          ],
+          "material": "/Looks/Red",
+          "path": "/OutOfRange/a"
+        }
+      ],
+      "valid": false
+    },
+    "/Overlapping": {
+      "fallback": "/Looks/Base",
+      "family_type": "nonOverlapping",
+      "members": [
+        "/Overlapping/a",
+        "/Overlapping/b"
+      ],
+      "subsets": [
+        {
+          "indices": [
+            0
+          ],
+          "material": "/Looks/Red",
+          "path": "/Overlapping/a"
+        },
+        {
+          "indices": [
+            0,
+            1
+          ],
+          "material": "/Looks/Blue",
+          "path": "/Overlapping/b"
+        }
+      ],
+      "valid": false
+    },
+    "/Unindexed": {
+      "fallback": null,
+      "family_type": "nonOverlapping",
+      "members": [
+        "/Unindexed/a"
+      ],
+      "subsets": [
+        {
+          "indices": [],
+          "material": "/Looks/Red",
+          "path": "/Unindexed/a"
+        }
+      ],
+      "valid": false
+    },
+    "/Untyped": {
+      "fallback": "/Looks/Base",
+      "family_type": "unrestricted",
+      "members": [
+        "/Untyped/a"
+      ],
+      "subsets": [
+        {
+          "indices": [
+            0
+          ],
+          "material": "/Looks/Red",
+          "path": "/Untyped/a"
+        }
+      ],
+      "valid": true
+    },
+    "/Valid": {
+      "fallback": "/Looks/Base",
+      "family_type": "partition",
+      "members": [
+        "/Valid/a",
+        "/Valid/b"
+      ],
+      "subsets": [
+        {
+          "indices": [
+            0
+          ],
+          "material": "/Looks/Red",
+          "path": "/Valid/a"
+        },
+        {
+          "indices": [
+            1
+          ],
+          "material": "/Looks/Base",
+          "path": "/Valid/b"
+        }
+      ],
+      "valid": true
+    }
+  },
+  "openusd_version": "26.8"
+}

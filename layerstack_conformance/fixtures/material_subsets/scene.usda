@@ -1,0 +1,166 @@
+#usda 1.0
+
+def Scope "Looks"
+{
+    def Material "Base" {}
+    def Material "Red" {}
+    def Material "Blue" {}
+}
+
+def Mesh "Untyped" (prepend apiSchemas = ["MaterialBindingAPI"])
+{
+    int[] faceVertexCounts = [3, 3]
+    int[] faceVertexIndices = [0, 1, 2, 0, 2, 3]
+    point3f[] points = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)]
+    rel material:binding = </Looks/Base>
+
+    def GeomSubset "a" (prepend apiSchemas = ["MaterialBindingAPI"])
+    {
+        uniform token elementType = "face"
+        uniform token familyName = "materialBind"
+        int[] indices = [0]
+        rel material:binding = </Looks/Red>
+    }
+}
+
+def Mesh "Overlapping" (prepend apiSchemas = ["MaterialBindingAPI"])
+{
+    int[] faceVertexCounts = [3, 3]
+    int[] faceVertexIndices = [0, 1, 2, 0, 2, 3]
+    point3f[] points = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)]
+    uniform token subsetFamily:materialBind:familyType = "nonOverlapping"
+    rel material:binding = </Looks/Base>
+
+    def GeomSubset "a" (prepend apiSchemas = ["MaterialBindingAPI"])
+    {
+        uniform token elementType = "face"
+        uniform token familyName = "materialBind"
+        int[] indices = [0]
+        rel material:binding = </Looks/Red>
+    }
+
+    def GeomSubset "b" (prepend apiSchemas = ["MaterialBindingAPI"])
+    {
+        uniform token elementType = "face"
+        uniform token familyName = "materialBind"
+        int[] indices = [0, 1]
+        rel material:binding = </Looks/Blue>
+    }
+}
+
+def Mesh "OutOfRange" (prepend apiSchemas = ["MaterialBindingAPI"])
+{
+    int[] faceVertexCounts = [3, 3]
+    int[] faceVertexIndices = [0, 1, 2, 0, 2, 3]
+    point3f[] points = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)]
+    uniform token subsetFamily:materialBind:familyType = "partition"
+
+    def GeomSubset "a" (prepend apiSchemas = ["MaterialBindingAPI"])
+    {
+        uniform token elementType = "face"
+        uniform token familyName = "materialBind"
+        int[] indices = [0, 5]
+        rel material:binding = </Looks/Red>
+    }
+}
+
+def Mesh "Mixed" (prepend apiSchemas = ["MaterialBindingAPI"])
+{
+    int[] faceVertexCounts = [3, 3]
+    int[] faceVertexIndices = [0, 1, 2, 0, 2, 3]
+    point3f[] points = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)]
+    uniform token subsetFamily:materialBind:familyType = "nonOverlapping"
+
+    def GeomSubset "faces" (prepend apiSchemas = ["MaterialBindingAPI"])
+    {
+        uniform token familyName = "materialBind"
+        int[] indices = [1]
+        rel material:binding = </Looks/Red>
+    }
+
+    def GeomSubset "points" (prepend apiSchemas = ["MaterialBindingAPI"])
+    {
+        uniform token elementType = "point"
+        uniform token familyName = "materialBind"
+        int[] indices = [0]
+        rel material:binding = </Looks/Blue>
+    }
+
+    def GeomSubset "other" (prepend apiSchemas = ["MaterialBindingAPI"])
+    {
+        uniform token elementType = "face"
+        uniform token familyName = "uvSets"
+        int[] indices = [0]
+        rel material:binding = </Looks/Blue>
+    }
+}
+
+def Mesh "Unindexed" (prepend apiSchemas = ["MaterialBindingAPI"])
+{
+    int[] faceVertexCounts = [3, 3]
+    int[] faceVertexIndices = [0, 1, 2, 0, 2, 3]
+    point3f[] points = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)]
+    uniform token subsetFamily:materialBind:familyType = "nonOverlapping"
+
+    def GeomSubset "a" (prepend apiSchemas = ["MaterialBindingAPI"])
+    {
+        uniform token elementType = "face"
+        uniform token familyName = "materialBind"
+        rel material:binding = </Looks/Red>
+    }
+}
+
+def Mesh "MistypedFamily" (prepend apiSchemas = ["MaterialBindingAPI"])
+{
+    int[] faceVertexCounts = [3, 3]
+    int[] faceVertexIndices = [0, 1, 2, 0, 2, 3]
+    point3f[] points = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)]
+    uniform int subsetFamily:materialBind:familyType = 1
+
+    def GeomSubset "a" (prepend apiSchemas = ["MaterialBindingAPI"])
+    {
+        uniform token elementType = "face"
+        uniform token familyName = "materialBind"
+        int[] indices = [0]
+        rel material:binding = </Looks/Red>
+    }
+
+    def GeomSubset "b" (prepend apiSchemas = ["MaterialBindingAPI"])
+    {
+        uniform token elementType = "face"
+        uniform token familyName = "materialBind"
+        int[] indices = [0]
+    }
+}
+
+def Mesh "Valid" (prepend apiSchemas = ["MaterialBindingAPI"])
+{
+    int[] faceVertexCounts = [3, 3]
+    int[] faceVertexIndices = [0, 1, 2, 0, 2, 3]
+    point3f[] points = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)]
+    uniform token subsetFamily:materialBind:familyType = "partition"
+    rel material:binding = </Looks/Base>
+
+    def GeomSubset "a" (prepend apiSchemas = ["MaterialBindingAPI"])
+    {
+        uniform token elementType = "face"
+        uniform token familyName = "materialBind"
+        int[] indices = [0]
+        rel material:binding = </Looks/Red>
+    }
+
+    def GeomSubset "b"
+    {
+        uniform token elementType = "face"
+        uniform token familyName = "materialBind"
+        int[] indices = [1]
+    }
+}
+
+def Mesh "Empty" (prepend apiSchemas = ["MaterialBindingAPI"])
+{
+    int[] faceVertexCounts = [3, 3]
+    int[] faceVertexIndices = [0, 1, 2, 0, 2, 3]
+    point3f[] points = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)]
+    rel material:binding = </Looks/Blue>
+}

@@ -884,7 +884,7 @@ fn removing_native_representative_retains_surviving_geometry_and_retargets_links
 }
 
 #[test]
-fn face_subsets_refresh_material_components_and_invalid_family_is_atomic() {
+fn face_subsets_refresh_material_components_and_report_invalid_families() {
     use crate::usd_geom::{GeomSubset, GeomSubsetElementType};
     let (mut store, mut live, mesh, _) = fixture();
     let mut observer = SceneObserver::default();
@@ -931,21 +931,30 @@ fn face_subsets_refresh_material_components_and_invalid_family_is_atomic() {
             .any(|c| c.components.materials && !c.components.geometry)
     );
     assert!(Arc::ptr_eq(record.mesh.as_ref().unwrap(), &geometry));
-    let old_materials = record.materials.clone();
-    let revision = observer.revision();
     let mut edit = SchemaEdit::new(live.stage(), &mut store, target);
     face.set_indices(&mut edit, &[2]);
     let transaction = edit.finish();
     live.apply(&mut store, &transaction).unwrap();
-    assert!(matches!(
-        observer.update(&mut live, &mut store, Time::Default),
-        Err(SceneError::Materials { .. })
-    ));
-    assert_eq!(observer.revision(), revision);
-    assert!(Arc::ptr_eq(
-        &observer.record_at(mesh).unwrap().materials,
-        &old_materials
-    ));
+    // An index past the mesh's faces is reported, and the subset still
+    // reads, as C++ renders it.
+    observer
+        .update(&mut live, &mut store, Time::Default)
+        .unwrap();
+    let family = observer
+        .record_at(mesh)
+        .unwrap()
+        .materials
+        .subsets
+        .clone()
+        .unwrap();
+    assert_eq!(*family.subsets[0].indices, [2]);
+    assert!(
+        family
+            .validation
+            .problems
+            .iter()
+            .any(|problem| { problem.kind == crate::subset::SubsetProblemKind::InvalidIndex(2) })
+    );
 }
 
 #[test]

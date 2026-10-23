@@ -85,21 +85,29 @@ fn material_subsets_report_family_overlap_bounds_and_coverage() {
         let (store, live) = support::scene(&text(family, index, ""));
         let path = store.path("/M");
         let mut cache = BindingCache::new(MaterialPurpose::All, BindingOptions::default());
-        let Err(MaterialSubsetError::InvalidFamily(problems)) =
-            cache.material_binding_subsets(&Scene::new(live.stage(), &store), path, Time::Default)
-        else {
-            panic!("invalid family");
-        };
-        assert!(problems.problems.iter().any(|p| p.kind == expected));
+        let family = cache
+            .material_binding_subsets(&Scene::new(live.stage(), &store), path, Time::Default)
+            .expect("an invalid family still reads");
+        assert_eq!(family.subsets.len(), 2, "problems never remove subsets");
+        assert!(
+            family
+                .validation
+                .problems
+                .iter()
+                .any(|p| p.kind == expected)
+        );
     }
-    let (store, live) = support::scene(&text("unrestricted", "1", ""));
+    let (store, live) = support::scene(&text("unrestricted", "0", ""));
     let path = store.path("/M");
     let mut cache = BindingCache::new(MaterialPurpose::All, BindingOptions::default());
-    assert_eq!(
-        cache.material_binding_subsets(&Scene::new(live.stage(), &store), path, Time::Default),
-        Err(MaterialSubsetError::InvalidFamilyType(
-            "unrestricted".into()
-        ))
+    let family = cache
+        .material_binding_subsets(&Scene::new(live.stage(), &store), path, Time::Default)
+        .unwrap();
+    assert_eq!(family.family_type, "unrestricted");
+    assert_eq!(family.subsets.len(), 2);
+    assert!(
+        family.validation.is_valid(),
+        "an unrestricted family may overlap"
     );
 }
 #[test]
@@ -115,12 +123,15 @@ fn material_subsets_validate_only_requested_time_and_allow_parent_only_meshes() 
     assert!(
         cache
             .material_binding_subsets(&scene, path, Time::held(1.))
-            .is_ok()
+            .unwrap()
+            .validation
+            .is_valid()
     );
-    assert!(matches!(
-        cache.material_binding_subsets(&scene, path, Time::held(2.)),
-        Err(MaterialSubsetError::InvalidFamily(_))
-    ));
+    let overlapping = cache
+        .material_binding_subsets(&scene, path, Time::held(2.))
+        .unwrap();
+    assert_eq!(*overlapping.subsets[1].indices, [0]);
+    assert!(!overlapping.validation.is_valid());
     let (store, live) = support::scene(
         "#usda 1.0\ndef Material \"A\" {}\ndef Mesh \"M\" { rel material:binding = </A> }",
     );
@@ -276,38 +287,49 @@ fn material_subsets_preserve_decode_failure_paths() {
 }
 
 #[test]
-fn material_subsets_reject_unauthored_unrestricted_families_and_nonface_members() {
-    for (case, source) in [
-        text("nonOverlapping", "1", "").replace(
-            "uniform token subsetFamily:materialBind:familyType = \"nonOverlapping\"",
-            "",
-        ),
-        text("nonOverlapping", "1", "").replace(
-            "uniform token elementType = \"face\"",
-            "uniform token elementType = \"point\"",
-        ),
-    ]
-    .into_iter()
-    .enumerate()
-    {
-        let (store, live) = support::scene(&source);
-        let path = store.path("/M");
-        let mut cache = BindingCache::new(MaterialPurpose::All, BindingOptions::default());
-        let error = cache
-            .material_binding_subsets(&Scene::new(live.stage(), &store), path, Time::Default)
-            .unwrap_err();
-        if case == 0 {
-            assert_eq!(
-                error,
-                MaterialSubsetError::InvalidFamilyType("unrestricted".into())
-            );
-        } else {
-            assert_eq!(
-                error,
-                MaterialSubsetError::InvalidElementType(store.path("/M/a"))
-            );
-        }
-    }
+fn material_subsets_read_untyped_families_and_report_nonface_members() {
+    // C++ `GetMaterialBindSubsets` returns an untyped family's members, and
+    // `ComputeBoundMaterial` binds them; `ValidateFamily` calls it valid.
+    let untyped = text("nonOverlapping", "1", "").replace(
+        "uniform token subsetFamily:materialBind:familyType = \"nonOverlapping\"",
+        "",
+    );
+    let (store, live) = support::scene(&untyped);
+    let path = store.path("/M");
+    let mut cache = BindingCache::new(MaterialPurpose::All, BindingOptions::default());
+    let family = cache
+        .material_binding_subsets(&Scene::new(live.stage(), &store), path, Time::Default)
+        .unwrap();
+    assert_eq!(family.family_type, "unrestricted");
+    assert_eq!(family.subsets.len(), 2);
+    assert_eq!(family.subsets[0].material.material, Some(store.path("/B")));
+    assert!(family.validation.is_valid());
+    // A point member is not a face set: the renderer leaves it out, and
+    // validation reports the mismatch.
+    let mixed = text("nonOverlapping", "1", "").replacen(
+        "uniform token elementType = \"face\"",
+        "uniform token elementType = \"point\"",
+        1,
+    );
+    let (store, live) = support::scene(&mixed);
+    let path = store.path("/M");
+    let mut cache = BindingCache::new(MaterialPurpose::All, BindingOptions::default());
+    let family = cache
+        .material_binding_subsets(&Scene::new(live.stage(), &store), path, Time::Default)
+        .unwrap();
+    assert_eq!(
+        family
+            .subsets
+            .iter()
+            .map(|subset| subset.path)
+            .collect::<Vec<_>>(),
+        [store.path("/M/b")]
+    );
+    assert_eq!(
+        family.validation.problems[0].kind,
+        SubsetProblemKind::ElementTypeMismatch
+    );
+    assert_eq!(family.validation.problems[0].path, store.path("/M/a"));
 }
 
 #[test]
@@ -318,15 +340,75 @@ fn snapshot_subset_diagnostics_report_requested_time_for_empty_indices() {
     let path = store.path("/M");
     let time = Time::held(7.);
     let mut cache = BindingCache::new(MaterialPurpose::All, BindingOptions::default());
-    let Err(MaterialSubsetError::InvalidFamily(validation)) =
-        cache.material_binding_subsets(&Scene::new(live.stage(), &store), path, time)
-    else {
-        panic!("empty family is invalid")
-    };
-    let problem = validation
+    let family = cache
+        .material_binding_subsets(&Scene::new(live.stage(), &store), path, time)
+        .unwrap();
+    let problem = family
+        .validation
         .problems
         .iter()
         .find(|p| p.kind == SubsetProblemKind::NoIndices)
         .unwrap();
     assert_eq!(problem.time, time);
+}
+
+const ORACLE: &str = include_str!("../fixtures/material_subsets/oracle.json");
+const SCENE: &str = include_str!("../fixtures/material_subsets/scene.usda");
+
+/// `fixtures/material_subsets/scene.usda` read as OpenUSD 26.08 reads it
+/// (`scripts/material_subsets_oracle.py`): every face member of the family
+/// with readable indices, bound whether or not the family validates, with
+/// `ValidateFamily` beside it. Untyped, overlapping, out-of-range, mixed,
+/// unindexed and mistyped families all read.
+#[test]
+fn material_subsets_read_as_openusd_renders_them() {
+    let oracle: serde_json::Value = serde_json::from_str(ORACLE).unwrap();
+    assert_eq!(
+        oracle["openusd_version"],
+        layerstack_schemas::OPENUSD_VERSION
+    );
+    let (store, live) = support::scene(SCENE);
+    let scene = Scene::new(live.stage(), &store);
+    let display = |path| store.paths.display(path, &store.tokens).to_string();
+    let mut cache = BindingCache::new(MaterialPurpose::All, BindingOptions::default());
+    let meshes = oracle["meshes"].as_object().unwrap();
+    assert_eq!(meshes.len(), 8);
+    for (mesh, expected) in meshes {
+        let family = cache
+            .material_binding_subsets(&scene, store.path(mesh), Time::Default)
+            .unwrap_or_else(|error| panic!("{mesh}: {error}"));
+        assert_eq!(family.family_type, expected["family_type"], "{mesh}");
+        let material = |bound: &layerstack_schemas::BoundMaterial| {
+            serde_json::to_value(bound.material.map(display)).unwrap()
+        };
+        assert_eq!(material(&family.fallback), expected["fallback"], "{mesh}");
+        let subsets: Vec<_> = family
+            .subsets
+            .iter()
+            .map(|subset| {
+                serde_json::json!({
+                    "path": display(subset.path),
+                    "indices": *subset.indices,
+                    "material": material(&subset.material),
+                })
+            })
+            .collect();
+        assert_eq!(
+            serde_json::Value::from(subsets),
+            expected["subsets"],
+            "{mesh}"
+        );
+        // A family without members has nothing to validate; C++ reports it
+        // invalid for having no indices.
+        if !expected["members"].as_array().unwrap().is_empty() {
+            assert_eq!(
+                family.validation.is_valid(),
+                expected["valid"],
+                "{mesh}: {:?}",
+                family.validation
+            );
+        } else {
+            assert!(family.validation.is_valid());
+        }
+    }
 }

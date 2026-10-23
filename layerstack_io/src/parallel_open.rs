@@ -45,13 +45,14 @@ struct Task {
 }
 
 /// One arc a layer resolved while it was read, in the order it asked.
+#[derive(Clone)]
 enum Call {
     /// The asset path did not identify a source.
     Failed { asset: String, error: IoError },
     /// The asset path identified the source `identifier`.
     Target {
         asset: String,
-        identifier: String,
+        identifier: Arc<str>,
         provisional: LayerId,
     },
 }
@@ -158,6 +159,7 @@ impl<B: Storage> Shared<'_, B> {
             shared: self,
             anchor: &task.identifier,
             calls: Vec::new(),
+            asked: HashMap::new(),
             added,
             package: false,
         };
@@ -192,19 +194,18 @@ struct TaskResolver<'s, 'a, B> {
     /// The identifier of the source being read, which its arcs anchor to.
     anchor: &'s str,
     calls: Vec<Call>,
+    /// The first of `calls` for each asset path asked: a layer that names
+    /// one asset many times, as a scene's root names each asset it places,
+    /// resolves it once.
+    asked: HashMap<String, usize>,
     added: &'s mut Vec<Task>,
     /// Whether an arc reached into a package.
     package: bool,
 }
 
-impl<B: Storage> AssetResolver for TaskResolver<'_, '_, B> {
-    fn resolve(
-        &mut self,
-        asset: &str,
-        _anchor: Option<LayerId>,
-        _tokens: &TokenInterner,
-        _paths: &PathInterner,
-    ) -> Result<ResolvedAsset, AssetResolveError> {
+impl<B: Storage> TaskResolver<'_, '_, B> {
+    /// Resolves an asset path this layer has not asked for yet.
+    fn resolve_new(&mut self, asset: &str) -> Result<ResolvedAsset, AssetResolveError> {
         let failed = |calls: &mut Vec<Call>, error: IoError| {
             calls.push(Call::Failed {
                 asset: String::from(asset),
@@ -233,16 +234,51 @@ impl<B: Storage> AssetResolver for TaskResolver<'_, '_, B> {
         };
         let identifier = source_identifier(self.shared.formats, &path, &outer, args);
         let provisional = self.shared.source(&identifier, self.added);
+        let identifier: Arc<str> = Arc::from(identifier);
         self.calls.push(Call::Target {
             asset: String::from(asset),
-            identifier: identifier.clone(),
+            identifier: Arc::clone(&identifier),
             provisional,
         });
         Ok(ResolvedAsset {
             layer_id: provisional,
-            resolved_path: Arc::from(identifier),
+            resolved_path: identifier,
             layer: None,
         })
+    }
+}
+
+impl<B: Storage> AssetResolver for TaskResolver<'_, '_, B> {
+    fn resolve(
+        &mut self,
+        asset: &str,
+        _anchor: Option<LayerId>,
+        _tokens: &TokenInterner,
+        _paths: &PathInterner,
+    ) -> Result<ResolvedAsset, AssetResolveError> {
+        if let Some(&first) = self.asked.get(asset) {
+            // The same asset resolves as it did, and is recorded again.
+            let call = self.calls[first].clone();
+            let result = match &call {
+                Call::Failed { error, .. } => Err(asset_error(error.clone())),
+                Call::Target {
+                    identifier,
+                    provisional,
+                    ..
+                } => Ok(ResolvedAsset {
+                    layer_id: *provisional,
+                    resolved_path: Arc::clone(identifier),
+                    layer: None,
+                }),
+            };
+            self.calls.push(call);
+            return result;
+        }
+        let result = self.resolve_new(asset);
+        if !self.package {
+            self.asked.insert(String::from(asset), self.calls.len() - 1);
+        }
+        result
     }
 
     fn resolved_path(&self, _: LayerId) -> Option<&str> {

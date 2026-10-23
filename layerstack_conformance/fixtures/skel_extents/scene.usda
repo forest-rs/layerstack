@@ -1,0 +1,232 @@
+#usda 1.0
+(
+    startTimeCode = 0
+    endTimeCode = 1
+)
+
+def Xform "World"
+{
+    def SkelRoot "Root"
+    {
+        def Skeleton "Skel" (
+            prepend apiSchemas = ["SkelBindingAPI"]
+        )
+        {
+            uniform token[] joints = ["A", "A/B"]
+            uniform matrix4d[] bindTransforms = [( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1) ), ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 2, 0, 1) )]
+            uniform matrix4d[] restTransforms = [( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1) ), ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 2, 0, 1) )]
+            rel skel:animationSource = </World/Root/Skel/Anim>
+            double3 xformOp:translate = (0, 0, 3)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+
+            def SkelAnimation "Anim"
+            {
+                uniform token[] joints = ["A", "A/B"]
+                float3[] translations.timeSamples = {
+                    0: [(0, 0, 0), (0, 2, 0)],
+                    1: [(1, 0, 0), (0, 4, 0)],
+                }
+                quatf[] rotations = [(1, 0, 0, 0), (1, 0, 0, 0)]
+                half3[] scales = [(1, 1, 1), (1, 1, 1)]
+            }
+        }
+
+        def Mesh "Mesh" (
+            prepend apiSchemas = ["SkelBindingAPI"]
+        )
+        {
+            int[] faceVertexIndices = [0, 1, 2]
+            int[] faceVertexCounts = [3]
+            point3f[] points = [(-1, 0, 0), (1, 0, 0), (0, 3, 0)]
+            float3[] extent = [(-1, 0, 0), (1, 3, 0)]
+            int[] primvars:skel:jointIndices = [0, 1, 1] (
+                interpolation = "vertex"
+                elementSize = 1
+            )
+            float[] primvars:skel:jointWeights = [1, 1, 1] (
+                interpolation = "vertex"
+                elementSize = 1
+            )
+            rel skel:skeleton = </World/Root/Skel>
+        }
+    }
+
+    def SkelRoot "Animated"
+    {
+        def Skeleton "Skel" (
+            prepend apiSchemas = ["SkelBindingAPI"]
+        )
+        {
+            uniform token[] joints = ["A", "A/B"]
+            uniform matrix4d[] bindTransforms = [( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1) ), ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 2, 0, 1) )]
+            uniform matrix4d[] restTransforms = [( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1) ), ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 2, 0, 1) )]
+            rel skel:animationSource = </World/Animated/Skel/Anim>
+            double3 xformOp:translate = (0, 0, 3)
+            double3 xformOp:translate.timeSamples = {0: (0, 0, 5), 1: (0, 0, 10)}
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+
+            def SkelAnimation "Anim"
+            {
+                uniform token[] joints = ["A", "A/B"]
+                float3[] translations.timeSamples = {
+                    0: [(0, 0, 0), (0, 2, 0)],
+                    1: [(1, 0, 0), (0, 4, 0)],
+                }
+                quatf[] rotations = [(1, 0, 0, 0), (1, 0, 0, 0)]
+                half3[] scales = [(1, 1, 1), (1, 1, 1)]
+            }
+        }
+
+        def Mesh "Mesh" (
+            prepend apiSchemas = ["SkelBindingAPI"]
+        )
+        {
+            int[] faceVertexIndices = [0, 1, 2]
+            int[] faceVertexCounts = [3]
+            point3f[] points = [(-1, 0, 0), (1, 0, 0), (0, 3, 0)]
+            float3[] extent = [(-1, 0, 0), (1, 3, 0)]
+            int[] primvars:skel:jointIndices = [0, 1, 1] (
+                interpolation = "vertex"
+                elementSize = 1
+            )
+            float[] primvars:skel:jointWeights = [1, 1, 1] (
+                interpolation = "vertex"
+                elementSize = 1
+            )
+            rel skel:skeleton = </World/Animated/Skel>
+        }
+    }
+
+    def SkelRoot "Sampled"
+    {
+        def Skeleton "Skel" (
+            prepend apiSchemas = ["SkelBindingAPI"]
+        )
+        {
+            uniform token[] joints = ["A", "A/B"]
+            uniform matrix4d[] bindTransforms = [( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1) ), ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 2, 0, 1) )]
+            uniform matrix4d[] restTransforms = [( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1) ), ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 2, 0, 1) )]
+            rel skel:animationSource = </World/Sampled/Skel/Anim>
+            double3 xformOp:translate.timeSamples = {0: (0, 0, 5), 1: (0, 0, 10)}
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+
+            def SkelAnimation "Anim"
+            {
+                uniform token[] joints = ["A", "A/B"]
+                float3[] translations.timeSamples = {
+                    0: [(0, 0, 0), (0, 2, 0)],
+                    1: [(1, 0, 0), (0, 4, 0)],
+                }
+                quatf[] rotations = [(1, 0, 0, 0), (1, 0, 0, 0)]
+                half3[] scales = [(1, 1, 1), (1, 1, 1)]
+            }
+        }
+
+        def Mesh "Mesh" (
+            prepend apiSchemas = ["SkelBindingAPI"]
+        )
+        {
+            int[] faceVertexIndices = [0, 1, 2]
+            int[] faceVertexCounts = [3]
+            point3f[] points = [(-1, 0, 0), (1, 0, 0), (0, 3, 0)]
+            float3[] extent = [(-1, 0, 0), (1, 3, 0)]
+            int[] primvars:skel:jointIndices = [0, 1, 1] (
+                interpolation = "vertex"
+                elementSize = 1
+            )
+            float[] primvars:skel:jointWeights = [1, 1, 1] (
+                interpolation = "vertex"
+                elementSize = 1
+            )
+            rel skel:skeleton = </World/Sampled/Skel>
+        }
+    }
+
+    def SkelRoot "Bound"
+    {
+        def Skeleton "Skel" (
+            prepend apiSchemas = ["SkelBindingAPI"]
+        )
+        {
+            uniform token[] joints = ["A", "A/B"]
+            uniform matrix4d[] bindTransforms = [( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1) ), ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 2, 0, 1) )]
+            uniform matrix4d[] restTransforms = [( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1) ), ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 2, 0, 1) )]
+            rel skel:animationSource = </World/Bound/Skel/Anim>
+            double3 xformOp:translate = (0, 0, 3)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+
+            def SkelAnimation "Anim"
+            {
+                uniform token[] joints = ["A", "A/B"]
+                float3[] translations.timeSamples = {
+                    0: [(0, 0, 0), (0, 2, 0)],
+                    1: [(1, 0, 0), (0, 4, 0)],
+                }
+                quatf[] rotations = [(1, 0, 0, 0), (1, 0, 0, 0)]
+                half3[] scales = [(1, 1, 1), (1, 1, 1)]
+            }
+        }
+
+        def Mesh "Mesh" (
+            prepend apiSchemas = ["SkelBindingAPI"]
+        )
+        {
+            int[] faceVertexIndices = [0, 1, 2]
+            int[] faceVertexCounts = [3]
+            point3f[] points = [(-1, 0, 0), (1, 0, 0), (0, 3, 0)]
+            float3[] extent = [(-1, 0, 0), (1, 3, 0)]
+            int[] primvars:skel:jointIndices = [0, 1, 1] (
+                interpolation = "vertex"
+                elementSize = 1
+            )
+            float[] primvars:skel:jointWeights = [1, 1, 1] (
+                interpolation = "vertex"
+                elementSize = 1
+            )
+            rel skel:skeleton = </World/Bound/Skel>
+            matrix4d primvars:skel:geomBindTransform = ( (2, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (5, 0, 0, 1) )
+        }
+    }
+
+
+    def SkelRoot "Unbound"
+    {
+        double3 xformOp:translate = (10, 0, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+
+        def Xform "Rig"
+        {
+            double3 xformOp:translate = (0, 1, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+
+            def Skeleton "Skel"
+            {
+                uniform token[] joints = ["A", "A/B"]
+                uniform matrix4d[] restTransforms = [( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1) ), ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 2, 0, 1) )]
+            }
+        }
+    }
+
+    def Xform "Broken"
+    {
+        def Skeleton "Skel"
+        {
+            uniform token[] joints = ["A", "A/B"]
+            uniform matrix4d[] restTransforms = [( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1) )]
+        }
+
+        def Cube "Box"
+        {
+            double size = 2
+        }
+    }
+    def Xform "Loose"
+    {
+        def Skeleton "Skel"
+        {
+            uniform token[] joints = ["A", "A/B"]
+            uniform matrix4d[] bindTransforms = [( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1) ), ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 2, 0, 1) )]
+            uniform matrix4d[] restTransforms = [( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1) ), ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 2, 0, 1) )]
+        }
+    }
+}

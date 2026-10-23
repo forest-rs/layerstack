@@ -920,6 +920,41 @@ impl BoundsCache {
             }
             return Ok(Some((range, varying)));
         }
+        #[cfg(feature = "usd-skel")]
+        {
+            // UsdSkel's extent plugins: posed joint pivots, which depend on
+            // animation and bindings outside the prim's own properties.
+            type Compute = fn(
+                &mut crate::extent::ExtentContext<'_>,
+            ) -> Result<Range3d, crate::extent::ExtentError>;
+            let compute: Option<(&str, Compute)> = if scene.is_a(path, "Skeleton") {
+                Some(("Skeleton", crate::skel::extent::skeleton))
+            } else if scene.is_a(path, "SkelRoot") {
+                Some(("SkelRoot", crate::skel::extent::skel_root))
+            } else {
+                None
+            };
+            if let Some((schema, compute)) = compute {
+                let schema = scene
+                    .store()
+                    .tokens()
+                    .lookup(schema)
+                    .expect("a registered schema name");
+                let mut context = crate::extent::ExtentContext::new(
+                    *scene,
+                    path,
+                    self.time,
+                    schema,
+                    self.extent_revision,
+                );
+                let result = compute(&mut context);
+                context.dependencies.time_varying |=
+                    PrimView::new(*scene, path).property_might_vary("extent");
+                let varying = context.dependencies.time_varying;
+                self.extent_dependencies.insert(path, context.dependencies);
+                return result.map(|range| Some((range, varying))).map_err(failure);
+            }
+        }
         self.extent_dependencies.remove(&path);
         crate::extent::checked_compute(scene, path, self.time).map_err(failure)
     }

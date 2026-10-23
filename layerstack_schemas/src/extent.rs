@@ -32,6 +32,7 @@ pub(crate) fn has_builtin(schema: &str) -> bool {
             schema,
             "SphereLight" | "CylinderLight" | "DiskLight" | "RectLight" | "PortalLight"
         )
+        || cfg!(feature = "usd-skel") && matches!(schema, "Skeleton" | "SkelRoot")
 }
 
 fn decode_error(prim: &PrimView<'_>, name: &str, error: layerstack::ArrayReadError) -> ExtentError {

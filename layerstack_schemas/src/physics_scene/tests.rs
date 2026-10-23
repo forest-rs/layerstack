@@ -397,11 +397,15 @@ fn mesh_points_group_and_material_capture_are_owned_and_checked() {
         .unwrap()
         .set_density(&mut edit, 5.);
     #[cfg(feature = "usd-shade")]
-    edit.set_targets(
-        mesh,
-        "material:binding:physics",
-        &[TargetPath::Prim(material)],
-    );
+    {
+        // The parse reports a material only through an applied binding API.
+        crate::usd_shade::MaterialBindingApi::apply(&mut edit, mesh).unwrap();
+        edit.set_targets(
+            mesh,
+            "material:binding:physics",
+            &[TargetPath::Prim(material)],
+        );
+    }
     PhysicsCollisionGroup::define(&mut edit, group);
     CollectionApi::apply(&mut edit, group, "colliders")
         .unwrap()

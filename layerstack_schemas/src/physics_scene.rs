@@ -191,8 +191,10 @@ pub struct ShapeDescriptor {
     pub simulation_owners: Vec<TargetPath>,
     /// Authored pair exclusions.
     pub filtered_collisions: Vec<TargetPath>,
-    /// Physics-purpose materials, subset materials then mesh material.
-    /// `None` means `usd-shade` is disabled; an empty vector means no material.
+    /// Physics-purpose materials, subset materials then mesh material, from
+    /// the collider and face subsets that have `MaterialBindingAPI` applied,
+    /// as OpenUSD's parser requires. `None` means `usd-shade` is disabled; an
+    /// empty vector means no material.
     pub materials: Option<Vec<PathId>>,
     /// Captured collision groups that include this shape, directly or
     /// through a group merged into them.

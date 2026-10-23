@@ -9,17 +9,20 @@
           "collisions": [
             "/World/Body/Box",
             "/World/Body/Convex"
-          ]
+          ],
+          "mass": 3000.0
         },
         "/World/Other/Proto": {
           "collisions": [
             "/World/Other/Proto/Ball"
-          ]
+          ],
+          "mass": 1000.0
         },
         "/World/Spawner/Proto": {
           "collisions": [
             "/World/Spawner/Proto/Ball"
-          ]
+          ],
+          "mass": 1000.0
         }
       },
       "shapes": {
@@ -62,12 +65,14 @@
             "/World/Body/Box",
             "/World/Body/Convex",
             "/World/Body/Typed"
-          ]
+          ],
+          "mass": 3000.0
         },
         "/World/Other/Proto": {
           "collisions": [
             "/World/Other/Proto/Ball"
-          ]
+          ],
+          "mass": 1000.0
         }
       },
       "shapes": {
@@ -154,7 +159,8 @@
           "collisions": [
             "/World/Body/Ball",
             "/World/Body/Box"
-          ]
+          ],
+          "mass": 2000.0
         }
       },
       "shapes": {
@@ -186,6 +192,99 @@
           "kind": "cube",
           "materials": [],
           "rigid_body": null,
+          "token": null
+        }
+      }
+    },
+    "materials.usda": {
+      "collision_groups": {},
+      "joints": {},
+      "rigid_bodies": {
+        "/World/Bound": {
+          "collisions": [
+            "/World/Bound"
+          ],
+          "mass": 500.0
+        },
+        "/World/Faces": {
+          "collisions": [
+            "/World/Faces"
+          ],
+          "mass": 100.0
+        },
+        "/World/Group/Inherited": {
+          "collisions": [
+            "/World/Group/Inherited"
+          ],
+          "mass": 100.0
+        },
+        "/World/Group/InheritedLegacy": {
+          "collisions": [
+            "/World/Group/InheritedLegacy"
+          ],
+          "mass": 100.0
+        },
+        "/World/Legacy": {
+          "collisions": [
+            "/World/Legacy"
+          ],
+          "mass": 500.0
+        },
+        "/World/VisualOnly": {
+          "collisions": [
+            "/World/VisualOnly"
+          ],
+          "mass": 1000.0
+        }
+      },
+      "shapes": {
+        "/World/Bound": {
+          "collision_groups": [],
+          "kind": "sphere",
+          "materials": [
+            "/World/Looks/Dense"
+          ],
+          "rigid_body": "/World/Bound",
+          "token": null
+        },
+        "/World/Faces": {
+          "collision_groups": [],
+          "kind": "mesh",
+          "materials": [
+            "/World/Looks/Dense",
+            "/World/Looks/Light"
+          ],
+          "rigid_body": "/World/Faces",
+          "token": null
+        },
+        "/World/Group/Inherited": {
+          "collision_groups": [],
+          "kind": "sphere",
+          "materials": [
+            "/World/Looks/Light"
+          ],
+          "rigid_body": "/World/Group/Inherited",
+          "token": null
+        },
+        "/World/Group/InheritedLegacy": {
+          "collision_groups": [],
+          "kind": "sphere",
+          "materials": [],
+          "rigid_body": "/World/Group/InheritedLegacy",
+          "token": null
+        },
+        "/World/Legacy": {
+          "collision_groups": [],
+          "kind": "sphere",
+          "materials": [],
+          "rigid_body": "/World/Legacy",
+          "token": null
+        },
+        "/World/VisualOnly": {
+          "collision_groups": [],
+          "kind": "sphere",
+          "materials": [],
+          "rigid_body": "/World/VisualOnly",
           "token": null
         }
       }

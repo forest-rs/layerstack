@@ -13,8 +13,8 @@ use std::sync::Barrier;
 use layerstack::edit::{Address, Transaction};
 use layerstack::{
     ArrayReadError, AssetResolveError, AssetResolver, FromValue, InMemoryStore, Layer, LayerId,
-    PathInterner, PropertyPath, ResolvedAsset, Stage, StageOptions, Time, TokenId, TokenInterner,
-    TypedArray, Value,
+    PathInterner, PrimSpec, PropertyPath, PropertySpec, PropertyType, ResolvedAsset, Stage,
+    StageOptions, SublayerEntry, Time, TokenId, TokenInterner, TypedArray, Value,
 };
 use layerstack_conformance::library_scene::{LibraryFormat, LibraryScene, LibraryShape};
 use layerstack_usdc::writer::{Spec, SpecForm, Specifier, Value as W, write_crate};
@@ -191,7 +191,7 @@ fn same(a: Option<&Value>, b: Option<&Value>) -> bool {
 /// field, agree between the two reads, in value and representation.
 fn assert_reads_agree(name: &str, eager: &Layer, lazy: &Layer) {
     assert!(eager == lazy, "{name}: the layers differ");
-    fn prims(layer: &Layer) -> Vec<(layerstack::PathId, &[layerstack::PrimSpec])> {
+    fn prims(layer: &Layer) -> Vec<(layerstack::PathId, &[PrimSpec])> {
         let mut prims: Vec<_> = layer
             .prims()
             .iter()
@@ -222,7 +222,7 @@ fn assert_reads_agree(name: &str, eager: &Layer, lazy: &Layer) {
                     same(e.spec.default.as_ref(), l.spec.default.as_ref()),
                     "{at}: default"
                 );
-                let samples = |spec: &layerstack::PropertySpec| spec.time_samples.clone();
+                let samples = |spec: &PropertySpec| spec.time_samples.clone();
                 match (samples(&e.spec), samples(&l.spec)) {
                     (Some(a), Some(b)) => {
                         assert_eq!(a.len(), b.len(), "{at}: samples");
@@ -585,4 +585,94 @@ fn a_retained_text_array_that_does_not_decode_is_an_error_when_read() {
     assert!(attribute.try_get(Time::Default).is_err());
     let stats = read.values.stats();
     assert_eq!((stats.failed_values, stats.decode_attempts), (1, 1));
+}
+
+/// A retained numeric array that does not decode.
+#[derive(Debug)]
+struct BrokenNumbers(ArrayReadError);
+impl layerstack::DeferredArraySource for BrokenNumbers {
+    fn materialize(&self) -> Result<&TypedArray, &ArrayReadError> {
+        Err(&self.0)
+    }
+    fn element_kind(&self) -> Value {
+        Value::Float(0.0)
+    }
+}
+
+/// A stronger retained value that does not decode answers a read with its
+/// failure at the default time as at a time code, as a retained numeric
+/// array does: never with the weaker opinion's value.
+#[test]
+fn a_failed_retained_text_array_hides_weaker_values_at_every_time() {
+    let bytes = malformed();
+    let mut store = InMemoryStore::default();
+    let read = read_usdc_lazy(
+        bytes.as_slice().into(),
+        LayerId(1),
+        &store.tokens,
+        &store.paths,
+        &mut NoAssets,
+    )
+    .unwrap();
+    let mut stronger = read.assembled.layer;
+    let rock = store.path("/Rock");
+    let (tags, sizes) = (store.tokens.intern("tags"), store.tokens.intern("sizes"));
+    let float_array = PropertyType::parse("float[]").unwrap();
+    let broken = ArrayReadError::InvalidData("broken float array".into());
+    stronger.prims_mut().get_mut(&rock).unwrap().set_property(
+        sizes,
+        PropertySpec::typed_attribute(float_array.clone()).with_default(Value::TypedArray(
+            TypedArray::Deferred(std::sync::Arc::new(BrokenNumbers(broken))),
+        )),
+    );
+    store.insert_layer(stronger);
+    let mut weaker = Layer::new(LayerId(2));
+    weaker.insert_prim(
+        rock,
+        PrimSpec::def()
+            .with_property(
+                tags,
+                PropertySpec::typed_attribute(PropertyType::parse("token[]").unwrap())
+                    .with_default(Value::array(vec![Value::Token(
+                        store.tokens.intern("pebble"),
+                    )])),
+            )
+            .with_property(
+                sizes,
+                PropertySpec::typed_attribute(float_array)
+                    .with_default(Value::array(vec![Value::Float(1.0)])),
+            ),
+    );
+    store.insert_layer(weaker);
+    let mut root = Layer::new(LayerId(3));
+    root.sublayers_mut().push(SublayerEntry::new(LayerId(1)));
+    root.sublayers_mut().push(SublayerEntry::new(LayerId(2)));
+    store.insert_layer(root);
+    let stage = Stage::compose(&mut store, LayerId(3), StageOptions::default());
+    let view = stage.view(&store);
+    let undecoded = |value: &Value| {
+        matches!(
+            value,
+            Value::Deferred(_) | Value::TypedArray(TypedArray::Deferred(_))
+        )
+    };
+    for name in ["/Rock.tags", "/Rock.sizes"] {
+        let attribute = view.attribute(store.property_path(name)).unwrap();
+        for time in [Time::Default, Time::at(1.0)] {
+            let tokens = attribute.read(time, |v| Vec::<TokenId>::from_value(v, &store.tokens));
+            let numbers = attribute.read(time, |v| Vec::<f32>::from_value(v, &store.tokens));
+            assert!(
+                tokens.is_none() && numbers.is_none(),
+                "{name} at {time:?}: {tokens:?} {numbers:?}"
+            );
+            assert!(attribute.try_get(time).is_err(), "{name} at {time:?}");
+            // An untyped read finds no value at the default time, and the
+            // undecoded value at a time code; never the weaker one.
+            let untyped = attribute.get(time).map(|resolved| resolved.value);
+            match time {
+                Time::Default => assert!(untyped.is_none(), "{name}: {untyped:?}"),
+                Time::At { .. } => assert!(untyped.as_ref().is_some_and(undecoded), "{name}"),
+            }
+        }
+    }
 }

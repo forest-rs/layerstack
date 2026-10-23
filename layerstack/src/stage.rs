@@ -3684,8 +3684,18 @@ impl Stage {
                 let Some(value) = opinion.value.default_value() else {
                     continue;
                 };
-                if let Value::TypedArray(array) = value {
-                    array.try_materialize().map_err(Clone::clone)?;
+                // A selected value that does not decode answers the query
+                // with its error, never a weaker opinion's value: a retained
+                // array, or a deferred value (which `default_value` returns
+                // still deferred when it fails), as at a time code.
+                match value {
+                    Value::TypedArray(array) => {
+                        array.try_materialize().map_err(Clone::clone)?;
+                    }
+                    Value::Deferred(_) => {
+                        value.try_materialize().map_err(Clone::clone)?;
+                    }
+                    _ => {}
                 }
                 if matches!(value, Value::Blocked) {
                     break;

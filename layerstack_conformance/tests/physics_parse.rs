@@ -10,7 +10,10 @@
 //! parsed twice, the second time with custom tokens for a shape API, a
 //! shape type and an instancer type, as `CustomPhysicsTypes` takes them.
 //! The test captures each scene with `PhysicsSceneSnapshot::capture` and
-//! compares. Records
+//! compares. Each body's mass, from a unit-volume collider callback, pins
+//! how the mass computation reads a collider's physics material: through
+//! any binding, where the parse reports a material only for a collider or
+//! face subset with `MaterialBindingAPI` applied, as C++ does both. Records
 //! layerstack keeps as explicit errors where C++ drops the prim (a collider
 //! of a type with no physics geometry) are compared as absent.
 
@@ -23,10 +26,12 @@ use layerstack::{Stage, StageOptions, TargetPath};
 use layerstack_conformance::{usda_real::load_entry_usda, workspace_root};
 use layerstack_schemas::{
     Scene,
+    mass::CollisionMassInformation,
     physics_scene::{
         CustomPhysicsTypes, JointKind, PhysicsSceneError, PhysicsSceneOptions,
         PhysicsSceneSnapshot, ShapeGeometry,
     },
+    usd_physics::PhysicsRigidBodyApi,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -96,9 +101,27 @@ fn parse(scene_name: &str) -> BTreeMap<String, BTreeMap<String, Value>> {
     }
     for body in &snapshot.rigid_bodies {
         let body_desc = body.descriptor.as_ref().unwrap();
+        // Every collider of unit volume: the mass is the density its
+        // bound physics material gives, as the oracle's callback.
+        let mass = PhysicsRigidBodyApi::get(&scene, body.path)
+            .unwrap()
+            .compute_mass_properties(|_| {
+                Ok(CollisionMassInformation {
+                    volume: 1.,
+                    inertia: [[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]],
+                    center_of_mass: [0.; 3],
+                    local_position: [0.; 3],
+                    local_orientation: [0., 0., 0., 1.],
+                })
+            })
+            .unwrap()
+            .mass;
         out.get_mut("rigid_bodies").unwrap().insert(
             text(body.path),
-            json!({"collisions": sorted(body_desc.collisions.iter().map(|&p| text(p)).collect())}),
+            json!({
+                "collisions": sorted(body_desc.collisions.iter().map(|&p| text(p)).collect()),
+                "mass": (f64::from(mass) * 1000.).round() / 1000.,
+            }),
         );
     }
     for shape in &snapshot.shapes {

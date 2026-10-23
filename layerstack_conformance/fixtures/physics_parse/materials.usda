@@ -1,0 +1,107 @@
+#usda 1.0
+(
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "World"
+{
+    def PhysicsScene "Scene"
+    {
+    }
+
+    def Scope "Looks"
+    {
+        def Material "Dense" (
+            prepend apiSchemas = ["PhysicsMaterialAPI"]
+        )
+        {
+            float physics:density = 500
+        }
+
+        def Material "Light" (
+            prepend apiSchemas = ["PhysicsMaterialAPI"]
+        )
+        {
+            float physics:density = 100
+        }
+
+        def Material "Visual"
+        {
+        }
+    }
+
+    def Sphere "Bound" (
+        prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsCollisionAPI", "MaterialBindingAPI"]
+    )
+    {
+        rel material:binding:physics = </World/Looks/Dense>
+    }
+
+    def Sphere "Legacy" (
+        prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsCollisionAPI"]
+    )
+    {
+        rel material:binding:physics = </World/Looks/Dense>
+        double3 xformOp:translate = (3, 0, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+
+    def Xform "Group"
+    {
+        rel material:binding:physics = </World/Looks/Light>
+        double3 xformOp:translate = (6, 0, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+
+        def Sphere "Inherited" (
+            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsCollisionAPI", "MaterialBindingAPI"]
+        )
+        {
+        }
+
+        def Sphere "InheritedLegacy" (
+            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsCollisionAPI"]
+        )
+        {
+            double3 xformOp:translate = (0, 3, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+    }
+
+    def Mesh "Faces" (
+        prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsCollisionAPI", "MaterialBindingAPI"]
+    )
+    {
+        int[] faceVertexCounts = [3, 3]
+        int[] faceVertexIndices = [0, 1, 2, 0, 2, 3]
+        point3f[] points = [(0, 0, 9), (1, 0, 9), (1, 1, 9), (0, 1, 9)]
+        rel material:binding:physics = </World/Looks/Light>
+
+        def GeomSubset "Applied" (
+            prepend apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            uniform token elementType = "face"
+            uniform token familyName = "materialBind"
+            int[] indices = [0]
+            rel material:binding:physics = </World/Looks/Dense>
+        }
+
+        def GeomSubset "Unapplied"
+        {
+            uniform token elementType = "face"
+            uniform token familyName = "materialBind"
+            int[] indices = [1]
+            rel material:binding:physics = </World/Looks/Dense>
+        }
+    }
+
+    def Sphere "VisualOnly" (
+        prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsCollisionAPI", "MaterialBindingAPI"]
+    )
+    {
+        rel material:binding:physics = </World/Looks/Visual>
+        double3 xformOp:translate = (0, -3, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+}

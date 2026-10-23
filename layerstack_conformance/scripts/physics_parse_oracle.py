@@ -13,13 +13,20 @@ collision groups (merged groups and filters). `custom.usda` is parsed
 twice: plain, and with custom tokens naming the shape API `MyConvexAPI`,
 the shape type `MyShape` and the instancer type `MyInstancer`.
 
+For each rigid body it also records `RigidBodyAPI::ComputeMassProperties`
+with a unit-volume callback, so the mass shows the density each collider's
+physics material gives. The two disagree on bindings: the parse reports a
+collider's material only when the collider (or face subset) has
+`MaterialBindingAPI` applied (`parseUtils.cpp` `_GetMaterialBinding`),
+while the mass computation reads the binding without it.
+
 `tests/physics_parse.rs` compares everything.
 """
 import argparse
 import json
 import pathlib
 
-from pxr import Usd, UsdPhysics as P
+from pxr import Gf, Usd, UsdPhysics as P
 
 ROOT = pathlib.Path(__file__).resolve().parents[1] / "fixtures" / "physics_parse"
 Kind = P.ObjectType
@@ -40,6 +47,20 @@ def paths(values):
     return sorted(str(p) for p in values)
 
 
+def unit_volume(shape):
+    info = P.RigidBodyAPI.MassInformation()
+    info.volume = 1.0
+    info.inertia = Gf.Matrix3f(1.0)
+    info.centerOfMass = Gf.Vec3f(0.0)
+    info.localPos = Gf.Vec3f(0.0)
+    info.localRot = Gf.Quatf(1.0)
+    return info
+
+
+def mass(prim):
+    return round(P.RigidBodyAPI(prim).ComputeMassProperties(unit_volume)[0], 3)
+
+
 def parse(path, custom):
     stage = Usd.Stage.Open(str(path))
     if custom:
@@ -55,7 +76,10 @@ def parse(path, custom):
         for prim, desc in zip(prim_paths, descs):
             prim = str(prim)
             if key == Kind.RigidBody:
-                out["rigid_bodies"][prim] = {"collisions": paths(desc.collisions)}
+                out["rigid_bodies"][prim] = {
+                    "collisions": paths(desc.collisions),
+                    "mass": mass(stage.GetPrimAtPath(prim)),
+                }
             elif key in SHAPES:
                 kind = SHAPES[key]
                 out["shapes"][prim] = {

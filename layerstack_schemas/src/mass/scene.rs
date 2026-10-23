@@ -112,6 +112,13 @@ impl<'a> PhysicsRigidBodyApi<'a> {
     /// unit-adjusted default 1000 kg/m³. Authored body mass overrides the total;
     /// collider/body inertia, centers and axes follow OpenUSD's override rules.
     ///
+    /// A collider's material is its `physics`-purpose binding, read whether
+    /// or not the collider has `MaterialBindingAPI` applied (legacy bindings
+    /// count), as C++ `ComputeMassProperties` reads it through
+    /// `ComputeBoundMaterials`. The scene parse is stricter, as C++'s
+    /// `LoadUsdPhysicsFromRange` is: it reports a collider's material only
+    /// when the collider has the API applied (`ShapeDescriptor::materials`).
+    ///
     /// Requires `usd-shade` for complete material binding resolution. Geometry
     /// integration and simulation belong to the callback's backend. If body
     /// mass, inertia and center are all authored, no collider calls are needed.

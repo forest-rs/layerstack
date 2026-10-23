@@ -274,6 +274,17 @@ pub(super) fn capture(
     }
     Err(PhysicsSceneError::UnsupportedShape)
 }
+/// The physics materials of a collider: each face subset's, then its own.
+///
+/// As C++'s parse does (`parseUtils.cpp` `_GetMaterialBinding`), a collider
+/// or face subset contributes only when it has `MaterialBindingAPI`
+/// applied; its `physics`-purpose binding then resolves as usual, through
+/// ancestors without the API too. The bound material must have
+/// `PhysicsMaterialAPI`. Mass computation reads the same binding without
+/// the applied API, as C++ `ComputeMassProperties` does (see
+/// `PhysicsRigidBodyApi::compute_mass_properties`), so a collider bound
+/// without it simulates with the default material but weighs its
+/// material's density, in C++ and here alike.
 #[cfg(feature = "usd-shade")]
 pub(super) fn materials(prim: &PrimView<'_>) -> Vec<PathId> {
     let scene = prim.scene();
@@ -290,6 +301,7 @@ pub(super) fn materials(prim: &PrimView<'_>) -> Vec<PathId> {
         }
     }
     candidates.push(*prim);
+    candidates.retain(|candidate| scene.has_api(candidate.path(), "MaterialBindingAPI", None));
     for candidate in candidates {
         if let Some(material) = candidate
             .compute_bound_material(

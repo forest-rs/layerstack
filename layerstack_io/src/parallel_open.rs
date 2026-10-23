@@ -29,7 +29,7 @@ use super::{
 use alloc::sync::Arc;
 use hashbrown::{HashMap, HashSet};
 use layerstack::{
-    AssetResolveError, AssetResolver, LayerId, PathInterner, ResolvedAsset, TokenInterner,
+    AssetResolveError, AssetResolver, Layer, LayerId, PathInterner, ResolvedAsset, TokenInterner,
     asset::PackagePath, parallel::Threads,
 };
 
@@ -301,17 +301,16 @@ impl<B: Storage> AssetResolver for TaskResolver<'_, '_, B> {
 }
 
 impl<B: Storage> Reader<'_, B> {
-    /// Loads the root `asset` and every layer it reaches on up to `threads`
+    /// Loads the root `asset` and every layer it reaches on the reader's
     /// threads, as [`Self::load`] does on one; `None` when it must be read
     /// on one (see the [module](self) documentation).
     pub(super) fn load_on_threads(
         &mut self,
         asset: &str,
-        threads: usize,
         tokens: &TokenInterner,
         paths: &PathInterner,
     ) -> Option<Result<ResolvedAsset, IoError>> {
-        if threads <= 1 || self.reachable_only {
+        if self.threads.limit() <= 1 || self.reachable_only {
             return None;
         }
         let (path, args) = match super::format::split_args(asset) {
@@ -333,7 +332,6 @@ impl<B: Storage> Reader<'_, B> {
         if self.catalog.ids.contains_key(&identifier) {
             return None;
         }
-        let budget = Threads::new(threads);
         let shared = Shared {
             storage: &*self.storage,
             tokens,
@@ -342,7 +340,7 @@ impl<B: Storage> Reader<'_, B> {
             usdc_options: self.usdc_options,
             formats: &self.formats,
             defers_variant_arcs: self.defers_variant_arcs(),
-            threads: &budget,
+            threads: &self.threads,
             identities: Mutex::new(self.identities.clone()),
             sources: Mutex::default(),
         };
@@ -350,7 +348,7 @@ impl<B: Storage> Reader<'_, B> {
         let root_id = shared.source(&identifier, &mut root);
         let work = |task: Task, added: &mut Vec<Task>| shared.read(task, added);
         let reads: HashMap<LayerId, Read> =
-            layerstack::parallel::with_pool_in(&budget, &work, |pool| pool.run(root))
+            layerstack::parallel::with_pool_in(&self.threads, &work, |pool| pool.run(root))
                 .into_iter()
                 .collect();
         if reads
@@ -369,7 +367,9 @@ impl<B: Storage> Reader<'_, B> {
             failed: HashSet::new(),
         };
         let result = replay.visit(&identifier, root_id);
-        let Replay { ids, failed, .. } = replay;
+        let Replay {
+            ids, failed, reads, ..
+        } = replay;
         let final_id = |id: LayerId| {
             if id.0 < PROVISIONAL || id == LayerId::UNRESOLVED {
                 id
@@ -379,9 +379,11 @@ impl<B: Storage> Reader<'_, B> {
                 ids.get(&id).copied().unwrap_or(LayerId::UNRESOLVED)
             }
         };
-        for layer in &mut self.pending[first_pending..] {
-            layer.map_layer_ids(final_id);
-        }
+        // The reads are dropped, and the layers they hold are rewritten, on
+        // the threads the reading used.
+        let threads = &self.threads;
+        let pending = &mut self.pending[first_pending..];
+        drop_and_map(threads, reads, pending, &final_id);
         // A diagnostic names the layer read, even one that failed, and so
         // do those a strict rejection carries.
         let rename = |diagnostics: &mut [layerstack_usdz::MemberDiagnostic]| {
@@ -407,6 +409,48 @@ impl<B: Storage> Reader<'_, B> {
     }
 }
 
+/// What finishing a read on threads does, in tasks.
+enum Finish<'l> {
+    /// Drops some of the reads replayed.
+    Drop(Vec<Read>),
+    /// Rewrites the layer ids that some of the layers read name.
+    Map(&'l mut [Layer]),
+}
+
+/// Drops `reads` and rewrites the provisional layer ids of `layers` with
+/// `map`, on the threads `threads` spares: each read holds the arcs its
+/// layer resolved, and dropping or walking several thousand of them
+/// would otherwise leave every thread but one idle.
+fn drop_and_map(
+    threads: &Threads,
+    reads: HashMap<LayerId, Read>,
+    layers: &mut [Layer],
+    map: &(dyn Fn(LayerId) -> LayerId + Sync),
+) {
+    if threads.spare() == 0 {
+        drop(reads);
+        layers.iter_mut().for_each(|layer| layer.map_layer_ids(map));
+        return;
+    }
+    let mut tasks: Vec<Finish<'_>> = layers
+        .chunks_mut(super::LAYERS_PER_TASK)
+        .map(Finish::Map)
+        .collect();
+    let mut reads = reads.into_values();
+    loop {
+        let chunk: Vec<Read> = reads.by_ref().take(super::LAYERS_PER_TASK).collect();
+        if chunk.is_empty() {
+            break;
+        }
+        tasks.push(Finish::Drop(chunk));
+    }
+    let work = |task: Finish<'_>, _: &mut Vec<Finish<'_>>| match task {
+        Finish::Drop(reads) => drop(reads),
+        Finish::Map(layers) => layers.iter_mut().for_each(|layer| layer.map_layer_ids(map)),
+    };
+    layerstack::parallel::with_pool_in(threads, &work, |pool| pool.run(tasks));
+}
+
 /// The single-threaded pass recording the sources read on threads.
 struct Replay<'r, 'a, B> {
     reader: &'r mut Reader<'a, B>,
@@ -425,7 +469,7 @@ impl<B: Storage> Replay<'_, '_, B> {
         &mut self,
         identifier: &str,
         provisional: LayerId,
-    ) -> Result<(LayerId, Option<layerstack::Layer>), IoError> {
+    ) -> Result<(LayerId, Option<Layer>), IoError> {
         let catalog = &mut *self.reader.catalog;
         let id = if let Some(&id) = catalog.ids.get(identifier) {
             id
@@ -509,7 +553,7 @@ impl<B: Storage> Replay<'_, '_, B> {
 
     /// Records the arc `call` of the layer `anchor`, as `Reader::resolve`
     /// does, adding the layer its target reads, if new, to `children`.
-    fn call(&mut self, call: &Call, anchor: LayerId, children: &mut Vec<layerstack::Layer>) {
+    fn call(&mut self, call: &Call, anchor: LayerId, children: &mut Vec<Layer>) {
         let (asset, result) = match call {
             Call::Failed { asset, error } => (asset, Err(error.clone())),
             Call::Target {

@@ -709,8 +709,9 @@ impl<B: Storage> StageDocument<B> {
         );
         reader.variant_arcs = loading.variant_arcs;
         reader.formats = loading.formats.clone();
+        reader.threads = Threads::new(options.threads);
         #[cfg(feature = "std")]
-        let threaded = reader.load_on_threads(asset, options.threads, &store.tokens, &store.paths);
+        let threaded = reader.load_on_threads(asset, &store.tokens, &store.paths);
         #[cfg(not(feature = "std"))]
         let threaded: Option<Result<ResolvedAsset, IoError>> = None;
         let resolved = match threaded {
@@ -1158,6 +1159,10 @@ struct Reader<'a, B> {
     variant_arcs: VariantArcLoading,
     /// The registered formats ([`LoadOptions::formats`]).
     formats: FileFormats,
+    /// The threads the operation reads on, and walks the layers it read
+    /// on afterwards ([`StageOptions::threads`]); one unless an open sets
+    /// them.
+    threads: Threads,
 }
 impl<'a, B: Storage> Reader<'a, B> {
     fn new(
@@ -1183,6 +1188,7 @@ impl<'a, B: Storage> Reader<'a, B> {
             reachable_only: false,
             variant_arcs: VariantArcLoading::All,
             formats: FileFormats::default(),
+            threads: Threads::new(1),
         }
     }
     fn resolve_expressions(
@@ -1192,11 +1198,9 @@ impl<'a, B: Storage> Reader<'a, B> {
     ) -> Result<(), IoError> {
         // Only an asset path authored as an expression needs evaluating;
         // without one the walk over every layer stack finds nothing.
-        if !self
-            .pending
-            .iter()
-            .chain(store.layers())
-            .any(authors_expressions)
+        // The layers just read are walked on the operation's threads.
+        if !any_layer(&self.threads, &self.pending, &authors_expressions)
+            && !store.layers().any(authors_expressions)
         {
             return Ok(());
         }
@@ -2013,6 +2017,22 @@ mod tests;
 
 /// Whether `layer` authors a sublayer, reference or payload whose asset path
 /// is a variable expression ([`layerstack::variable_expression`]).
+/// The layers each task of a walk over many layers takes ([`any_layer`]).
+const LAYERS_PER_TASK: usize = 64;
+
+/// Whether `test` holds for any of `layers`, testing them on the threads
+/// `threads` spares in tasks of [`LAYERS_PER_TASK`] layers.
+fn any_layer(threads: &Threads, layers: &[Layer], test: &(dyn Fn(&Layer) -> bool + Sync)) -> bool {
+    if layers.len() <= LAYERS_PER_TASK || threads.spare() == 0 {
+        return layers.iter().any(test);
+    }
+    let work = |chunk: &[Layer], _: &mut Vec<&[Layer]>| chunk.iter().any(test);
+    let tasks = layers.chunks(LAYERS_PER_TASK).collect();
+    layerstack::parallel::with_pool_in(threads, &work, |pool| pool.run(tasks))
+        .into_iter()
+        .any(|found| found)
+}
+
 fn authors_expressions(layer: &Layer) -> bool {
     let arcs = |spec_arcs: [&layerstack::ListOp<layerstack::Reference>; 2]| {
         spec_arcs

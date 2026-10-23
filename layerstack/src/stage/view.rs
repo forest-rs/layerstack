@@ -417,9 +417,15 @@ impl<T: FromValue> FromValue for Vec<T> {
                     out.push(T::from_value(item, tokens)?);
                 }
             }
-            // An empty array of any element type converts, as a generic one does.
-            Value::TypedArray(array) if array.is_empty() => {}
-            Value::TypedArray(array) => return T::from_array(array, tokens),
+            // A retained array that does not decode converts to nothing,
+            // not to an empty array; an empty array of any element type
+            // converts, as a generic one does.
+            Value::TypedArray(array) => {
+                let array = array.try_materialize().ok()?;
+                if !array.is_empty() {
+                    return T::from_array(array, tokens);
+                }
+            }
             _ => return None,
         }
         Some(out)
@@ -696,6 +702,38 @@ mod tests {
             Vec::<TokenId>::from_value(&empty, &tokens),
             Some(Vec::new())
         );
+    }
+
+    /// A retained array converts as the array it decodes to, and one that
+    /// does not decode converts to nothing, not to an empty vector.
+    #[test]
+    fn retained_arrays_convert_as_they_decode() {
+        use super::FromValue;
+        use crate::{ArrayReadError, DeferredArraySource, TypedArray};
+
+        #[derive(Debug)]
+        struct Retained(Result<TypedArray, ArrayReadError>);
+        impl DeferredArraySource for Retained {
+            fn materialize(&self) -> Result<&TypedArray, &ArrayReadError> {
+                self.0.as_ref()
+            }
+            fn element_kind(&self) -> Value {
+                Value::Float(0.0)
+            }
+        }
+        let retained = |array| Value::TypedArray(TypedArray::Deferred(Arc::new(Retained(array))));
+        let tokens = crate::TokenInterner::default();
+        let floats = retained(Ok(TypedArray::Float(Arc::new(vec![1.5]))));
+        assert_eq!(Vec::<f32>::from_value(&floats, &tokens), Some(vec![1.5]));
+        assert_eq!(Vec::<TokenId>::from_value(&floats, &tokens), None);
+        let empty = retained(Ok(TypedArray::Float(Arc::default())));
+        assert_eq!(
+            Vec::<TokenId>::from_value(&empty, &tokens),
+            Some(Vec::new())
+        );
+        let broken = retained(Err(ArrayReadError::InvalidData("broken".into())));
+        assert_eq!(Vec::<f32>::from_value(&broken, &tokens), None);
+        assert_eq!(Vec::<TokenId>::from_value(&broken, &tokens), None);
     }
 
     #[test]

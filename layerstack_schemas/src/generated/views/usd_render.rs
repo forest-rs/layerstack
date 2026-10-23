@@ -94,21 +94,17 @@ impl<'a> RenderPass<'a> {
     #[doc(alias = "UsdRenderPass::GetCommandAttr")]
     #[doc(alias = "GetCommandAttr")]
     #[must_use]
-    pub fn command(&self) -> Option<::alloc::vec::Vec<::alloc::sync::Arc<str>>> {
-        self.read_value("command", |v, t| {
-            crate::value::read_array(v, t, crate::value::read_string)
-        })
+    pub fn command(&self) -> Option<::alloc::sync::Arc<::layerstack::StringArray>> {
+        self.read_value("command", crate::value::read_string_array_shared)
     }
 
     /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
     pub fn try_command(
         &self,
         time: crate::Time,
-    ) -> Result<Option<::alloc::vec::Vec<::alloc::sync::Arc<str>>>, ::layerstack::ArrayReadError>
+    ) -> Result<Option<::alloc::sync::Arc<::layerstack::StringArray>>, ::layerstack::ArrayReadError>
     {
-        self.try_read_value("command", time, |v, t| {
-            crate::value::read_array(v, t, crate::value::read_string)
-        })
+        self.try_read_value("command", time, crate::value::read_string_array_shared)
     }
 
     /// The USD name of [`Self::file_name`].
@@ -207,7 +203,7 @@ impl RenderPassEdit {
     #[doc(alias = "UsdRenderPass::CreateCommandAttr")]
     #[doc(alias = "CreateCommandAttr")]
     pub fn set_command(&self, edit: &mut SchemaEdit<'_>, value: &[&str]) -> &Self {
-        let value = crate::value::write_array(value, edit.tokens(), crate::value::write_string);
+        let value = crate::value::write_string_array(value, edit.tokens());
         self.write_value(edit, "command", value);
         self
     }

@@ -206,6 +206,13 @@ fn conversion(ty: &str) -> Result<(String, String), String> {
         _ => {}
     }
     let mut tokens = TokenInterner::default();
+    if ty == "string[]" {
+        // A `string[]` reads as its shared text buffer, as attributes do.
+        return Ok((
+            "::alloc::sync::Arc<::layerstack::StringArray>".into(),
+            "crate::value::read_string_array_shared".into(),
+        ));
+    }
     if let Some(element) = element_type(ty) {
         primitive(element, &mut tokens)?;
         let (ty, read) = conversion(element)?;

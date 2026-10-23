@@ -19,7 +19,7 @@
 
 use alloc::{sync::Arc, vec::Vec};
 
-use layerstack::{TokenInterner, Value, half};
+use layerstack::{ArrayReadError, StringArray, TokenInterner, TypedArray, Value, half};
 
 /// Reads an array of `read`'s type.
 pub fn read_array<'a, T>(
@@ -42,7 +42,7 @@ pub fn try_read_array<'a, T>(
     value: &Value,
     tokens: &'a TokenInterner,
     read: impl Fn(&Value, &'a TokenInterner) -> Option<T>,
-) -> Result<Option<Vec<T>>, layerstack::ArrayReadError> {
+) -> Result<Option<Vec<T>>, ArrayReadError> {
     if let Value::TypedArray(array) = value {
         array.try_materialize().map_err(Clone::clone)?;
     }
@@ -81,7 +81,7 @@ macro_rules! plain {
 
         /// Encodes the USD value without coercing incompatible types.
         pub fn $write_array(items: &[$ty], _: &mut TokenInterner) -> Value {
-            Value::TypedArray(layerstack::TypedArray::$variant(Arc::new(items.to_vec())))
+            Value::TypedArray(TypedArray::$variant(Arc::new(items.to_vec())))
         }
 
         /// Borrows matching native elements without copying them. Legacy boxed
@@ -92,7 +92,7 @@ macro_rules! plain {
                 return None;
             };
             match array.try_materialize().ok()? {
-                layerstack::TypedArray::$variant(items) => Some(items),
+                TypedArray::$variant(items) => Some(items),
                 _ => None,
             }
         }
@@ -110,10 +110,10 @@ macro_rules! plain {
         pub fn $try_share(
             value: &Value,
             tokens: &TokenInterner,
-        ) -> Result<Option<Arc<Vec<$ty>>>, layerstack::ArrayReadError> {
+        ) -> Result<Option<Arc<Vec<$ty>>>, ArrayReadError> {
             if let Value::TypedArray(array) = value {
                 return Ok(match array.try_materialize().map_err(Clone::clone)? {
-                    layerstack::TypedArray::$variant(items) => Some(items.clone()),
+                    TypedArray::$variant(items) => Some(items.clone()),
                     _ => None,
                 });
             }
@@ -123,12 +123,12 @@ macro_rules! plain {
         /// Transfers an owned vector without copying elements. Allocates a shared
         /// owner header; the vector's element allocation and capacity survive.
         pub fn $owned(items: Vec<$ty>, _: &mut TokenInterner) -> Value {
-            Value::TypedArray(layerstack::TypedArray::$variant(Arc::new(items)))
+            Value::TypedArray(TypedArray::$variant(Arc::new(items)))
         }
 
         /// Transfers a shared owner without allocating or copying elements.
         pub fn $shared(items: Arc<Vec<$ty>>, _: &mut TokenInterner) -> Value {
-            Value::TypedArray(layerstack::TypedArray::$variant(items))
+            Value::TypedArray(TypedArray::$variant(items))
         }
     };
 }
@@ -413,6 +413,62 @@ macro_rules! text {
 
 text!(read_string, write_string, String);
 
+/// Borrows a native `string[]` buffer without copying it, decoding a
+/// retained one first. A legacy [`Value::Array`] of strings returns `None`;
+/// use [`read_string_array_shared`] for a conversion fallback.
+pub fn borrow_string_array(value: &Value) -> Option<&StringArray> {
+    match value.materialized() {
+        Value::TypedArray(array) => array.as_string(),
+        _ => None,
+    }
+}
+
+/// Retains a `string[]` value's text buffer with an O(1) shared-owner
+/// clone, as the numeric `read_*_array_shared` readers retain theirs. A
+/// legacy [`Value::Array`] of strings is gathered into a new buffer.
+/// Retained storage may decode; no file I/O occurs.
+pub fn read_string_array_shared(value: &Value, tokens: &TokenInterner) -> Option<Arc<StringArray>> {
+    try_read_string_array_shared(value, tokens).ok().flatten()
+}
+
+/// [`read_string_array_shared`], preserving retained decode failures.
+/// Incompatible types return `Ok(None)`; legacy arrays allocate.
+///
+/// # Errors
+///
+/// The decode failure of a retained value.
+pub fn try_read_string_array_shared(
+    value: &Value,
+    _: &TokenInterner,
+) -> Result<Option<Arc<StringArray>>, ArrayReadError> {
+    Ok(match value.try_materialize().map_err(Clone::clone)? {
+        Value::TypedArray(array) => match array.try_materialize().map_err(Clone::clone)? {
+            TypedArray::String(items) => Some(Arc::clone(items)),
+            _ => None,
+        },
+        Value::Array(items) => items
+            .iter()
+            .map(|item| match item {
+                Value::String(text) => Some(&**text),
+                _ => None,
+            })
+            .collect::<Option<StringArray>>()
+            .map(Arc::new),
+        _ => None,
+    })
+}
+
+/// Encodes a `string[]` value into one text buffer, without a value per
+/// element.
+pub fn write_string_array(items: &[&str], _: &mut TokenInterner) -> Value {
+    Value::from(items.iter().collect::<StringArray>())
+}
+
+/// Transfers a shared `string[]` buffer without allocating or copying it.
+pub fn write_string_array_shared(items: Arc<StringArray>, _: &mut TokenInterner) -> Value {
+    Value::TypedArray(TypedArray::String(items))
+}
+
 /// Reads a primvar reader's name as a modern string or a legacy token.
 ///
 /// OpenUSD changed `inputs:varname` to `string` in 20.11. Its imaging
@@ -459,7 +515,7 @@ pub fn write_half(value: f32, _: &mut TokenInterner) -> Value {
 /// Decodes the USD value without coercing incompatible types.
 pub fn read_half_array(value: &Value, tokens: &TokenInterner) -> Option<Vec<f32>> {
     match value {
-        Value::TypedArray(layerstack::TypedArray::Half(items)) => {
+        Value::TypedArray(TypedArray::Half(items)) => {
             Some(items.iter().copied().map(half::to_f32).collect())
         }
         Value::TypedArray(_) => None,
@@ -469,7 +525,7 @@ pub fn read_half_array(value: &Value, tokens: &TokenInterner) -> Option<Vec<f32>
 
 /// Encodes the USD value without coercing incompatible types.
 pub fn write_half_array(items: &[f32], _: &mut TokenInterner) -> Value {
-    Value::TypedArray(layerstack::TypedArray::Half(Arc::new(
+    Value::TypedArray(TypedArray::Half(Arc::new(
         items.iter().copied().map(half::from_f32).collect(),
     )))
 }
@@ -492,7 +548,7 @@ macro_rules! halves {
         /// Decodes the USD value without coercing incompatible types.
         pub fn $read_array(value: &Value, tokens: &TokenInterner) -> Option<Vec<[f32; $n]>> {
             match value {
-                Value::TypedArray(layerstack::TypedArray::$variant(items)) => {
+                Value::TypedArray(TypedArray::$variant(items)) => {
                     Some(items.iter().map(|bits| bits.map(half::to_f32)).collect())
                 }
                 Value::TypedArray(_) => None,
@@ -502,7 +558,7 @@ macro_rules! halves {
 
         /// Encodes the USD value without coercing incompatible types.
         pub fn $write_array(items: &[[f32; $n]], _: &mut TokenInterner) -> Value {
-            Value::TypedArray(layerstack::TypedArray::$variant(Arc::new(
+            Value::TypedArray(TypedArray::$variant(Arc::new(
                 items
                     .iter()
                     .map(|value| value.map(half::from_f32))
@@ -573,7 +629,7 @@ macro_rules! matrix {
         /// Decodes the USD value without coercing incompatible types.
         pub fn $read_array(value: &Value, tokens: &TokenInterner) -> Option<Vec<[[f64; $n]; $n]>> {
             match value {
-                Value::TypedArray(layerstack::TypedArray::$variant(items)) => Some(
+                Value::TypedArray(TypedArray::$variant(items)) => Some(
                     items
                         .iter()
                         .map(|flat| {
@@ -590,7 +646,7 @@ macro_rules! matrix {
 
         /// Encodes the USD value without coercing incompatible types.
         pub fn $write_array(items: &[[[f64; $n]; $n]], _: &mut TokenInterner) -> Value {
-            Value::TypedArray(layerstack::TypedArray::$variant(Arc::new(
+            Value::TypedArray(TypedArray::$variant(Arc::new(
                 items
                     .iter()
                     .map(|rows| {
@@ -636,9 +692,9 @@ mod tests {
     use super::*;
 
     #[derive(Debug)]
-    struct RetainedNative(layerstack::TypedArray);
+    struct RetainedNative(TypedArray);
     impl layerstack::DeferredArraySource for RetainedNative {
-        fn materialize(&self) -> Result<&layerstack::TypedArray, &layerstack::ArrayReadError> {
+        fn materialize(&self) -> Result<&TypedArray, &ArrayReadError> {
             Ok(&self.0)
         }
         fn element_kind(&self) -> Value {
@@ -650,8 +706,8 @@ mod tests {
     fn deferred_storage_is_retained_after_materialization() {
         let tokens = TokenInterner::default();
         let points = Arc::new(alloc::vec![[1., 2., 3.]]);
-        let value = Value::TypedArray(layerstack::TypedArray::Deferred(Arc::new(RetainedNative(
-            layerstack::TypedArray::Vec3f(points.clone()),
+        let value = Value::TypedArray(TypedArray::Deferred(Arc::new(RetainedNative(
+            TypedArray::Vec3f(points.clone()),
         ))));
         assert!(Arc::ptr_eq(
             &points,
@@ -663,6 +719,79 @@ mod tests {
         );
         let copied = read_float3_array(&value, &tokens).unwrap();
         assert_ne!(copied.as_ptr(), points.as_ptr());
+    }
+
+    /// A retained text value ([`Value::Deferred`]).
+    #[derive(Debug)]
+    struct RetainedText(Value);
+    impl layerstack::DeferredValueSource for RetainedText {
+        fn materialize(&self) -> Result<&Value, &ArrayReadError> {
+            Ok(&self.0)
+        }
+        fn element_kind(&self) -> Option<Value> {
+            Some(Value::string(""))
+        }
+    }
+
+    #[test]
+    fn string_arrays_read_and_write_their_shared_buffer() {
+        let mut tokens = TokenInterner::default();
+        let value = write_string_array(&["a", "", "long text"], &mut tokens);
+        let shared = read_string_array_shared(&value, &tokens).unwrap();
+        assert!(shared.iter().eq(["a", "", "long text"]));
+        assert!(core::ptr::eq(
+            borrow_string_array(&value).unwrap(),
+            &*shared
+        ));
+        let transferred = write_string_array_shared(shared.clone(), &mut tokens);
+        assert!(Arc::ptr_eq(
+            &shared,
+            &read_string_array_shared(&transferred, &tokens).unwrap()
+        ));
+        // A retained value shares its decoded buffer.
+        let retained = Value::Deferred(layerstack::DeferredValue::new(Arc::new(RetainedText(
+            value.clone(),
+        ))));
+        assert!(Arc::ptr_eq(
+            &shared,
+            &read_string_array_shared(&retained, &tokens).unwrap()
+        ));
+        assert!(core::ptr::eq(
+            borrow_string_array(&retained).unwrap(),
+            &*shared
+        ));
+        // A legacy array of strings is gathered into a new buffer, and
+        // reads as the element-by-element reader reads it.
+        let legacy = Value::Array(alloc::vec![Value::string("a"), Value::string("b")]);
+        assert!(borrow_string_array(&legacy).is_none());
+        assert!(
+            read_string_array_shared(&legacy, &tokens)
+                .unwrap()
+                .iter()
+                .eq(["a", "b"])
+        );
+        assert_eq!(
+            read_array(&legacy, &tokens, read_string).unwrap(),
+            [Arc::from("a"), Arc::from("b")]
+        );
+        // Other element kinds read as nothing, empty or not.
+        for other in [
+            Value::Array(alloc::vec![Value::string("a"), Value::Int(1)]),
+            Value::TypedArray(TypedArray::Token(Arc::default())),
+            Value::array(alloc::vec![Value::Token(tokens.intern("a"))]),
+            Value::string("a"),
+        ] {
+            assert!(
+                read_string_array_shared(&other, &tokens).is_none(),
+                "{other:?}"
+            );
+            assert!(borrow_string_array(&other).is_none(), "{other:?}");
+        }
+        assert!(
+            read_string_array_shared(&Value::Array(Vec::new()), &tokens)
+                .unwrap()
+                .is_empty()
+        );
     }
 
     #[test]
@@ -694,7 +823,7 @@ mod tests {
         );
         assert!(
             read_float3_array_shared(
-                &Value::TypedArray(layerstack::TypedArray::Float(Arc::new(Vec::new()))),
+                &Value::TypedArray(TypedArray::Float(Arc::new(Vec::new()))),
                 &tokens
             )
             .is_none()
@@ -709,10 +838,7 @@ mod tests {
         let read = read_float3_array(&native, &tokens).unwrap();
         assert_eq!(read[0].map(f32::to_bits), values[0].map(f32::to_bits));
         let empty = write_float3_array(&[], &mut tokens);
-        assert!(matches!(
-            empty,
-            Value::TypedArray(layerstack::TypedArray::Vec3f(_))
-        ));
+        assert!(matches!(empty, Value::TypedArray(TypedArray::Vec3f(_))));
         assert_eq!(read_float3_array(&empty, &tokens), Some(Vec::new()));
         assert_eq!(read_double3_array(&empty, &tokens), None);
         assert_eq!(read_quatf_array(&empty, &tokens), None);
@@ -743,7 +869,7 @@ mod tests {
             })
         });
         let native = write_matrix4d_array(&[rows], &mut tokens);
-        let Value::TypedArray(layerstack::TypedArray::Matrix4d(flat)) = &native else {
+        let Value::TypedArray(TypedArray::Matrix4d(flat)) = &native else {
             panic!("native matrix storage");
         };
         assert_eq!(flat[0][6], rows[1][2]);

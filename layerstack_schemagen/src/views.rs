@@ -283,7 +283,17 @@ pub(crate) fn rust_type_in(
         Value::String(_) | Value::Asset(_) | Value::PathExpression(_) | Value::Token(_)
     );
     let value = format!("{schemas}::value");
-    Ok(Some(if is_array && element_wise {
+    Ok(Some(if is_array && matches!(zero, Value::String(_)) {
+        // A `string[]` reads as its shared text buffer, as numeric arrays
+        // read as theirs (AOUSD Core §6.2).
+        RustType {
+            read: format!("{arc}<::layerstack::StringArray>"),
+            write: "&[&str]".into(),
+            read_fn: format!("{value}::read_string_array_shared"),
+            write_fn: format!("{value}::write_string_array"),
+            write_call: format!("{value}::write_string_array(VALUE, TOKENS)"),
+        }
+    } else if is_array && element_wise {
         RustType {
             read: format!("{vec}<{read}>"),
             write: format!("&[{write}]"),

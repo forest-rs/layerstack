@@ -412,3 +412,217 @@ fn material_subsets_read_as_openusd_renders_them() {
         }
     }
 }
+
+/// `CreateMaterialBindSubset` and `SetMaterialBindSubsetsFamilyType`
+/// replayed call by call, each applied before the next, against the C++
+/// accept/reject results, returned paths and family types.
+#[test]
+fn material_bind_subset_authoring_matches_openusd_call_by_call() {
+    use layerstack::{EditTarget, LayerId, PropertyKind, Specifier, Variability};
+    use layerstack_schemas::{
+        SchemaEdit,
+        subset::{SubsetAuthoringError, SubsetFamilyType},
+        usd_geom::{GeomSubsetElementType, Imageable, ImageableEdit},
+        usd_shade::MaterialBindingApiEdit,
+    };
+    let oracle: serde_json::Value = serde_json::from_str(ORACLE).unwrap();
+    let expected = &oracle["authoring"];
+    let (mut store, mut live) = support::scene(
+        r#"#usda 1.0
+def Mesh "M" (prepend apiSchemas = ["MaterialBindingAPI"])
+{
+    int[] faceVertexCounts = [3, 3, 3, 3]
+    int[] faceVertexIndices = [0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 1, 2]
+    point3f[] points = [(0, 0, 0), (1, 0, 0), (0, 1, 0)]
+}
+"#,
+    );
+    let mesh = store.path("/M");
+    enum Call {
+        Create(&'static str, &'static [i32]),
+        SetType(SubsetFamilyType),
+        GenericUnrestricted,
+    }
+    let calls = [
+        ("create red [0, 1]", Call::Create("red", &[0, 1])),
+        ("create red [2]", Call::Create("red", &[2])),
+        (
+            "set unrestricted",
+            Call::SetType(SubsetFamilyType::Unrestricted),
+        ),
+        ("set partition", Call::SetType(SubsetFamilyType::Partition)),
+        ("create blue [3]", Call::Create("blue", &[3])),
+        ("", Call::GenericUnrestricted),
+        ("create green [0]", Call::Create("green", &[0])),
+        (
+            "set nonOverlapping",
+            Call::SetType(SubsetFamilyType::NonOverlapping),
+        ),
+    ];
+    let mut log = Vec::new();
+    for (label, call) in calls {
+        let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
+        let api = MaterialBindingApiEdit::new(&edit, mesh).unwrap();
+        let created = match call {
+            Call::Create(name, indices) => Some(
+                api.create_material_bind_subset(
+                    &mut edit,
+                    name,
+                    GeomSubsetElementType::Face,
+                    indices,
+                )
+                .map(|subset| subset.path()),
+            ),
+            Call::SetType(family_type) => {
+                let result = api.set_material_bind_subsets_family_type(&mut edit, family_type);
+                if family_type == SubsetFamilyType::Unrestricted {
+                    assert_eq!(
+                        result,
+                        Err(SubsetAuthoringError::UnrestrictedMaterialBindFamily)
+                    );
+                    assert!(edit.transaction().is_empty());
+                }
+                result.err().map(Err)
+            }
+            Call::GenericUnrestricted => {
+                ImageableEdit::new(&edit, mesh)
+                    .unwrap()
+                    .set_subset_family_type(
+                        &mut edit,
+                        "materialBind",
+                        SubsetFamilyType::Unrestricted,
+                    )
+                    .unwrap();
+                None
+            }
+        };
+        let transaction = edit.finish();
+        live.apply(&mut store, &transaction).unwrap();
+        if label.is_empty() {
+            continue;
+        }
+        let scene = Scene::new(live.stage(), &store);
+        let family = Imageable::new(&scene, mesh)
+            .unwrap()
+            .subset_family_type("materialBind");
+        let entry = match created {
+            Some(Err(_)) => serde_json::json!({"call": label, "accepted": false, "result": null}),
+            Some(Ok(path)) => {
+                let indices = layerstack_schemas::usd_geom::GeomSubset::new(&scene, path)
+                    .unwrap()
+                    .indices()
+                    .unwrap();
+                serde_json::json!({"call": label, "accepted": true, "result": {
+                    "path": store.paths.display(path, &store.tokens).to_string(),
+                    "indices": *indices,
+                    "family_type": family,
+                }})
+            }
+            None => serde_json::json!({"call": label, "accepted": true, "result": {
+                "family_type": family,
+            }}),
+        };
+        log.push(entry);
+    }
+    assert_eq!(serde_json::Value::from(log), expected["calls"]);
+
+    let scene = Scene::new(live.stage(), &store);
+    let subsets: Vec<_> = Imageable::new(&scene, mesh)
+        .unwrap()
+        .geom_subsets(None, Some("materialBind"))
+        .iter()
+        .map(|subset| {
+            store
+                .paths
+                .display(subset.path(), &store.tokens)
+                .to_string()
+        })
+        .collect();
+    assert_eq!(serde_json::to_value(subsets).unwrap(), expected["subsets"]);
+    let family = store.property_path("/M.subsetFamily:materialBind:familyType");
+    let declaration = live
+        .view(&store)
+        .property(family)
+        .and_then(|property| property.declaration())
+        .unwrap();
+    assert_eq!(declaration.kind, PropertyKind::Attribute);
+    assert_eq!(declaration.variability, Variability::Uniform);
+    assert_eq!(expected["family_variability"], "Sdf.VariabilityUniform");
+    assert_eq!(declaration.custom, expected["family_custom"]);
+    let red = live.stage().prim(store.path("/M/red"), &store).unwrap();
+    assert_eq!(red.specifier(), Specifier::Def);
+    assert_eq!(expected["subset_specifier"], "Sdf.SpecifierDef");
+    assert_eq!(red.type_name(), expected["subset_type"].as_str());
+}
+
+/// Authoring departs from C++ in two refusals: indices outside the mesh,
+/// and a name another prim type holds (C++ authors both, retyping the prim).
+/// Several calls in one edit see each other's family type.
+#[test]
+fn material_bind_subset_authoring_refuses_bad_indices_and_taken_names() {
+    use layerstack::{EditTarget, LayerId};
+    use layerstack_schemas::{
+        SchemaEdit,
+        subset::{SubsetAuthoringError, SubsetFamilyType},
+        usd_geom::{GeomSubsetElementType as Element, Imageable},
+        usd_shade::MaterialBindingApiEdit,
+    };
+    let (mut store, mut live) = support::scene(
+        r#"#usda 1.0
+def Mesh "M"
+{
+    int[] faceVertexCounts = [3, 3]
+    int[] faceVertexIndices = [0, 1, 2, 0, 1, 2]
+    point3f[] points = [(0, 0, 0), (1, 0, 0), (0, 1, 0)]
+    def Xform "taken" {}
+}
+"#,
+    );
+    let mesh = store.path("/M");
+    let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
+    let api = MaterialBindingApiEdit::new(&edit, mesh).unwrap();
+    assert_eq!(
+        api.create_material_bind_subset(&mut edit, "far", Element::Face, &[2]),
+        Err(SubsetAuthoringError::Indices(
+            SubsetProblemKind::InvalidIndex(2)
+        ))
+    );
+    let taken = store_path(&mut edit, "/M/taken");
+    assert_eq!(
+        api.create_material_bind_subset(&mut edit, "taken", Element::Face, &[0]),
+        Err(SubsetAuthoringError::NameTaken(taken))
+    );
+    assert_eq!(
+        api.create_material_bind_subset(&mut edit, "a/b", Element::Face, &[0]),
+        Err(SubsetAuthoringError::InvalidName)
+    );
+    assert!(edit.transaction().is_empty(), "refusals collect nothing");
+    api.set_material_bind_subsets_family_type(&mut edit, SubsetFamilyType::Partition)
+        .unwrap();
+    let a = api
+        .create_material_bind_subset(&mut edit, "a", Element::Face, &[0])
+        .unwrap();
+    let again = api
+        .create_material_bind_subset(&mut edit, "a", Element::Face, &[0, 1])
+        .unwrap();
+    assert_eq!(
+        a.path(),
+        again.path(),
+        "a subset defined in this edit is reused"
+    );
+    let transaction = edit.finish();
+    live.apply(&mut store, &transaction).unwrap();
+    let scene = Scene::new(live.stage(), &store);
+    let geom = Imageable::new(&scene, mesh).unwrap();
+    assert_eq!(geom.subset_family_type("materialBind"), "partition");
+    let mut cache = BindingCache::new(MaterialPurpose::All, BindingOptions::default());
+    let family = cache
+        .material_binding_subsets(&scene, mesh, Time::Default)
+        .unwrap();
+    assert_eq!(*family.subsets[0].indices, [0, 1]);
+    assert!(family.validation.is_valid());
+}
+
+fn store_path(edit: &mut layerstack_schemas::SchemaEdit<'_>, path: &str) -> layerstack::PathId {
+    edit.prim_path(path).unwrap()
+}

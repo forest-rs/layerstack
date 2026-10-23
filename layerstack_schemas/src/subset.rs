@@ -42,6 +42,12 @@ pub enum SubsetAuthoringError {
     Indices(SubsetProblemKind),
     /// The family attribute already has a declaration other than scalar token.
     IncompatibleFamilyDeclaration,
+    /// A prim that is not a `GeomSubset` already has the subset's name.
+    NameTaken(PathId),
+    /// A `materialBind` family may not be `unrestricted`: bound subsets
+    /// must not overlap. OpenUSD's `SetMaterialBindSubsetsFamilyType`
+    /// refuses it with a coding error.
+    UnrestrictedMaterialBindFamily,
 }
 impl core::fmt::Display for SubsetAuthoringError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -85,53 +91,7 @@ impl crate::usd_geom::GeomSubsetEdit {
         family: &str,
     ) -> Result<Self, SubsetAuthoringError> {
         edit.group(|edit| {
-            {
-                let scene = edit.scene();
-                let geom = Imageable::new(&scene, parent)
-                    .filter(|geom| valid_geom(geom, &element))
-                    .ok_or(SubsetError::InvalidGeometry)?;
-                match elements(&geom, &element, Time::Default)? {
-                    Elements::Scalar(count) => {
-                        if let Some(&index) = indices.iter().find(|&&index| {
-                            usize::try_from(index).map_or(true, |index| index >= count)
-                        }) {
-                            return Err(SubsetAuthoringError::Indices(
-                                SubsetProblemKind::InvalidIndex(index),
-                            ));
-                        }
-                    }
-                    Elements::Pairs(possible) => {
-                        if !indices.len().is_multiple_of(2) {
-                            return Err(SubsetAuthoringError::Indices(
-                                SubsetProblemKind::OddPairCount,
-                            ));
-                        }
-                        for pair in indices.as_chunks::<2>().0 {
-                            let pair = if element == SubsetElementType::Edge {
-                                [pair[0].min(pair[1]), pair[0].max(pair[1])]
-                            } else {
-                                *pair
-                            };
-                            if !possible.contains(&pair) {
-                                return Err(SubsetAuthoringError::Indices(
-                                    SubsetProblemKind::InvalidPair(pair),
-                                ));
-                            }
-                        }
-                        // Match ValidateFamily's native edge-count bound as
-                        // well as membership, including non-contiguous vertices.
-                        if element == SubsetElementType::Edge
-                            && let Some(&index) = indices.iter().find(|&&index| {
-                                usize::try_from(index).map_or(true, |index| index >= possible.len())
-                            })
-                        {
-                            return Err(SubsetAuthoringError::Indices(
-                                SubsetProblemKind::InvalidIndex(index),
-                            ));
-                        }
-                    }
-                }
-            }
+            check_indices(edit, parent, &element, indices)?;
             let path = edit
                 .unique_child_path(parent, name)
                 .ok_or(SubsetAuthoringError::InvalidName)?;
@@ -143,6 +103,117 @@ impl crate::usd_geom::GeomSubsetEdit {
             Ok(subset)
         })
     }
+
+    /// Collects the subset `name` under existing composed geometry: a new
+    /// one, or the subset already there (composed, or defined earlier in
+    /// this edit) with its element type, indices and family re-authored, as
+    /// OpenUSD's `CreateGeomSubset` reuses it. Its other opinions, such as a
+    /// material binding, stay.
+    ///
+    /// Indices are checked as [`Self::create_unique`] checks them, where
+    /// C++ authors any indices. A prim of another type at that name is
+    /// refused with [`SubsetAuthoringError::NameTaken`]; C++ would retype it.
+    /// Rejection collects no edits. AOUSD Core §7.3, §12.3–12.5;
+    /// OpenUSD `UsdGeomSubset::CreateGeomSubset`.
+    #[doc(alias = "CreateGeomSubset")]
+    pub fn create(
+        edit: &mut crate::SchemaEdit<'_>,
+        parent: PathId,
+        name: &str,
+        element: SubsetElementType,
+        indices: &[i32],
+        family: &str,
+    ) -> Result<Self, SubsetAuthoringError> {
+        edit.group(|edit| {
+            check_indices(edit, parent, &element, indices)?;
+            let path = child_path(edit, parent, name)?;
+            let subset = if edit.exists(path) {
+                if !edit.is_a(path, Subset::SCHEMA) {
+                    return Err(SubsetAuthoringError::NameTaken(path));
+                }
+                Self::from_prim(crate::PrimEdit::from_path_unchecked(path))
+            } else {
+                Subset::define(edit, path)
+            };
+            subset
+                .set_element_type(edit, element)
+                .set_family_name(edit, family)
+                .set_indices(edit, indices);
+            Ok(subset)
+        })
+    }
+}
+
+/// The child `name` of `parent`, for a single prim identifier.
+fn child_path(
+    edit: &mut crate::SchemaEdit<'_>,
+    parent: PathId,
+    name: &str,
+) -> Result<PathId, SubsetAuthoringError> {
+    let parsed = layerstack::Path::parse_absolute(&format!("/{name}"), edit.tokens())
+        .map_err(|_| SubsetAuthoringError::InvalidName)?;
+    if parsed.depth() != 1 {
+        return Err(SubsetAuthoringError::InvalidName);
+    }
+    let token = edit.tokens().intern(name);
+    Ok(edit.child_path(parent, token))
+}
+
+/// Checks a new subset's element type and indices against the parent's
+/// composed default-time topology.
+fn check_indices(
+    edit: &crate::SchemaEdit<'_>,
+    parent: PathId,
+    element: &SubsetElementType,
+    indices: &[i32],
+) -> Result<(), SubsetAuthoringError> {
+    let scene = edit.scene();
+    let geom = Imageable::new(&scene, parent)
+        .filter(|geom| valid_geom(geom, element))
+        .ok_or(SubsetError::InvalidGeometry)?;
+    match elements(&geom, element, Time::Default)? {
+        Elements::Scalar(count) => {
+            if let Some(&index) = indices
+                .iter()
+                .find(|&&index| usize::try_from(index).map_or(true, |index| index >= count))
+            {
+                return Err(SubsetAuthoringError::Indices(
+                    SubsetProblemKind::InvalidIndex(index),
+                ));
+            }
+        }
+        Elements::Pairs(possible) => {
+            if !indices.len().is_multiple_of(2) {
+                return Err(SubsetAuthoringError::Indices(
+                    SubsetProblemKind::OddPairCount,
+                ));
+            }
+            for pair in indices.as_chunks::<2>().0 {
+                let pair = if *element == SubsetElementType::Edge {
+                    [pair[0].min(pair[1]), pair[0].max(pair[1])]
+                } else {
+                    *pair
+                };
+                if !possible.contains(&pair) {
+                    return Err(SubsetAuthoringError::Indices(
+                        SubsetProblemKind::InvalidPair(pair),
+                    ));
+                }
+            }
+            // Match ValidateFamily's native edge-count bound as
+            // well as membership, including non-contiguous vertices.
+            if *element == SubsetElementType::Edge
+                && let Some(&index) = indices.iter().find(|&&index| {
+                    usize::try_from(index).map_or(true, |index| index >= possible.len())
+                })
+            {
+                return Err(SubsetAuthoringError::Indices(
+                    SubsetProblemKind::InvalidIndex(index),
+                ));
+            }
+        }
+    }
+    Ok(())
 }
 
 impl crate::usd_geom::ImageableEdit {

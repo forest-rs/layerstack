@@ -426,6 +426,8 @@ resolution for each subset and the parent fallback. It preserves binding
 strength, collection and purpose rules and retains shared face indices. An
 unauthored family type reads as `unrestricted`, and requested-time family
 validation is reported beside the subsets rather than failing the read.
+`MaterialBindingApiEdit::create_material_bind_subset` authors a subset and
+types its family `nonOverlapping`, as C++ `CreateMaterialBindSubset` does.
 Engines own triangulation and draw grouping.
 After relevant edits, invalidate changed binding inputs and collection queries
 explicitly. Clear the cache when precise dependency tracking is unavailable.
@@ -542,7 +544,8 @@ append no edits. Ordinary transaction validation and undo remain in force.
 
 `GeomSubsetEdit::create_unique` collects a subset under existing composed
 geometry, validates the supplied indices against its default-time topology, and
-reserves a collision-free name across the batch.
+reserves a collision-free name across the batch. `GeomSubsetEdit::create`
+reuses a subset of the same name instead.
 `ImageableEdit::set_subset_family_type` declares
 `subset::SubsetFamilyType::{Unrestricted, NonOverlapping, Partition}`. Creation
 does not certify family-wide overlap or coverage, and queued topology changes

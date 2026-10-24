@@ -1,0 +1,13 @@
+#usda 1.0
+
+over "Empty"
+{
+    float3 xformOp:scale = (3, 3, 3)
+    uniform token[] xformOpOrder = ["xformOp:scale"]
+}
+
+over "Translated"
+{
+    float3 xformOp:scale = (3, 3, 3)
+    uniform token[] xformOpOrder = ["xformOp:scale"]
+}

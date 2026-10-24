@@ -380,7 +380,7 @@ fn quat(value: &Value) -> Option<[f64; 4]> {
 /// The matrix of one op with the value `value`.
 ///
 /// OpenUSD: `UsdGeomXformOp::GetOpTransform(opType, opVal, isInverseOp)`.
-fn op_matrix(
+pub(crate) fn op_matrix(
     op_type: XformOpType,
     value: &Value,
     inverse: bool,

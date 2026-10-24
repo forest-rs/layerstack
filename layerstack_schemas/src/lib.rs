@@ -259,8 +259,13 @@
 //! code. `clear_xform_op_order` and `set_reset_xform_stack` edit the order
 //! itself. `set_common_transform` and `set_common_transform_at` author a
 //! compatible translation/pivot/Euler rotation/scale stack from
-//! [`CommonTransform`], rejecting incompatible ops before writing. They retain
-//! existing vector precision and the reset flag; they do not decompose matrices.
+//! [`CommonTransform`], and `set_common_component` one [`CommonComponent`],
+//! as `UsdGeomXformCommonAPI` does: they refuse ([`CommonTransformError`])
+//! exactly the stacks and value types OpenUSD refuses, before writing, and
+//! keep the reset flag. `Xformable::common_transform` and
+//! `common_transform_by_accumulation` read the values back, factoring or
+//! reducing other stacks and saying which ([`CommonTransformReading`]);
+//! `is_common_transform_compatible` says whether the stack is a common one.
 //!
 //! Each computation is a pure step over one prim's stage reads and its
 //! parent's result: [`LocalTransformInputs`] (read once, then
@@ -507,7 +512,10 @@ mod xform;
 #[cfg(feature = "usd-geom")]
 mod xform_edit;
 #[cfg(feature = "usd-geom")]
-pub use common_xform::{CommonTransform, CommonTransformError, RotationOrder};
+pub use common_xform::{
+    CommonComponent, CommonTransform, CommonTransformError, CommonTransformReading,
+    CommonTransformSource, RotationOrder,
+};
 pub use edit::{ApplyError, CannotEdit};
 
 #[cfg(all(feature = "usd-geom", feature = "usd-shade"))]

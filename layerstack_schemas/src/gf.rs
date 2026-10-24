@@ -181,6 +181,59 @@ impl Rotation {
     }
 }
 
+impl Rotation {
+    /// `GfRotation::Decompose(axis0, axis1, axis2)`: the angles, in degrees,
+    /// of rotations about the three (orthogonal) axes whose product, the
+    /// first axis's applied first, is this rotation. Ken Shoemake's Euler
+    /// angle conversion (Graphics Gems IV, p. 222), as OpenUSD computes it,
+    /// in the axes' frame, negated for a right-handed axis triple.
+    pub(crate) fn decompose(self, axes: [[f64; 3]; 3]) -> [f64; 3] {
+        let rotation = self.matrix();
+        // `GfVec3d::GetNormalized`: times the reciprocal of the length, or
+        // of `GF_MIN_VECTOR_LENGTH` when the length is not above it.
+        let n = axes.map(|axis| {
+            let len = length(axis);
+            let reciprocal = 1.0
+                / if len > MIN_VECTOR_LENGTH {
+                    len
+                } else {
+                    MIN_VECTOR_LENGTH
+                };
+            axis.map(|c| c * reciprocal)
+        });
+        let mut frame = IDENTITY;
+        for (row, values) in frame.iter_mut().take(3).enumerate() {
+            *values = [n[0][row], n[1][row], n[2][row], 0.0];
+        }
+        let transpose: Matrix4 = core::array::from_fn(|i| core::array::from_fn(|j| frame[j][i]));
+        let m = mul(&mul(&transpose, &rotation), &frame);
+        let cy = libm::sqrt(m[0][0] * m[0][0] + m[1][0] * m[1][0]);
+        let (mut r0, mut r1, mut r2) = if cy > 1e-6 {
+            (
+                libm::atan2(m[2][1], m[2][2]),
+                libm::atan2(-m[2][0], cy),
+                libm::atan2(m[1][0], m[0][0]),
+            )
+        } else {
+            (
+                libm::atan2(-m[1][2], m[1][1]),
+                libm::atan2(-m[2][0], cy),
+                0.0,
+            )
+        };
+        let [a, b, c] = n;
+        let cross = [
+            a[1] * b[2] - a[2] * b[1],
+            a[2] * b[0] - a[0] * b[2],
+            a[0] * b[1] - a[1] * b[0],
+        ];
+        if dot(cross, c) >= 0.0 {
+            (r0, r1, r2) = (-r0, -r1, -r2);
+        }
+        [r0, r1, r2].map(|r| r * (180.0 / PI))
+    }
+}
+
 /// The unit axes.
 pub(crate) const AXES: [[f64; 3]; 3] = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
 

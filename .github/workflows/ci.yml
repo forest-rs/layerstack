@@ -607,6 +607,11 @@ jobs:
       - name: check common transform authoring oracle
         run: python layerstack_conformance/scripts/common_xform_oracle.py --check
 
+      # The common transform API oracle must be what OpenUSD's
+      # `UsdGeomXformCommonAPI` reads, authors and refuses, call by call.
+      - name: check common transform API oracle
+        run: python layerstack_conformance/scripts/common_xform_api_oracle.py --check
+
       - name: check whole-camera writeback oracle
         run: python layerstack_conformance/scripts/camera_writeback_oracle.py --check
 

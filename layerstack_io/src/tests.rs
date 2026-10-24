@@ -2732,3 +2732,60 @@ fn root_reload_refreshes_nested_expression_assets_and_recovers_missing_sources()
     assert_eq!(doc.storage.reads, vec![String::from("root.usda")]);
     assert!(!doc.stage.stage().used_layers(true).contains(&child));
 }
+
+/// A read layer keeps none of the changes its reader recorded building it:
+/// no stage saw the layer before them. Edits after the open still reach
+/// the stage, incrementally.
+#[test]
+fn read_layers_keep_no_change_history_from_their_reading() {
+    let memory = Memory::with(&[
+        (
+            "root.usda",
+            "#usda 1.0\ndef \"World\" (references = @rock.usda@</Rock>) {}\n",
+        ),
+        (
+            "rock.usda",
+            "#usda 1.0\ndef \"Rock\" {\n double size = 1\n def \"Chip\" {}\n}\n",
+        ),
+    ]);
+    let mut document = StageDocument::open(memory, "root.usda", StageOptions::default()).unwrap();
+    let rock = *document
+        .load_report()
+        .layers
+        .iter()
+        .find(|&&id| {
+            document.store().layer(id).is_some_and(|layer| {
+                layer
+                    .prim_specs(document.store().path("/Rock"))
+                    .next()
+                    .is_some()
+            })
+        })
+        .unwrap();
+    assert_eq!(
+        document
+            .store()
+            .layer(rock)
+            .unwrap()
+            .change_history_stats()
+            .retained_batches,
+        0
+    );
+    let size = document.store().property_path("/Rock.size");
+    document
+        .store_mut()
+        .layer_mut(rock)
+        .unwrap()
+        .property_mut(size)
+        .unwrap()
+        .default = Some(Value::Double(2.));
+    document.synchronize();
+    let world_size = document.store().property_path("/World.size");
+    assert_eq!(
+        document
+            .view()
+            .attribute(world_size)
+            .and_then(|attribute| attribute.value::<f64>(layerstack::Time::Default)),
+        Some(2.)
+    );
+}

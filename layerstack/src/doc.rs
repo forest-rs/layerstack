@@ -3120,6 +3120,15 @@ impl Layer {
     pub fn set_change_history_budget(&mut self, budget: crate::ChangeHistoryBudget) {
         self.change_history.set_budget(budget);
     }
+    /// Forgets the authored evidence retained so far, as a reader does once
+    /// it has built a layer from a file: its edits built the layer before
+    /// any stage could see it, so no stage needs them. A stage that did see
+    /// an older generation of the layer recovers through conservative
+    /// recomposition, as after any history expiry; layer content and
+    /// generations are unchanged.
+    pub fn forget_change_history(&mut self) {
+        self.change_history.clear();
+    }
     /// Current authored-evidence budget.
     pub fn change_history_budget(&self) -> crate::ChangeHistoryBudget {
         self.change_history.budget()

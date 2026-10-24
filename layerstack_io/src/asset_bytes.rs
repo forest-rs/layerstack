@@ -273,7 +273,7 @@ pub(super) fn read<B: Storage>(
     })
 }
 
-fn package_entry(
+pub(super) fn package_entry(
     archive: &PackageSnapshot,
     package: &str,
     member: &str,

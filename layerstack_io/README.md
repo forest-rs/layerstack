@@ -163,8 +163,12 @@ edits. The candidate rewrites copied layers and shares opaque resource bytes;
 preparation and export preserve live source bindings and dirty generations.
 Inspect `report()` for exact unresolved authoring uses and `plan()` for destinations.
 Missing resources, unsupported resource types and unexpanded patterns prevent a
-plan. Choose `KeepExternal` for intentional external dependencies; concrete paths
-are anchored to their original sources, while expressions remain host controlled.
+plan. A UDIM texture expands to every existing tile, each set discovered once
+(`udim_work()` reports the storage work): the copied value keeps `<UDIM>` and its
+file name, `assets/000002/color.<UDIM>.png`, beside one member per tile. A pattern
+without tiles is unresolved, as in OpenUSD. Choose `KeepExternal` for intentional
+external dependencies; concrete paths are anchored to their original sources, a
+UDIM pattern to its tiles' directory, while expressions remain host controlled.
 Use the lower-level localization callback for custom pattern expansion.
 
 Set layer/asset inventory counts, cumulative opaque bytes and per-resource

@@ -145,6 +145,12 @@ impl UdimDiscovery {
         self.work
     }
 
+    /// A package this discovery read for an explicit `package[member]`
+    /// pattern, by its identifier.
+    pub(super) fn archive(&self, identifier: &str) -> Option<&Arc<PackageSnapshot>> {
+        self.archives.get(identifier)
+    }
+
     /// Forgets what was found, so later calls ask the storage again; the
     /// choice of [`Self::probing`] is kept.
     pub fn clear(&mut self) {
@@ -181,7 +187,8 @@ impl<B: Storage> StageDocument<B> {
     /// each set is looked for, and each directory listed, once. A listing
     /// reads every entry of its directory, so a single set beside thousands
     /// of other files is cheaper probed; the listing pays off as the sets of
-    /// a directory share it.
+    /// a directory share it. [`StageDocument::prepare_package`] keeps one
+    /// for its whole preparation.
     ///
     /// ```no_run
     /// # #[cfg(feature = "std")]

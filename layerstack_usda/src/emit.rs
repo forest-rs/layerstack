@@ -57,6 +57,7 @@ use layerstack::variable_expression::is_expression;
 use layerstack::{
     ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex, AssetResolveError, AssetResolver,
     MetadataTarget, PropertyType, ReferenceTarget, ResolvedAsset, SchemaRegistry, StringArray,
+    TypedArray,
 };
 use smallvec::SmallVec;
 
@@ -1735,11 +1736,15 @@ impl EmitCtx<'_> {
         }
         match element_hint {
             "token" => {
+                if !items.iter().all(|item| text(item).is_some()) {
+                    return None;
+                }
+                // Interned straight into the array's buffer, sized once.
                 let ids = items
                     .iter()
-                    .map(|item| text(item).map(|text| self.tokens.intern(text)))
-                    .collect::<Option<Vec<TokenId>>>()?;
-                Some(Value::from(ids))
+                    .map(|item| self.tokens.intern(text(item).unwrap_or_default()))
+                    .collect();
+                Some(Value::TypedArray(TypedArray::Token(ids)))
             }
             "string" => {
                 let bytes = items
@@ -3300,7 +3305,7 @@ def \"A\" {
                 .clone(),
         );
         match field {
-            FieldValue::Value(Value::TypedArray(layerstack::TypedArray::Int(items))) => {
+            FieldValue::Value(Value::TypedArray(TypedArray::Int(items))) => {
                 assert_eq!(items.as_slice(), &[1, 2, 3]);
             }
             other => panic!("expected Array, got {:?}", other),
@@ -3322,7 +3327,7 @@ def \"A\" {
                 .clone(),
         );
         match field {
-            FieldValue::Value(Value::TypedArray(layerstack::TypedArray::Vec3f(items))) => {
+            FieldValue::Value(Value::TypedArray(TypedArray::Vec3f(items))) => {
                 assert_eq!(items.as_slice(), &[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]);
             }
             other => panic!("expected Array of Vec3f, got {:?}", other),
@@ -3343,7 +3348,7 @@ def \"A\" {
                 .clone(),
         );
         match field {
-            FieldValue::Value(Value::TypedArray(layerstack::TypedArray::Int(items))) => {
+            FieldValue::Value(Value::TypedArray(TypedArray::Int(items))) => {
                 assert!(items.is_empty());
             }
             other => panic!("expected empty Array, got {:?}", other),
@@ -3626,7 +3631,7 @@ def \"A\" {
         assert!(matches!(signed("g"), Value::TimeCode(z) if z == 0.0 && z.is_sign_negative()));
         assert!(matches!(
             signed("j"),
-            Value::TypedArray(layerstack::TypedArray::Float(items)) if matches!(items[..],
+            Value::TypedArray(TypedArray::Float(items)) if matches!(items[..],
                 [a, b, c]
                     if a == 1.0 && b.is_sign_negative() && c == 1.5)
         ));

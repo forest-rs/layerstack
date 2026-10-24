@@ -846,8 +846,10 @@ cargo run -p layerstack_schemagen -- --kind-plugin path/to/plugInfo.json --out k
 
 Repeat `--kind-plugin` to include bases declared by other plugins. Include the
 module and call `kinds::register(&mut registry)`, then supply the registry with
-`Scene::with_kinds`. Generation and `KindRegistry::register_all` reject duplicate
-names, missing bases and cycles; failed batches leave the registry unchanged.
-The existing incremental `register` method still accepts staged declarations;
-call `validate` before publishing a manually assembled hierarchy. No runtime
-plugin loading is required.
+`Scene::with_kinds`. Declarations are taken as OpenUSD's `KindRegistry` takes
+them: generation fails on every declaration OpenUSD refuses (an invalid name, a
+declaration or `baseKind` of the wrong type, a built-in kind, a kind declared
+twice), naming its plugin, kind and field; bases nobody declares and cycles are
+kept, as OpenUSD keeps them, and `KindRegistry::issues` reports them.
+`KindRegistry::register_all` registers each declaration it can and returns the
+rest. No runtime plugin loading is required.

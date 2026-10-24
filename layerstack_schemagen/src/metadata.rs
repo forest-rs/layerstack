@@ -634,6 +634,184 @@ pub(crate) fn files(model: &Model) -> Result<Vec<(String, String)>, String> {
     Ok(vec![("metadata.rs".into(), out)])
 }
 
+/// How a library's metadata accessor reads and a setter writes a field's
+/// value.
+struct Accessor {
+    /// The getter's type.
+    read: String,
+    /// The expression reading a `Value` (`fn(&Value, &TokenInterner)`).
+    read_fn: String,
+    /// The setter's parameter type.
+    write: String,
+    /// The expression writing `value` with `TOKENS`, a `FieldValue`.
+    write_call: String,
+}
+
+/// The accessor of a field of `value_type` in a library's module; `None`
+/// for a field that holds no value (`opaque`, `group`).
+fn accessor(value_type: MetadataType) -> Result<Option<Accessor>, String> {
+    use crate::views::{Target, rust_type_in};
+    let schemas = "::layerstack_schemas::value";
+    let list = |item: &str, read: &str| Accessor {
+        read: format!("Vec<{read}>"),
+        read_fn: format!("|v, t| {schemas}::read_array(v, t, {schemas}::read_{item})"),
+        write: format!(
+            "::layerstack::ListOp<{}>",
+            if read == "&'a str" || read == "Arc<str>" {
+                "&str"
+            } else {
+                read
+            }
+        ),
+        write_call: match item {
+            "token" => format!("{schemas}::write_token_list_op(&value, TOKENS)"),
+            "string" => format!("{schemas}::write_string_list_op(&value, TOKENS)"),
+            _ => "::layerstack::FieldValue::from(value)".into(),
+        },
+    };
+    Ok(Some(match value_type.storage() {
+        MetadataType::Dictionary => Accessor {
+            read: "Vec<(Arc<str>, ::layerstack::Value)>".into(),
+            read_fn: "|v, _| match v { ::layerstack::Value::Dictionary(entries) => Some(entries.clone()), _ => None }".into(),
+            write: "Vec<(Arc<str>, ::layerstack::Value)>".into(),
+            write_call: "::layerstack::FieldValue::Value(::layerstack::Value::Dictionary(value))".into(),
+        },
+        MetadataType::ListOp(item) => {
+            let (name, read) = match item {
+                layerstack::ListOpItem::Token => ("token", "&'a str"),
+                layerstack::ListOpItem::String => ("string", "Arc<str>"),
+                layerstack::ListOpItem::Int => ("int", "i32"),
+                layerstack::ListOpItem::UInt => ("uint", "u32"),
+                layerstack::ListOpItem::Int64 => ("int64", "i64"),
+                layerstack::ListOpItem::UInt64 => ("uint64", "u64"),
+            };
+            list(name, read)
+        }
+        MetadataType::Value(ty) | MetadataType::Array(ty) => {
+            let array = matches!(value_type, MetadataType::Array(_));
+            let Some(rust) = rust_type_in(&ty.zero(), array, Target::Library)? else {
+                return Ok(None);
+            };
+            Accessor {
+                write_call: format!(
+                    "::layerstack::FieldValue::Value({})",
+                    rust.write("value", "TOKENS")
+                ),
+                read: rust.read,
+                read_fn: rust.read_fn,
+                write: rust.write,
+            }
+        }
+    }))
+}
+
+/// The typed views and edit handles of a schema library's metadata fields
+/// (`SdfMetadata`), for its Rust module: `PrimMetadata` and
+/// `PrimMetadataEdit` for prim fields, `PropertyMetadata` and
+/// `PropertyMetadataEdit` for attribute and relationship fields, and
+/// `StageMetadata` for layer fields; empty without fields. A field's
+/// getter is named for it (`metaFloat` reads with `meta_float`), its
+/// setter and clearer `set_…` and `clear_…`; two that would share a name
+/// are an error, as a field that holds no value is not given accessors.
+pub(crate) fn library_items(
+    metadata: &[MetadataDefinition],
+    tokens: &TokenInterner,
+) -> Result<String, String> {
+    #[derive(Default)]
+    struct Kind {
+        reads: String,
+        writes: String,
+        names: std::collections::BTreeSet<String>,
+    }
+    let (mut prim, mut property, mut stage) = (Kind::default(), Kind::default(), Kind::default());
+    for field in metadata {
+        let name = tokens.resolve(field.name);
+        let Some(accessor) = accessor(field.value_type)? else {
+            continue;
+        };
+        let method = crate::views::snake(name);
+        let doc = format!(
+            "`{name}` (`{}`). {}",
+            field.value_type,
+            field.documentation.trim()
+        );
+        let read = &accessor.read;
+        let read_fn = &accessor.read_fn;
+        let write = &accessor.write;
+        for (kind, applies, label) in [
+            (&mut prim, field.applies_to(MetadataTarget::Prim), "prim"),
+            (
+                &mut property,
+                field.applies_to(MetadataTarget::Attribute)
+                    || field.applies_to(MetadataTarget::Relationship),
+                "property",
+            ),
+            (&mut stage, field.applies_to(MetadataTarget::Layer), "stage"),
+        ] {
+            if !applies {
+                continue;
+            }
+            for accessor_name in [
+                method.clone(),
+                format!("set_{method}"),
+                format!("clear_{method}"),
+            ] {
+                if !kind.names.insert(accessor_name.clone()) {
+                    return Err(format!(
+                        "two metadata fields make the {label} accessor `{accessor_name}`; rename one"
+                    ));
+                }
+            }
+            let _ = write!(
+                kind.reads,
+                "\n    #[doc = {:?}]\n    #[must_use]\n    pub fn {method}(&self) -> Option<{read}> {{\n        self.read({name:?}, {read_fn})\n    }}\n",
+                format!("Reads {doc}")
+            );
+            let write_call = match label {
+                "stage" => accessor.write_call.replace("TOKENS", "store.tokens_mut()"),
+                _ => accessor.write_call.replace("TOKENS", "edit.tokens()"),
+            };
+            let _ = match label {
+                "stage" => write!(
+                    kind.writes,
+                    "\n    #[doc = {:?}]\n    ///\n    /// # Errors\n    ///\n    /// Why the field cannot be authored ([`::layerstack::LiveStage::set_stage_metadata`]).\n    pub fn set_{method}(\n        live: &mut ::layerstack::LiveStage,\n        store: &mut dyn ::layerstack::LayerStore,\n        layer: ::layerstack::LayerId,\n        value: {write},\n    ) -> Result<::layerstack::Applied, ::layerstack::StageMetadataError> {{\n        let value = {write_call};\n        let key = store.tokens_mut().intern({name:?});\n        live.set_stage_metadata(store, layer, key, value)\n    }}\n\n    #[doc = {:?}]\n    ///\n    /// # Errors\n    ///\n    /// Why the field cannot be cleared.\n    pub fn clear_{method}(\n        live: &mut ::layerstack::LiveStage,\n        store: &mut dyn ::layerstack::LayerStore,\n        layer: ::layerstack::LayerId,\n    ) -> Result<::layerstack::Applied, ::layerstack::StageMetadataError> {{\n        let key = store.tokens_mut().intern({name:?});\n        live.clear_stage_metadata(store, layer, key)\n    }}\n",
+                    format!("Authors {doc} on `layer`, the stage's root or session layer."),
+                    format!("Clears `{name}` on `layer`."),
+                ),
+                _ => write!(
+                    kind.writes,
+                    "\n    #[doc = {:?}]\n    ///\n    /// # Errors\n    ///\n    /// Why the field cannot be authored there.\n    pub fn set_{method}(\n        &self,\n        edit: &mut ::layerstack_schemas::SchemaEdit<'_>,\n        value: {write},\n    ) -> Result<&Self, ::layerstack_schemas::MetadataError> {{\n        let value = {write_call};\n        self.write(edit, {name:?}, Some(value))?;\n        Ok(self)\n    }}\n\n    #[doc = {:?}]\n    ///\n    /// # Errors\n    ///\n    /// Why the field cannot be cleared there.\n    pub fn clear_{method}(\n        &self,\n        edit: &mut ::layerstack_schemas::SchemaEdit<'_>,\n    ) -> Result<&Self, ::layerstack_schemas::MetadataError> {{\n        self.write(edit, {name:?}, None)?;\n        Ok(self)\n    }}\n",
+                    format!("Authors {doc}"),
+                    format!("Clears `{name}` in the edit target, so weaker opinions show through."),
+                ),
+            };
+        }
+    }
+    let mut out = String::new();
+    if !prim.reads.is_empty() {
+        let _ = write!(
+            out,
+            "\n/// Reads the library's metadata fields (`SdfMetadata`) of a prim: its\n/// composed authored values ([`::layerstack_schemas::PrimView::metadata_value`]).\n#[derive(Clone, Copy, Debug)]\npub struct PrimMetadata<'a> {{\n    prim: ::layerstack_schemas::PrimView<'a>,\n}}\n\n#[allow(clippy::doc_markdown, reason = \"documentation as the plugin writes it\")]\nimpl<'a> PrimMetadata<'a> {{\n    /// The fields of `prim`.\n    #[must_use]\n    pub fn of(prim: ::layerstack_schemas::PrimView<'a>) -> Self {{\n        Self {{ prim }}\n    }}\n\n    fn read<T>(\n        &self,\n        name: &str,\n        read: impl Fn(&::layerstack::Value, &'a ::layerstack::TokenInterner) -> Option<T>,\n    ) -> Option<T> {{\n        read(&self.prim.metadata_value(name)?, self.prim.scene().store().tokens())\n    }}\n{}}}\n\n/// Authors the library's metadata fields of a prim through a\n/// [`::layerstack_schemas::SchemaEdit`]\n/// ([`::layerstack_schemas::PrimEdit::write_metadata`]).\n#[derive(Clone, Copy, Debug)]\npub struct PrimMetadataEdit {{\n    prim: ::layerstack_schemas::PrimEdit,\n}}\n\n#[allow(clippy::doc_markdown, reason = \"documentation as the plugin writes it\")]\nimpl PrimMetadataEdit {{\n    /// A handle authoring the fields of the prim `prim` authors.\n    #[must_use]\n    pub fn of(prim: ::layerstack_schemas::PrimEdit) -> Self {{\n        Self {{ prim }}\n    }}\n\n    fn write(\n        &self,\n        edit: &mut ::layerstack_schemas::SchemaEdit<'_>,\n        name: &str,\n        value: Option<::layerstack::FieldValue>,\n    ) -> Result<(), ::layerstack_schemas::MetadataError> {{\n        match value {{\n            Some(value) => self.prim.write_metadata(edit, name, value),\n            None => self.prim.clear_metadata(edit, name),\n        }}\n    }}\n{}}}\n",
+            prim.reads, prim.writes
+        );
+    }
+    if !property.reads.is_empty() {
+        let _ = write!(
+            out,
+            "\n/// Reads the library's metadata fields (`SdfMetadata`) of a property: its\n/// composed authored values ([`::layerstack_schemas::PropertyMetadata::value`]).\n#[derive(Clone, Copy, Debug)]\npub struct PropertyMetadata<'a> {{\n    metadata: ::layerstack_schemas::PropertyMetadata<'a>,\n    tokens: &'a ::layerstack::TokenInterner,\n}}\n\n#[allow(clippy::doc_markdown, reason = \"documentation as the plugin writes it\")]\nimpl<'a> PropertyMetadata<'a> {{\n    /// The fields of the property `name` (its USD name) of `prim`, if it\n    /// has one.\n    #[must_use]\n    pub fn of(prim: ::layerstack_schemas::PrimView<'a>, name: &str) -> Option<Self> {{\n        Some(Self {{\n            metadata: prim.property_metadata(name)?,\n            tokens: prim.scene().store().tokens(),\n        }})\n    }}\n\n    fn read<T>(\n        &self,\n        name: &str,\n        read: impl Fn(&::layerstack::Value, &'a ::layerstack::TokenInterner) -> Option<T>,\n    ) -> Option<T> {{\n        read(&self.metadata.value(name)?, self.tokens)\n    }}\n{}}}\n\n/// Authors the library's metadata fields of a property through a\n/// [`::layerstack_schemas::SchemaEdit`] ([`::layerstack_schemas::PrimEdit::write_property_metadata`]).\n#[derive(Clone, Copy, Debug)]\npub struct PropertyMetadataEdit<'n> {{\n    prim: ::layerstack_schemas::PrimEdit,\n    name: &'n str,\n}}\n\n#[allow(clippy::doc_markdown, reason = \"documentation as the plugin writes it\")]\nimpl<'n> PropertyMetadataEdit<'n> {{\n    /// A handle authoring the fields of the property `name` (its USD name)\n    /// of the prim `prim` authors.\n    #[must_use]\n    pub fn of(prim: ::layerstack_schemas::PrimEdit, name: &'n str) -> Self {{\n        Self {{ prim, name }}\n    }}\n\n    fn write(\n        &self,\n        edit: &mut ::layerstack_schemas::SchemaEdit<'_>,\n        key: &str,\n        value: Option<::layerstack::FieldValue>,\n    ) -> Result<(), ::layerstack_schemas::MetadataError> {{\n        match value {{\n            Some(value) => self.prim.write_property_metadata(edit, self.name, key, value),\n            None => self.prim.clear_property_metadata(edit, self.name, key),\n        }}\n    }}\n{}}}\n",
+            property.reads, property.writes
+        );
+    }
+    if !stage.reads.is_empty() {
+        let _ = write!(
+            out,
+            "\n/// Reads and authors the library's metadata fields (`SdfMetadata`) of the\n/// stage: its root layer's, or their fallbacks ([`::layerstack_schemas::StageMetadata::value`]).\n#[derive(Clone, Copy, Debug)]\npub struct StageMetadata<'a> {{\n    scene: ::layerstack_schemas::Scene<'a>,\n}}\n\n#[allow(clippy::doc_markdown, reason = \"documentation as the plugin writes it\")]\nimpl<'a> StageMetadata<'a> {{\n    /// The fields of the stage of `scene`.\n    #[must_use]\n    pub fn of(scene: ::layerstack_schemas::Scene<'a>) -> Self {{\n        Self {{ scene }}\n    }}\n\n    fn read<T>(\n        &self,\n        name: &str,\n        read: impl Fn(&::layerstack::Value, &'a ::layerstack::TokenInterner) -> Option<T>,\n    ) -> Option<T> {{\n        read(&self.scene.metadata().value(name)?, self.scene.store().tokens())\n    }}\n{}{}}}\n",
+            stage.reads, stage.writes
+        );
+    }
+    Ok(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -863,6 +1041,31 @@ mod tests {
             MetadataRejection::AlreadyRegistered {
                 by: "plugin `a: first`".into()
             }
+        );
+    }
+
+    #[test]
+    fn library_accessors_that_would_share_a_name_are_an_error() {
+        let (read, tokens) = declare(serde_json::json!({
+            "hostScale": {"type": "float", "appliesTo": "prims"},
+            "host_scale": {"type": "double", "appliesTo": "prims"},
+        }));
+        let fields: Vec<_> = read.accepted.into_iter().map(|d| d.definition).collect();
+        let error = library_items(&fields, &tokens).unwrap_err();
+        assert!(error.contains("`host_scale`"), "{error}");
+        // On different kinds of spec they do not meet.
+        let (read, tokens) = declare(serde_json::json!({
+            "hostScale": {"type": "float", "appliesTo": "prims"},
+            "host_scale": {"type": "double", "appliesTo": "layers"},
+            "hostBlob": {"type": "opaque", "appliesTo": "prims"},
+        }));
+        let fields: Vec<_> = read.accepted.into_iter().map(|d| d.definition).collect();
+        let items = library_items(&fields, &tokens).unwrap();
+        assert!(items.contains("pub fn host_scale(&self) -> Option<f32>"));
+        assert!(items.contains("pub fn host_scale(&self) -> Option<f64>"));
+        assert!(
+            !items.contains("host_blob"),
+            "an opaque field holds no value"
         );
     }
 }

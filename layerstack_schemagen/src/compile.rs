@@ -110,6 +110,12 @@
 //!   adds OpenUSD's; nothing is parsed at run time. `DEPENDENCIES` lists
 //!   the OpenUSD domains the schemas build on, and `registry(tokens)`
 //!   builds a registry of both. `LIBRARY` is the library's name.
+//! - `PrimMetadata` and `PrimMetadataEdit`, `PropertyMetadata` and
+//!   `PropertyMetadataEdit`, and `StageMetadata` read and author the
+//!   plugin's metadata fields with their declared types, a getter, a
+//!   `set_…` and a `clear_…` per field (`hostScale`: `host_scale`), list ops
+//!   as `layerstack::ListOp`s; a field that conflicts with a built-in one
+//!   or two that make one accessor name are refused.
 //! - `KINDS` holds the kinds the plugin's `plugInfo.json` declares
 //!   (`Info.Kinds`, from an existing file), read as OpenUSD's
 //!   `KindRegistry` reads them ([`kinds`](crate::kinds)), and

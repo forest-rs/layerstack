@@ -24,6 +24,20 @@ fn main() {
     let module = compiled.rust_module().unwrap_or_else(|e| panic!("{e}"));
     let out = PathBuf::from(std::env::var_os("OUT_DIR").expect("cargo sets OUT_DIR"));
     std::fs::write(out.join("lab.rs"), module).expect("OUT_DIR is writable");
+
+    // A library whose `plugInfo.json` declares metadata fields of every
+    // type, for its typed metadata views.
+    let registry = Path::new("../layerstack_conformance/fixtures/registry_metadata");
+    let existing = std::fs::read_to_string(registry.join("plugInfo.json"))
+        .expect("the registry_metadata plugInfo.json");
+    let options = CompileOptions::new()
+        .with_search_path(fixtures)
+        .with_existing_plug_info(existing);
+    let compiled =
+        compile(&registry.join("schema.usda"), &options).unwrap_or_else(|e| panic!("{e}"));
+    let module = compiled.rust_module().unwrap_or_else(|e| panic!("{e}"));
+    std::fs::write(out.join("fields.rs"), module).expect("OUT_DIR is writable");
+    println!("cargo:rerun-if-changed={}", registry.display());
     println!("cargo:rerun-if-changed={}", fixtures.join("lab").display());
     println!("cargo:rerun-if-changed={}", fixtures.join("usd").display());
 }

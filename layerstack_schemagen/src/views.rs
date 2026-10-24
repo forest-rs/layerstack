@@ -194,7 +194,7 @@ pub(crate) struct RustType {
 
 impl RustType {
     /// The expression writing `value` with the interner `tokens`.
-    fn write(&self, value: &str, tokens: &str) -> String {
+    pub(crate) fn write(&self, value: &str, tokens: &str) -> String {
         self.write_call
             .replace("VALUE", value)
             .replace("TOKENS", tokens)

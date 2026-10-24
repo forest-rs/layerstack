@@ -353,8 +353,12 @@ pub(crate) fn module_text(
         owner: format!("the `{library}` library's"),
     };
     let ordered: Vec<&Schema> = schemas.iter().collect();
-    let items = views::module_items(&cx, &ordered, &mut TestTable::default())
+    let mut items = views::module_items(&cx, &ordered, &mut TestTable::default())
         .map_err(|e| error(format!("{e} (a property's `apiName` names its accessors)")))?;
+    // The typed views and edit handles of the library's metadata fields.
+    items
+        .body
+        .push_str(&crate::metadata::library_items(&metadata, &store.tokens).map_err(error)?);
     check_type_names(&items.body)?;
 
     let mut types = ValueTypes::default();

@@ -1,0 +1,745 @@
+{
+ "before": {
+  "asset.usda": "#usda 1.0\n\ndef Mesh \"Asset\"\n{\n    int[] faceVertexCounts = [3]\n    int[] faceVertexIndices = [0, 1, 2]\n\n    def Mesh \"Child\"\n    {\n        int[] faceVertexCounts = [3]\n        int[] faceVertexIndices = [0, 1, 2]\n    }\n\n    def Material \"Mat\"\n    {\n    }\n}\n\ndef Material \"Looks\"\n{\n    def Shader \"Surface\"\n    {\n        uniform token info:id = \"UsdPreviewSurface\"\n    }\n}\n\n",
+  "scene.usda": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+ },
+ "cases": [
+  {
+   "family": "geometry",
+   "path": "/Instance",
+   "raised": false,
+   "route": "define",
+   "situation": "root",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef Scope \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance/Child",
+   "raised": true,
+   "route": "define",
+   "situation": "proxy",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "Child",
+   "prototype_of": "/Instance",
+   "raised": true,
+   "route": "define",
+   "situation": "prototype",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance/New",
+   "raised": true,
+   "route": "define",
+   "situation": "new",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance/Child",
+   "raised": false,
+   "route": "define",
+   "situation": "nonlocal",
+   "target": "asset.usda",
+   "text": "#usda 1.0\n\ndef Mesh \"Asset\"\n{\n    int[] faceVertexCounts = [3]\n    int[] faceVertexIndices = [0, 1, 2]\n\n    def Scope \"Child\"\n    {\n        int[] faceVertexCounts = [3]\n        int[] faceVertexIndices = [0, 1, 2]\n    }\n\n    def Material \"Mat\"\n    {\n    }\n}\n\ndef Material \"Looks\"\n{\n    def Shader \"Surface\"\n    {\n        uniform token info:id = \"UsdPreviewSurface\"\n    }\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance",
+   "raised": false,
+   "route": "apply_single",
+   "situation": "root",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    prepend apiSchemas = [\"ShapingAPI\"]\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance/Child",
+   "raised": true,
+   "route": "apply_single",
+   "situation": "proxy",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "Child",
+   "prototype_of": "/Instance",
+   "raised": true,
+   "route": "apply_single",
+   "situation": "prototype",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance/New",
+   "raised": true,
+   "route": "apply_single",
+   "situation": "new",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance/Child",
+   "raised": false,
+   "route": "apply_single",
+   "situation": "nonlocal",
+   "target": "asset.usda",
+   "text": "#usda 1.0\n\ndef Mesh \"Asset\"\n{\n    int[] faceVertexCounts = [3]\n    int[] faceVertexIndices = [0, 1, 2]\n\n    def Mesh \"Child\" (\n        prepend apiSchemas = [\"ShapingAPI\"]\n    )\n    {\n        int[] faceVertexCounts = [3]\n        int[] faceVertexIndices = [0, 1, 2]\n    }\n\n    def Material \"Mat\"\n    {\n    }\n}\n\ndef Material \"Looks\"\n{\n    def Shader \"Surface\"\n    {\n        uniform token info:id = \"UsdPreviewSurface\"\n    }\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance",
+   "raised": false,
+   "route": "apply_multiple",
+   "situation": "root",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    prepend apiSchemas = [\"CollectionAPI:set\"]\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance/Child",
+   "raised": true,
+   "route": "apply_multiple",
+   "situation": "proxy",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "Child",
+   "prototype_of": "/Instance",
+   "raised": true,
+   "route": "apply_multiple",
+   "situation": "prototype",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance/New",
+   "raised": true,
+   "route": "apply_multiple",
+   "situation": "new",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance/Child",
+   "raised": false,
+   "route": "apply_multiple",
+   "situation": "nonlocal",
+   "target": "asset.usda",
+   "text": "#usda 1.0\n\ndef Mesh \"Asset\"\n{\n    int[] faceVertexCounts = [3]\n    int[] faceVertexIndices = [0, 1, 2]\n\n    def Mesh \"Child\" (\n        prepend apiSchemas = [\"CollectionAPI:set\"]\n    )\n    {\n        int[] faceVertexCounts = [3]\n        int[] faceVertexIndices = [0, 1, 2]\n    }\n\n    def Material \"Mat\"\n    {\n    }\n}\n\ndef Material \"Looks\"\n{\n    def Shader \"Surface\"\n    {\n        uniform token info:id = \"UsdPreviewSurface\"\n    }\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance",
+   "raised": false,
+   "route": "apply_by_name",
+   "situation": "root",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    prepend apiSchemas = [\"MotionAPI\"]\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance/Child",
+   "raised": true,
+   "route": "apply_by_name",
+   "situation": "proxy",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "Child",
+   "prototype_of": "/Instance",
+   "raised": true,
+   "route": "apply_by_name",
+   "situation": "prototype",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance/New",
+   "raised": true,
+   "route": "apply_by_name",
+   "situation": "new",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance/Child",
+   "raised": false,
+   "route": "apply_by_name",
+   "situation": "nonlocal",
+   "target": "asset.usda",
+   "text": "#usda 1.0\n\ndef Mesh \"Asset\"\n{\n    int[] faceVertexCounts = [3]\n    int[] faceVertexIndices = [0, 1, 2]\n\n    def Mesh \"Child\" (\n        prepend apiSchemas = [\"MotionAPI\"]\n    )\n    {\n        int[] faceVertexCounts = [3]\n        int[] faceVertexIndices = [0, 1, 2]\n    }\n\n    def Material \"Mat\"\n    {\n    }\n}\n\ndef Material \"Looks\"\n{\n    def Shader \"Surface\"\n    {\n        uniform token info:id = \"UsdPreviewSurface\"\n    }\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance",
+   "raised": false,
+   "route": "attribute_default",
+   "situation": "root",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n    uniform token purpose = \"proxy\"\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance/Child",
+   "raised": true,
+   "route": "attribute_default",
+   "situation": "proxy",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "Child",
+   "prototype_of": "/Instance",
+   "raised": true,
+   "route": "attribute_default",
+   "situation": "prototype",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance/New",
+   "raised": true,
+   "route": "attribute_default",
+   "situation": "new",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance/Child",
+   "raised": false,
+   "route": "attribute_default",
+   "situation": "nonlocal",
+   "target": "asset.usda",
+   "text": "#usda 1.0\n\ndef Mesh \"Asset\"\n{\n    int[] faceVertexCounts = [3]\n    int[] faceVertexIndices = [0, 1, 2]\n\n    def Mesh \"Child\"\n    {\n        int[] faceVertexCounts = [3]\n        int[] faceVertexIndices = [0, 1, 2]\n        uniform token purpose = \"proxy\"\n    }\n\n    def Material \"Mat\"\n    {\n    }\n}\n\ndef Material \"Looks\"\n{\n    def Shader \"Surface\"\n    {\n        uniform token info:id = \"UsdPreviewSurface\"\n    }\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance",
+   "raised": false,
+   "route": "attribute_sample",
+   "situation": "root",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n    token visibility.timeSamples = {\n        5: \"invisible\",\n    }\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance/Child",
+   "raised": true,
+   "route": "attribute_sample",
+   "situation": "proxy",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "Child",
+   "prototype_of": "/Instance",
+   "raised": true,
+   "route": "attribute_sample",
+   "situation": "prototype",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance/New",
+   "raised": true,
+   "route": "attribute_sample",
+   "situation": "new",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance/Child",
+   "raised": false,
+   "route": "attribute_sample",
+   "situation": "nonlocal",
+   "target": "asset.usda",
+   "text": "#usda 1.0\n\ndef Mesh \"Asset\"\n{\n    int[] faceVertexCounts = [3]\n    int[] faceVertexIndices = [0, 1, 2]\n\n    def Mesh \"Child\"\n    {\n        int[] faceVertexCounts = [3]\n        int[] faceVertexIndices = [0, 1, 2]\n        token visibility.timeSamples = {\n            5: \"invisible\",\n        }\n    }\n\n    def Material \"Mat\"\n    {\n    }\n}\n\ndef Material \"Looks\"\n{\n    def Shader \"Surface\"\n    {\n        uniform token info:id = \"UsdPreviewSurface\"\n    }\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance",
+   "raised": false,
+   "route": "targets",
+   "situation": "root",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n    rel proxyPrim = </Instance>\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance/Child",
+   "raised": true,
+   "route": "targets",
+   "situation": "proxy",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "Child",
+   "prototype_of": "/Instance",
+   "raised": true,
+   "route": "targets",
+   "situation": "prototype",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance/New",
+   "raised": true,
+   "route": "targets",
+   "situation": "new",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance/Child",
+   "raised": false,
+   "route": "targets",
+   "situation": "nonlocal",
+   "target": "asset.usda",
+   "text": "#usda 1.0\n\ndef Mesh \"Asset\"\n{\n    int[] faceVertexCounts = [3]\n    int[] faceVertexIndices = [0, 1, 2]\n\n    def Mesh \"Child\"\n    {\n        int[] faceVertexCounts = [3]\n        int[] faceVertexIndices = [0, 1, 2]\n        rel proxyPrim = </Asset>\n    }\n\n    def Material \"Mat\"\n    {\n    }\n}\n\ndef Material \"Looks\"\n{\n    def Shader \"Surface\"\n    {\n        uniform token info:id = \"UsdPreviewSurface\"\n    }\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance",
+   "raised": false,
+   "route": "add_target",
+   "situation": "root",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n    custom rel links\n    prepend rel links = </Instance>\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance/Child",
+   "raised": true,
+   "route": "add_target",
+   "situation": "proxy",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "Child",
+   "prototype_of": "/Instance",
+   "raised": true,
+   "route": "add_target",
+   "situation": "prototype",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance/New",
+   "raised": true,
+   "route": "add_target",
+   "situation": "new",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance/Child",
+   "raised": false,
+   "route": "add_target",
+   "situation": "nonlocal",
+   "target": "asset.usda",
+   "text": "#usda 1.0\n\ndef Mesh \"Asset\"\n{\n    int[] faceVertexCounts = [3]\n    int[] faceVertexIndices = [0, 1, 2]\n\n    def Mesh \"Child\"\n    {\n        int[] faceVertexCounts = [3]\n        int[] faceVertexIndices = [0, 1, 2]\n        custom rel links\n        prepend rel links = </Asset>\n    }\n\n    def Material \"Mat\"\n    {\n    }\n}\n\ndef Material \"Looks\"\n{\n    def Shader \"Surface\"\n    {\n        uniform token info:id = \"UsdPreviewSurface\"\n    }\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance",
+   "raised": false,
+   "route": "property_metadata",
+   "situation": "root",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n    uniform token purpose (\n        doc = \"Tagged\"\n    )\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance/Child",
+   "raised": true,
+   "route": "property_metadata",
+   "situation": "proxy",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "Child",
+   "prototype_of": "/Instance",
+   "raised": true,
+   "route": "property_metadata",
+   "situation": "prototype",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance/New",
+   "raised": true,
+   "route": "property_metadata",
+   "situation": "new",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance/Child",
+   "raised": false,
+   "route": "property_metadata",
+   "situation": "nonlocal",
+   "target": "asset.usda",
+   "text": "#usda 1.0\n\ndef Mesh \"Asset\"\n{\n    int[] faceVertexCounts = [3]\n    int[] faceVertexIndices = [0, 1, 2]\n\n    def Mesh \"Child\"\n    {\n        int[] faceVertexCounts = [3]\n        int[] faceVertexIndices = [0, 1, 2]\n        uniform token purpose (\n            doc = \"Tagged\"\n        )\n    }\n\n    def Material \"Mat\"\n    {\n    }\n}\n\ndef Material \"Looks\"\n{\n    def Shader \"Surface\"\n    {\n        uniform token info:id = \"UsdPreviewSurface\"\n    }\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance",
+   "raised": false,
+   "route": "primvar",
+   "situation": "root",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n    float primvars:tint = 0.5\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance/Child",
+   "raised": true,
+   "route": "primvar",
+   "situation": "proxy",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "Child",
+   "prototype_of": "/Instance",
+   "raised": true,
+   "route": "primvar",
+   "situation": "prototype",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance/New",
+   "raised": true,
+   "route": "primvar",
+   "situation": "new",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance/Child",
+   "raised": false,
+   "route": "primvar",
+   "situation": "nonlocal",
+   "target": "asset.usda",
+   "text": "#usda 1.0\n\ndef Mesh \"Asset\"\n{\n    int[] faceVertexCounts = [3]\n    int[] faceVertexIndices = [0, 1, 2]\n\n    def Mesh \"Child\"\n    {\n        int[] faceVertexCounts = [3]\n        int[] faceVertexIndices = [0, 1, 2]\n        float primvars:tint = 0.5\n    }\n\n    def Material \"Mat\"\n    {\n    }\n}\n\ndef Material \"Looks\"\n{\n    def Shader \"Surface\"\n    {\n        uniform token info:id = \"UsdPreviewSurface\"\n    }\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance",
+   "raised": true,
+   "route": "subset",
+   "situation": "root",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance/Child",
+   "raised": true,
+   "route": "subset",
+   "situation": "proxy",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "Child",
+   "prototype_of": "/Instance",
+   "raised": true,
+   "route": "subset",
+   "situation": "prototype",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance/New",
+   "raised": true,
+   "route": "subset",
+   "situation": "new",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance/Child",
+   "raised": false,
+   "route": "subset",
+   "situation": "nonlocal",
+   "target": "asset.usda",
+   "text": "#usda 1.0\n\ndef Mesh \"Asset\"\n{\n    int[] faceVertexCounts = [3]\n    int[] faceVertexIndices = [0, 1, 2]\n\n    def Mesh \"Child\"\n    {\n        int[] faceVertexCounts = [3]\n        int[] faceVertexIndices = [0, 1, 2]\n\n        def GeomSubset \"part\"\n        {\n            uniform token elementType = \"face\"\n            uniform token familyName = \"family\"\n            int[] indices = [0]\n        }\n    }\n\n    def Material \"Mat\"\n    {\n    }\n}\n\ndef Material \"Looks\"\n{\n    def Shader \"Surface\"\n    {\n        uniform token info:id = \"UsdPreviewSurface\"\n    }\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance",
+   "raised": false,
+   "route": "binding",
+   "situation": "root",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    prepend apiSchemas = [\"MaterialBindingAPI\"]\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n    rel material:binding = </Instance/Mat>\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance/Child",
+   "raised": true,
+   "route": "binding",
+   "situation": "proxy",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "Child",
+   "prototype_of": "/Instance",
+   "raised": true,
+   "route": "binding",
+   "situation": "prototype",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance/New",
+   "raised": true,
+   "route": "binding",
+   "situation": "new",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance/Child",
+   "raised": false,
+   "route": "binding",
+   "situation": "nonlocal",
+   "target": "asset.usda",
+   "text": "#usda 1.0\n\ndef Mesh \"Asset\"\n{\n    int[] faceVertexCounts = [3]\n    int[] faceVertexIndices = [0, 1, 2]\n\n    def Mesh \"Child\" (\n        prepend apiSchemas = [\"MaterialBindingAPI\"]\n    )\n    {\n        int[] faceVertexCounts = [3]\n        int[] faceVertexIndices = [0, 1, 2]\n        rel material:binding = </Asset/Mat>\n    }\n\n    def Material \"Mat\"\n    {\n    }\n}\n\ndef Material \"Looks\"\n{\n    def Shader \"Surface\"\n    {\n        uniform token info:id = \"UsdPreviewSurface\"\n    }\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance",
+   "raised": false,
+   "route": "xform_op",
+   "situation": "root",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n    double3 xformOp:translate = (1, 2, 3)\n    uniform token[] xformOpOrder = [\"xformOp:translate\"]\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance/Child",
+   "raised": true,
+   "route": "xform_op",
+   "situation": "proxy",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "Child",
+   "prototype_of": "/Instance",
+   "raised": true,
+   "route": "xform_op",
+   "situation": "prototype",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance/New",
+   "raised": true,
+   "route": "xform_op",
+   "situation": "new",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance/Child",
+   "raised": false,
+   "route": "xform_op",
+   "situation": "nonlocal",
+   "target": "asset.usda",
+   "text": "#usda 1.0\n\ndef Mesh \"Asset\"\n{\n    int[] faceVertexCounts = [3]\n    int[] faceVertexIndices = [0, 1, 2]\n\n    def Mesh \"Child\"\n    {\n        int[] faceVertexCounts = [3]\n        int[] faceVertexIndices = [0, 1, 2]\n        double3 xformOp:translate = (1, 2, 3)\n        uniform token[] xformOpOrder = [\"xformOp:translate\"]\n    }\n\n    def Material \"Mat\"\n    {\n    }\n}\n\ndef Material \"Looks\"\n{\n    def Shader \"Surface\"\n    {\n        uniform token info:id = \"UsdPreviewSurface\"\n    }\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance",
+   "raised": false,
+   "route": "make_invisible",
+   "situation": "root",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n    token visibility = \"invisible\"\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance/Child",
+   "raised": true,
+   "route": "make_invisible",
+   "situation": "proxy",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "Child",
+   "prototype_of": "/Instance",
+   "raised": true,
+   "route": "make_invisible",
+   "situation": "prototype",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance/New",
+   "raised": true,
+   "route": "make_invisible",
+   "situation": "new",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance/Child",
+   "raised": false,
+   "route": "make_invisible",
+   "situation": "nonlocal",
+   "target": "asset.usda",
+   "text": "#usda 1.0\n\ndef Mesh \"Asset\"\n{\n    int[] faceVertexCounts = [3]\n    int[] faceVertexIndices = [0, 1, 2]\n\n    def Mesh \"Child\"\n    {\n        int[] faceVertexCounts = [3]\n        int[] faceVertexIndices = [0, 1, 2]\n        token visibility = \"invisible\"\n    }\n\n    def Material \"Mat\"\n    {\n    }\n}\n\ndef Material \"Looks\"\n{\n    def Shader \"Surface\"\n    {\n        uniform token info:id = \"UsdPreviewSurface\"\n    }\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance",
+   "raised": false,
+   "route": "ui_hints",
+   "situation": "root",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n    uniform token purpose (\n        uiHints = {\n            string displayName = \"Shown\"\n        }\n    )\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance/Child",
+   "raised": true,
+   "route": "ui_hints",
+   "situation": "proxy",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "Child",
+   "prototype_of": "/Instance",
+   "raised": true,
+   "route": "ui_hints",
+   "situation": "prototype",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance/New",
+   "raised": true,
+   "route": "ui_hints",
+   "situation": "new",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "geometry",
+   "path": "/Instance/Child",
+   "raised": false,
+   "route": "ui_hints",
+   "situation": "nonlocal",
+   "target": "asset.usda",
+   "text": "#usda 1.0\n\ndef Mesh \"Asset\"\n{\n    int[] faceVertexCounts = [3]\n    int[] faceVertexIndices = [0, 1, 2]\n\n    def Mesh \"Child\"\n    {\n        int[] faceVertexCounts = [3]\n        int[] faceVertexIndices = [0, 1, 2]\n        uniform token purpose (\n            uiHints = {\n                string displayName = \"Shown\"\n            }\n        )\n    }\n\n    def Material \"Mat\"\n    {\n    }\n}\n\ndef Material \"Looks\"\n{\n    def Shader \"Surface\"\n    {\n        uniform token info:id = \"UsdPreviewSurface\"\n    }\n}\n\n"
+  },
+  {
+   "family": "shading",
+   "path": "/Looks",
+   "raised": false,
+   "route": "port",
+   "situation": "root",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n    float inputs:roughness = 0.25\n}\n\n"
+  },
+  {
+   "family": "shading",
+   "path": "/Looks/Surface",
+   "raised": true,
+   "route": "port",
+   "situation": "proxy",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "shading",
+   "path": "Surface",
+   "prototype_of": "/Looks",
+   "raised": true,
+   "route": "port",
+   "situation": "prototype",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "shading",
+   "path": "/Looks/New",
+   "raised": true,
+   "route": "port",
+   "situation": "new",
+   "target": "scene.usda",
+   "text": "#usda 1.0\n\ndef \"Instance\" (\n    instanceable = true\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"Looks\" (\n    instanceable = true\n    prepend references = @asset.usda@</Looks>\n)\n{\n}\n\n"
+  },
+  {
+   "family": "shading",
+   "path": "/Looks/Surface",
+   "raised": false,
+   "route": "port",
+   "situation": "nonlocal",
+   "target": "asset.usda",
+   "text": "#usda 1.0\n\ndef Mesh \"Asset\"\n{\n    int[] faceVertexCounts = [3]\n    int[] faceVertexIndices = [0, 1, 2]\n\n    def Mesh \"Child\"\n    {\n        int[] faceVertexCounts = [3]\n        int[] faceVertexIndices = [0, 1, 2]\n    }\n\n    def Material \"Mat\"\n    {\n    }\n}\n\ndef Material \"Looks\"\n{\n    def Shader \"Surface\"\n    {\n        uniform token info:id = \"UsdPreviewSurface\"\n        float inputs:roughness = 0.25\n    }\n}\n\n"
+  }
+ ],
+ "openusd_version": "26.8"
+}

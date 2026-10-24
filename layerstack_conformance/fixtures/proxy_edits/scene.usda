@@ -1,0 +1,15 @@
+#usda 1.0
+
+def "Instance" (
+    instanceable = true
+    prepend references = @asset.usda@</Asset>
+)
+{
+}
+
+def "Looks" (
+    instanceable = true
+    prepend references = @asset.usda@</Looks>
+)
+{
+}

@@ -838,6 +838,11 @@ it unchanged. No history or shader scheduling is implied.
 
 `PointInstancer::compute_instance_transforms_at_times` evaluates ordered shutter
 samples against a fixed topology/mask base, retaining original indices and IDs.
+It reads base-time inputs once for the batch, and, without usable motion,
+carries an interpolated array whose length does not match into the next
+sample as OpenUSD does; `prepare_instance_transforms_at_times` captures the
+same batch as snapshots. A prototype target that is not a prim contributes
+the identity.
 Sparse default/sample edits participate in motion anchoring without bypassing
 stage composition; dense sources mask weaker sample grids. Any bad sample
 returns an error without a partial batch.

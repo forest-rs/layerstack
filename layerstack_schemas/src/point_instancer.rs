@@ -475,7 +475,7 @@ mod retained_input_tests {
             accelerations: Arc::new(Vec::new()),
             angular: Arc::new(Vec::new()),
             ids: Some(Arc::new(vec![7])),
-            mask: Vec::new(),
+            mask: Arc::new(Vec::new()),
             prototypes: vec![gf::IDENTITY],
             include_prototype_transform: true,
             velocity_delta: 0.,
@@ -552,7 +552,8 @@ pub enum PointInstancerError {
     },
     /// An authored array length differs from the instance count.
     LengthMismatch(&'static str),
-    /// A prototype relationship is empty or targets a property.
+    /// A prototype relationship is empty, or (for bounds and extents) targets
+    /// a property.
     InvalidPrototypes,
     /// A prototype index is negative or outside the relationship.
     InvalidPrototypeIndex {
@@ -561,8 +562,6 @@ pub enum PointInstancerError {
         /// The invalid index.
         index: i32,
     },
-    /// A referenced prototype is absent or has invalid transform operations.
-    InvalidPrototype(PathId),
     /// Numeric times must be finite, both times must have the same kind, and
     /// the stage's time-code rate must be finite and positive.
     InvalidTime,
@@ -683,7 +682,13 @@ impl PointInstancer<'_> {
     /// Preserves duplicate times and interpolation policies. Any invalid sample
     /// returns an error without a partial batch. All times must have the same
     /// default/numeric kind as `base_time`; empty times return an empty batch.
-    /// Matches `UsdGeomPointInstancer::ComputeInstanceTransformsAtTimes` ordering.
+    ///
+    /// Base-time inputs (topology, IDs, the mask, motion arrays) are read once
+    /// for the whole batch, as OpenUSD's `ComputeInstanceTransformsAtTimes`
+    /// reads them. Without usable motion, positions, scales and orientations
+    /// interpolate at each time; a time whose array does not match the
+    /// instance count keeps the previous time's array (the base time's for
+    /// the first), as OpenUSD carries it from sample to sample.
     #[doc(alias = "UsdGeomPointInstancer::ComputeInstanceTransformsAtTimes")]
     #[doc(alias = "ComputeInstanceTransformsAtTimes")]
     pub fn compute_instance_transforms_at_times(
@@ -692,10 +697,8 @@ impl PointInstancer<'_> {
         base_time: Time,
         options: InstanceTransformOptions,
     ) -> Result<Vec<Vec<InstanceTransform>>, PointInstancerError> {
-        times
-            .iter()
-            .map(|&time| self.compute_instance_transforms(time, base_time, options))
-            .collect()
+        self.prepare_instance_transforms_at_times(times, base_time, options)
+            .map(|batch| batch.iter().map(|sample| sample.iter().collect()).collect())
     }
     /// Computes compacted transforms in instancer space. `base_time` fixes
     /// topology and masks and anchors velocity integration; `time` evaluates
@@ -703,7 +706,9 @@ impl PointInstancer<'_> {
     /// is used. Velocities and accelerations use seconds, angular velocities
     /// degrees per second. Misaligned motion arrays are ignored as in OpenUSD;
     /// malformed required arrays and prototype indices return explicit errors.
-    /// Prototype transforms are local, even when their ancestors are transformed.
+    /// Prototype transforms are local, even when their ancestors are
+    /// transformed; a prototype target that is not a prim contributes the
+    /// identity, as in OpenUSD.
     #[doc(alias = "UsdGeomPointInstancer::ComputeInstanceTransformsAtTime")]
     #[doc(alias = "ComputeInstanceTransformsAtTime")]
     pub fn compute_instance_transforms(
@@ -743,15 +748,39 @@ impl PointInstancer<'_> {
         base_time: Time,
         options: InstanceTransformOptions,
     ) -> Result<InstanceTransforms, PointInstancerError> {
-        let code = match (time, base_time) {
-            (Time::Default, Time::Default) => None,
-            (Time::At { code, .. }, Time::At { code: base, .. })
-                if code.is_finite() && base.is_finite() =>
-            {
-                Some(code)
-            }
-            _ => return Err(PointInstancerError::InvalidTime),
-        };
+        sample_code(time, base_time)?;
+        let mut base = self.base_inputs(base_time, options)?;
+        self.sample_inputs(&mut base, time)
+    }
+    /// [`Self::prepare_instance_transforms`] for each of `times` against one
+    /// base, reading base-time inputs once, as
+    /// [`Self::compute_instance_transforms_at_times`] does.
+    pub fn prepare_instance_transforms_at_times(
+        &self,
+        times: &[Time],
+        base_time: Time,
+        options: InstanceTransformOptions,
+    ) -> Result<Vec<InstanceTransforms>, PointInstancerError> {
+        for &time in times {
+            sample_code(time, base_time)?;
+        }
+        if times.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut base = self.base_inputs(base_time, options)?;
+        times
+            .iter()
+            .map(|&time| self.sample_inputs(&mut base, time))
+            .collect()
+    }
+    // `_ComputePointInstancerAttributesPreamble` and the base-time reads of
+    // `_DoComputeInstanceTransformsAtTimes`.
+    fn base_inputs(
+        &self,
+        base_time: Time,
+        options: InstanceTransformOptions,
+    ) -> Result<BaseInputs, PointInstancerError> {
+        sample_code(base_time, base_time)?;
         let indices_anchor = anchor(self, "protoIndices", base_time)
             .map_err(PointInstancerError::UnsupportedMotionSource)?;
         let indices = read(
@@ -764,37 +793,26 @@ impl PointInstancer<'_> {
         let count = indices.len();
         let position_anchor = anchor(self, "positions", base_time)
             .map_err(PointInstancerError::UnsupportedMotionSource)?;
-        let mut positions = vectors(self, "positions", position_anchor.time)?
+        let positions = vectors(self, "positions", position_anchor.time)?
             .ok_or(PointInstancerError::MissingAttribute("positions"))?;
         if positions.len() != count {
             return Err(PointInstancerError::LengthMismatch("positions"));
         }
-        let orientation_name = if self.has_authored_value("orientationsf") {
+        let orientations_f = self.has_authored_value("orientationsf");
+        let orientation_name = if orientations_f {
             "orientationsf"
         } else {
             "orientations"
         };
         let orientation_anchor = anchor(self, orientation_name, base_time)
             .map_err(PointInstancerError::UnsupportedMotionSource)?;
-        let orientations = |at| {
-            if orientation_name == "orientationsf" {
-                read(
-                    self,
-                    orientation_name,
-                    at,
-                    crate::value::read_quatf_array_shared,
-                )
-            } else {
-                read(self, orientation_name, at, crate::value::read_quath_array)
-                    .map(|v| v.map(Arc::new))
-            }
-        };
-        let mut rotations = orientations(orientation_anchor.time)?
+        let rotations = self
+            .read_orientations(orientations_f, orientation_anchor.time)?
             .filter(|v| v.len() == count)
             .unwrap_or_default();
         let scale_anchor = anchor(self, "scales", base_time)
             .map_err(PointInstancerError::UnsupportedMotionSource)?;
-        let mut scales = vectors(self, "scales", scale_anchor.time)?.unwrap_or_default();
+        let scales = vectors(self, "scales", scale_anchor.time)?.unwrap_or_default();
         if !scales.is_empty() && scales.len() != count {
             return Err(PointInstancerError::LengthMismatch("scales"));
         }
@@ -821,17 +839,6 @@ impl PointInstancer<'_> {
                     && aligned(orientation_anchor, angular_anchor)
             })
             .unwrap_or_default();
-        if velocities.is_empty() && angular.is_empty() {
-            if let Some(values) = vectors(self, "positions", time)?.filter(|v| v.len() == count) {
-                positions = values;
-            }
-            if let Some(values) = vectors(self, "scales", time)?.filter(|v| v.len() == count) {
-                scales = values;
-            }
-            if let Some(values) = orientations(time)?.filter(|v| v.len() == count) {
-                rotations = values;
-            }
-        }
         let ids = read(
             self,
             "ids",
@@ -841,11 +848,11 @@ impl PointInstancer<'_> {
         if ids.as_ref().is_some_and(|v| v.len() != count) {
             return Err(PointInstancerError::LengthMismatch("ids"));
         }
-        let mask = if options.apply_mask {
+        let mask = Arc::new(if options.apply_mask {
             self.try_compute_mask(base_time)?
         } else {
             Vec::new()
-        };
+        });
         if !mask.is_empty() && mask.len() != count {
             return Err(PointInstancerError::LengthMismatch("mask"));
         }
@@ -855,33 +862,13 @@ impl PointInstancer<'_> {
             if targets.is_empty() {
                 return Err(PointInstancerError::InvalidPrototypes);
             }
-            for target in targets {
-                let TargetPath::Prim(path) = target else {
-                    return Err(PointInstancerError::InvalidPrototypes);
-                };
-                if self.scene().prim(path).is_none() {
-                    return Err(PointInstancerError::InvalidPrototype(path));
-                }
-                let transform = crate::usd_geom::Xformable::new(&self.scene(), path)
-                    .map_or_else(crate::LocalTransform::identity, |prim| {
-                        prim.local_transform(time)
-                    });
-                if !transform.problems.is_empty() {
-                    return Err(PointInstancerError::InvalidPrototype(path));
-                }
-                prototypes.push(transform.matrix);
-            }
+            // `stage->GetPrimAtPath` of a property target, or of a path
+            // with no prim, is invalid: its transform is the identity.
+            prototypes.extend(targets.into_iter().map(|target| match target {
+                TargetPath::Prim(path) => self.scene().prim(path).map(|_| path),
+                TargetPath::Property(_) => None,
+            }));
         }
-        let rate = rate(&self.scene());
-        if !rate.is_finite() || rate <= 0.0 {
-            return Err(PointInstancerError::InvalidTime);
-        }
-        let delta = |sample: Option<f64>| {
-            code.zip(sample)
-                .map_or(0.0, |(code, sample)| (code - sample) / rate)
-        };
-        let velocity_delta = delta(velocity_anchor.sample);
-        let angular_delta = delta(angular_anchor.sample);
         for (i, &index) in indices.iter().enumerate() {
             if usize::try_from(index)
                 .ok()
@@ -891,12 +878,17 @@ impl PointInstancer<'_> {
                 return Err(PointInstancerError::InvalidPrototypeIndex { instance: i, index });
             }
         }
+        let rate = rate(&self.scene());
+        if !rate.is_finite() || rate <= 0.0 {
+            return Err(PointInstancerError::InvalidTime);
+        }
         let survivors = if mask.is_empty() {
             count
         } else {
             mask.iter().filter(|&&v| v).count()
         };
-        Ok(InstanceTransforms {
+        Ok(BaseInputs {
+            interpolate: velocities.is_empty() && angular.is_empty(),
             indices,
             positions,
             rotations,
@@ -907,12 +899,122 @@ impl PointInstancer<'_> {
             ids,
             mask,
             prototypes,
+            orientations_f,
             include_prototype_transform: options.include_prototype_transform,
-            velocity_delta,
-            angular_delta,
+            velocity_sample: velocity_anchor.sample,
+            angular_sample: angular_anchor.sample,
+            rate,
             survivors,
         })
     }
+    // One sample of `_DoComputeInstanceTransformsAtTimes`: interpolated
+    // arrays (carried into later samples), prototype transforms at `time`
+    // (`UsdGeomXformCache(time)`) and the motion deltas.
+    fn sample_inputs(
+        &self,
+        base: &mut BaseInputs,
+        time: Time,
+    ) -> Result<InstanceTransforms, PointInstancerError> {
+        let code = sample_code(time, time)?;
+        let count = base.indices.len();
+        if base.interpolate {
+            if let Some(values) = vectors(self, "positions", time)?.filter(|v| v.len() == count) {
+                base.positions = values;
+            }
+            if let Some(values) = vectors(self, "scales", time)?.filter(|v| v.len() == count) {
+                base.scales = values;
+            }
+            if let Some(values) = self
+                .read_orientations(base.orientations_f, time)?
+                .filter(|v| v.len() == count)
+            {
+                base.rotations = values;
+            }
+        }
+        let prototypes = base
+            .prototypes
+            .iter()
+            .map(|path| {
+                path.and_then(|path| crate::usd_geom::Xformable::new(&self.scene(), path))
+                    .map_or(gf::IDENTITY, |prim| prim.local_transform(time).matrix)
+            })
+            .collect();
+        let delta = |sample: Option<f64>| {
+            code.zip(sample)
+                .map_or(0.0, |(code, sample)| (code - sample) / base.rate)
+        };
+        Ok(InstanceTransforms {
+            indices: base.indices.clone(),
+            positions: base.positions.clone(),
+            rotations: base.rotations.clone(),
+            scales: base.scales.clone(),
+            velocities: base.velocities.clone(),
+            accelerations: base.accelerations.clone(),
+            angular: base.angular.clone(),
+            ids: base.ids.clone(),
+            mask: base.mask.clone(),
+            prototypes,
+            include_prototype_transform: base.include_prototype_transform,
+            velocity_delta: delta(base.velocity_sample),
+            angular_delta: delta(base.angular_sample),
+            survivors: base.survivors,
+        })
+    }
+    fn read_orientations(
+        &self,
+        float: bool,
+        time: Time,
+    ) -> Result<Option<Arc<Vec<[f32; 4]>>>, PointInstancerError> {
+        if float {
+            read(
+                self,
+                "orientationsf",
+                time,
+                crate::value::read_quatf_array_shared,
+            )
+        } else {
+            read(self, "orientations", time, crate::value::read_quath_array)
+                .map(|v| v.map(Arc::new))
+        }
+    }
+}
+
+/// The time code of `time`, `None` for the default time, when `time` and
+/// `base` are both default or both finite time codes.
+fn sample_code(time: Time, base: Time) -> Result<Option<f64>, PointInstancerError> {
+    match (time, base) {
+        (Time::Default, Time::Default) => Ok(None),
+        (Time::At { code, .. }, Time::At { code: base, .. })
+            if code.is_finite() && base.is_finite() =>
+        {
+            Ok(Some(code))
+        }
+        _ => Err(PointInstancerError::InvalidTime),
+    }
+}
+
+/// Base-time inputs one batch of sample times shares.
+struct BaseInputs {
+    indices: Arc<Vec<i32>>,
+    positions: Arc<Vec<[f32; 3]>>,
+    rotations: Arc<Vec<[f32; 4]>>,
+    scales: Arc<Vec<[f32; 3]>>,
+    velocities: Arc<Vec<[f32; 3]>>,
+    accelerations: Arc<Vec<[f32; 3]>>,
+    angular: Arc<Vec<[f32; 3]>>,
+    ids: Option<Arc<Vec<i64>>>,
+    mask: Arc<Vec<bool>>,
+    /// Prototype prims in relationship order; `None` for a target that is
+    /// not a prim. Empty when prototype transforms are excluded.
+    prototypes: Vec<Option<PathId>>,
+    orientations_f: bool,
+    include_prototype_transform: bool,
+    /// Whether positions, scales and orientations interpolate per sample.
+    interpolate: bool,
+    velocity_sample: Option<f64>,
+    angular_sample: Option<f64>,
+    rate: f64,
+    survivors: usize,
 }
 
 /// Validated immutable inputs for streaming point-instance transforms.
@@ -927,7 +1029,7 @@ pub struct InstanceTransforms {
     accelerations: Arc<Vec<[f32; 3]>>,
     angular: Arc<Vec<[f32; 3]>>,
     ids: Option<Arc<Vec<i64>>>,
-    mask: Vec<bool>,
+    mask: Arc<Vec<bool>>,
     prototypes: Vec<[[f64; 4]; 4]>,
     include_prototype_transform: bool,
     velocity_delta: f64,

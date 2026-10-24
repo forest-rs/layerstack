@@ -91,6 +91,11 @@ impl core::error::Error for GeneratedSchemaError {}
 /// Reads the definitions of the `declared` schemas from `layer`, a
 /// generated schema layer, in declaration order.
 ///
+/// The definitions are [flattened](SchemaDefinition::flattened): each
+/// class holds its inherited properties, built-ins and overrides, so the
+/// registry composes in no ancestor's, as OpenUSD reads a prim definition
+/// from its class alone.
+///
 /// Built-ins are converted from OpenUSD's template form to the form
 /// [`SchemaDefinition::built_ins`] documents (`Other:__INSTANCE_NAME__`
 /// becomes `Other`, `Other:__INSTANCE_NAME__:sub` becomes `Other:sub`).
@@ -121,7 +126,7 @@ pub fn read_generated_schema(
                 .ok_or(GeneratedSchemaError::MissingSchema {
                     name: declaration.name,
                 })?;
-            let mut schema = SchemaDefinition::new(declaration.name, declaration.kind);
+            let mut schema = SchemaDefinition::new(declaration.name, declaration.kind).flattened();
             schema.parent = declaration.parent;
             schema
                 .can_only_apply_to

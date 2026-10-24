@@ -246,6 +246,22 @@ pub struct SchemaDefinition {
     ///
     /// Spec: AOUSD Core §13.3.1 (single inheritance).
     pub parent: Option<TokenId>,
+    /// Whether [`SchemaDefinition::properties`], [`SchemaDefinition::built_ins`]
+    /// and [`SchemaDefinition::overrides`] already hold those of the schemas
+    /// it inherits from, as each class of a generated schema layer does
+    /// (usdGenSchema flattens them in). The registry then composes none of
+    /// its parent's in: OpenUSD builds a typed schema's prim definition from
+    /// its generated class alone, so what the class leaves out it lacks.
+    ///
+    /// `false` for a definition built by hand: its parent chain's
+    /// properties, built-ins and overrides compose in, weaker, up to and
+    /// including the first flattened ancestor, as usdGenSchema would
+    /// flatten them. [`read_generated_schema`] and `layerstack_schemas`'
+    /// tables set it.
+    ///
+    /// OpenUSD: `UsdSchemaRegistry::_SchemaDefInitHelper::_PopulateTypedPrimDefinitions`
+    /// (`schemaRegistry.cpp`), `usdGenSchema.py`'s `GenerateRegistry`.
+    pub flattened: bool,
     /// The applied schemas this schema includes as built-ins, strongest
     /// first. A typed or single-apply schema names a single-apply schema,
     /// or a multiple-apply schema with an instance name (`SlotAPI:main`). A
@@ -294,6 +310,7 @@ impl SchemaDefinition {
             name,
             kind,
             parent: None,
+            flattened: false,
             built_ins: Vec::new(),
             properties: Vec::new(),
             overrides: Vec::new(),
@@ -319,6 +336,14 @@ impl SchemaDefinition {
     #[must_use]
     pub fn with_parent(mut self, parent: TokenId) -> Self {
         self.parent = Some(parent);
+        self
+    }
+
+    /// Marks the definition as already holding its ancestors' properties,
+    /// built-ins and overrides ([`SchemaDefinition::flattened`]) (builder).
+    #[must_use]
+    pub fn flattened(mut self) -> Self {
+        self.flattened = true;
         self
     }
 
@@ -1308,8 +1333,15 @@ impl<'a> Build<'a> {
         let mut definition = PrimDefinition::default();
         definition.type_name = Some(name);
         definition.type_chain.clone_from(&chain);
+        // What the definition composes: the schema and its parent chain up
+        // to the first flattened one, which holds the rest already.
+        let flattened = chain
+            .iter()
+            .position(|ancestor| schemas[ancestor].flattened)
+            .map_or(chain.len(), |at| at + 1);
+        let chain = &chain[..flattened];
         let mut inclusions = Vec::new();
-        for ancestor in &chain {
+        for ancestor in chain {
             let ancestor = &schemas[ancestor];
             for property in &ancestor.properties {
                 definition.add_property(property.clone(), self.tokens);
@@ -1335,7 +1367,7 @@ impl<'a> Build<'a> {
             }
         }
         let mut overridden = HashSet::new();
-        for ancestor in &chain {
+        for ancestor in chain {
             for property in &schemas[ancestor].overrides {
                 if overridden.insert(property.name) {
                     self.apply_override(&mut definition, name, property);

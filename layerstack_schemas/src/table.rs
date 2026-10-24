@@ -184,10 +184,14 @@ impl Property {
 }
 
 impl Schema {
-    /// The schema's definition, with its names interned in `tokens`.
+    /// The schema's definition, with its names interned in `tokens`;
+    /// [flattened](SchemaDefinition::flattened), as the generated schema
+    /// layer the table is read from is.
     #[must_use]
     pub fn definition(&self, tokens: &TokenInterner) -> SchemaDefinition {
-        let mut schema = SchemaDefinition::new(tokens.intern(self.name), self.kind);
+        // The tables are read from generated schema layers, whose classes
+        // hold their inherited properties already.
+        let mut schema = SchemaDefinition::new(tokens.intern(self.name), self.kind).flattened();
         schema.parent = self.parent.map(|parent| tokens.intern(parent));
         schema.built_ins = self.built_ins.iter().map(|b| tokens.intern(b)).collect();
         schema.properties = self

@@ -99,6 +99,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use core::cmp::Ordering;
 use core::fmt::{self, Write as _};
+use core::ptr;
 
 use layerstack::array_edit::{ArrayIndex, Instruction, Operand};
 use layerstack::ident::dictionary_cmp;
@@ -2306,12 +2307,54 @@ fn spline_text_version(prim: &Prim) -> u8 {
         .fold(own, u8::max)
 }
 
-/// `items` in the order `cmp` gives, by reference. The sort is stable and
-/// costs one pass over items already in order.
-fn sorted_by<T>(items: &[T], cmp: impl FnMut(&&T, &&T) -> Ordering) -> SmallVec<[&T; 16]> {
-    let mut refs: SmallVec<[&T; 16]> = items.iter().collect();
-    refs.sort_by(cmp);
-    refs
+/// `items` in the order `cmp` gives, by reference. Items already in order,
+/// as a layer read from OpenUSD's text holds them, cost one comparison
+/// each and nothing else; others are sorted as references, on the heap so
+/// that a recursive caller's frame stays small. Equal items keep their
+/// order, as a stable sort keeps them.
+fn sorted_by<'a, T>(items: &'a [T], mut cmp: impl FnMut(&T, &T) -> Ordering) -> InOrder<'a, T> {
+    if items.is_sorted_by(|a, b| cmp(a, b) != Ordering::Greater) {
+        return InOrder::Given(items.iter());
+    }
+    let mut refs: Vec<&T> = items.iter().collect();
+    // Ties go by place in `items`: the unstable sort needs no buffer.
+    refs.sort_unstable_by(|a, b| cmp(a, b).then_with(|| ptr::from_ref(*a).cmp(&ptr::from_ref(*b))));
+    InOrder::Sorted(refs.into_iter())
+}
+
+/// What properties are sorted by: the name, then whether the property is
+/// a relationship, as `_SortByNameThenType` puts an attribute before a
+/// relationship of the same name (which validation does not let a
+/// document hold).
+type PropertyKey<'a> = (&'a str, bool);
+
+fn property_key(property: &Property) -> PropertyKey<'_> {
+    (
+        property.name(),
+        matches!(property, Property::Relationship(_)),
+    )
+}
+
+/// The order of [`PropertyKey`]s: names in [`dictionary_cmp`] order.
+fn property_order(a: &PropertyKey<'_>, b: &PropertyKey<'_>) -> Ordering {
+    dictionary_cmp(a.0, b.0).then(a.1.cmp(&b.1))
+}
+
+/// The items [`sorted_by`] gives.
+enum InOrder<'a, T> {
+    Given(core::slice::Iter<'a, T>),
+    Sorted(alloc::vec::IntoIter<&'a T>),
+}
+
+impl<'a, T> Iterator for InOrder<'a, T> {
+    type Item = &'a T;
+
+    fn next(&mut self) -> Option<&'a T> {
+        match self {
+            Self::Given(items) => items.next(),
+            Self::Sorted(items) => items.next(),
+        }
+    }
 }
 
 /// The field a metadata key names, which decides where OpenUSD writes it:
@@ -2416,7 +2459,7 @@ impl Writer<'_> {
             if !doc.sublayers.is_empty() {
                 fields.push(LayerField::SubLayers(&doc.sublayers));
             }
-            fields.sort_by(|a, b| a.name().cmp(b.name()));
+            fields.sort_unstable_by(|a, b| a.name().cmp(b.name()));
             for field in fields {
                 match field {
                     LayerField::DefaultPrim(name) => {
@@ -2576,9 +2619,16 @@ impl Writer<'_> {
     /// `variants` as `variantSelection`, `variantSets` as
     /// `variantSetNames`).
     fn prim_metadata(&mut self, prim: &Prim, depth: usize) {
-        if !prim.has_metadata() {
-            return;
+        if prim.has_metadata() {
+            self.prim_fields(prim, depth);
         }
+    }
+
+    /// [`Self::prim_metadata`]'s section, out of line so that the fields
+    /// it sorts do not enlarge the frame of [`Self::prim`], which recurses
+    /// through child prims.
+    #[inline(never)]
+    fn prim_fields(&mut self, prim: &Prim, depth: usize) {
         self.out.push_str(" (\n");
         let depth = depth + 1;
         if let Some(text) = comment_of(&prim.metadata) {
@@ -2602,7 +2652,7 @@ impl Writer<'_> {
                 .as_ref()
                 .map(PrimField::VariantSetNames),
         );
-        fields.sort_by(|a, b| dictionary_cmp(a.name(), b.name()));
+        fields.sort_unstable_by(|a, b| dictionary_cmp(a.name(), b.name()));
         for field in fields {
             match field {
                 PrimField::Metadatum(entry) => self.metadatum(entry, depth),
@@ -2687,15 +2737,15 @@ impl Writer<'_> {
         if let Some(order) = &prim.prim_order {
             self.reorder("nameChildren", order, depth);
         }
-        let kind = |p: &Property| matches!(p, Property::Relationship(_));
-        let properties = sorted_by(&prim.properties, |a, b| {
-            dictionary_cmp(a.name(), b.name()).then_with(|| kind(a).cmp(&kind(b)))
+        let in_order = prim.properties.is_sorted_by(|a, b| {
+            property_order(&property_key(a), &property_key(b)) != Ordering::Greater
         });
-        for property in properties {
-            match property {
-                Property::Attribute(attribute) => self.attribute(attribute, depth),
-                Property::Relationship(relationship) => self.relationship(relationship, depth),
+        if in_order {
+            for property in &prim.properties {
+                self.property(property, depth);
             }
+        } else {
+            self.sorted_properties(&prim.properties, depth);
         }
         // A blank line between the properties and the children and
         // between children; none before or between variant sets.
@@ -2710,6 +2760,26 @@ impl Writer<'_> {
         }
         for set in &prim.variant_sets {
             self.variant_set(set, depth);
+        }
+    }
+
+    /// Writes `properties`, which are out of order, sorted. Out of line,
+    /// so that the keys it sorts do not enlarge the frame of
+    /// [`Self::prim_body`], which recurses through child prims.
+    #[inline(never)]
+    fn sorted_properties(&mut self, properties: &[Property], depth: usize) {
+        let mut keyed: SmallVec<[(PropertyKey<'_>, &Property); 16]> =
+            properties.iter().map(|p| (property_key(p), p)).collect();
+        keyed.sort_unstable_by(|a, b| property_order(&a.0, &b.0));
+        for (_, property) in keyed {
+            self.property(property, depth);
+        }
+    }
+
+    fn property(&mut self, property: &Property, depth: usize) {
+        match property {
+            Property::Attribute(attribute) => self.attribute(attribute, depth),
+            Property::Relationship(relationship) => self.relationship(relationship, depth),
         }
     }
 

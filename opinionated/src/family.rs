@@ -5,7 +5,7 @@
 //! [`OpinionFamily`] and [`resolve_family_chain`], since this module is private.
 
 use alloc::vec::Vec;
-use core::convert::Infallible;
+use core::{convert::Infallible, hash::Hash};
 
 use crate::{
     IgnoreReason, ListOp, OpinionKind, OpinionOp, ShallowOverlay, combine_dictionary_chain,
@@ -455,7 +455,7 @@ pub struct ListFamily;
 
 impl<V, I, K> OpinionFamily<OpinionOp<V, I, K>> for ListFamily
 where
-    I: Clone + Eq,
+    I: Clone + Eq + Hash,
 {
     type Value = Vec<I>;
     type Edit<'op>

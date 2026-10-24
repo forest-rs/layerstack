@@ -14,4 +14,10 @@ categories = ["algorithms", "data-structures"]
 [lints]
 workspace = true
 
+[features]
+default = ["hash-tables"]
+# Hashes long lists so list-op edits take linear time; without it they scan.
+hash-tables = ["dep:hashbrown"]
+
 [dependencies]
+hashbrown = { optional = true, workspace = true }

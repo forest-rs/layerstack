@@ -16,7 +16,21 @@
 //! schemas, references, variants or storage formats.
 //!
 //! The crate requires Rust **1.89** or later and is always `no_std` with
-//! `alloc`. It has no dependencies or feature flags; callers need an allocator.
+//! `alloc`; callers need an allocator. It has one feature, `hash-tables`, on by
+//! default, which depends on `hashbrown` to hash long lists so list edits take
+//! linear time (see [Features](#features)).
+//!
+//! # Features
+//!
+//! - `hash-tables` (default): list-op edits ([`ListOp::apply_to`],
+//!   [`resolve_list_chain`], [`apply_list_order`] and the list resolvers built
+//!   on them) scan short lists and hash long ones, taking time linear in the
+//!   lengths of the list and of its authored items. A lookup scans while its
+//!   scans make at most 1,024 comparisons in all, and hashes beyond that.
+//!   Without the feature every lookup scans: results are the same, but an
+//!   edit naming `k` items over a list of `n` items takes `O(n * k)` time,
+//!   quadratic for long lists. The API is the same either way; list items
+//!   need `Hash` in both.
 //!
 //! # Concepts
 //!
@@ -177,14 +191,16 @@
 extern crate alloc;
 
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
-use core::{borrow::Borrow, fmt};
+use core::{borrow::Borrow, fmt, hash::Hash};
 
 mod array_edit;
 mod dictionary;
 mod family;
+mod list_edit;
 mod list_order;
 mod temporal;
 
+use list_edit::{Occurrence, Positions};
 pub use list_order::{apply_list_order, apply_list_order_by_key};
 
 pub use temporal::{SamplePick, TemporalMode, TemporalPlanner, TemporalSample, TemporalSelection};
@@ -472,7 +488,7 @@ impl<T> ListOp<T> {
     }
 }
 
-impl<T: Clone + Eq> ListOp<T> {
+impl<T: Clone + Eq + Hash> ListOp<T> {
     /// Applies this list operation to `base`: an explicit list replaces
     /// it; otherwise the deleted items are removed, the added items the
     /// list lacks inserted at the back, the prepended and appended items
@@ -483,6 +499,11 @@ impl<T: Clone + Eq> ListOp<T> {
     /// follow it up to the next item it names, and moves those runs into
     /// its order, after every item that precedes the first item it names;
     /// items it names that the list does not hold are ignored.
+    ///
+    /// Each edit takes time linear in the lengths of the list and of its
+    /// authored items: short lists are scanned and long ones hashed. Without
+    /// the `hash-tables` feature every list is scanned, which is quadratic
+    /// for long lists (see [Features](crate#features)).
     ///
     /// Spec: AOUSD Core §6.6.3 (list ops). OpenUSD:
     /// `SdfListOp::ApplyOperations`, `_AddKeys` and `_ReorderKeysHelper` in
@@ -512,35 +533,29 @@ impl<T: Clone + Eq> ListOp<T> {
             // preserve first-occurrence order without changing authored data.
             out.clear();
             out.reserve(explicit.len());
-            for item in explicit {
-                if !out.contains(item) {
-                    out.push(item.clone());
-                }
-            }
+            list_edit::push_absent(out, explicit);
             return;
         }
 
+        // OpenUSD's order: `_DeleteKeys`, `_AddKeys`, `_PrependKeys`,
+        // `_AppendKeys`, `_ReorderKeys`. OpenUSD maps an item the list
+        // repeats to its last copy and deletes or moves only that one; here
+        // every copy is deleted or moved.
         if !self.delete.is_empty() {
-            out.retain(|item| !self.delete.contains(item));
+            Positions::new(&self.delete, Occurrence::First, out.len()).remove_from(out);
         }
-
-        for item in &self.add {
-            if !out.contains(item) {
-                out.push(item.clone());
-            }
+        if !self.add.is_empty() {
+            list_edit::push_absent(out, &self.add);
         }
-
-        for item in self.prepend.iter().rev() {
-            out.retain(|existing| existing != item);
-            out.insert(0, item.clone());
+        if !self.prepend.is_empty() {
+            list_edit::move_to_front(out, &self.prepend);
         }
-
-        for item in &self.append {
-            out.retain(|existing| existing != item);
-            out.push(item.clone());
+        if !self.append.is_empty() {
+            list_edit::move_to_back(out, &self.append);
         }
-
-        apply_list_order(out, &self.reorder);
+        if !self.reorder.is_empty() {
+            apply_list_order(out, &self.reorder);
+        }
     }
 }
 
@@ -557,7 +572,7 @@ impl<T: Clone + Eq> ListOp<T> {
 /// assert_eq!(resolve_list_chain(&[], &ops), vec![1, 2, 3]);
 /// ```
 #[must_use]
-pub fn resolve_list_chain<T: Clone + Eq>(
+pub fn resolve_list_chain<T: Clone + Eq + Hash>(
     fallback: &[T],
     ops_strong_to_weak: impl IntoIterator<Item = impl Borrow<ListOp<T>>>,
 ) -> Vec<T> {
@@ -595,7 +610,7 @@ pub struct ListReport<T, P> {
 /// the report rather than cloned. An empty chain returns the fallback with no
 /// events; this low-level list kernel does not model field absence or blocks.
 #[must_use]
-pub fn resolve_list_chain_report<'a, T: Clone + Eq + 'a, P>(
+pub fn resolve_list_chain_report<'a, T: Clone + Eq + Hash + 'a, P>(
     fallback: &[T],
     ops_strong_to_weak: impl IntoIterator<Item = (&'a ListOp<T>, P)>,
 ) -> ListReport<T, P> {
@@ -1055,7 +1070,7 @@ where
     A: Ord,
     F: Ord,
     V: Clone,
-    I: Clone + Eq,
+    I: Clone + Eq + Hash,
     K: Clone + Ord,
     P: Clone,
 {
@@ -1245,7 +1260,7 @@ pub fn resolve_ordered_chain<'a, V, I, K, P>(
 ) -> Resolution<V, I, K, P>
 where
     V: Clone + 'a,
-    I: Clone + Eq + 'a,
+    I: Clone + Eq + Hash + 'a,
     K: Clone + Ord + 'a,
     P: Clone + 'a,
 {
@@ -1274,7 +1289,7 @@ pub fn resolve_ordered_chain_with_fallback<'a, V, I, K, P>(
 ) -> Resolution<V, I, K, P>
 where
     V: Clone + 'a,
-    I: Clone + Eq + 'a,
+    I: Clone + Eq + Hash + 'a,
     K: Clone + Ord + 'a,
     P: Clone + 'a,
 {
@@ -1291,7 +1306,7 @@ fn fold_ordered_chain<'a, V, I, K, P>(
 ) -> Resolution<V, I, K, P>
 where
     V: Clone + 'a,
-    I: Clone + Eq + 'a,
+    I: Clone + Eq + Hash + 'a,
     K: Clone + Ord + 'a,
     P: Clone + 'a,
 {
@@ -1358,7 +1373,7 @@ pub fn resolve_ordered_chain_report<'a, V, I, K, P>(
 ) -> ResolutionReport<V, I, K, P>
 where
     V: Clone + 'a,
-    I: Clone + Eq + 'a,
+    I: Clone + Eq + Hash + 'a,
     K: Clone + Ord + 'a,
     P: Clone + 'a,
 {
@@ -1379,7 +1394,7 @@ pub fn resolve_ordered_chain_with_fallback_report<'a, V, I, K, P>(
 ) -> ResolutionReport<V, I, K, P>
 where
     V: Clone + 'a,
-    I: Clone + Eq + 'a,
+    I: Clone + Eq + Hash + 'a,
     K: Clone + Ord + 'a,
     P: Clone + 'a,
 {
@@ -1395,7 +1410,7 @@ fn fold_ordered_chain_report<'a, V, I, K, P>(
 ) -> ResolutionReport<V, I, K, P>
 where
     V: Clone + 'a,
-    I: Clone + Eq + 'a,
+    I: Clone + Eq + Hash + 'a,
     K: Clone + Ord + 'a,
     P: Clone + 'a,
 {

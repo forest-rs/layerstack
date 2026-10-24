@@ -557,6 +557,11 @@ jobs:
       - name: check point instancer transforms oracle
         run: python layerstack_conformance/scripts/point_instancer_transforms_oracle.py --check
 
+      # The extents hint oracle must be what OpenUSD's `UsdGeomModelAPI`
+      # computes, reads and authors for model extents hints.
+      - name: check extents hint oracle
+        run: python layerstack_conformance/scripts/extents_hint_oracle.py --check
+
       # The proxy edits oracle must be which authoring calls OpenUSD refuses
       # on instance proxies and prototype prims, and what the others author.
       - name: check proxy edits oracle

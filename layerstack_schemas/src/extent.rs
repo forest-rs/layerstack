@@ -93,6 +93,16 @@ pub(crate) fn checked_compute(
     if let Some(extent) = authored(scene, path, time)? {
         return Ok(Some(extent));
     }
+    checked_intrinsic(scene, path, time)
+}
+
+/// [`checked_compute`] without the authored extent: what the intrinsic
+/// provider computes, as `UsdGeomBoundable::ComputeExtentFromPlugins` does.
+pub(crate) fn checked_intrinsic(
+    scene: &Scene<'_>,
+    path: PathId,
+    time: Time,
+) -> Result<Option<(Range3d, bool)>, ExtentError> {
     let prim = PrimView::new(*scene, path);
     if scene.is_a(path, "PointBased") {
         prim.try_read_value("points", time, crate::value::read_float3_array_shared)
@@ -102,7 +112,7 @@ pub(crate) fn checked_compute(
                 .map_err(|error| decode_error(&prim, "widths", error))?;
         }
     }
-    Ok(compute(scene, path, time))
+    Ok(compute_intrinsic(scene, path, time))
 }
 
 /// OpenUSD `UsdGeomBoundable::ComputeExtent`: a valid authored extent wins;
@@ -141,6 +151,21 @@ pub(crate) fn compute(scene: &Scene<'_>, path: PathId, time: Time) -> Option<(Ra
     {
         return Some((range, extent_varying));
     }
+    compute_intrinsic(scene, path, time)
+}
+
+/// The built-in providers' extent, ignoring any authored one.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "USD extents are float3 even for double geometry parameters"
+)]
+pub(crate) fn compute_intrinsic(
+    scene: &Scene<'_>,
+    path: PathId,
+    time: Time,
+) -> Option<(Range3d, bool)> {
+    let prim = PrimView::new(*scene, path);
+    let extent_varying = prim.property_might_vary("extent");
     let varying =
         |names: &[&str]| extent_varying || names.iter().any(|name| prim.property_might_vary(name));
     let points_schema = scene.is_a(path, "Points");

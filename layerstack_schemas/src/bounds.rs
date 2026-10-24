@@ -39,7 +39,27 @@ impl Default for Range3d {
         }
     }
 }
+/// An `extent`: the minimum and maximum corners of an axis-aligned box, in
+/// single precision, as a boundable's `extent` attribute and each purpose of
+/// a model's `extentsHint` hold it.
+pub type Extent = [[f32; 3]; 2];
+
 impl Range3d {
+    /// The range as a `float3` extent, as `GfVec3f(GfRange3d::GetMin())` and
+    /// `GetMax()` convert it: each coordinate rounded to single precision,
+    /// and an empty range as `GfRange3d()`'s, `f32::MAX` minimum and
+    /// `-f32::MAX` maximum.
+    #[must_use]
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "an extent is float3[], as OpenUSD publishes it"
+    )]
+    pub fn to_extent(&self) -> Extent {
+        if self.is_empty() {
+            return [[f32::MAX; 3], [-f32::MAX; 3]];
+        }
+        [self.min.map(|v| v as f32), self.max.map(|v| v as f32)]
+    }
     /// Whether any axis has no extent.
     #[must_use]
     pub fn is_empty(&self) -> bool {
@@ -624,11 +644,23 @@ impl BoundsCache {
         scene: &Scene<'_>,
         path: PathId,
     ) -> Result<BoundingBox, BoundsError> {
+        let included = self.options.included_purposes.clone();
+        self.purpose_bound(scene, path, &included)
+    }
+    /// The untransformed bound of `purposes`, whatever the cache includes:
+    /// every purpose's bound is kept, so this evicts nothing
+    /// (`UsdGeomBBoxCache::SetIncludedPurposes`).
+    fn purpose_bound(
+        &mut self,
+        scene: &Scene<'_>,
+        path: PathId,
+        purposes: &[ImageablePurpose],
+    ) -> Result<BoundingBox, BoundsError> {
         self.resolve(scene, path)?;
         let bounds = &self.entries[&path].value;
         let mut result = BoundingBox::default();
         for (purpose, bbox) in bounds {
-            if self.options.included_purposes.contains(purpose) && !bbox.range.is_empty() {
+            if purposes.contains(purpose) && !bbox.range.is_empty() {
                 // All purpose buckets at one prim share the same frame.
                 if result.range.is_empty() {
                     result = *bbox;
@@ -638,6 +670,67 @@ impl BoundsCache {
             }
         }
         Ok(result)
+    }
+    /// The `extentsHint` OpenUSD's `UsdGeomModelAPI::ComputeExtentsHint`
+    /// computes for the prim with this cache: one extent per purpose, in
+    /// default, render, proxy, guide order, each the prim's untransformed
+    /// bound of that purpose alone (the cache's own options otherwise
+    /// apply, model hints included), with trailing empty extents dropped but
+    /// one kept. A boundable prim instead repeats its computed extent for
+    /// all four purposes, computed as `UsdGeomBoundable::ComputeExtentFromPlugins`
+    /// does, ignoring any authored `extent` (a point instancer's at this
+    /// time against itself); when none can be computed, the hint is one
+    /// empty extent. Author it with `GeomModelApiEdit::set_extents_hint`.
+    ///
+    /// # Errors
+    /// The bounds errors of the prim's subtree, and of a point instancer's
+    /// prototypes; invalid instance data computes no extent, as in OpenUSD.
+    #[doc(alias = "UsdGeomModelAPI::ComputeExtentsHint")]
+    #[doc(alias = "ComputeExtentsHint")]
+    pub fn compute_extents_hint(
+        &mut self,
+        scene: &Scene<'_>,
+        path: PathId,
+    ) -> Result<Vec<Extent>, BoundsError> {
+        // `UsdGeomImageable::GetOrderedPurposeTokens`.
+        const PURPOSES: [ImageablePurpose; 4] = [
+            ImageablePurpose::Default,
+            ImageablePurpose::Render,
+            ImageablePurpose::Proxy,
+            ImageablePurpose::Guide,
+        ];
+        if scene.prim(path).is_none() {
+            return Err(BoundsError::MissingPrim(path));
+        }
+        if scene.is_a(path, "Boundable") {
+            // An instancer whose instances are invalid computes no extent.
+            let computed =
+                if let Some(instancer) = crate::usd_geom::PointInstancer::new(scene, path) {
+                    match instancer.compute_extent(self.time, self.time, None) {
+                        Ok(extent) => Some(extent),
+                        Err(BoundsError::InvalidPointInstancer { .. }) => None,
+                        Err(error) => return Err(error),
+                    }
+                } else {
+                    self.compute_extent_from(scene, path, false)?
+                        .map(|(range, _)| range.to_extent())
+                };
+            return Ok(match computed {
+                Some(extent) => alloc::vec![extent; PURPOSES.len()],
+                None => alloc::vec![Range3d::default().to_extent()],
+            });
+        }
+        let mut hint = Vec::with_capacity(PURPOSES.len());
+        let mut last_nonempty = 0;
+        for (i, purpose) in PURPOSES.into_iter().enumerate() {
+            let range = self.purpose_bound(scene, path, &[purpose])?.aligned_range();
+            if !range.is_empty() {
+                last_nonempty = i;
+            }
+            hint.push(range.to_extent());
+        }
+        hint.truncate(last_nonempty + 1);
+        Ok(hint)
     }
     /// Bound with the queried prim's local transform applied (even with reset).
     #[doc(alias = "UsdGeomBBoxCache::ComputeLocalBound")]
@@ -896,8 +989,21 @@ impl BoundsCache {
         scene: &Scene<'_>,
         path: PathId,
     ) -> Result<Option<(Range3d, bool)>, BoundsError> {
+        self.compute_extent_from(scene, path, true)
+    }
+    // `UsdGeomBoundable::ComputeExtent` when `authored`, else
+    // `ComputeExtentFromPlugins`, which skips the authored extent.
+    fn compute_extent_from(
+        &mut self,
+        scene: &Scene<'_>,
+        path: PathId,
+        authored: bool,
+    ) -> Result<Option<(Range3d, bool)>, BoundsError> {
         let failure = |source| BoundsError::ExtentProvider { prim: path, source };
-        if let Some(extent) = crate::extent::authored(scene, path, self.time).map_err(failure)? {
+        if authored
+            && let Some(extent) =
+                crate::extent::authored(scene, path, self.time).map_err(failure)?
+        {
             self.extent_dependencies.remove(&path);
             return Ok(Some(extent));
         }
@@ -962,7 +1068,11 @@ impl BoundsCache {
             }
         }
         self.extent_dependencies.remove(&path);
-        crate::extent::checked_compute(scene, path, self.time).map_err(failure)
+        if authored {
+            crate::extent::checked_compute(scene, path, self.time).map_err(failure)
+        } else {
+            crate::extent::checked_intrinsic(scene, path, self.time).map_err(failure)
+        }
     }
 
     fn direct_bounds(

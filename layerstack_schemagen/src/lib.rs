@@ -65,7 +65,7 @@
 
 pub mod compile;
 mod emit;
-mod kinds;
+pub mod kinds;
 mod library;
 mod metadata;
 mod model;
@@ -233,7 +233,7 @@ fn generate(args: impl Iterator<Item = String>) -> Result<String, String> {
             return Err("--kind-plugin cannot be combined with schema or shader generation".into());
         }
         let output = output.ok_or("--out <Rust file> is required for kind libraries")?;
-        let text = rustfmt(&generate_kind_library(&kind_plugins)?)?;
+        let text = rustfmt(&generate_kind_library(&kind_plugins).map_err(|e| e.to_string())?)?;
         if check {
             if fs::read_to_string(&output).ok().as_deref() != Some(text.as_str()) {
                 return Err(format!("{} is stale", output.display()));
@@ -468,19 +468,28 @@ fn render_library(
 
 /// Generates a kind-registration module from explicit `plugInfo.json` files.
 ///
-/// Reads OpenUSD `Info.Kinds` declarations across all supplied plugins, accepting
-/// forward references within that input set. Rejects duplicate/invalid names,
-/// malformed declarations, unknown bases and cycles before returning Rust source.
-/// No plugin discovery or execution occurs. Whole-line `#` comments are accepted.
-/// The generated `KINDS` and `register` function require `layerstack_schemas`,
-/// support `no_std`, and register atomically into a caller-owned `KindRegistry`.
-/// Built-in kinds remain runtime-owned. Returns unformatted Rust for build scripts.
-/// CLI: `--kind-plugin <plugInfo.json> [--kind-plugin ...] --out <file> [--check]`.
+/// Reads each plugin's `Info.Kinds` as OpenUSD's `KindRegistry` does
+/// ([`kinds::read`]): forward bases, bases no plugin declares and cycles
+/// are kept, as OpenUSD keeps them. No plugin discovery or execution
+/// occurs; whole-line `#` comments are accepted. The module's `KINDS`
+/// table and `register` function need `layerstack_schemas` and `alloc`
+/// (`no_std` works); `register` adds the kinds to a caller-owned
+/// `KindRegistry` and returns those already registered there. Built-in
+/// kinds remain the registry's. Returns unformatted Rust for build
+/// scripts. CLI: `--kind-plugin <plugInfo.json> [--kind-plugin ...] --out
+/// <file> [--check]`.
+///
 /// AOUSD Core §7.6.2.4.4 and §11.4 (kind/model hierarchy).
 ///
 /// # Errors
-/// Returns an error for unreadable files or an invalid complete hierarchy.
-pub fn generate_kind_library(paths: &[impl AsRef<Path>]) -> Result<String, String> {
+///
+/// [`kinds::KindLibraryError`]: no file, an unreadable or malformed file,
+/// or every declaration OpenUSD refuses (an invalid name, a declaration or
+/// `baseKind` of the wrong type, a built-in kind, a kind an earlier plugin
+/// declares), each with its plugin, kind and field.
+pub fn generate_kind_library(
+    paths: &[impl AsRef<Path>],
+) -> Result<String, kinds::KindLibraryError> {
     kinds::generate(paths)
 }
 

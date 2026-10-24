@@ -8,13 +8,13 @@ pub mod generated {
 }
 
 #[test]
-fn generated_kinds_drive_model_queries_and_reject_collisions_atomically() {
+fn generated_kinds_drive_model_queries_and_refuse_repeats() {
     use layerstack::{
         FieldValue, InMemoryStore, Layer, LayerId, PrimSpec, Stage, StageOptions, Value,
     };
     use layerstack_schemas::{KindRegistry, Scene};
     let mut kinds = KindRegistry::new();
-    generated::register(&mut kinds).unwrap();
+    assert!(generated::register(&mut kinds).is_empty());
     assert!(
         kinds.is_a("stack_leaf", "component"),
         "forward plugin base resolves"
@@ -24,11 +24,12 @@ fn generated_kinds_drive_model_queries_and_reject_collisions_atomically() {
         "root kind stays outside models"
     );
     let before = kinds.clone();
-    assert!(
-        generated::register(&mut kinds).is_err(),
-        "duplicate plugin publication rejects"
+    assert_eq!(
+        generated::register(&mut kinds).len(),
+        generated::KINDS.len(),
+        "registering again refuses every kind, as OpenUSD refuses them"
     );
-    assert_eq!(kinds, before, "collision leaves caller registry unchanged");
+    assert_eq!(kinds, before, "the first registrations stand");
     let mut store = InMemoryStore::default();
     let path = store.path("/Model");
     let kind = store.tokens.intern("kind");

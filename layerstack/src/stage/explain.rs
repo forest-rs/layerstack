@@ -1370,6 +1370,19 @@ impl<'s> Roles<'s> {
     }
 
     /// Finishes a sparse-array explanation.
+    /// The earliest finite time of a sample a contributing opinion offered.
+    fn first_contributed_sample(&self) -> Option<f64> {
+        self.roles
+            .iter()
+            .zip(&self.samples)
+            .filter(|(role, _)| matches!(role, Some(OpinionRole::Contributed(_))))
+            .flat_map(|(_, samples)| samples)
+            .filter(|sample| matches!(sample.role, OpinionRole::Contributed(_)))
+            .map(|sample| sample.time)
+            .filter(|time| time.is_finite())
+            .min_by(f64::total_cmp)
+    }
+
     fn finish_sparse<T>(
         self,
         value: Option<T>,
@@ -1404,6 +1417,20 @@ impl<'s> Roles<'s> {
                         upper_seeded_by_fallback: seeded(only),
                     }
                 }
+                // Before the first composed sample, the samples that
+                // composed over a default hold it: its time is the first of
+                // theirs (AOUSD Core §12.5.1; OpenUSD's resolve info names
+                // the time samples).
+                (Some(interpolation), [only]) => match self.first_contributed_sample() {
+                    Some(first) => ValueSource::TimeSamples {
+                        lower: first,
+                        upper: first,
+                        interpolation,
+                        lower_seeded_by_fallback: seeded(only),
+                        upper_seeded_by_fallback: seeded(only),
+                    },
+                    None => ValueSource::Default,
+                },
                 _ => ValueSource::Default,
             },
         };

@@ -1,0 +1,7 @@
+#usda 1.0
+
+def "Model"
+{
+    asset bark = @./tex/bark.<UDIM>.png@
+    asset stone = @../shared/stone.<UDIM>.png@
+}

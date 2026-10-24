@@ -502,6 +502,10 @@ The `usd-geom` feature provides caller-owned transform and bounds caches:
   matrix. `RotationOrder` converts to and from rotate op types and builds its
   rotation.
 
+`XformableEdit::make_matrix_xform` is `UsdGeomXformable::MakeMatrixXform`: it
+clears the order at the edit target, adds a `transform` op to the order that
+then composes and returns it to set, refusing (without authoring) where a
+stronger order still has ops.
 `XformableEdit::set_matrix_transform` and `set_matrix_transform_at` replace the
 local op order with one double-precision matrix op. They preflight the current
 order and matrix source strength, then collect the replacement in one atomic

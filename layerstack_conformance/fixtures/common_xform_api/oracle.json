@@ -347,6 +347,105 @@
   {
    "after": {
     "attributes": {
+     "xformOp:transform": {
+      "default": [
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+       ],
+       [
+        4.0,
+        5.0,
+        6.0,
+        1.0
+       ]
+      ],
+      "samples": {},
+      "type": "matrix4d"
+     }
+    },
+    "order": [
+     "xformOp:transform"
+    ]
+   },
+   "call": [
+    "make_matrix",
+    "root"
+   ],
+   "prim": "/Empty",
+   "result": true
+  },
+  {
+   "after": {
+    "attributes": {
+     "xformOp:scale": {
+      "default": [
+       3.0,
+       3.0,
+       3.0
+      ],
+      "samples": {},
+      "type": "float3"
+     },
+     "xformOp:transform": {
+      "default": [
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+       ],
+       [
+        4.0,
+        5.0,
+        6.0,
+        1.0
+       ]
+      ],
+      "samples": {},
+      "type": "matrix4d"
+     }
+    },
+    "order": [
+     "xformOp:transform"
+    ]
+   },
+   "call": [
+    "make_matrix",
+    "weak"
+   ],
+   "prim": "/Empty",
+   "result": true
+  },
+  {
+   "after": {
+    "attributes": {
      "xformOp:rotateXYZ": {
       "default": [
        10.0,
@@ -736,6 +835,82 @@
   {
    "after": {
     "attributes": {
+     "xformOp:transform": {
+      "default": [
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+       ],
+       [
+        4.0,
+        5.0,
+        6.0,
+        1.0
+       ]
+      ],
+      "samples": {},
+      "type": "matrix4d"
+     },
+     "xformOp:translate": {
+      "default": [
+       1.0,
+       2.0,
+       3.0
+      ],
+      "samples": {},
+      "type": "double3"
+     }
+    },
+    "order": [
+     "xformOp:transform"
+    ]
+   },
+   "call": [
+    "make_matrix",
+    "root"
+   ],
+   "prim": "/Translated",
+   "result": true
+  },
+  {
+   "after": {
+    "attributes": {
+     "xformOp:scale": {
+      "default": [
+       3.0,
+       3.0,
+       3.0
+      ],
+      "samples": {},
+      "type": "float3"
+     }
+    },
+    "order": []
+   },
+   "call": [
+    "make_matrix",
+    "weak"
+   ],
+   "prim": "/Translated",
+   "result": false
+  },
+  {
+   "after": {
+    "attributes": {
      "xformOp:rotateXYZ": {
       "default": [
        10.0,
@@ -1126,6 +1301,81 @@
    ],
    "prim": "/TranslatedRotated",
    "result": true
+  },
+  {
+   "after": {
+    "attributes": {
+     "xformOp:rotateXYZ": {
+      "default": [
+       10.0,
+       20.0,
+       30.0
+      ],
+      "samples": {},
+      "type": "float3"
+     },
+     "xformOp:transform": {
+      "default": [
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+       ],
+       [
+        4.0,
+        5.0,
+        6.0,
+        1.0
+       ]
+      ],
+      "samples": {},
+      "type": "matrix4d"
+     },
+     "xformOp:translate": {
+      "default": [
+       1.0,
+       2.0,
+       3.0
+      ],
+      "samples": {},
+      "type": "double3"
+     }
+    },
+    "order": [
+     "xformOp:transform"
+    ]
+   },
+   "call": [
+    "make_matrix",
+    "root"
+   ],
+   "prim": "/TranslatedRotated",
+   "result": true
+  },
+  {
+   "after": {
+    "attributes": {},
+    "order": []
+   },
+   "call": [
+    "make_matrix",
+    "weak"
+   ],
+   "prim": "/TranslatedRotated",
+   "result": false
   },
   {
    "after": {
@@ -1488,6 +1738,72 @@
   {
    "after": {
     "attributes": {
+     "xformOp:rotateZYX": {
+      "default": [
+       10.0,
+       20.0,
+       30.0
+      ],
+      "samples": {},
+      "type": "float3"
+     },
+     "xformOp:transform": {
+      "default": [
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+       ],
+       [
+        4.0,
+        5.0,
+        6.0,
+        1.0
+       ]
+      ],
+      "samples": {},
+      "type": "matrix4d"
+     }
+    },
+    "order": [
+     "xformOp:transform"
+    ]
+   },
+   "call": [
+    "make_matrix",
+    "root"
+   ],
+   "prim": "/RotatedZyx",
+   "result": true
+  },
+  {
+   "after": {
+    "attributes": {},
+    "order": []
+   },
+   "call": [
+    "make_matrix",
+    "weak"
+   ],
+   "prim": "/RotatedZyx",
+   "result": false
+  },
+  {
+   "after": {
+    "attributes": {
      "xformOp:rotateXYZ:spin": {
       "default": [
        10.0,
@@ -2050,6 +2366,105 @@
   {
    "after": {
     "attributes": {
+     "xformOp:rotateXYZ:spin": {
+      "default": [
+       5.0,
+       10.0,
+       15.0
+      ],
+      "samples": {},
+      "type": "float3"
+     },
+     "xformOp:scale": {
+      "default": [
+       2.0,
+       3.0,
+       4.0
+      ],
+      "samples": {},
+      "type": "float3"
+     },
+     "xformOp:transform": {
+      "default": [
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+       ],
+       [
+        4.0,
+        5.0,
+        6.0,
+        1.0
+       ]
+      ],
+      "samples": {},
+      "type": "matrix4d"
+     },
+     "xformOp:translate": {
+      "default": [
+       1.0,
+       2.0,
+       3.0
+      ],
+      "samples": {
+       "2.0": [
+        4.0,
+        5.0,
+        6.0
+       ]
+      },
+      "type": "double3"
+     },
+     "xformOp:translate:pivot": {
+      "default": [
+       0.5,
+       1.0,
+       1.5
+      ],
+      "samples": {},
+      "type": "float3"
+     }
+    },
+    "order": [
+     "xformOp:transform"
+    ]
+   },
+   "call": [
+    "make_matrix",
+    "root"
+   ],
+   "prim": "/Full",
+   "result": true
+  },
+  {
+   "after": {
+    "attributes": {},
+    "order": []
+   },
+   "call": [
+    "make_matrix",
+    "weak"
+   ],
+   "prim": "/Full",
+   "result": false
+  },
+  {
+   "after": {
+    "attributes": {
      "xformOp:scale": {
       "default": [
        2.0,
@@ -2396,6 +2811,81 @@
   {
    "after": {
     "attributes": {
+     "xformOp:scale": {
+      "default": [
+       2.0,
+       2.0,
+       2.0
+      ],
+      "samples": {},
+      "type": "float3"
+     },
+     "xformOp:transform": {
+      "default": [
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+       ],
+       [
+        4.0,
+        5.0,
+        6.0,
+        1.0
+       ]
+      ],
+      "samples": {},
+      "type": "matrix4d"
+     },
+     "xformOp:translate": {
+      "default": [
+       1.0,
+       0.0,
+       0.0
+      ],
+      "samples": {},
+      "type": "double3"
+     }
+    },
+    "order": [
+     "xformOp:transform"
+    ]
+   },
+   "call": [
+    "make_matrix",
+    "root"
+   ],
+   "prim": "/WrongOrder",
+   "result": true
+  },
+  {
+   "after": {
+    "attributes": {},
+    "order": []
+   },
+   "call": [
+    "make_matrix",
+    "weak"
+   ],
+   "prim": "/WrongOrder",
+   "result": false
+  },
+  {
+   "after": {
+    "attributes": {
      "xformOp:translate:pivot": {
       "default": [
        1.0,
@@ -2666,6 +3156,72 @@
       "default": [
        [
         0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+       ],
+       [
+        4.0,
+        5.0,
+        6.0,
+        1.0
+       ]
+      ],
+      "samples": {},
+      "type": "matrix4d"
+     },
+     "xformOp:translate:pivot": {
+      "default": [
+       1.0,
+       1.0,
+       1.0
+      ],
+      "samples": {},
+      "type": "float3"
+     }
+    },
+    "order": [
+     "xformOp:transform"
+    ]
+   },
+   "call": [
+    "make_matrix",
+    "root"
+   ],
+   "prim": "/Unpaired",
+   "result": true
+  },
+  {
+   "after": {
+    "attributes": {},
+    "order": []
+   },
+   "call": [
+    "make_matrix",
+    "weak"
+   ],
+   "prim": "/Unpaired",
+   "result": false
+  },
+  {
+   "after": {
+    "attributes": {
+     "xformOp:transform": {
+      "default": [
+       [
+        0.0,
         0.0,
         2.0,
         0.0
@@ -3096,6 +3652,63 @@
   {
    "after": {
     "attributes": {
+     "xformOp:transform": {
+      "default": [
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+       ],
+       [
+        4.0,
+        5.0,
+        6.0,
+        1.0
+       ]
+      ],
+      "samples": {},
+      "type": "matrix4d"
+     }
+    },
+    "order": [
+     "xformOp:transform"
+    ]
+   },
+   "call": [
+    "make_matrix",
+    "root"
+   ],
+   "prim": "/Matrix",
+   "result": true
+  },
+  {
+   "after": {
+    "attributes": {},
+    "order": []
+   },
+   "call": [
+    "make_matrix",
+    "weak"
+   ],
+   "prim": "/Matrix",
+   "result": false
+  },
+  {
+   "after": {
+    "attributes": {
      "xformOp:rotateX": {
       "default": 30.0,
       "samples": {},
@@ -3323,6 +3936,68 @@
      0.75
     ],
     null
+   ],
+   "prim": "/SingleAxis",
+   "result": false
+  },
+  {
+   "after": {
+    "attributes": {
+     "xformOp:rotateX": {
+      "default": 30.0,
+      "samples": {},
+      "type": "float"
+     },
+     "xformOp:transform": {
+      "default": [
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+       ],
+       [
+        4.0,
+        5.0,
+        6.0,
+        1.0
+       ]
+      ],
+      "samples": {},
+      "type": "matrix4d"
+     }
+    },
+    "order": [
+     "xformOp:transform"
+    ]
+   },
+   "call": [
+    "make_matrix",
+    "root"
+   ],
+   "prim": "/SingleAxis",
+   "result": true
+  },
+  {
+   "after": {
+    "attributes": {},
+    "order": []
+   },
+   "call": [
+    "make_matrix",
+    "weak"
    ],
    "prim": "/SingleAxis",
    "result": false
@@ -3723,6 +4398,72 @@
    ],
    "prim": "/Reset",
    "result": true
+  },
+  {
+   "after": {
+    "attributes": {
+     "xformOp:transform": {
+      "default": [
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+       ],
+       [
+        4.0,
+        5.0,
+        6.0,
+        1.0
+       ]
+      ],
+      "samples": {},
+      "type": "matrix4d"
+     },
+     "xformOp:translate": {
+      "default": [
+       1.0,
+       2.0,
+       3.0
+      ],
+      "samples": {},
+      "type": "double3"
+     }
+    },
+    "order": [
+     "xformOp:transform"
+    ]
+   },
+   "call": [
+    "make_matrix",
+    "root"
+   ],
+   "prim": "/Reset",
+   "result": true
+  },
+  {
+   "after": {
+    "attributes": {},
+    "order": []
+   },
+   "call": [
+    "make_matrix",
+    "weak"
+   ],
+   "prim": "/Reset",
+   "result": false
   },
   {
    "after": {
@@ -4040,6 +4781,107 @@
   {
    "after": {
     "attributes": {
+     "xformOp:transform": {
+      "default": [
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+       ],
+       [
+        4.0,
+        5.0,
+        6.0,
+        1.0
+       ]
+      ],
+      "samples": {},
+      "type": "matrix4d"
+     },
+     "xformOp:translate": {
+      "default": [
+       1.0,
+       2.0,
+       3.0
+      ],
+      "samples": {},
+      "type": "double3"
+     }
+    },
+    "order": [
+     "xformOp:transform"
+    ]
+   },
+   "call": [
+    "make_matrix",
+    "root"
+   ],
+   "prim": "/BeforeReset",
+   "result": true
+  },
+  {
+   "after": {
+    "attributes": {
+     "xformOp:transform": {
+      "default": [
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+       ],
+       [
+        4.0,
+        5.0,
+        6.0,
+        1.0
+       ]
+      ],
+      "samples": {},
+      "type": "matrix4d"
+     }
+    },
+    "order": [
+     "xformOp:translate",
+     "!resetXformStack!",
+     "xformOp:transform"
+    ]
+   },
+   "call": [
+    "make_matrix",
+    "weak"
+   ],
+   "prim": "/BeforeReset",
+   "result": true
+  },
+  {
+   "after": {
+    "attributes": {
      "xformOp:scale": {
       "default": [
        2.0,
@@ -4344,6 +5186,72 @@
   {
    "after": {
     "attributes": {
+     "xformOp:scale": {
+      "default": [
+       2.0,
+       3.0,
+       4.0
+      ],
+      "samples": {},
+      "type": "float3"
+     },
+     "xformOp:transform": {
+      "default": [
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+       ],
+       [
+        4.0,
+        5.0,
+        6.0,
+        1.0
+       ]
+      ],
+      "samples": {},
+      "type": "matrix4d"
+     }
+    },
+    "order": [
+     "xformOp:transform"
+    ]
+   },
+   "call": [
+    "make_matrix",
+    "root"
+   ],
+   "prim": "/Missing",
+   "result": true
+  },
+  {
+   "after": {
+    "attributes": {},
+    "order": []
+   },
+   "call": [
+    "make_matrix",
+    "weak"
+   ],
+   "prim": "/Missing",
+   "result": false
+  },
+  {
+   "after": {
+    "attributes": {
      "xformOp:orient": {
       "default": [
        0.0,
@@ -4618,6 +5526,73 @@
   {
    "after": {
     "attributes": {
+     "xformOp:orient": {
+      "default": [
+       0.0,
+       0.7071067690849304,
+       0.0,
+       0.7071067690849304
+      ],
+      "samples": {},
+      "type": "quatf"
+     },
+     "xformOp:transform": {
+      "default": [
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+       ],
+       [
+        4.0,
+        5.0,
+        6.0,
+        1.0
+       ]
+      ],
+      "samples": {},
+      "type": "matrix4d"
+     }
+    },
+    "order": [
+     "xformOp:transform"
+    ]
+   },
+   "call": [
+    "make_matrix",
+    "root"
+   ],
+   "prim": "/Oriented",
+   "result": true
+  },
+  {
+   "after": {
+    "attributes": {},
+    "order": []
+   },
+   "call": [
+    "make_matrix",
+    "weak"
+   ],
+   "prim": "/Oriented",
+   "result": false
+  },
+  {
+   "after": {
+    "attributes": {
      "xformOp:rotateXYZ": {
       "default": [
        0.0,
@@ -5286,6 +6261,117 @@
     "attributes": {
      "xformOp:rotateXYZ": {
       "default": [
+       0.0,
+       0.0,
+       90.0
+      ],
+      "samples": {},
+      "type": "float3"
+     },
+     "xformOp:scale": {
+      "default": [
+       2.0,
+       2.0,
+       2.0
+      ],
+      "samples": {},
+      "type": "float3"
+     },
+     "xformOp:scale:c": {
+      "default": [
+       1.0,
+       2.0,
+       1.0
+      ],
+      "samples": {},
+      "type": "float3"
+     },
+     "xformOp:transform": {
+      "default": [
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+       ],
+       [
+        4.0,
+        5.0,
+        6.0,
+        1.0
+       ]
+      ],
+      "samples": {},
+      "type": "matrix4d"
+     },
+     "xformOp:translate": {
+      "default": [
+       1.0,
+       0.0,
+       0.0
+      ],
+      "samples": {},
+      "type": "double3"
+     },
+     "xformOp:translate:a": {
+      "default": [
+       0.0,
+       1.0,
+       0.0
+      ],
+      "samples": {},
+      "type": "double3"
+     },
+     "xformOp:translate:b": {
+      "default": [
+       0.0,
+       0.0,
+       1.0
+      ],
+      "samples": {},
+      "type": "double3"
+     }
+    },
+    "order": [
+     "xformOp:transform"
+    ]
+   },
+   "call": [
+    "make_matrix",
+    "root"
+   ],
+   "prim": "/Six",
+   "result": true
+  },
+  {
+   "after": {
+    "attributes": {},
+    "order": []
+   },
+   "call": [
+    "make_matrix",
+    "weak"
+   ],
+   "prim": "/Six",
+   "result": false
+  },
+  {
+   "after": {
+    "attributes": {
+     "xformOp:rotateXYZ": {
+      "default": [
        10.0,
        20.0,
        30.0
@@ -5794,6 +6880,99 @@
    ],
    "prim": "/Precisions",
    "result": null
+  },
+  {
+   "after": {
+    "attributes": {
+     "xformOp:rotateXYZ": {
+      "default": [
+       10.0,
+       20.0,
+       30.0
+      ],
+      "samples": {},
+      "type": "double3"
+     },
+     "xformOp:scale": {
+      "default": [
+       2.0,
+       3.0,
+       4.0
+      ],
+      "samples": {},
+      "type": "double3"
+     },
+     "xformOp:transform": {
+      "default": [
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+       ],
+       [
+        4.0,
+        5.0,
+        6.0,
+        1.0
+       ]
+      ],
+      "samples": {},
+      "type": "matrix4d"
+     },
+     "xformOp:translate": {
+      "default": [
+       1.0,
+       2.0,
+       3.0
+      ],
+      "samples": {},
+      "type": "half3"
+     },
+     "xformOp:translate:pivot": {
+      "default": [
+       0.5,
+       1.0,
+       1.5
+      ],
+      "samples": {},
+      "type": "double3"
+     }
+    },
+    "order": [
+     "xformOp:transform"
+    ]
+   },
+   "call": [
+    "make_matrix",
+    "root"
+   ],
+   "prim": "/Precisions",
+   "result": true
+  },
+  {
+   "after": {
+    "attributes": {},
+    "order": []
+   },
+   "call": [
+    "make_matrix",
+    "weak"
+   ],
+   "prim": "/Precisions",
+   "result": false
   },
   {
    "after": {
@@ -6193,6 +7372,74 @@
   {
    "after": {
     "attributes": {
+     "xformOp:scale": {
+      "default": [
+       [
+        1.0,
+        1.0,
+        1.0
+       ]
+      ],
+      "samples": {},
+      "type": "float3[]"
+     },
+     "xformOp:transform": {
+      "default": [
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+       ],
+       [
+        4.0,
+        5.0,
+        6.0,
+        1.0
+       ]
+      ],
+      "samples": {},
+      "type": "matrix4d"
+     }
+    },
+    "order": [
+     "xformOp:transform"
+    ]
+   },
+   "call": [
+    "make_matrix",
+    "root"
+   ],
+   "prim": "/ArrayScale",
+   "result": true
+  },
+  {
+   "after": {
+    "attributes": {},
+    "order": []
+   },
+   "call": [
+    "make_matrix",
+    "weak"
+   ],
+   "prim": "/ArrayScale",
+   "result": false
+  },
+  {
+   "after": {
+    "attributes": {
      "xformOp:translate": {
       "default": [
        1.0,
@@ -6459,6 +7706,72 @@
   {
    "after": {
     "attributes": {
+     "xformOp:transform": {
+      "default": [
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+       ],
+       [
+        4.0,
+        5.0,
+        6.0,
+        1.0
+       ]
+      ],
+      "samples": {},
+      "type": "matrix4d"
+     },
+     "xformOp:translate": {
+      "default": [
+       1.0,
+       2.0,
+       3.0
+      ],
+      "samples": {},
+      "type": "double3"
+     }
+    },
+    "order": [
+     "xformOp:transform"
+    ]
+   },
+   "call": [
+    "make_matrix",
+    "root"
+   ],
+   "prim": "/Inverted",
+   "result": true
+  },
+  {
+   "after": {
+    "attributes": {},
+    "order": []
+   },
+   "call": [
+    "make_matrix",
+    "weak"
+   ],
+   "prim": "/Inverted",
+   "result": false
+  },
+  {
+   "after": {
+    "attributes": {
      "xformOp:translate:offset": {
       "default": [
        1.0,
@@ -6718,6 +8031,72 @@
      0.75
     ],
     null
+   ],
+   "prim": "/Suffixed",
+   "result": false
+  },
+  {
+   "after": {
+    "attributes": {
+     "xformOp:transform": {
+      "default": [
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+       ],
+       [
+        4.0,
+        5.0,
+        6.0,
+        1.0
+       ]
+      ],
+      "samples": {},
+      "type": "matrix4d"
+     },
+     "xformOp:translate:offset": {
+      "default": [
+       1.0,
+       2.0,
+       3.0
+      ],
+      "samples": {},
+      "type": "double3"
+     }
+    },
+    "order": [
+     "xformOp:transform"
+    ]
+   },
+   "call": [
+    "make_matrix",
+    "root"
+   ],
+   "prim": "/Suffixed",
+   "result": true
+  },
+  {
+   "after": {
+    "attributes": {},
+    "order": []
+   },
+   "call": [
+    "make_matrix",
+    "weak"
    ],
    "prim": "/Suffixed",
    "result": false
@@ -7147,6 +8526,81 @@
   {
    "after": {
     "attributes": {
+     "xformOp:scale": {
+      "default": [
+       2.0,
+       2.0,
+       2.0
+      ],
+      "samples": {},
+      "type": "double3"
+     },
+     "xformOp:transform": {
+      "default": [
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+       ],
+       [
+        4.0,
+        5.0,
+        6.0,
+        1.0
+       ]
+      ],
+      "samples": {},
+      "type": "matrix4d"
+     },
+     "xformOp:translate": {
+      "default": [
+       1.0,
+       2.0,
+       3.0
+      ],
+      "samples": {},
+      "type": "double3"
+     }
+    },
+    "order": [
+     "xformOp:transform"
+    ]
+   },
+   "call": [
+    "make_matrix",
+    "root"
+   ],
+   "prim": "/Stray",
+   "result": true
+  },
+  {
+   "after": {
+    "attributes": {},
+    "order": []
+   },
+   "call": [
+    "make_matrix",
+    "weak"
+   ],
+   "prim": "/Stray",
+   "result": false
+  },
+  {
+   "after": {
+    "attributes": {
      "xformOp:rotateXYZ": {
       "default": [
        0.0,
@@ -7909,6 +9363,126 @@
   {
    "after": {
     "attributes": {
+     "xformOp:rotateXYZ": {
+      "default": [
+       0.0,
+       45.0,
+       0.0
+      ],
+      "samples": {},
+      "type": "float3"
+     },
+     "xformOp:scale": {
+      "default": [
+       2.0,
+       1.0,
+       1.0
+      ],
+      "samples": {},
+      "type": "float3"
+     },
+     "xformOp:transform": {
+      "default": [
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+       ],
+       [
+        4.0,
+        5.0,
+        6.0,
+        1.0
+       ]
+      ],
+      "samples": {},
+      "type": "matrix4d"
+     },
+     "xformOp:translate": {
+      "default": [
+       1.0,
+       2.0,
+       3.0
+      ],
+      "samples": {},
+      "type": "double3"
+     },
+     "xformOp:translate:rotatePivot": {
+      "default": [
+       1.0,
+       0.0,
+       0.0
+      ],
+      "samples": {},
+      "type": "float3"
+     },
+     "xformOp:translate:rotatePivotTranslate": {
+      "default": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "samples": {},
+      "type": "float3"
+     },
+     "xformOp:translate:scalePivot": {
+      "default": [
+       1.0,
+       0.0,
+       0.0
+      ],
+      "samples": {},
+      "type": "float3"
+     },
+     "xformOp:translate:scalePivotTranslate": {
+      "default": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "samples": {},
+      "type": "float3"
+     }
+    },
+    "order": [
+     "xformOp:transform"
+    ]
+   },
+   "call": [
+    "make_matrix",
+    "root"
+   ],
+   "prim": "/Pivots",
+   "result": true
+  },
+  {
+   "after": {
+    "attributes": {},
+    "order": []
+   },
+   "call": [
+    "make_matrix",
+    "weak"
+   ],
+   "prim": "/Pivots",
+   "result": false
+  },
+  {
+   "after": {
+    "attributes": {
      "xformOp:scale": {
       "default": [
        1.0,
@@ -8335,6 +9909,90 @@
   {
    "after": {
     "attributes": {
+     "xformOp:scale": {
+      "default": [
+       1.0,
+       2.0,
+       3.0
+      ],
+      "samples": {},
+      "type": "float3"
+     },
+     "xformOp:transform": {
+      "default": [
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+       ],
+       [
+        4.0,
+        5.0,
+        6.0,
+        1.0
+       ]
+      ],
+      "samples": {},
+      "type": "matrix4d"
+     },
+     "xformOp:translate": {
+      "default": [
+       1.0,
+       2.0,
+       3.0
+      ],
+      "samples": {},
+      "type": "double3"
+     },
+     "xformOp:translate:offset": {
+      "default": [
+       10.0,
+       0.0,
+       0.0
+      ],
+      "samples": {},
+      "type": "double3"
+     }
+    },
+    "order": [
+     "xformOp:transform"
+    ]
+   },
+   "call": [
+    "make_matrix",
+    "root"
+   ],
+   "prim": "/Offsets",
+   "result": true
+  },
+  {
+   "after": {
+    "attributes": {},
+    "order": []
+   },
+   "call": [
+    "make_matrix",
+    "weak"
+   ],
+   "prim": "/Offsets",
+   "result": false
+  },
+  {
+   "after": {
+    "attributes": {
      "xformOp:rotateXYZ": {
       "default": [
        10.0,
@@ -8681,6 +10339,81 @@
   {
    "after": {
     "attributes": {
+     "xformOp:rotateXYZ": {
+      "default": [
+       10.0,
+       0.0,
+       0.0
+      ],
+      "samples": {},
+      "type": "float3"
+     },
+     "xformOp:rotateXYZ:extra": {
+      "default": [
+       0.0,
+       20.0,
+       0.0
+      ],
+      "samples": {},
+      "type": "float3"
+     },
+     "xformOp:transform": {
+      "default": [
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+       ],
+       [
+        4.0,
+        5.0,
+        6.0,
+        1.0
+       ]
+      ],
+      "samples": {},
+      "type": "matrix4d"
+     }
+    },
+    "order": [
+     "xformOp:transform"
+    ]
+   },
+   "call": [
+    "make_matrix",
+    "root"
+   ],
+   "prim": "/TwoRotations",
+   "result": true
+  },
+  {
+   "after": {
+    "attributes": {},
+    "order": []
+   },
+   "call": [
+    "make_matrix",
+    "weak"
+   ],
+   "prim": "/TwoRotations",
+   "result": false
+  },
+  {
+   "after": {
+    "attributes": {
      "xformOp:transform": {
       "default": [
        [
@@ -9108,6 +10841,63 @@
      0.75
     ],
     null
+   ],
+   "prim": "/Sheared",
+   "result": false
+  },
+  {
+   "after": {
+    "attributes": {
+     "xformOp:transform": {
+      "default": [
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+       ],
+       [
+        4.0,
+        5.0,
+        6.0,
+        1.0
+       ]
+      ],
+      "samples": {},
+      "type": "matrix4d"
+     }
+    },
+    "order": [
+     "xformOp:transform"
+    ]
+   },
+   "call": [
+    "make_matrix",
+    "root"
+   ],
+   "prim": "/Sheared",
+   "result": true
+  },
+  {
+   "after": {
+    "attributes": {},
+    "order": []
+   },
+   "call": [
+    "make_matrix",
+    "weak"
    ],
    "prim": "/Sheared",
    "result": false
@@ -9528,6 +11318,44 @@
   {
    "after": {
     "attributes": {
+     "xformOp:transform": {
+      "default": [
+       1.0,
+       2.0,
+       3.0
+      ],
+      "samples": {},
+      "type": "double3"
+     }
+    },
+    "order": [
+     "xformOp:transform"
+    ]
+   },
+   "call": [
+    "make_matrix",
+    "root"
+   ],
+   "prim": "/TransformTyped",
+   "result": null
+  },
+  {
+   "after": {
+    "attributes": {},
+    "order": [
+     "xformOp:transform"
+    ]
+   },
+   "call": [
+    "make_matrix",
+    "weak"
+   ],
+   "prim": "/TransformTyped",
+   "result": null
+  },
+  {
+   "after": {
+    "attributes": {
      "xformOp:rotateXYZ": {
       "default": [
        10.0,
@@ -9906,10 +11734,135 @@
      0.75
     ],
     null
+   ],
+   "prim": "/Unlisted",
+   "result": true
+  },
+  {
+   "after": {
+    "attributes": {
+     "xformOp:transform": {
+      "default": [
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+       ],
+       [
+        4.0,
+        5.0,
+        6.0,
+        1.0
+       ]
+      ],
+      "samples": {},
+      "type": "matrix4d"
+     },
+     "xformOp:translate": {
+      "default": [
+       1.0,
+       2.0,
+       3.0
+      ],
+      "samples": {},
+      "type": "double3"
+     }
+    },
+    "order": [
+     "xformOp:transform"
+    ]
+   },
+   "call": [
+    "make_matrix",
+    "root"
+   ],
+   "prim": "/Unlisted",
+   "result": true
+  },
+  {
+   "after": {
+    "attributes": {
+     "xformOp:transform": {
+      "default": [
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+       ],
+       [
+        4.0,
+        5.0,
+        6.0,
+        1.0
+       ]
+      ],
+      "samples": {},
+      "type": "matrix4d"
+     }
+    },
+    "order": [
+     "xformOp:transform"
+    ]
+   },
+   "call": [
+    "make_matrix",
+    "weak"
    ],
    "prim": "/Unlisted",
    "result": true
   }
+ ],
+ "matrix": [
+  [
+   0.0,
+   1.0,
+   0.0,
+   0.0
+  ],
+  [
+   -1.0,
+   0.0,
+   0.0,
+   0.0
+  ],
+  [
+   0.0,
+   0.0,
+   1.0,
+   0.0
+  ],
+  [
+   4.0,
+   5.0,
+   6.0,
+   1.0
+  ]
  ],
  "openusd_version": "26.8",
  "reads": {

@@ -1,11 +1,12 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! The common transform API agrees with C++ call by call.
+//! The common transform API and `MakeMatrixXform` agree with C++ call by call.
 //!
 //! `fixtures/common_xform_api/oracle.json` is what
 //! `scripts/common_xform_api_oracle.py` records with OpenUSD's
-//! `UsdGeomXformCommonAPI` on 25 op stacks, each call alone on a fresh copy of the scene. A call OpenUSD
+//! `UsdGeomXformCommonAPI` and `UsdGeomXformable::MakeMatrixXform` on 25
+//! op stacks, each call alone on a fresh copy of the scene. A call OpenUSD
 //! accepts must be accepted here and author the same layer content; a call
 //! it refuses (returning `false` or raising a coding error) must be refused
 //! here with nothing authored, where OpenUSD can leave ops it added before
@@ -34,6 +35,7 @@ struct Oracle {
     reads: BTreeMap<String, Reads>,
     calls: Vec<Call>,
     rotation_orders: RotationOrders,
+    matrix: [[f64; 4]; 4],
 }
 #[derive(Deserialize)]
 struct Reads {
@@ -228,7 +230,7 @@ fn close(a: &Json, b: &Json) -> bool {
 }
 
 /// Makes one oracle call; `true` when it is accepted.
-fn make(edit: &mut SchemaEdit<'_>, path: PathId, call: &[Json]) -> bool {
+fn make(edit: &mut SchemaEdit<'_>, path: PathId, call: &[Json], matrix: [[f64; 4]; 4]) -> bool {
     let xform = XformableEdit::new(edit, path)
         .expect("outside any instance")
         .unwrap();
@@ -262,7 +264,22 @@ fn make(edit: &mut SchemaEdit<'_>, path: PathId, call: &[Json]) -> bool {
         ),
         "scale" => component(edit, CommonComponent::Scale(float3(&call[1])), &call[2]),
         "pivot" => component(edit, CommonComponent::Pivot(float3(&call[1])), &call[2]),
+        "make_matrix" => match xform.make_matrix_xform(edit) {
+            Ok(op) => {
+                op.set(edit, matrix).unwrap();
+                true
+            }
+            Err(_) => false,
+        },
         other => panic!("unknown call {other}"),
+    }
+}
+
+fn target(call: &[Json]) -> LayerId {
+    if call[0] == "make_matrix" && call[1] == "weak" {
+        LayerId(2)
+    } else {
+        LayerId(1)
     }
 }
 
@@ -273,10 +290,10 @@ fn authoring_accepts_and_refuses_as_cpp_and_authors_what_it_authors() {
     for record in &oracle.calls {
         let (mut store, mut live) = scene();
         let path = store.path(&record.prim);
-        let layer = LayerId(1);
+        let layer = target(&record.call);
         let before = authored(&store, layer, path);
         let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(layer));
-        let accepted = make(&mut edit, path, &record.call);
+        let accepted = make(&mut edit, path, &record.call, oracle.matrix);
         let what = format!("{} {:?}", record.prim, record.call);
         assert_eq!(accepted, record.result == Some(true), "{what}");
         let transaction = edit.finish();
@@ -296,9 +313,37 @@ fn authoring_accepts_and_refuses_as_cpp_and_authors_what_it_authors() {
     }
     assert_eq!(
         (accepted_calls, refused_calls),
-        (76, 124),
+        (103, 147),
         "every recorded call was replayed"
     );
+}
+
+#[test]
+fn guarded_matrix_authoring_accepts_only_where_cpp_does() {
+    let oracle = oracle();
+    for record in oracle.calls.iter().filter(|r| r.call[0] == "make_matrix") {
+        let (mut store, mut live) = scene();
+        let path = store.path(&record.prim);
+        let layer = target(&record.call);
+        let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(layer));
+        let xform = XformableEdit::new(&edit, path)
+            .expect("outside any instance")
+            .unwrap();
+        if xform
+            .set_matrix_transform(&mut edit, oracle.matrix)
+            .is_err()
+        {
+            continue;
+        }
+        let what = format!("{} {:?}", record.prim, record.call);
+        assert_eq!(record.result, Some(true), "{what}");
+        let transaction = edit.finish();
+        live.apply(&mut store, &transaction).unwrap();
+        assert!(
+            close(&authored(&store, layer, path), &record.after),
+            "{what}"
+        );
+    }
 }
 
 fn agree(actual: &CommonTransform, expected: &Vectors, what: &str) {

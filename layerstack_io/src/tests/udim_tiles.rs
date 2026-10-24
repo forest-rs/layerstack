@@ -404,6 +404,277 @@ fn the_filesystem_lists_files_beside_an_identifier_and_answers_existence() {
     fs::remove_dir_all(directory).unwrap();
 }
 
+const PACKAGED_SCENE: &str = r#"#usda 1.0
+def "Root" (references = @./models/model.usda@</Model>)
+{
+    asset color = @./textures/c.<UDIM>.png@
+    asset[] layers = [@./textures/c.<UDIM>.png@, @./textures/plain.png@]
+    asset animated.timeSamples = { 1: @./textures/c.<UDIM>.png@, 2: @./textures/d.<UDIM>.png@ }
+}
+"#;
+const PACKAGED_MODEL: &str = r#"#usda 1.0
+def "Model"
+{
+    asset shared = @../textures/c.<UDIM>.png@
+    asset bark = @./tex/<UDIM>/bark.png@
+}
+"#;
+
+fn packaged_scene() -> Tree {
+    let mut tree = Tree::with(&[
+        "textures/c.1001.png",
+        "textures/c.1002.png",
+        "textures/c.1011.png",
+        "textures/d.1005.png",
+        "textures/plain.png",
+        "models/tex/1001/bark.png",
+        "models/tex/1003/bark.png",
+    ])
+    .listing();
+    tree.files
+        .insert("scene.usda".into(), PACKAGED_SCENE.into());
+    tree.files
+        .insert("models/model.usda".into(), PACKAGED_MODEL.into());
+    tree
+}
+
+/// The authored asset values of every layer in `plan`, by layer member.
+fn values(
+    plan: &layerstack_usdz::localize::LocalizationPlan,
+    store: &InMemoryStore,
+) -> BTreeSet<(String, String)> {
+    plan.layers
+        .iter()
+        .flat_map(|layer| {
+            layerstack::asset_dependencies::extract_layer_dependencies(
+                &layer.layer,
+                &store.paths,
+                &store.tokens,
+            )
+            .into_iter()
+            .map(|d| (layer.member.to_string(), d.identifier.to_string()))
+        })
+        .collect()
+}
+
+#[test]
+fn packaging_carries_every_tile_and_keeps_the_pattern() {
+    let (mut document, model) = open(packaged_scene());
+    let root = document.stage.stage().root_layer().unwrap();
+    let before = document.storage.calls();
+    let prepared = document
+        .prepare_package(
+            root,
+            "scene.usda",
+            PackagePreparationLimits::default(),
+            |_| PackageInclusion::Include,
+        )
+        .unwrap();
+    let report = prepared.report();
+    assert!(report.is_complete(), "{report:?}");
+    let tiles_of = |layer: LayerId, identifier: &str| {
+        report
+            .dependencies
+            .iter()
+            .find(|d| d.source.layer == layer && &*d.source.identifier == identifier)
+            .map(|d| d.targets.clone())
+            .unwrap()
+    };
+    let assets = |names: &[&str]| -> Vec<_> {
+        names
+            .iter()
+            .map(|n| layerstack::asset_dependencies::DependencyTarget::Asset((*n).into()))
+            .collect()
+    };
+    let c = assets(&[
+        "textures/c.1001.png",
+        "textures/c.1002.png",
+        "textures/c.1011.png",
+    ]);
+    assert_eq!(tiles_of(root, "./textures/c.<UDIM>.png"), c);
+    assert_eq!(tiles_of(model, "../textures/c.<UDIM>.png"), c);
+    assert_eq!(
+        tiles_of(model, "./tex/<UDIM>/bark.png"),
+        assets(&["models/tex/1001/bark.png", "models/tex/1003/bark.png"])
+    );
+    // Five uses of three sets: `c` is found once, its later uses, from
+    // other fields and the other layer's spelling, reuse it.
+    let work = prepared.udim_work();
+    assert_eq!(work.sets_reused, 3, "{work:?}");
+    assert_eq!(
+        (work.listings, work.listings_reused),
+        (1, 1),
+        "c and d share one listing"
+    );
+    assert_eq!(work.existence_checks, 1 + 5 + 1 + 1 + 99, "{work:?}");
+    let calls = document.storage.calls();
+    assert_eq!(calls[1] - before[1], work.existence_checks);
+    assert_eq!(calls[2] - before[2], work.listings);
+
+    let plan = prepared.plan().unwrap();
+    let members: Vec<_> = plan.assets.iter().map(|a| &*a.member).collect();
+    assert_eq!(
+        members,
+        [
+            "assets/000000/1001/bark.png",
+            "assets/000000/1003/bark.png",
+            "assets/000001/c.1001.png",
+            "assets/000001/c.1002.png",
+            "assets/000001/c.1011.png",
+            "assets/000002/d.1005.png",
+            "assets/000003.png",
+        ]
+    );
+    let values = values(plan, &document.store);
+    for (layer, value) in [
+        ("scene.usda", "assets/000001/c.<UDIM>.png"),
+        ("scene.usda", "assets/000002/d.<UDIM>.png"),
+        ("scene.usda", "assets/000003.png"),
+        ("layers/000000.usda", "../assets/000001/c.<UDIM>.png"),
+        ("layers/000000.usda", "../assets/000000/<UDIM>/bark.png"),
+    ] {
+        assert!(
+            values.contains(&(layer.into(), value.into())),
+            "{layer} {value} in {values:?}"
+        );
+    }
+
+    // The package's own tiles are found inside it and hold the source bytes.
+    let usdz = prepared.write_usdz().unwrap();
+    let mut tree = Tree::default();
+    tree.files.insert("out.usdz".into(), usdz);
+    let mut packaged = StageDocument::open(tree, "out.usdz", StageOptions::default()).unwrap();
+    let inner = packaged.catalog.ids["out.usdz[layers/000000.usda]"];
+    let pattern = UdimPattern::parse("../assets/000001/c.<UDIM>.png").unwrap();
+    let found = packaged
+        .resolve_udim_tiles(pattern, Some(inner), &mut UdimDiscovery::default())
+        .unwrap();
+    assert_eq!(numbers(&found), [1001, 1002, 1011]);
+    let tile = &found.tiles[2];
+    assert_eq!(tile.identifier, "out.usdz[assets/000001/c.1011.png]");
+    let bytes = packaged.read_asset_bytes(&tile.identifier, None).unwrap();
+    assert_eq!(&bytes.bytes[..], b"textures/c.1011.png");
+}
+
+#[test]
+fn a_set_without_tiles_is_unresolved_and_prevents_a_plan() {
+    let mut tree = scene(&[]).listing();
+    tree.files.insert(
+        "scene.usda".into(),
+        "#usda 1.0\ndef \"P\" { asset a = @./none.<UDIM>.png@ }\n".into(),
+    );
+    let mut document = StageDocument::open(tree, "scene.usda", StageOptions::default()).unwrap();
+    let root = document.stage.stage().root_layer().unwrap();
+    let prepared = document
+        .prepare_package(
+            root,
+            "scene.usda",
+            PackagePreparationLimits::default(),
+            |_| PackageInclusion::Include,
+        )
+        .unwrap();
+    assert!(prepared.plan().is_none());
+    let [dependency] = &prepared.report().dependencies[..] else {
+        panic!("{:?}", prepared.report());
+    };
+    let [layerstack::asset_dependencies::DependencyTarget::Unresolved(reason)] =
+        &dependency.targets[..]
+    else {
+        panic!("{dependency:?}");
+    };
+    assert_eq!(
+        &**reason,
+        "no UDIM tile 1001 through 1100 exists for ./none.<UDIM>.png"
+    );
+}
+
+#[test]
+fn arcs_expressions_and_kept_external_sets_follow_openusd() {
+    let mut tree = scene(&["textures/c.1001.png", "textures/c.1002.png"]).listing();
+    tree.files.insert(
+        "scene.usda".into(),
+        r#"#usda 1.0
+(
+    expressionVariables = { string NAME = "c" }
+)
+def "P" (references = @./models/<UDIM>.usda@)
+{
+    asset expression = @`"./textures/${NAME}.<UDIM>.png"`@
+    asset kept = @./textures/c.<UDIM>.png@
+}
+"#
+        .into(),
+    );
+    let mut document = StageDocument::open(tree, "scene.usda", StageOptions::default()).unwrap();
+    let root = document.stage.stage().root_layer().unwrap();
+    let prepared = document
+        .prepare_package(
+            root,
+            "scene.usda",
+            PackagePreparationLimits::default(),
+            |d| {
+                if d.identifier.contains("kept") || d.identifier.starts_with("./textures") {
+                    PackageInclusion::KeepExternal
+                } else {
+                    PackageInclusion::Include
+                }
+            },
+        )
+        .unwrap();
+    let target = |identifier: &str| {
+        let dependency = prepared
+            .report()
+            .dependencies
+            .iter()
+            .find(|d| &*d.source.identifier == identifier)
+            .unwrap();
+        dependency.targets.clone()
+    };
+    use layerstack::asset_dependencies::DependencyTarget;
+    // C++ expands neither a pattern in an arc nor one after evaluating an
+    // expression; both are unresolved there too.
+    for identifier in [
+        "./models/<UDIM>.usda",
+        "`\"./textures/${NAME}.<UDIM>.png\"`",
+    ] {
+        assert!(
+            matches!(&target(identifier)[..], [DependencyTarget::Unresolved(_)]),
+            "{identifier}"
+        );
+    }
+    assert_eq!(
+        target("./textures/c.<UDIM>.png"),
+        [DependencyTarget::Ignored]
+    );
+    assert_eq!(prepared.udim_work().listings, 1);
+}
+
+#[test]
+fn a_tile_a_package_may_not_hold_leaves_its_set_unresolved() {
+    let mut tree = scene(&["t.1001.tif"]).listing();
+    tree.files.insert(
+        "scene.usda".into(),
+        "#usda 1.0\ndef \"P\" { asset a = @./t.<UDIM>.tif@ }\n".into(),
+    );
+    let mut document = StageDocument::open(tree, "scene.usda", StageOptions::default()).unwrap();
+    let root = document.stage.stage().root_layer().unwrap();
+    let prepared = document
+        .prepare_package(
+            root,
+            "scene.usda",
+            PackagePreparationLimits::default(),
+            |_| PackageInclusion::Include,
+        )
+        .unwrap();
+    assert!(prepared.plan().is_none());
+    let targets = &prepared.report().dependencies[0].targets;
+    assert!(
+        matches!(&targets[..], [layerstack::asset_dependencies::DependencyTarget::Unresolved(reason)]
+            if reason.contains("t.1001.tif") && reason.contains("not permitted")),
+        "{targets:?}"
+    );
+}
+
 #[test]
 fn a_kept_discovery_answers_again_without_storage_work() {
     let tiles = [
@@ -497,4 +768,73 @@ fn a_listing_spelled_in_another_case_is_confirmed_by_probes() {
             assert_eq!(found.tiles[1].identifier, "models/tex/Bark.1002.png");
         }
     }
+}
+
+#[test]
+fn a_kept_external_set_without_local_tiles_is_anchored_like_any_path() {
+    let mut tree = scene(&[]).listing();
+    tree.files.insert(
+        "models/model.usda".into(),
+        "#usda 1.0\ndef \"Model\" { asset a = @./far/c.<UDIM>.png@ }\n".into(),
+    );
+    let (mut document, _) = open(tree);
+    let root = document.stage.stage().root_layer().unwrap();
+    let prepared = document
+        .prepare_package(
+            root,
+            "scene.usda",
+            PackagePreparationLimits::default(),
+            |d| {
+                if d.identifier.contains("far") {
+                    PackageInclusion::KeepExternal
+                } else {
+                    PackageInclusion::Include
+                }
+            },
+        )
+        .unwrap();
+    assert!(prepared.report().is_complete(), "{:?}", prepared.report());
+    let values = values(prepared.plan().unwrap(), &document.store);
+    assert!(
+        values.contains(&(
+            "layers/000000.usda".into(),
+            "models/far/c.<UDIM>.png".into()
+        )),
+        "{values:?}"
+    );
+}
+
+#[test]
+fn packaging_reads_an_outside_package_once_for_all_its_tiles() {
+    let package = usdz(&[
+        ("root.usda", b"#usda 1.0\n"),
+        ("tex/c.1001.png", b"one"),
+        ("tex/c.1002.png", b"two"),
+        ("tex/c.1003.png", b"three"),
+    ]);
+    let mut tree = scene(&[]).listing();
+    tree.files.insert("models/pkg.usdz".into(), package);
+    tree.files.insert(
+        "models/model.usda".into(),
+        "#usda 1.0\ndef \"Model\" { asset a = @./pkg.usdz[tex/c.<UDIM>.png]@ }\n".into(),
+    );
+    let (mut document, _) = open(tree);
+    let root = document.stage.stage().root_layer().unwrap();
+    let reads = document.storage.reads.get();
+    let prepared = document
+        .prepare_package(
+            root,
+            "scene.usda",
+            PackagePreparationLimits::default(),
+            |_| PackageInclusion::Include,
+        )
+        .unwrap();
+    assert!(prepared.report().is_complete(), "{:?}", prepared.report());
+    assert_eq!(prepared.plan().unwrap().assets.len(), 3);
+    assert_eq!(prepared.udim_work().package_reads, 1);
+    assert_eq!(
+        document.storage.reads.get() - reads,
+        1,
+        "one read of pkg.usdz"
+    );
 }

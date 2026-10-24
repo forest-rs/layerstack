@@ -10,6 +10,15 @@
 //! Hosts resolve expressions, UDIMs and clip templates through the explicit
 //! callback in [`collect_dependencies`]. Source layers remain untouched.
 //!
+//! A UDIM use (`color.<UDIM>.png`, see [`crate::asset::UdimPattern`]) is one
+//! dependency whose resolution has one [`DependencyTarget::Asset`] per
+//! existing tile, in tile order, as `UsdUtilsComputeAllDependencies` lists
+//! every tile; a pattern with no tile is unresolved there. `layerstack_io`'s
+//! `StageDocument::resolve_udim_tiles` finds the tiles through host storage,
+//! and its `prepare_package` expands them. OpenUSD expands patterns in asset
+//! values only, not in composition arcs, and not after evaluating a variable
+//! expression.
+//!
 //! Spec: AOUSD Core §9 (asset resolution), §7.3.6 (variants), §10.3
 //! (composition arcs). OpenUSD: `UsdUtilsExtractExternalReferences`,
 //! `UsdUtilsComputeAllDependencies`, `UsdUtilsModifyAssetPaths`.
@@ -164,7 +173,8 @@ pub fn extract_layer_dependencies(
 /// Recursively inventories loaded layers and host-resolved external assets.
 /// Each reachable layer is inspected once, including cycles. `resolve` receives
 /// the exact authoring layer/spec even when an identifier occurs elsewhere.
-/// A host may return multiple targets for UDIMs or clip templates. Resolution
+/// A host may return multiple targets for UDIMs (one per existing tile) or
+/// clip templates. Resolution
 /// never loads a layer implicitly: the host must already supply it in `store`.
 #[must_use]
 pub fn collect_dependencies(

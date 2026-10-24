@@ -92,7 +92,6 @@ const DIVERGENCES: &[(&str, &str)] = &[
 /// Mismatches a later change fixes: the kind of result, the attribute's
 /// name (a `*` in it matches any run of characters), and why it differs.
 const KNOWN: &[(&str, &str, &str)] = &[
-    ("source", "esd_arr", HELD_EDITS),
     ("source", "sblk_*", SAMPLED_BLOCKS),
     ("source", "ssblk_*", SAMPLED_BLOCKS),
     ("source", "dbl", CLIP_NODES),
@@ -105,7 +104,6 @@ const KNOWN: &[(&str, &str, &str)] = &[
     ("customData", "cd*_dbl", DICTIONARY_ASSETS),
 ];
 
-const HELD_EDITS: &str = "edits held before the first composed sample read as a default";
 const SAMPLED_BLOCKS: &str = "explanations do not say where a sampled block is held";
 const CLIP_NODES: &str = "clip explanations do not name the clip set's node";
 const DICTIONARY_ASSETS: &str = "dictionary asset paths cannot be anchored";

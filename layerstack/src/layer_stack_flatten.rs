@@ -12,6 +12,7 @@
 //! AOUSD Core §9, §10.3.1, §12.2–§12.4; OpenUSD
 //! `UsdUtilsFlattenLayerStack` / `UsdFlattenLayerStack` (`usd/flattenUtils.cpp`).
 
+use crate::listop::append_unique;
 use crate::spec_path::VariantSelectionSite;
 use crate::{
     CompositionError, FieldEntry, FieldValue, HashMap, Layer, LayerId, LayerOffset, LayerStack,
@@ -652,7 +653,7 @@ impl<F: FnMut(LayerId, &str) -> Option<String>> Context<'_, F> {
                 continue;
             };
             if site.nested.is_empty() {
-                unique(&mut children, &prim.authored_children);
+                append_unique(&mut children, &prim.authored_children);
                 if let Some(order) = &prim.prim_order {
                     children = ListOp::default()
                         .with_reordered(order.clone())
@@ -669,7 +670,7 @@ impl<F: FnMut(LayerId, &str) -> Option<String>> Context<'_, F> {
                     sets = &spec.variant_sets;
                 }
                 if let Some(spec) = found {
-                    unique(&mut children, &spec.authored_children);
+                    append_unique(&mut children, &spec.authored_children);
                 }
             }
         }
@@ -712,13 +713,6 @@ fn validate_list<T>(list: &ListOp<T>, layer: LayerId) -> Result<(), LayerStackFl
 fn fill<T: Clone>(strong: &mut Option<T>, weak: &Option<T>) {
     if strong.is_none() {
         strong.clone_from(weak);
-    }
-}
-fn unique<T: Clone + PartialEq>(strong: &mut Vec<T>, weak: &[T]) {
-    for value in weak {
-        if !strong.contains(value) {
-            strong.push(value.clone());
-        }
     }
 }
 /// Compose edits as functions on an arbitrary weaker list, without collapsing it.
@@ -829,7 +823,7 @@ fn merge_variants(
 fn merge_variant(a: &mut VariantSpec, b: &VariantSpec) -> Result<(), LayerStackFlattenError> {
     merge_fields(&mut a.fields, &b.fields);
     merge_properties(&mut a.properties, &b.properties)?;
-    unique(&mut a.authored_children, &b.authored_children);
+    append_unique(&mut a.authored_children, &b.authored_children);
     a.variant_set_names = list(&a.variant_set_names, &b.variant_set_names).into();
     a.references = list(&a.references, &b.references).into();
     a.payloads = list(&a.payloads, &b.payloads).into();
@@ -852,7 +846,7 @@ fn merge_prim(a: &mut PrimSpec, b: &PrimSpec) -> Result<(), LayerStackFlattenErr
     fill(&mut a.prim_order, &b.prim_order);
     merge_fields(&mut a.fields, &b.fields);
     merge_properties(&mut a.properties, &b.properties)?;
-    unique(&mut a.authored_children, &b.authored_children);
+    append_unique(&mut a.authored_children, &b.authored_children);
     a.variant_set_names = list(&a.variant_set_names, &b.variant_set_names).into();
     a.references = list(&a.references, &b.references).into();
     a.payloads = list(&a.payloads, &b.payloads).into();

@@ -80,6 +80,11 @@ struct Parser<'a, const LOSSLESS: bool> {
     /// Whether a line break was consumed since the last non-trivia token,
     /// so a property statement there has ended.
     line_break: bool,
+    /// Whether a speculative parse may return to an earlier token, so
+    /// streamed tokens must not be released.
+    speculating: bool,
+    /// The position from which consumed tokens are next released.
+    release_at: usize,
 }
 
 impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
@@ -92,6 +97,8 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
             builder: TreeBuilder::new(source.len() as u32),
             direct_arrays: None,
             line_break: false,
+            speculating: false,
+            release_at: crate::token_source::RELEASE_AFTER,
         }
     }
 
@@ -148,6 +155,10 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
     }
 
     /// Emits all trivia tokens (whitespace, newlines, comments) to the builder.
+    ///
+    /// Every token before the current one is consumed here, so unless a
+    /// speculative parse may return to one, the streamed ones are released:
+    /// a read holds a window of lookahead, not the whole file's tokens.
     fn eat_trivia(&mut self) {
         while let Some(tok) = self.current() {
             if is_trivia(tok.kind) {
@@ -159,6 +170,10 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
             } else {
                 break;
             }
+        }
+        if self.pos >= self.release_at && !self.speculating {
+            self.tokens.release(self.pos);
+            self.release_at = self.pos + crate::token_source::RELEASE_AFTER;
         }
     }
 
@@ -828,6 +843,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
         if self.peek() == Some(TokenKind::Ident) && !self.at_string() {
             let saved_pos = self.pos;
             let saved_node_count = self.builder_node_count();
+            self.speculating = true;
             self.bump(); // type name or key
             self.eat_trivia();
             if self.peek() == Some(TokenKind::Ident) || self.at_string() {
@@ -856,6 +872,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
                     self.bump();
                 }
             }
+            self.speculating = false;
         } else if self.at_string() {
             self.parse_string_token();
             self.expect(TokenKind::Equals);

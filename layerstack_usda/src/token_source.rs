@@ -17,11 +17,25 @@ pub(crate) enum TokenSource<'a> {
     Streaming(RefCell<Cursor<'a>>),
 }
 
+/// Lazily lexed tokens: a window from `base` on, lexed as lookahead asks and
+/// released once the parser can no longer return to them.
 pub(crate) struct Cursor<'a> {
     source: &'a str,
     lexer: Lexer<'a>,
+    /// Index of `tokens[0]` in the whole token stream.
+    base: usize,
     tokens: Vec<Token>,
+    /// The most tokens the window held at once.
+    peak: usize,
 }
+
+/// Consumed tokens a window keeps before it moves its lookahead to the
+/// front, so a release costs a short move once per this many tokens.
+pub(crate) const RELEASE_AFTER: usize = 32;
+
+/// Room for the consumed tokens and the grammar's lookahead past them (a
+/// few tokens), so that a window rarely grows.
+const WINDOW: usize = 2 * RELEASE_AFTER;
 
 impl<'a> TokenSource<'a> {
     pub(crate) fn eager(tokens: Vec<Token>) -> Self {
@@ -31,7 +45,9 @@ impl<'a> TokenSource<'a> {
         Self::Streaming(RefCell::new(Cursor {
             source,
             lexer: Lexer::new(source),
-            tokens: Vec::new(),
+            base: 0,
+            tokens: Vec::with_capacity(WINDOW),
+            peak: 0,
         }))
     }
     pub(crate) fn get(&self, index: usize) -> Option<Token> {
@@ -39,18 +55,34 @@ impl<'a> TokenSource<'a> {
             Self::Eager(tokens) => tokens.get(index).copied(),
             Self::Streaming(cursor) => {
                 let mut cursor = cursor.borrow_mut();
-                while cursor.tokens.len() <= index {
+                let at = index
+                    .checked_sub(cursor.base)
+                    .expect("released tokens are never read again");
+                while cursor.tokens.len() <= at {
                     let token = cursor.lexer.next()?;
                     cursor.tokens.push(token);
+                    cursor.peak = cursor.peak.max(cursor.tokens.len());
                 }
-                cursor.tokens.get(index).copied()
+                cursor.tokens.get(at).copied()
             }
         }
     }
+    /// Drops streamed tokens before `index`, which the parser will not read
+    /// again: it has consumed them and holds no checkpoint at or before them.
+    /// Eager tokens stay, as editing reads them all.
+    pub(crate) fn release(&self, index: usize) {
+        if let Self::Streaming(cursor) = self {
+            let mut cursor = cursor.borrow_mut();
+            let consumed = index.saturating_sub(cursor.base).min(cursor.tokens.len());
+            cursor.tokens.drain(..consumed);
+            cursor.base += consumed;
+        }
+    }
+    /// The most tokens held at once: all of them when eager.
     pub(crate) fn retained(&self) -> usize {
         match self {
             Self::Eager(tokens) => tokens.len(),
-            Self::Streaming(cursor) => cursor.borrow().tokens.len(),
+            Self::Streaming(cursor) => cursor.borrow().peak,
         }
     }
     pub(crate) fn numeric_array(
@@ -71,7 +103,8 @@ impl<'a> TokenSource<'a> {
             crate::read::numeric_array(cursor.source, token.span.start, type_hint, width)?;
         // Discard speculative lookahead past the opening bracket; the event
         // cursor owns the continuation. Invalid shapes leave this state intact.
-        cursor.tokens.truncate(index + 1);
+        let keep = index + 1 - cursor.base;
+        cursor.tokens.truncate(keep);
         cursor.tokens.push(Token {
             kind: TokenKind::RightBracket,
             span: Span::new(array.span.end - 1, array.span.end),

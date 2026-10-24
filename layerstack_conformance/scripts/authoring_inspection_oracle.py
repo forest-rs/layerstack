@@ -7,7 +7,7 @@ Usage: authoring_inspection_oracle.py [--check] [OUT_DIR]
 Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`.
 Writes, under `layerstack_conformance/fixtures/authoring_inspection` by
 default, the layers below and `oracle.json`, which
-`tests/authoring_inspection.rs` replays against
+`tests/conformance/authoring_inspection.rs` replays against
 `Stage::inspect_property_authoring`.
 
 Each case names an attribute, an edit target (a layer of the root layer

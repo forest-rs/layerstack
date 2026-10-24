@@ -169,7 +169,7 @@ capability, not for uniformity alone.
 
 ## Conformance With OpenUSD
 
-`layerstack_conformance/tests/temporal_sparse.rs` replays vectors recorded
+`layerstack_conformance/tests/conformance/temporal_sparse.rs` replays vectors recorded
 from OpenUSD 26.08 (`scripts/temporal_sparse_oracle.py`, including ports of
 `testUsdAttributeArrayEdits.cpp`): mixed dense and sparse samples at differing
 times, held and linear interpolation, sublayer and reference offsets, sampled
@@ -179,7 +179,7 @@ OpenUSD's schema registry) under sparse samples, blocks and layer offsets. It
 also checks that resolving the composed stage equals
 resolving OpenUSD's flattened layer.
 
-`layerstack_conformance/tests/value_matrix.rs` replays a second, broader
+`layerstack_conformance/tests/conformance/value_matrix.rs` replays a second, broader
 matrix recorded from OpenUSD 26.08 (`scripts/value_matrix_oracle.py`, which
 also writes its layers under `fixtures/value_matrix`). Every value kind
 (numbers, time codes, arrays, tokens, strings, asset paths, path
@@ -342,7 +342,7 @@ replans under an explicit request budget. Check completeness and failures before
 the corresponding checked read. A complete plan can confirm a gap rather than a
 value. Automatic manifests and missing-value searches can demand additional files.
 See [I/O onboarding](../layerstack_io/README.md) and the
-[sparse clip tests](../layerstack_conformance/tests/clip_sparse.rs) for supported
+[sparse clip tests](../layerstack_conformance/tests/conformance/clip_sparse.rs) for supported
 participation and preparation behavior.
 
 ## What Should Not Change
@@ -359,7 +359,7 @@ participation and preparation behavior.
   `cargo run -p layerstack_examples --example sparse_array_edits`
 - Array family, query modes and time queries:
   `layerstack/src/value_resolution.rs`
-- OpenUSD differential vectors: `layerstack_conformance/tests/temporal_sparse.rs`
+- OpenUSD differential vectors: `layerstack_conformance/tests/conformance/temporal_sparse.rs`
 - Family kernel: `opinionated/src/family.rs`
 - Sparse edit kernel: `opinionated/src/array_edit.rs`; USD value adapters:
   `layerstack/src/array_edit.rs`

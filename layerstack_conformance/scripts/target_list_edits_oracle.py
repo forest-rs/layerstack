@@ -9,7 +9,7 @@ Usage: target_list_edits_oracle.py [--check] [OUT_DIR]
 Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`.
 Writes, under `layerstack_conformance/fixtures/target_list_edits` by
 default, the layers below as authored and `oracle.json`, which
-`tests/target_list_edits.rs` replays against layerstack.
+`tests/conformance/target_list_edits.rs` replays against layerstack.
 
 `UsdRelationship::AddTarget` and `UsdAttribute::AddConnection` put the
 item with `Usd_InsertListItem` (`pxr/usd/usd/valueUtils.h`): at the front

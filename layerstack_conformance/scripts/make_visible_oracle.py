@@ -8,7 +8,7 @@ Usage: make_visible_oracle.py [--check] [OUT_DIR]
 Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`.
 Writes, under `layerstack_conformance/fixtures/make_visible` by default,
 the layers below as authored and `oracle.json`, which
-`tests/make_visible.rs` replays against layerstack's `ImageableEdit`.
+`tests/conformance/make_visible.rs` replays against layerstack's `ImageableEdit`.
 
 `MakeVisible` (`pxr/usd/usdGeom/imageable.cpp`) sets the prim's own
 `visibility` to `inherited` if it is `invisible` at the time code, then

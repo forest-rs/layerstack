@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 //! `SchemaEdit::define_prim` against OpenUSD's `UsdStage::DefinePrim`;
-//! `layerstack_conformance/tests/define_prim.rs` checks it call by call
+//! `layerstack_conformance/tests/conformance/define_prim.rs` checks it call by call
 //! against OpenUSD itself.
 
 use alloc::string::String;

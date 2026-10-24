@@ -15,7 +15,7 @@ the prims each root-stack layer authors, the root layer's relocates and
 `defaultPrim`, the fields of `/Watch` that name other objects, and every
 prim the stage composes (`TraverseAll`).
 
-`tests/namespace_deletes.rs` makes the same deletes with layerstack's
+`tests/conformance/namespace_deletes.rs` makes the same deletes with layerstack's
 `NamespaceEdit::prepare_delete` and must agree with every record.
 
 Writes `fixtures/namespace_deletes/oracle.json` by default.

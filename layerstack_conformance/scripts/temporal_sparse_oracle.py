@@ -7,7 +7,7 @@ Usage: temporal_sparse_oracle.py [OUT_JSON]
 Needs OpenUSD 26.03 or newer (sparse array edits) through Python `pxr`, for
 example `pip install usd-core==26.8`. Writes
 `layerstack_conformance/tests/data/temporal_sparse.json` by default, which
-`tests/temporal_sparse.rs` replays against layerstack.
+`tests/conformance/temporal_sparse.rs` replays against layerstack.
 
 Each case is a set of USDA layers (`root.usda` is the stage root), with array
 edits in OpenUSD's syntax, `edit [op; op]`. The script records for every query
@@ -52,7 +52,7 @@ USED = set()
 # (`openusd_behavior`, `openusd_source`, with paths and lines in that
 # release), and the behaviour Layerstack follows instead with its authority
 # (`layerstack`, `authority`). `docs/generic-sparse-composition.md` and
-# `tests/temporal_sparse.rs` list the same names and versions; any other
+# `tests/conformance/temporal_sparse.rs` list the same names and versions; any other
 # difference from OpenUSD is a failure.
 DIVERGENCES = {
     "nan-before-first-sample": {

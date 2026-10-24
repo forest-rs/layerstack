@@ -173,7 +173,7 @@ for usdc in "$out"/*.usdc; do
 done
 
 log "== USDC vs OpenUSD's USDC (structural)"
-if (cd "$root" && cargo test -q -p layerstack_conformance --test export_interop) > "$out/export_interop_test.log" 2>&1; then
+if (cd "$root" && cargo test -q -p layerstack_conformance --test conformance export_interop::) > "$out/export_interop_test.log" 2>&1; then
     log "   export_interop test: ok"
 else
     fail "export_interop test failed (see export_interop_test.log)"
@@ -182,7 +182,7 @@ fi
 log "== authored-layer save round trip"
 if [ -n "$usd_version" ]; then
     if (cd "$root" && LAYERSTACK_USD_PYTHON="$usd_python" cargo test -q -p layerstack_conformance \
-            --test layer_save --test export_interop -- --nocapture) > "$out/layer_save_test.log" 2>&1 \
+            --test conformance -- layer_save:: export_interop:: --nocapture) > "$out/layer_save_test.log" 2>&1 \
         && grep -q "OpenUSD $usd_version via" "$out/layer_save_test.log"; then
         log "   save corpus through OpenUSD $usd_version: ok"
     else

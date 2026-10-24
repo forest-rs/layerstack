@@ -24,17 +24,17 @@ layer (`scripts/render_check.py`) in both profiles: the two-material cube must
 show both materials' colors and the textured cube both texture hues; the
 ARKit and generic plain cubes must render identically. It records tool
 versions, the selected validator rules and the renders in `OUT_DIR`. It is not
-run by CI; `tests/export_interop.rs` runs the `usdcat`/`usdchecker` subset and
+run by CI; `tests/conformance/export_interop.rs` runs the `usdcat`/`usdchecker` subset and
 the USDC differential (our USDC against OpenUSD's `usdcat -o` output for the
 same USDA, compared structurally) when those tools are on `PATH` and skips
 otherwise.
 
 ## Instancing (optional)
 
-`tests/point_instancer.rs` checks `PointInstancer` export against OpenUSD's
+`tests/conformance/point_instancer.rs` checks `PointInstancer` export against OpenUSD's
 Python bindings (`scripts/point_instancer_oracle.py`: instance transforms,
 `orientationsf`, prototype order, ids, extent and bindings) and
-`usdchecker`. `tests/instanced_references.rs` checks the instanced-reference
+`usdchecker`. `tests/conformance/instanced_references.rs` checks the instanced-reference
 form that `ARKit` packages use, since Apple's USD stack does not draw
 `PointInstancer` instances (`scripts/instancing_oracle.py`: no
 `PointInstancer`, instance names, ids, tints and world transforms, and the

@@ -9,7 +9,7 @@ Writes, under `layerstack_conformance/fixtures/variant_specs` by default:
 
 - `*.usda`: the layers below, as authored;
 - `oracle.json`: what OpenUSD composes from `root.usda`, which
-  `tests/variant_specs.rs` replays against layerstack.
+  `tests/conformance/variant_specs.rs` replays against layerstack.
 
 Every variant is a spec of its own, addressed by its variant-qualified path
 (`/P{a=x}`, `/P{a=x}{b=y}`), and a variant set may be a child of a prim spec

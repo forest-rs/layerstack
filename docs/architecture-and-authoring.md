@@ -60,7 +60,7 @@ including signed zero and NaN payloads.
 Namespace edits use `NamespaceEdit` preparation and its affected-layer/prim preview.
 Dependent-stage coordination has explicit coverage requirements; a masked or
 unloaded region cannot silently count as checked. See the
-[coordinated namespace tests](../layerstack_conformance/tests/namespace_coordinated.rs).
+[coordinated namespace tests](../layerstack_conformance/tests/conformance/namespace_coordinated.rs).
 
 ## Evidence and invalidation
 

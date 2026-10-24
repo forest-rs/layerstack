@@ -13,7 +13,7 @@ recording whether `UsdObject::SetMetadata` accepts it and the value
 `GetMetadata` reads back. Values are tagged with the Rust value they
 stand for; Python converts each to the field's registered type.
 
-`tests/property_metadata.rs` replays every call through
+`tests/conformance/property_metadata.rs` replays every call through
 `PrimEdit::write_property_metadata`.
 """
 import argparse

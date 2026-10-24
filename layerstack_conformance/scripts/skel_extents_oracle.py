@@ -15,7 +15,7 @@ default value), a scaled and offset `geomBindTransform`, a SkelRoot with
 no bindings, and a skeleton whose rest transforms do not match its
 joints beside a cube.
 
-`tests/skel_extents.rs` compares everything.
+`tests/conformance/skel_extents.rs` compares everything.
 """
 import argparse
 import json

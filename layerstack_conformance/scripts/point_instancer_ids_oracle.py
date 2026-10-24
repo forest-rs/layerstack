@@ -22,7 +22,7 @@ prim's `ids` (on a scratch copy of the scene) before the ordinary call: the
 overload and the authored-`ids` path run the same loop over the array, and
 neither reads `protoIndices`.
 
-Writes `oracle.json` beside the scene; `tests/point_instancer_ids.rs`
+Writes `oracle.json` beside the scene; `tests/conformance/point_instancer_ids.rs`
 replays the same calls through `layerstack_schemas`. With `--check` it
 writes nothing and fails unless the committed `oracle.json` agrees.
 """

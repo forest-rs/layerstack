@@ -23,7 +23,7 @@ Keep these authorities identifiable:
 When an implementation oracle disagrees with the chosen specification contract,
 keep a named, explained divergence and a minimal case. Do not turn the difference
 into an unconditional success or change the baseline without review. The
-[temporal sparse tests](../layerstack_conformance/tests/temporal_sparse.rs) and
+[temporal sparse tests](../layerstack_conformance/tests/conformance/temporal_sparse.rs) and
 [sparse composition note](generic-sparse-composition.md) show this distinction.
 
 Schema identifiers and unknown authored metadata should survive supported
@@ -52,7 +52,7 @@ occurrences can hide composition bugs. Check authored absence separately from an
 explicit value, and compare float bits when representation fidelity is the
 contract. Tolerance is appropriate only when the operation explicitly permits it.
 Explanations must return the same value or failure as their corresponding resolve
-query; [explanation tests](../layerstack_conformance/tests/explain_consistency.rs)
+query; [explanation tests](../layerstack_conformance/tests/conformance/explain_consistency.rs)
 exercise that invariant.
 
 ## Failure, recovery and bounded work

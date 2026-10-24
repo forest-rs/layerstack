@@ -7,7 +7,7 @@ Usage: dangling_targets_oracle.py [--check] [OUT]
 
 Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`.
 Writes `layerstack_conformance/fixtures/dangling_targets/oracle.json` by
-default, which `tests/dangling_targets.rs` checks layerstack's
+default, which `tests/conformance/dangling_targets.rs` checks layerstack's
 `DanglingReport` against.
 
 The fixture's `scene.usda` is opened with every payload loaded, then

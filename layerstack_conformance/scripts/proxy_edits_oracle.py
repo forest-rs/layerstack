@@ -7,7 +7,7 @@ Usage: proxy_edits_oracle.py [--check] [OUT_DIR]
 Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`.
 Writes, under `layerstack_conformance/fixtures/proxy_edits` by default, the
 layers below as OpenUSD exports them and `oracle.json`, which
-`tests/proxy_edits.rs` replays against layerstack's `SchemaEdit` routes.
+`tests/conformance/proxy_edits.rs` replays against layerstack's `SchemaEdit` routes.
 
 Every authoring call of `UsdStage` creates or clears a prim or property spec
 through `_CreatePrimSpecForEditing`, `_CreatePropertySpecForEditing` or
@@ -178,7 +178,7 @@ def r_port(stage, prim, root):
     UsdShade.ConnectableAPI(prim).CreateInput("roughness", Sdf.ValueTypeNames.Float).Set(0.25)
 
 
-# (route, family); `tests/proxy_edits.rs` has a route of each name.
+# (route, family); `tests/conformance/proxy_edits.rs` has a route of each name.
 ROUTES = [
     ("define", "geometry", r_define),
     ("apply_single", "geometry", r_apply_single),

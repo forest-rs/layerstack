@@ -7,7 +7,7 @@ Usage: layer_dangling_targets_oracle.py [--check] [OUT]
 
 Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`.
 Writes `layerstack_conformance/fixtures/layer_dangling_targets/oracle.json`
-by default, which `tests/layer_dangling_targets.rs` checks layerstack's
+by default, which `tests/conformance/layer_dangling_targets.rs` checks layerstack's
 `Stage::authored_targets` and `LayerDanglingReport` against.
 
 The fixture's `scene.usda` is opened with every payload loaded, then

@@ -9,7 +9,7 @@ Writes, under `layerstack_conformance/fixtures/variant_children` by default:
 
 - `*.usda`: the layers below, as authored;
 - `oracle.json`: what OpenUSD composes from `root.usda`, which
-  `tests/variant_children.rs` replays against layerstack.
+  `tests/conformance/variant_children.rs` replays against layerstack.
 
 A prim's children are the names its contributing specs author
 (`PcpComposeSiteChildNames` in `pxr/usd/pcp/composeSite.cpp`, called for
@@ -403,7 +403,7 @@ def "Reef" (
 }
 
 
-# The selections `tests/variant_children.rs` switches through `LiveStage`.
+# The selections `tests/conformance/variant_children.rs` switches through `LiveStage`.
 SWITCH = (("/Scene", "look", "Tinted"), ("/Tree", "season", "Winter"))
 
 

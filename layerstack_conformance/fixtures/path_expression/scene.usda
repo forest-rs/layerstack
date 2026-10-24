@@ -1,6 +1,6 @@
 #usda 1.0
 (
-    doc = "Path expressions and collection predicates for tests/path_expression.rs; scripts/path_expression_oracle.py records what OpenUSD matches."
+    doc = "Path expressions and collection predicates for tests/conformance/path_expression.rs; scripts/path_expression_oracle.py records what OpenUSD matches."
     subLayers = [
         @weak.usda@
     ]

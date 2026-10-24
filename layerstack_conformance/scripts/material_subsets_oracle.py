@@ -19,7 +19,7 @@ It also replays `CreateMaterialBindSubset` and
 whether each call is accepted, the subset path it returns and the family
 type after it.
 
-`tests/material_subsets.rs` compares everything.
+`tests/conformance/material_subsets.rs` compares everything.
 """
 import argparse
 import json

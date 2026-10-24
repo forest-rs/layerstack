@@ -8,7 +8,7 @@ Usage: usda_field_order_oracle.py [--check] [OUT_DIR]
 Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`.
 Writes, under `layerstack_conformance/fixtures/usda_field_order` by
 default, the files of `FILES` (`scrambled.usda`, `scrambled.usdc`, ...)
-and `oracle.json`, which `tests/usda_field_order.rs` replays against
+and `oracle.json`, which `tests/conformance/usda_field_order.rs` replays against
 layerstack's USDA save.
 
 OpenUSD's text writer does not keep authoring order
@@ -366,7 +366,7 @@ def as_float(x):
 
 def generated(name):
     """The values of the generated array `name`, the same in
-    `tests/usda_field_order.rs`."""
+    `tests/conformance/usda_field_order.rs`."""
     if name == "every half":
         # But the NaNs: the C library spells their sign, or not.
         return [struct.unpack("<e", struct.pack("<H", bits))[0] for bits in range(1 << 16)

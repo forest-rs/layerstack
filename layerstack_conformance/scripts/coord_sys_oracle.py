@@ -14,7 +14,7 @@ blocks one (so it is inherited from further up), authors a relationship
 without its applied instance, applies an instance with no relationship,
 and binds through a forwarding relationship.
 
-`tests/coord_sys.rs` compares everything.
+`tests/conformance/coord_sys.rs` compares everything.
 """
 import argparse
 import json

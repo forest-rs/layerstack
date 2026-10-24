@@ -25,7 +25,7 @@ sublayer and records:
   `GetRotationTransform` for each order, and `CanConvertOpTypeToRotationOrder`
   for every op type.
 
-Writes `oracle.json` beside the scene; `tests/common_xform_api.rs` replays
+Writes `oracle.json` beside the scene; `tests/conformance/common_xform_api.rs` replays
 the calls through `layerstack_schemas`. With `--check` it writes nothing and
 fails unless the committed `oracle.json` agrees, floats to within 1e-9 of
 their scale.

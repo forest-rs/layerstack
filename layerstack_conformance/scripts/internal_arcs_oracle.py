@@ -9,7 +9,7 @@ Writes, under `layerstack_conformance/fixtures/internal_arcs` by default:
 
 - `*.usda`: the layers below, as authored;
 - `oracle.json`: what OpenUSD composes from `root.usda`, which
-  `tests/internal_arcs.rs` replays against layerstack.
+  `tests/conformance/internal_arcs.rs` replays against layerstack.
 
 An internal reference or payload (no asset path) targets the layer stack
 that contains the site authoring it, not the layer that authors it: the root

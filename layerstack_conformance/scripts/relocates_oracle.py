@@ -9,7 +9,7 @@ Writes, under `layerstack_conformance/fixtures/relocates` by default:
 
 - `*.usda`: the layers below, as authored;
 - `oracle.json`: what OpenUSD composes from `root.usda`, which
-  `tests/relocates.rs` replays against layerstack.
+  `tests/conformance/relocates.rs` replays against layerstack.
 
 A layer's `relocates` metadata moves a prim of its layer stack to a new
 path: the relocated prim composes at the target from the target's own

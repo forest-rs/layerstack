@@ -26,7 +26,7 @@ With `--check`, compares a fresh run with `fixtures/skel_bake/oracle.json`:
 names, types and structure exactly, numbers within 1e-5 (relative above
 one).
 
-`tests/skel_bake.rs` bakes the same scene and compares every spec.
+`tests/conformance/skel_bake.rs` bakes the same scene and compares every spec.
 """
 import argparse
 import json

@@ -10,7 +10,7 @@ Writes, under `layerstack_conformance/fixtures/prim_index_graph` by default:
 - `*.usda`: the layers below, as authored;
 - `oracle.json`: for every prim OpenUSD composes from `root.usda`, each
   source of its prim stack, strongest first, with the arc path of the node
-  that provides it, which `tests/prim_index_graph.rs` replays against
+  that provides it, which `tests/conformance/prim_index_graph.rs` replays against
   layerstack.
 
 An arc path lists `[arc, site]` from the root node down to the node: the arc

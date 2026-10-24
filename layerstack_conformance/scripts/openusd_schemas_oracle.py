@@ -10,7 +10,7 @@ that release in `LAYERSTACK_OPENUSD_SOURCE` for the schemas the wheel is
 built without (`usdMtlx`, loaded as a codeless plugin; see
 `openusd_source.py`). Writes
 `layerstack_conformance/fixtures/openusd_schemas/registry.json` by default,
-which `tests/openusd_schemas.rs` replays against the registry
+which `tests/conformance/openusd_schemas.rs` replays against the registry
 `layerstack_schemas::openusd` builds.
 
 For every schema the domains' `plugInfo.json` files declare, the vectors

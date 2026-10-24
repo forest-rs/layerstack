@@ -12,7 +12,7 @@ was accepted and the arrays it left. With `--check`, compares a fresh run
 with `fixtures/skel_influences/oracle.json`: acceptance and integers
 exactly, weights within 1e-6.
 
-`tests/skel_influences.rs` replays every case.
+`tests/conformance/skel_influences.rs` replays every case.
 """
 import argparse
 import json

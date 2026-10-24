@@ -11,7 +11,7 @@ one `Sdf.CopySpec` call, recording whether OpenUSD accepted it and then
 every spec of the destination layer: prim specs with their specifier, type
 name, inherits, specializes and references, and their properties with
 their default value, targets or connections. `scene.usda` only sublayers
-both layers, so that `tests/copy_spec.rs` can load them into one store and
+both layers, so that `tests/conformance/copy_spec.rs` can load them into one store and
 make the same copies with `Transaction::copy_spec`.
 
 Writes `fixtures/copy_spec/oracle.json` by default.

@@ -12,7 +12,7 @@ selected may contribute (AOUSD Core §7.3.6, §10.3.2.5).
 Every case is written as `<case>.usda` and as `<case>.usdc` by OpenUSD
 itself. `expected.json` records what the same OpenUSD composes for `/P/C`:
 whether it exists, its child names, and the default of each attribute.
-`layerstack_conformance/tests/variant_selection.rs` composes the fixtures and
+`layerstack_conformance/tests/conformance/variant_selection.rs` composes the fixtures and
 compares.
 
 Pinned oracle: `usd-core` 26.8 from PyPI (OpenUSD v26.08):

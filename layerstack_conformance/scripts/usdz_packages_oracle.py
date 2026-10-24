@@ -13,7 +13,7 @@ Writes, under `layerstack_conformance/fixtures/usdz_packages` by default:
   paths naming no member resolve to;
 - `oracle.json`: for each case, its members in package order (the root
   layer first) and what OpenUSD composes from the package, which
-  `tests/usdz_packages.rs` replays against layerstack after packaging the
+  `tests/conformance/usdz_packages.rs` replays against layerstack after packaging the
   same members in the same order.
 
 Every layer a package member loads, directly or beneath another member,

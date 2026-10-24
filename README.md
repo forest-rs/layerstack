@@ -39,7 +39,7 @@ session layers, layer muting, population masks, payload load rules and atomic
 namespace edits. Format writers and schema queries have additional limits
 documented by their crates.
 
-The [strict composition harness](layerstack_conformance/tests/composition_strict.rs)
+The [strict composition harness](layerstack_conformance/tests/conformance/composition_strict.rs)
 compares ordered prim/property stacks and values to upstream `pcp.txt` oracles
 and records known mismatches explicitly. Separate differential tests cover
 file formats, authoring, time queries, and mesh export. Passing these fixtures

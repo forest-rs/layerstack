@@ -6,7 +6,7 @@ Usage: load_rules_oracle.py [OUT]
 
 Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`.
 Writes `layerstack_conformance/fixtures/load_rules/oracle.json` by default,
-which `tests/load_rules.rs` replays against `PayloadLoadRules`.
+which `tests/conformance/load_rules.rs` replays against `PayloadLoadRules`.
 
 Each case starts from all or no payloads loaded and applies a fixed,
 pseudo-random sequence of `LoadWithDescendants`, `LoadWithoutDescendants`,

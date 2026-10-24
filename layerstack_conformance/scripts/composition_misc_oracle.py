@@ -10,7 +10,7 @@ Writes, under `layerstack_conformance/fixtures/composition_misc` by default:
 
 - `*.usda`: the layers below, as authored;
 - `oracle.json`: what OpenUSD composes from `root.usda`, which
-  `tests/composition_misc.rs` replays against layerstack.
+  `tests/conformance/composition_misc.rs` replays against layerstack.
 
 - `/Grove` is an instance of `/Seedling`. Its local `over "Leaf"` authors a
   reference, an inherit, a variant set and a value: beneath an instance the

@@ -9,7 +9,7 @@ Writes, under `layerstack_conformance/fixtures/udim_tiles` by default:
 
 - the layers and tile files below, as authored; each tile's content is its
   own relative path, so a packaged tile shows which file it came from;
-- `oracle.json`, which `tests/udim_tiles.rs` replays against layerstack.
+- `oracle.json`, which `tests/conformance/udim_tiles.rs` replays against layerstack.
 
 `scene.usda` names UDIM sets in asset values: a search path and a `./`
 path to one set (tiles 1001, 1002, 1011), a set with gaps and with files

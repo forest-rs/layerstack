@@ -1,6 +1,6 @@
 #usda 1.0
 (
-    doc = "Transforms, visibility and purpose for tests/xform.rs; scripts/xform_oracle.py records what OpenUSD computes."
+    doc = "Transforms, visibility and purpose for tests/conformance/xform.rs; scripts/xform_oracle.py records what OpenUSD computes."
     startTimeCode = 0
     endTimeCode = 4
 )

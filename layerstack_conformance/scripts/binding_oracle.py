@@ -20,10 +20,10 @@ writes `oracle.json` beside it:
   and property paths (`GetPropertyNames`), and the pseudo-root,
   `IsPathIncluded` includes.
 
-`tests/binding.rs` compares everything.
+`tests/conformance/binding.rs` compares everything.
 
 `binding_oracle.py fixtures/membership` records the same for the
-sublayered collection fixture of `tests/membership_index.rs`, whose reverse
+sublayered collection fixture of `tests/conformance/membership_index.rs`, whose reverse
 membership index must agree with these forward memberships.
 """
 import json

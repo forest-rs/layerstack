@@ -21,7 +21,7 @@ with one entry per LAYER:
   (`UsdShadeMaterialBindingAPI::ComputeBoundMaterial`) is set, its path and
   the material's path; `GeomSubset` prims are included.
 
-`tests/point_instancer.rs` compares the report with the exporter's inputs.
+`tests/conformance/point_instancer.rs` compares the report with the exporter's inputs.
 """
 import json
 import sys

@@ -1877,7 +1877,7 @@ impl TestTable {
         let mut out = header;
         out.push_str(
             "\n//! Every generated view, getter, setter and enum of `layerstack_schemas`,\n\
-             //! which `tests/schema_views.rs` checks against OpenUSD.\n//!\n\
+             //! which `tests/conformance/schema_views.rs` checks against OpenUSD.\n//!\n\
              //! Every concrete typed and applied schema gets two prims: `/Fallback_<S>`,\n\
              //! which authors nothing but the schema, and `/Authored_<S>`, where every\n\
              //! setter authors a value (a default and, for a varying attribute, a time\n\
@@ -1909,7 +1909,7 @@ impl TestTable {
 
 /// Whether the table authors and reads a getter's property: USDA save
 /// writes no `pathExpression` value yet, so the fixture layer cannot hold
-/// one (`tests/schema_views.rs` checks those setters on the live stage).
+/// one (`tests/conformance/schema_views.rs` checks those setters on the live stage).
 fn saved(getter: &Getter) -> bool {
     !matches!(
         getter,

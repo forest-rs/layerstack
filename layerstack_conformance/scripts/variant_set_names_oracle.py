@@ -10,7 +10,7 @@ Writes, under `layerstack_conformance/fixtures/variant_set_names` by default:
 
 - `*.usda`: the layers below, as authored;
 - `forms.usdc`: `forms.usda` as OpenUSD writes it in the crate format;
-- `oracle.json`, which `tests/variant_set_names.rs` replays against
+- `oracle.json`, which `tests/conformance/variant_set_names.rs` replays against
   layerstack.
 
 A variant set composes only where a site lists it: `PcpComposeSiteVariantSets`

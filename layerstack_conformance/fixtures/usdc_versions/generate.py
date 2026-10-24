@@ -8,7 +8,7 @@ Layerstack, so they are independent evidence for the crate reader in
 for every fixture (`UsdAttribute.Get` at default and at sample times), plus
 the generator provenance. It also records OpenUSD's values for the AOUSD
 supplemental spec's `gen_splines.usdc`, which is read but not written here.
-`layerstack_conformance/tests/usdc_versions.rs` decodes the fixtures,
+`layerstack_conformance/tests/conformance/usdc_versions.rs` decodes the fixtures,
 composes them through `Stage`, and compares.
 
 Pinned oracle: `usd-core` 26.8 from PyPI (OpenUSD v26.08, which writes crate

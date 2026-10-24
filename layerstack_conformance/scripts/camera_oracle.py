@@ -11,7 +11,7 @@ back into a matrix with `GfSinCos` (`GfFrustum::SetPositionAndRotationFromMatrix
 corners and the points and boxes placed through it carry the rounding of
 the platform's trigonometry: usd-core 26.08 on x86-64 Linux and on arm64
 macOS differ by up to 64 ulps, 5.3e-15 in a field of magnitude 16.
-`tests/camera.rs` compares layerstack with the file to within 2e-10.
+`tests/conformance/camera.rs` compares layerstack with the file to within 2e-10.
 """
 import json
 import math

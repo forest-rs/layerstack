@@ -14,7 +14,7 @@ each call it records whether OpenUSD accepted it. After the last call it
 records the root layer's sublayer paths and offsets, its relocates, and
 every prim the stage then composes (`TraverseAll`).
 
-`tests/layer_field_edits.rs` makes the same edits through layerstack's
+`tests/conformance/layer_field_edits.rs` makes the same edits through layerstack's
 `Transaction` and must agree with every record.
 
 Writes `fixtures/layer_field_edits/oracle.json` by default.

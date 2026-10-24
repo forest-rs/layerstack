@@ -18,7 +18,7 @@ With `--check`, compares a fresh run with
 `fixtures/skel_authoring/oracle.json`: acceptance, names and types
 exactly, numbers within 1e-6.
 
-`tests/skel_authoring.rs` replays every call.
+`tests/conformance/skel_authoring.rs` replays every call.
 """
 import argparse
 import json

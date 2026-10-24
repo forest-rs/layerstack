@@ -206,6 +206,14 @@ impl LiveStage {
         // needs. Any other is recomposed with its namespace.
         let pseudo_root = store.paths().lookup(&crate::Path::root());
         let mut refreshed = Vec::new();
+        // The strict ancestors of `roots`, which each supporting prim is
+        // looked up in: a bulk edit makes as many roots as prims it touches.
+        let mut above = HashSet::new();
+        if !self.support_sources.is_empty() {
+            for &root in &roots {
+                insert_ancestors(store.paths(), &mut above, root);
+            }
+        }
         for (layer, prim) in core::mem::take(&mut self.support_sources) {
             let local = self.stage.layer_stack().contains(&layer);
             // The pseudo-root's spec stack follows the root layer stack's
@@ -217,17 +225,16 @@ impl LiveStage {
                 }
                 continue;
             }
-            if local
-                && self.stage.has_prim(prim)
-                && roots
-                    .iter()
-                    .any(|root| *root != prim && is_beneath(store, *root, &[prim]))
-            {
+            if local && self.stage.has_prim(prim) && above.contains(&prim) {
                 refreshed.push(prim);
             } else if local {
+                insert_ancestors(store.paths(), &mut above, prim);
                 roots.push(prim);
             } else {
                 self.map_source_structure(store, layer, &[prim]);
+                for &root in &self.structural_roots {
+                    insert_ancestors(store.paths(), &mut above, root);
+                }
                 roots.append(&mut self.structural_roots);
                 if self.needs_full_rebuild {
                     return None;
@@ -251,7 +258,8 @@ impl LiveStage {
             *root = store.paths_mut().intern(path);
         }
         let roots = minimal_roots(store, &roots);
-        refreshed.retain(|prim| !is_beneath(store, *prim, &roots));
+        let within: HashSet<PathId> = roots.iter().copied().collect();
+        refreshed.retain(|prim| !is_beneath_set(store, *prim, &within));
         refreshed.sort_unstable();
         refreshed.dedup();
         Some((roots, refreshed))
@@ -277,7 +285,7 @@ impl LiveStage {
             self.record_generations(store);
             return Vec::new();
         }
-        let mut partial = loop {
+        let (mut partial, within) = loop {
             let old_paths: Vec<_> = roots
                 .iter()
                 .flat_map(|r| self.stage.traverse_all(*r))
@@ -307,8 +315,10 @@ impl LiveStage {
                 ..self.options.clone()
             };
             // The parents just outside the roots are the boundaries the
-            // merge orders children of.
-            let within: HashSet<PathId> = roots.iter().copied().collect();
+            // merge orders children of. Membership below the roots is an
+            // ancestor walk in this set: an edit can resync as many sibling
+            // roots as prims reference what it changed.
+            let mut within: HashSet<PathId> = roots.iter().copied().collect();
             let boundaries: HashSet<PathId> = roots
                 .iter()
                 .filter_map(|root| store.paths().parent(*root))
@@ -361,13 +371,14 @@ impl LiveStage {
                 refreshed.retain(|prim| partial.has_prim(*prim));
                 roots.extend(unrefreshed);
                 roots = minimal_roots(store, &roots);
-                refreshed.retain(|prim| !is_beneath(store, *prim, &roots));
+                within = roots.iter().copied().collect();
+                refreshed.retain(|prim| !is_beneath_set(store, *prim, &within));
                 continue;
             }
             // Newly discovered prims may already be sources of retained arcs.
             for prim in partial
                 .prim_paths()
-                .filter(|p| is_beneath(store, *p, &roots))
+                .filter(|p| is_beneath_set(store, *p, &within))
             {
                 self.tracker.mark(prim, OPINION_EDIT);
             }
@@ -378,8 +389,11 @@ impl LiveStage {
                 .scratch(&mut self.traversal_scratch)
                 .run()
                 .collect();
-            if dependents.iter().all(|p| is_beneath(store, *p, &roots)) {
-                break partial;
+            if dependents
+                .iter()
+                .all(|p| is_beneath_set(store, *p, &within))
+            {
+                break (partial, within);
             }
             roots.extend(dependents);
             roots = minimal_roots(store, &roots);
@@ -390,13 +404,14 @@ impl LiveStage {
             .collect();
         let new: HashSet<_> = partial
             .prim_paths()
-            .filter(|p| is_beneath(store, *p, &roots))
+            .filter(|p| is_beneath_set(store, *p, &within))
             .collect();
         if new
             .iter()
             .all(|p| store.paths().resolve(*p) == &crate::Path::root())
             && self.stage.prim_paths().all(|p| {
-                store.paths().resolve(p) == &crate::Path::root() || is_beneath(store, p, &roots)
+                store.paths().resolve(p) == &crate::Path::root()
+                    || is_beneath_set(store, p, &within)
             })
         {
             return self.full_rebuild(store, changes);
@@ -408,13 +423,9 @@ impl LiveStage {
         // boundary parents. Refresh their indexes while preserving full lists.
         let mut lists_changed = Vec::new();
         for &root in &roots {
-            if let Some(parent) = store
-                .paths()
-                .resolve(root)
-                .parent()
-                .and_then(|p| store.paths().lookup(&p))
+            if let Some(parent) = store.paths().parent(root)
                 && partial.has_prim(parent)
-                && !is_beneath(store, parent, &roots)
+                && !is_beneath_set(store, parent, &within)
             {
                 affected.push(parent);
                 // A child that came or went changed the parent's child list.
@@ -436,6 +447,7 @@ impl LiveStage {
             &affected,
             &hierarchy,
             &roots,
+            &within,
             self.options.clone(),
             &self.child_index,
         );
@@ -461,6 +473,25 @@ impl LiveStage {
     }
 }
 
+/// Inserts the strict ancestors of `path` into `set`, stopping at the first
+/// one already there: its ancestors are too.
+pub(super) fn insert_ancestors(
+    paths: &crate::PathInterner,
+    set: &mut HashSet<PathId>,
+    path: PathId,
+) {
+    let mut current = paths.parent(path);
+    while let Some(at) = current {
+        if !set.insert(at) {
+            break;
+        }
+        current = paths.parent(at);
+    }
+}
+
+/// The mask that composes `roots` within `mask`: each root beneath a
+/// selected path, and each selected path beneath a root. Both are ancestor
+/// walks, so the cost is the paths' depth, not roots times selections.
 fn intersect_mask(
     store: &dyn LayerStore,
     roots: &[PathId],
@@ -471,19 +502,125 @@ fn intersect_mask(
             include: roots.to_vec(),
         };
     };
-    let mut include = Vec::new();
-    for &root in roots {
-        for &selected in &mask.include {
-            let r = store.paths().resolve(root);
-            let s = store.paths().resolve(selected);
-            if r.is_prefix_of(s) {
-                include.push(selected);
-            } else if s.is_prefix_of(r) {
-                include.push(root);
-            }
-        }
-    }
+    let root_set: HashSet<PathId> = roots.iter().copied().collect();
+    let selected: HashSet<PathId> = mask.include.iter().copied().collect();
+    let include: Vec<PathId> = mask
+        .include
+        .iter()
+        .copied()
+        .filter(|s| is_beneath_set(store, *s, &root_set))
+        .chain(
+            roots
+                .iter()
+                .copied()
+                .filter(|r| is_beneath_set(store, *r, &selected)),
+        )
+        .collect();
     PopulationMask {
         include: minimal_roots(store, &include),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use core::sync::atomic::{AtomicUsize, Ordering};
+
+    use crate::{
+        InMemoryStore, Layer, LayerId, LayerStore, LiveStage, PathInterner, PrimSpec, Reference,
+        Specifier, StageOptions, TokenInterner, Transaction, edit::EditTarget,
+    };
+
+    /// A store counting the reads of its path interner: the work of
+    /// telling whether a path is beneath the roots of a recomposition.
+    struct CountingStore {
+        inner: InMemoryStore,
+        path_reads: AtomicUsize,
+    }
+
+    impl LayerStore for CountingStore {
+        fn layer(&self, id: LayerId) -> Option<&Layer> {
+            self.inner.layer(id)
+        }
+        fn layer_mut(&mut self, id: LayerId) -> Option<&mut Layer> {
+            self.inner.layer_mut(id)
+        }
+        fn tokens(&self) -> &TokenInterner {
+            self.inner.tokens()
+        }
+        fn tokens_mut(&mut self) -> &mut TokenInterner {
+            self.inner.tokens_mut()
+        }
+        fn paths(&self) -> &PathInterner {
+            self.path_reads.fetch_add(1, Ordering::Relaxed);
+            self.inner.paths()
+        }
+        fn paths_mut(&mut self) -> &mut PathInterner {
+            self.inner.paths_mut()
+        }
+    }
+
+    /// The path reads of each of three edits to `/Proto` while `count`
+    /// siblings under `/World` reference it: deactivating it, activating
+    /// it again, and authoring a new child spec under it. Each resyncs
+    /// every sibling.
+    fn edit_reads(count: usize) -> [usize; 3] {
+        let mut store = InMemoryStore::default();
+        let proto = store.path("/Proto");
+        let geo = store.path("/Proto/Geo");
+        let world = store.path("/World");
+        let added = store.path("/Proto/Added");
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(proto, PrimSpec::def());
+        layer.insert_prim(geo, PrimSpec::def());
+        layer.insert_prim(world, PrimSpec::def());
+        for i in 0..count {
+            let sibling = store.path(&alloc::format!("/World/I{i}"));
+            layer.insert_prim(
+                sibling,
+                PrimSpec::def().with_reference(Reference::new(LayerId(1), proto)),
+            );
+        }
+        store.insert_layer(layer);
+        let mut store = CountingStore {
+            inner: store,
+            path_reads: AtomicUsize::new(0),
+        };
+        let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+        let target = EditTarget::for_layer(LayerId(1));
+        let mut deactivate = Transaction::new();
+        deactivate.set_active(target.prim(proto), false);
+        let mut activate = Transaction::new();
+        activate.set_active(target.prim(proto), true);
+        let mut create = Transaction::new();
+        create.create_prim(target.prim(added), Specifier::Def, None);
+        let mut reads = [0; 3];
+        for (read, edit) in reads.iter_mut().zip([deactivate, activate, create]) {
+            store.path_reads.store(0, Ordering::Relaxed);
+            live.apply(&mut store, &edit).expect("edit applies");
+            assert!(!live.recomposition_work().full_rebuild);
+            *read = store.path_reads.load(Ordering::Relaxed);
+        }
+        let added_under = store
+            .inner
+            .path(&alloc::format!("/World/I{}/Added", count - 1));
+        assert!(live.stage().has_prim(added_under));
+        reads
+    }
+
+    /// An edit that resyncs many sibling roots does work in proportion to
+    /// them: membership beneath the roots is an ancestor walk, not a scan
+    /// of every root for each prim.
+    #[test]
+    fn resyncing_many_siblings_is_linear() {
+        let small = edit_reads(100);
+        let large = edit_reads(800);
+        for (small, large) in small.into_iter().zip(large) {
+            // Eight times the siblings; a scan of the roots per prim
+            // would read the paths about 64 times as often.
+            assert!(
+                large <= small * 10,
+                "{large} path reads for 800 siblings, {small} for 100"
+            );
+        }
     }
 }

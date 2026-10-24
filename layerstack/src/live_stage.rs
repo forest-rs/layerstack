@@ -67,20 +67,10 @@ fn generations_of(store: &dyn LayerStore, layer: LayerId) -> Option<LayerGenerat
         .map(|found| (found.generation(), found.structural_generation()))
 }
 
-fn is_beneath(store: &dyn LayerStore, path: PathId, roots: &[PathId]) -> bool {
-    roots.iter().any(|root| {
-        store
-            .paths()
-            .resolve(path)
-            .strip_prefix(store.paths().resolve(*root))
-            .is_some()
-    })
-}
-
-/// Whether `path` is one of `roots` or beneath one, as [`is_beneath`]
-/// tells, walking `path`'s ancestors: the cost is its depth, not the
-/// number of roots, which a bulk edit makes as many as the prims it
-/// creates.
+/// Whether `path` is one of `roots` or beneath one, walking `path`'s
+/// ancestors: the cost is its depth, not the number of roots, which a bulk
+/// edit makes as many as the prims it creates, and an edit to a referenced
+/// prim as many as the prims referencing it.
 fn is_beneath_set(store: &dyn LayerStore, path: PathId, roots: &HashSet<PathId>) -> bool {
     let mut current = Some(path);
     while let Some(at) = current {
@@ -92,24 +82,17 @@ fn is_beneath_set(store: &dyn LayerStore, path: PathId, roots: &HashSet<PathId>)
     false
 }
 
+/// The paths of `paths` beneath none of the others, sorted by id.
 fn minimal_roots(store: &dyn LayerStore, paths: &[PathId]) -> Vec<PathId> {
     let set: HashSet<_> = paths.iter().copied().collect();
     let mut roots: Vec<_> = set
         .iter()
         .copied()
         .filter(|path| {
-            let mut current = store.paths().resolve(*path).parent();
-            while let Some(parent) = current {
-                if store
-                    .paths()
-                    .lookup(&parent)
-                    .is_some_and(|id| set.contains(&id))
-                {
-                    return false;
-                }
-                current = parent.parent();
-            }
-            true
+            store
+                .paths()
+                .parent(*path)
+                .is_none_or(|parent| !is_beneath_set(store, parent, &set))
         })
         .collect();
     roots.sort_unstable();
@@ -1633,14 +1616,16 @@ impl LiveStage {
                 self.stage.hierarchy_diverges(&partial, &[*prim])
                     || self.stage.sources_changed(&partial, *prim)
             });
+        // Neither beneath a diverging prim nor above one; both are ancestor
+        // walks, as a diverging edit can resync every prim referencing it.
+        let diverging_set: HashSet<PathId> = diverging.iter().copied().collect();
+        let mut above = HashSet::new();
+        for &prim in &diverging {
+            controls::insert_ancestors(store.paths(), &mut above, prim);
+        }
         let rest: Vec<PathId> = rest
             .into_iter()
-            .filter(|prim| {
-                !is_beneath(store, *prim, &diverging)
-                    && !diverging
-                        .iter()
-                        .any(|root| is_beneath(store, *root, &[*prim]))
-            })
+            .filter(|prim| !is_beneath_set(store, *prim, &diverging_set) && !above.contains(prim))
             .collect();
         if rest.is_empty() {
             self.structural_roots.extend(affected);
@@ -1659,10 +1644,11 @@ impl LiveStage {
         let mut recomposed = self.recompose_controls(store, changes.as_deref_mut());
         self.work.replaced_prim_indexes += replaced;
         if let Some(changes) = changes {
+            let resynced: HashSet<PathId> = changes.resynced.iter().copied().collect();
             changes.changed_info_only.extend(
                 rest.iter()
                     .copied()
-                    .filter(|prim| !is_beneath(store, *prim, &changes.resynced)),
+                    .filter(|prim| !is_beneath_set(store, *prim, &resynced)),
             );
         }
         recomposed.extend(rest);

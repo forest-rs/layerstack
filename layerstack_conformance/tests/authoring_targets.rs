@@ -25,7 +25,9 @@
 
 #![allow(missing_docs, reason = "integration tests")]
 
-use layerstack::{ArcKind, PropertyPath, Stage, StageOptions, Time, Value, edit::EditTarget};
+use layerstack::{
+    ArcKind, AuthoringQuery, PropertyPath, Stage, StageOptions, Value, edit::EditTarget,
+};
 use layerstack_conformance::{usda_real::load_entry_usda, workspace_root};
 use serde::Deserialize;
 
@@ -84,7 +86,7 @@ fn writes_to_culled_sites_are_placed_with_their_strength() {
         );
         let property = store.property_path(&case.property);
         let inspection = stage
-            .inspect_property_authoring(store, property, &target, Time::Default)
+            .inspect_property_authoring(store, property, &target, AuthoringQuery::default_value())
             .unwrap();
         let context = &case.property;
         let site = inspection.target.as_ref().expect("the target is placed");

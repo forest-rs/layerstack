@@ -104,6 +104,12 @@ pub(super) struct DemandSet {
     interpolate_missing: bool,
 }
 impl DemandSet {
+    /// Whether a clip (not the manifest) awaits resolution or loading.
+    pub(super) fn has_unresolved_clips(&self) -> bool {
+        self.requests
+            .iter()
+            .any(|request| request.role != ClipAssetRole::Manifest && !resident(request))
+    }
     pub(super) fn new(
         set: &ReadySet,
         path: PathId,
@@ -146,57 +152,147 @@ impl DemandSet {
         }
     }
 }
+/// A clip set that may source one attribute, as authoring inspection sees it.
+#[derive(Clone, Debug)]
+pub(crate) struct AuthoringClipSet {
+    /// The metadata anchor, at the node of the prim the set applies to.
+    pub(crate) key: OpinionKey,
+    /// The clip-set name on the metadata owner.
+    pub(crate) set_name: Arc<str>,
+    /// The prepared property entry, when resident metadata declares the
+    /// attribute varying; `None` while `pending` assets are unread.
+    pub(crate) entry: Option<usize>,
+    /// The assets whose metadata would settle whether the set sources the
+    /// attribute: an unresolved or nonresident manifest, or, for a set
+    /// without one, the clips its manifest is generated from.
+    pub(crate) pending: Arc<[ClipAssetRequest]>,
+}
 impl Catalog {
-    /// Clip eligibility from prepared metadata, without projecting sample values.
-    pub(crate) fn authoring_sources(
-        &self,
-        prim: PathId,
-        field: TokenId,
-    ) -> Vec<(OpinionKey, Arc<str>, crate::SourceComposability)> {
-        use crate::SourceComposability;
-        let entries = self.properties.get(&(prim, field));
-        let mut sources: Vec<_> = entries
+    /// The clip sets that source `field` of `prim` by prepared metadata, and
+    /// those whose metadata is not resident yet, without reading values.
+    /// OpenUSD `Usd_ClipSet::ContainsValueForAttribute`: a set sources an
+    /// attribute its manifest declares varying, at every time.
+    pub(crate) fn authoring_sets(&self, prim: PathId, field: TokenId) -> Vec<AuthoringClipSet> {
+        let mut sets: Vec<_> = self
+            .properties
+            .get(&(prim, field))
             .into_iter()
             .flatten()
-            .map(|entry| {
-                // Non-array composable kinds and incomplete residency need not
-                // have the same shape at every queried bracket. Do not infer a
-                // dense cutoff from the array-only sparse-samples optimization.
-                (
-                    entry.key.clone(),
-                    entry.set_name.clone(),
-                    SourceComposability::Unknown,
-                )
+            .enumerate()
+            .map(|(index, entry)| AuthoringClipSet {
+                key: entry.key.clone(),
+                set_name: entry.set_name.clone(),
+                entry: Some(index),
+                pending: Arc::from([]),
             })
             .collect();
         for set in self.demands.get(&prim).into_iter().flatten() {
-            if sources
+            if sets
                 .iter()
-                .any(|(key, name, _)| key == &set.key && name == &set.name)
+                .any(|known| known.key == set.key && known.set_name == set.name)
             {
                 continue;
             }
-            let unknown = |request: &ClipAssetRequest| {
-                matches!(
-                    request.status,
-                    ClipAssetStatus::Unavailable(
-                        ClipAssetUnavailable::Unresolved | ClipAssetUnavailable::NotResident(_)
-                    )
-                )
+            let pending: Vec<_> = match &set.manifest {
+                Some(manifest) => (!resident(manifest))
+                    .then(|| manifest.clone())
+                    .into_iter()
+                    .collect(),
+                None => set
+                    .requests
+                    .iter()
+                    .filter(|request| !resident(request))
+                    .cloned()
+                    .collect(),
             };
-            let unresolved = match &set.manifest {
-                Some(manifest) => unknown(manifest),
-                None => set.template_unresolved || set.requests.iter().any(unknown),
-            };
-            if unresolved {
-                sources.push((
-                    set.key.clone(),
-                    set.name.clone(),
-                    SourceComposability::Unknown,
-                ));
+            if !pending.is_empty() {
+                sets.push(AuthoringClipSet {
+                    key: set.key.clone(),
+                    set_name: set.name.clone(),
+                    entry: None,
+                    pending: pending.into(),
+                });
             }
         }
-        sources
+        sets
+    }
+
+    /// Whether a weaker value can show through entry `entry` of `field` at
+    /// `time`, from sample kinds and resident metadata only. A sparse array
+    /// edit at a bracketing sample composes
+    /// (OpenUSD `_GetSamplesComposability`); an array kind whose clips are
+    /// not all resident, or a path expression, is unknown.
+    pub(crate) fn authoring_composability(
+        &self,
+        prim: PathId,
+        field: TokenId,
+        entry: usize,
+        time: f64,
+        interpolation: InterpolationType,
+    ) -> crate::SourceComposability {
+        use crate::SourceComposability;
+        let Some(entry) = self
+            .properties
+            .get(&(prim, field))
+            .and_then(|entries| entries.get(entry))
+        else {
+            return SourceComposability::Unknown;
+        };
+        if entry
+            .property_type
+            .as_ref()
+            .is_some_and(|ty| ty.type_name() == "pathExpression")
+        {
+            return SourceComposability::Unknown;
+        }
+        if entry.evaluator.is_spline() {
+            return SourceComposability::Dense;
+        }
+        if entry.has_sparse_samples {
+            let times = entry.evaluator.sample_times();
+            let next = times.partition_point(|t| *t < time);
+            let (lower, upper) = if next == times.len() || times[next] == time || next == 0 {
+                let at = next.min(times.len().saturating_sub(1));
+                (at, at)
+            } else {
+                (next - 1, next)
+            };
+            let sparse = |at: usize| {
+                times
+                    .get(at)
+                    .is_some_and(|&t| entry.evaluator.sample_is_sparse(t))
+            };
+            return if sparse(lower) || interpolation == InterpolationType::Linear && sparse(upper) {
+                SourceComposability::Composable
+            } else {
+                SourceComposability::Dense
+            };
+        }
+        if entry.unseen_clips
+            && entry
+                .property_type
+                .as_ref()
+                .is_none_or(PropertyType::is_array)
+        {
+            SourceComposability::Unknown
+        } else {
+            SourceComposability::Dense
+        }
+    }
+
+    /// The stage times at which entry `entry`'s sample kinds may change:
+    /// its sample times when any is a sparse array edit, else none.
+    pub(crate) fn authoring_breakpoints(
+        &self,
+        prim: PathId,
+        field: TokenId,
+        entry: usize,
+    ) -> &[f64] {
+        self.properties
+            .get(&(prim, field))
+            .and_then(|entries| entries.get(entry))
+            .filter(|entry| entry.has_sparse_samples)
+            .map_or(&[], |entry| entry.evaluator.sample_times())
     }
 
     pub(crate) fn query_plan(

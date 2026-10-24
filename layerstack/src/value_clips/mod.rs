@@ -20,6 +20,7 @@ use crate::{
     PropertySpec, PropertyType, SpecPath, TokenId, Value, Variability,
 };
 use alloc::{boxed::Box, collections::BTreeMap, sync::Arc, vec::Vec};
+pub(crate) use demand::AuthoringClipSet;
 pub use demand::{ClipDemand, ClipDemandReason, ClipQueryPlan};
 pub use eval::ClipEvalError;
 use eval::PreparedClipProperty;
@@ -203,6 +204,9 @@ struct ClipProperty {
     clip_layers: Vec<Option<LayerId>>,
     manifest_layer: Option<LayerId>,
     has_sparse_samples: bool,
+    /// Whether a clip of the set was unresolved or not resident when the
+    /// stage was prepared, so its sample kinds are unknown.
+    unseen_clips: bool,
     property_type: Option<PropertyType>,
     evaluator: Arc<PreparedClipProperty>,
 }
@@ -615,6 +619,11 @@ impl Catalog {
         if set.manifest_unavailable || set.template_unresolved {
             return;
         }
+        // Clips whose sample kinds preparation could not see, for authoring
+        // inspection's composability.
+        let unseen_clips = self.demands[&prim]
+            .last()
+            .is_some_and(demand::DemandSet::has_unresolved_clips);
         let mut manifest_props: BTreeMap<TokenId, Arc<PropertySpec>> = BTreeMap::new();
         if let Some((_, manifest)) = &set.manifest {
             if let Some(props) = manifest.at(clip_path) {
@@ -762,6 +771,7 @@ impl Catalog {
                     clip_layers: sources,
                     manifest_layer: set.manifest.as_ref().map(|(id, _)| *id),
                     has_sparse_samples,
+                    unseen_clips,
                     property_type: manifest.type_name.clone(),
                     evaluator: Arc::new(evaluator),
                 });
@@ -1418,6 +1428,7 @@ mod tests {
                 clip_layers: vec![Some(layer)],
                 manifest_layer: None,
                 has_sparse_samples: false,
+                unseen_clips: false,
                 property_type: None,
                 evaluator: Arc::new(
                     PreparedClipProperty::new(

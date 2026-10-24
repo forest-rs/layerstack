@@ -486,7 +486,7 @@ impl<'s> SchemaEdit<'s> {
             &mut *self.store,
             PropertyPath::new(path, name),
             &self.target,
-            time,
+            time.into(),
         )
     }
 

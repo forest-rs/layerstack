@@ -20,9 +20,9 @@
 
 use core::ops::Deref;
 
-use layerstack::{CannotApply, PathId};
+use layerstack::PathId;
 
-use crate::{CannotDefine, PrimEdit, PrimView, Scene, SchemaEdit};
+use crate::{ApplyError, CannotEdit, PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "This LOD heuristic selects LOD children on the basis of distance from the view point to the LOD root."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `LODDistanceHeuristic`, inheriting [`LODHeuristic`]. Construct it with [`LODDistanceHeuristic::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
@@ -67,12 +67,6 @@ impl<'a> LODDistanceHeuristic<'a> {
         }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> LODDistanceHeuristicEdit {
-        LODDistanceHeuristicEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Defines the prim at `path` as a `LODDistanceHeuristic`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
@@ -80,14 +74,14 @@ impl<'a> LODDistanceHeuristic<'a> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// [`CannotEdit`] for a path beneath an instance or in a
     /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdLodDistanceHeuristic::Define")]
     #[doc(alias = "Define")]
     pub fn define(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<LODDistanceHeuristicEdit, CannotDefine> {
+    ) -> Result<LODDistanceHeuristicEdit, CannotEdit> {
         edit.define_prim(path, Self::SCHEMA)
             .map(LODDistanceHeuristicEdit::from_prim)
     }
@@ -196,12 +190,18 @@ impl Deref for LODDistanceHeuristicEdit {
 }
 
 impl LODDistanceHeuristicEdit {
-    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `LODDistanceHeuristic` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`LODDistanceHeuristic::define`] types it, and `LODDistanceHeuristicEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        let path = edit.prim_path(path)?;
-        edit.is_a(path, LODDistanceHeuristic::SCHEMA)
-            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `LODDistanceHeuristic` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`Ok(None)` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`LODDistanceHeuristic::define`] types it, and `LODDistanceHeuristicEdit::from_prim` of a [`PrimEdit::new`] handle authors the schema's properties on any prim that exists. Setters never create a prim.\n\n# Errors\n\n[`CannotEdit`] for a path beneath an instance or in a prototype, which OpenUSD refuses to author ([`SchemaEdit::can_edit`]); nothing is authored."]
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        let Some(path) = edit.prim_path(path) else {
+            return Ok(None);
+        };
+        edit.can_edit(path)?;
+        Ok(edit
+            .is_a(path, LODDistanceHeuristic::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path))))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -389,12 +389,6 @@ impl<'a> LODHeuristic<'a> {
         }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> LODHeuristicEdit {
-        LODHeuristicEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// The USD name of [`Self::lod_domain`].
     pub const LOD_DOMAIN: &'static str = "lod:domain";
 
@@ -425,12 +419,18 @@ impl Deref for LODHeuristicEdit {
 }
 
 impl LODHeuristicEdit {
-    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `LODHeuristic` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`SchemaEdit::define_prim`] with a concrete schema derived from it types it, and `LODHeuristicEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        let path = edit.prim_path(path)?;
-        edit.is_a(path, LODHeuristic::SCHEMA)
-            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `LODHeuristic` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`Ok(None)` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`SchemaEdit::define_prim`] with a concrete schema derived from it types it, and `LODHeuristicEdit::from_prim` of a [`PrimEdit::new`] handle authors the schema's properties on any prim that exists. Setters never create a prim.\n\n# Errors\n\n[`CannotEdit`] for a path beneath an instance or in a prototype, which OpenUSD refuses to author ([`SchemaEdit::can_edit`]); nothing is authored."]
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        let Some(path) = edit.prim_path(path) else {
+            return Ok(None);
+        };
+        edit.can_edit(path)?;
+        Ok(edit
+            .is_a(path, LODHeuristic::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path))))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -562,12 +562,6 @@ impl<'a> LODOverrideApi<'a> {
         Self { base: prim }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> LODOverrideApiEdit {
-        LODOverrideApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
     /// edit's target) if the prim may have it.
     ///
@@ -575,13 +569,14 @@ impl<'a> LODOverrideApi<'a> {
     ///
     /// # Errors
     ///
-    /// Why the schema cannot be applied there.
+    /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
+    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdLodOverrideAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<LODOverrideApiEdit, CannotApply> {
+    ) -> Result<LODOverrideApiEdit, ApplyError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(LODOverrideApiEdit::from_prim)
     }
@@ -650,11 +645,18 @@ impl Deref for LODOverrideApiEdit {
 
 impl LODOverrideApiEdit {
     /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+    /// exists: on the edit's stage, or defined earlier in `edit`; `Ok(None)`
+    /// when it does not. Setters never create a prim.
+    ///
+    /// # Errors
+    ///
+    /// [`CannotEdit`] for a path beneath an instance or in a prototype, as
+    /// [`PrimEdit::new`] refuses it; nothing is authored.
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        Ok(PrimEdit::new(edit, path)?.map(Self::from_prim))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -761,12 +763,6 @@ impl<'a> LODRootApi<'a> {
         Self { base: prim }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> LODRootApiEdit {
-        LODRootApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
     /// edit's target) if the prim may have it.
     ///
@@ -774,10 +770,11 @@ impl<'a> LODRootApi<'a> {
     ///
     /// # Errors
     ///
-    /// Why the schema cannot be applied there.
+    /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
+    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdLodRootAPI::Apply")]
     #[doc(alias = "Apply")]
-    pub fn apply(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<LODRootApiEdit, CannotApply> {
+    pub fn apply(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<LODRootApiEdit, ApplyError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(LODRootApiEdit::from_prim)
     }
@@ -833,11 +830,18 @@ impl Deref for LODRootApiEdit {
 
 impl LODRootApiEdit {
     /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+    /// exists: on the edit's stage, or defined earlier in `edit`; `Ok(None)`
+    /// when it does not. Setters never create a prim.
+    ///
+    /// # Errors
+    ///
+    /// [`CannotEdit`] for a path beneath an instance or in a prototype, as
+    /// [`PrimEdit::new`] refuses it; nothing is authored.
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        Ok(PrimEdit::new(edit, path)?.map(Self::from_prim))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -1006,12 +1010,6 @@ impl<'a> LODScreenSizeHeuristic<'a> {
         }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> LODScreenSizeHeuristicEdit {
-        LODScreenSizeHeuristicEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Defines the prim at `path` as a `LODScreenSizeHeuristic`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
@@ -1019,14 +1017,14 @@ impl<'a> LODScreenSizeHeuristic<'a> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// [`CannotEdit`] for a path beneath an instance or in a
     /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdLodScreenSizeHeuristic::Define")]
     #[doc(alias = "Define")]
     pub fn define(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<LODScreenSizeHeuristicEdit, CannotDefine> {
+    ) -> Result<LODScreenSizeHeuristicEdit, CannotEdit> {
         edit.define_prim(path, Self::SCHEMA)
             .map(LODScreenSizeHeuristicEdit::from_prim)
     }
@@ -1166,12 +1164,18 @@ impl Deref for LODScreenSizeHeuristicEdit {
 }
 
 impl LODScreenSizeHeuristicEdit {
-    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `LODScreenSizeHeuristic` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`LODScreenSizeHeuristic::define`] types it, and `LODScreenSizeHeuristicEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        let path = edit.prim_path(path)?;
-        edit.is_a(path, LODScreenSizeHeuristic::SCHEMA)
-            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `LODScreenSizeHeuristic` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`Ok(None)` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`LODScreenSizeHeuristic::define`] types it, and `LODScreenSizeHeuristicEdit::from_prim` of a [`PrimEdit::new`] handle authors the schema's properties on any prim that exists. Setters never create a prim.\n\n# Errors\n\n[`CannotEdit`] for a path beneath an instance or in a prototype, which OpenUSD refuses to author ([`SchemaEdit::can_edit`]); nothing is authored."]
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        let Some(path) = edit.prim_path(path) else {
+            return Ok(None);
+        };
+        edit.can_edit(path)?;
+        Ok(edit
+            .is_a(path, LODScreenSizeHeuristic::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path))))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`

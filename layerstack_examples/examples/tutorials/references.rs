@@ -41,6 +41,7 @@ fn main() {
     let red = store.path("/refSphere2/world");
     let mut edit = SchemaEdit::new(live.stage(), store, at);
     SphereEdit::new(&edit, red)
+        .expect("outside any instance")
         .expect("a Sphere, through the reference")
         .set_display_color(&mut edit, &[[1.0, 0.0, 0.0]]);
     let transaction = edit.finish();

@@ -462,7 +462,9 @@ def Mesh "M" (prepend apiSchemas = ["MaterialBindingAPI"])
     let mut log = Vec::new();
     for (label, call) in calls {
         let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-        let api = MaterialBindingApiEdit::new(&edit, mesh).unwrap();
+        let api = MaterialBindingApiEdit::new(&edit, mesh)
+            .expect("outside any instance")
+            .unwrap();
         let created = match call {
             Call::Create(name, indices) => Some(
                 api.create_material_bind_subset(
@@ -486,6 +488,7 @@ def Mesh "M" (prepend apiSchemas = ["MaterialBindingAPI"])
             }
             Call::GenericUnrestricted => {
                 ImageableEdit::new(&edit, mesh)
+                    .expect("outside any instance")
                     .unwrap()
                     .set_subset_family_type(
                         &mut edit,
@@ -580,7 +583,9 @@ def Mesh "M"
     );
     let mesh = store.path("/M");
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    let api = MaterialBindingApiEdit::new(&edit, mesh).unwrap();
+    let api = MaterialBindingApiEdit::new(&edit, mesh)
+        .expect("outside any instance")
+        .unwrap();
     assert_eq!(
         api.create_material_bind_subset(&mut edit, "far", Element::Face, &[2]),
         Err(SubsetAuthoringError::Indices(

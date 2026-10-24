@@ -204,9 +204,15 @@ fn edit_targets_map_as_openusd_does() {
         let target = edit_target(&mut store, &stage, prim, arc);
 
         for (path, expected) in case["spec_paths"].as_object().expect("spec paths") {
+            let id = store.path(path);
             let got = target
-                .map_to_spec_path(store.path(path), &mut store.paths)
+                .map_to_spec_path(id, &mut store.paths)
                 .map(|spec| spec.display(&store.paths, &store.tokens));
+            if target.maps_to_itself(id, &store.paths) != (got.as_deref() == Some(path.as_str())) {
+                failures.push(format!(
+                    "{name}: maps_to_itself({path}) disagrees with MapToSpecPath {got:?}"
+                ));
+            }
             if json!(got) != *expected {
                 failures.push(format!(
                     "{name}: MapToSpecPath({path}) is {got:?}, OpenUSD {expected}"

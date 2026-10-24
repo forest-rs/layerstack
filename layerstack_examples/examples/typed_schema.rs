@@ -74,7 +74,9 @@ fn main() {
     // Place the arm: raised, then swung about Y over time. The handle
     // derefs to `XformableEdit`, which authors transform ops; the last op
     // listed applies first.
-    let arm_ops = MeshEdit::new(&edit, arm).expect("defined above");
+    let arm_ops = MeshEdit::new(&edit, arm)
+        .expect("outside any instance")
+        .expect("defined above");
     arm_ops
         .add_translate_op(&mut edit, XformOpPrecision::Double)
         .expect("a new translate")
@@ -112,11 +114,13 @@ fn main() {
     // Setters return the handle of the schema that defines the property,
     // so chain a derived schema's setters before its bases'.
     MeshEdit::new(&edit, arm)
+        .expect("outside any instance")
         .expect("the arm is on the stage")
         .set_subdivision_scheme(&mut edit, MeshSubdivisionScheme::None)
         .set_display_color(&mut edit, &[[1.0, 0.0, 0.0]]);
     // Purpose inherits: the whole robot is for final renders.
     XformEdit::new(&edit, robot)
+        .expect("outside any instance")
         .expect("the robot is on the stage")
         .set_purpose(&mut edit, ImageablePurpose::Render);
     let transaction = edit.finish();

@@ -8,9 +8,9 @@ use layerstack::{
     edit::EditTarget,
 };
 use layerstack_schemas::{
-    PrimView, Scene, SchemaEdit,
+    PrimEdit, PrimView, Scene, SchemaEdit,
     primvar::{Primvar, PrimvarError},
-    usd_geom::Mesh,
+    usd_geom::MeshEdit,
 };
 
 #[path = "support/schema_scene.rs"]
@@ -107,11 +107,11 @@ fn inheritance_flattening_and_animation_match_cpp() {
 fn primvar_authoring_and_rejections_preserve_undo() {
     let (mut store, mut live) = scene();
     let path = store.path("/Root/Group/Mesh");
-    let mesh = Mesh::new(&Scene::new(live.stage(), &store), path)
-        .unwrap()
-        .edit();
     let before = store.layer(LayerId(1)).unwrap().clone();
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
+    let mesh = MeshEdit::new(&edit, path)
+        .expect("outside any instance")
+        .expect("the prim");
     let var = mesh
         .create_primvar(
             &mut edit,
@@ -233,10 +233,10 @@ fn id_target_authoring_is_atomic_and_undoable() {
     let (mut store, mut live) = query_scene();
     let path = store.path("/Root/Group/Mesh");
     let base = store.layer(LayerId(1)).unwrap().clone();
-    let handle = Mesh::new(&Scene::new(live.stage(), &store), path)
-        .unwrap()
-        .edit();
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
+    let handle = MeshEdit::new(&edit, path)
+        .expect("outside any instance")
+        .expect("the prim");
     let pv = handle
         .create_primvar(&mut edit, "newId", PropertyType::parse("string").unwrap())
         .unwrap();
@@ -379,13 +379,13 @@ fn primvar_groups_discard_failures_and_nonindexed_authoring_masks_weaker_indices
             ..StageOptions::default()
         },
     );
-    let handle = Mesh::new(&Scene::new(live.stage(), &store), path)
-        .unwrap()
-        .edit();
     let ty = PropertyType::parse("float[]").unwrap();
     let values = || Value::array(vec![Value::Float(7.), Value::Float(8.)]);
     let before = store.layer(LayerId(1)).unwrap().clone();
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
+    let handle = MeshEdit::new(&edit, path)
+        .expect("outside any instance")
+        .expect("the prim");
     let checkpoint = edit.transaction().clone();
     assert!(
         handle
@@ -471,11 +471,18 @@ fn primvar_groups_discard_failures_and_nonindexed_authoring_masks_weaker_indices
 fn primvar_block_erases_local_animation_and_authors_future_indices_barrier() {
     let (mut store, mut live) = query_scene();
     let path = store.path("/Root/Group/Mesh");
-    let scene = Scene::new(live.stage(), &store);
-    let animated = Primvar::new(&scene, path, "both").unwrap().edit();
-    let plain = Primvar::new(&scene, path, "noIndices").unwrap().edit();
     let before = store.layer(LayerId(1)).unwrap().clone();
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
+    let plain = PrimEdit::new(&edit, path)
+        .expect("outside any instance")
+        .expect("the prim")
+        .primvar(&mut edit, "noIndices")
+        .expect("the primvar");
+    let animated = PrimEdit::new(&edit, path)
+        .expect("outside any instance")
+        .expect("the prim")
+        .primvar(&mut edit, "both")
+        .expect("the primvar");
     animated.block(&mut edit).unwrap();
     plain.block(&mut edit).unwrap();
     let transaction = edit.finish();
@@ -549,11 +556,13 @@ fn weaker_primvar_value_and_block_edits_can_precede_metadata() {
                 ..StageOptions::default()
             },
         );
-        let pv = Primvar::new(&Scene::new(live.stage(), &store), path, "x")
-            .unwrap()
-            .edit();
         let before = store.layer(LayerId(1)).unwrap().clone();
         let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
+        let pv = PrimEdit::new(&edit, path)
+            .expect("outside any instance")
+            .expect("the prim")
+            .primvar(&mut edit, "x")
+            .expect("the primvar");
         match mode {
             "default" => {
                 pv.set(&mut edit, Value::Float(2.)).unwrap();
@@ -601,11 +610,16 @@ fn removed_primvars_can_be_recreated_in_the_same_edit() {
         let (mut store, mut live) =
             support::scene("#usda 1.0\ndef Mesh \"P\" {\nfloat primvars:x = 1\n}");
         let path = store.path("/P");
-        let scene = Scene::new(live.stage(), &store);
-        let handle = Mesh::new(&scene, path).unwrap().edit();
-        let pv = Primvar::new(&scene, path, "x").unwrap().edit();
         let before = store.layer(LayerId(1)).unwrap().clone();
         let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
+        let pv = PrimEdit::new(&edit, path)
+            .expect("outside any instance")
+            .expect("the prim")
+            .primvar(&mut edit, "x")
+            .expect("the primvar");
+        let handle = MeshEdit::new(&edit, path)
+            .expect("outside any instance")
+            .expect("the prim");
         pv.remove(&mut edit).unwrap();
         let value = if new_type == "int" {
             Value::Int(4)
@@ -690,11 +704,16 @@ fn removed_primvar_declarations_reveal_weaker_sources_and_group_rollback() {
             ..StageOptions::default()
         },
     );
-    let scene = Scene::new(live.stage(), &store);
-    let handle = Mesh::new(&scene, path).unwrap().edit();
-    let pv = Primvar::new(&scene, path, "x").unwrap().edit();
     let before = store.layer(LayerId(1)).unwrap().clone();
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
+    let pv = PrimEdit::new(&edit, path)
+        .expect("outside any instance")
+        .expect("the prim")
+        .primvar(&mut edit, "x")
+        .expect("the primvar");
+    let handle = MeshEdit::new(&edit, path)
+        .expect("outside any instance")
+        .expect("the prim");
     let checkpoint = edit.transaction().clone();
     let failed: Result<(), &str> = edit.group(|child| {
         pv.remove(child).unwrap();
@@ -780,10 +799,15 @@ fn removed_primvar_ui_labels_do_not_leak_into_recreated_properties() {
         let transaction = edit.finish();
         live.apply(&mut store, &transaction).unwrap();
         let before = store.layer(LayerId(1)).unwrap().clone();
-        let scene = Scene::new(live.stage(), &store);
-        let pv = Primvar::new(&scene, path, "x").unwrap().edit();
-        let handle = Mesh::new(&scene, path).unwrap().edit();
         let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
+        let pv = PrimEdit::new(&edit, path)
+            .expect("outside any instance")
+            .expect("the prim")
+            .primvar(&mut edit, "x")
+            .expect("the primvar");
+        let handle = MeshEdit::new(&edit, path)
+            .expect("outside any instance")
+            .expect("the prim");
         pv.remove(&mut edit).unwrap();
         handle
             .create_primvar(&mut edit, "x", PropertyType::parse("float").unwrap())

@@ -9,7 +9,7 @@ use layerstack::{LayerId, Time, edit::EditTarget};
 use layerstack_schemas::{
     Scene, SchemaEdit,
     bounds::{BoundsCache, BoundsError, BoundsOptions},
-    usd_geom::Points,
+    usd_geom::PointsEdit,
 };
 
 #[test]
@@ -43,10 +43,10 @@ fn width_edits_invalidate_cached_bounds_and_undo_restores_them() {
     let original = cache
         .world_bound(&Scene::new(live.stage(), &store), path)
         .unwrap();
-    let points = Points::new(&Scene::new(live.stage(), &store), path)
-        .unwrap()
-        .edit();
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
+    let points = PointsEdit::new(&edit, path)
+        .expect("outside any instance")
+        .expect("the prim");
     points.set_widths(&mut edit, &[8., 12.]);
     let transaction = edit.finish();
     let applied = live.apply(&mut store, &transaction).unwrap();

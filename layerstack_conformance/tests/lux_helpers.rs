@@ -120,7 +120,9 @@ fn contextual_authoring_is_uniform_noncustom_and_reversible() {
     let path = store.path("/Light");
     let name = store.tokens.intern("engine:gpu:light:shaderId");
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    let light = LightApiEdit::new(&edit, path).unwrap();
+    let light = LightApiEdit::new(&edit, path)
+        .expect("outside any instance")
+        .unwrap();
     light
         .set_shader_id_for_render_context(&mut edit, "engine:gpu", "EngineGpuLight")
         .unwrap();
@@ -158,7 +160,9 @@ fn invalid_shader_id_edits_are_atomic() {
     );
     let path = store.path("/Light");
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    let light = LightApiEdit::new(&edit, path).unwrap();
+    let light = LightApiEdit::new(&edit, path)
+        .expect("outside any instance")
+        .unwrap();
     for context in ["bad", "rel"] {
         assert!(matches!(
             light.set_shader_id_for_render_context(&mut edit, context, "id"),
@@ -178,7 +182,9 @@ fn dome_orientation_matches_cpp_preserves_reset_and_reports_noop() {
     let (mut store, mut live) = support::scene(SCENE);
     let path = store.path("/Dome");
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    let dome = DomeLightEdit::new(&edit, path).unwrap();
+    let dome = DomeLightEdit::new(&edit, path)
+        .expect("outside any instance")
+        .unwrap();
     assert_eq!(
         dome.orient_to_stage_up_axis(&mut edit).unwrap(),
         DomeOrientation::Authored
@@ -207,6 +213,7 @@ fn dome_orientation_matches_cpp_preserves_reset_and_reports_noop() {
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
     assert_eq!(
         DomeLightEdit::new(&edit, path)
+            .expect("outside any instance")
             .unwrap()
             .orient_to_stage_up_axis(&mut edit)
             .unwrap(),
@@ -224,7 +231,9 @@ fn filter_context_authoring_and_existing_declarations_preserve_opinions() {
     let existing = store.tokens.intern("existing:lightFilter:shaderId");
     let created = store.tokens.intern("new:lightFilter:shaderId");
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    let filter = layerstack_schemas::usd_lux::LightFilterEdit::new(&edit, path).unwrap();
+    let filter = layerstack_schemas::usd_lux::LightFilterEdit::new(&edit, path)
+        .expect("outside any instance")
+        .unwrap();
     filter
         .set_shader_id_for_render_context(&mut edit, "existing", "New")
         .unwrap();
@@ -267,6 +276,7 @@ fn dome_orientation_preserves_existing_values_and_rejects_unordered_wrong_types(
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
     assert_eq!(
         DomeLightEdit::new(&edit, path)
+            .expect("outside any instance")
             .unwrap()
             .orient_to_stage_up_axis(&mut edit)
             .unwrap(),
@@ -280,6 +290,7 @@ fn dome_orientation_preserves_existing_values_and_rejects_unordered_wrong_types(
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
     assert_eq!(
         DomeLightEdit::new(&edit, path)
+            .expect("outside any instance")
             .unwrap()
             .orient_to_stage_up_axis(&mut edit),
         Err(LightHelperError::InvalidOrientationOp(path))
@@ -296,6 +307,7 @@ fn malformed_ordered_dome_operation_is_a_diagnostic_instead_of_a_false_noop() {
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
     assert_eq!(
         DomeLightEdit::new(&edit, path)
+            .expect("outside any instance")
             .unwrap()
             .orient_to_stage_up_axis(&mut edit),
         Err(LightHelperError::InvalidOrientationOp(path))

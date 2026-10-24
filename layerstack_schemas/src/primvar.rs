@@ -470,14 +470,6 @@ impl<'a> Primvar<'a> {
         self.validated_values(time)
             .map(|value| value.map(|v| v.compute_flattened()))
     }
-    /// An edit handle retaining this primvar's name and declared type.
-    #[must_use]
-    pub fn edit(&self) -> PrimvarEdit {
-        PrimvarEdit {
-            prim: self.prim.path(),
-            name: self.name.to_string(),
-        }
-    }
 }
 
 impl<'a> PrimView<'a> {
@@ -681,6 +673,25 @@ pub struct PrimvarEdit {
     name: String,
 }
 impl PrimEdit {
+    /// A handle authoring the primvar `name` (its base name or full
+    /// `primvars:` name) of this prim, if the prim has it as an attribute
+    /// as `edit` leaves it: declared on the stage, defined by its schemas,
+    /// or created earlier in `edit`. `None` for an invalid name or no such
+    /// attribute. The handle authors through this prim, so it is as
+    /// editable as this handle is ([`SchemaEdit::can_edit`]).
+    ///
+    /// OpenUSD: `UsdGeomPrimvarsAPI::GetPrimvar`.
+    #[doc(alias = "GetPrimvar")]
+    #[doc(alias = "UsdGeomPrimvarsAPI::GetPrimvar")]
+    pub fn primvar(&self, edit: &mut SchemaEdit<'_>, name: &str) -> Option<PrimvarEdit> {
+        let name = full_name(name);
+        (valid_name(&name) && edit.attribute_type(self.path(), &name).is_some()).then(|| {
+            PrimvarEdit {
+                prim: self.path(),
+                name,
+            }
+        })
+    }
     /// Creates and authors an indexed array primvar as one fallible child group.
     /// Invalid names, metadata or sidecars append no edits.
     pub fn create_indexed_primvar(

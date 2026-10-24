@@ -9,8 +9,8 @@ use layerstack::{
 };
 use layerstack_schemas::{
     Scene, SchemaEdit,
-    shading::nodes::{PreviewSurface, UvTexture},
-    usd_shade::{NodeDefApiImplementationSource, Shader},
+    shading::nodes::{PreviewSurface, PreviewSurfaceEdit, UvTexture, UvTextureEdit},
+    usd_shade::{NodeDefApiImplementationSource, Shader, ShaderEdit},
 };
 use std::sync::Arc;
 
@@ -75,9 +75,14 @@ fn identifier_checks_defaults_connections_samples_and_undo_are_explicit() {
     assert_eq!(PreviewSurface::roughness_default(), 0.5);
     assert!(PreviewSurface::new(&scene, texture).is_none());
     assert!(PreviewSurface::new(&scene, missing).is_none());
-    let surface_edit = view.edit();
-    let texture_edit = UvTexture::new(&scene, texture).unwrap().edit();
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
+    let shader = |edit: &SchemaEdit<'_>, path| {
+        ShaderEdit::new(edit, path)
+            .expect("outside any instance")
+            .expect("a shader")
+    };
+    let surface_edit = PreviewSurfaceEdit::from_shader(shader(&edit, surface));
+    let texture_edit = UvTextureEdit::from_shader(shader(&edit, texture));
     surface_edit.set_roughness_at(&mut edit, 1.0, 0.2).unwrap();
     surface_edit.set_roughness_at(&mut edit, 3.0, 0.8).unwrap();
     let input = surface_edit.create_diffuse_color_input(&mut edit).unwrap();
@@ -99,8 +104,8 @@ fn identifier_checks_defaults_connections_samples_and_undo_are_explicit() {
     let sources = view.diffuse_color_input().unwrap().shader_sources();
     assert_eq!(sources.sources.len(), 1);
     assert_eq!(sources.sources[0].output.prim_path(), texture);
-    let handle = view.edit();
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
+    let handle = PreviewSurfaceEdit::from_shader(shader(&edit, surface));
     handle
         .create_roughness_input(&mut edit)
         .unwrap()
@@ -144,10 +149,12 @@ fn incompatible_existing_port_is_rejected_without_appending_edits() {
     .unwrap();
     let transaction = edit.finish();
     live.apply(&mut store, &transaction).unwrap();
-    let handle = PreviewSurface::new(&Scene::new(live.stage(), &store), path)
-        .unwrap()
-        .edit();
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
+    let handle = PreviewSurfaceEdit::from_shader(
+        ShaderEdit::new(&edit, path)
+            .expect("outside any instance")
+            .expect("a shader"),
+    );
     assert!(handle.set_roughness(&mut edit, 0.3).is_err());
     assert!(edit.finish().is_empty());
 }

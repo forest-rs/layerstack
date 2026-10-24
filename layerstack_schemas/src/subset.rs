@@ -34,9 +34,10 @@ impl SubsetFamilyType {
 /// A subset edit could not be collected; its child group remains unchanged.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SubsetAuthoringError {
-    /// The subset cannot be defined at its path, beneath an instance or in
-    /// a prototype ([`SchemaEdit::define_prim`](crate::SchemaEdit::define_prim)).
-    CannotDefine(crate::CannotDefine),
+    /// The subset cannot be defined or authored at its path, beneath an
+    /// instance or in a prototype
+    /// ([`SchemaEdit::can_edit`](crate::SchemaEdit::can_edit)).
+    CannotEdit(crate::CannotEdit),
     /// The name must be a nonempty, single prim identifier.
     InvalidName,
     /// Geometry or its topology is absent, incompatible, or unreadable.
@@ -61,7 +62,7 @@ impl core::error::Error for SubsetAuthoringError {
     fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
         match self {
             Self::Geometry(error) => Some(error),
-            Self::CannotDefine(error) => Some(error),
+            Self::CannotEdit(error) => Some(error),
             _ => None,
         }
     }
@@ -71,9 +72,9 @@ impl From<SubsetError> for SubsetAuthoringError {
         Self::Geometry(value)
     }
 }
-impl From<crate::CannotDefine> for SubsetAuthoringError {
-    fn from(value: crate::CannotDefine) -> Self {
-        Self::CannotDefine(value)
+impl From<crate::CannotEdit> for SubsetAuthoringError {
+    fn from(value: crate::CannotEdit) -> Self {
+        Self::CannotEdit(value)
     }
 }
 
@@ -90,6 +91,14 @@ impl crate::usd_geom::GeomSubsetEdit {
     /// to inspect the complete family's contract and animated samples.
     /// Rejection collects no edits. AOUSD Core §7.3, §12.3–12.5;
     /// OpenUSD `UsdGeomSubset::CreateUniqueGeomSubset`.
+    ///
+    /// # Errors
+    ///
+    /// [`SubsetAuthoringError::InvalidName`] for a bad name, then
+    /// [`SubsetAuthoringError::CannotEdit`] for a subset beneath an instance
+    /// (geometry that is an instance or an instance proxy) or in a prototype
+    /// ([`SchemaEdit::can_edit`](crate::SchemaEdit::can_edit)), then why the
+    /// geometry or indices do not fit.
     #[doc(alias = "CreateUniqueGeomSubset")]
     pub fn create_unique(
         edit: &mut crate::SchemaEdit<'_>,
@@ -100,10 +109,14 @@ impl crate::usd_geom::GeomSubsetEdit {
         family: &str,
     ) -> Result<Self, SubsetAuthoringError> {
         edit.group(|edit| {
-            check_indices(edit, parent, &element, indices)?;
             let path = edit
                 .unique_child_path(parent, name)
                 .ok_or(SubsetAuthoringError::InvalidName)?;
+            // OpenUSD: `DefinePrim` refuses a subset beneath an instance or
+            // in a prototype; checked before the parent's geometry, which
+            // a prototype prim does not have here.
+            edit.can_edit(path)?;
+            check_indices(edit, parent, &element, indices)?;
             let subset = Subset::define(edit, path)?;
             subset
                 .set_element_type(edit, element)
@@ -124,6 +137,11 @@ impl crate::usd_geom::GeomSubsetEdit {
     /// refused with [`SubsetAuthoringError::NameTaken`]; C++ would retype it.
     /// Rejection collects no edits. AOUSD Core §7.3, §12.3–12.5;
     /// OpenUSD `UsdGeomSubset::CreateGeomSubset`.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::create_unique`], and
+    /// [`SubsetAuthoringError::NameTaken`].
     #[doc(alias = "CreateGeomSubset")]
     pub fn create(
         edit: &mut crate::SchemaEdit<'_>,
@@ -134,8 +152,12 @@ impl crate::usd_geom::GeomSubsetEdit {
         family: &str,
     ) -> Result<Self, SubsetAuthoringError> {
         edit.group(|edit| {
-            check_indices(edit, parent, &element, indices)?;
             let path = child_path(edit, parent, name)?;
+            // OpenUSD: `DefinePrim` refuses a subset beneath an instance or
+            // in a prototype, whether or not it is already there; checked
+            // before the parent's geometry, as in `create_unique`.
+            edit.can_edit(path)?;
+            check_indices(edit, parent, &element, indices)?;
             let subset = if edit.exists(path) {
                 if !edit.is_a(path, Subset::SCHEMA) {
                     return Err(SubsetAuthoringError::NameTaken(path));

@@ -164,6 +164,7 @@ struct Indexed {
 /// // `stones` excludes the flint: the index follows the edit's report.
 /// let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
 /// CollectionApiEdit::new(&edit, parts, "stones")
+///     .expect("outside any instance")
 ///     .expect("applied")
 ///     .set_excludes(&mut edit, &[TargetPath::Prim(flint)]);
 /// let transaction = edit.finish();

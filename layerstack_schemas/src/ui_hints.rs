@@ -8,7 +8,7 @@
 //! Authoring updates only local dictionary entries and uses explicit legacy
 //! mirroring, rather than process environment variables.
 //! AOUSD Core §12.2.5 (dictionary metadata), §12.3 (attribute values).
-use crate::{PrimView, Scene, SchemaEdit};
+use crate::{CannotEdit, PrimView, Scene, SchemaEdit};
 use alloc::{string::String, sync::Arc, vec::Vec};
 use layerstack::{PathId, PropertyKind, PropertyPath, TargetPath, Value};
 
@@ -27,13 +27,28 @@ pub enum UiHintError {
     MissingValueLabel(String),
     /// A labeled value is incompatible with the attribute's declared type.
     IncompatibleValueLabel(String),
+    /// The edit may not author the object's prim, beneath an instance or in
+    /// a prototype ([`SchemaEdit::can_edit`]).
+    CannotEdit(CannotEdit),
 }
 impl core::fmt::Display for UiHintError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "UI hint: {self:?}")
     }
 }
-impl core::error::Error for UiHintError {}
+impl core::error::Error for UiHintError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::CannotEdit(error) => Some(error),
+            _ => None,
+        }
+    }
+}
+impl From<CannotEdit> for UiHintError {
+    fn from(value: CannotEdit) -> Self {
+        Self::CannotEdit(value)
+    }
+}
 
 /// A dictionary in OpenUSD's ordered metadata representation.
 pub type HintDictionary = Vec<(Arc<str>, Value)>;
@@ -229,15 +244,6 @@ impl<'a> UiHints<'a> {
         keys.extend(group.split(':'));
         Ok(string(self.hint(&keys)).unwrap_or_default())
     }
-    /// An authoring handle retaining this object's kind.
-    #[must_use]
-    pub fn edit(&self) -> UiHintsEdit {
-        UiHintsEdit {
-            target: self.target,
-            kind: self.kind,
-            write_legacy: true,
-        }
-    }
 }
 
 /// UI hint authoring handle. Setters update mapped local dictionaries, including
@@ -250,7 +256,14 @@ pub struct UiHintsEdit {
 }
 impl UiHintsEdit {
     /// A prim handle for an existing prim or one defined earlier in this edit.
+    ///
+    /// # Errors
+    ///
+    /// [`UiHintError::CannotEdit`] when the edit may not author the prim
+    /// ([`SchemaEdit::can_edit`]), checked first, and
+    /// [`UiHintError::MissingObject`] when no prim is there.
     pub fn prim(edit: &SchemaEdit<'_>, path: PathId) -> Result<Self, UiHintError> {
+        edit.can_edit(path)?;
         if !edit.exists(path) {
             return Err(UiHintError::MissingObject(TargetPath::Prim(path)));
         }
@@ -261,7 +274,14 @@ impl UiHintsEdit {
         })
     }
     /// A property handle for an existing or newly created property.
+    ///
+    /// # Errors
+    ///
+    /// [`UiHintError::CannotEdit`] when the edit may not author the
+    /// property's prim ([`SchemaEdit::can_edit`]), checked first, and
+    /// [`UiHintError::MissingObject`] when the prim has no such property.
     pub fn property(edit: &mut SchemaEdit<'_>, path: PropertyPath) -> Result<Self, UiHintError> {
+        edit.can_edit(path.prim_path())?;
         let name = String::from(edit.tokens().resolve(path.property()));
         let kind = edit
             .property_kind(path.prim_path(), &name)
@@ -563,8 +583,8 @@ mod tests {
             vec!["High", "Bad", "High"]
         );
         assert_eq!(hints.display_group().unwrap(), "Settings");
-        let hints = hints.edit();
         let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
+        let hints = UiHintsEdit::property(&mut edit, attr).unwrap();
         assert!(matches!(
             hints.apply_value_label(&mut edit, "Bad"),
             Err(UiHintError::IncompatibleValueLabel(_))

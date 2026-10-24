@@ -154,8 +154,12 @@ fn binding_authoring_matches_openusd_call_by_call() {
         assert_eq!(label, expected.call);
         let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
         let (on_mesh, on_set) = (
-            MaterialBindingApiEdit::new(&edit, mesh).unwrap(),
-            MaterialBindingApiEdit::new(&edit, set).unwrap(),
+            MaterialBindingApiEdit::new(&edit, mesh)
+                .expect("outside any instance")
+                .unwrap(),
+            MaterialBindingApiEdit::new(&edit, set)
+                .expect("outside any instance")
+                .unwrap(),
         );
         let result = match author {
             Bind(material, strength, purpose) => {
@@ -168,6 +172,7 @@ fn binding_authoring_matches_openusd_call_by_call() {
             UnbindCollection(name) => on_set.unbind_collection(&mut edit, name, &All),
             UnbindAll(path) => {
                 MaterialBindingApiEdit::new(&edit, path)
+                    .expect("outside any instance")
                     .unwrap()
                     .unbind_all(&mut edit);
                 Ok(())
@@ -199,7 +204,9 @@ fn binding_strength_reads_earlier_calls_in_the_same_edit() {
     let mesh = store.path("/Set/Mesh");
     let a = store.path("/Looks/A");
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    let api = MaterialBindingApiEdit::new(&edit, mesh).unwrap();
+    let api = MaterialBindingApiEdit::new(&edit, mesh)
+        .expect("outside any instance")
+        .unwrap();
     api.bind(
         &mut edit,
         a,
@@ -224,7 +231,9 @@ fn binding_strength_through_property_metadata() {
     let mesh = store.path("/Set/Mesh");
     let a = store.path("/Looks/A");
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    let api = MaterialBindingApiEdit::new(&edit, mesh).unwrap();
+    let api = MaterialBindingApiEdit::new(&edit, mesh)
+        .expect("outside any instance")
+        .unwrap();
     api.bind(&mut edit, a, None, &MaterialPurpose::All).unwrap();
     let stronger = Value::Token(edit.tokens().intern("strongerThanDescendants"));
     api.write_property_metadata(

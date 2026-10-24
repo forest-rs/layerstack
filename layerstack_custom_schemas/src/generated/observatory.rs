@@ -12,10 +12,10 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::ops::Deref;
 
-use layerstack::{CannotApply, PathId, PropertyKind, SchemaKind, Value, Variability};
+use layerstack::{PathId, PropertyKind, SchemaKind, Value, Variability};
 
 use ::layerstack_schemas::table::{Property, Schema, SchemaTables, ValueType, fallback};
-use ::layerstack_schemas::{CannotDefine, PrimEdit, PrimView, Scene, SchemaEdit};
+use ::layerstack_schemas::{ApplyError, CannotEdit, PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "What an instrument is mounted on."]
 #[doc = ""]
 #[doc = "The view of the `observatory` library's single-apply API schema `MountedOnAPI`. Get it with [`MountedOnApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
@@ -66,12 +66,6 @@ impl<'a> MountedOnApi<'a> {
         Self { base: prim }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> MountedOnApiEdit {
-        MountedOnApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
     /// edit's target) if the prim may have it.
     ///
@@ -79,8 +73,9 @@ impl<'a> MountedOnApi<'a> {
     ///
     /// # Errors
     ///
-    /// Why the schema cannot be applied there.
-    pub fn apply(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<MountedOnApiEdit, CannotApply> {
+    /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
+    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
+    pub fn apply(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<MountedOnApiEdit, ApplyError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(MountedOnApiEdit::from_prim)
     }
@@ -118,11 +113,18 @@ impl Deref for MountedOnApiEdit {
 )]
 impl MountedOnApiEdit {
     /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+    /// exists: on the edit's stage, or defined earlier in `edit`; `Ok(None)`
+    /// when it does not. Setters never create a prim.
+    ///
+    /// # Errors
+    ///
+    /// [`CannotEdit`] for a path beneath an instance or in a prototype, as
+    /// [`PrimEdit::new`] refuses it; nothing is authored.
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        Ok(PrimEdit::new(edit, path)?.map(Self::from_prim))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -274,12 +276,6 @@ impl<'a> Telescope<'a> {
         }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> TelescopeEdit {
-        TelescopeEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Defines the prim at `path` as a `Telescope`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
@@ -287,9 +283,9 @@ impl<'a> Telescope<'a> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// [`CannotEdit`] for a path beneath an instance or in a
     /// prototype, which OpenUSD refuses; nothing is authored.
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<TelescopeEdit, CannotDefine> {
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<TelescopeEdit, CannotEdit> {
         edit.define_prim(path, Self::SCHEMA)
             .map(TelescopeEdit::from_prim)
     }
@@ -357,12 +353,18 @@ impl Deref for TelescopeEdit {
     reason = "documentation as the schema writes it"
 )]
 impl TelescopeEdit {
-    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Telescope` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`Telescope::define`] types it, and `TelescopeEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        let path = edit.prim_path(path)?;
-        edit.is_a(path, Telescope::SCHEMA)
-            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Telescope` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`Ok(None)` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`Telescope::define`] types it, and `TelescopeEdit::from_prim` of a [`PrimEdit::new`] handle authors the schema's properties on any prim that exists. Setters never create a prim.\n\n# Errors\n\n[`CannotEdit`] for a path beneath an instance or in a prototype, which OpenUSD refuses to author ([`SchemaEdit::can_edit`]); nothing is authored."]
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        let Some(path) = edit.prim_path(path) else {
+            return Ok(None);
+        };
+        edit.can_edit(path)?;
+        Ok(edit
+            .is_a(path, Telescope::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path))))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`

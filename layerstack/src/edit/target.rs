@@ -67,6 +67,35 @@ impl NamespaceMap {
             }
         }
     }
+
+    /// Whether the map takes the stage prim `path` to the spec path of
+    /// the same name, as [`Self::map_prim`] would, without interning the
+    /// image.
+    fn maps_to_itself(&self, path: PathId, paths: &PathInterner) -> bool {
+        match self {
+            Self::Identity => true,
+            Self::Prefix {
+                stage_root,
+                spec_root,
+                root_identity,
+            } => {
+                let stage_path = paths.resolve(path);
+                if stage_path
+                    .strip_prefix(paths.resolve(*stage_root))
+                    .is_some()
+                {
+                    // The names below `stage_root` are kept, so the image
+                    // is `path` exactly when `spec_root` is `stage_root`.
+                    return *spec_root == SpecPath::from_prim_path(*stage_root);
+                }
+                *root_identity
+                    && (spec_root.has_variant_selections()
+                        || stage_path
+                            .strip_prefix(paths.resolve(spec_root.prim_path()))
+                            .is_none())
+            }
+        }
+    }
 }
 
 /// Where stage-level edits are written: a layer, a map from stage
@@ -245,6 +274,18 @@ impl EditTarget {
     #[must_use]
     pub fn map_to_spec_path(&self, path: PathId, paths: &mut PathInterner) -> Option<SpecPath> {
         self.map.map_prim(path, paths)
+    }
+
+    /// Whether the target maps the stage prim `path` to the spec path of
+    /// the same name in its layer, as [`Self::map_to_spec_path`] would.
+    /// It interns nothing.
+    ///
+    /// OpenUSD: `GetMapFunction().IsIdentityPathMapping() ||
+    /// MapToSpecPath(path) == path`, the test `UsdStage::_ValidateEditPrim`
+    /// makes before it refuses authoring to an instance proxy or prototype.
+    #[must_use]
+    pub fn maps_to_itself(&self, path: PathId, paths: &PathInterner) -> bool {
+        self.map.maps_to_itself(path, paths)
     }
 
     /// Maps the stage property path `path` to its spec path in the target

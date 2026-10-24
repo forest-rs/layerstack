@@ -222,8 +222,11 @@ fn transaction(
         }
         _ => {
             let mut edit = SchemaEdit::new(live.stage(), store, target.clone());
-            let collection = CollectionApiEdit::new(&edit, prim, "lightLink").expect("the prim");
+            let collection = CollectionApiEdit::new(&edit, prim, "lightLink")
+                .expect("outside any instance")
+                .expect("the prim");
             let light = SphereLightEdit::new(&edit, prim)
+                .expect("outside any instance")
                 .expect("a sphere light")
                 .light_api();
             let position = position(step);

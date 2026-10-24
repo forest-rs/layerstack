@@ -20,9 +20,11 @@
 
 use core::ops::Deref;
 
-use layerstack::{CannotApply, PathId};
+use layerstack::PathId;
 
-use crate::{CannotDefine, InstanceEdit, InstanceView, PrimEdit, PrimView, Scene, SchemaEdit};
+use crate::{
+    ApplyError, CannotEdit, InstanceEdit, InstanceView, PrimEdit, PrimView, Scene, SchemaEdit,
+};
 #[doc = "The tokens `backPlate:<instance>:plateVisibility` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum BackPlateApiPlateVisibility {
@@ -157,15 +159,6 @@ impl<'a> BackPlateApi<'a> {
         Self { base: instance }
     }
 
-    /// An edit handle for this instance.
-    #[must_use]
-    pub fn edit(&self) -> BackPlateApiEdit {
-        BackPlateApiEdit::from_instance(InstanceEdit::new(
-            PrimEdit::from_path_unchecked(self.path()),
-            self.instance(),
-        ))
-    }
-
     /// Applies the instance `instance` of the schema to `path` (a `prepend
     /// apiSchemas` entry in the edit's target) if the prim may have it.
     ///
@@ -173,14 +166,15 @@ impl<'a> BackPlateApi<'a> {
     ///
     /// # Errors
     ///
-    /// Why the schema cannot be applied there.
+    /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
+    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdGeomBackPlateAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
         instance: &str,
-    ) -> Result<BackPlateApiEdit, CannotApply> {
+    ) -> Result<BackPlateApiEdit, ApplyError> {
         let prim = edit.apply_api(path, Self::SCHEMA, Some(instance))?;
         Ok(BackPlateApiEdit::from_instance(InstanceEdit::new(
             prim, instance,
@@ -499,14 +493,20 @@ impl Deref for BackPlateApiEdit {
 impl BackPlateApiEdit {
     /// A handle authoring the instance `instance` on the prim at `path`
     /// through `edit`, if the prim exists: on the edit's stage, or defined
-    /// earlier in `edit`. Setters never create a prim that does not.
-    #[must_use]
+    /// earlier in `edit`; `Ok(None)` when it does not. Setters never
+    /// create a prim.
+    ///
+    /// # Errors
+    ///
+    /// [`CannotEdit`] for a path beneath an instance or in a prototype, as
+    /// [`PrimEdit::new`] refuses it; nothing is authored.
     pub fn new(
         edit: &SchemaEdit<'_>,
         path: impl ::layerstack::PrimPathArg,
         instance: &str,
-    ) -> Option<Self> {
-        PrimEdit::new(edit, path).map(|prim| Self::from_instance(InstanceEdit::new(prim, instance)))
+    ) -> Result<Option<Self>, CannotEdit> {
+        Ok(PrimEdit::new(edit, path)?
+            .map(|prim| Self::from_instance(InstanceEdit::new(prim, instance))))
     }
 
     /// A handle authoring the schema's properties for `instance`, whether
@@ -1027,12 +1027,6 @@ impl<'a> BasisCurves<'a> {
         }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> BasisCurvesEdit {
-        BasisCurvesEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Defines the prim at `path` as a `BasisCurves`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
@@ -1040,14 +1034,11 @@ impl<'a> BasisCurves<'a> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// [`CannotEdit`] for a path beneath an instance or in a
     /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdGeomBasisCurves::Define")]
     #[doc(alias = "Define")]
-    pub fn define(
-        edit: &mut SchemaEdit<'_>,
-        path: PathId,
-    ) -> Result<BasisCurvesEdit, CannotDefine> {
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<BasisCurvesEdit, CannotEdit> {
         edit.define_prim(path, Self::SCHEMA)
             .map(BasisCurvesEdit::from_prim)
     }
@@ -1110,12 +1101,18 @@ impl Deref for BasisCurvesEdit {
 }
 
 impl BasisCurvesEdit {
-    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `BasisCurves` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`BasisCurves::define`] types it, and `BasisCurvesEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        let path = edit.prim_path(path)?;
-        edit.is_a(path, BasisCurves::SCHEMA)
-            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `BasisCurves` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`Ok(None)` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`BasisCurves::define`] types it, and `BasisCurvesEdit::from_prim` of a [`PrimEdit::new`] handle authors the schema's properties on any prim that exists. Setters never create a prim.\n\n# Errors\n\n[`CannotEdit`] for a path beneath an instance or in a prototype, which OpenUSD refuses to author ([`SchemaEdit::can_edit`]); nothing is authored."]
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        let Some(path) = edit.prim_path(path) else {
+            return Ok(None);
+        };
+        edit.can_edit(path)?;
+        Ok(edit
+            .is_a(path, BasisCurves::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path))))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -1208,12 +1205,6 @@ impl<'a> Boundable<'a> {
         }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> BoundableEdit {
-        BoundableEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// The USD name of [`Self::extent`].
     pub const EXTENT: &'static str = "extent";
 
@@ -1264,12 +1255,18 @@ impl Deref for BoundableEdit {
 }
 
 impl BoundableEdit {
-    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Boundable` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`SchemaEdit::define_prim`] with a concrete schema derived from it types it, and `BoundableEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        let path = edit.prim_path(path)?;
-        edit.is_a(path, Boundable::SCHEMA)
-            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Boundable` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`Ok(None)` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`SchemaEdit::define_prim`] with a concrete schema derived from it types it, and `BoundableEdit::from_prim` of a [`PrimEdit::new`] handle authors the schema's properties on any prim that exists. Setters never create a prim.\n\n# Errors\n\n[`CannotEdit`] for a path beneath an instance or in a prototype, which OpenUSD refuses to author ([`SchemaEdit::can_edit`]); nothing is authored."]
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        let Some(path) = edit.prim_path(path) else {
+            return Ok(None);
+        };
+        edit.can_edit(path)?;
+        Ok(edit
+            .is_a(path, Boundable::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path))))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -1497,12 +1494,6 @@ impl<'a> Camera<'a> {
         }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> CameraEdit {
-        CameraEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Defines the prim at `path` as a `Camera`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
@@ -1510,11 +1501,11 @@ impl<'a> Camera<'a> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// [`CannotEdit`] for a path beneath an instance or in a
     /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdGeomCamera::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<CameraEdit, CannotDefine> {
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<CameraEdit, CannotEdit> {
         edit.define_prim(path, Self::SCHEMA)
             .map(CameraEdit::from_prim)
     }
@@ -1909,12 +1900,18 @@ impl Deref for CameraEdit {
 }
 
 impl CameraEdit {
-    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Camera` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`Camera::define`] types it, and `CameraEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        let path = edit.prim_path(path)?;
-        edit.is_a(path, Camera::SCHEMA)
-            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Camera` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`Ok(None)` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`Camera::define`] types it, and `CameraEdit::from_prim` of a [`PrimEdit::new`] handle authors the schema's properties on any prim that exists. Setters never create a prim.\n\n# Errors\n\n[`CannotEdit`] for a path beneath an instance or in a prototype, which OpenUSD refuses to author ([`SchemaEdit::can_edit`]); nothing is authored."]
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        let Some(path) = edit.prim_path(path) else {
+            return Ok(None);
+        };
+        edit.can_edit(path)?;
+        Ok(edit
+            .is_a(path, Camera::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path))))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -2451,12 +2448,6 @@ impl<'a> Capsule<'a> {
         }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> CapsuleEdit {
-        CapsuleEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Defines the prim at `path` as a `Capsule`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
@@ -2464,11 +2455,11 @@ impl<'a> Capsule<'a> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// [`CannotEdit`] for a path beneath an instance or in a
     /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdGeomCapsule::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<CapsuleEdit, CannotDefine> {
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<CapsuleEdit, CannotEdit> {
         edit.define_prim(path, Self::SCHEMA)
             .map(CapsuleEdit::from_prim)
     }
@@ -2543,12 +2534,18 @@ impl Deref for CapsuleEdit {
 }
 
 impl CapsuleEdit {
-    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Capsule` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`Capsule::define`] types it, and `CapsuleEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        let path = edit.prim_path(path)?;
-        edit.is_a(path, Capsule::SCHEMA)
-            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Capsule` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`Ok(None)` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`Capsule::define`] types it, and `CapsuleEdit::from_prim` of a [`PrimEdit::new`] handle authors the schema's properties on any prim that exists. Setters never create a prim.\n\n# Errors\n\n[`CannotEdit`] for a path beneath an instance or in a prototype, which OpenUSD refuses to author ([`SchemaEdit::can_edit`]); nothing is authored."]
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        let Some(path) = edit.prim_path(path) else {
+            return Ok(None);
+        };
+        edit.can_edit(path)?;
+        Ok(edit
+            .is_a(path, Capsule::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path))))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -2710,12 +2707,6 @@ impl<'a> Capsule1<'a> {
         }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> Capsule1Edit {
-        Capsule1Edit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Defines the prim at `path` as a `Capsule_1`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
@@ -2723,11 +2714,11 @@ impl<'a> Capsule1<'a> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// [`CannotEdit`] for a path beneath an instance or in a
     /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdGeomCapsule_1::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<Capsule1Edit, CannotDefine> {
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<Capsule1Edit, CannotEdit> {
         edit.define_prim(path, Self::SCHEMA)
             .map(Capsule1Edit::from_prim)
     }
@@ -2822,12 +2813,18 @@ impl Deref for Capsule1Edit {
 }
 
 impl Capsule1Edit {
-    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Capsule_1` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`Capsule1::define`] types it, and `Capsule1Edit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        let path = edit.prim_path(path)?;
-        edit.is_a(path, Capsule1::SCHEMA)
-            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Capsule_1` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`Ok(None)` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`Capsule1::define`] types it, and `Capsule1Edit::from_prim` of a [`PrimEdit::new`] handle authors the schema's properties on any prim that exists. Setters never create a prim.\n\n# Errors\n\n[`CannotEdit`] for a path beneath an instance or in a prototype, which OpenUSD refuses to author ([`SchemaEdit::can_edit`]); nothing is authored."]
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        let Some(path) = edit.prim_path(path) else {
+            return Ok(None);
+        };
+        edit.can_edit(path)?;
+        Ok(edit
+            .is_a(path, Capsule1::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path))))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -3007,12 +3004,6 @@ impl<'a> Cone<'a> {
         }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> ConeEdit {
-        ConeEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Defines the prim at `path` as a `Cone`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
@@ -3020,11 +3011,11 @@ impl<'a> Cone<'a> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// [`CannotEdit`] for a path beneath an instance or in a
     /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdGeomCone::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<ConeEdit, CannotDefine> {
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<ConeEdit, CannotEdit> {
         edit.define_prim(path, Self::SCHEMA)
             .map(ConeEdit::from_prim)
     }
@@ -3099,12 +3090,18 @@ impl Deref for ConeEdit {
 }
 
 impl ConeEdit {
-    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Cone` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`Cone::define`] types it, and `ConeEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        let path = edit.prim_path(path)?;
-        edit.is_a(path, Cone::SCHEMA)
-            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Cone` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`Ok(None)` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`Cone::define`] types it, and `ConeEdit::from_prim` of a [`PrimEdit::new`] handle authors the schema's properties on any prim that exists. Setters never create a prim.\n\n# Errors\n\n[`CannotEdit`] for a path beneath an instance or in a prototype, which OpenUSD refuses to author ([`SchemaEdit::can_edit`]); nothing is authored."]
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        let Some(path) = edit.prim_path(path) else {
+            return Ok(None);
+        };
+        edit.can_edit(path)?;
+        Ok(edit
+            .is_a(path, Cone::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path))))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -3211,12 +3208,6 @@ impl<'a> Cube<'a> {
         }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> CubeEdit {
-        CubeEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Defines the prim at `path` as a `Cube`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
@@ -3224,11 +3215,11 @@ impl<'a> Cube<'a> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// [`CannotEdit`] for a path beneath an instance or in a
     /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdGeomCube::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<CubeEdit, CannotDefine> {
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<CubeEdit, CannotEdit> {
         edit.define_prim(path, Self::SCHEMA)
             .map(CubeEdit::from_prim)
     }
@@ -3269,12 +3260,18 @@ impl Deref for CubeEdit {
 }
 
 impl CubeEdit {
-    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Cube` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`Cube::define`] types it, and `CubeEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        let path = edit.prim_path(path)?;
-        edit.is_a(path, Cube::SCHEMA)
-            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Cube` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`Ok(None)` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`Cube::define`] types it, and `CubeEdit::from_prim` of a [`PrimEdit::new`] handle authors the schema's properties on any prim that exists. Setters never create a prim.\n\n# Errors\n\n[`CannotEdit`] for a path beneath an instance or in a prototype, which OpenUSD refuses to author ([`SchemaEdit::can_edit`]); nothing is authored."]
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        let Some(path) = edit.prim_path(path) else {
+            return Ok(None);
+        };
+        edit.can_edit(path)?;
+        Ok(edit
+            .is_a(path, Cube::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path))))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -3348,12 +3345,6 @@ impl<'a> Curves<'a> {
         Self {
             base: PointBased::from_prim_unchecked(prim),
         }
-    }
-
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> CurvesEdit {
-        CurvesEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// The USD name of [`Self::curve_vertex_counts`].
@@ -3448,12 +3439,18 @@ impl Deref for CurvesEdit {
 }
 
 impl CurvesEdit {
-    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Curves` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`SchemaEdit::define_prim`] with a concrete schema derived from it types it, and `CurvesEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        let path = edit.prim_path(path)?;
-        edit.is_a(path, Curves::SCHEMA)
-            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Curves` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`Ok(None)` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`SchemaEdit::define_prim`] with a concrete schema derived from it types it, and `CurvesEdit::from_prim` of a [`PrimEdit::new`] handle authors the schema's properties on any prim that exists. Setters never create a prim.\n\n# Errors\n\n[`CannotEdit`] for a path beneath an instance or in a prototype, which OpenUSD refuses to author ([`SchemaEdit::can_edit`]); nothing is authored."]
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        let Some(path) = edit.prim_path(path) else {
+            return Ok(None);
+        };
+        edit.can_edit(path)?;
+        Ok(edit
+            .is_a(path, Curves::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path))))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -3703,12 +3700,6 @@ impl<'a> Cylinder<'a> {
         }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> CylinderEdit {
-        CylinderEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Defines the prim at `path` as a `Cylinder`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
@@ -3716,11 +3707,11 @@ impl<'a> Cylinder<'a> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// [`CannotEdit`] for a path beneath an instance or in a
     /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdGeomCylinder::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<CylinderEdit, CannotDefine> {
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<CylinderEdit, CannotEdit> {
         edit.define_prim(path, Self::SCHEMA)
             .map(CylinderEdit::from_prim)
     }
@@ -3795,12 +3786,18 @@ impl Deref for CylinderEdit {
 }
 
 impl CylinderEdit {
-    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Cylinder` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`Cylinder::define`] types it, and `CylinderEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        let path = edit.prim_path(path)?;
-        edit.is_a(path, Cylinder::SCHEMA)
-            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Cylinder` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`Ok(None)` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`Cylinder::define`] types it, and `CylinderEdit::from_prim` of a [`PrimEdit::new`] handle authors the schema's properties on any prim that exists. Setters never create a prim.\n\n# Errors\n\n[`CannotEdit`] for a path beneath an instance or in a prototype, which OpenUSD refuses to author ([`SchemaEdit::can_edit`]); nothing is authored."]
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        let Some(path) = edit.prim_path(path) else {
+            return Ok(None);
+        };
+        edit.can_edit(path)?;
+        Ok(edit
+            .is_a(path, Cylinder::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path))))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -3962,12 +3959,6 @@ impl<'a> Cylinder1<'a> {
         }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> Cylinder1Edit {
-        Cylinder1Edit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Defines the prim at `path` as a `Cylinder_1`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
@@ -3975,11 +3966,11 @@ impl<'a> Cylinder1<'a> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// [`CannotEdit`] for a path beneath an instance or in a
     /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdGeomCylinder_1::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<Cylinder1Edit, CannotDefine> {
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<Cylinder1Edit, CannotEdit> {
         edit.define_prim(path, Self::SCHEMA)
             .map(Cylinder1Edit::from_prim)
     }
@@ -4074,12 +4065,18 @@ impl Deref for Cylinder1Edit {
 }
 
 impl Cylinder1Edit {
-    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Cylinder_1` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`Cylinder1::define`] types it, and `Cylinder1Edit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        let path = edit.prim_path(path)?;
-        edit.is_a(path, Cylinder1::SCHEMA)
-            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Cylinder_1` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`Ok(None)` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`Cylinder1::define`] types it, and `Cylinder1Edit::from_prim` of a [`PrimEdit::new`] handle authors the schema's properties on any prim that exists. Setters never create a prim.\n\n# Errors\n\n[`CannotEdit`] for a path beneath an instance or in a prototype, which OpenUSD refuses to author ([`SchemaEdit::can_edit`]); nothing is authored."]
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        let Some(path) = edit.prim_path(path) else {
+            return Ok(None);
+        };
+        edit.can_edit(path)?;
+        Ok(edit
+            .is_a(path, Cylinder1::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path))))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -4376,12 +4373,6 @@ impl<'a> GeomModelApi<'a> {
         Self { base: prim }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> GeomModelApiEdit {
-        GeomModelApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
     /// edit's target) if the prim may have it.
     ///
@@ -4389,10 +4380,11 @@ impl<'a> GeomModelApi<'a> {
     ///
     /// # Errors
     ///
-    /// Why the schema cannot be applied there.
+    /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
+    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdGeomModelAPI::Apply")]
     #[doc(alias = "Apply")]
-    pub fn apply(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<GeomModelApiEdit, CannotApply> {
+    pub fn apply(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<GeomModelApiEdit, ApplyError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(GeomModelApiEdit::from_prim)
     }
@@ -4625,11 +4617,18 @@ impl Deref for GeomModelApiEdit {
 
 impl GeomModelApiEdit {
     /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+    /// exists: on the edit's stage, or defined earlier in `edit`; `Ok(None)`
+    /// when it does not. Setters never create a prim.
+    ///
+    /// # Errors
+    ///
+    /// [`CannotEdit`] for a path beneath an instance or in a prototype, as
+    /// [`PrimEdit::new`] refuses it; nothing is authored.
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        Ok(PrimEdit::new(edit, path)?.map(Self::from_prim))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -4963,12 +4962,6 @@ impl<'a> GeomSubset<'a> {
         }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> GeomSubsetEdit {
-        GeomSubsetEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Defines the prim at `path` as a `GeomSubset`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
@@ -4976,11 +4969,11 @@ impl<'a> GeomSubset<'a> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// [`CannotEdit`] for a path beneath an instance or in a
     /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdGeomSubset::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<GeomSubsetEdit, CannotDefine> {
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<GeomSubsetEdit, CannotEdit> {
         edit.define_prim(path, Self::SCHEMA)
             .map(GeomSubsetEdit::from_prim)
     }
@@ -5063,12 +5056,18 @@ impl Deref for GeomSubsetEdit {
 }
 
 impl GeomSubsetEdit {
-    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `GeomSubset` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`GeomSubset::define`] types it, and `GeomSubsetEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        let path = edit.prim_path(path)?;
-        edit.is_a(path, GeomSubset::SCHEMA)
-            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `GeomSubset` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`Ok(None)` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`GeomSubset::define`] types it, and `GeomSubsetEdit::from_prim` of a [`PrimEdit::new`] handle authors the schema's properties on any prim that exists. Setters never create a prim.\n\n# Errors\n\n[`CannotEdit`] for a path beneath an instance or in a prototype, which OpenUSD refuses to author ([`SchemaEdit::can_edit`]); nothing is authored."]
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        let Some(path) = edit.prim_path(path) else {
+            return Ok(None);
+        };
+        edit.can_edit(path)?;
+        Ok(edit
+            .is_a(path, GeomSubset::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path))))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -5270,12 +5269,6 @@ impl<'a> Gprim<'a> {
         }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> GprimEdit {
-        GprimEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// The USD name of [`Self::double_sided`].
     pub const DOUBLE_SIDED: &'static str = "doubleSided";
 
@@ -5410,12 +5403,18 @@ impl Deref for GprimEdit {
 }
 
 impl GprimEdit {
-    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Gprim` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`SchemaEdit::define_prim`] with a concrete schema derived from it types it, and `GprimEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        let path = edit.prim_path(path)?;
-        edit.is_a(path, Gprim::SCHEMA)
-            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Gprim` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`Ok(None)` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`SchemaEdit::define_prim`] with a concrete schema derived from it types it, and `GprimEdit::from_prim` of a [`PrimEdit::new`] handle authors the schema's properties on any prim that exists. Setters never create a prim.\n\n# Errors\n\n[`CannotEdit`] for a path beneath an instance or in a prototype, which OpenUSD refuses to author ([`SchemaEdit::can_edit`]); nothing is authored."]
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        let Some(path) = edit.prim_path(path) else {
+            return Ok(None);
+        };
+        edit.can_edit(path)?;
+        Ok(edit
+            .is_a(path, Gprim::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path))))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -5640,12 +5639,6 @@ impl<'a> HermiteCurves<'a> {
         }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> HermiteCurvesEdit {
-        HermiteCurvesEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Defines the prim at `path` as a `HermiteCurves`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
@@ -5653,14 +5646,14 @@ impl<'a> HermiteCurves<'a> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// [`CannotEdit`] for a path beneath an instance or in a
     /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdGeomHermiteCurves::Define")]
     #[doc(alias = "Define")]
     pub fn define(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<HermiteCurvesEdit, CannotDefine> {
+    ) -> Result<HermiteCurvesEdit, CannotEdit> {
         edit.define_prim(path, Self::SCHEMA)
             .map(HermiteCurvesEdit::from_prim)
     }
@@ -5715,12 +5708,18 @@ impl Deref for HermiteCurvesEdit {
 }
 
 impl HermiteCurvesEdit {
-    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `HermiteCurves` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`HermiteCurves::define`] types it, and `HermiteCurvesEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        let path = edit.prim_path(path)?;
-        edit.is_a(path, HermiteCurves::SCHEMA)
-            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `HermiteCurves` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`Ok(None)` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`HermiteCurves::define`] types it, and `HermiteCurvesEdit::from_prim` of a [`PrimEdit::new`] handle authors the schema's properties on any prim that exists. Setters never create a prim.\n\n# Errors\n\n[`CannotEdit`] for a path beneath an instance or in a prototype, which OpenUSD refuses to author ([`SchemaEdit::can_edit`]); nothing is authored."]
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        let Some(path) = edit.prim_path(path) else {
+            return Ok(None);
+        };
+        edit.can_edit(path)?;
+        Ok(edit
+            .is_a(path, HermiteCurves::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path))))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -5957,12 +5956,6 @@ impl<'a> Imageable<'a> {
         }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> ImageableEdit {
-        ImageableEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// The USD name of [`Self::proxy_prim`].
     pub const PROXY_PRIM: &'static str = "proxyPrim";
 
@@ -6027,12 +6020,18 @@ impl Deref for ImageableEdit {
 }
 
 impl ImageableEdit {
-    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Imageable` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`SchemaEdit::define_prim`] with a concrete schema derived from it types it, and `ImageableEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        let path = edit.prim_path(path)?;
-        edit.is_a(path, Imageable::SCHEMA)
-            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Imageable` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`Ok(None)` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`SchemaEdit::define_prim`] with a concrete schema derived from it types it, and `ImageableEdit::from_prim` of a [`PrimEdit::new`] handle authors the schema's properties on any prim that exists. Setters never create a prim.\n\n# Errors\n\n[`CannotEdit`] for a path beneath an instance or in a prototype, which OpenUSD refuses to author ([`SchemaEdit::can_edit`]); nothing is authored."]
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        let Some(path) = edit.prim_path(path) else {
+            return Ok(None);
+        };
+        edit.can_edit(path)?;
+        Ok(edit
+            .is_a(path, Imageable::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path))))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -6400,12 +6399,6 @@ impl<'a> Mesh<'a> {
         }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> MeshEdit {
-        MeshEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Defines the prim at `path` as a `Mesh`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
@@ -6413,11 +6406,11 @@ impl<'a> Mesh<'a> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// [`CannotEdit`] for a path beneath an instance or in a
     /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdGeomMesh::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<MeshEdit, CannotDefine> {
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<MeshEdit, CannotEdit> {
         edit.define_prim(path, Self::SCHEMA)
             .map(MeshEdit::from_prim)
     }
@@ -6836,12 +6829,18 @@ impl Deref for MeshEdit {
 }
 
 impl MeshEdit {
-    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Mesh` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`Mesh::define`] types it, and `MeshEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        let path = edit.prim_path(path)?;
-        edit.is_a(path, Mesh::SCHEMA)
-            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Mesh` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`Ok(None)` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`Mesh::define`] types it, and `MeshEdit::from_prim` of a [`PrimEdit::new`] handle authors the schema's properties on any prim that exists. Setters never create a prim.\n\n# Errors\n\n[`CannotEdit`] for a path beneath an instance or in a prototype, which OpenUSD refuses to author ([`SchemaEdit::can_edit`]); nothing is authored."]
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        let Some(path) = edit.prim_path(path) else {
+            return Ok(None);
+        };
+        edit.can_edit(path)?;
+        Ok(edit
+            .is_a(path, Mesh::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path))))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -7574,12 +7573,6 @@ impl<'a> MotionApi<'a> {
         Self { base: prim }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> MotionApiEdit {
-        MotionApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
     /// edit's target) if the prim may have it.
     ///
@@ -7587,10 +7580,11 @@ impl<'a> MotionApi<'a> {
     ///
     /// # Errors
     ///
-    /// Why the schema cannot be applied there.
+    /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
+    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdGeomMotionAPI::Apply")]
     #[doc(alias = "Apply")]
-    pub fn apply(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<MotionApiEdit, CannotApply> {
+    pub fn apply(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<MotionApiEdit, ApplyError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(MotionApiEdit::from_prim)
     }
@@ -7672,11 +7666,18 @@ impl Deref for MotionApiEdit {
 
 impl MotionApiEdit {
     /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+    /// exists: on the edit's stage, or defined earlier in `edit`; `Ok(None)`
+    /// when it does not. Setters never create a prim.
+    ///
+    /// # Errors
+    ///
+    /// [`CannotEdit`] for a path beneath an instance or in a prototype, as
+    /// [`PrimEdit::new`] refuses it; nothing is authored.
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        Ok(PrimEdit::new(edit, path)?.map(Self::from_prim))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -7798,12 +7799,6 @@ impl<'a> NurbsCurves<'a> {
         }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> NurbsCurvesEdit {
-        NurbsCurvesEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Defines the prim at `path` as a `NurbsCurves`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
@@ -7811,14 +7806,11 @@ impl<'a> NurbsCurves<'a> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// [`CannotEdit`] for a path beneath an instance or in a
     /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdGeomNurbsCurves::Define")]
     #[doc(alias = "Define")]
-    pub fn define(
-        edit: &mut SchemaEdit<'_>,
-        path: PathId,
-    ) -> Result<NurbsCurvesEdit, CannotDefine> {
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<NurbsCurvesEdit, CannotEdit> {
         edit.define_prim(path, Self::SCHEMA)
             .map(NurbsCurvesEdit::from_prim)
     }
@@ -7975,12 +7967,18 @@ impl Deref for NurbsCurvesEdit {
 }
 
 impl NurbsCurvesEdit {
-    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `NurbsCurves` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`NurbsCurves::define`] types it, and `NurbsCurvesEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        let path = edit.prim_path(path)?;
-        edit.is_a(path, NurbsCurves::SCHEMA)
-            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `NurbsCurves` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`Ok(None)` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`NurbsCurves::define`] types it, and `NurbsCurvesEdit::from_prim` of a [`PrimEdit::new`] handle authors the schema's properties on any prim that exists. Setters never create a prim.\n\n# Errors\n\n[`CannotEdit`] for a path beneath an instance or in a prototype, which OpenUSD refuses to author ([`SchemaEdit::can_edit`]); nothing is authored."]
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        let Some(path) = edit.prim_path(path) else {
+            return Ok(None);
+        };
+        edit.can_edit(path)?;
+        Ok(edit
+            .is_a(path, NurbsCurves::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path))))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -8418,12 +8416,6 @@ impl<'a> NurbsPatch<'a> {
         }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> NurbsPatchEdit {
-        NurbsPatchEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Defines the prim at `path` as a `NurbsPatch`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
@@ -8431,11 +8423,11 @@ impl<'a> NurbsPatch<'a> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// [`CannotEdit`] for a path beneath an instance or in a
     /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdGeomNurbsPatch::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<NurbsPatchEdit, CannotDefine> {
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<NurbsPatchEdit, CannotEdit> {
         edit.define_prim(path, Self::SCHEMA)
             .map(NurbsPatchEdit::from_prim)
     }
@@ -8961,12 +8953,18 @@ impl Deref for NurbsPatchEdit {
 }
 
 impl NurbsPatchEdit {
-    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `NurbsPatch` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`NurbsPatch::define`] types it, and `NurbsPatchEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        let path = edit.prim_path(path)?;
-        edit.is_a(path, NurbsPatch::SCHEMA)
-            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `NurbsPatch` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`Ok(None)` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`NurbsPatch::define`] types it, and `NurbsPatchEdit::from_prim` of a [`PrimEdit::new`] handle authors the schema's properties on any prim that exists. Setters never create a prim.\n\n# Errors\n\n[`CannotEdit`] for a path beneath an instance or in a prototype, which OpenUSD refuses to author ([`SchemaEdit::can_edit`]); nothing is authored."]
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        let Some(path) = edit.prim_path(path) else {
+            return Ok(None);
+        };
+        edit.can_edit(path)?;
+        Ok(edit
+            .is_a(path, NurbsPatch::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path))))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -9853,12 +9851,6 @@ impl<'a> Plane<'a> {
         }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> PlaneEdit {
-        PlaneEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Defines the prim at `path` as a `Plane`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
@@ -9866,11 +9858,11 @@ impl<'a> Plane<'a> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// [`CannotEdit`] for a path beneath an instance or in a
     /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdGeomPlane::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<PlaneEdit, CannotDefine> {
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<PlaneEdit, CannotEdit> {
         edit.define_prim(path, Self::SCHEMA)
             .map(PlaneEdit::from_prim)
     }
@@ -9945,12 +9937,18 @@ impl Deref for PlaneEdit {
 }
 
 impl PlaneEdit {
-    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Plane` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`Plane::define`] types it, and `PlaneEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        let path = edit.prim_path(path)?;
-        edit.is_a(path, Plane::SCHEMA)
-            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Plane` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`Ok(None)` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`Plane::define`] types it, and `PlaneEdit::from_prim` of a [`PrimEdit::new`] handle authors the schema's properties on any prim that exists. Setters never create a prim.\n\n# Errors\n\n[`CannotEdit`] for a path beneath an instance or in a prototype, which OpenUSD refuses to author ([`SchemaEdit::can_edit`]); nothing is authored."]
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        let Some(path) = edit.prim_path(path) else {
+            return Ok(None);
+        };
+        edit.can_edit(path)?;
+        Ok(edit
+            .is_a(path, Plane::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path))))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -10055,12 +10053,6 @@ impl<'a> PointBased<'a> {
         Self {
             base: Gprim::from_prim_unchecked(prim),
         }
-    }
-
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> PointBasedEdit {
-        PointBasedEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
     /// The USD name of [`Self::accelerations`].
@@ -10223,12 +10215,18 @@ impl Deref for PointBasedEdit {
 }
 
 impl PointBasedEdit {
-    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `PointBased` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`SchemaEdit::define_prim`] with a concrete schema derived from it types it, and `PointBasedEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        let path = edit.prim_path(path)?;
-        edit.is_a(path, PointBased::SCHEMA)
-            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `PointBased` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`Ok(None)` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`SchemaEdit::define_prim`] with a concrete schema derived from it types it, and `PointBasedEdit::from_prim` of a [`PrimEdit::new`] handle authors the schema's properties on any prim that exists. Setters never create a prim.\n\n# Errors\n\n[`CannotEdit`] for a path beneath an instance or in a prototype, which OpenUSD refuses to author ([`SchemaEdit::can_edit`]); nothing is authored."]
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        let Some(path) = edit.prim_path(path) else {
+            return Ok(None);
+        };
+        edit.can_edit(path)?;
+        Ok(edit
+            .is_a(path, PointBased::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path))))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -10568,12 +10566,6 @@ impl<'a> PointInstancer<'a> {
         }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> PointInstancerEdit {
-        PointInstancerEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Defines the prim at `path` as a `PointInstancer`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
@@ -10581,14 +10573,14 @@ impl<'a> PointInstancer<'a> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// [`CannotEdit`] for a path beneath an instance or in a
     /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdGeomPointInstancer::Define")]
     #[doc(alias = "Define")]
     pub fn define(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<PointInstancerEdit, CannotDefine> {
+    ) -> Result<PointInstancerEdit, CannotEdit> {
         edit.define_prim(path, Self::SCHEMA)
             .map(PointInstancerEdit::from_prim)
     }
@@ -10973,12 +10965,18 @@ impl Deref for PointInstancerEdit {
 }
 
 impl PointInstancerEdit {
-    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `PointInstancer` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`PointInstancer::define`] types it, and `PointInstancerEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        let path = edit.prim_path(path)?;
-        edit.is_a(path, PointInstancer::SCHEMA)
-            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `PointInstancer` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`Ok(None)` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`PointInstancer::define`] types it, and `PointInstancerEdit::from_prim` of a [`PrimEdit::new`] handle authors the schema's properties on any prim that exists. Setters never create a prim.\n\n# Errors\n\n[`CannotEdit`] for a path beneath an instance or in a prototype, which OpenUSD refuses to author ([`SchemaEdit::can_edit`]); nothing is authored."]
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        let Some(path) = edit.prim_path(path) else {
+            return Ok(None);
+        };
+        edit.can_edit(path)?;
+        Ok(edit
+            .is_a(path, PointInstancer::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path))))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -11733,12 +11731,6 @@ impl<'a> Points<'a> {
         }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> PointsEdit {
-        PointsEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Defines the prim at `path` as a `Points`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
@@ -11746,11 +11738,11 @@ impl<'a> Points<'a> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// [`CannotEdit`] for a path beneath an instance or in a
     /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdGeomPoints::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<PointsEdit, CannotDefine> {
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<PointsEdit, CannotEdit> {
         edit.define_prim(path, Self::SCHEMA)
             .map(PointsEdit::from_prim)
     }
@@ -11839,12 +11831,18 @@ impl Deref for PointsEdit {
 }
 
 impl PointsEdit {
-    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Points` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`Points::define`] types it, and `PointsEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        let path = edit.prim_path(path)?;
-        edit.is_a(path, Points::SCHEMA)
-            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Points` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`Ok(None)` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`Points::define`] types it, and `PointsEdit::from_prim` of a [`PrimEdit::new`] handle authors the schema's properties on any prim that exists. Setters never create a prim.\n\n# Errors\n\n[`CannotEdit`] for a path beneath an instance or in a prototype, which OpenUSD refuses to author ([`SchemaEdit::can_edit`]); nothing is authored."]
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        let Some(path) = edit.prim_path(path) else {
+            return Ok(None);
+        };
+        edit.can_edit(path)?;
+        Ok(edit
+            .is_a(path, Points::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path))))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -12031,12 +12029,6 @@ impl<'a> Scope<'a> {
         }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> ScopeEdit {
-        ScopeEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Defines the prim at `path` as a `Scope`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
@@ -12044,11 +12036,11 @@ impl<'a> Scope<'a> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// [`CannotEdit`] for a path beneath an instance or in a
     /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdGeomScope::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<ScopeEdit, CannotDefine> {
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<ScopeEdit, CannotEdit> {
         edit.define_prim(path, Self::SCHEMA)
             .map(ScopeEdit::from_prim)
     }
@@ -12069,12 +12061,18 @@ impl Deref for ScopeEdit {
 }
 
 impl ScopeEdit {
-    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Scope` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`Scope::define`] types it, and `ScopeEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        let path = edit.prim_path(path)?;
-        edit.is_a(path, Scope::SCHEMA)
-            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Scope` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`Ok(None)` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`Scope::define`] types it, and `ScopeEdit::from_prim` of a [`PrimEdit::new`] handle authors the schema's properties on any prim that exists. Setters never create a prim.\n\n# Errors\n\n[`CannotEdit`] for a path beneath an instance or in a prototype, which OpenUSD refuses to author ([`SchemaEdit::can_edit`]); nothing is authored."]
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        let Some(path) = edit.prim_path(path) else {
+            return Ok(None);
+        };
+        edit.can_edit(path)?;
+        Ok(edit
+            .is_a(path, Scope::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path))))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -12131,12 +12129,6 @@ impl<'a> Sphere<'a> {
         }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> SphereEdit {
-        SphereEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Defines the prim at `path` as a `Sphere`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
@@ -12144,11 +12136,11 @@ impl<'a> Sphere<'a> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// [`CannotEdit`] for a path beneath an instance or in a
     /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdGeomSphere::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<SphereEdit, CannotDefine> {
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<SphereEdit, CannotEdit> {
         edit.define_prim(path, Self::SCHEMA)
             .map(SphereEdit::from_prim)
     }
@@ -12189,12 +12181,18 @@ impl Deref for SphereEdit {
 }
 
 impl SphereEdit {
-    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Sphere` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`Sphere::define`] types it, and `SphereEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        let path = edit.prim_path(path)?;
-        edit.is_a(path, Sphere::SCHEMA)
-            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Sphere` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`Ok(None)` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`Sphere::define`] types it, and `SphereEdit::from_prim` of a [`PrimEdit::new`] handle authors the schema's properties on any prim that exists. Setters never create a prim.\n\n# Errors\n\n[`CannotEdit`] for a path beneath an instance or in a prototype, which OpenUSD refuses to author ([`SchemaEdit::can_edit`]); nothing is authored."]
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        let Some(path) = edit.prim_path(path) else {
+            return Ok(None);
+        };
+        edit.can_edit(path)?;
+        Ok(edit
+            .is_a(path, Sphere::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path))))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -12270,12 +12268,6 @@ impl<'a> TetMesh<'a> {
         }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> TetMeshEdit {
-        TetMeshEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Defines the prim at `path` as a `TetMesh`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
@@ -12283,11 +12275,11 @@ impl<'a> TetMesh<'a> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// [`CannotEdit`] for a path beneath an instance or in a
     /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdGeomTetMesh::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<TetMeshEdit, CannotDefine> {
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<TetMeshEdit, CannotEdit> {
         edit.define_prim(path, Self::SCHEMA)
             .map(TetMeshEdit::from_prim)
     }
@@ -12397,12 +12389,18 @@ impl Deref for TetMeshEdit {
 }
 
 impl TetMeshEdit {
-    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `TetMesh` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`TetMesh::define`] types it, and `TetMeshEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        let path = edit.prim_path(path)?;
-        edit.is_a(path, TetMesh::SCHEMA)
-            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `TetMesh` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`Ok(None)` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`TetMesh::define`] types it, and `TetMeshEdit::from_prim` of a [`PrimEdit::new`] handle authors the schema's properties on any prim that exists. Setters never create a prim.\n\n# Errors\n\n[`CannotEdit`] for a path beneath an instance or in a prototype, which OpenUSD refuses to author ([`SchemaEdit::can_edit`]); nothing is authored."]
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        let Some(path) = edit.prim_path(path) else {
+            return Ok(None);
+        };
+        edit.can_edit(path)?;
+        Ok(edit
+            .is_a(path, TetMesh::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path))))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -12769,12 +12767,6 @@ impl<'a> VisibilityApi<'a> {
         Self { base: prim }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> VisibilityApiEdit {
-        VisibilityApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
     /// edit's target) if the prim may have it.
     ///
@@ -12782,13 +12774,11 @@ impl<'a> VisibilityApi<'a> {
     ///
     /// # Errors
     ///
-    /// Why the schema cannot be applied there.
+    /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
+    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdGeomVisibilityAPI::Apply")]
     #[doc(alias = "Apply")]
-    pub fn apply(
-        edit: &mut SchemaEdit<'_>,
-        path: PathId,
-    ) -> Result<VisibilityApiEdit, CannotApply> {
+    pub fn apply(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<VisibilityApiEdit, ApplyError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(VisibilityApiEdit::from_prim)
     }
@@ -12852,11 +12842,18 @@ impl Deref for VisibilityApiEdit {
 
 impl VisibilityApiEdit {
     /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+    /// exists: on the edit's stage, or defined earlier in `edit`; `Ok(None)`
+    /// when it does not. Setters never create a prim.
+    ///
+    /// # Errors
+    ///
+    /// [`CannotEdit`] for a path beneath an instance or in a prototype, as
+    /// [`PrimEdit::new`] refuses it; nothing is authored.
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        Ok(PrimEdit::new(edit, path)?.map(Self::from_prim))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -12959,12 +12956,6 @@ impl<'a> Xform<'a> {
         }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> XformEdit {
-        XformEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Defines the prim at `path` as a `Xform`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
@@ -12972,11 +12963,11 @@ impl<'a> Xform<'a> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// [`CannotEdit`] for a path beneath an instance or in a
     /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdGeomXform::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<XformEdit, CannotDefine> {
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<XformEdit, CannotEdit> {
         edit.define_prim(path, Self::SCHEMA)
             .map(XformEdit::from_prim)
     }
@@ -12997,12 +12988,18 @@ impl Deref for XformEdit {
 }
 
 impl XformEdit {
-    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Xform` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`Xform::define`] types it, and `XformEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        let path = edit.prim_path(path)?;
-        edit.is_a(path, Xform::SCHEMA)
-            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Xform` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`Ok(None)` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`Xform::define`] types it, and `XformEdit::from_prim` of a [`PrimEdit::new`] handle authors the schema's properties on any prim that exists. Setters never create a prim.\n\n# Errors\n\n[`CannotEdit`] for a path beneath an instance or in a prototype, which OpenUSD refuses to author ([`SchemaEdit::can_edit`]); nothing is authored."]
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        let Some(path) = edit.prim_path(path) else {
+            return Ok(None);
+        };
+        edit.can_edit(path)?;
+        Ok(edit
+            .is_a(path, Xform::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path))))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -13059,12 +13056,6 @@ impl<'a> Xformable<'a> {
         }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> XformableEdit {
-        XformableEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// The USD name of [`Self::xform_op_order`].
     pub const XFORM_OP_ORDER: &'static str = "xformOpOrder";
 
@@ -13107,12 +13098,18 @@ impl Deref for XformableEdit {
 }
 
 impl XformableEdit {
-    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Xformable` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`SchemaEdit::define_prim`] with a concrete schema derived from it types it, and `XformableEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        let path = edit.prim_path(path)?;
-        edit.is_a(path, Xformable::SCHEMA)
-            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Xformable` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`Ok(None)` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`SchemaEdit::define_prim`] with a concrete schema derived from it types it, and `XformableEdit::from_prim` of a [`PrimEdit::new`] handle authors the schema's properties on any prim that exists. Setters never create a prim.\n\n# Errors\n\n[`CannotEdit`] for a path beneath an instance or in a prototype, which OpenUSD refuses to author ([`SchemaEdit::can_edit`]); nothing is authored."]
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        let Some(path) = edit.prim_path(path) else {
+            return Ok(None);
+        };
+        edit.can_edit(path)?;
+        Ok(edit
+            .is_a(path, Xformable::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path))))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`

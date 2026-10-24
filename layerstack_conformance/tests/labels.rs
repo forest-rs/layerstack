@@ -150,7 +150,7 @@ fn labels_match_openusd() {
 #[test]
 fn label_queries_belong_to_one_snapshot() {
     use layerstack::{LiveStage, edit::EditTarget};
-    use layerstack_schemas::{SchemaEdit, usd_semantics::SemanticsLabelsApi};
+    use layerstack_schemas::{SchemaEdit, usd_semantics::SemanticsLabelsApiEdit};
     let mut loaded = load_entry_usda(
         &workspace_root().join("layerstack_conformance/fixtures/labels/scene.usda"),
     );
@@ -183,14 +183,14 @@ fn label_queries_belong_to_one_snapshot() {
                 .is_empty()
         );
     }
-    let handle = SemanticsLabelsApi::get(&Scene::new(live.stage(), &loaded.store), root, "kind")
-        .unwrap()
-        .edit();
     let mut edit = SchemaEdit::new(
         live.stage(),
         &mut loaded.store,
         EditTarget::for_layer(loaded.root_layer),
     );
+    let handle = SemanticsLabelsApiEdit::new(&edit, root, "kind")
+        .expect("outside any instance")
+        .expect("the prim");
     handle.set_labels(&mut edit, &["changed"]);
     let transaction = edit.finish();
     let inverse = live.apply(&mut loaded.store, &transaction).unwrap().inverse;

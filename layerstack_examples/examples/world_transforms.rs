@@ -48,7 +48,11 @@ fn main() -> Result<(), XformOpError> {
     let double = XformOpPrecision::Double;
     let float = XformOpPrecision::Float;
     Xform::define(&mut edit, orrery).expect("outside any instance");
-    let handle = |edit: &SchemaEdit<'_>, path| XformableEdit::new(edit, path).expect("defined");
+    let handle = |edit: &SchemaEdit<'_>, path| {
+        XformableEdit::new(edit, path)
+            .expect("outside any instance")
+            .expect("defined")
+    };
     handle(&edit, orrery)
         .add_translate_op(&mut edit, double)?
         .set(&mut edit, [0.0, 1.0, 0.0])?;

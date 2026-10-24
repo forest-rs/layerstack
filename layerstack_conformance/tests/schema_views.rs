@@ -540,6 +540,7 @@ fn unmappable_targets_are_rejected() {
 #[test]
 fn missing_prims_are_not_authored() {
     use layerstack::CannotApply;
+    use layerstack_schemas::ApplyError;
     use layerstack_schemas::usd::{CollectionApi, CollectionApiEdit};
     use layerstack_schemas::usd_geom::{Mesh, MeshEdit, Xform};
 
@@ -554,18 +555,33 @@ fn missing_prims_are_not_authored() {
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
     assert_eq!(
         CollectionApi::apply(&mut edit, missing, "lights").err(),
-        Some(CannotApply::NoSuchPrim)
+        Some(ApplyError::CannotApply(CannotApply::NoSuchPrim))
     );
-    assert!(MeshEdit::new(&edit, missing).is_none());
-    assert!(CollectionApiEdit::new(&edit, missing, "lights").is_none());
+    assert!(
+        MeshEdit::new(&edit, missing)
+            .expect("outside any instance")
+            .is_none()
+    );
+    assert!(
+        CollectionApiEdit::new(&edit, missing, "lights")
+            .expect("outside any instance")
+            .is_none()
+    );
     assert_eq!(edit.transaction(), &layerstack::edit::Transaction::new());
 
     Xform::define(&mut edit, later).expect("outside any instance");
     assert!(CollectionApi::apply(&mut edit, later, "lights").is_ok());
-    assert!(MeshEdit::new(&edit, later).is_none(), "an Xform");
+    assert!(
+        MeshEdit::new(&edit, later)
+            .expect("outside any instance")
+            .is_none(),
+        "an Xform"
+    );
     Mesh::define(&mut edit, missing).expect("outside any instance");
     assert!(
-        MeshEdit::new(&edit, missing).is_some(),
+        MeshEdit::new(&edit, missing)
+            .expect("outside any instance")
+            .is_some(),
         "defined in the edit"
     );
 }
@@ -603,32 +619,82 @@ fn typed_edit_handles_by_path_check_the_type() {
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
 
     // On the stage: the type and the abstract schemas it derives from.
-    assert!(MeshEdit::new(&edit, boulder).is_some());
-    assert!(GprimEdit::new(&edit, boulder).is_some());
-    assert!(XformableEdit::new(&edit, boulder).is_some());
-    assert!(SphereEdit::new(&edit, boulder).is_none());
+    assert!(
+        MeshEdit::new(&edit, boulder)
+            .expect("outside any instance")
+            .is_some()
+    );
+    assert!(
+        GprimEdit::new(&edit, boulder)
+            .expect("outside any instance")
+            .is_some()
+    );
+    assert!(
+        XformableEdit::new(&edit, boulder)
+            .expect("outside any instance")
+            .is_some()
+    );
+    assert!(
+        SphereEdit::new(&edit, boulder)
+            .expect("outside any instance")
+            .is_none()
+    );
     assert!(edit.is_a(boulder, "Gprim"));
 
     // An untyped prim is not an Xform yet; a `PrimEdit` still reaches it.
-    assert!(XformEdit::new(&edit, terrain).is_none());
+    assert!(
+        XformEdit::new(&edit, terrain)
+            .expect("outside any instance")
+            .is_none()
+    );
     assert!(!edit.is_a(terrain, "Xform"));
-    let untyped = PrimEdit::new(&edit, terrain).map(XformEdit::from_prim);
+    let untyped = PrimEdit::new(&edit, terrain)
+        .expect("outside any instance")
+        .map(XformEdit::from_prim);
     assert!(untyped.is_some());
 
     // Defined earlier in the edit, as the last `define` leaves it.
-    assert!(XformEdit::new(&edit, moss).is_none(), "not there yet");
+    assert!(
+        XformEdit::new(&edit, moss)
+            .expect("outside any instance")
+            .is_none(),
+        "not there yet"
+    );
     Xform::define(&mut edit, moss).expect("outside any instance");
-    assert!(XformEdit::new(&edit, moss).is_some());
-    assert!(XformableEdit::new(&edit, moss).is_some());
-    assert!(MeshEdit::new(&edit, moss).is_none());
+    assert!(
+        XformEdit::new(&edit, moss)
+            .expect("outside any instance")
+            .is_some()
+    );
+    assert!(
+        XformableEdit::new(&edit, moss)
+            .expect("outside any instance")
+            .is_some()
+    );
+    assert!(
+        MeshEdit::new(&edit, moss)
+            .expect("outside any instance")
+            .is_none()
+    );
     Xform::define(&mut edit, terrain).expect("outside any instance");
     assert!(
-        XformEdit::new(&edit, terrain).is_some(),
+        XformEdit::new(&edit, terrain)
+            .expect("outside any instance")
+            .is_some(),
         "typed by the edit"
     );
     Mesh::define(&mut edit, moss).expect("outside any instance");
-    assert!(MeshEdit::new(&edit, moss).is_some());
-    assert!(XformEdit::new(&edit, moss).is_none(), "a Mesh now");
+    assert!(
+        MeshEdit::new(&edit, moss)
+            .expect("outside any instance")
+            .is_some()
+    );
+    assert!(
+        XformEdit::new(&edit, moss)
+            .expect("outside any instance")
+            .is_none(),
+        "a Mesh now"
+    );
 }
 
 const LOCAL_VARIANT: &str = include_str!("../fixtures/schema_views/local_variant.usda");

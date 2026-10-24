@@ -9,7 +9,7 @@ use layerstack::{
     TokenInterner, Value,
     schema::{SchemaDeclaration, read_generated_schema},
 };
-use layerstack_schemas::{Domain, SchemaEdit, usd_geom::Cube};
+use layerstack_schemas::{ApplyError, Domain, SchemaEdit, usd_geom::Cube};
 use std::sync::Arc;
 struct NoAssets;
 impl AssetResolver for NoAssets {
@@ -126,23 +126,23 @@ fn rejected_runtime_application_adds_nothing_and_pending_definition_is_validated
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
     assert_eq!(
         edit.apply_api(missing, "PipelineTintAPI", None),
-        Err(CannotApply::NoSuchPrim)
+        Err(ApplyError::CannotApply(CannotApply::NoSuchPrim))
     );
     assert_eq!(
         edit.apply_api(cube, "UnknownAPI", None),
-        Err(CannotApply::NotAnAppliedSchema)
+        Err(ApplyError::CannotApply(CannotApply::NotAnAppliedSchema))
     );
     assert!(matches!(
         edit.apply_api(sphere, "PipelineTintAPI", None),
-        Err(CannotApply::PrimType { .. })
+        Err(ApplyError::CannotApply(CannotApply::PrimType { .. }))
     ));
     assert_eq!(
         edit.apply_api(cube, "PipelineTintAPI", Some("main")),
-        Err(CannotApply::UnexpectedInstanceName)
+        Err(ApplyError::CannotApply(CannotApply::UnexpectedInstanceName))
     );
     assert_eq!(
         edit.apply_api(cube, "PipelineSlotAPI", None),
-        Err(CannotApply::MissingInstanceName)
+        Err(ApplyError::CannotApply(CannotApply::MissingInstanceName))
     );
     assert!(
         edit.apply_api(cube, "PipelineSlotAPI", Some("invalid.name"))

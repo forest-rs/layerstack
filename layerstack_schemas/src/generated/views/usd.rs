@@ -20,9 +20,11 @@
 
 use core::ops::Deref;
 
-use layerstack::{CannotApply, PathId};
+use layerstack::PathId;
 
-use crate::{InstanceEdit, InstanceView, PrimEdit, PrimView, Scene, SchemaEdit};
+use crate::{
+    ApplyError, CannotEdit, InstanceEdit, InstanceView, PrimEdit, PrimView, Scene, SchemaEdit,
+};
 #[doc = "The tokens `collection:<instance>:expansionRule` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum CollectionApiExpansionRule {
@@ -212,15 +214,6 @@ impl<'a> CollectionApi<'a> {
         Self { base: instance }
     }
 
-    /// An edit handle for this instance.
-    #[must_use]
-    pub fn edit(&self) -> CollectionApiEdit {
-        CollectionApiEdit::from_instance(InstanceEdit::new(
-            PrimEdit::from_path_unchecked(self.path()),
-            self.instance(),
-        ))
-    }
-
     /// Applies the instance `instance` of the schema to `path` (a `prepend
     /// apiSchemas` entry in the edit's target) if the prim may have it.
     ///
@@ -228,14 +221,15 @@ impl<'a> CollectionApi<'a> {
     ///
     /// # Errors
     ///
-    /// Why the schema cannot be applied there.
+    /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
+    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdCollectionAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
         instance: &str,
-    ) -> Result<CollectionApiEdit, CannotApply> {
+    ) -> Result<CollectionApiEdit, ApplyError> {
         let prim = edit.apply_api(path, Self::SCHEMA, Some(instance))?;
         Ok(CollectionApiEdit::from_instance(InstanceEdit::new(
             prim, instance,
@@ -335,14 +329,20 @@ impl Deref for CollectionApiEdit {
 impl CollectionApiEdit {
     /// A handle authoring the instance `instance` on the prim at `path`
     /// through `edit`, if the prim exists: on the edit's stage, or defined
-    /// earlier in `edit`. Setters never create a prim that does not.
-    #[must_use]
+    /// earlier in `edit`; `Ok(None)` when it does not. Setters never
+    /// create a prim.
+    ///
+    /// # Errors
+    ///
+    /// [`CannotEdit`] for a path beneath an instance or in a prototype, as
+    /// [`PrimEdit::new`] refuses it; nothing is authored.
     pub fn new(
         edit: &SchemaEdit<'_>,
         path: impl ::layerstack::PrimPathArg,
         instance: &str,
-    ) -> Option<Self> {
-        PrimEdit::new(edit, path).map(|prim| Self::from_instance(InstanceEdit::new(prim, instance)))
+    ) -> Result<Option<Self>, CannotEdit> {
+        Ok(PrimEdit::new(edit, path)?
+            .map(|prim| Self::from_instance(InstanceEdit::new(prim, instance))))
     }
 
     /// A handle authoring the schema's properties for `instance`, whether
@@ -543,12 +543,6 @@ impl<'a> ColorSpaceApi<'a> {
         Self { base: prim }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> ColorSpaceApiEdit {
-        ColorSpaceApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
     /// edit's target) if the prim may have it.
     ///
@@ -556,13 +550,11 @@ impl<'a> ColorSpaceApi<'a> {
     ///
     /// # Errors
     ///
-    /// Why the schema cannot be applied there.
+    /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
+    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdColorSpaceAPI::Apply")]
     #[doc(alias = "Apply")]
-    pub fn apply(
-        edit: &mut SchemaEdit<'_>,
-        path: PathId,
-    ) -> Result<ColorSpaceApiEdit, CannotApply> {
+    pub fn apply(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<ColorSpaceApiEdit, ApplyError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(ColorSpaceApiEdit::from_prim)
     }
@@ -598,11 +590,18 @@ impl Deref for ColorSpaceApiEdit {
 
 impl ColorSpaceApiEdit {
     /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+    /// exists: on the edit's stage, or defined earlier in `edit`; `Ok(None)`
+    /// when it does not. Setters never create a prim.
+    ///
+    /// # Errors
+    ///
+    /// [`CannotEdit`] for a path beneath an instance or in a prototype, as
+    /// [`PrimEdit::new`] refuses it; nothing is authored.
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        Ok(PrimEdit::new(edit, path)?.map(Self::from_prim))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -705,15 +704,6 @@ impl<'a> ColorSpaceDefinitionApi<'a> {
         Self { base: instance }
     }
 
-    /// An edit handle for this instance.
-    #[must_use]
-    pub fn edit(&self) -> ColorSpaceDefinitionApiEdit {
-        ColorSpaceDefinitionApiEdit::from_instance(InstanceEdit::new(
-            PrimEdit::from_path_unchecked(self.path()),
-            self.instance(),
-        ))
-    }
-
     /// Applies the instance `instance` of the schema to `path` (a `prepend
     /// apiSchemas` entry in the edit's target) if the prim may have it.
     ///
@@ -721,14 +711,15 @@ impl<'a> ColorSpaceDefinitionApi<'a> {
     ///
     /// # Errors
     ///
-    /// Why the schema cannot be applied there.
+    /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
+    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdColorSpaceDefinitionAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
         instance: &str,
-    ) -> Result<ColorSpaceDefinitionApiEdit, CannotApply> {
+    ) -> Result<ColorSpaceDefinitionApiEdit, ApplyError> {
         let prim = edit.apply_api(path, Self::SCHEMA, Some(instance))?;
         Ok(ColorSpaceDefinitionApiEdit::from_instance(
             InstanceEdit::new(prim, instance),
@@ -911,14 +902,20 @@ impl Deref for ColorSpaceDefinitionApiEdit {
 impl ColorSpaceDefinitionApiEdit {
     /// A handle authoring the instance `instance` on the prim at `path`
     /// through `edit`, if the prim exists: on the edit's stage, or defined
-    /// earlier in `edit`. Setters never create a prim that does not.
-    #[must_use]
+    /// earlier in `edit`; `Ok(None)` when it does not. Setters never
+    /// create a prim.
+    ///
+    /// # Errors
+    ///
+    /// [`CannotEdit`] for a path beneath an instance or in a prototype, as
+    /// [`PrimEdit::new`] refuses it; nothing is authored.
     pub fn new(
         edit: &SchemaEdit<'_>,
         path: impl ::layerstack::PrimPathArg,
         instance: &str,
-    ) -> Option<Self> {
-        PrimEdit::new(edit, path).map(|prim| Self::from_instance(InstanceEdit::new(prim, instance)))
+    ) -> Result<Option<Self>, CannotEdit> {
+        Ok(PrimEdit::new(edit, path)?
+            .map(|prim| Self::from_instance(InstanceEdit::new(prim, instance))))
     }
 
     /// A handle authoring the schema's properties for `instance`, whether
@@ -1166,12 +1163,6 @@ impl<'a> Typed<'a> {
     pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {
         Self { base: prim }
     }
-
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> TypedEdit {
-        TypedEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
 }
 
 #[doc = "Authors the properties of OpenUSD's `Typed` through a [`SchemaEdit`]; it derefs to the handle of the schema it inherits from."]
@@ -1189,12 +1180,18 @@ impl Deref for TypedEdit {
 }
 
 impl TypedEdit {
-    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Typed` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`SchemaEdit::define_prim`] with a concrete schema derived from it types it, and `TypedEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        let path = edit.prim_path(path)?;
-        edit.is_a(path, Typed::SCHEMA)
-            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Typed` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`Ok(None)` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`SchemaEdit::define_prim`] with a concrete schema derived from it types it, and `TypedEdit::from_prim` of a [`PrimEdit::new`] handle authors the schema's properties on any prim that exists. Setters never create a prim.\n\n# Errors\n\n[`CannotEdit`] for a path beneath an instance or in a prototype, which OpenUSD refuses to author ([`SchemaEdit::can_edit`]); nothing is authored."]
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        let Some(path) = edit.prim_path(path) else {
+            return Ok(None);
+        };
+        edit.can_edit(path)?;
+        Ok(edit
+            .is_a(path, Typed::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path))))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`

@@ -31,6 +31,7 @@ fn unique_subsets_validate_membership_and_publish_a_valid_partition() {
         GeomSubsetEdit::create_unique(&mut edit, mesh, "faces", Element::Face, &[1], "f").unwrap();
     assert_eq!([first.path(), second.path()], expected_paths);
     ImageableEdit::new(&edit, mesh)
+        .expect("outside any instance")
         .unwrap()
         .set_subset_family_type(&mut edit, "f", SubsetFamilyType::Partition)
         .unwrap();
@@ -86,6 +87,7 @@ fn rolled_back_subset_groups_release_names_and_family_overlays() {
     let cancelled: Result<(), &str> = edit.group(|child| {
         GeomSubsetEdit::create_unique(child, mesh, "new", Element::Face, &[0], "f").unwrap();
         ImageableEdit::new(child, mesh)
+            .expect("outside any instance")
             .unwrap()
             .set_subset_family_type(child, "f", SubsetFamilyType::Partition)
             .unwrap();
@@ -141,6 +143,7 @@ fn incompatible_family_declarations_reject_without_touching_prior_edits() {
         let count = edit.transaction().len();
         assert_eq!(
             ImageableEdit::new(&edit, mesh)
+                .expect("outside any instance")
                 .unwrap()
                 .set_subset_family_type(&mut edit, "f", SubsetFamilyType::Partition),
             Err(SubsetAuthoringError::IncompatibleFamilyDeclaration)

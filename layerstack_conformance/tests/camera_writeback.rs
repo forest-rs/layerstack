@@ -37,6 +37,7 @@ fn numeric_writeback_matches_native_parent_conversion_and_undo() {
     let before = store.layers().cloned().collect::<Vec<_>>();
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
     CameraEdit::new(&edit, path)
+        .expect("outside any instance")
         .unwrap()
         .set_from_camera_at(&mut edit, 2., &camera)
         .unwrap();
@@ -118,6 +119,7 @@ fn default_writeback_keeps_numeric_slots() {
     let path = store.path("/DestinationParent/Destination");
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
     CameraEdit::new(&edit, path)
+        .expect("outside any instance")
         .unwrap()
         .set_from_camera(&mut edit, &camera)
         .unwrap();
@@ -161,7 +163,9 @@ fn stronger_last_field_and_untyped_declarations_reject_without_partial_edits() {
         let before = store.layers().cloned().collect::<Vec<_>>();
         let target = LayerId(if bad_type { 1 } else { 2 });
         let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(target));
-        let dest = CameraEdit::new(&edit, path).unwrap();
+        let dest = CameraEdit::new(&edit, path)
+            .expect("outside any instance")
+            .unwrap();
         dest.set_focus_distance(&mut edit, 99.);
         let pending = edit.transaction().clone();
         let error = dest.set_from_camera(&mut edit, &camera).unwrap_err();
@@ -207,7 +211,9 @@ fn singular_parent_and_invalid_time_leave_batch_unchanged() {
         .default = Some(Value::Vec3d([0., 1., 1.]));
     live.synchronize(&mut store);
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    let dest = CameraEdit::new(&edit, path).unwrap();
+    let dest = CameraEdit::new(&edit, path)
+        .expect("outside any instance")
+        .unwrap();
     let before = edit.transaction().clone();
     assert!(
         matches!(
@@ -243,7 +249,9 @@ fn stronger_transform_order_rejects_the_entire_camera_group() {
     store.insert_layer(Layer::new(LayerId(2)));
     live.synchronize(&mut store);
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(2)));
-    let dest = CameraEdit::new(&edit, path).unwrap();
+    let dest = CameraEdit::new(&edit, path)
+        .expect("outside any instance")
+        .unwrap();
     dest.set_focus_distance(&mut edit, 99.);
     let before = edit.transaction().clone();
     assert!(
@@ -299,6 +307,7 @@ fn reference_target_maps_all_camera_samples_and_matrix_together() {
     let target = EditTarget::for_node(live.stage(), path, node).unwrap();
     let mut edit = SchemaEdit::new(live.stage(), &mut store, target);
     CameraEdit::new(&edit, path)
+        .expect("outside any instance")
         .unwrap()
         .set_from_camera_at(&mut edit, 14., &camera)
         .unwrap();
@@ -346,6 +355,7 @@ fn nonfinite_extra_planes_and_unreadable_parent_ops_reject_without_edits() {
     assert!(
         matches!(
             CameraEdit::new(&edit, path)
+                .expect("outside any instance")
                 .unwrap()
                 .set_from_camera(&mut edit, &camera),
             Err(CameraWriteError::InvalidClippingPlanes)
@@ -376,6 +386,7 @@ fn nonfinite_extra_planes_and_unreadable_parent_ops_reject_without_edits() {
     assert!(
         matches!(
             CameraEdit::new(&edit, path)
+                .expect("outside any instance")
                 .unwrap()
                 .set_from_camera(&mut edit, &valid),
             Err(CameraWriteError::InvalidParentTransform)

@@ -28,6 +28,7 @@ fn main() {
             EditTarget::for_local_variant(root, &branch),
         );
         SphereEdit::new(&edit, world)
+            .expect("outside any instance")
             .unwrap()
             .set_display_color(&mut edit, &[rgb]);
         let transaction = edit.finish();

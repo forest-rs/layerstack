@@ -20,9 +20,11 @@
 
 use core::ops::Deref;
 
-use layerstack::{CannotApply, PathId};
+use layerstack::PathId;
 
-use crate::{CannotDefine, InstanceEdit, InstanceView, PrimEdit, PrimView, Scene, SchemaEdit};
+use crate::{
+    ApplyError, CannotEdit, InstanceEdit, InstanceView, PrimEdit, PrimView, Scene, SchemaEdit,
+};
 #[doc = "The tokens `accessibility:<instance>:priority` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum AccessibilityApiPriority {
@@ -157,15 +159,6 @@ impl<'a> AccessibilityApi<'a> {
         Self { base: instance }
     }
 
-    /// An edit handle for this instance.
-    #[must_use]
-    pub fn edit(&self) -> AccessibilityApiEdit {
-        AccessibilityApiEdit::from_instance(InstanceEdit::new(
-            PrimEdit::from_path_unchecked(self.path()),
-            self.instance(),
-        ))
-    }
-
     /// Applies the instance `instance` of the schema to `path` (a `prepend
     /// apiSchemas` entry in the edit's target) if the prim may have it.
     ///
@@ -173,14 +166,15 @@ impl<'a> AccessibilityApi<'a> {
     ///
     /// # Errors
     ///
-    /// Why the schema cannot be applied there.
+    /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
+    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdUIAccessibilityAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
         instance: &str,
-    ) -> Result<AccessibilityApiEdit, CannotApply> {
+    ) -> Result<AccessibilityApiEdit, ApplyError> {
         let prim = edit.apply_api(path, Self::SCHEMA, Some(instance))?;
         Ok(AccessibilityApiEdit::from_instance(InstanceEdit::new(
             prim, instance,
@@ -277,14 +271,20 @@ impl Deref for AccessibilityApiEdit {
 impl AccessibilityApiEdit {
     /// A handle authoring the instance `instance` on the prim at `path`
     /// through `edit`, if the prim exists: on the edit's stage, or defined
-    /// earlier in `edit`. Setters never create a prim that does not.
-    #[must_use]
+    /// earlier in `edit`; `Ok(None)` when it does not. Setters never
+    /// create a prim.
+    ///
+    /// # Errors
+    ///
+    /// [`CannotEdit`] for a path beneath an instance or in a prototype, as
+    /// [`PrimEdit::new`] refuses it; nothing is authored.
     pub fn new(
         edit: &SchemaEdit<'_>,
         path: impl ::layerstack::PrimPathArg,
         instance: &str,
-    ) -> Option<Self> {
-        PrimEdit::new(edit, path).map(|prim| Self::from_instance(InstanceEdit::new(prim, instance)))
+    ) -> Result<Option<Self>, CannotEdit> {
+        Ok(PrimEdit::new(edit, path)?
+            .map(|prim| Self::from_instance(InstanceEdit::new(prim, instance))))
     }
 
     /// A handle authoring the schema's properties for `instance`, whether
@@ -415,12 +415,6 @@ impl<'a> Backdrop<'a> {
         }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> BackdropEdit {
-        BackdropEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Defines the prim at `path` as a `Backdrop`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
@@ -428,11 +422,11 @@ impl<'a> Backdrop<'a> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// [`CannotEdit`] for a path beneath an instance or in a
     /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdUIBackdrop::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<BackdropEdit, CannotDefine> {
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<BackdropEdit, CannotEdit> {
         edit.define_prim(path, Self::SCHEMA)
             .map(BackdropEdit::from_prim)
     }
@@ -467,12 +461,18 @@ impl Deref for BackdropEdit {
 }
 
 impl BackdropEdit {
-    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Backdrop` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`Backdrop::define`] types it, and `BackdropEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        let path = edit.prim_path(path)?;
-        edit.is_a(path, Backdrop::SCHEMA)
-            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `Backdrop` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`Ok(None)` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`Backdrop::define`] types it, and `BackdropEdit::from_prim` of a [`PrimEdit::new`] handle authors the schema's properties on any prim that exists. Setters never create a prim.\n\n# Errors\n\n[`CannotEdit`] for a path beneath an instance or in a prototype, which OpenUSD refuses to author ([`SchemaEdit::can_edit`]); nothing is authored."]
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        let Some(path) = edit.prim_path(path) else {
+            return Ok(None);
+        };
+        edit.can_edit(path)?;
+        Ok(edit
+            .is_a(path, Backdrop::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path))))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -595,12 +595,6 @@ impl<'a> NodeGraphNodeApi<'a> {
         Self { base: prim }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> NodeGraphNodeApiEdit {
-        NodeGraphNodeApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
     /// edit's target) if the prim may have it.
     ///
@@ -608,13 +602,14 @@ impl<'a> NodeGraphNodeApi<'a> {
     ///
     /// # Errors
     ///
-    /// Why the schema cannot be applied there.
+    /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
+    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdUINodeGraphNodeAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<NodeGraphNodeApiEdit, CannotApply> {
+    ) -> Result<NodeGraphNodeApiEdit, ApplyError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(NodeGraphNodeApiEdit::from_prim)
     }
@@ -734,11 +729,18 @@ impl Deref for NodeGraphNodeApiEdit {
 
 impl NodeGraphNodeApiEdit {
     /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+    /// exists: on the edit's stage, or defined earlier in `edit`; `Ok(None)`
+    /// when it does not. Setters never create a prim.
+    ///
+    /// # Errors
+    ///
+    /// [`CannotEdit`] for a path beneath an instance or in a prototype, as
+    /// [`PrimEdit::new`] refuses it; nothing is authored.
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        Ok(PrimEdit::new(edit, path)?.map(Self::from_prim))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -878,12 +880,6 @@ impl<'a> SceneGraphPrimApi<'a> {
         Self { base: prim }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> SceneGraphPrimApiEdit {
-        SceneGraphPrimApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
     /// edit's target) if the prim may have it.
     ///
@@ -891,13 +887,14 @@ impl<'a> SceneGraphPrimApi<'a> {
     ///
     /// # Errors
     ///
-    /// Why the schema cannot be applied there.
+    /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
+    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdUISceneGraphPrimAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<SceneGraphPrimApiEdit, CannotApply> {
+    ) -> Result<SceneGraphPrimApiEdit, ApplyError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(SceneGraphPrimApiEdit::from_prim)
     }
@@ -947,11 +944,18 @@ impl Deref for SceneGraphPrimApiEdit {
 
 impl SceneGraphPrimApiEdit {
     /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+    /// exists: on the edit's stage, or defined earlier in `edit`; `Ok(None)`
+    /// when it does not. Setters never create a prim.
+    ///
+    /// # Errors
+    ///
+    /// [`CannotEdit`] for a path beneath an instance or in a prototype, as
+    /// [`PrimEdit::new`] refuses it; nothing is authored.
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        Ok(PrimEdit::new(edit, path)?.map(Self::from_prim))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`

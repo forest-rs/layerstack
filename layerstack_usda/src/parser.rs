@@ -60,8 +60,8 @@ pub(crate) struct ReadParse<'a> {
     pub lowered: ParseResult<'a>,
     /// Syntax and recovery diagnostics.
     pub diagnostics: Vec<Diagnostic>,
-    /// Numeric arrays converted as they were read.
-    pub arrays: crate::read::PreparedArrays,
+    /// Numeric arrays and tuples read straight into their values.
+    pub arrays: crate::read::PreparedValues,
     /// The most tokens held at once.
     pub tokens: usize,
     /// The most syntax nodes held at once.
@@ -75,7 +75,7 @@ pub(crate) struct ReadParse<'a> {
 pub(crate) fn parse_for_read(source: &str) -> ReadParse<'_> {
     let mut parser =
         Parser::<false>::with_tokens(source, crate::token_source::TokenSource::streaming(source));
-    parser.direct_arrays = Some(crate::read::PreparedArrays::new());
+    parser.direct_arrays = Some(crate::read::PreparedValues::default());
     parser.lowering = Some(PrimLowering::new(source));
     // Holding the syntax of the open prims alone, a read rarely needs more.
     parser.builder = TreeBuilder::with_capacity(source.len() as u32, READ_NODES);
@@ -113,7 +113,7 @@ struct Parser<'a, const LOSSLESS: bool> {
     current: Option<Token>,
     diagnostics: Vec<Diagnostic>,
     builder: TreeBuilder,
-    direct_arrays: Option<crate::read::PreparedArrays>,
+    direct_arrays: Option<crate::read::PreparedValues>,
     /// In read mode, lowers each prim as it closes (see [`parse_for_read`]).
     lowering: Option<PrimLowering<'a>>,
     /// Whether a line break was consumed since the last non-trivia token,
@@ -1590,7 +1590,28 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
                 self.direct_arrays
                     .as_mut()
                     .expect("read mode")
-                    .insert((attribute, sample), array);
+                    .insert(crate::read::PreparedKey::new(attribute, sample), array);
+                return;
+            }
+        }
+        if !is_array
+            && self.direct_arrays.is_some()
+            && let Some(width @ 1..) = crate::read::numeric_width(type_name)
+        {
+            let start = self.current_span().start;
+            if let Some(tuple) = self.tokens.numeric_tuple(self.pos, type_name, width) {
+                let end = self.pos + 2;
+                self.builder.start_node(SyntaxKind::ValueExpr, start);
+                self.builder.start_node(SyntaxKind::TupleValue, start);
+                self.seek(end);
+                self.line_break = false;
+                // Placeholders, as for an array above.
+                self.builder.finish_node(tuple.span.end);
+                self.builder.finish_node(self.current_span().start);
+                self.direct_arrays
+                    .as_mut()
+                    .expect("read mode")
+                    .insert(crate::read::PreparedKey::new(attribute, sample), tuple);
                 return;
             }
         }

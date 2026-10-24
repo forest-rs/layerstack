@@ -16,7 +16,8 @@ use crate::{
 /// Work counters for one USDA import, excluding recursively resolved layers.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ReadStats {
-    /// Tokens retained for grammar navigation, including fallback values.
+    /// The most tokens held at once for grammar navigation (lookahead and
+    /// the rollback of a speculative parse), including fallback values.
     pub tokens: usize,
     /// Nodes retained for structural lowering.
     pub syntax_nodes: usize,
@@ -538,6 +539,26 @@ def "A" {
         compare(&format!(
             "#usda 1.0\ndef \"A\" {{ float3[] points = [{prefix}(4, 5, 6)]\n string after = \"[not an array]\"\n }}"
         ));
+    }
+
+    #[test]
+    fn reads_hold_a_window_of_tokens_across_rollback() {
+        // Tokens are released as the parser consumes them, except where a
+        // variant selection entry may roll back; recovery and diagnostics
+        // match the eager parse, here with an entry that rolls back (`bad`)
+        // after many released tokens.
+        let mut source = String::from("#usda 1.0\n");
+        for i in 0..200 {
+            source.push_str(&format!(
+                "def \"P{i}\" (\n    variants = {{ string look = \"a\"\n shape = \"b\"\n \"q\" = \"c\" }}\n) {{\n    int a = {i}\n    token t = \"x\"\n}}\n"
+            ));
+            if i == 150 {
+                source.push_str("over \"Bad\" ( variants = { bad } ) {}\n");
+            }
+        }
+        let stats = compare(&source);
+        let window = 2 * crate::token_source::RELEASE_AFTER;
+        assert!(stats.tokens <= window, "{stats:?}");
     }
 
     #[test]

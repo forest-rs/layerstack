@@ -106,10 +106,6 @@ const KNOWN: &[(&str, &str, &str)] = &[
     ("source", "tc", CLIP_NODES),
     ("source", "gap", CLIP_NODES),
     ("source", "radius", CLIP_NODES),
-    ("samples", "*_expr", EXPRESSION_GRIDS),
-    ("intervals", "*_expr", EXPRESSION_GRIDS),
-    ("brackets", "*_expr", EXPRESSION_GRIDS),
-    ("varying", "ds_expr", EXPRESSION_GRIDS),
     ("customData", "cd*_dbl", DICTIONARY_ASSETS),
 ];
 
@@ -117,7 +113,6 @@ const ANIMATION_BLOCKS: &str = "explanations ignore animation blocks";
 const HELD_EDITS: &str = "edits held before the first composed sample read as a default";
 const SAMPLED_BLOCKS: &str = "explanations do not say where a sampled block is held";
 const CLIP_NODES: &str = "clip explanations do not name the clip set's node";
-const EXPRESSION_GRIDS: &str = "grids leave out samples a path expression composes over";
 const DICTIONARY_ASSETS: &str = "dictionary asset paths cannot be anchored";
 
 /// Whether `name` matches the [`KNOWN`] pattern `pattern`, in which one `*`

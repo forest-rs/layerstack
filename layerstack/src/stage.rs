@@ -1383,8 +1383,8 @@ impl Stage {
 
     /// Sorted, unique stage-time samples of the effective property sources.
     ///
-    /// Dense defaults and blocks mask weaker animation. Sparse array edits retain
-    /// weaker grids. Clip times include activations and mapping discontinuities;
+    /// Dense defaults and blocks mask weaker animation. Sparse array edits and
+    /// path expressions retain weaker grids. Clip times include activations and mapping discontinuities;
     /// splines have no discrete sample times. Default-time reads ignore clips.
     #[must_use]
     pub(crate) fn property_sample_times(&self, prim: PathId, field: TokenId) -> Vec<f64> {
@@ -1451,7 +1451,7 @@ impl Stage {
                     .map(|(time, value)| {
                         (
                             op.layer_offset.offset + time * op.layer_offset.scale,
-                            value.array_edit_ref().is_some(),
+                            shows_weaker_samples(value),
                         )
                     })
                     .collect()
@@ -1463,7 +1463,7 @@ impl Stage {
                 if op
                     .value
                     .default_value()
-                    .is_some_and(|v| v.array_edit_ref().is_none())
+                    .is_some_and(|v| !shows_weaker_samples(v))
                 {
                     break;
                 }
@@ -4216,6 +4216,18 @@ pub(crate) fn materialize_selected(value: &mut Value) -> Result<(), crate::Array
     Ok(())
 }
 
+/// Whether a sample or default holding `value` lets weaker samples show
+/// through in the composed sample grid: a sparse array edit, or a path
+/// expression, whose type composes over a weaker one even without a `%_`
+/// (OpenUSD `VtValue::CanComposeOver`, `pxr/base/vt/value.cpp:450`, which
+/// asks the type; `_SamplesInIntervalResolver` in `pxr/usd/usd/stage.cpp`
+/// keeps weaker samples under a composing one).
+///
+/// Spec: AOUSD Core §12.3.2 (effective stage-time samples).
+fn shows_weaker_samples(value: &Value) -> bool {
+    value.array_edit_ref().is_some() || matches!(value, Value::PathExpression(_))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -4883,6 +4895,64 @@ mod tests {
             .expect("authored");
         assert_eq!(explained.value, Some(composed));
         assert_eq!(explained.contributors().count(), 2);
+    }
+
+    /// A stage over one prim `/A` whose attribute `x` has `specs`, strongest
+    /// first.
+    fn property_stack_fixture(specs: Vec<PropertySpec>) -> (Stage, PathId, TokenId) {
+        let store = crate::doc::InMemoryStore::default();
+        let prim = store.path("/A");
+        let field = store.tokens.intern("x");
+        let mut index = PrimIndex::default();
+        let key = test_key(LayerId(1), prim);
+        index.add_source(key.clone());
+        for (strength, spec) in specs.into_iter().enumerate() {
+            index.add_opinion(Opinion {
+                key: OpinionKey {
+                    layer_strength: u16::try_from(strength).expect("small fixture"),
+                    ..key.clone()
+                },
+                field,
+                value: spec.into(),
+                layer_offset: LayerOffset::IDENTITY,
+            });
+        }
+        let stage = Stage::from_parts(HashMap::from([(prim, index)]), HashMap::new(), false, None);
+        (stage, prim, field)
+    }
+
+    /// A path expression's type composes over a weaker one, so the sample
+    /// grid keeps weaker samples under a stronger expression, with or
+    /// without `%_`, as OpenUSD's does (`VtValue::CanComposeOver`).
+    ///
+    /// Spec: AOUSD Core §12.3.2.
+    #[test]
+    fn path_expressions_keep_weaker_sample_grids() {
+        let ty = PropertyType::parse("pathExpression").unwrap();
+        let expression = |text: &str| Value::PathExpression(text.into());
+        let weak = PropertySpec::typed_attribute(ty.clone()).with_time_samples(vec![
+            (1.0, expression("/Weak1")),
+            (3.0, expression("/Weak3")),
+        ]);
+        let strong_samples = PropertySpec::typed_attribute(ty.clone())
+            .with_time_samples(vec![(2.0, expression("/Other"))]);
+        let (stage, prim, field) = property_stack_fixture(vec![strong_samples, weak.clone()]);
+        assert_eq!(
+            stage.property_sample_times(prim, field),
+            vec![1.0, 2.0, 3.0]
+        );
+
+        let strong_default =
+            PropertySpec::typed_attribute(ty.clone()).with_default(expression("%_ /Other"));
+        let (stage, prim, field) = property_stack_fixture(vec![strong_default, weak.clone()]);
+        assert_eq!(stage.property_sample_times(prim, field), vec![1.0, 3.0]);
+        assert!(stage.property_might_be_time_varying(prim, field));
+
+        // A block still hides them.
+        let blocked = PropertySpec::typed_attribute(ty).with_default(Value::Blocked);
+        let (stage, prim, field) = property_stack_fixture(vec![blocked, weak]);
+        assert!(stage.property_sample_times(prim, field).is_empty());
+        assert!(!stage.property_might_be_time_varying(prim, field));
     }
 
     fn append_edit(value: i32) -> Value {

@@ -1,0 +1,17 @@
+{
+  "Plugins": [{
+    "Type": "resource",
+    "Name": "LayerstackRejectedKinds",
+    "Root": ".",
+    "ResourcePath": ".",
+    "LibraryPath": "",
+    "Info": { "Kinds": {
+      "bad name": {},
+      "model": { "baseKind": "group" },
+      "listed": 3,
+      "numeric": { "baseKind": 5 },
+      "stack_leaf": { "baseKind": "stack_branch" },
+      "stack_extra": { "baseKind": "stack_leaf" }
+    }}
+  }]
+}

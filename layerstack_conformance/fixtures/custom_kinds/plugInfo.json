@@ -2,10 +2,18 @@
   "Plugins": [{
     "Type": "resource",
     "Name": "LayerstackKindFixture",
+    "Root": ".",
+    "ResourcePath": ".",
+    "LibraryPath": "",
     "Info": { "Kinds": {
       "stack_leaf": { "baseKind": "stack_branch" },
       "stack_branch": { "baseKind": "component" },
-      "stack_root": {}
+      "stack_root": {},
+      "stack_blank": { "baseKind": "" },
+      "stack_orphan": { "baseKind": "stack_missing" },
+      "stack_ring_a": { "baseKind": "stack_ring_b" },
+      "stack_ring_b": { "baseKind": "stack_ring_a" },
+      "stack_spur": { "baseKind": "stack_ring_a" }
     }}
   }]
 }

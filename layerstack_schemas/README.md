@@ -489,9 +489,18 @@ The `usd-geom` feature provides caller-owned transform and bounds caches:
   `compute_velocity_scale` find the nearest readable authored `MotionAPI`
   setting through any prim type; the API view exposes the same computations.
 - `XformableEdit::set_common_transform` and `set_common_transform_at` author
-  `CommonTransform` translation, pivot, Euler rotation and scale values. They
-  complete compatible partial stacks, preserve resets and existing precision,
-  and reject incompatible stacks before authoring anything.
+  `CommonTransform` translation, pivot, Euler rotation and scale values, and
+  `set_common_component` (and `_at`) one `CommonComponent`, as
+  `UsdGeomXformCommonAPI`'s `SetXformVectors`, `SetTranslate`, `SetRotate`,
+  `SetScale` and `SetPivot` do. They complete compatible partial stacks and
+  preserve resets; they refuse, before authoring anything, every call OpenUSD
+  refuses: incompatible stacks, a different rotation order, an op to add that
+  the order already lists, and attributes of another value type.
+  `Xformable::common_transform` and `common_transform_by_accumulation` read
+  the values back as `GetXformVectors` and `GetXformVectorsByAccumulation`
+  do, reporting whether they came from the ops, a reduced stack or a factored
+  matrix. `RotationOrder` converts to and from rotate op types and builds its
+  rotation.
 
 `XformableEdit::set_matrix_transform` and `set_matrix_transform_at` replace the
 local op order with one double-precision matrix op. They preflight the current

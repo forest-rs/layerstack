@@ -495,6 +495,22 @@ impl XformableEdit {
         })
     }
 
+    /// Creates the attribute of an op of `op_type` with `suffix` in
+    /// `precision`, unless the prim has it, as `UsdGeomXformOp`'s
+    /// constructor does for `AddXformOp`. The order is not changed.
+    pub(crate) fn ensure_op_attribute(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        op_type: XformOpType,
+        precision: XformOpPrecision,
+        suffix: Option<&str>,
+    ) {
+        let attribute = op_type.attribute_name(suffix);
+        if edit.attribute_type(self.path(), &attribute).is_none() {
+            edit.create_attribute(self.path(), &attribute, value_type(op_type, precision));
+        }
+    }
+
     /// The prim's `xformOpOrder` as the edit leaves it.
     pub(crate) fn order(&self, edit: &mut SchemaEdit<'_>) -> Vec<String> {
         let tokens = |edit: &mut SchemaEdit<'_>, value: Value| match value.array_ref() {

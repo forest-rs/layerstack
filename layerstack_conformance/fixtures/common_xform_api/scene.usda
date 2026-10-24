@@ -1,0 +1,173 @@
+#usda 1.0
+
+def Xform "Empty"
+{
+}
+
+def Xform "Translated"
+{
+    double3 xformOp:translate = (1, 2, 3)
+    uniform token[] xformOpOrder = ["xformOp:translate"]
+}
+
+def Xform "TranslatedRotated"
+{
+    float3 xformOp:rotateXYZ = (10, 20, 30)
+    double3 xformOp:translate = (1, 2, 3)
+    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ"]
+}
+
+def Xform "RotatedZyx"
+{
+    float3 xformOp:rotateZYX = (10, 20, 30)
+    uniform token[] xformOpOrder = ["xformOp:rotateZYX"]
+}
+
+def Xform "Full"
+{
+    float3 xformOp:rotateXYZ:spin = (5, 10, 15)
+    float3 xformOp:scale = (2, 3, 4)
+    double3 xformOp:translate = (1, 2, 3)
+    double3 xformOp:translate.timeSamples = {
+        2: (4, 5, 6),
+    }
+    float3 xformOp:translate:pivot = (0.5, 1, 1.5)
+    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:translate:pivot", "xformOp:rotateXYZ:spin", "xformOp:scale", "!invert!xformOp:translate:pivot"]
+}
+
+def Xform "WrongOrder"
+{
+    float3 xformOp:scale = (2, 2, 2)
+    double3 xformOp:translate = (1, 0, 0)
+    uniform token[] xformOpOrder = ["xformOp:scale", "xformOp:translate"]
+}
+
+def Xform "Unpaired"
+{
+    float3 xformOp:translate:pivot = (1, 1, 1)
+    uniform token[] xformOpOrder = ["xformOp:translate:pivot"]
+}
+
+def Xform "Matrix"
+{
+    matrix4d xformOp:transform = ( (0, 0, 2, 0), (0, 3, 0, 0), (-1, 0, 0, 0), (5, 6, 7, 1) )
+    uniform token[] xformOpOrder = ["xformOp:transform"]
+}
+
+def Xform "SingleAxis"
+{
+    float xformOp:rotateX = 30
+    uniform token[] xformOpOrder = ["xformOp:rotateX"]
+}
+
+def Xform "Reset"
+{
+    double3 xformOp:translate = (1, 2, 3)
+    uniform token[] xformOpOrder = ["!resetXformStack!", "xformOp:translate"]
+}
+
+def Xform "BeforeReset"
+{
+    double3 xformOp:translate = (1, 2, 3)
+    uniform token[] xformOpOrder = ["xformOp:translate", "!resetXformStack!"]
+}
+
+def Xform "Missing"
+{
+    float3 xformOp:scale = (2, 3, 4)
+    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+}
+
+def Xform "Oriented"
+{
+    quatf xformOp:orient = (0.70710677, 0, 0.70710677, 0)
+    uniform token[] xformOpOrder = ["xformOp:orient"]
+}
+
+def Xform "Six"
+{
+    float3 xformOp:rotateXYZ = (0, 0, 90)
+    float3 xformOp:scale = (2, 2, 2)
+    float3 xformOp:scale:c = (1, 2, 1)
+    double3 xformOp:translate = (1, 0, 0)
+    double3 xformOp:translate:a = (0, 1, 0)
+    double3 xformOp:translate:b = (0, 0, 1)
+    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:translate:a", "xformOp:translate:b", "xformOp:scale", "xformOp:rotateXYZ", "xformOp:scale:c"]
+}
+
+def Xform "Precisions"
+{
+    double3 xformOp:rotateXYZ = (10, 20, 30)
+    double3 xformOp:scale = (2, 3, 4)
+    half3 xformOp:translate = (1, 2, 3)
+    double3 xformOp:translate:pivot = (0.5, 1, 1.5)
+    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:translate:pivot", "xformOp:rotateXYZ", "xformOp:scale", "!invert!xformOp:translate:pivot"]
+}
+
+def Xform "ArrayScale"
+{
+    float3[] xformOp:scale = [(1, 1, 1)]
+    uniform token[] xformOpOrder = ["xformOp:scale"]
+}
+
+def Xform "Inverted"
+{
+    double3 xformOp:translate = (1, 2, 3)
+    uniform token[] xformOpOrder = ["!invert!xformOp:translate"]
+}
+
+def Xform "Suffixed"
+{
+    double3 xformOp:translate:offset = (1, 2, 3)
+    uniform token[] xformOpOrder = ["xformOp:translate:offset"]
+}
+
+def Xform "Stray"
+{
+    double3 xformOp:scale = (2, 2, 2)
+    double3 xformOp:translate = (1, 2, 3)
+    uniform token[] xformOpOrder = ["xformOp:translate"]
+}
+
+def Xform "Pivots"
+{
+    float3 xformOp:rotateXYZ = (0, 45, 0)
+    float3 xformOp:scale = (2, 1, 1)
+    double3 xformOp:translate = (1, 2, 3)
+    float3 xformOp:translate:rotatePivot = (1, 0, 0)
+    float3 xformOp:translate:rotatePivotTranslate = (0, 0, 0)
+    float3 xformOp:translate:scalePivot = (1, 0, 0)
+    float3 xformOp:translate:scalePivotTranslate = (0, 0, 0)
+    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:translate:rotatePivotTranslate", "xformOp:translate:rotatePivot", "xformOp:rotateXYZ", "!invert!xformOp:translate:rotatePivot", "xformOp:translate:scalePivotTranslate", "xformOp:translate:scalePivot", "xformOp:scale", "!invert!xformOp:translate:scalePivot"]
+}
+
+def Xform "Offsets"
+{
+    float3 xformOp:scale = (1, 2, 3)
+    double3 xformOp:translate = (1, 2, 3)
+    double3 xformOp:translate:offset = (10, 0, 0)
+    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:translate:offset", "xformOp:scale"]
+}
+
+def Xform "TwoRotations"
+{
+    float3 xformOp:rotateXYZ = (10, 0, 0)
+    float3 xformOp:rotateXYZ:extra = (0, 20, 0)
+    uniform token[] xformOpOrder = ["xformOp:rotateXYZ", "xformOp:rotateXYZ:extra"]
+}
+
+def Xform "Sheared"
+{
+    matrix4d xformOp:transform = ( (1, 0.5, 0, 0), (0, 1, 0, 0), (0, 0, 2, 0), (1, 2, 3, 1) )
+    uniform token[] xformOpOrder = ["xformOp:transform"]
+}
+
+def Xform "TransformTyped"
+{
+    double3 xformOp:transform = (1, 2, 3)
+}
+
+def Xform "Unlisted"
+{
+    double3 xformOp:translate = (1, 2, 3)
+}

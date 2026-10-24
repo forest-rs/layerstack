@@ -235,7 +235,11 @@ The `live_edits` benchmark's `live_sibling_resyncs` group edits a prim that
 deactivated and activated again, and a child spec authored under it and removed
 again. Each iteration times both edits of a pair. A live update should cost about
 what composing the resynced prims afresh does; checking membership beneath the
-resynced roots by scanning them made it quadratic in the siblings.
+resynced roots by scanning them made it quadratic in the siblings. Its
+`live_bulk_loads` group unloads every other one of 10,000 or 20,000 payload prims
+in one `load_and_unload` and loads them back in another, recomposing after each;
+finding each prim's load rule among the 5,000 or 10,000 rules that leaves should
+cost the prim's depth.
 
 The `encoded_ownership` benchmark measures transferring an already-read vector
 into shared immutable encoded storage, excluding input allocation, initialization

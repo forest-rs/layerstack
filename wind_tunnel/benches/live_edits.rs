@@ -7,8 +7,8 @@ use std::hint::black_box;
 
 use criterion::{BenchmarkId, Criterion, SamplingMode, criterion_group, criterion_main};
 use layerstack::{
-    InMemoryStore, Layer, LayerId, LiveStage, NamespaceEdit, PrimSpec, PropertyPath, PropertySpec,
-    PropertyType, Reference, Specifier, StageOptions, TargetPath, Value,
+    InMemoryStore, Layer, LayerId, LiveStage, LoadPolicy, NamespaceEdit, PrimSpec, PropertyPath,
+    PropertySpec, PropertyType, Reference, Specifier, StageOptions, TargetPath, Value,
     edit::{EditTarget, Transaction},
 };
 
@@ -541,6 +541,55 @@ fn bench_sibling_resyncs(c: &mut Criterion) {
     group.finish();
 }
 
+/// `n` prims under `/World`, each with a payload to `/Asset` and its
+/// child `/Asset/Geo` in another layer.
+fn payload_holders(n: usize) -> (InMemoryStore, LiveStage, Vec<layerstack::PathId>) {
+    let mut store = InMemoryStore::default();
+    let asset = store.path("/Asset");
+    let mut layer = Layer::new(LayerId(2));
+    layer.insert_prim(asset, PrimSpec::def());
+    layer.insert_prim(store.path("/Asset/Geo"), PrimSpec::def());
+    store.insert_layer(layer);
+    let mut layer = Layer::new(LayerId(1));
+    layer.insert_prim(store.path("/World"), PrimSpec::def());
+    let holders: Vec<_> = (0..n)
+        .map(|i| store.path(&format!("/World/P{i}")))
+        .collect();
+    for &holder in &holders {
+        layer.insert_prim(
+            holder,
+            PrimSpec::def().with_payload(Reference::new(LayerId(2), asset)),
+        );
+    }
+    store.insert_layer(layer);
+    let live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+    (store, live, holders)
+}
+
+/// Every other one of `n` payload prims unloaded in one `load_and_unload`
+/// and loaded back in another, each followed by the recomposition: one
+/// load rule per unloaded prim, which every loadable prim's rule is then
+/// looked up among. The cost should grow with the prims changed, not
+/// with them times the rules.
+fn bench_bulk_loads(c: &mut Criterion) {
+    let mut group = c.benchmark_group("live_bulk_loads");
+    group.sample_size(10);
+    group.sampling_mode(SamplingMode::Flat);
+    for n in [10_000, 20_000] {
+        let (mut store, mut live, holders) = payload_holders(n);
+        let half: Vec<_> = holders.iter().copied().step_by(2).collect();
+        group.bench_with_input(BenchmarkId::new("unload_and_load_half", n), &n, |b, _| {
+            b.iter(|| {
+                live.load_and_unload(&store, &[], &half, LoadPolicy::WithDescendants);
+                black_box(live.recompose_changes(&mut store));
+                live.load_and_unload(&store, &half, &[], LoadPolicy::WithDescendants);
+                black_box(live.recompose_changes(&mut store));
+            });
+        });
+    }
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_live_edits,
@@ -551,6 +600,7 @@ criterion_group!(
     bench_many_root_creates,
     bench_root_renames,
     bench_root_rename_prepares,
-    bench_sibling_resyncs
+    bench_sibling_resyncs,
+    bench_bulk_loads
 );
 criterion_main!(benches);

@@ -216,8 +216,6 @@ pub struct LiveStage {
     tracker: InvalidationTracker<PathId>,
     /// Reused traversal state for lazy invalidation expansion.
     traversal_scratch: TraversalScratch<PathId>,
-    /// Arc metadata for incremental edge updates and diagnostics.
-    arc_metadata: HashSet<ArcDependency>,
     /// Layer → prims that receive opinions from that layer, or that a
     /// reference or payload authored in it reaches. Every prim drawing on a
     /// site of the layer ([`Stage::layer_source_sites`]) is among them,
@@ -294,7 +292,6 @@ impl LiveStage {
             local_namespace: local::LocalSlot::pending(store, root, &options),
             tracker,
             traversal_scratch: TraversalScratch::new(),
-            arc_metadata: deps.arcs,
             layer_to_prims: deps.layer_to_prims,
             prim_to_layers: deps.prim_to_layers,
             sources: crate::sync::ReadLock::default(),
@@ -1695,8 +1692,6 @@ impl LiveStage {
         self.relocation_layers
             .extend(partial.relocation_layers.iter().copied());
         let affected_set: HashSet<_> = affected.iter().copied().collect();
-        self.arc_metadata
-            .retain(|arc| !affected_set.contains(&arc.target));
         let mut new_arcs: Vec<_> = partial
             .arcs
             .iter()
@@ -1713,7 +1708,6 @@ impl LiveStage {
         for &prim in affected {
             self.update_prim_graph_edges(prim, partial, arcs_of(prim));
         }
-        self.arc_metadata.extend(new_arcs);
 
         // Scoped composition also holds supporting source prims. Only
         // replace dependencies for prims whose indexes were merged.
@@ -1904,7 +1898,6 @@ impl LiveStage {
         self.stage = stage;
         self.tracker =
             InvalidationTracker::from_graph_with_cycle_handling(deps.graph, CycleHandling::Ignore);
-        self.arc_metadata = deps.arcs;
         self.layer_to_prims = deps.layer_to_prims;
         self.prim_to_layers = deps.prim_to_layers;
         self.default_prim_dependents = deps.default_prim_dependents;
@@ -3620,7 +3613,24 @@ mod tests {
             }
         }
 
-        assert_eq!(live.arc_metadata, fresh_deps.arcs, "arc metadata differs");
+        let edges = |graph: &invalidation::InvalidationGraph<PathId>| {
+            let mut edges: Vec<(PathId, PathId)> = graph
+                .keys()
+                .flat_map(|key| {
+                    graph
+                        .dependencies(key, OPINION_EDIT)
+                        .map(move |source| (key, source))
+                })
+                .collect();
+            edges.sort_unstable();
+            edges.dedup();
+            edges
+        };
+        assert_eq!(
+            edges(live.tracker.graph()),
+            edges(&fresh_deps.graph),
+            "arc dependency edges differ"
+        );
         let non_empty = |m: &HashMap<LayerId, HashSet<PathId>>| {
             m.iter()
                 .filter(|(_, prims)| !prims.is_empty())

@@ -281,8 +281,7 @@ impl LiveStage {
             )
         )]
         let child_index = Arc::new(crate::prim_indexing::ChildIndex::default());
-        let mut stage =
-            Stage::compose_retained(store, root, opts, false, &HashSet::new(), &child_index);
+        let mut stage = Stage::compose_live(store, root, opts, &child_index);
         let deps = stage.take_deps().unwrap_or_default();
         let tracker =
             InvalidationTracker::from_graph_with_cycle_handling(deps.graph, CycleHandling::Ignore);
@@ -1878,14 +1877,7 @@ impl LiveStage {
             with_dependencies: true,
             ..self.options.clone()
         };
-        let mut stage = Stage::compose_retained(
-            store,
-            self.root,
-            opts,
-            false,
-            &HashSet::new(),
-            &self.child_index,
-        );
+        let mut stage = Stage::compose_live(store, self.root, opts, &self.child_index);
         let deps = stage.take_deps().unwrap_or_default();
 
         self.work.full_rebuild = true;
@@ -3708,6 +3700,36 @@ mod tests {
     }
 
     /// The paths [`four_layer_scene`] authors.
+    /// A live stage's full composition builds no arc metadata, which the
+    /// live stage would drop; a stage composed on its own with dependencies
+    /// keeps it for its diagnostic queries. Both build the same edges.
+    #[test]
+    fn live_compositions_build_no_arc_metadata() {
+        let mut store = InMemoryStore::default();
+        let scene = four_layer_scene(&mut store);
+        let options = StageOptions {
+            with_dependencies: true,
+            ..StageOptions::default()
+        };
+        let mut alone = Stage::compose(&mut store, LayerId(1), options.clone());
+        assert!(
+            alone
+                .arc_dependencies()
+                .iter()
+                .any(|arc| arc.target == scene.a && arc.source == scene.source)
+        );
+        let child_index = crate::prim_indexing::ChildIndex::default();
+        let mut live = Stage::compose_live(&mut store, LayerId(1), options, &child_index);
+        let (alone, live) = (alone.take_deps().unwrap(), live.take_deps().unwrap());
+        assert!(live.arcs.is_empty());
+        assert!(
+            live.graph
+                .dependencies(scene.a, OPINION_EDIT)
+                .any(|source| source == scene.source)
+        );
+        assert_eq!(live.prim_to_layers, alone.prim_to_layers);
+    }
+
     struct FourLayers {
         x: TokenId,
         source: PathId,

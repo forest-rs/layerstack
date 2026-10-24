@@ -581,10 +581,53 @@ impl Stage {
     pub(crate) fn compose_retained(
         store: &mut dyn LayerStore,
         root: LayerId,
+        options: StageOptions,
+        exact_mask: bool,
+        boundaries: &HashSet<PathId>,
+        child_index: &crate::prim_indexing::ChildIndex,
+    ) -> Self {
+        Self::compose_retained_with(
+            store,
+            root,
+            options,
+            exact_mask,
+            boundaries,
+            child_index,
+            true,
+        )
+    }
+
+    /// Composes the whole stage as [`Self::compose_retained`] does for a live
+    /// stage, which keeps the dependency maps but for the arc metadata
+    /// ([`crate::dependency_map::CompositionDeps::arcs`]): its edits read the
+    /// arcs of the partial compositions they merge instead.
+    pub(crate) fn compose_live(
+        store: &mut dyn LayerStore,
+        root: LayerId,
+        options: StageOptions,
+        child_index: &crate::prim_indexing::ChildIndex,
+    ) -> Self {
+        Self::compose_retained_with(
+            store,
+            root,
+            options,
+            false,
+            &HashSet::new(),
+            child_index,
+            false,
+        )
+    }
+
+    /// [`Self::compose_retained`], building the arc metadata of the
+    /// dependency maps only when `arc_metadata`.
+    fn compose_retained_with(
+        store: &mut dyn LayerStore,
+        root: LayerId,
         mut options: StageOptions,
         exact_mask: bool,
         boundaries: &HashSet<PathId>,
         child_index: &crate::prim_indexing::ChildIndex,
+        arc_metadata: bool,
     ) -> Self {
         options.muted_layers.remove(&root);
         let captured = options.clone();
@@ -619,6 +662,7 @@ impl Stage {
                 .errors
                 .insert(0, CompositionError::ForeignSchemaRegistry);
         }
+        let dependencies = dependencies.map(|records| records.with_arc_metadata(arc_metadata));
         stage.prepare(store, instance_keys, dependencies);
         stage
     }

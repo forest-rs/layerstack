@@ -117,6 +117,8 @@ const THREADED_BUILD_PRIMS: usize = 1024;
 pub(crate) struct DependencyRecords {
     /// What each composed prim the composition keeps depends on.
     prims: HashMap<PathId, PrimDependencies>,
+    /// Whether [`Self::build`] builds [`CompositionDeps::arcs`].
+    arc_metadata: bool,
     relocation_layers: HashSet<LayerId>,
     expression_variables: VariableReads,
 }
@@ -126,8 +128,20 @@ impl DependencyRecords {
     pub(crate) fn new(prims: HashMap<PathId, PrimDependencies>) -> Self {
         Self {
             prims,
+            arc_metadata: true,
             relocation_layers: HashSet::new(),
             expression_variables: VariableReads::default(),
+        }
+    }
+
+    /// These records, building [`CompositionDeps::arcs`] only when
+    /// `arc_metadata`: a live stage keeps no arc metadata of its full
+    /// compositions, and an empty set leaves the rest of the maps as they
+    /// are.
+    pub(crate) fn with_arc_metadata(self, arc_metadata: bool) -> Self {
+        Self {
+            arc_metadata,
+            ..self
         }
     }
 
@@ -171,7 +185,19 @@ impl DependencyRecords {
         };
         let ((graph, arc_set), ((layer_to_prims, default_prim_dependents), prim_to_layers)) = join(
             threads,
-            || join(threads, || arc_graph(&self.prims), || arc_set(&self.prims)),
+            || {
+                join(
+                    threads,
+                    || arc_graph(&self.prims),
+                    || {
+                        if self.arc_metadata {
+                            arc_set(&self.prims)
+                        } else {
+                            HashSet::new()
+                        }
+                    },
+                )
+            },
             || {
                 join(
                     threads,

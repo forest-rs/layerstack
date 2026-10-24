@@ -386,7 +386,7 @@ impl Stage {
                 let FieldKey::Property(name) = *field else {
                     continue;
                 };
-                let opinions = &index.opinions[range.clone()];
+                let opinions = index.opinions_in(range);
                 if opinions
                     .iter()
                     .any(|opinion| opinion.value.targets().is_some())

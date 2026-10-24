@@ -292,11 +292,18 @@ pub(crate) struct PrimIndex {
 #[derive(Clone, Debug, Default)]
 pub(crate) struct PrimIndexData {
     pub(crate) opinions: Vec<Opinion>,
-    pub(crate) fields: Vec<(FieldKey, Range<usize>)>,
+    /// Each field's opinions, a range of [`Self::opinions`]
+    /// ([`Self::opinions_in`]), sorted by field.
+    pub(crate) fields: Vec<(FieldKey, Range<u32>)>,
     pub(crate) sources: Vec<OpinionKey>,
 }
 
 impl PrimIndexData {
+    /// The opinions of one of [`Self::fields`]' ranges.
+    pub(crate) fn opinions_in(&self, range: &Range<u32>) -> &[Opinion] {
+        &self.opinions[span(range)]
+    }
+
     /// Exact record identity for sharing; public value equality stays IEEE.
     pub(crate) fn same_records(&self, other: &Self) -> bool {
         use crate::edit::same::Same;
@@ -317,6 +324,17 @@ impl PrimIndexData {
                     }
             })
     }
+}
+
+/// `range` as indices of [`PrimIndexData::opinions`].
+fn span(range: &Range<u32>) -> Range<usize> {
+    range.start as usize..range.end as usize
+}
+
+/// The position `at` in [`PrimIndexData::opinions`], as a field range
+/// holds it.
+fn position(at: usize) -> u32 {
+    u32::try_from(at).expect("prim index opinion count overflow")
 }
 
 impl core::ops::Deref for PrimIndex {
@@ -343,6 +361,18 @@ impl PrimIndex {
     #[cfg(test)]
     pub(crate) fn add_opinion(&mut self, opinion: Opinion) {
         self.add_opinions(core::iter::once(opinion));
+    }
+
+    /// Gives back the room the sources did not use, and the opinions' when
+    /// they left much of theirs unused.
+    pub(crate) fn trim(&mut self) {
+        let data = Arc::make_mut(&mut self.data);
+        data.sources.shrink_to_fit();
+        // Opinions grown by a few batches are copied back only when they
+        // left more than a quarter unused.
+        if data.opinions.capacity() - data.opinions.len() > data.opinions.len() / 4 {
+            data.opinions.shrink_to_fit();
+        }
     }
 
     /// Appends one batch before finalization, preserving equal-key
@@ -378,7 +408,7 @@ impl PrimIndex {
             .fields
             .binary_search_by_key(&field, |(key, _)| *key)
             .ok()?;
-        Some(self.fields[slot].1.clone())
+        Some(span(&self.fields[slot].1))
     }
 
     fn field_opinions(&self, field: FieldKey) -> Option<&[Opinion]> {
@@ -395,17 +425,20 @@ impl PrimIndex {
     fn index_fields(&mut self) {
         let data = Arc::make_mut(&mut self.data);
         data.fields.clear();
-        if data.fields.capacity() == 0 && !data.opinions.is_empty() {
-            data.fields.reserve_exact(1);
-        }
-        for (position, opinion) in data.opinions.iter().enumerate() {
+        let runs = data
+            .opinions
+            .chunk_by(|a, b| FieldKey::of(a) == FieldKey::of(b))
+            .count();
+        data.fields.reserve_exact(runs);
+        for (at, opinion) in data.opinions.iter().enumerate() {
             let field = FieldKey::of(opinion);
+            let end = position(at + 1);
             if let Some((last, range)) = data.fields.last_mut()
                 && *last == field
             {
-                range.end = position + 1;
+                range.end = end;
             } else {
-                data.fields.push((field, position..position + 1));
+                data.fields.push((field, position(at)..end));
             }
         }
     }
@@ -426,7 +459,7 @@ impl PrimIndex {
         keys.sort_unstable();
         keys.dedup();
         data.fields.clear();
-        data.fields.reserve(keys.len());
+        data.fields.reserve_exact(keys.len());
         data.fields.extend(keys.iter().map(|&key| (key, 0..0)));
         for opinion in &data.opinions {
             let field = keys
@@ -446,7 +479,7 @@ impl PrimIndex {
                 .binary_search(&FieldKey::of(opinion))
                 .expect("counted field");
             let range = &mut data.fields[field].1;
-            order[range.end] = source;
+            order[range.end as usize] = source;
             range.end += 1;
         }
         // Each cycle places records in their destination field once. The
@@ -488,6 +521,14 @@ impl PrimIndex {
         self.sources.push(key);
     }
 
+    /// Makes room for `layers` sources, unless there is room for some
+    /// already; [`Self::trim`] gives back what is not used.
+    pub(crate) fn reserve_sources(&mut self, layers: usize) {
+        if self.sources.capacity() == 0 {
+            Arc::make_mut(&mut self.data).sources.reserve_exact(layers);
+        }
+    }
+
     /// Returns the type of the strongest surviving property declaration.
     /// Untyped opinions do not hide weaker declarations (AOUSD Core §12).
     /// Stage queries read finalized opinions, already strongest first.
@@ -504,7 +545,7 @@ impl PrimIndex {
         let graph = &self.graph;
         let data = Arc::make_mut(&mut self.data);
         for (_, range) in &data.fields {
-            data.opinions[range.clone()].sort_by(|a, b| graph.cmp_keys(&a.key, &b.key));
+            data.opinions[span(range)].sort_by(|a, b| graph.cmp_keys(&a.key, &b.key));
         }
         data.sources.sort_by(|a, b| graph.cmp_keys(a, b));
     }

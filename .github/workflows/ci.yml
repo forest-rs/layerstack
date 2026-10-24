@@ -537,6 +537,11 @@ jobs:
       - name: check proxy edits oracle
         run: python layerstack_conformance/scripts/proxy_edits_oracle.py --check
 
+      # The USDA field order oracle must be the text OpenUSD writes for
+      # layers authored in scrambled orders, and for a scrambled file.
+      - name: check USDA field order oracle
+        run: python layerstack_conformance/scripts/usda_field_order_oracle.py --check
+
       - name: test saved variant set names against OpenUSD
         env:
           LAYERSTACK_USD_PYTHON: python

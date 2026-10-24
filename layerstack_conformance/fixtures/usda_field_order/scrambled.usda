@@ -1,0 +1,97 @@
+#usda 1.0
+(
+    upAxis = "Z"
+    subLayers = [
+        @./b.usda@,
+        @./a.usda@ (offset = 2)
+    ]
+    defaultPrim = "P"
+    "layer comment"
+    metersPerUnit = 1
+    customLayerData = {
+        int zz = 1
+        dictionary b = {
+            int y = 1
+            int x = 2
+        }
+        int a = 2
+    }
+)
+
+def "P" (
+    variants = {
+        string zz = "b"
+        string aa = "a"
+    }
+    kind = "group"
+    references = [
+        </Q>,
+        @./r.usda@</R>
+    ]
+    prepend variantSets = ["zz", "aa"]
+    inherits = </Q>
+    "prim comment"
+    active = true
+    customData = {
+        int z = 1
+        int a = 2
+    }
+)
+{
+    reorder properties = ["zeta", "alpha"]
+    reorder nameChildren = ["Y", "X"]
+    rel zrel = [
+        </P/Y>,
+        </P/X>,
+    ]
+    float zeta = 1
+    float alpha.timeSamples = {
+        1: 2,
+        5: 1,
+    }
+    float alpha.connect = </P.zeta>
+    float alpha = 3 (
+        interpolation = "vertex"
+        customData = {
+            int b = 1
+            int a = 2
+        }
+        doc = "x"
+        "property comment"
+    )
+    custom rel arel
+    double A2 = 1
+    double a10 = 1
+    double a9 = 1
+
+    def "Y"
+    {
+    }
+
+    def "X"
+    {
+    }
+    variantSet "zz" = {
+        "b" {
+            float q = 1
+
+        }
+        "a" (
+            kind = "x"
+            active = false
+        ) {
+            float q = 2
+            float b = 1
+
+        }
+    }
+    variantSet "aa" = {
+        "a" {
+
+        }
+    }
+}
+
+def "Q"
+{
+}

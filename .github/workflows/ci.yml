@@ -572,11 +572,6 @@ jobs:
       - name: check USDA field order oracle
         run: python layerstack_conformance/scripts/usda_field_order_oracle.py --check
 
-      - name: test saved variant set names against OpenUSD
-        env:
-          LAYERSTACK_USD_PYTHON: python
-        run: cargo test --locked -p layerstack_conformance --test variant_set_names
-
       # The pseudo-root oracle must be what OpenUSD's authoring calls do
       # when aimed at the pseudo-root, at the Usd and Sdf levels.
       - name: check pseudo-root edits oracle
@@ -598,15 +593,22 @@ jobs:
         run: python layerstack_conformance/scripts/udim_tiles_oracle.py --check
 
       # These compare with OpenUSD when a Python with `pxr` is given and
-      # skip otherwise, as they do in the test jobs: flattening (instancing
-      # and prototype sharing included), layer saves, and prim field edits.
-      - name: test flatten, saves and prim field edits against OpenUSD
+      # skip otherwise, as they do in the test jobs: every conformance test
+      # that reads `LAYERSTACK_USD_PYTHON`, found by that name so that a new
+      # one runs here too (flattening, saves and their round trip through
+      # OpenUSD, variant set names, value clips, stage queries and more),
+      # with layer saves and prim field edits. Every test runs even when one
+      # fails, so a failure shows all that differ from OpenUSD.
+      - name: test against OpenUSD
         env:
           LAYERSTACK_USD_PYTHON: python
         run: |
-          cargo test --locked -p layerstack_conformance --test flatten
-          cargo test --locked -p layerstack_conformance --test layer_save
-          cargo test --locked -p layerstack_conformance --test prim_field_edits
+          tests=()
+          for file in $(grep -l LAYERSTACK_USD_PYTHON layerstack_conformance/tests/*.rs); do
+            tests+=(--test "$(basename "$file" .rs)")
+          done
+          cargo test --locked --no-fail-fast -p layerstack_conformance "${tests[@]}" \
+            --test layer_save --test prim_field_edits
 
       # The transform oracle must be what OpenUSD computes, to within the
       # rounding of the platform's trigonometry.

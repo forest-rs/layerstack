@@ -607,6 +607,99 @@ mod tests {
         reads
     }
 
+    /// A child spec removed from and authored again under a prim many
+    /// siblings reference leaves and returns under each of them: removing
+    /// the prims' keys from the dependency graph keeps the edges the
+    /// recomposed siblings need.
+    #[test]
+    fn removed_child_returns_under_every_sibling() {
+        let mut store = InMemoryStore::default();
+        let proto = store.path("/Proto");
+        let added = store.path("/Proto/Added");
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(proto, PrimSpec::def());
+        let siblings: alloc::vec::Vec<_> = (0..20)
+            .map(|i| store.path(&alloc::format!("/World/I{i}")))
+            .collect();
+        for &sibling in &siblings {
+            layer.insert_prim(
+                sibling,
+                PrimSpec::def().with_reference(Reference::new(LayerId(1), proto)),
+            );
+        }
+        store.insert_layer(layer);
+        let under: alloc::vec::Vec<_> = (0..20)
+            .map(|i| store.path(&alloc::format!("/World/I{i}/Added")))
+            .collect();
+        let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+        let target = EditTarget::for_layer(LayerId(1));
+        let mut create = Transaction::new();
+        create.create_prim(target.prim(added), Specifier::Def, None);
+        let mut remove = Transaction::new();
+        remove.remove_spec(target.prim(added));
+        for (edit, present) in [(&create, true), (&remove, false), (&create, true)] {
+            live.apply(&mut store, edit).expect("edit applies");
+            assert!(!live.recomposition_work().full_rebuild);
+            for &prim in &under {
+                assert_eq!(live.stage().has_prim(prim), present, "{prim:?}");
+            }
+        }
+        assert_fresh_edges(&live, &mut store);
+    }
+
+    /// The edges of every prim of `live` match those of a fresh composition
+    /// with its options.
+    fn assert_fresh_edges(live: &LiveStage, store: &mut InMemoryStore) {
+        let fresh = LiveStage::compose(store, LayerId(1), live.options().clone());
+        let prims: alloc::vec::Vec<_> = fresh.stage().prim_paths().collect();
+        assert_eq!(prims.len(), live.stage().prim_paths().count());
+        for prim in prims {
+            let edges = |stage: &LiveStage| {
+                let mut edges: alloc::vec::Vec<_> = stage
+                    .tracker
+                    .graph()
+                    .dependencies(prim, super::OPINION_EDIT)
+                    .collect();
+                edges.sort_unstable();
+                edges
+            };
+            assert_eq!(edges(live), edges(&fresh), "{prim:?}");
+        }
+    }
+
+    /// Unloading and loading back half of 20 prims with one payload each
+    /// drops and restores their edges to the payload's prims, many to one
+    /// key, as a fresh composition has them.
+    #[test]
+    fn bulk_unload_keeps_the_edges_a_fresh_composition_has() {
+        let mut store = InMemoryStore::default();
+        let asset = store.path("/Asset");
+        let mut layer = Layer::new(LayerId(2));
+        layer.insert_prim(asset, PrimSpec::def());
+        layer.insert_prim(store.path("/Asset/Geo"), PrimSpec::def());
+        store.insert_layer(layer);
+        let mut layer = Layer::new(LayerId(1));
+        let holders: alloc::vec::Vec<_> = (0..20)
+            .map(|i| store.path(&alloc::format!("/World/P{i}")))
+            .collect();
+        for &holder in &holders {
+            layer.insert_prim(
+                holder,
+                PrimSpec::def().with_payload(Reference::new(LayerId(2), asset)),
+            );
+        }
+        store.insert_layer(layer);
+        let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+        let half: alloc::vec::Vec<_> = holders.iter().copied().step_by(2).collect();
+        live.load_and_unload(&store, &[], &half, crate::LoadPolicy::WithDescendants);
+        live.recompose_changes(&mut store);
+        assert!(!live.recomposition_work().full_rebuild);
+        assert_fresh_edges(&live, &mut store);
+        live.load_and_unload(&store, &half, &[], crate::LoadPolicy::WithDescendants);
+        live.recompose_changes(&mut store);
+        assert_fresh_edges(&live, &mut store);
+    }
+
     /// An edit that resyncs many sibling roots does work in proportion to
     /// them: membership beneath the roots is an ancestor walk, not a scan
     /// of every root for each prim.

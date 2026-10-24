@@ -36,6 +36,7 @@
 //! [`Layer`]: layerstack::Layer
 //! [`PrimSpec`]: layerstack::PrimSpec
 
+use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use alloc::format;
 use alloc::string::String;
@@ -476,6 +477,29 @@ impl EmitCtx<'_> {
 
         layer.insert_prim(path_id, spec);
         prim_path.truncate(parent_len);
+    }
+
+    /// Interns the absolute prim path `text`, as interning its parsed
+    /// [`Path`] does (its names' tokens, then the path and its ancestors),
+    /// without building the `Path`: each name's path from its parent's
+    /// ([`PathInterner::intern_child`]). `None` when `text` does not parse.
+    fn intern_prim_path(&self, text: &str) -> Option<PathId> {
+        let names = text.strip_prefix('/')?;
+        let mut path = self.paths.intern(Path::root());
+        if names.is_empty() {
+            return Some(path);
+        }
+        let mut tokens = SmallVec::<[TokenId; 16]>::new();
+        for name in names.split('/') {
+            if name.is_empty() {
+                return None;
+            }
+            tokens.push(self.tokens.intern(name));
+        }
+        for name in tokens {
+            path = self.paths.intern_child(path, name);
+        }
+        Some(path)
     }
 
     fn variant_site(
@@ -939,7 +963,7 @@ impl EmitCtx<'_> {
         let name_tok = self.tokens.intern(rel.name);
         let listop = rel.targets.as_ref().map(|targets| {
             // Spec: `SdfSchema::IsValidRelationshipTargetPath`.
-            let targets: Vec<String> = targets
+            let targets: Vec<Cow<'_, str>> = targets
                 .iter()
                 .copied()
                 .filter_map(|target| {
@@ -958,7 +982,7 @@ impl EmitCtx<'_> {
                     absolute
                 })
                 .collect();
-            let targets: Vec<&str> = targets.iter().map(String::as_str).collect();
+            let targets: Vec<&str> = targets.iter().map(|target| &**target).collect();
             let target_paths = self.target_paths(&targets, anchor, rel.span);
             let mut listop = ListOp::default();
             match rel.op {
@@ -1268,8 +1292,7 @@ impl EmitCtx<'_> {
         // Spec: AOUSD Core §10.3.2.1 (references with no prim path).
         let target = match arc_ref.prim_path {
             Some(path_str) if !path_str.is_empty() => {
-                let path = Path::parse_absolute(path_str, self.tokens).ok()?;
-                ReferenceTarget::Prim(self.paths.intern(path))
+                ReferenceTarget::Prim(self.intern_prim_path(path_str)?)
             }
             _ => ReferenceTarget::DefaultPrim,
         };
@@ -1377,33 +1400,29 @@ impl EmitCtx<'_> {
             return ListOp::explicit(Vec::new());
         };
 
-        let path_ids: Vec<PathId> = items
-            .iter()
-            .filter_map(|s| {
-                // Spec: `SdfSchema::IsValidInheritPath` and
-                // `IsValidSpecializesPath`.
-                let Some(absolute) = (!has_variant_selection(s))
-                    .then(|| self.variant_anchored(s, anchor, sites))
-                    .flatten()
-                else {
-                    self.reject(
-                        paths.span,
-                        format!("{arc} paths cannot contain variant selections: <{s}>"),
-                    );
-                    return None;
-                };
-                match Path::parse_absolute(&absolute, self.tokens) {
-                    Ok(path) => Some(self.paths.intern(path)),
-                    Err(_) => {
-                        self.diagnostics.push(Diagnostic::error(
-                            paths.span,
-                            format!("unsupported: arc path `<{s}>` is not a prim path; ignored"),
-                        ));
-                        None
-                    }
-                }
-            })
-            .collect();
+        let mut path_ids = Vec::with_capacity(items.len());
+        path_ids.extend(items.iter().filter_map(|s| {
+            // Spec: `SdfSchema::IsValidInheritPath` and
+            // `IsValidSpecializesPath`.
+            let Some(absolute) = (!has_variant_selection(s))
+                .then(|| self.variant_anchored(s, anchor, sites))
+                .flatten()
+            else {
+                self.reject(
+                    paths.span,
+                    format!("{arc} paths cannot contain variant selections: <{s}>"),
+                );
+                return None;
+            };
+            let path = self.intern_prim_path(&absolute);
+            if path.is_none() {
+                self.diagnostics.push(Diagnostic::error(
+                    paths.span,
+                    format!("unsupported: arc path `<{s}>` is not a prim path; ignored"),
+                ));
+            }
+            path
+        }));
 
         let mut listop = ListOp::default();
         match paths.kind {
@@ -1501,12 +1520,12 @@ impl EmitCtx<'_> {
     /// (`/A{v=x}B`), where each leading `..` removes one element, a prim name
     /// or a variant selection (`SdfPath::MakeAbsolutePath`): `<../../D>`
     /// authored on `/A{v=x}C` is `/A/D`, while `<../D>` is `/A{v=x}D`.
-    fn variant_anchored(
+    fn variant_anchored<'p>(
         &self,
-        path: &str,
+        path: &'p str,
         anchor: &str,
         sites: &[VariantSelectionSite],
-    ) -> Option<String> {
+    ) -> Option<Cow<'p, str>> {
         if path.starts_with('/') || sites.is_empty() {
             return Some(absolute_path(path, anchor));
         }
@@ -1546,7 +1565,7 @@ impl EmitCtx<'_> {
         if base.is_empty() {
             base.push('/');
         }
-        Some(absolute_path(rest, &base))
+        Some(Cow::Owned(absolute_path(rest, &base).into_owned()))
     }
 
     /// Parses relationship or connection targets; relative paths resolve
@@ -1913,9 +1932,9 @@ fn has_variant_selection(path: &str) -> bool {
     path.contains('{')
 }
 
-fn absolute_path(path: &str, anchor: &str) -> String {
+fn absolute_path<'p>(path: &'p str, anchor: &str) -> Cow<'p, str> {
     if path.starts_with('/') {
-        return String::from(path);
+        return Cow::Borrowed(path);
     }
     let mut segments: Vec<&str> = anchor.split('/').filter(|s| !s.is_empty()).collect();
     let mut rest = path;
@@ -1948,7 +1967,7 @@ fn absolute_path(path: &str, anchor: &str) -> String {
     } else if out.is_empty() {
         out.push('/');
     }
-    out
+    Cow::Owned(out)
 }
 
 /// The registered value type of a metadata field, as far as ingestion needs
@@ -3984,6 +4003,46 @@ def \"A\" (
             attr_default(&spec.properties, &tokens.intern("l")),
             Some(&Value::Array(vec![Value::PathExpression(Arc::from("/X"))]))
         );
+    }
+
+    #[test]
+    fn prim_paths_intern_as_their_parsed_paths_do() {
+        // The same tokens and paths, in the same order, as interning the
+        // parsed `Path`, including for text that does not parse.
+        let (tokens, paths) = (TokenInterner::default(), PathInterner::default());
+        let (parsed_tokens, parsed_paths) = (TokenInterner::default(), PathInterner::default());
+        let mut resolver = StubResolver::new();
+        let ctx = EmitCtx {
+            registry: None,
+            arrays: crate::read::PreparedValues::default(),
+            tokens: &tokens,
+            paths: &paths,
+            resolver: &mut resolver,
+            defer_variant_arcs: false,
+            layer_id: LayerId(1),
+            resolved_layers: Vec::new(),
+            diagnostics: Vec::new(),
+            rejections: Vec::new(),
+            rejected: false,
+            emitted_arcs: false,
+        };
+        for text in [
+            "/", "/A/B/C", "/A", "/A/B", "/A//B", "/A/X/", "//Y", "Z", "", "/A.b", "/D/E/F/G",
+        ] {
+            let parsed = Path::parse_absolute(text, &parsed_tokens)
+                .ok()
+                .map(|path| parsed_paths.intern(path));
+            assert_eq!(ctx.intern_prim_path(text), parsed, "{text}");
+            assert_eq!(
+                tokens.intern("probe"),
+                parsed_tokens.intern("probe"),
+                "{text}"
+            );
+            let probe = |paths: &PathInterner, tokens: &TokenInterner| {
+                paths.intern(Path::parse_absolute("/probe", tokens).expect("a path"))
+            };
+            assert_eq!(probe(&paths, &tokens), probe(&parsed_paths, &parsed_tokens));
+        }
     }
 
     #[test]

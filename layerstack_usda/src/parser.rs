@@ -73,8 +73,8 @@ pub(crate) struct ReadParse<'a> {
 /// it closes, its syntax then dropped, so the read holds a window of tokens
 /// and the syntax of the prims it is in rather than the whole file's.
 pub(crate) fn parse_for_read(source: &str) -> ReadParse<'_> {
-    let mut parser = Parser::<false>::new(source, Vec::new());
-    parser.tokens = crate::token_source::TokenSource::streaming(source);
+    let mut parser =
+        Parser::<false>::with_tokens(source, crate::token_source::TokenSource::streaming(source));
     parser.direct_arrays = Some(crate::read::PreparedArrays::new());
     parser.lowering = Some(PrimLowering::new(source));
     // Holding the syntax of the open prims alone, a read rarely needs more.
@@ -109,6 +109,8 @@ struct Parser<'a, const LOSSLESS: bool> {
     source: &'a str,
     tokens: crate::token_source::TokenSource<'a>,
     pos: usize,
+    /// The token at `pos`, which navigation asks for many times per token.
+    current: Option<Token>,
     diagnostics: Vec<Diagnostic>,
     builder: TreeBuilder,
     direct_arrays: Option<crate::read::PreparedArrays>,
@@ -126,10 +128,16 @@ struct Parser<'a, const LOSSLESS: bool> {
 
 impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
     fn new(source: &'a str, tokens: Vec<Token>) -> Self {
+        Self::with_tokens(source, crate::token_source::TokenSource::eager(tokens))
+    }
+
+    fn with_tokens(source: &'a str, tokens: crate::token_source::TokenSource<'a>) -> Self {
+        let current = tokens.get(0);
         Self {
             source,
-            tokens: crate::token_source::TokenSource::eager(tokens),
+            tokens,
             pos: 0,
+            current,
             diagnostics: Vec::new(),
             builder: TreeBuilder::new(source.len() as u32),
             direct_arrays: None,
@@ -144,7 +152,13 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
 
     /// Returns the current token without advancing.
     fn current(&self) -> Option<Token> {
-        self.tokens.get(self.pos)
+        self.current
+    }
+
+    /// Moves to the token at `pos`.
+    fn seek(&mut self, pos: usize) {
+        self.pos = pos;
+        self.current = self.tokens.get(pos);
     }
 
     /// Returns the kind of the current token.
@@ -177,12 +191,12 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
     // Some grammar tokens carry no information needed by AST lowering.
     // Consume them identically in both modes, storing them only for editing.
     fn bump_stored<const STORE: bool>(&mut self) -> Option<Token> {
-        let tok = self.tokens.get(self.pos);
+        let tok = self.current;
         if let Some(t) = tok {
             if STORE {
                 self.builder.token(SyntaxKind::from(t.kind), t.span);
             }
-            self.pos += 1;
+            self.seek(self.pos + 1);
             if t.kind == TokenKind::Newline {
                 self.line_break = true;
             } else if !is_trivia(t.kind) {
@@ -204,7 +218,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
                     self.builder.token(SyntaxKind::from(tok.kind), tok.span);
                 }
                 self.line_break |= tok.kind == TokenKind::Newline;
-                self.pos += 1;
+                self.seek(self.pos + 1);
             } else {
                 break;
             }
@@ -223,7 +237,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
                     self.builder.token(SyntaxKind::from(tok.kind), tok.span);
                 }
                 self.line_break |= tok.kind == TokenKind::Newline;
-                self.pos += 1;
+                self.seek(self.pos + 1);
             } else {
                 break;
             }
@@ -952,7 +966,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
 
     /// Rollback parser position and builder nodes.
     fn restore_to(&mut self, pos: usize, node_count: usize) {
-        self.pos = pos;
+        self.seek(pos);
         self.line_break = false;
         self.builder.truncate(node_count);
     }
@@ -1567,7 +1581,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
                 let end = self.pos + 2;
                 self.builder.start_node(SyntaxKind::ValueExpr, start);
                 self.builder.start_node(SyntaxKind::ArrayValue, start);
-                self.pos = end;
+                self.seek(end);
                 self.line_break = false;
                 // Private placeholders: emission consumes the matching source
                 // range by declaration offset and sample ordinal.
@@ -1743,7 +1757,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
             if LOSSLESS {
                 self.builder.token(SyntaxKind::from(tok.kind), tok.span);
             }
-            self.pos += 1;
+            self.seek(self.pos + 1);
         }
         newline
     }

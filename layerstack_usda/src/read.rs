@@ -19,7 +19,8 @@ pub struct ReadStats {
     /// The most tokens held at once for grammar navigation (lookahead and
     /// the rollback of a speculative parse), including fallback values.
     pub tokens: usize,
-    /// Nodes retained for structural lowering.
+    /// The most syntax nodes held at once for structural lowering, which
+    /// drops a prim's nodes once it has lowered the prim.
     pub syntax_nodes: usize,
     /// Nonempty numeric property arrays recognized for direct conversion.
     pub numeric_arrays: usize,
@@ -96,28 +97,26 @@ fn read_with_registry(
     resolver: &mut dyn AssetResolver,
     registry: Option<&SchemaRegistry>,
 ) -> ReadResult {
-    let (parsed, arrays, token_count) = crate::parser::parse_for_read(source);
+    let parsed = crate::parser::parse_for_read(source);
     let stats = ReadStats {
-        tokens: token_count,
-        syntax_nodes: parsed.tree.len(),
-        numeric_arrays: arrays.len(),
-        numeric_elements: arrays.values().map(|array| array.count).sum(),
+        tokens: parsed.tokens,
+        syntax_nodes: parsed.syntax_nodes,
+        numeric_arrays: parsed.arrays.len(),
+        numeric_elements: parsed.arrays.values().map(|array| array.count).sum(),
     };
-    let lowered = crate::lower::lower(&parsed.tree, source);
-    drop(parsed.tree);
     let emitted = crate::emit::emit_with_arrays(
-        &lowered.layer,
+        &parsed.lowered.layer,
         layer_id,
         tokens,
         paths,
         resolver,
-        arrays,
+        parsed.arrays,
         registry,
     );
     ReadResult {
         emitted,
         parse_diagnostics: parsed.diagnostics,
-        lower_diagnostics: lowered.diagnostics,
+        lower_diagnostics: parsed.lowered.diagnostics,
         stats,
     }
 }
@@ -559,6 +558,51 @@ def "A" {
         let stats = compare(&source);
         let window = 2 * crate::token_source::RELEASE_AFTER;
         assert!(stats.tokens <= window, "{stats:?}");
+    }
+
+    #[test]
+    fn prims_lowered_as_they_close_keep_diagnostics_in_source_order() {
+        // Lowering reports escapes in names and strings and malformed
+        // splines; reading lowers each prim as it closes, yet reports what
+        // lowering the whole tree reports, in the same order.
+        let source = r#"#usda 1.0
+(
+    doc = "layer \xff"
+)
+def "A\1" (
+    doc = "prim \xfe"
+    references = @@@a\@@@b@@@
+) {
+    int i.spline = { 1: 2 }
+    def "B\2" {
+        string s = "\xfd"
+        double d.spline = { bad }
+    }
+    variantSet "v" = {
+        "x" ( doc = "branch \xfc" ) {
+            def "C\3" { custom string t = "\xfb" }
+        }
+    }
+    rel r = </A>
+    string after = "\xfa"
+}
+def "D\4" {}
+"#;
+        compare(source);
+        let store = InMemoryStore::default();
+        let imported = read_usda(
+            source,
+            LayerId(1),
+            &store.tokens,
+            &store.paths,
+            &mut NoAssets,
+        );
+        assert_eq!(
+            imported.lower_diagnostics.len(),
+            13,
+            "{:#?}",
+            imported.lower_diagnostics
+        );
     }
 
     #[test]

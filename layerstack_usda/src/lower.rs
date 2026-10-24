@@ -20,20 +20,79 @@ use crate::diagnostic::Diagnostic;
 
 /// Lowers a CST into an AST, producing diagnostics for semantic errors.
 pub fn lower<'a>(tree: &SyntaxTree, source: &'a str) -> ParseResult<'a> {
-    let mut ctx = LowerCtx {
-        source,
-        diagnostics: Vec::new(),
-    };
-    let layer = ctx.lower_source_file(tree.root());
-    ParseResult {
-        layer,
-        diagnostics: ctx.diagnostics,
+    PrimLowering::new(source).finish(tree)
+}
+
+/// Lowers each prim as the parser closes it, so that the parser can drop
+/// the prim's syntax and a reader holds the syntax of the prims it is in,
+/// not the whole file's. The result, diagnostics and their order are those
+/// of [`lower`] over the whole tree: lowering a prim reads its subtree
+/// alone, and a prim's diagnostics join the enclosing prim's (or layer's)
+/// where lowering the whole tree would report them.
+pub(crate) struct PrimLowering<'a> {
+    ctx: LowerCtx<'a>,
+}
+
+impl<'a> PrimLowering<'a> {
+    pub(crate) fn new(source: &'a str) -> Self {
+        Self {
+            ctx: LowerCtx {
+                source,
+                diagnostics: Vec::new(),
+                lowered: Vec::new(),
+            },
+        }
     }
+
+    /// Where the prims closed inside one the parser opens now will start.
+    pub(crate) fn mark(&self) -> usize {
+        self.ctx.lowered.len()
+    }
+
+    /// Lowers the prim the parser has just closed at `node` of `tree`, the
+    /// prims closed inside it starting at `mark`. The parser may then
+    /// collapse `node` to a leaf: lowering finds the prim by its offset.
+    pub(crate) fn close_prim(&mut self, tree: &SyntaxTree, node: u32, mark: usize) {
+        let node = tree.node(crate::cst::NodeId(node));
+        let start = node.span().start;
+        let prim = self.ctx.lower_prim(node);
+        let diagnostics = core::mem::take(&mut self.ctx.diagnostics);
+        // The prims inside are part of this one now (or were not lowered by
+        // it, as lowering the whole tree would not have lowered them).
+        self.ctx.lowered.truncate(mark);
+        self.ctx.lowered.push(LoweredPrim {
+            start,
+            prim: Some(prim),
+            diagnostics,
+        });
+    }
+
+    /// Lowers the rest of `tree`: the header, layer metadata and the root
+    /// prims, whose lowering was done as they closed.
+    pub(crate) fn finish(mut self, tree: &SyntaxTree) -> ParseResult<'a> {
+        let layer = self.ctx.lower_source_file(tree.root());
+        ParseResult {
+            layer,
+            diagnostics: self.ctx.diagnostics,
+        }
+    }
+}
+
+/// A prim lowered when the parser closed it, held with the diagnostics of
+/// its lowering until the prim or layer it is in is lowered.
+struct LoweredPrim<'a> {
+    /// The prim's source offset, which its collapsed node keeps.
+    start: u32,
+    prim: Option<Prim<'a>>,
+    diagnostics: Vec<Diagnostic>,
 }
 
 struct LowerCtx<'a> {
     source: &'a str,
     diagnostics: Vec<Diagnostic>,
+    /// Prims lowered as they closed, in source order, that the prim or layer
+    /// holding them has not taken yet.
+    lowered: Vec<LoweredPrim<'a>>,
 }
 
 impl<'a> LowerCtx<'a> {
@@ -216,7 +275,28 @@ impl<'a> LowerCtx<'a> {
 
     // ── Prims ──────────────────────────────────────────────────────
 
+    /// Takes the prim lowered when the parser closed it and collapsed its
+    /// `node`, adding the diagnostics of its lowering where lowering it now
+    /// would; `None` when `node` holds its syntax.
+    fn take_lowered(&mut self, node: SyntaxNode<'_>) -> Option<Prim<'a>> {
+        if node.children().len() != 0 {
+            return None;
+        }
+        let start = node.span().start;
+        let at = self
+            .lowered
+            .binary_search_by_key(&start, |lowered| lowered.start)
+            .ok()?;
+        let lowered = &mut self.lowered[at];
+        let prim = lowered.prim.take()?;
+        self.diagnostics.append(&mut lowered.diagnostics);
+        Some(prim)
+    }
+
     fn lower_prim(&mut self, node: SyntaxNode<'_>) -> Prim<'a> {
+        if let Some(prim) = self.take_lowered(node) {
+            return prim;
+        }
         let span = node.span();
         let tree = node.tree();
         let sig: Vec<_> = node

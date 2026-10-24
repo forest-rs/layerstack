@@ -18,9 +18,12 @@
 use std::collections::BTreeMap;
 
 use layerstack::{
-    FieldValue, ListOp, MetadataField, MetadataTarget, TokenInterner, Value, is_spec_field,
+    AssetResolveError, AssetResolver, FieldEntry, FieldValue, InMemoryStore, LayerId, ListOp,
+    MetadataDefinition, MetadataField, MetadataTarget, MetadataType, PathInterner, ResolvedAsset,
+    SchemaRegistry, TokenInterner, Value, is_spec_field,
 };
 use layerstack_conformance::workspace_root;
+use layerstack_usda::{read_usda_with_registry, save::save_usda};
 use serde::Deserialize;
 use serde_json::{Value as Json, json};
 
@@ -28,6 +31,32 @@ use serde_json::{Value as Json, json};
 struct Oracle {
     openusd_version: String,
     builtins: BTreeMap<String, Builtin>,
+    registration: BTreeMap<String, Registration>,
+    reading: Vec<Reading>,
+}
+
+/// A declared field as OpenUSD registers it: no `type` for one it
+/// refuses, and no `specs` for one it registers for no spec.
+#[derive(Deserialize)]
+struct Registration {
+    specs: Vec<String>,
+    #[serde(rename = "type")]
+    type_name: Option<String>,
+}
+
+/// A metadata statement on a spec, in a layer of its own, and what
+/// OpenUSD's text parser made of it.
+#[derive(Deserialize)]
+struct Reading {
+    spec: String,
+    statement: String,
+    error: Option<String>,
+    #[serde(default)]
+    unregistered: bool,
+    #[serde(default)]
+    absent: bool,
+    value: Option<Json>,
+    written: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -161,9 +190,13 @@ fn builtin_fields_are_the_fields_usd_core_registers() {
     assert_eq!(oracle.openusd_version, "0.26.8");
     let tokens = TokenInterner::default();
     for (name, builtin) in &oracle.builtins {
-        if matches!(builtin.type_name.as_str(), "payloadlistop" | "permission")
-            || name == "typeName"
-        {
+        if builtin.type_name == "permission" {
+            // An enum of Sdf's own, which no metadata type holds: kept as
+            // the token it is written as.
+            assert!(MetadataField::builtin(name).is_none());
+            continue;
+        }
+        if builtin.type_name == "payloadlistop" || name == "typeName" {
             // Metadata with routes of their own, which no metadata
             // statement or generic edit sets.
             for spec in &builtin.specs {
@@ -213,4 +246,218 @@ fn registry_metadata_oracle_matches_configured_openusd() {
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
+}
+
+fn target(spec: &str) -> MetadataTarget {
+    TARGETS
+        .into_iter()
+        .find(|target| spec_name(*target) == spec)
+        .unwrap_or_else(|| panic!("no kind of spec {spec}"))
+}
+
+/// The registry OpenUSD's registration of the fixture plugins amounts to:
+/// each field it registers, with its type and spec kinds.
+fn registry(oracle: &Oracle, tokens: &TokenInterner) -> SchemaRegistry {
+    let mut builder = SchemaRegistry::builder();
+    for (name, registration) in &oracle.registration {
+        let Some(type_name) = &registration.type_name else {
+            continue;
+        };
+        let definition = MetadataDefinition::new(
+            tokens.intern(name),
+            MetadataType::parse(type_name).unwrap(),
+            registration.specs.iter().map(|spec| target(spec)),
+        );
+        builder.register_metadata(definition, tokens).unwrap();
+    }
+    builder.build(tokens)
+}
+
+struct NoAssets;
+impl AssetResolver for NoAssets {
+    fn resolve(
+        &mut self,
+        _: &str,
+        _: Option<LayerId>,
+        _: &TokenInterner,
+        _: &PathInterner,
+    ) -> Result<ResolvedAsset, AssetResolveError> {
+        Err(AssetResolveError::NotFound)
+    }
+    fn resolved_path(&self, _: LayerId) -> Option<&str> {
+        None
+    }
+}
+
+/// The layer the oracle reads `statement` on a spec of kind `spec` from.
+fn layer_text(spec: &str, statement: &str) -> String {
+    match spec {
+        "layer" => format!("#usda 1.0\n(\n    {statement}\n)\n"),
+        "prim" => format!("#usda 1.0\ndef \"P\" (\n    {statement}\n)\n{{\n}}\n"),
+        "variant" => format!(
+            "#usda 1.0\ndef \"P\" (\n    variants = {{\n        string v = \"x\"\n    }}\n    \
+             prepend variantSets = \"v\"\n)\n{{\n    variantSet \"v\" = {{\n        \"x\" (\n            \
+             {statement}\n        ) {{\n        }}\n    }}\n}}\n"
+        ),
+        "attribute" => {
+            format!("#usda 1.0\ndef \"P\"\n{{\n    float a (\n        {statement}\n    )\n}}\n")
+        }
+        "relationship" => {
+            format!("#usda 1.0\ndef \"P\"\n{{\n    rel r (\n        {statement}\n    )\n}}\n")
+        }
+        other => panic!("no kind of spec {other}"),
+    }
+}
+
+/// The field a statement sets.
+fn field_of(statement: &str) -> &str {
+    let first = statement.lines().next().unwrap();
+    first
+        .split('=')
+        .next()
+        .unwrap()
+        .split_whitespace()
+        .last()
+        .unwrap()
+}
+
+/// The fields of the spec of kind `spec` in a layer the oracle reads.
+fn spec_fields<'a>(
+    layer: &'a layerstack::Layer,
+    store: &InMemoryStore,
+    prim: layerstack::PathId,
+    spec: &str,
+) -> &'a [FieldEntry] {
+    match spec {
+        "layer" => layer.metadata_fields(),
+        "prim" => &layer.prims()[&prim].fields,
+        "variant" => {
+            let prim = &layer.prims()[&prim];
+            let set = prim
+                .variant_sets
+                .get(&store.tokens.lookup("v").unwrap())
+                .unwrap();
+            &set.variants[&store.tokens.lookup("x").unwrap()].fields
+        }
+        "attribute" | "relationship" => {
+            let name = if spec == "attribute" { "a" } else { "r" };
+            let prim = &layer.prims()[&prim];
+            &layerstack::property::get_property(
+                &prim.properties,
+                store.tokens.lookup(name).unwrap(),
+            )
+            .unwrap()
+            .metadata
+        }
+        other => panic!("no kind of spec {other}"),
+    }
+}
+
+/// The lines of `field`'s statements in the text a layer saves as, as the
+/// oracle collects OpenUSD's: stripped, a dictionary's block whole.
+fn written(text: &str, field: &str) -> String {
+    let lines: Vec<&str> = text.lines().collect();
+    let mut out = Vec::new();
+    for (i, line) in lines.iter().enumerate() {
+        let trimmed = line.trim_start();
+        let statement = ["prepend ", "append ", "delete ", "add ", "reorder "]
+            .iter()
+            .find_map(|op| trimmed.strip_prefix(op))
+            .unwrap_or(trimmed);
+        if !statement.starts_with(&format!("{field} = ")) {
+            continue;
+        }
+        out.push(line.trim());
+        if line.trim_end().ends_with('{') {
+            let indent = line.len() - trimmed.len();
+            for rest in &lines[i + 1..] {
+                out.push(rest.trim());
+                if rest.trim() == "}" && rest.len() - rest.trim_start().len() == indent {
+                    break;
+                }
+            }
+        }
+    }
+    out.join("\n")
+}
+
+#[test]
+fn metadata_statements_read_and_save_as_openusd_reads_and_writes_them() {
+    let oracle = oracle();
+    for case in &oracle.reading {
+        let store = InMemoryStore::default();
+        let registry = registry(&oracle, &store.tokens);
+        let source = layer_text(&case.spec, &case.statement);
+        let read = read_usda_with_registry(
+            &source,
+            LayerId(1),
+            &store.tokens,
+            &store.paths,
+            &mut NoAssets,
+            &registry,
+        );
+        let what = format!("{} on a {}", case.statement, case.spec);
+        if let Some(error) = &case.error {
+            assert!(read.emitted.rejected, "{what} is rejected");
+            let messages: Vec<String> = read
+                .emitted
+                .diagnostics
+                .iter()
+                .filter_map(|d| d.metadata.as_ref().map(|m| m.openusd_message()))
+                .collect();
+            assert_eq!(messages, std::slice::from_ref(error), "{what}");
+            continue;
+        }
+        assert!(
+            read.parse_diagnostics.is_empty() && !read.emitted.rejected,
+            "{what}: {:?} {:?}",
+            read.parse_diagnostics,
+            read.emitted.diagnostics
+        );
+        let field = field_of(&case.statement);
+        let layer = &read.emitted.layer;
+        let key = store.tokens.intern(field);
+        let prim = store.path("/P");
+        let value = layerstack::doc::get_field(spec_fields(layer, &store, prim, &case.spec), &key);
+        if case.absent {
+            assert!(value.is_none(), "{what}");
+            continue;
+        }
+        // Prim members, and a prim's type, which no field holds.
+        let member = matches!(field, "instanceable" | "typeName");
+        if !member {
+            let value = value.unwrap_or_else(|| panic!("{what} authors {field}"));
+            // A variant's field registered for variants alone is no field
+            // the text parser types (it reads a variant's metadata as a
+            // prim's), and OpenUSD keeps its text.
+            let unregistered = case.unregistered
+                || case
+                    .value
+                    .as_ref()
+                    .is_some_and(|value| value.get("unregistered").is_some());
+            if !unregistered {
+                assert_eq!(
+                    Some(encode(value, &store.tokens)),
+                    case.value,
+                    "{what}'s value"
+                );
+            }
+        }
+        let text = save_usda(layer, &store.tokens, &store.paths)
+            .unwrap_or_else(|e| panic!("{what} saves: {e:?}"));
+        assert_eq!(
+            Some(written(&text, field)),
+            case.written,
+            "{what} saves as OpenUSD writes it:\n{text}"
+        );
+        let again = read_usda_with_registry(
+            &text,
+            LayerId(1),
+            &store.tokens,
+            &store.paths,
+            &mut NoAssets,
+            &registry,
+        );
+        assert_eq!(&again.emitted.layer, layer, "{what} reopens as it was");
+    }
 }

@@ -2584,8 +2584,9 @@ impl Writer<'_> {
     }
 
     /// §16.2.14: one `[op] key = [items]` statement per operation, in
-    /// OpenUSD's order. Validation guarantees the op is non-empty and not
-    /// mixed.
+    /// OpenUSD's order; an explicit empty list is `key = None`, as
+    /// OpenUSD writes it (`_WriteListOpList`, `pxr/usd/sdf/fileIO_Common.cpp`).
+    /// Validation guarantees the op is non-empty and not mixed.
     fn list_op<T>(
         &mut self,
         key: &str,
@@ -2597,7 +2598,11 @@ impl Writer<'_> {
             w.out.push_str(keyword);
             w.out.push_str(key);
             w.out.push_str(" = ");
-            w.array(items, &mut item);
+            if items.is_empty() && keyword.is_empty() {
+                w.out.push_str("None");
+            } else {
+                w.array(items, &mut item);
+            }
         });
     }
 
@@ -4232,7 +4237,8 @@ def Xform "Root"
                 "    prepend apiSchemas = [\"P\"]\n",
                 "    append apiSchemas = [\"A1\", \"A2\"]\n",
                 "    reorder apiSchemas = [\"A2\", \"P\"]\n",
-                "    exedraTags = []\n",
+                // An explicit empty list is `None`, as OpenUSD writes it.
+                "    exedraTags = None\n",
             )),
             "{text}"
         );

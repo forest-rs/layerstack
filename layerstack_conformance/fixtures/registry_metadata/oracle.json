@@ -2292,11 +2292,6 @@
    "statement": "acceptOpaque = None"
   },
   {
-   "error": "\"comment\" is registered as a non-metadata field",
-   "spec": "prim",
-   "statement": "comment = \"note\""
-  },
-  {
    "error": "\"specifier\" is registered as a non-metadata field",
    "spec": "prim",
    "statement": "specifier = \"def\""

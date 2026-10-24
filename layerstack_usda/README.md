@@ -55,13 +55,18 @@ and recognized numeric arrays. Use the parser APIs when you need an inspectable
 AST or lossless editing. The importer still retains structural syntax for
 declarations and metadata; the caller supplies the complete source string.
 
-For plugin-defined metadata, build a `layerstack::SchemaRegistry` with the
-same token interner and use `read_usda_with_registry`, or
-`emit::emit_with_registry` for an AST. These entry points convert registered
-scalar, array and list-op fields to their declared types and reject invalid
-literals or spec targets with source diagnostics. Registered defaults remain
-in the registry; importing does not author them. Built-in field definitions
-retain precedence, and unregistered names keep the ordinary literal inference.
+Metadata statements read as their field's registered type, as OpenUSD's text
+parser reads them: the fields Sdf and usd-core's own plugins register are
+built in, and for plugin-defined metadata build a `layerstack::SchemaRegistry`
+with the same token interner and use `read_usda_with_registry`, or
+`emit::emit_with_registry` for an AST. A field registered for the kind of spec
+a statement is on converts its literal (`irIsInvertible = 0` is `false` for a
+`bool` field); a literal the type cannot hold rejects the layer with a
+diagnostic naming the field, its type and why (`Diagnostic::metadata`). A name
+registered for no field of that spec keeps its literal's own type, as OpenUSD
+keeps such a field's text. Registered defaults remain in the registry;
+importing does not author them. `metadata::metadata_value` reads one USDA
+literal as a given metadata type.
 
 For storage-backed stages, pass that store and registry to
 `layerstack_io::StageDocument::open_in` through `StageOptions::schemas`.

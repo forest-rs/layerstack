@@ -133,7 +133,6 @@ EXTRA_STATEMENTS = [
     ("attribute", "noLoadHint = 1"),
     ("prim", "acceptOpaque = None"),
     # Fields of the spec that are not metadata.
-    ("prim", 'comment = "note"'),
     ("prim", 'specifier = "def"'),
     ("relationship", 'variability = "uniform"'),
     ("layer", 'primOrder = ["P"]'),

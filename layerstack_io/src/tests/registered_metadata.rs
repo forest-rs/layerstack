@@ -4,7 +4,7 @@
 //! Stage options govern registered USDA metadata through every reader lifecycle.
 
 use super::*;
-use layerstack::{FieldValue, MetadataDefinition, MetadataTarget};
+use layerstack::{FieldValue, MetadataDefinition, MetadataTarget, Value};
 
 fn setup(files: &[(&str, &str)]) -> (Memory, InMemoryStore, StageOptions) {
     let store = InMemoryStore::default();
@@ -163,14 +163,19 @@ fn stage_registry_types_initial_recursive_explicit_reload_and_package_reads() {
 }
 
 #[test]
-fn strict_import_rejects_registered_metadata_on_invalid_spec_targets() {
+fn strict_import_keeps_a_field_on_a_spec_it_is_not_registered_for_untyped() {
+    // `hostScale` is registered for prims: on a layer it is a field the
+    // layer's spec definition does not register, which OpenUSD keeps as it
+    // reads it rather than rejecting the layer.
     let (memory, store, options) =
         setup(&[("root.usda", "#usda 1.0\n(hostScale = 1)\ndef \"P\" {}\n")]);
+    let document =
+        StageDocument::open_in(memory, store, "root.usda", options, ImportPolicy::Strict).unwrap();
+    let key = document.store.tokens.lookup("hostScale").unwrap();
+    let layer = document.store.layers().next().unwrap();
     assert_eq!(
-        StageDocument::open_in(memory, store, "root.usda", options, ImportPolicy::Strict)
-            .unwrap_err()
-            .kind,
-        IoErrorKind::Rejected
+        layer.metadata(key),
+        Some(&FieldValue::Value(Value::Int64(1)))
     );
 }
 

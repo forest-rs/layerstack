@@ -266,7 +266,6 @@ fn invalid_registered_literals_and_targets_reject_without_foreign_kind_fields() 
         "hostTokens = 3",
         "hostNames = { string bad = \"wrong\" }",
         "prepend hostFloat = [1]",
-        "hostLayer = 3",
     ] {
         let mut store = InMemoryStore::default();
         let registry = registry(&mut store);
@@ -299,6 +298,32 @@ fn invalid_registered_literals_and_targets_reject_without_foreign_kind_fields() 
             "{assignment}: diagnostics retain the authored span"
         );
     }
+}
+
+#[test]
+fn a_field_on_a_kind_of_spec_it_is_not_registered_for_is_kept_untyped() {
+    // OpenUSD keeps the text of a field the spec's definition does not
+    // register (`SdfUnregisteredValue`); the literal keeps its own type.
+    let mut store = InMemoryStore::default();
+    let registry = registry(&mut store);
+    let result = read_usda_with_registry(
+        "#usda 1.0\ndef \"P\" (hostLayer = 3) {}",
+        LayerId(1),
+        &store.tokens,
+        &store.paths,
+        &mut NoAssets,
+        &registry,
+    );
+    assert!(!result.emitted.rejected, "{:?}", result.emitted.diagnostics);
+    let path = store.path("/P");
+    assert_eq!(
+        field(
+            &store,
+            &result.emitted.layer.prims()[&path].fields,
+            "hostLayer"
+        ),
+        &FieldValue::Value(Value::Int64(3))
+    );
 }
 
 #[test]

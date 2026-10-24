@@ -70,10 +70,10 @@ pub fn read_usda(
 
 /// Imports USDA using caller-registered metadata types and spec targets.
 ///
-/// Use the registry built with `tokens` to interpret custom metadata literals.
-/// Built-in field definitions retain precedence. Declared scalar, array and
-/// list-op types are checked; invalid literals and targets reject the layer.
-/// Defaults remain un-authored. Numeric property arrays retain the compact
+/// Use the registry built with `tokens` to interpret custom metadata literals,
+/// as [`crate::emit::emit_with_registry`] does: a field registered for the
+/// statement's kind of spec takes its declared type, and a literal it cannot
+/// hold rejects the layer. Defaults remain un-authored. Numeric property arrays retain the compact
 /// import path and [`ReadStats`] accounting of [`read_usda`].
 ///
 /// For storage-backed stages, `layerstack_io::StageDocument::open_in` supplies

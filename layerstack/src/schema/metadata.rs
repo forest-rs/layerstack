@@ -508,9 +508,10 @@ impl<'a> MetadataField<'a> {
 
 /// Whether `name` is a field of a spec of `target` that is not metadata:
 /// one of the spec's own fields (`specifier`, `default`, `targetPaths`,
-/// `subLayers`, …) or a metadata field with a route of its own
-/// (`typeName`, `payload`, `permission`), which edits author through their
-/// own calls and a USDA metadata statement cannot set.
+/// `subLayers`, …) or a metadata field with a route of its own (`typeName`,
+/// `payload`), which edits author through their own calls. `permission`,
+/// an enum of Sdf's own that no metadata type holds, is a field of none of
+/// these: it is kept as the token it is written as.
 ///
 /// OpenUSD: the `Field`s of `_RegisterStandardFields`' spec definitions
 /// (`"…" is registered as a non-metadata field`).

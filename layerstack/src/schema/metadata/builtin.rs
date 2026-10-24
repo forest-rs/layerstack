@@ -338,7 +338,6 @@ pub(super) fn is_spec_field(name: &str, target: MetadataTarget) -> bool {
                 | "variantSetChildren"
                 | "variantSetNames"
                 | "payload"
-                | "permission"
                 | "typeName"
         ),
         MetadataTarget::Attribute => matches!(
@@ -347,7 +346,6 @@ pub(super) fn is_spec_field(name: &str, target: MetadataTarget) -> bool {
                 | "variability"
                 | "comment"
                 | "default"
-                | "permission"
                 | "typeName"
                 | "spline"
                 | "connectionChildren"
@@ -357,13 +355,7 @@ pub(super) fn is_spec_field(name: &str, target: MetadataTarget) -> bool {
         ),
         MetadataTarget::Relationship => matches!(
             name,
-            "custom"
-                | "variability"
-                | "comment"
-                | "default"
-                | "permission"
-                | "targetChildren"
-                | "targetPaths"
+            "custom" | "variability" | "comment" | "default" | "targetChildren" | "targetPaths"
         ),
     }
 }

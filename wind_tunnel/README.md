@@ -230,6 +230,13 @@ released native ownership. Reusing tables alone addresses the much smaller table
 opening cost and does not release decoded arrays. Raw results are in
 `retention-plain-*.csv`, `retention-snapshot-*.csv` and `retention-metadata-*.csv`.
 
+The `live_edits` benchmark's `live_sibling_resyncs` group edits a prim that
+10,000 or 20,000 siblings reference, so each edit resyncs all of them: `/Proto`
+deactivated and activated again, and a child spec authored under it and removed
+again. Each iteration times both edits of a pair. A live update should cost about
+what composing the resynced prims afresh does; checking membership beneath the
+resynced roots by scanning them made it quadratic in the siblings.
+
 The `encoded_ownership` benchmark measures transferring an already-read vector
 into shared immutable encoded storage, excluding input allocation, initialization
 and output destruction. Vector capacity remains retained and accounted; explicit

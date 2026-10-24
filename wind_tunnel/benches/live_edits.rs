@@ -8,7 +8,7 @@ use std::hint::black_box;
 use criterion::{BenchmarkId, Criterion, SamplingMode, criterion_group, criterion_main};
 use layerstack::{
     InMemoryStore, Layer, LayerId, LiveStage, NamespaceEdit, PrimSpec, PropertyPath, PropertySpec,
-    PropertyType, StageOptions, TargetPath, Value,
+    PropertyType, Reference, Specifier, StageOptions, TargetPath, Value,
     edit::{EditTarget, Transaction},
 };
 
@@ -131,14 +131,14 @@ fn bench_local_structure(c: &mut Criterion) {
             let mut setup = Transaction::new();
             setup.create_prim(
                 EditTarget::for_layer(LayerId(1)).prim(target),
-                layerstack::Specifier::Def,
+                Specifier::Def,
                 None,
             );
             for i in 1..count {
                 let child = store.path(&format!("{name}/Child{i}"));
                 setup.create_prim(
                     EditTarget::for_layer(LayerId(1)).prim(child),
-                    layerstack::Specifier::Def,
+                    Specifier::Def,
                     None,
                 );
             }
@@ -184,7 +184,7 @@ fn bench_batch_removals(c: &mut Criterion) {
             for i in 0..count {
                 let path = store.path(&format!("{prefix}/Batch{i}"));
                 let address = EditTarget::for_layer(LayerId(1)).prim(path);
-                setup.create_prim(address.clone(), layerstack::Specifier::Def, None);
+                setup.create_prim(address.clone(), Specifier::Def, None);
                 txn.remove_spec(address);
             }
             live.apply(&mut store, &setup).unwrap();
@@ -224,7 +224,7 @@ fn bench_bulk_create(c: &mut Criterion) {
         let mut create = Transaction::new();
         for i in 0..n {
             let path = store.path(&format!("/World/Item{i}"));
-            create.create_prim(target.prim(path), layerstack::Specifier::Def, Some(cube));
+            create.create_prim(target.prim(path), Specifier::Def, Some(cube));
             for (at, &property) in names.iter().enumerate() {
                 create.create_property(
                     target.property(PropertyPath::new(path, property)),
@@ -282,7 +282,7 @@ fn many_creates(
         .map(|i| {
             let path = store.path(&format!("/World/Plant{i}"));
             let mut txn = Transaction::new();
-            txn.create_prim(target.prim(path), layerstack::Specifier::Def, None);
+            txn.create_prim(target.prim(path), Specifier::Def, None);
             txn
         })
         .collect();
@@ -365,7 +365,7 @@ fn many_root_creates(
         .map(|i| {
             let path = store.path(&format!("/Plant{i}"));
             let mut txn = Transaction::new();
-            txn.create_prim(target.prim(path), layerstack::Specifier::Def, None);
+            txn.create_prim(target.prim(path), Specifier::Def, None);
             txn
         })
         .collect();
@@ -485,6 +485,62 @@ fn bench_root_rename_prepares(c: &mut Criterion) {
     group.finish();
 }
 
+/// `/Proto`, with a child `/Proto/Geo`, and `n` siblings under `/World`
+/// that reference it: an edit to `/Proto` resyncs every sibling.
+fn referenced_by_siblings(n: usize) -> (InMemoryStore, LiveStage, layerstack::PathId) {
+    let mut store = InMemoryStore::default();
+    let proto = store.path("/Proto");
+    let mut layer = Layer::new(LayerId(1));
+    layer.insert_prim(proto, PrimSpec::def());
+    layer.insert_prim(store.path("/Proto/Geo"), PrimSpec::def());
+    layer.insert_prim(store.path("/World"), PrimSpec::def());
+    for i in 0..n {
+        layer.insert_prim(
+            store.path(&format!("/World/I{i}")),
+            PrimSpec::def().with_reference(Reference::new(LayerId(1), proto)),
+        );
+    }
+    store.insert_layer(layer);
+    let live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+    (store, live, proto)
+}
+
+/// Edits to a prim `n` siblings reference, each resyncing all of them:
+/// `/Proto` deactivated and activated again (`toggle_active`), and a
+/// child spec `/Proto/Added` authored and removed again (`add_child`).
+/// One iteration times both edits of a pair, which leave the stage as it
+/// was. A live update should cost about what composing the resynced
+/// prims afresh does, not grow with the siblings squared.
+fn bench_sibling_resyncs(c: &mut Criterion) {
+    let mut group = c.benchmark_group("live_sibling_resyncs");
+    group.sample_size(10);
+    group.sampling_mode(SamplingMode::Flat);
+    for n in [10_000, 20_000] {
+        let (mut store, mut live, proto) = referenced_by_siblings(n);
+        let target = EditTarget::for_layer(LayerId(1));
+        let added = store.path("/Proto/Added");
+        let (mut off, mut on) = (Transaction::new(), Transaction::new());
+        off.set_active(target.prim(proto), false);
+        on.set_active(target.prim(proto), true);
+        let (mut create, mut remove) = (Transaction::new(), Transaction::new());
+        create.create_prim(target.prim(added), Specifier::Def, None);
+        remove.remove_spec(target.prim(added));
+        for (case, edits) in [
+            ("toggle_active", [off, on]),
+            ("add_child", [create, remove]),
+        ] {
+            group.bench_with_input(BenchmarkId::new(case, n), &n, |b, _| {
+                b.iter(|| {
+                    for edit in &edits {
+                        black_box(live.apply(&mut store, edit).unwrap());
+                    }
+                });
+            });
+        }
+    }
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_live_edits,
@@ -494,6 +550,7 @@ criterion_group!(
     bench_many_creates,
     bench_many_root_creates,
     bench_root_renames,
-    bench_root_rename_prepares
+    bench_root_rename_prepares,
+    bench_sibling_resyncs
 );
 criterion_main!(benches);

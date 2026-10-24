@@ -122,6 +122,40 @@ impl Storage for Filesystem {
         }
         Ok(bytes)
     }
+    fn exists(&self, identifier: &str) -> Result<bool, IoError> {
+        // A file, as `identify` selects candidates; a directory is no source.
+        match fs::metadata(identifier) {
+            Ok(metadata) => Ok(metadata.is_file()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+            Err(error) => Err(storage_error(error)),
+        }
+    }
+    fn list_siblings(&self, identifier: &str) -> Result<Option<Vec<String>>, IoError> {
+        let Some(directory) = Path::new(identifier).parent() else {
+            return Ok(Some(Vec::new()));
+        };
+        let entries = match fs::read_dir(directory) {
+            Ok(entries) => entries,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(Some(Vec::new()));
+            }
+            Err(error) => return Err(storage_error(error)),
+        };
+        let mut files = Vec::new();
+        for entry in entries {
+            let entry = entry.map_err(storage_error)?;
+            // The entry's type comes with the listing; only a symbolic
+            // link needs a further query, to see whether it names a file.
+            let kind = entry.file_type().map_err(storage_error)?;
+            let path = entry.path();
+            if (kind.is_file() || (kind.is_symlink() && path.is_file()))
+                && let Some(path) = path.to_str()
+            {
+                files.push(path.to_string());
+            }
+        }
+        Ok(Some(files))
+    }
     fn open_ranges(
         &self,
         identifier: &str,

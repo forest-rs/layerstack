@@ -11,6 +11,7 @@ mod file_formats;
 mod package_identity;
 mod registered_metadata;
 mod threaded_open;
+mod udim_tiles;
 
 #[test]
 fn sparse_clip_preparation_covers_advanced_weaker_queries_and_set_reordering() {

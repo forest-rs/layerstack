@@ -62,6 +62,9 @@
 //! candidate composition and preserves stage observers. Both document and
 //! candidate provide `read_asset_bytes` for package-aware arbitrary resources;
 //! pass the asset's winning authoring layer, not its composed prim's root layer.
+//! [`StageDocument::resolve_udim_tiles`] lists the existing tiles of a UDIM
+//! texture (`color.<UDIM>.png`) through the same storage and packages, with
+//! the storage work it spent.
 #![no_std]
 extern crate alloc;
 #[cfg(feature = "std")]
@@ -94,9 +97,11 @@ pub use reload::PreparedReload;
 mod asset_bytes;
 mod clips;
 mod package;
+mod udim;
 pub use asset_bytes::{AssetByteSource, AssetBytes, AssetReadLimits};
 pub use clips::{ClipLoadFailure, ClipQueryPreparation};
 pub use package::{PackageInclusion, PackagePreparationLimits, PreparedPackage};
+pub use udim::{UdimDiscovery, UdimDiscoveryWork, UdimTileAsset, UdimTiles};
 
 #[cfg(feature = "std")]
 mod filesystem;
@@ -258,6 +263,28 @@ pub trait Storage: layerstack::MaybeSync {
             IoErrorKind::Unsupported,
             "storage does not implement range sources",
         ))
+    }
+    /// Whether `identifier`, as [`Self::identify`] returns it, names an
+    /// existing source, reading none of it. UDIM tile discovery
+    /// ([`StageDocument::resolve_udim_tiles`]) asks this of tile spellings,
+    /// as OpenUSD asks `ArResolver::Resolve`. The default fails with
+    /// [`IoErrorKind::Unsupported`]; it never reads the source to find out.
+    fn exists(&self, _identifier: &str) -> Result<bool, IoError> {
+        Err(IoError::new(
+            IoErrorKind::Unsupported,
+            "storage does not implement existence queries",
+        ))
+    }
+    /// The identifiers of every existing source in the same directory as
+    /// `identifier`, which need not exist itself, spelled as
+    /// [`Self::identify`] spells them; an absent directory lists as empty.
+    /// `Ok(None)` when the backend cannot enumerate, the default: callers
+    /// then probe with [`Self::exists`]. One listing replaces up to 99
+    /// probes for the tiles of a UDIM set; a [`UdimDiscovery`] keeps it for
+    /// the directory's other sets, keyed by the identifier's text before its
+    /// last `/` or `\`, which the identifiers of one directory must share.
+    fn list_siblings(&self, _identifier: &str) -> Result<Option<Vec<String>>, IoError> {
+        Ok(None)
     }
     /// Writes a complete source.
     fn write(&mut self, identifier: &str, bytes: &[u8]) -> Result<(), IoError>;

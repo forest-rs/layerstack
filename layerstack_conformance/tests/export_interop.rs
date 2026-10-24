@@ -639,12 +639,18 @@ fn layer_snapshot(python: &str, args: &[&Path]) -> Result<String, String> {
 /// The preservation corpus through OpenUSD (`save_corpus`): each case is
 /// imported from its USDA and from OpenUSD's USDC of it, edited through the
 /// `Layer` API and saved as USDA and USDC. OpenUSD must read every saved
-/// file exactly as it reads the hand-written expected layer — the same text
-/// (every spec, field and type), the same authored child and property
-/// order, and the same `ClaimsAPI` records — and our USDC must decode like
-/// OpenUSD's own USDC of our USDA, which pins every field's value type. A
-/// case about composition is also composed by OpenUSD with its assets, and
-/// every saved file must compose as the expected layer does.
+/// file as it reads the expected layer saved the same way: the same text
+/// (every spec, field and type), the same child and property order, and
+/// the same `ClaimsAPI` records. Saved as USDC, that is the hand-written
+/// expected layer, in its authored order; saved as USDA, it is OpenUSD's
+/// own USDA of the expected layer, whose text writer sorts each prim's
+/// properties (`Sdf_WritePrimProperties`, `_SortByNameThenType`, in
+/// `pxr/usd/sdf/fileIO_Common.h`), so its text parser reads them back
+/// sorted. Our USDC must also decode like OpenUSD's own USDC of our USDA,
+/// which pins every field's value type, apart from the order of fields and
+/// properties ([`unordered`]), which a crate file keeps as authored. A case
+/// about composition is also composed by OpenUSD with its assets, and every
+/// saved file must compose as the expected layer does.
 #[test]
 fn saved_layers_round_trip_through_openusd() {
     let Some((python, version)) = usd_python() else {
@@ -708,6 +714,23 @@ fn saved_layers_round_trip_through_openusd() {
             .unwrap_or_else(|e| panic!("{name}: OpenUSD cannot convert the source: {e}"));
         let want = snapshot(&expected)
             .unwrap_or_else(|e| panic!("{name}: OpenUSD cannot read the expected layer: {e}"));
+        let expected_text = dir.join(format!("{name}.expected.openusd.usda"));
+        layer_snapshot(&python, &[Path::new("convert"), &expected, &expected_text])
+            .unwrap_or_else(|e| panic!("{name}: OpenUSD cannot save the expected layer: {e}"));
+        let want_text = snapshot(&expected_text)
+            .unwrap_or_else(|e| panic!("{name}: OpenUSD cannot read its USDA: {e}"));
+        if name == "animation_blocks" {
+            // The oracle itself: OpenUSD's USDA of a layer reads back with
+            // its properties sorted, its crate file in authored order.
+            let order = |snapshot: &str| {
+                let snapshot: serde_json::Value = serde_json::from_str(snapshot).unwrap();
+                snapshot["order"]["/P"]["properties"].clone()
+            };
+            let authored = serde_json::json!(["changed", "blocked", "array"]);
+            assert_eq!(order(&want), authored, "expected layer");
+            let sorted = serde_json::json!(["array", "blocked", "changed"]);
+            assert_eq!(order(&want_text), sorted, "OpenUSD's USDA of it");
+        }
         if name == "explicit_empty_lists" {
             // The oracle itself: explicit-empty lists block the weaker
             // opinions, a bare declaration does not, a delete edits them.
@@ -753,9 +776,9 @@ fn saved_layers_round_trip_through_openusd() {
             let ours = layer.save_usdc().unwrap();
             std::fs::write(&usda, layer.save_usda().unwrap()).unwrap();
             std::fs::write(&usdc, &ours).unwrap();
-            for saved in [&usda, &usdc] {
+            for (saved, want) in [(&usda, &want_text), (&usdc, &want)] {
                 match snapshot(saved) {
-                    Ok(got) if got == want => {}
+                    Ok(got) if got == *want => {}
                     Ok(got) => failures.push(format!(
                         "{}: OpenUSD reads it differently\n--- saved\n{got}\n--- expected\n{want}",
                         saved.display()
@@ -779,8 +802,8 @@ fn saved_layers_round_trip_through_openusd() {
                 failures.push(format!("{name}: OpenUSD cannot convert our USDA: {e}"));
                 continue;
             }
-            let theirs = crate_structure(&std::fs::read(&reference).unwrap()).unwrap();
-            let ours = crate_structure(&ours).unwrap();
+            let theirs = unordered(crate_structure(&std::fs::read(&reference).unwrap()).unwrap());
+            let ours = unordered(crate_structure(&ours).unwrap());
             if ours != theirs {
                 failures.push(format!(
                     "{name} (from {from}): USDC differs from OpenUSD's USDC of our USDA\n--- ours\n{ours:#?}\n--- OpenUSD\n{theirs:#?}"

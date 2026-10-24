@@ -154,6 +154,16 @@ fn bench_list_ops(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("chain", n), &chain, |b, chain| {
             b.iter(|| black_box(resolve_list_chain(black_box(&fallback), chain.iter())));
         });
+        // Two layers' deletes, prepends and appends, as flattening and
+        // stitching combine them.
+        let [_, append, prepend, delete, _] = &chain[..] else {
+            unreachable!("the chain has five edits")
+        };
+        let strong = prepend.clone().with_deleted(delete.delete.clone());
+        let weak = append.clone().with_deleted(delete.delete.clone());
+        group.bench_function(BenchmarkId::new("compose", n), |b| {
+            b.iter(|| black_box(black_box(&strong).compose_over(black_box(&weak))));
+        });
     }
     group.finish();
 }

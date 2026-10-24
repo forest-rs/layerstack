@@ -557,6 +557,83 @@ impl<T: Clone + Eq + Hash> ListOp<T> {
             apply_list_order(out, &self.reorder);
         }
     }
+
+    /// The one operation that edits any list as applying `weaker` and then
+    /// this operation does, if there is one.
+    ///
+    /// An explicit list composes over anything, and an operation without
+    /// added or reordered items composes over an explicit list. Otherwise
+    /// both operations may only delete, prepend and append: an add or a
+    /// reorder depends on the list it edits, so no single operation stands
+    /// for it over every list, and this returns `None`.
+    ///
+    /// Each list of the result is built in one pass over the authored items:
+    /// short lists are scanned and long ones hashed (only scanned, and
+    /// quadratic, without the `hash-tables` feature).
+    ///
+    /// Spec: AOUSD Core §6.6.3 (list ops). OpenUSD:
+    /// `SdfListOp::ApplyOperations(const SdfListOp&)` in
+    /// `pxr/usd/sdf/listOp.cpp`, which keeps repeated authored items as
+    /// they are.
+    ///
+    /// ```
+    /// use opinionated::ListOp;
+    /// let weak = ListOp::appended(vec![1, 2]);
+    /// let strong = ListOp::prepended(vec![2]).with_deleted(vec![3]);
+    /// let op = strong.compose_over(&weak).unwrap();
+    /// assert_eq!(op.apply_to(&[3, 4]), strong.apply_to(&weak.apply_to(&[3, 4])));
+    /// assert_eq!(op, ListOp::prepended(vec![2]).with_appended(vec![1]).with_deleted(vec![3]));
+    /// assert_eq!(ListOp::added(vec![5]).compose_over(&weak), None);
+    /// ```
+    #[must_use]
+    pub fn compose_over(&self, weaker: &Self) -> Option<Self> {
+        if self.explicit.is_some() {
+            return Some(self.clone());
+        }
+        if !self.add.is_empty() || !self.reorder.is_empty() {
+            return None;
+        }
+        if let Some(items) = &weaker.explicit {
+            return Some(Self::explicit(self.apply_to(items)));
+        }
+        if !weaker.add.is_empty() || !weaker.reorder.is_empty() {
+            return None;
+        }
+        // Every authored item of both operations may be looked up.
+        let probes = self.items().count() + weaker.items().count();
+        let lookup = |items| Positions::new(items, Occurrence::First, probes);
+        let deleted = lookup(&self.delete);
+        let prepended = lookup(&self.prepend);
+        let appended = lookup(&self.append);
+        let weaker_deleted = lookup(&weaker.delete);
+        // A stronger prepend or append takes an item out of every weaker
+        // list; a stronger delete takes it out of the weaker insertions.
+        let moved = |item: &&T| prepended.contains(item) || appended.contains(item);
+        let edited = |item: &&T| deleted.contains(item) || moved(item);
+        let delete = weaker.delete.iter().filter(|item| !moved(item)).chain(
+            deleted
+                .unique()
+                .filter(|item| !weaker_deleted.contains(item) && !moved(item)),
+        );
+        let prepend = self
+            .prepend
+            .iter()
+            .filter(|item| !appended.contains(item))
+            .chain(weaker.prepend.iter().filter(|item| !edited(item)));
+        let append = weaker
+            .append
+            .iter()
+            .filter(|item| !edited(item))
+            .chain(&self.append);
+        Some(Self {
+            explicit: None,
+            prepend: prepend.cloned().collect(),
+            append: append.cloned().collect(),
+            delete: delete.cloned().collect(),
+            add: Vec::new(),
+            reorder: Vec::new(),
+        })
+    }
 }
 
 /// Resolves a strongest-to-weakest chain of owned or borrowed list operations.

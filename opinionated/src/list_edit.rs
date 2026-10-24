@@ -148,6 +148,14 @@ impl<'a, T: Eq + Hash> Positions<'a, T> {
         }
     }
 
+    /// Whether the items hold `item`.
+    pub(crate) fn contains(&self, item: &T) -> bool {
+        match &self.table {
+            Some(table) => table.contains(item),
+            None => self.items.contains(item),
+        }
+    }
+
     /// Removes every item the items hold from `out`. The lookup is chosen
     /// once, outside the loop, so a scan stays a tight loop.
     pub(crate) fn remove_from(&self, out: &mut Vec<T>) {

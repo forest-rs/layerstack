@@ -226,39 +226,12 @@ fn listop<T: Clone + Eq + Hash>(
 ) -> ListOp<T> {
     // AOUSD §12.4; SdfListOp::ApplyOperations(listop) composition, followed by
     // usdUtils/stitch.cpp's _FixListOp only when exact representation fails.
-    if strong.explicit.is_some() {
-        return strong.clone();
-    }
-    let legacy = !strong.add.is_empty()
-        || !strong.reorder.is_empty()
-        || (weak.explicit.is_none() && (!weak.add.is_empty() || !weak.reorder.is_empty()));
-    if legacy {
+    strong.compose_over(weak).unwrap_or_else(|| {
         report.approximated_list_ops += 1;
-        return listop(&fixed(strong), &fixed(weak), report);
-    }
-    if let Some(items) = &weak.explicit {
-        return ListOp::explicit(strong.apply_to(items));
-    }
-    let mut result = weak.clone();
-    for value in &strong.delete {
-        result.prepend.retain(|v| v != value);
-        result.append.retain(|v| v != value);
-        if !result.delete.contains(value) {
-            result.delete.push(value.clone());
-        }
-    }
-    for value in strong.prepend.iter().chain(&strong.append) {
-        result.delete.retain(|v| v != value);
-        result.prepend.retain(|v| v != value);
-        result.append.retain(|v| v != value);
-    }
-    let mut prepend = strong.prepend.clone();
-    prepend.extend(result.prepend);
-    // If strong prepends and appends the same item, append wins.
-    prepend.retain(|v| !strong.append.contains(v));
-    result.prepend = prepend;
-    result.append.extend_from_slice(&strong.append);
-    result
+        fixed(strong)
+            .compose_over(&fixed(weak))
+            .expect("ops without added or reordered items compose")
+    })
 }
 fn field_value(strong: &mut FieldValue, weak: &FieldValue, report: &mut StitchReport) {
     match (strong, weak) {

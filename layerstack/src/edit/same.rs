@@ -22,7 +22,7 @@ use hashbrown::HashMap;
 
 use crate::{
     array_edit::{ArrayEditOp, ArrayEditOperand},
-    doc::{FieldEntry, FieldValue, PrimSpec, Value, VariantSetSpec, VariantSpec},
+    doc::{FieldEntry, FieldValue, PrimSpec, Value, VariantSetSpec, VariantSets, VariantSpec},
     property::{PropertyEntry, PropertySpec, PropertyType},
     spline::{Extrapolation, Knot, LoopParams, SplineData},
 };
@@ -313,6 +313,17 @@ impl Same for VariantSpec {
             && variant_sets.same(&other.variant_sets)
             && *variant_set_names == other.variant_set_names
             && *property_order == other.property_order
+    }
+}
+
+/// The same sets in the same order: the order is written.
+impl Same for VariantSets {
+    fn same(&self, other: &Self) -> bool {
+        self.len() == other.len()
+            && self
+                .iter()
+                .zip(other)
+                .all(|((a, a_set), (b, b_set))| a == b && a_set.same(b_set))
     }
 }
 

@@ -6,7 +6,7 @@
 use layerstack::{
     AssetResolveError, AssetResolver, FieldValue, LayerId, PathInterner, PrimSpec, PropertyEntry,
     Reference, ReferenceSource, ResolvedAsset, Stage, StageOptions, Time, TokenInterner, Value,
-    VariantSetSpec, flatten_layer_stack,
+    VariantSets, flatten_layer_stack,
 };
 use layerstack_conformance::{usda_real::load_entry_usda, workspace_root};
 use std::{path::Path, sync::Arc};
@@ -77,7 +77,7 @@ fn properties(properties: &mut [PropertyEntry]) {
         fields(property.metadata.make_mut());
     }
 }
-fn variants(sets: &mut hashbrown::HashMap<layerstack::TokenId, VariantSetSpec>, output: LayerId) {
+fn variants(sets: &mut VariantSets, output: LayerId) {
     for set in sets.values_mut() {
         for variant in set.variants.values_mut() {
             fields(&mut variant.fields);

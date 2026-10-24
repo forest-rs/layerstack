@@ -1530,14 +1530,14 @@ pub struct VariantSpec {
     /// those selections apply to the owning prim when this variant is selected.
     pub variant_selections: HashMap<TokenId, TokenId>,
     /// The variant sets nested in this branch (`/P{a=x}{b=}`), keyed by
-    /// set name.
+    /// set name, in the order they were added.
     ///
     /// They are sets of the prim hosting this branch, available only while
     /// this branch is selected.
     ///
     /// Spec: AOUSD Core §7.3.6 (variant specs may contain variant set
     /// specs).
-    pub variant_sets: HashMap<TokenId, VariantSetSpec>,
+    pub variant_sets: VariantSets,
     /// The `variantSetNames` list op of this branch (`variantSets` in
     /// USDA): the nested sets it lists, as
     /// [`PrimSpec::variant_set_names`] is for a prim spec.
@@ -1612,7 +1612,7 @@ impl VariantBranch<'_> {
 
 /// The variant spec reached from `sets` through `chain`, outermost first.
 fn variant_spec_in<'a>(
-    sets: &'a HashMap<TokenId, VariantSetSpec>,
+    sets: &'a VariantSets,
     chain: &[(TokenId, TokenId)],
 ) -> Option<&'a VariantSpec> {
     let ((set, variant), rest) = chain.split_first()?;
@@ -1626,7 +1626,7 @@ fn variant_spec_in<'a>(
 
 /// The variant spec reached from `sets` through `chain`, mutably.
 fn variant_spec_in_mut<'a>(
-    sets: &'a mut HashMap<TokenId, VariantSetSpec>,
+    sets: &'a mut VariantSets,
     chain: &[(TokenId, TokenId)],
 ) -> Option<&'a mut VariantSpec> {
     let ((set, variant), rest) = chain.split_first()?;
@@ -1650,10 +1650,7 @@ pub struct VariantBranches<'a> {
 }
 
 impl<'a> VariantBranches<'a> {
-    fn new(
-        sets: &'a HashMap<TokenId, VariantSetSpec>,
-        selections: Option<&'a HashMap<TokenId, TokenId>>,
-    ) -> Self {
+    fn new(sets: &'a VariantSets, selections: Option<&'a HashMap<TokenId, TokenId>>) -> Self {
         let mut branches = Self {
             pending: Vec::new(),
             selections,
@@ -1662,11 +1659,7 @@ impl<'a> VariantBranches<'a> {
         branches
     }
 
-    fn push_sets(
-        &mut self,
-        enclosing: &[(TokenId, TokenId)],
-        sets: &'a HashMap<TokenId, VariantSetSpec>,
-    ) {
+    fn push_sets(&mut self, enclosing: &[(TokenId, TokenId)], sets: &'a VariantSets) {
         for (set, set_spec) in sets {
             match self.selections {
                 Some(selections) => {
@@ -1754,6 +1747,204 @@ pub struct VariantSetSpec {
     pub variants: HashMap<TokenId, VariantSpec>,
 }
 
+/// The variant set specs of a prim spec or variant spec, keyed by set
+/// name, in the order they were added: a new set goes last, a replaced one
+/// keeps its place, and a removed one leaves the others in order.
+///
+/// This is OpenUSD's `variantSetChildren`, the order a text layer's
+/// `variantSet` blocks are written in (`Sdf_WritePrimVariantSets`,
+/// `pxr/usd/sdf/fileIO_Common.h`): set specs are created as a text layer
+/// lists them in an explicit or added `variantSets` and then as its
+/// blocks introduce them, as `UsdVariantSets::AddVariantSet` creates them,
+/// and as a crate file's `variantSetChildren` holds them. Which sets a
+/// prim composes, and in which order, is its `variantSetNames` list op
+/// instead ([`PrimSpec::variant_set_names`]).
+///
+/// Lookups are linear: a spec has few variant sets.
+///
+/// Spec: AOUSD Core §7.3.6 (prim and variant specs contain variant set
+/// specs).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct VariantSets {
+    sets: Vec<(TokenId, VariantSetSpec)>,
+}
+
+impl VariantSets {
+    /// No variant sets.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self { sets: Vec::new() }
+    }
+
+    /// The number of sets.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.sets.len()
+    }
+
+    /// Whether there are no sets.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.sets.is_empty()
+    }
+
+    /// The place of the set named `name` among the sets.
+    #[must_use]
+    pub fn index_of(&self, name: &TokenId) -> Option<usize> {
+        self.sets.iter().position(|(set, _)| set == name)
+    }
+
+    /// The set named `name`.
+    #[must_use]
+    pub fn get(&self, name: &TokenId) -> Option<&VariantSetSpec> {
+        self.index_of(name).map(|i| &self.sets[i].1)
+    }
+
+    /// The set named `name`, mutably.
+    #[must_use]
+    pub fn get_mut(&mut self, name: &TokenId) -> Option<&mut VariantSetSpec> {
+        self.index_of(name).map(|i| &mut self.sets[i].1)
+    }
+
+    /// Whether a set is named `name`.
+    #[must_use]
+    pub fn contains_key(&self, name: &TokenId) -> bool {
+        self.index_of(name).is_some()
+    }
+
+    /// Sets the set named `name` to `set`, in its place when there is one
+    /// (returning it) and last otherwise.
+    pub fn insert(&mut self, name: TokenId, set: VariantSetSpec) -> Option<VariantSetSpec> {
+        match self.index_of(&name) {
+            Some(i) => Some(core::mem::replace(&mut self.sets[i].1, set)),
+            None => {
+                self.sets.push((name, set));
+                None
+            }
+        }
+    }
+
+    /// Adds the set `set` named `name` at `index` among the sets, which
+    /// must not have one of that name.
+    ///
+    /// # Panics
+    ///
+    /// When `index` is past the last set, or a set is named `name`.
+    pub fn insert_at(&mut self, index: usize, name: TokenId, set: VariantSetSpec) {
+        assert!(!self.contains_key(&name), "a variant set of that name");
+        self.sets.insert(index, (name, set));
+    }
+
+    /// The set named `name`, added last, empty, when there is none.
+    pub fn get_or_insert_default(&mut self, name: TokenId) -> &mut VariantSetSpec {
+        let i = self.index_of(&name).unwrap_or_else(|| {
+            self.sets.push((name, VariantSetSpec::default()));
+            self.sets.len() - 1
+        });
+        &mut self.sets[i].1
+    }
+
+    /// Removes the set named `name`, keeping the others in order.
+    pub fn remove(&mut self, name: &TokenId) -> Option<VariantSetSpec> {
+        self.index_of(name).map(|i| self.sets.remove(i).1)
+    }
+
+    /// Keeps the sets `keep` accepts, in order.
+    pub fn retain(&mut self, mut keep: impl FnMut(&TokenId, &mut VariantSetSpec) -> bool) {
+        self.sets.retain_mut(|(name, set)| keep(name, set));
+    }
+
+    /// The sets, in order.
+    pub fn iter(&self) -> VariantSetsIter<'_> {
+        self.into_iter()
+    }
+
+    /// The sets, mutably, in order.
+    pub fn iter_mut(&mut self) -> VariantSetsIterMut<'_> {
+        self.into_iter()
+    }
+
+    /// The set names, in order.
+    pub fn keys(&self) -> impl ExactSizeIterator<Item = &TokenId> + DoubleEndedIterator {
+        self.sets.iter().map(|(name, _)| name)
+    }
+
+    /// The sets, in order.
+    pub fn values(&self) -> impl ExactSizeIterator<Item = &VariantSetSpec> + DoubleEndedIterator {
+        self.sets.iter().map(|(_, set)| set)
+    }
+
+    /// The sets, mutably, in order.
+    pub fn values_mut(
+        &mut self,
+    ) -> impl ExactSizeIterator<Item = &mut VariantSetSpec> + DoubleEndedIterator {
+        self.sets.iter_mut().map(|(_, set)| set)
+    }
+}
+
+/// The sets of a [`VariantSets`] with their names, in order.
+pub type VariantSetsIter<'a> = core::iter::Map<
+    core::slice::Iter<'a, (TokenId, VariantSetSpec)>,
+    fn(&'a (TokenId, VariantSetSpec)) -> (&'a TokenId, &'a VariantSetSpec),
+>;
+
+/// The sets of a [`VariantSets`] with their names, mutably, in order.
+pub type VariantSetsIterMut<'a> = core::iter::Map<
+    core::slice::IterMut<'a, (TokenId, VariantSetSpec)>,
+    fn(&'a mut (TokenId, VariantSetSpec)) -> (&'a TokenId, &'a mut VariantSetSpec),
+>;
+
+impl<'a> IntoIterator for &'a VariantSets {
+    type Item = (&'a TokenId, &'a VariantSetSpec);
+    type IntoIter = VariantSetsIter<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.sets.iter().map(|(name, set)| (name, set))
+    }
+}
+
+impl<'a> IntoIterator for &'a mut VariantSets {
+    type Item = (&'a TokenId, &'a mut VariantSetSpec);
+    type IntoIter = VariantSetsIterMut<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.sets.iter_mut().map(|(name, set)| (&*name, set))
+    }
+}
+
+impl IntoIterator for VariantSets {
+    type Item = (TokenId, VariantSetSpec);
+    type IntoIter = alloc::vec::IntoIter<(TokenId, VariantSetSpec)>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.sets.into_iter()
+    }
+}
+
+impl FromIterator<(TokenId, VariantSetSpec)> for VariantSets {
+    fn from_iter<I: IntoIterator<Item = (TokenId, VariantSetSpec)>>(sets: I) -> Self {
+        let mut all = Self::new();
+        all.extend(sets);
+        all
+    }
+}
+
+impl Extend<(TokenId, VariantSetSpec)> for VariantSets {
+    fn extend<I: IntoIterator<Item = (TokenId, VariantSetSpec)>>(&mut self, sets: I) {
+        for (name, set) in sets {
+            self.insert(name, set);
+        }
+    }
+}
+
+impl core::ops::Index<&TokenId> for VariantSets {
+    type Output = VariantSetSpec;
+
+    fn index(&self, name: &TokenId) -> &VariantSetSpec {
+        self.get(name).expect("no variant set of that name")
+    }
+}
+
 /// Opinions for a prim at a path.
 #[derive(Clone, Debug, Default, PartialEq)]
 #[doc(alias = "SdfPrimSpec")]
@@ -1806,12 +1997,13 @@ pub struct PrimSpec {
     /// Authored variant selections (set -> chosen variant).
     pub variant_selections: HashMap<TokenId, TokenId>,
     /// Authored variant sets of this prim spec (`/P{v=}`), keyed by set
-    /// name. Sets nested in a branch belong to that branch's
+    /// name, in the order they were added (OpenUSD's
+    /// `variantSetChildren`). Sets nested in a branch belong to that branch's
     /// [`VariantSpec::variant_sets`]; [`PrimSpec::variant_branches`] walks
     /// them all.
     ///
     /// Spec: AOUSD Core §7.3.6 (prim specs contain variant set specs).
-    pub variant_sets: HashMap<TokenId, VariantSetSpec>,
+    pub variant_sets: VariantSets,
     /// The `variantSetNames` list op of this prim spec (`variantSets` in
     /// USDA), as authored.
     ///
@@ -2069,7 +2261,7 @@ impl PrimSpec {
     pub fn variant_sets_in(
         &self,
         chain: &[(TokenId, TokenId)],
-    ) -> Option<(&HashMap<TokenId, VariantSetSpec>, &ListOp<TokenId>)> {
+    ) -> Option<(&VariantSets, &ListOp<TokenId>)> {
         if chain.is_empty() {
             return Some((&self.variant_sets, &self.variant_set_names));
         }
@@ -2536,10 +2728,7 @@ impl Layer {
                 arc.layer = map(arc.layer);
             }
         }
-        fn variant_sets(
-            sets: &mut HashMap<TokenId, VariantSetSpec>,
-            map: &dyn Fn(LayerId) -> LayerId,
-        ) {
+        fn variant_sets(sets: &mut VariantSets, map: &dyn Fn(LayerId) -> LayerId) {
             for variant in sets.values_mut().flat_map(|set| set.variants.values_mut()) {
                 if let Some(op) = variant.references.get_mut() {
                     arcs(op, map);
@@ -2625,7 +2814,7 @@ impl Layer {
         fn arcs(references: &ListOp<Reference>, payloads: &ListOp<Reference>) -> bool {
             !references.is_empty() || !payloads.is_empty()
         }
-        fn in_sets(sets: &HashMap<TokenId, VariantSetSpec>) -> bool {
+        fn in_sets(sets: &VariantSets) -> bool {
             sets.values()
                 .flat_map(|set| set.variants.values())
                 .any(|variant| {
@@ -3381,7 +3570,7 @@ impl Layer {
         &self,
         spec_path: &SpecPath,
         paths: &PathInterner,
-    ) -> Option<(&HashMap<TokenId, VariantSetSpec>, &ListOp<TokenId>)> {
+    ) -> Option<(&VariantSets, &ListOp<TokenId>)> {
         let chain = spec_path.variant_chain();
         self.branch_prim_spec(spec_path.prim_path(), spec_path, paths)?
             .variant_sets_in(&chain)
@@ -3926,6 +4115,35 @@ impl LayerStore for InMemoryStore {
 mod tests {
     use super::*;
     use alloc::boxed::Box;
+
+    /// Sets keep their order: a new one last, a replaced one in place, a
+    /// removed one leaving the others in order; `insert_at` places one.
+    #[test]
+    fn variant_sets_keep_their_order() {
+        let tokens = TokenInterner::default();
+        let [a, b, c, d, unknown] = ["a", "b", "c", "d", "e"].map(|name| tokens.intern(name));
+        let names = |sets: &VariantSets| sets.keys().copied().collect::<Vec<_>>();
+        let mut sets: VariantSets = [c, a, b]
+            .into_iter()
+            .map(|name| (name, VariantSetSpec::default()))
+            .collect();
+        assert_eq!(names(&sets), [c, a, b]);
+        let mut one = VariantSetSpec::default();
+        one.variants.insert(d, VariantSpec::default());
+        assert!(sets.insert(a, one.clone()).is_some());
+        assert_eq!(names(&sets), [c, a, b], "replaced in place");
+        assert_eq!(sets[&a], one);
+        sets.get_or_insert_default(d);
+        assert_eq!(names(&sets), [c, a, b, d]);
+        assert!(sets.remove(&a).is_some());
+        assert_eq!(names(&sets), [c, b, d]);
+        sets.insert_at(1, a, VariantSetSpec::default());
+        assert_eq!(names(&sets), [c, a, b, d]);
+        assert_eq!(sets.index_of(&b), Some(2));
+        assert_eq!(sets.index_of(&unknown), None);
+        let reversed: VariantSets = sets.clone().into_iter().rev().collect();
+        assert_ne!(reversed, sets, "the order is part of the value");
+    }
 
     /// Each constructor makes the source it names, and a source makes the
     /// arc it was read from.
@@ -4679,8 +4897,7 @@ mod tests {
                     spec.variant_set_names.make_mut().prepend.push(set);
                 }
                 spec.variant_sets
-                    .entry(set)
-                    .or_default()
+                    .get_or_insert_default(set)
                     .variants
                     .insert(name, nested);
             }
@@ -4694,7 +4911,7 @@ mod tests {
         let ay = variant(4, vec![(b, y, variant(5, vec![]))]);
         let mut prim = PrimSpec::def();
         prim.variant_set_names = ListOp::prepended(vec![a]).into();
-        let set = prim.variant_sets.entry(a).or_default();
+        let set = prim.variant_sets.get_or_insert_default(a);
         set.variants.insert(x, ax);
         set.variants.insert(y, ay);
         let mut layer = Layer::new(LayerId(1));

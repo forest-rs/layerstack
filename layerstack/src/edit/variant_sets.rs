@@ -112,9 +112,13 @@ pub(crate) fn add_variant_set(
     let Some(spec) = spec_at(layer(store, id)?, &loc) else {
         return Err(Rejection::Diverged(loc.spec_path(store.paths())));
     };
-    let has_set = spec.variant_sets().contains_key(&name);
+    let sets = spec.variant_sets();
+    let (has_set, last) = (sets.contains_key(&name), sets.len());
     let mut list = names(spec).clone();
     if !has_set {
+        // A new set spec goes after the others: `SdfVariantSetSpec::New`
+        // appends it to `variantSetChildren` (`Sdf_ChildrenUtils::CreateSpec`,
+        // `pxr/usd/sdf/childrenUtils.cpp`).
         journal.run(
             store,
             Raw::VariantSet {
@@ -122,6 +126,7 @@ pub(crate) fn add_variant_set(
                 host: loc.clone(),
                 set: name,
                 spec: Some(VariantSetSpec::default()),
+                index: last,
             },
         )?;
     }
@@ -168,6 +173,7 @@ pub(crate) fn remove_variant_set(
             host: loc,
             set: name,
             spec: None,
+            index: 0,
         },
     )
 }

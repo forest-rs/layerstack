@@ -16,7 +16,7 @@ use crate::spec_path::VariantSelectionSite;
 use crate::{
     CompositionError, FieldEntry, FieldValue, HashMap, Layer, LayerId, LayerOffset, LayerStack,
     LayerStackIdentifier, LayerStore, ListOp, PathId, PrimSpec, PropertyEntry, Reference,
-    Specifier, TokenId, TokenInterner, Value, VariantSetSpec, VariantSpec,
+    Specifier, TokenId, TokenInterner, Value, VariantSets, VariantSpec,
 };
 use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
 
@@ -577,7 +577,7 @@ impl<F: FnMut(LayerId, &str) -> Option<String>> Context<'_, F> {
     }
     fn prepare_variants(
         &mut self,
-        sets: &mut HashMap<TokenId, VariantSetSpec>,
+        sets: &mut VariantSets,
         site: &Site,
         layer: LayerId,
         offset: LayerOffset,
@@ -685,7 +685,7 @@ impl<F: FnMut(LayerId, &str) -> Option<String>> Context<'_, F> {
         }
         self.finish_variants(&mut spec.variant_sets, site);
     }
-    fn finish_variants(&self, sets: &mut HashMap<TokenId, VariantSetSpec>, site: &Site) {
+    fn finish_variants(&self, sets: &mut VariantSets, site: &Site) {
         for (&set, variants) in sets {
             for (&variant, spec) in &mut variants.variants {
                 let mut site = site.clone();
@@ -832,11 +832,11 @@ fn merge_selections(strong: &mut HashMap<TokenId, TokenId>, weak: &HashMap<Token
     }
 }
 fn merge_variants(
-    strong: &mut HashMap<TokenId, VariantSetSpec>,
-    weak: &HashMap<TokenId, VariantSetSpec>,
+    strong: &mut VariantSets,
+    weak: &VariantSets,
 ) -> Result<(), LayerStackFlattenError> {
     for (&set, variants) in weak {
-        let target = strong.entry(set).or_default();
+        let target = strong.get_or_insert_default(set);
         for (&variant, source) in &variants.variants {
             let target = target.variants.entry(variant).or_default();
             merge_variant(target, source)?;
@@ -944,8 +944,7 @@ mod tests {
             .get_mut(&path)
             .unwrap()
             .variant_sets
-            .entry(v)
-            .or_default()
+            .get_or_insert_default(v)
             .variants
             .insert(b, variant);
         weak.insert_prim(child, PrimSpec::def());
@@ -972,8 +971,7 @@ mod tests {
             .get_mut(&path)
             .unwrap()
             .variant_sets
-            .entry(v)
-            .or_default()
+            .get_or_insert_default(v)
             .variants
             .insert(a, VariantSpec::default());
         store.insert_layer(strong);

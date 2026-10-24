@@ -100,7 +100,7 @@ use hashbrown::{HashMap, HashSet};
 use layerstack::doc::{
     FieldEntry, FieldValue, Layer, LayerOffset as LayerLayerOffset, PrimSpec,
     Reference as LayerReference, ReferenceSource, ReferenceTarget, Specifier, Value as LayerValue,
-    VariantSetSpec, VariantSpec,
+    VariantSets, VariantSpec,
 };
 use layerstack::interner::{TokenId, TokenInterner};
 use layerstack::listop::ListOp as LayerListOp;
@@ -551,7 +551,7 @@ impl Lowering<'_> {
         &self,
         layer: &Layer,
         host: PathId,
-        sets: &HashMap<TokenId, VariantSetSpec>,
+        sets: &VariantSets,
         names: &LayerListOp<TokenId>,
         owner: Parent<'_>,
         visited: &mut Visited,

@@ -27,7 +27,7 @@
 
 use layerstack::{
     EditTarget, Layer, LayerId, ListOp, LiveStage, NamespaceEdit, Path, PathId, PrimSpec,
-    PropertyPath, Reference, ReferenceTarget, Stage, StageOptions, TargetPath, VariantSetSpec,
+    PropertyPath, Reference, ReferenceTarget, Stage, StageOptions, TargetPath, VariantSets,
 };
 use layerstack_conformance::{
     usda_real::{LoadedStage, load_entry_usda},
@@ -92,7 +92,7 @@ fn layer_specs(loaded: &LoadedStage, layer: &Layer) -> Vec<String> {
         fn variant_paths(
             store: &layerstack::InMemoryStore,
             prefix: &str,
-            sets: &hashbrown::HashMap<layerstack::TokenId, VariantSetSpec>,
+            sets: &VariantSets,
             out: &mut Vec<String>,
         ) {
             for (set, spec) in sets {

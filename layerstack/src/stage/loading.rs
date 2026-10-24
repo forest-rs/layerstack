@@ -160,6 +160,35 @@ impl PayloadLoadRules {
         PayloadRule::None
     }
 
+    /// Removes the rules that do not change what any path's effective rule
+    /// is: a rule the same as its nearest ancestor's, and `All` at the
+    /// root, which is what no rule there means. As OpenUSD does, a single
+    /// rule left once that root rule is gone is kept, redundant or not.
+    ///
+    /// OpenUSD: `UsdStageLoadRules::Minimize`.
+    pub fn minimize(&mut self) {
+        if self.rules.get(&Path::root()) == Some(&PayloadRule::All) {
+            self.rules.remove(&Path::root());
+        }
+        if self.rules.len() <= 1 {
+            return;
+        }
+        // The kept rules above the one visited, outermost first: the map
+        // visits a path's ancestors before it.
+        let mut kept: Vec<(Path, PayloadRule)> = Vec::new();
+        self.rules.retain(|path, rule| {
+            while kept.last().is_some_and(|(top, _)| !top.is_prefix_of(path)) {
+                kept.pop();
+            }
+            let inherited = kept.last().map_or(PayloadRule::All, |(_, r)| *r);
+            if *rule == inherited {
+                return false;
+            }
+            kept.push((path.clone(), *rule));
+            true
+        });
+    }
+
     /// Whether a payload authored at `path` is included by these rules.
     #[must_use]
     pub fn is_loaded(&self, path: &Path) -> bool {

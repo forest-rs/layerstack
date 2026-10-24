@@ -1,0 +1,65 @@
+#usda 1.0
+
+class "_O"
+{
+    double s_dbl.timeSamples = { 1: 10, 3: 30 }
+    double sd_dbl = 1.5
+    double ss_dbl.timeSamples = { 1: 10, 3: 30 }
+    double sblk_dbl.timeSamples = { 1: 10, 2: None, 3: 30 }
+    timecode s_tc.timeSamples = { 1: 10, 3: 30 }
+    timecode sd_tc = 1.5
+    timecode ss_tc.timeSamples = { 1: 10, 3: 30 }
+    timecode sblk_tc.timeSamples = { 1: 10, 2: None, 3: 30 }
+    float[] s_arr.timeSamples = { 1: [10, 20], 3: [30, 40] }
+    float[] sd_arr = [1, 2]
+    float[] ss_arr.timeSamples = { 1: [10, 20], 3: [30, 40] }
+    float[] sblk_arr.timeSamples = { 1: [10, 20], 2: None, 3: [30, 40] }
+    token s_tok.timeSamples = { 1: "w1", 3: "w3" }
+    token sd_tok = "wd"
+    token ss_tok.timeSamples = { 1: "w1", 3: "w3" }
+    token sblk_tok.timeSamples = { 1: "w1", 2: None, 3: "w3" }
+    int ss_int.timeSamples = { 1: 10, 3: 30 }
+    string ss_str.timeSamples = { 1: "w1", 3: "w3" }
+    asset ss_asset.timeSamples = { 1: @./weak.usda@, 3: @./clips/clip_a.usda@ }
+    pathExpression ss_expr.timeSamples = { 1: "Leaf", 3: "/Elsewhere" }
+    double sp_dbl.spline = { 1: 10; post linear, 3: 30; post linear }
+    double ssp_dbl.timeSamples = { 1: 10, 3: 30 }
+    float[] es_arr.timeSamples = { 1: [10, 20], 3: [30, 40] }
+    float[] esd_arr = [1, 2]
+    double cdw_dbl = 1.5 (
+        customData = {
+            string a = "weak"
+            int w = 1
+            timecode t = 3
+            asset p = @./weak.usda@
+            dictionary n = {
+                int x = 1
+                string y = "weak"
+            }
+        }
+    )
+    timecode both_tc = 1.5
+    timecode both_tc.timeSamples = { 1: 10, 3: 30 }
+}
+
+class "_CO" (
+    clips = {
+        dictionary default = {
+            asset[] assetPaths = [@./clips/clip_a.usda@, @./clips/clip_b.usda@]
+            string primPath = "/Clip"
+            double2[] active = [(0, 0), (2, 1)]
+            double2[] times = [(0, 0), (2, 2), (2, 0), (4, 2)]
+            asset manifestAssetPath = @./clips/manifest.usda@
+        }
+    }
+)
+{
+    double dbl
+    float[] arr
+    token tok
+    asset asset
+    timecode tc
+    double gap
+    double over_dbl
+    double anchor_dbl = 5
+}

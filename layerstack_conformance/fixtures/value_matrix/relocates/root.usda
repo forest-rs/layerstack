@@ -1,0 +1,270 @@
+#usda 1.0
+(
+    relocates = {
+        </M/Old>: </M/New>,
+        </O/Old>: </O/New>,
+        </R/Old>: </R/New>,
+        </CE/Old>: </CE/New>,
+        </CN/Old>: </CN/New>,
+        </CT/Old>: </CT/New>,
+        </CI/Old>: </CI/New>,
+        </CO/Old>: </CO/New>,
+        </FS_none/Old>: </FS_none/New>,
+        </FS_blk/Old>: </FS_blk/New>,
+        </FS_sblk/Old>: </FS_sblk/New>,
+        </FS_over/Old>: </FS_over/New>,
+        </FA_none/Old>: </FA_none/New>,
+        </FA_blk/Old>: </FA_blk/New>,
+        </FV_none/Old>: </FV_none/New>,
+        </FV_blk/Old>: </FV_blk/New>
+    }
+)
+
+def "M" (
+    prepend references = @./lib/weak.usda@</M_Rig>
+)
+{
+    over "New"
+    {
+        double dd_dbl = 2.5
+        double sd_dbl.timeSamples = { 2: 200, 4: 400 }
+        double ds_dbl = 2.5
+        double ss_dbl.timeSamples = { 2: 200, 4: 400 }
+        double blk_dbl = None
+        double ssblk_dbl.timeSamples = { 2: None, 4: 400 }
+        double ablk_dbl = AnimationBlock
+        double spd_dbl = 2.5
+        double ssp_dbl.spline = { 2: 200; post linear, 4: 400; post held }
+        double absp_dbl = AnimationBlock
+        double cdd_dbl = 2.5 (
+            customData = {
+                string a = "strong"
+                dictionary n = {
+                    string y = "strong"
+                    int z = 3
+                }
+            }
+        )
+        int dd_int = 2
+        int sd_int.timeSamples = { 2: 200, 4: 400 }
+        int ss_int.timeSamples = { 2: 200, 4: 400 }
+        timecode dd_tc = 2.5
+        timecode sd_tc.timeSamples = { 2: 200, 4: 400 }
+        timecode ss_tc.timeSamples = { 2: 200, 4: 400 }
+        float[] dd_arr = [3, 4]
+        float[] sd_arr.timeSamples = { 2: [200, 400], 4: [400, 800] }
+        float[] ds_arr = [3, 4]
+        float[] ss_arr.timeSamples = { 2: [200, 400], 4: [400, 800] }
+        float[] blk_arr = None
+        float[] ssblk_arr.timeSamples = { 2: None, 4: [400, 800] }
+        float[] ablk_arr = AnimationBlock
+        float[] ed_arr = edit [append 9]
+        float[] es_arr.timeSamples = { 2: edit [write 7 to [0]], 4: edit [append 5] }
+        float[] esd_arr.timeSamples = { 2: edit [write 7 to [0]], 4: edit [append 5] }
+        float[] edb_arr = edit [append 9]
+        token dd_tok = "sd"
+        token sd_tok.timeSamples = { 2: "s2", 4: "s4" }
+        token ss_tok.timeSamples = { 2: "s2", 4: "s4" }
+        string dd_str = "sd"
+        string sd_str.timeSamples = { 2: "s2", 4: "s4" }
+        string ss_str.timeSamples = { 2: "s2", 4: "s4" }
+        asset dd_asset = @./lib/weak_tcps.usda@
+        asset sd_asset.timeSamples = { 2: @./lib/weak.usda@, 4: @./root.usda@ }
+        asset ss_asset.timeSamples = { 2: @./lib/weak.usda@, 4: @./root.usda@ }
+        asset[] dd_assets = [@./root.usda@]
+        asset[] sd_assets.timeSamples = { 2: [@./lib/weak.usda@], 4: [@./root.usda@, @./missing.usda@] }
+        asset[] ss_assets.timeSamples = { 2: [@./lib/weak.usda@], 4: [@./root.usda@, @./missing.usda@] }
+        pathExpression dd_expr = "%_ Other"
+        pathExpression sd_expr.timeSamples = { 2: "Other", 4: "%_ Other" }
+        pathExpression ss_expr.timeSamples = { 2: "Other", 4: "%_ Other" }
+    }
+
+}
+
+def "O" (
+    prepend references = @./lib/weak_off.usda@</O_Rig> (offset = 10; scale = 2)
+)
+{
+    over "New"
+    {
+        double sd_dbl.timeSamples = { 2: 200, 4: 400 }
+        double ss_dbl.timeSamples = { 2: 200, 4: 400 }
+        timecode sd_tc.timeSamples = { 2: 200, 4: 400 }
+        timecode ss_tc.timeSamples = { 2: 200, 4: 400 }
+        float[] sd_arr.timeSamples = { 2: [200, 400], 4: [400, 800] }
+        float[] ss_arr.timeSamples = { 2: [200, 400], 4: [400, 800] }
+        token sd_tok.timeSamples = { 2: "s2", 4: "s4" }
+        token ss_tok.timeSamples = { 2: "s2", 4: "s4" }
+        int ss_int.timeSamples = { 2: 200, 4: 400 }
+        string ss_str.timeSamples = { 2: "s2", 4: "s4" }
+        asset ss_asset.timeSamples = { 2: @./lib/weak.usda@, 4: @./root.usda@ }
+        pathExpression ss_expr.timeSamples = { 2: "Other", 4: "%_ Other" }
+        double ssp_dbl.spline = { 2: 200; post linear, 4: 400; post held }
+        float[] es_arr.timeSamples = { 2: edit [write 7 to [0]], 4: edit [append 5] }
+        float[] esd_arr.timeSamples = { 2: edit [write 7 to [0]], 4: edit [append 5] }
+    }
+
+}
+
+def "R" (
+    prepend references = @./lib/weak_tcps.usda@</R_Rig>
+)
+{
+    over "New"
+    {
+        double sd_dbl.timeSamples = { 2: 200, 4: 400 }
+        double ss_dbl.timeSamples = { 2: 200, 4: 400 }
+        timecode sd_tc.timeSamples = { 2: 200, 4: 400 }
+        timecode ss_tc.timeSamples = { 2: 200, 4: 400 }
+        float[] sd_arr.timeSamples = { 2: [200, 400], 4: [400, 800] }
+        float[] ss_arr.timeSamples = { 2: [200, 400], 4: [400, 800] }
+        token sd_tok.timeSamples = { 2: "s2", 4: "s4" }
+        token ss_tok.timeSamples = { 2: "s2", 4: "s4" }
+        int ss_int.timeSamples = { 2: 200, 4: 400 }
+        string ss_str.timeSamples = { 2: "s2", 4: "s4" }
+        asset ss_asset.timeSamples = { 2: @./lib/weak.usda@, 4: @./root.usda@ }
+        pathExpression ss_expr.timeSamples = { 2: "Other", 4: "%_ Other" }
+        double ssp_dbl.spline = { 2: 200; post linear, 4: 400; post held }
+        float[] es_arr.timeSamples = { 2: edit [write 7 to [0]], 4: edit [append 5] }
+        float[] esd_arr.timeSamples = { 2: edit [write 7 to [0]], 4: edit [append 5] }
+    }
+
+}
+
+def "CE" (
+    prepend references = @./lib/weak.usda@</CE_Rig>
+)
+{
+    over Sphere "New"
+    {
+        double over_dbl = 7
+    }
+
+}
+
+def "CN" (
+    prepend references = @./lib/weak.usda@</CN_Rig>
+)
+{
+    over "New"
+    {
+        double over_dbl = 7
+    }
+
+}
+
+def "CT" (
+    prepend references = @./lib/weak.usda@</CT_Rig>
+)
+{
+    over "New"
+    {
+        double over_dbl = 7
+    }
+
+}
+
+def "CI" (
+    prepend references = @./lib/weak.usda@</CI_Rig>
+)
+{
+    over "New"
+    {
+        double over_dbl = 7
+    }
+
+}
+
+def "CO" (
+    prepend references = @./lib/weak_off.usda@</CO_Rig> (offset = 10; scale = 2)
+)
+{
+    over "New"
+    {
+        double over_dbl = 7
+    }
+
+}
+
+def "FS_none" (
+    prepend references = @./lib/weak.usda@</FS_none_Rig>
+)
+{
+    over Sphere "New"
+    {
+    }
+
+}
+
+def "FS_blk" (
+    prepend references = @./lib/weak.usda@</FS_blk_Rig>
+)
+{
+    over Sphere "New"
+    {
+    }
+
+}
+
+def "FS_sblk" (
+    prepend references = @./lib/weak.usda@</FS_sblk_Rig>
+)
+{
+    over Sphere "New"
+    {
+    }
+
+}
+
+def "FS_over" (
+    prepend references = @./lib/weak.usda@</FS_over_Rig>
+)
+{
+    over Sphere "New"
+    {
+        double radius.timeSamples = { 1: 5, 3: 7 }
+        float3[] extent = edit [write (9, 9, 9) to [1]]
+        token visibility.timeSamples = { 1: "invisible", 3: "inherited" }
+    }
+
+}
+
+def "FA_none" (
+    prepend references = @./lib/weak.usda@</FA_none_Rig>
+)
+{
+    over SpatialAudio "New"
+    {
+    }
+
+}
+
+def "FA_blk" (
+    prepend references = @./lib/weak.usda@</FA_blk_Rig>
+)
+{
+    over SpatialAudio "New"
+    {
+    }
+
+}
+
+def "FV_none" (
+    prepend references = @./lib/weak.usda@</FV_none_Rig>
+)
+{
+    over RenderVar "New"
+    {
+    }
+
+}
+
+def "FV_blk" (
+    prepend references = @./lib/weak.usda@</FV_blk_Rig>
+)
+{
+    over RenderVar "New"
+    {
+    }
+
+}

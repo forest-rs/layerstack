@@ -541,9 +541,9 @@ impl Lowering<'_> {
     /// The list op and the set specs are written apart, as OpenUSD keeps
     /// them (`variantSetNames` and `variantSetChildren`): a set spec the
     /// list op does not name is written without being listed, and a listed
-    /// set without a spec is listed only. Sets are written in the order
-    /// the list op first names them, then by name, and variants by name,
-    /// as `Sdf_WriteVariantSet` sorts them.
+    /// set without a spec is listed only. Sets are written in the layer's
+    /// order, OpenUSD's `variantSetChildren` (`Sdf_WritePrimVariantSets`),
+    /// and variants by name, as `Sdf_WriteVariantSet` sorts them.
     ///
     /// Spec: AOUSD Core §7.3.6 (variant specs may contain variant set
     /// specs), §7.6.2.3.5 (`variantSetNames`), §7.6.6–§7.6.7.
@@ -556,26 +556,11 @@ impl Lowering<'_> {
         owner: Parent<'_>,
         visited: &mut Visited,
     ) -> Result<(Option<ListOp<String>>, Vec<VariantSet>), SaveError> {
-        let mut order: Vec<TokenId> = Vec::new();
-        for set in names.items() {
-            if sets.contains_key(set) && !order.contains(set) {
-                order.push(*set);
-            }
-        }
-        let mut unordered: Vec<TokenId> = sets
-            .keys()
-            .copied()
-            .filter(|set| !order.contains(set))
-            .collect();
-        unordered.sort_by(|a, b| self.tokens.resolve(*a).cmp(self.tokens.resolve(*b)));
-        order.extend(unordered);
-
         let mut written = Vec::new();
-        for set in order {
-            let mut here: Vec<(TokenId, &VariantSpec)> = sets
-                .get(&set)
-                .into_iter()
-                .flat_map(|set| &set.variants)
+        for (&set, spec) in sets {
+            let mut here: Vec<(TokenId, &VariantSpec)> = spec
+                .variants
+                .iter()
                 .map(|(&name, variant)| (name, variant))
                 .collect();
             if here.is_empty() {

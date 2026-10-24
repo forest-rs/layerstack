@@ -24,7 +24,7 @@ use hashbrown::{HashMap, HashSet};
 
 use layerstack::doc::{
     FieldValue, Layer, LayerId, LayerOffset, PrimSpec, Reference, Specifier, SublayerEntry, Value,
-    VariantSpec, set_field_vec,
+    VariantSets, VariantSpec, set_field_vec,
 };
 use layerstack::interner::{TokenId, TokenInterner};
 use layerstack::listop::ListOp;
@@ -1472,8 +1472,12 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
                 "propertyOrder" => {
                     spec.property_order = Some(self.extract_token_names(value));
                 }
-                // Derived from the variant set specs themselves.
-                "variantSetChildren" => {}
+                // The set specs, read from their own specs, in this order
+                // (see `declare_variant_sets`).
+                "variantSetChildren" => {
+                    let names = self.extract_token_names(value);
+                    declare_variant_sets(&mut spec.variant_sets, &names);
+                }
                 "references" => {
                     if let Some(CrateValue::ListOp(listop)) = value.value() {
                         let converted = self.convert_ref_listop(listop)?;
@@ -1887,8 +1891,12 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
                 "propertyOrder" => {
                     variant.property_order = Some(self.extract_token_names(value));
                 }
-                // Nested variant sets are read from their own specs.
-                "variantSetChildren" => {}
+                // Nested variant sets are read from their own specs, in
+                // this order.
+                "variantSetChildren" => {
+                    let names = self.extract_token_names(value);
+                    declare_variant_sets(&mut variant.variant_sets, &names);
+                }
                 "variantSetNames" => {
                     // The nested sets, as for a prim spec.
                     variant.variant_set_names = self.variant_set_names(value).into();
@@ -3304,6 +3312,20 @@ fn copy_prim(spec: &PrimSpec) -> PrimSpec {
         prim_order: spec.prim_order.clone(),
         instanceable: spec.instanceable,
         active: spec.active,
+    }
+}
+
+/// Declares the variant sets a spec's `variantSetChildren` names, in its
+/// order, before their own specs fill them: OpenUSD keeps a spec's set
+/// specs in that order (`SdfPrimSpec::GetVariantSets`), the order its text
+/// writer writes them in, while the crate's specs come in an order of
+/// their own.
+///
+/// Spec: AOUSD Core §7.3.6 (prim and variant specs contain variant set
+/// specs).
+fn declare_variant_sets(sets: &mut VariantSets, names: &[TokenId]) {
+    for &name in names {
+        sets.get_or_insert_default(name);
     }
 }
 

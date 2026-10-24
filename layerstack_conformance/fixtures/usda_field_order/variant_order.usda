@@ -1,0 +1,48 @@
+#usda 1.0
+
+def "P" (
+    prepend variantSets = ["b", "a", "c"]
+)
+{
+    variantSet "c" = {
+        "x" {
+            float q = 1
+        }
+    }
+    variantSet "a" = {
+        "y" (
+            prepend variantSets = ["n2", "n1"]
+        ) {
+            variantSet "n1" = {
+                "k" {
+                }
+            }
+            variantSet "n2" = {
+                "k" {
+                }
+            }
+        }
+    }
+    variantSet "b" = {
+        "x" {
+        }
+    }
+}
+
+def "Q" (
+    variantSets = ["s", "r"]
+)
+{
+    variantSet "t" = {
+        "x" {
+        }
+    }
+    variantSet "r" = {
+        "x" {
+        }
+    }
+    variantSet "s" = {
+        "x" {
+        }
+    }
+}

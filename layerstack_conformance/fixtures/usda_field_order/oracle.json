@@ -948,6 +948,88 @@
    "text": "#usda 1.0\n(\n    \"a layer\"\n    customLayerData = {\n        int Ab = 2\n        int aa = 3\n        int zz = 1\n    }\n    defaultPrim = \"Z\"\n    doc = \"docs\"\n    endTimeCode = 10\n    framesPerSecond = 24\n    metersPerUnit = 0.01\n    startTimeCode = 1\n    timeCodesPerSecond = 24\n    upAxis = \"Z\"\n)\n\ndef \"Z\"\n{\n    def \"z\"\n    {\n    }\n\n    def \"a\"\n    {\n    }\n\n    def \"m\"\n    {\n    }\n}\n\ndef \"A\"\n{\n}\n\n"
   },
   {
+   "name": "variant_set_order",
+   "steps": [
+    {
+     "op": "prim",
+     "path": "/V",
+     "specifier": "def"
+    },
+    {
+     "name": "z",
+     "op": "variant_set",
+     "path": "/V"
+    },
+    {
+     "name": "m",
+     "op": "variant_set",
+     "path": "/V",
+     "position": "front"
+    },
+    {
+     "name": "a",
+     "op": "variant_set",
+     "path": "/V"
+    },
+    {
+     "name": "k",
+     "op": "variant_set",
+     "path": "/V"
+    },
+    {
+     "op": "prim",
+     "path": "/V{z=x}"
+    },
+    {
+     "op": "prim",
+     "path": "/V{m=x}"
+    },
+    {
+     "op": "prim",
+     "path": "/V{a=x}"
+    },
+    {
+     "op": "prim",
+     "path": "/V{k=x}"
+    },
+    {
+     "name": "m",
+     "op": "remove_variant_set",
+     "path": "/V"
+    },
+    {
+     "name": "m",
+     "op": "variant_set",
+     "path": "/V",
+     "position": "front"
+    },
+    {
+     "op": "prim",
+     "path": "/V{m=y}"
+    },
+    {
+     "name": "q",
+     "op": "variant_set",
+     "path": "/V{a=x}"
+    },
+    {
+     "name": "b",
+     "op": "variant_set",
+     "path": "/V{a=x}",
+     "position": "front"
+    },
+    {
+     "op": "prim",
+     "path": "/V{a=x}{q=x}"
+    },
+    {
+     "op": "prim",
+     "path": "/V{a=x}{b=x}"
+    }
+   ],
+   "text": "#usda 1.0\n\ndef \"V\" (\n    prepend variantSets = [\"m\", \"z\", \"a\", \"k\"]\n)\n{\n    variantSet \"z\" = {\n        \"x\" {\n\n        }\n    }\n    variantSet \"a\" = {\n        \"x\" (\n            prepend variantSets = [\"b\", \"q\"]\n        ) {\n            variantSet \"q\" = {\n                \"x\" {\n\n                }\n            }\n            variantSet \"b\" = {\n                \"x\" {\n\n                }\n            }\n\n        }\n    }\n    variantSet \"k\" = {\n        \"x\" {\n\n        }\n    }\n    variantSet \"m\" = {\n        \"y\" {\n\n        }\n    }\n}\n\n"
+  },
+  {
    "name": "numbers",
    "steps": [
     {
@@ -1345,6 +1427,8 @@
  "round_trip": {
   "unregistered": "#usda 1.0\n(\n    Beta = \"2\"\n    _u = \"4\"\n    a10 = \"x\"\n    a9 = \"y\"\n    zeta = \"1\"\n)\n\ndef \"P\" (\n    _u = \"4\"\n    a9 = \"y\"\n    a10 = \"x\"\n    Beta = \"2\"\n    zeta = \"1\"\n)\n{\n}\n\n",
   "usda": "#usda 1.0\n(\n    \"layer comment\"\n    customLayerData = {\n        int a = 2\n        dictionary b = {\n            int x = 2\n            int y = 1\n        }\n        int zz = 1\n    }\n    defaultPrim = \"P\"\n    metersPerUnit = 1\n    subLayers = [\n        @./b.usda@,\n        @./a.usda@ (offset = 2)\n    ]\n    upAxis = \"Z\"\n)\n\ndef \"P\" (\n    \"prim comment\"\n    active = true\n    customData = {\n        int a = 2\n        int z = 1\n    }\n    inherits = </Q>\n    kind = \"group\"\n    references = [\n        </Q>,\n        @./r.usda@</R>\n    ]\n    variants = {\n        string aa = \"a\"\n        string zz = \"b\"\n    }\n    prepend variantSets = [\"zz\", \"aa\"]\n)\n{\n    reorder properties = [\"zeta\", \"alpha\"]\n    reorder nameChildren = [\"Y\", \"X\"]\n    double A2 = 1\n    double a9 = 1\n    double a10 = 1\n    float alpha = 3 (\n        \"property comment\"\n        customData = {\n            int a = 2\n            int b = 1\n        }\n        doc = \"x\"\n        interpolation = \"vertex\"\n    )\n    float alpha.timeSamples = {\n        1: 2,\n        5: 1,\n    }\n    float alpha.connect = </P.zeta>\n    custom rel arel\n    float zeta = 1\n    rel zrel = [\n        </P/Y>,\n        </P/X>,\n    ]\n\n    def \"Y\"\n    {\n    }\n\n    def \"X\"\n    {\n    }\n    variantSet \"zz\" = {\n        \"a\" (\n            active = false\n            kind = \"x\"\n        ) {\n            float b = 1\n            float q = 2\n\n        }\n        \"b\" {\n            float q = 1\n\n        }\n    }\n    variantSet \"aa\" = {\n        \"a\" {\n\n        }\n    }\n}\n\ndef \"Q\"\n{\n}\n\n",
-  "usdc": "#usda 1.0\n(\n    \"layer comment\"\n    customLayerData = {\n        int a = 2\n        dictionary b = {\n            int x = 2\n            int y = 1\n        }\n        int zz = 1\n    }\n    defaultPrim = \"P\"\n    metersPerUnit = 1\n    subLayers = [\n        @./b.usda@,\n        @./a.usda@ (offset = 2)\n    ]\n    upAxis = \"Z\"\n)\n\ndef \"P\" (\n    \"prim comment\"\n    active = true\n    customData = {\n        int a = 2\n        int z = 1\n    }\n    inherits = </Q>\n    kind = \"group\"\n    references = [\n        </Q>,\n        @./r.usda@</R>\n    ]\n    variants = {\n        string aa = \"a\"\n        string zz = \"b\"\n    }\n    prepend variantSets = [\"zz\", \"aa\"]\n)\n{\n    reorder properties = [\"zeta\", \"alpha\"]\n    reorder nameChildren = [\"Y\", \"X\"]\n    double A2 = 1\n    double a9 = 1\n    double a10 = 1\n    float alpha = 3 (\n        \"property comment\"\n        customData = {\n            int a = 2\n            int b = 1\n        }\n        doc = \"x\"\n        interpolation = \"vertex\"\n    )\n    float alpha.timeSamples = {\n        1: 2,\n        5: 1,\n    }\n    float alpha.connect = </P.zeta>\n    custom rel arel\n    float zeta = 1\n    rel zrel = [\n        </P/Y>,\n        </P/X>,\n    ]\n\n    def \"Y\"\n    {\n    }\n\n    def \"X\"\n    {\n    }\n    variantSet \"zz\" = {\n        \"a\" (\n            active = false\n            kind = \"x\"\n        ) {\n            float b = 1\n            float q = 2\n\n        }\n        \"b\" {\n            float q = 1\n\n        }\n    }\n    variantSet \"aa\" = {\n        \"a\" {\n\n        }\n    }\n}\n\ndef \"Q\"\n{\n}\n\n"
+  "usdc": "#usda 1.0\n(\n    \"layer comment\"\n    customLayerData = {\n        int a = 2\n        dictionary b = {\n            int x = 2\n            int y = 1\n        }\n        int zz = 1\n    }\n    defaultPrim = \"P\"\n    metersPerUnit = 1\n    subLayers = [\n        @./b.usda@,\n        @./a.usda@ (offset = 2)\n    ]\n    upAxis = \"Z\"\n)\n\ndef \"P\" (\n    \"prim comment\"\n    active = true\n    customData = {\n        int a = 2\n        int z = 1\n    }\n    inherits = </Q>\n    kind = \"group\"\n    references = [\n        </Q>,\n        @./r.usda@</R>\n    ]\n    variants = {\n        string aa = \"a\"\n        string zz = \"b\"\n    }\n    prepend variantSets = [\"zz\", \"aa\"]\n)\n{\n    reorder properties = [\"zeta\", \"alpha\"]\n    reorder nameChildren = [\"Y\", \"X\"]\n    double A2 = 1\n    double a9 = 1\n    double a10 = 1\n    float alpha = 3 (\n        \"property comment\"\n        customData = {\n            int a = 2\n            int b = 1\n        }\n        doc = \"x\"\n        interpolation = \"vertex\"\n    )\n    float alpha.timeSamples = {\n        1: 2,\n        5: 1,\n    }\n    float alpha.connect = </P.zeta>\n    custom rel arel\n    float zeta = 1\n    rel zrel = [\n        </P/Y>,\n        </P/X>,\n    ]\n\n    def \"Y\"\n    {\n    }\n\n    def \"X\"\n    {\n    }\n    variantSet \"zz\" = {\n        \"a\" (\n            active = false\n            kind = \"x\"\n        ) {\n            float b = 1\n            float q = 2\n\n        }\n        \"b\" {\n            float q = 1\n\n        }\n    }\n    variantSet \"aa\" = {\n        \"a\" {\n\n        }\n    }\n}\n\ndef \"Q\"\n{\n}\n\n",
+  "variant_order": "#usda 1.0\n\ndef \"P\" (\n    prepend variantSets = [\"b\", \"a\", \"c\"]\n)\n{\n    variantSet \"c\" = {\n        \"x\" {\n            float q = 1\n\n        }\n    }\n    variantSet \"a\" = {\n        \"y\" (\n            prepend variantSets = [\"n2\", \"n1\"]\n        ) {\n            variantSet \"n1\" = {\n                \"k\" {\n\n                }\n            }\n            variantSet \"n2\" = {\n                \"k\" {\n\n                }\n            }\n\n        }\n    }\n    variantSet \"b\" = {\n        \"x\" {\n\n        }\n    }\n}\n\ndef \"Q\" (\n    variantSets = [\"s\", \"r\"]\n)\n{\n    variantSet \"s\" = {\n        \"x\" {\n\n        }\n    }\n    variantSet \"r\" = {\n        \"x\" {\n\n        }\n    }\n    variantSet \"t\" = {\n        \"x\" {\n\n        }\n    }\n}\n\n",
+  "variant_order.usdc": "#usda 1.0\n\ndef \"P\" (\n    prepend variantSets = [\"b\", \"a\", \"c\"]\n)\n{\n    variantSet \"c\" = {\n        \"x\" {\n            float q = 1\n\n        }\n    }\n    variantSet \"a\" = {\n        \"y\" (\n            prepend variantSets = [\"n2\", \"n1\"]\n        ) {\n            variantSet \"n1\" = {\n                \"k\" {\n\n                }\n            }\n            variantSet \"n2\" = {\n                \"k\" {\n\n                }\n            }\n\n        }\n    }\n    variantSet \"b\" = {\n        \"x\" {\n\n        }\n    }\n}\n\ndef \"Q\" (\n    variantSets = [\"s\", \"r\"]\n)\n{\n    variantSet \"s\" = {\n        \"x\" {\n\n        }\n    }\n    variantSet \"r\" = {\n        \"x\" {\n\n        }\n    }\n    variantSet \"t\" = {\n        \"x\" {\n\n        }\n    }\n}\n\n"
  }
 }

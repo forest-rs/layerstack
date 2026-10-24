@@ -81,8 +81,9 @@ pub(crate) struct Composition {
     records: HashMap<PathId, PrimDependencies>,
     /// The layer stacks whose errors a prim has reported.
     reported_stacks: HashSet<StackId>,
-    /// The layer stacks whose layers are in `used_layers`.
-    used_stacks: HashSet<StackId>,
+    /// Whether a prim's index reads each layer stack, by [`StackId`]: the
+    /// stacks whose layers are `used_layers`.
+    used_stacks: Vec<bool>,
 }
 
 /// Which prims a composition indexes.
@@ -269,6 +270,7 @@ pub(crate) fn compose(
     let claims = Claims {
         share,
         keys: ReadLock::default(),
+        hasher: hashbrown::DefaultHashBuilder::default(),
     };
     let work = |prim: Pending, added: &mut Vec<Pending>| {
         index_prim(
@@ -303,6 +305,13 @@ pub(crate) fn compose(
         records.retain(|path, _| out.prims.contains_key(path));
         out.deps = Some(DependencyRecords::new(records));
     }
+    let used = (0..).zip(&out.used_stacks).filter(|(_, used)| **used);
+    let used: Vec<&[LayerId]> = used
+        .map(|(at, _)| &ctx.stacks.get(StackId(at)).layers[..])
+        .collect();
+    out.used_layers
+        .reserve(used.iter().map(|layers| layers.len()).sum());
+    out.used_layers.extend(used.into_iter().flatten().copied());
     // The stage's own layer stack, and any no arc reached, report last.
     for (at, stack) in (0..).zip(ctx.stacks.iter()) {
         if !out.reported_stacks.contains(&StackId(at)) {
@@ -359,10 +368,31 @@ impl Instances {
 /// What an instance's descendants are composed from: its instanceable
 /// nodes, strongest first, each with its arc, layer stack, site and time
 /// offset. OpenUSD: `PcpInstanceKey`.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-struct InstanceKey(Vec<(ArcKind, StackId, SpecPath, u64, u64)>);
+///
+/// The key's hash is found once, on the thread that indexes the instance,
+/// and is all the key hashes as: the composition looks each key up twice,
+/// once to claim it and once to find its representative.
+#[derive(Clone, Debug)]
+struct InstanceKey {
+    hash: u64,
+    nodes: Vec<(ArcKind, StackId, SpecPath, u64, u64)>,
+}
 
-fn instance_key(graph: &Graph) -> InstanceKey {
+impl PartialEq for InstanceKey {
+    fn eq(&self, other: &Self) -> bool {
+        self.hash == other.hash && self.nodes == other.nodes
+    }
+}
+
+impl Eq for InstanceKey {}
+
+impl core::hash::Hash for InstanceKey {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        state.write_u64(self.hash);
+    }
+}
+
+fn instance_key(graph: &Graph, hasher: &hashbrown::DefaultHashBuilder) -> InstanceKey {
     let mut out = Vec::new();
     let mut pending = graph.child_list(0);
     pending.reverse();
@@ -385,7 +415,10 @@ fn instance_key(graph: &Graph) -> InstanceKey {
         children.reverse();
         pending.extend(children);
     }
-    InstanceKey(out)
+    InstanceKey {
+        hash: core::hash::BuildHasher::hash_one(hasher, &out),
+        nodes: out,
+    }
 }
 
 /// The instance keys whose descendants some instance is indexing, while
@@ -395,6 +428,8 @@ struct Claims {
     /// payloads load everywhere alike.
     share: bool,
     keys: ReadLock<HashSet<InstanceKey>>,
+    /// What instance keys are hashed with.
+    hasher: hashbrown::DefaultHashBuilder,
 }
 
 /// A prim to index, with its namespace parent's finalized index, which its
@@ -410,8 +445,9 @@ type Pending = (PathId, Option<Arc<Graph>>);
 /// are done with it.
 struct Indexed {
     path: PathId,
-    /// The prim's graph, for an instance whose descendants may wait for
-    /// or be walked from it ([`Self::key`]); `None` otherwise.
+    /// The prim's graph, for an instance that did not claim its key
+    /// ([`Self::key`]), whose descendants may wait for or be walked from
+    /// it; `None` otherwise.
     graph: Option<Arc<Graph>>,
     has_payloads: bool,
     instanceable: bool,
@@ -580,7 +616,8 @@ fn index_prim(
             all.push(child);
         }
     }
-    let key = (claims.share && active && graph.instanceable).then(|| instance_key(&graph));
+    let key = (claims.share && active && graph.instanceable)
+        .then(|| instance_key(&graph, &claims.hasher));
     let mut stacks = smallvec::SmallVec::new();
     let mut arc_stacks = smallvec::SmallVec::new();
     for (at, node) in graph.nodes.iter().enumerate() {
@@ -620,7 +657,12 @@ fn index_prim(
     let composed_children = (composed_children != children).then_some(composed_children);
     Indexed {
         path,
-        graph: key.is_some().then_some(graph),
+        // An instance that claimed its key has added its children with its
+        // graph: the join reads it no more, and it is freed here, with
+        // them, rather than on the thread joining the prims. Should the
+        // instance's descendants not be shared after all, they start from
+        // indexes of their ancestors built anew.
+        graph: (key.is_some() && !descended).then_some(graph),
         has_payloads,
         instanceable,
         stacks,
@@ -774,12 +816,14 @@ impl Walk<'_, '_, '_> {
             out.reads.extend(reads);
         }
         // A layer stack's use belongs to the prim whose index first adds a
-        // node reading it; its descendants inherit the node.
+        // node reading it; its descendants inherit the node. Its layers
+        // join `used_layers` once the walk is done.
         for stack in stacks {
-            if out.used_stacks.insert(stack) {
-                out.used_layers
-                    .extend(ctx.stacks.get(stack).layers.iter().copied());
+            let at = stack.0 as usize;
+            if at >= out.used_stacks.len() {
+                out.used_stacks.resize(at + 1, false);
             }
+            out.used_stacks[at] = true;
         }
         if !arc_stacks.is_empty() {
             let sites = out.used_layer_sites.entry(path).or_default();

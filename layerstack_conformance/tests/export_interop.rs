@@ -28,7 +28,7 @@ use layerstack_conformance::export_fixtures::{
     Expect, OpenUsdRelease, documents, minimum_openusd, parse_openusd_release, write_all,
 };
 use layerstack_conformance::save_corpus::{Imported, PROBE_TIMES, cases};
-use layerstack_conformance::usdc::crate_structure;
+use layerstack_conformance::usdc::{CrateStructure, crate_structure};
 use layerstack_usdc::writer::{
     Spec as UsdcSpec, SpecForm, Specifier, Value as UsdcValue, Variability, write_crate,
 };
@@ -156,15 +156,40 @@ fn usdcat(args: &[&Path]) -> Result<String, String> {
     }
 }
 
+/// `structure` without the order of each spec's fields or of the names in
+/// its `properties` field: both sorted.
+fn unordered(mut structure: CrateStructure) -> CrateStructure {
+    for (_, fields) in structure.specs.values_mut() {
+        fields.sort();
+        for (name, value) in fields.iter_mut() {
+            if name != "properties" {
+                continue;
+            }
+            // `TokenVector TokenVector(["a", "b"])`: names hold no `", "`.
+            if let Some((head, rest)) = value.split_once("([")
+                && let Some(items) = rest.strip_suffix("])")
+            {
+                let mut items: Vec<&str> = items.split(", ").collect();
+                items.sort_unstable();
+                *value = format!("{head}([{}])", items.join(", "));
+            }
+        }
+    }
+    structure
+}
+
 /// Differential check of the USDC writer against OpenUSD, for every
 /// authored document of the fixture set:
 ///
 /// 1. `usdcat` prints the same text for our USDC as for our USDA of the
 ///    same document, so OpenUSD reads one layer from both;
 /// 2. OpenUSD's own USDC for that USDA (`usdcat -o`) decodes, with this
-///    workspace's reader, to the same version, specs, fields (in order) and
-///    values as ours. Bytes may differ (LZ4 output, deduplication), so the
-///    comparison is structural.
+///    workspace's reader, to the same version, specs, fields and values as
+///    ours. Bytes may differ (LZ4 output, deduplication), so the comparison
+///    is structural. It leaves out the order of each spec's fields and of
+///    its `properties`: the text writer sorts both, as OpenUSD's does, so
+///    OpenUSD reads them sorted, while a crate file keeps the layer's
+///    order, ours and OpenUSD's alike ([`unordered`]).
 #[test]
 fn usdc_writer_matches_openusd() {
     let Some(version) = tool("usdcat") else {
@@ -206,8 +231,8 @@ fn usdc_writer_matches_openusd() {
             continue;
         }
         let theirs = std::fs::read(&reference).unwrap();
-        let ours = crate_structure(&ours).expect("our USDC decodes");
-        let theirs = crate_structure(&theirs).expect("OpenUSD's USDC decodes");
+        let ours = unordered(crate_structure(&ours).expect("our USDC decodes"));
+        let theirs = unordered(crate_structure(&theirs).expect("OpenUSD's USDC decodes"));
         if ours != theirs {
             failures.push(format!(
                 "{name}: structure differs from OpenUSD's USDC\n--- ours\n{ours:#?}\n--- OpenUSD\n{theirs:#?}"

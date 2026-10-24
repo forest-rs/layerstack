@@ -137,23 +137,29 @@ def BasisCurves "Fallback_BasisCurves"
 
 def BasisCurves "Authored_BasisCurves"
 {
-    uniform token basis = "bspline"
-    uniform token type = "cubic"
-    uniform token wrap = "periodic"
-    float3[] extent = [(1.5, 2.5, 3.5), (2.5, 3.5, 4.5)]
-    float3[] extent.timeSamples = {
+    vector3f[] accelerations = [(1.5, 2.5, 3.5), (2.5, 3.5, 4.5)]
+    vector3f[] accelerations.timeSamples = {
         2: [(2.5, 3.5, 4.5), (3.5, 4.5, 5.5)],
     }
+    uniform token basis = "bspline"
     int[] curveVertexCounts = [3, 4]
     int[] curveVertexCounts.timeSamples = {
         2: [4, 5],
     }
-    float[] widths = [1.5, 2.5]
-    float[] widths.timeSamples = {
-        2: [2.5, 3.5],
-    }
     uniform bool doubleSided = 1
+    float3[] extent = [(1.5, 2.5, 3.5), (2.5, 3.5, 4.5)]
+    float3[] extent.timeSamples = {
+        2: [(2.5, 3.5, 4.5), (3.5, 4.5, 5.5)],
+    }
+    normal3f[] normals = [(1.5, 2.5, 3.5), (2.5, 3.5, 4.5)]
+    normal3f[] normals.timeSamples = {
+        2: [(2.5, 3.5, 4.5), (3.5, 4.5, 5.5)],
+    }
     uniform token orientation = "leftHanded"
+    point3f[] points = [(1.5, 2.5, 3.5), (2.5, 3.5, 4.5)]
+    point3f[] points.timeSamples = {
+        2: [(2.5, 3.5, 4.5), (3.5, 4.5, 5.5)],
+    }
     color3f[] primvars:displayColor = [(1.5, 2.5, 3.5), (2.5, 3.5, 4.5)]
     color3f[] primvars:displayColor.timeSamples = {
         2: [(2.5, 3.5, 4.5), (3.5, 4.5, 5.5)],
@@ -164,26 +170,20 @@ def BasisCurves "Authored_BasisCurves"
     }
     rel proxyPrim = </Target>
     uniform token purpose = "render"
-    token visibility = "invisible"
-    token visibility.timeSamples = {
-        2: "inherited",
-    }
-    vector3f[] accelerations = [(1.5, 2.5, 3.5), (2.5, 3.5, 4.5)]
-    vector3f[] accelerations.timeSamples = {
-        2: [(2.5, 3.5, 4.5), (3.5, 4.5, 5.5)],
-    }
-    normal3f[] normals = [(1.5, 2.5, 3.5), (2.5, 3.5, 4.5)]
-    normal3f[] normals.timeSamples = {
-        2: [(2.5, 3.5, 4.5), (3.5, 4.5, 5.5)],
-    }
-    point3f[] points = [(1.5, 2.5, 3.5), (2.5, 3.5, 4.5)]
-    point3f[] points.timeSamples = {
-        2: [(2.5, 3.5, 4.5), (3.5, 4.5, 5.5)],
-    }
+    uniform token type = "cubic"
     vector3f[] velocities = [(1.5, 2.5, 3.5), (2.5, 3.5, 4.5)]
     vector3f[] velocities.timeSamples = {
         2: [(2.5, 3.5, 4.5), (3.5, 4.5, 5.5)],
     }
+    token visibility = "invisible"
+    token visibility.timeSamples = {
+        2: "inherited",
+    }
+    float[] widths = [1.5, 2.5]
+    float[] widths.timeSamples = {
+        2: [2.5, 3.5],
+    }
+    uniform token wrap = "periodic"
     uniform token[] xformOpOrder = ["token1", "token2"]
 }
 
@@ -1615,10 +1615,6 @@ def Field3DAsset "Fallback_Field3DAsset"
 
 def Field3DAsset "Authored_Field3DAsset"
 {
-    token fieldPurpose = "token1"
-    token fieldPurpose.timeSamples = {
-        2: "token2",
-    }
     token fieldDataType = "token1"
     token fieldDataType.timeSamples = {
         2: "token2",
@@ -1629,6 +1625,10 @@ def Field3DAsset "Authored_Field3DAsset"
     }
     token fieldName = "token1"
     token fieldName.timeSamples = {
+        2: "token2",
+    }
+    token fieldPurpose = "token1"
+    token fieldPurpose.timeSamples = {
         2: "token2",
     }
     asset filePath = @asset1.usda@
@@ -1871,19 +1871,19 @@ def RenderProduct "Fallback_RenderProduct"
 
 def RenderProduct "Authored_RenderProduct"
 {
-    rel orderedVars = </Target>
-    token productName = "token1"
-    token productName.timeSamples = {
-        2: "token2",
-    }
-    uniform token productType = "deepRaster"
     uniform token aspectRatioConformPolicy = "cropAperture"
     rel camera = </Target>
     uniform float4 dataWindowNDC = (1.5, 2.5, 3.5, 4.5)
     uniform bool disableDepthOfField = 1
     uniform bool disableMotionBlur = 1
     uniform bool instantaneousShutter = 1
+    rel orderedVars = </Target>
     uniform float pixelAspectRatio = 1.5
+    token productName = "token1"
+    token productName.timeSamples = {
+        2: "token2",
+    }
+    uniform token productType = "deepRaster"
     uniform int2 resolution = (3, 4)
 }
 
@@ -1922,8 +1922,8 @@ def LODDistanceHeuristic "Authored_LODDistanceHeuristic"
     point3f center.timeSamples = {
         2: (2.5, 3.5, 4.5),
     }
-    uniform float[] thresholds = [1.5, 2.5]
     uniform token lod:domain = "token1"
+    uniform float[] thresholds = [1.5, 2.5]
 }
 
 def Scope "Fallback_LODOverrideAPI" (

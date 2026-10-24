@@ -17,6 +17,7 @@ use layerstack::{
     StageOptions, SublayerEntry, Time, TokenId, TokenInterner, TypedArray, Value,
 };
 use layerstack_conformance::library_scene::{LibraryFormat, LibraryScene, LibraryShape};
+use layerstack_conformance::save_corpus::in_text_order;
 use layerstack_usdc::writer::{Spec, SpecForm, Specifier, Value as W, write_crate};
 use layerstack_usdc::{CrateFile, DecodeBudget, LazyReadResult, read_usdc, read_usdc_lazy};
 
@@ -411,7 +412,10 @@ fn retained_text_arrays_save_as_eager_reads_do() {
         let text =
             layerstack_usda::read_usda(&text, LayerId(1), &pair.tokens, &pair.paths, &mut NoAssets);
         assert!(text.emitted.diagnostics.is_empty(), "{name}");
-        assert!(text.emitted.layer == pair.eager, "{name}: USDA reads back");
+        // In the order the text writer sorts fields and properties into.
+        let mut sorted = pair.eager.clone();
+        in_text_order(&mut sorted, &pair.tokens);
+        assert!(text.emitted.layer == sorted, "{name}: USDA reads back");
     }
     assert!(checked > 0, "the library retains text arrays");
 }

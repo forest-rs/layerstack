@@ -1701,11 +1701,14 @@ impl LiveStage {
             .copied()
             .collect();
         new_arcs.sort_unstable_by_key(|arc| arc.target);
-
-        for &prim in affected {
+        let arcs_of = |prim: PathId| {
             let start = new_arcs.partition_point(|arc| arc.target < prim);
             let end = new_arcs.partition_point(|arc| arc.target <= prim);
-            self.update_prim_graph_edges(prim, partial, &new_arcs[start..end]);
+            &new_arcs[start..end]
+        };
+        self.drop_shared_edges(affected, arcs_of);
+        for &prim in affected {
+            self.update_prim_graph_edges(prim, partial, arcs_of(prim));
         }
         self.arc_metadata.extend(new_arcs);
 
@@ -1727,6 +1730,58 @@ impl LiveStage {
         }
         self.default_prim_dependents
             .retain(|_, dependents| !dependents.is_empty());
+    }
+
+    /// Removes, in one pass per key, the edges that many of `affected`
+    /// lose to one key: those to it that `arcs_of` no longer lists.
+    ///
+    /// The invalidation graph finds an edge it removes in the list of its
+    /// key's dependents, so replacing each dependent's edges in turn costs
+    /// that list once per dependent: quadratic when an edit resyncs or
+    /// unloads many prims drawing on one site, as 20,000 prims referencing
+    /// one prim or holding one payload do. Removing the key drops its
+    /// whole list at once; the key's own edges, and those of the
+    /// dependents that keep theirs, go back, without the cycle checks
+    /// they passed when first added.
+    fn drop_shared_edges<'a>(
+        &mut self,
+        affected: &[PathId],
+        arcs_of: impl Fn(PathId) -> &'a [ArcDependency],
+    ) {
+        // Fewer dropped edges than this are removed one at a time.
+        const SHARED: usize = 8;
+        let mut dropped: HashMap<PathId, HashSet<PathId>> = HashMap::new();
+        for &prim in affected {
+            let kept = arcs_of(prim);
+            for key in self.tracker.graph().dependencies(prim, OPINION_EDIT) {
+                if !kept.iter().any(|arc| arc.source == key) {
+                    dropped.entry(key).or_default().insert(prim);
+                }
+            }
+        }
+        for (key, losing) in dropped {
+            // An invalidated key would lose its mark with it.
+            if losing.len() < SHARED || self.tracker.is_invalidated(key, OPINION_EDIT) {
+                continue;
+            }
+            let graph = self.tracker.graph();
+            let own: Vec<PathId> = graph.dependencies(key, OPINION_EDIT).collect();
+            let keeping: Vec<PathId> = graph
+                .dependents(key, OPINION_EDIT)
+                .filter(|dependent| !losing.contains(dependent))
+                .collect();
+            self.tracker.remove_key(key);
+            for to in own {
+                let _ =
+                    self.tracker
+                        .add_dependency_with(key, to, OPINION_EDIT, CycleHandling::Allow);
+            }
+            for from in keeping {
+                let _ =
+                    self.tracker
+                        .add_dependency_with(from, key, OPINION_EDIT, CycleHandling::Allow);
+            }
+        }
     }
 
     /// Replaces one dependent's graph and layer edges from the partial

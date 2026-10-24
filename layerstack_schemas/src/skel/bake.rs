@@ -165,6 +165,15 @@ pub struct SkinningBake {
     /// Where extents recomputed after the bake, and extents hints, are
     /// authored: OpenUSD authors them through the stage's edit target.
     pub extents_target: EditTarget,
+    /// The most threads the deformation runs on, the calling thread
+    /// included. `0` and `1`, the default, deform on the calling thread;
+    /// above that, samples (one prim at one time each) deform on scoped
+    /// worker threads that last as long as the bake, with this crate's
+    /// `std` feature (without it, on the calling thread). Reading the stage
+    /// and writing the results stay on the calling thread, so the bake
+    /// writes the same values in the same order for every count. OpenUSD
+    /// deforms on its work dispatcher's threads.
+    pub threads: usize,
 }
 
 impl SkinningBake {
@@ -179,6 +188,7 @@ impl SkinningBake {
             update_extents: true,
             update_extents_hints: true,
             extents_target: target,
+            threads: 1,
         }
     }
 
@@ -228,6 +238,13 @@ impl SkinningBake {
             interval.start_bound().cloned(),
             interval.end_bound().cloned(),
         );
+        self
+    }
+
+    /// This bake deforming on up to `threads` threads ([`Self::threads`]).
+    #[must_use]
+    pub fn with_threads(mut self, threads: usize) -> Self {
+        self.threads = threads;
         self
     }
 
@@ -844,8 +861,9 @@ impl SkinningBake {
         });
         let times = self.times(scene, &mut rigs, &targets);
         report.times.clone_from(&times);
-        // Read every sample's inputs in order, deform them, then write them
-        // in order.
+        // Read every sample's inputs in order, deform them on up to
+        // `threads` threads, then write them in order: the result does not
+        // depend on the thread count.
         let mut xforms = XformCache::new(Time::Default);
         let mut jobs = Vec::new();
         for (index, &time) in times.iter().enumerate() {
@@ -860,9 +878,8 @@ impl SkinningBake {
                 }
             }
         }
-        for job in jobs {
-            let number = job.target;
-            targets[number].write(run(job), &mut transaction, report);
+        for (number, output) in run_all(jobs, self.threads) {
+            targets[number].write(output, &mut transaction, report);
         }
         let mut post = PostBake {
             times,
@@ -1441,7 +1458,7 @@ impl<'a> Target<'a> {
 
     /// Reads what one sample deforms: OpenUSD `_SkinningAdapter`'s
     /// `UpdateTransform` and the input reads of `Update`. The deformation
-    /// itself runs in [`run`], from these inputs alone.
+    /// itself runs in [`run`], on any thread.
     fn gather(
         &mut self,
         index: usize,
@@ -1627,7 +1644,7 @@ struct SkinJob {
 }
 
 /// Everything one sample of one prim deforms, read from the stage; [`run`]
-/// needs nothing else.
+/// needs nothing else, so samples deform on any thread.
 struct Job {
     target: usize,
     time: Time,
@@ -1648,6 +1665,22 @@ struct Output {
     extent: Option<[[f32; 3]; 2]>,
     xform: Option<gf::Matrix4>,
     problems: Vec<SkelError>,
+}
+
+/// Deforms every job on up to `threads` threads, returning each output
+/// with its target, in job order.
+fn run_all(jobs: Vec<Job>, threads: usize) -> Vec<(usize, Output)> {
+    let work = |(order, job): (usize, Job), _: &mut Vec<(usize, Job)>| {
+        let target = job.target;
+        (order, target, run(job))
+    };
+    let tasks: Vec<(usize, Job)> = jobs.into_iter().enumerate().collect();
+    let mut outputs = layerstack::parallel::with_pool(threads, &work, |pool| pool.run(tasks));
+    outputs.sort_unstable_by_key(|(order, _, _)| *order);
+    outputs
+        .into_iter()
+        .map(|(_, target, output)| (target, output))
+        .collect()
 }
 
 /// Deforms one sample: OpenUSD `_SkinningAdapter::Update` after its reads.

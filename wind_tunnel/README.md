@@ -370,3 +370,35 @@ transforms write 152 bytes per instance; reusing the output vector
 (`compute_instance_transforms_into`) takes 16.2 ms. The three-sample motion
 batch is dominated by each instance's angular-velocity rotation (a sine,
 cosine and normalization per instance and sample, as OpenUSD computes it).
+
+## Skinning bakes
+
+`examples/skel_bake.rs` times `SkinningBake` on a character-sized scene that
+`tools/skel_bake_cpp_timing.py` writes and bakes with OpenUSD 26.08's
+`UsdSkel.BakeSkinning`: a grid mesh of 50,000 points with vertex normals and
+four joint influences per point, bound to a 100-joint skeleton whose
+animation rotates every joint at each of 200 frames. Each run bakes a fresh
+copy into the root layer (opening the scene is not timed): 200 samples each of
+`points`, `normals` and `extent`, applied to the live stage. Set
+`PXR_WORK_THREAD_LIMIT=1` for one OpenUSD thread; the example's third argument
+is `SkinningBake::threads`.
+
+```sh
+.local/usd-venv/bin/python wind_tunnel/tools/skel_bake_cpp_timing.py /tmp/skel_bake.usda
+cargo run -p wind_tunnel --release --example skel_bake -- /tmp/skel_bake.usda 9 16
+```
+
+Measured on an Apple M3 Max (16 cores), macOS 27.0.1, Rust 1.99.0, release
+profile, 2026-10-25, with other builds running (load average 7–10), medians
+of nine runs in ms:
+
+| Threads | layerstack | OpenUSD |
+|---:|---:|---:|
+| 1 | 230 | 253 |
+| 4 | 65 | |
+| 8 | 40 | |
+| 16 | 36 | 102 |
+
+The deformation of each sample runs on the worker threads; reading the stage,
+writing the results and applying them stay on the calling thread, so every
+thread count writes the same layer.

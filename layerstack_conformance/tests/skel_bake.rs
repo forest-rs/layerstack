@@ -469,6 +469,25 @@ fn bakes_refuse_bad_bindings_before_writing() {
     assert_eq!(layer_json::layer(&store, LayerId(1)), before);
 }
 
+/// Deforming on threads writes exactly what deforming on one thread does.
+#[test]
+#[cfg_attr(target_os = "wasi", ignore = "WASI runs tests without threads")]
+fn threaded_bakes_write_the_same_layer() {
+    let (one, _, _) = bake_stage();
+    let (mut loaded, mut live) = load();
+    let bake = {
+        let scene = Scene::new(live.stage(), &loaded.store);
+        let root = loaded.store.path("/");
+        SkinningBake::for_subtree(&scene, root, EditTarget::for_layer(loaded.root_layer))
+            .with_threads(4)
+    };
+    bake.bake(&mut live, &mut loaded.store).unwrap();
+    assert_eq!(
+        layer_json::layer(&loaded.store, loaded.root_layer),
+        layer_json::layer(&one.store, one.root_layer)
+    );
+}
+
 #[test]
 fn pinned_bake_oracle_matches_configured_openusd() {
     let Ok(python) = std::env::var("LAYERSTACK_USD_PYTHON") else {

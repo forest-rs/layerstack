@@ -813,7 +813,8 @@ blend-shaped and skinned `points` and `normals`, and rigid prims'
 the times OpenUSD samples (animation, transform and input samples, and the
 stage's playback frames between them), `extent` and models' `extentsHint` are
 recomputed, and each `SkelRoot` becomes an `Xform`. `BakeDeformations`
-selects what is written. The bake applies its transactions to a `LiveStage`
+selects what is written, and `threads` deforms samples on worker threads
+without changing what is written. The bake applies its transactions to a `LiveStage`
 and returns a `SkinningBakeReport` naming every prim, time, layer and
 skipped input, with the applied transactions and their combined undo; saving
 the changed layers is the caller's step.

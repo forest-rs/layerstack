@@ -48,7 +48,7 @@ usd-profiles = []
 usd-mtlx = ["usd-shade"]
 # END GENERATED FEATURES
 
-std = ["fearless_simd?/std"]
+std = ["fearless_simd?/std", "layerstack/std"]
 # Optional CPU skinning acceleration; scalar kernels remain dependency-free.
 simd = ["usd-skel", "dep:fearless_simd"]
 

@@ -1,0 +1,182 @@
+#usda 1.0
+
+over "M"
+{
+    double dd_dbl = 2.5
+    double sd_dbl.timeSamples = { 2: 200, 4: 400 }
+    double ds_dbl = 2.5
+    double ss_dbl.timeSamples = { 2: 200, 4: 400 }
+    double blk_dbl = None
+    double ssblk_dbl.timeSamples = { 2: None, 4: 400 }
+    double ablk_dbl = AnimationBlock
+    double spd_dbl = 2.5
+    double ssp_dbl.spline = { 2: 200; post linear, 4: 400; post held }
+    double absp_dbl = AnimationBlock
+    double cdd_dbl = 2.5 (
+        customData = {
+            string a = "strong"
+            dictionary n = {
+                string y = "strong"
+                int z = 3
+            }
+        }
+    )
+    int dd_int = 2
+    int sd_int.timeSamples = { 2: 200, 4: 400 }
+    int ds_int = 2
+    int ss_int.timeSamples = { 2: 200, 4: 400 }
+    int blk_int = None
+    int ssblk_int.timeSamples = { 2: None, 4: 400 }
+    int ablk_int = AnimationBlock
+    timecode dd_tc = 2.5
+    timecode sd_tc.timeSamples = { 2: 200, 4: 400 }
+    timecode ds_tc = 2.5
+    timecode ss_tc.timeSamples = { 2: 200, 4: 400 }
+    timecode blk_tc = None
+    timecode ssblk_tc.timeSamples = { 2: None, 4: 400 }
+    timecode ablk_tc = AnimationBlock
+    float[] dd_arr = [3, 4]
+    float[] sd_arr.timeSamples = { 2: [200, 400], 4: [400, 800] }
+    float[] ds_arr = [3, 4]
+    float[] ss_arr.timeSamples = { 2: [200, 400], 4: [400, 800] }
+    float[] blk_arr = None
+    float[] ssblk_arr.timeSamples = { 2: None, 4: [400, 800] }
+    float[] ablk_arr = AnimationBlock
+    float[] ed_arr = edit [append 9]
+    float[] es_arr.timeSamples = { 2: edit [write 7 to [0]], 4: edit [append 5] }
+    float[] esd_arr.timeSamples = { 2: edit [write 7 to [0]], 4: edit [append 5] }
+    float[] edb_arr = edit [append 9]
+    token dd_tok = "sd"
+    token sd_tok.timeSamples = { 2: "s2", 4: "s4" }
+    token ds_tok = "sd"
+    token ss_tok.timeSamples = { 2: "s2", 4: "s4" }
+    token blk_tok = None
+    token ssblk_tok.timeSamples = { 2: None, 4: "s4" }
+    token ablk_tok = AnimationBlock
+    string dd_str = "sd"
+    string sd_str.timeSamples = { 2: "s2", 4: "s4" }
+    string ds_str = "sd"
+    string ss_str.timeSamples = { 2: "s2", 4: "s4" }
+    string blk_str = None
+    string ssblk_str.timeSamples = { 2: None, 4: "s4" }
+    string ablk_str = AnimationBlock
+    asset dd_asset = @./lib/weak_tcps.usda@
+    asset sd_asset.timeSamples = { 2: @./lib/weak.usda@, 4: @./root.usda@ }
+    asset ds_asset = @./lib/weak_tcps.usda@
+    asset ss_asset.timeSamples = { 2: @./lib/weak.usda@, 4: @./root.usda@ }
+    asset blk_asset = None
+    asset ssblk_asset.timeSamples = { 2: None, 4: @./root.usda@ }
+    asset ablk_asset = AnimationBlock
+    asset[] dd_assets = [@./root.usda@]
+    asset[] sd_assets.timeSamples = { 2: [@./lib/weak.usda@], 4: [@./root.usda@, @./missing.usda@] }
+    asset[] ds_assets = [@./root.usda@]
+    asset[] ss_assets.timeSamples = { 2: [@./lib/weak.usda@], 4: [@./root.usda@, @./missing.usda@] }
+    asset[] blk_assets = None
+    asset[] ssblk_assets.timeSamples = { 2: None, 4: [@./root.usda@, @./missing.usda@] }
+    asset[] ablk_assets = AnimationBlock
+    pathExpression dd_expr = "%_ Other"
+    pathExpression sd_expr.timeSamples = { 2: "Other", 4: "%_ Other" }
+    pathExpression ds_expr = "%_ Other"
+    pathExpression ss_expr.timeSamples = { 2: "Other", 4: "%_ Other" }
+    pathExpression blk_expr = None
+    pathExpression ssblk_expr.timeSamples = { 2: None, 4: "%_ Other" }
+    pathExpression ablk_expr = AnimationBlock
+}
+
+over "O"
+{
+    double sd_dbl.timeSamples = { 2: 200, 4: 400 }
+    double ss_dbl.timeSamples = { 2: 200, 4: 400 }
+    timecode sd_tc.timeSamples = { 2: 200, 4: 400 }
+    timecode ss_tc.timeSamples = { 2: 200, 4: 400 }
+    float[] sd_arr.timeSamples = { 2: [200, 400], 4: [400, 800] }
+    float[] ss_arr.timeSamples = { 2: [200, 400], 4: [400, 800] }
+    token sd_tok.timeSamples = { 2: "s2", 4: "s4" }
+    token ss_tok.timeSamples = { 2: "s2", 4: "s4" }
+    int ss_int.timeSamples = { 2: 200, 4: 400 }
+    string ss_str.timeSamples = { 2: "s2", 4: "s4" }
+    asset ss_asset.timeSamples = { 2: @./lib/weak.usda@, 4: @./root.usda@ }
+    pathExpression ss_expr.timeSamples = { 2: "Other", 4: "%_ Other" }
+    double ssp_dbl.spline = { 2: 200; post linear, 4: 400; post held }
+    float[] es_arr.timeSamples = { 2: edit [write 7 to [0]], 4: edit [append 5] }
+    float[] esd_arr.timeSamples = { 2: edit [write 7 to [0]], 4: edit [append 5] }
+}
+
+over "R"
+{
+    double sd_dbl.timeSamples = { 2: 200, 4: 400 }
+    double ss_dbl.timeSamples = { 2: 200, 4: 400 }
+    timecode sd_tc.timeSamples = { 2: 200, 4: 400 }
+    timecode ss_tc.timeSamples = { 2: 200, 4: 400 }
+    float[] sd_arr.timeSamples = { 2: [200, 400], 4: [400, 800] }
+    float[] ss_arr.timeSamples = { 2: [200, 400], 4: [400, 800] }
+    token sd_tok.timeSamples = { 2: "s2", 4: "s4" }
+    token ss_tok.timeSamples = { 2: "s2", 4: "s4" }
+    int ss_int.timeSamples = { 2: 200, 4: 400 }
+    string ss_str.timeSamples = { 2: "s2", 4: "s4" }
+    asset ss_asset.timeSamples = { 2: @./lib/weak.usda@, 4: @./root.usda@ }
+    pathExpression ss_expr.timeSamples = { 2: "Other", 4: "%_ Other" }
+    double ssp_dbl.spline = { 2: 200; post linear, 4: 400; post held }
+    float[] es_arr.timeSamples = { 2: edit [write 7 to [0]], 4: edit [append 5] }
+    float[] esd_arr.timeSamples = { 2: edit [write 7 to [0]], 4: edit [append 5] }
+}
+
+over Sphere "CE"
+{
+    double over_dbl = 7
+}
+
+over "CN"
+{
+    double over_dbl = 7
+}
+
+over "CT"
+{
+    double over_dbl = 7
+}
+
+over "CI"
+{
+    double over_dbl = 7
+}
+
+over "CO"
+{
+    double over_dbl = 7
+}
+
+over Sphere "FS_none"
+{
+}
+
+over Sphere "FS_blk"
+{
+}
+
+over Sphere "FS_sblk"
+{
+}
+
+over Sphere "FS_over"
+{
+    double radius.timeSamples = { 1: 5, 3: 7 }
+    float3[] extent = edit [write (9, 9, 9) to [1]]
+    token visibility.timeSamples = { 1: "invisible", 3: "inherited" }
+}
+
+over SpatialAudio "FA_none"
+{
+}
+
+over SpatialAudio "FA_blk"
+{
+}
+
+over RenderVar "FV_none"
+{
+}
+
+over RenderVar "FV_blk"
+{
+}

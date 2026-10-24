@@ -682,6 +682,10 @@ jobs:
       - name: check path expression oracle
         run: python layerstack_conformance/scripts/path_expression_oracle.py --check
 
+      # The value matrix must be what OpenUSD resolves across value sources.
+      - name: check value matrix oracle
+        run: python layerstack_conformance/scripts/value_matrix_oracle.py --check
+
   # If this fails, consider changing your text or adding something to .typos.toml.
   typos:
     runs-on: ubuntu-latest

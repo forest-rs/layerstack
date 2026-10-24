@@ -1,0 +1,14 @@
+#usda 1.0
+
+over "Clip"
+{
+    double dbl
+    float[] arr
+    token tok
+    asset asset
+    timecode tc
+    double gap
+    double radius
+    double anchor_dbl
+    double over_dbl
+}

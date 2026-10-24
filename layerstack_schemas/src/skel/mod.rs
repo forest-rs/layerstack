@@ -21,6 +21,11 @@ pub use cache::{SkelCache, SkelCacheMemory, SkelCacheStats};
 pub use dual_quaternion::DualQuaternionJoint;
 mod helpers;
 pub use helpers::JointTransformComponents;
+mod influences;
+pub use influences::{
+    InfluenceShapeError, normalize_joint_weights, normalize_joint_weights_with_epsilon,
+    resize_joint_indices, resize_joint_weights, sort_joint_influences,
+};
 mod normals;
 pub use normals::{
     rigid_skinning_transform, rigid_skinning_transform_with_method, skin_face_varying_normals,

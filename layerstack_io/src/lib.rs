@@ -1310,9 +1310,12 @@ impl<'a, B: Storage> Reader<'a, B> {
             })
             .collect();
         let mut layers = BTreeSet::new();
-        for layer in self.pending.drain(..) {
+        for mut layer in self.pending.drain(..) {
             let id = layer.id();
             if layers.insert(id) {
+                // A reader records a change for each spec it inserts; no
+                // stage has seen the layer before them.
+                layer.forget_change_history();
                 store.insert_layer(layer);
             }
         }

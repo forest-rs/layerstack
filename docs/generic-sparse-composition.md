@@ -179,14 +179,35 @@ OpenUSD's schema registry) under sparse samples, blocks and layer offsets. It
 also checks that resolving the composed stage equals
 resolving OpenUSD's flattened layer.
 
+`layerstack_conformance/tests/value_matrix.rs` replays a second, broader
+matrix recorded from OpenUSD 26.08 (`scripts/value_matrix_oracle.py`, which
+also writes its layers under `fixtures/value_matrix`). Every value kind
+(numbers, time codes, arrays, tokens, strings, asset paths, path
+expressions and composed `customData`) meets every value form or source
+(defaults, time samples, value and animation blocks, splines, sparse array
+edits, value clips, schema fallbacks, layer offsets and time code rates)
+behind every composition arc (sublayers, references, payloads, inherits,
+specializes, variants, relocates and instance proxies). For each attribute
+it records `UsdAttribute::Get` at the default time and at times around every
+sample and clip boundary under both interpolations, `GetResolveInfo`,
+`GetBracketingTimeSamples`, `GetTimeSamples`, `GetTimeSamplesInInterval`
+and `ValueMightBeTimeVarying`, and the test reads the same through
+`Attribute::get`, `AttributeQuery`, `Attribute::explain`,
+`Attribute::sample_times`, `sample_times_in_range` and
+`might_be_time_varying`.
+
 Every recorded value must match OpenUSD, except for the named divergences
-below.
+below. Each set of vectors names the divergences it shows: the temporal
+sparse vectors the first five, the value matrix the first, fourth and fifth
+and the last five.
 
 ### Divergences From OpenUSD
 
 A divergence is a result Layerstack resolves differently from OpenUSD on
 purpose, following the Core specification or the sparse-array-edits proposal
-where OpenUSD disagrees with them, or with its own flattened stage. Each has a
+where OpenUSD disagrees with them, or with its own flattened stage, or with
+its own results for the same query elsewhere (its attribute queries, sample
+lists and prototypes). Each has a
 name and the OpenUSD release it was confirmed against. The oracle script
 records them in `DIVERGENCES`, and each affected query names one and pins
 Layerstack's `expected` value. The script refuses to write vectors when:
@@ -196,8 +217,8 @@ Layerstack's `expected` value. The script refuses to write vectors when:
   must be re-checked and the version bumped;
 - no case shows a named divergence any more.
 
-`divergences_are_exactly_the_named_ones` requires the vectors to name exactly
-the divergences and versions below, each shown by a query where OpenUSD's
+Each test's `divergences_are_exactly_the_named_ones` requires its vectors to
+name exactly their divergences and versions below, each shown by a query where OpenUSD's
 value differs from the expected one. Any other difference from OpenUSD fails
 `composed_resolution_matches_openusd`.
 
@@ -208,6 +229,11 @@ value differs from the expected one. Any other difference from OpenUSD fails
 | `transparent-sampled-block` | 26.08 | a held sampled block in a weaker series lets opinions weaker than it show through | the block ends the fold | Core §12.3.6 |
 | `sampled-block-drops-fallback` | 26.08 | a held sampled block resolves no value despite a schema fallback, and edits over it compose over `[]` | the fallback resolves, and edits compose over it, as for a default block | Core §12.3.6, §16.2.16.3 |
 | `default-time-block-hides-fallback` | 26.08 | at the default time a default block resolves no value despite a schema fallback | the fallback resolves, as at numeric times | Core §12.3.6, §16.2.16.2 |
+| `default-time-edits-over-block` | 26.08 | at the default time sparse edits over a default block resolve no value | the edits compose over the empty array, as at numeric times | Core §12.3.6; proposal |
+| `sampled-path-expression-anchoring` | 26.08 | a sampled path expression's relative patterns stay unanchored, and drop out across arcs | every opinion's relative patterns anchor at the prim that authors it | OpenUSD's own anchoring of defaults |
+| `instance-proxy-clips-not-varying` | 26.08 | an instance proxy's clip-valued attribute is not time-varying | it varies as its prototype's does | Core §12.3.4, §11 |
+| `bracketing-composability-in-stage-time` | 26.08 | brackets behind a layer offset can end at a stronger sparse series | brackets follow the composed sample grid | Core §12.3.2.1 |
+| `missing-clip-values-across-jump` | 26.08 | a missing clip value after a jump holds the earlier clip's first sample | it holds the last composed sample | Core §12.3.4, §12.5 |
 
 - **`nan-before-first-sample`.** A default or fallback under time samples is a
   sample at `-inf` (`pxr/usd/usd/stage.cpp:8029` and `:8054`,
@@ -246,12 +272,49 @@ value differs from the expected one. Any other difference from OpenUSD fails
   fallback as the source (`:9173`) and numeric times resolve the fallback.
   Core §12.3.6 and §16.2.16.2 ("`int x = None` ... only resolve to fallback")
   resolve the fallback.
+- **`default-time-edits-over-block`.** The same default-time read composes the
+  `default` field as metadata (`pxr/usd/usd/stage.cpp:7261`) and clears the
+  result when the weaker default is a block (`:7272`), so sparse edits
+  stronger than a block resolve no value, while numeric times and
+  `UsdAttributeQuery::Get` at the default time compose them over the empty
+  array. A block discards weaker opinions only (Core §12.3.6), so Layerstack
+  composes the edits at every time.
+- **`sampled-path-expression-anchoring`.** OpenUSD's text parser makes a
+  default path expression absolute at the prim that authors it
+  (`pxr/usd/sdf/textParserHelpers.cpp:114`) but leaves time samples as
+  authored, and composition maps patterns as they are
+  (`pxr/usd/usd/stage.cpp:272`, `_MapPathExpressionToPrim`): a sample's
+  relative patterns stay relative under an identity mapping and drop out
+  across a reference, payload or relocation. Layerstack anchors every
+  opinion's relative patterns, as `Value::PathExpression` documents; the
+  vectors pin what OpenUSD resolves from the same layers with their samples
+  anchored.
+- **`instance-proxy-clips-not-varying`.** `ValueMightBeTimeVarying` looks
+  value clips up by the attribute's prim path
+  (`pxr/usd/usd/stage.cpp:9769`), which for an instance proxy is not the
+  prototype's path the clip cache holds, so it answers `false` although the
+  proxy's values vary. Layerstack answers as for the prototype.
+- **`bracketing-composability-in-stage-time`.** `GetBracketingTimeSamples`
+  asks whether a series' lower sample composes at that sample's stage time
+  rather than its layer time (`pxr/usd/usd/stage.cpp:8362`,
+  `_BracketingSamplesResolver::ProcessLayerAtTime`), so behind a layer
+  offset it can stop at a stronger sparse series and bracket with its last
+  sample, although `GetTimeSamples` lists the weaker samples there and the
+  value changes at them. Layerstack brackets with the composed sample grid.
+- **`missing-clip-values-across-jump`.** With `interpolateMissingClipValues`,
+  where the active clip lacks the attribute and no later clip has it,
+  OpenUSD brackets with the earlier clip's samples at the query time
+  (`pxr/usd/usd/clipSet.cpp:681`), which a jump discontinuity maps to that
+  clip's first sample, although `GetTimeSamples` ends with its last sample
+  before the jump and the value there differs. Layerstack holds the last
+  composed sample (Core §12.5).
 
 ## Explanations
 
-`Attribute::explain` (at a `Time`, default or numeric) and
-`Prim::explain_metadata` answer "why does this property or field have this
-value?". Each mirrors a read (`Attribute::get`, `Prim::metadata`) and returns its value, where the
+`Attribute::explain` (at a `Time`, default or numeric),
+`Prim::explain_metadata` and `Property::explain_metadata` answer "why does
+this property or field have this value?". Each mirrors a read
+(`Attribute::get`, `Prim::metadata`, `Property::metadata`) and returns its value, where the
 value comes from (a default, the time samples bracketing the query, a spline,
 the schema fallback, or nothing), and every consulted opinion with its layer,
 spec path, composition node and layer offset, and its part: a dense value, a

@@ -1,0 +1,10 @@
+#usda 1.0
+(
+    subLayers = [
+        @./strong.usda@,
+        @./lib/weak.usda@,
+        @./lib/weak_off.usda@ (offset = 10; scale = 2),
+        @./lib/weak_tcps.usda@
+    ]
+)
+

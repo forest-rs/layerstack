@@ -1,0 +1,7 @@
+#usda 1.0
+
+def "Clip"
+{
+    double dbl.timeSamples = { 2: 20, 3: 30 }
+    token tok.timeSamples = { 2: "t2" }
+}

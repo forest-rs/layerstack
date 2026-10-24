@@ -16,7 +16,7 @@ mod template;
 use crate::prim_index::PrimIndex;
 use crate::{
     AssetAvailability, FieldValue, HashMap, HashSet, InterpolationType, LayerId, LayerOffset,
-    LayerStore, ListOp, Opinion, OpinionKey, OpinionValue, Path, PathId, PropertyPath,
+    LayerStore, ListOp, NodeId, Opinion, OpinionKey, OpinionValue, Path, PathId, PropertyPath,
     PropertySpec, PropertyType, SpecPath, TokenId, Value, Variability,
 };
 use alloc::{boxed::Box, collections::BTreeMap, sync::Arc, vec::Vec};
@@ -139,6 +139,12 @@ pub struct ClipValueSource {
     pub owner: PathId,
     /// Metadata's asset anchor; distinct from the actual value layer.
     pub anchor_layer: LayerId,
+    /// The node of the queried prim's composition graph
+    /// ([`Prim::composition_graph`](crate::Prim::composition_graph)) whose
+    /// site authors the clip set; its strength places the clips among the
+    /// prim's opinions. OpenUSD: `UsdResolveInfo::GetNode` for a clips
+    /// source.
+    pub node: NodeId,
     /// Lower bracketing source.
     pub lower: ClipSampleSource,
     /// Upper bracketing source.
@@ -585,7 +591,7 @@ impl Catalog {
                 return false;
             };
             instance_boundary.is_none_or(|depth| {
-                node != crate::NodeId::ROOT && target.namespace_depth() >= depth
+                node != NodeId::ROOT && target.namespace_depth() >= depth
             }) && target.layer_stack_identifier() == anchor_node.layer_stack_identifier()
                 // C++ _ClipsApplyToNode compares variant-qualified paths. A
                 // variant clip belongs at that arc, below local layer opinions.
@@ -1095,6 +1101,7 @@ fn entry_evaluation(
         set_name: entry.set_name.clone(),
         owner: entry.owner,
         anchor_layer: entry.key.layer_id,
+        node: entry.key.node,
         lower: source(
             value.lower_clip,
             value.lower,
@@ -1411,7 +1418,7 @@ mod tests {
         let property_path = store.property_path("/Clip.x");
         let spec = SpecPath::from_property_path(property_path);
         let key = OpinionKey {
-            node: crate::prim_index_graph::NodeId::ROOT,
+            node: NodeId::ROOT,
             layer_strength: 0,
             layer_id: LayerId(1),
             lookup_path: prim,
@@ -1555,6 +1562,18 @@ mod tests {
                 .unwrap()
                 .value,
             Value::Double(41.)
+        );
+        // The source names the node whose site authors the clip set: the
+        // referenced prim's variant, as OpenUSD's resolve info does.
+        let source = stage
+            .property_clip_source(world_child.prim_path(), field, Time::at(0.))
+            .expect("clip source");
+        let graph = stage.explain_prim_graph(world_child.prim_path()).unwrap();
+        let node = graph.node(source.node).expect("node of the prim's graph");
+        assert_eq!(node.arc_kind(), crate::ArcKind::Variants);
+        assert_eq!(
+            node.site().display(&store.paths, &store.tokens),
+            "/P{mode=a}Q"
         );
     }
 

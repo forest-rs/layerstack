@@ -4,9 +4,11 @@
 //! Value explanations: why a property or metadata field has its value.
 //!
 //! Each explanation ([`Attribute::explain`](crate::Attribute::explain),
-//! [`Prim::explain_metadata`](crate::Prim::explain_metadata)) mirrors one
-//! read ([`Attribute::get`](crate::Attribute::get),
-//! [`Prim::metadata`](crate::Prim::metadata)) and answers with the same
+//! [`Prim::explain_metadata`](crate::Prim::explain_metadata),
+//! [`Property::explain_metadata`](crate::Property::explain_metadata))
+//! mirrors one read ([`Attribute::get`](crate::Attribute::get),
+//! [`Prim::metadata`](crate::Prim::metadata),
+//! [`Property::metadata`](crate::Property::metadata)) and answers with the same
 //! value, plus the opinions resolution consulted and the part each one
 //! played. It is the counterpart of OpenUSD's
 //! `UsdAttribute::GetResolveInfo` (`UsdResolveInfo`, `pxr/usd/usd/resolveInfo.h`),
@@ -32,7 +34,7 @@
 //! §12.2.6 (list ops), §12.3.1 (default values), §12.3.2 (time samples and
 //! splines), §12.3.6 (blocks), §13.3.2.4 (schema fallbacks).
 
-use alloc::{sync::Arc, vec, vec::Vec};
+use alloc::{borrow::Cow, sync::Arc, vec, vec::Vec};
 
 use opinionated::{
     ChainOpinion, DictionaryEvent, FamilyEvent, IgnoreReason, OpinionOp, ResolutionEvent,
@@ -59,11 +61,13 @@ use crate::{
 
 /// Why a property or metadata field has its value.
 ///
-/// Returned by [`Attribute::explain`](crate::Attribute::explain) and
-/// [`Prim::explain_metadata`](crate::Prim::explain_metadata), each of which
-/// mirrors a read: [`ValueExplanation::value`] is exactly the value that
-/// read resolves ([`Attribute::get`](crate::Attribute::get),
-/// [`Prim::metadata`](crate::Prim::metadata)).
+/// Returned by [`Attribute::explain`](crate::Attribute::explain),
+/// [`Prim::explain_metadata`](crate::Prim::explain_metadata) and
+/// [`Property::explain_metadata`](crate::Property::explain_metadata), each
+/// of which mirrors a read: [`ValueExplanation::value`] is exactly the value
+/// that read resolves ([`Attribute::get`](crate::Attribute::get),
+/// [`Prim::metadata`](crate::Prim::metadata),
+/// [`Property::metadata`](crate::Property::metadata)).
 #[derive(Clone, Debug, PartialEq)]
 pub struct ValueExplanation<'s, T> {
     /// The resolved value; `None` when the query resolves no value.
@@ -378,6 +382,71 @@ impl Stage {
         }
     }
 
+    /// Explains [`Stage::resolve_property_metadata`]: why a property's
+    /// metadata field `key`, such as `customData`, has its value, the
+    /// schema's fallback included.
+    ///
+    /// Each opinion is explained as the field it authors, so a dictionary's
+    /// entries name the opinion, and so the layer, that supplied them.
+    /// Returns `None` when no opinion authors the field and the schema has
+    /// no fallback for it.
+    ///
+    /// Spec: AOUSD Core §12.2 (metadata resolution), §12.2.5 (dictionaries
+    /// combine), §13.3.2.3 (fallback metadata).
+    #[must_use]
+    pub(crate) fn explain_property_metadata(
+        &self,
+        prim: PathId,
+        property: TokenId,
+        key: TokenId,
+    ) -> Option<ValueExplanation<'_, ResolvedValue>> {
+        let index = self.prims.get(&prim)?;
+        let opinions = index.property_opinions(property).unwrap_or(&[]);
+        let fallback = self
+            .property_definition_ref(prim, property)
+            .and_then(|definition| definition.metadata(key));
+        // Each opinion as its `key` field, position for position; one that
+        // does not author it authors nothing the explanation reads.
+        let nothing = OpinionValue::from(PropertySpec::attribute());
+        let fields: Vec<Opinion> = opinions
+            .iter()
+            .map(|opinion| Opinion {
+                value: opinion
+                    .value
+                    .as_property()
+                    .and_then(|spec| spec.metadata(key))
+                    .map_or_else(
+                        || nothing.clone(),
+                        |field| OpinionValue::Field(field.clone()),
+                    ),
+                ..opinion.clone()
+            })
+            .collect();
+        let authored = fields.iter().find_map(|opinion| opinion.value.as_field());
+        if authored.is_none() && fallback.is_none() {
+            return None;
+        }
+        let explained = match authored {
+            Some(list) if list.is_list_op() => explain_field_list(index, &fields, list),
+            _ => {
+                let fallback = match fallback {
+                    Some(FieldValue::Value(value)) => Some(value),
+                    _ => None,
+                };
+                self.explain_default(index, key, &fields, None, fallback)
+            }
+        };
+        let mut explained = rebind(index, opinions, &fields, explained);
+        if explained.value.is_none() && authored.is_none() {
+            // Only the schema's fallback answers.
+            explained.value = self
+                .resolve_property_metadata(prim, property, key)
+                .map(|resolved| resolved.value);
+            explained.source = ValueSource::Fallback;
+        }
+        Some(explained)
+    }
+
     /// Why a property has its default-time value, or a relationship its
     /// targets ([`Stage::resolve_property_path`]).
     #[cfg(test)]
@@ -564,7 +633,7 @@ impl Stage {
             self.explain_default_as_authored(index, opinions, property_type, fallback);
         if matches!(
             super::stage_time::opinions_in_stage_time(opinions),
-            alloc::borrow::Cow::Owned(_)
+            Cow::Owned(_)
         ) {
             explained.value = self
                 .resolve_default(field, opinions, property_type, fallback)
@@ -725,18 +794,39 @@ impl Stage {
         fallback: Option<&Value>,
         composability: Option<&crate::value_resolution::SampleComposability<'_>>,
     ) -> ValueExplanation<'s, Value> {
-        let mut explained = self.explain_at_time_as_authored(
-            index,
-            field,
-            opinions,
-            time,
-            interp,
-            fallback,
-            composability,
-        );
+        // Spec: AOUSD Core §12.3 (an animation block hides weaker time
+        // samples and splines, not weaker defaults). Explain the fold the
+        // read runs (`Stage::resolve_at_time_with_source`), over the masked
+        // opinions, and report it against the authored ones.
+        let animation = super::stage_time::animation_opinions(opinions);
+        let mut explained = match &animation {
+            Cow::Borrowed(_) => self.explain_at_time_as_authored(
+                index,
+                field,
+                opinions,
+                time,
+                interp,
+                fallback,
+                composability,
+            ),
+            Cow::Owned(masked) => rebind(
+                index,
+                opinions,
+                masked,
+                self.explain_at_time_as_authored(
+                    index,
+                    field,
+                    masked,
+                    time,
+                    interp,
+                    fallback,
+                    composability,
+                ),
+            ),
+        };
         if matches!(
             super::stage_time::opinions_in_stage_time(opinions),
-            alloc::borrow::Cow::Owned(_)
+            Cow::Owned(_)
         ) {
             explained.value = self
                 .resolve_at_time_with_source(
@@ -801,6 +891,7 @@ impl Stage {
                 Some(_) => source.unwrap_or(ValueSource::Fallback),
                 None => ValueSource::None,
             };
+            roles.record_blocks(time);
             return roles.finish(fold.value, source, seeded);
         }
 
@@ -835,6 +926,7 @@ impl Stage {
             return roles.finish(None, ValueSource::None, false);
         };
         roles.apply_strongest_wins(reads, value.is_none());
+        roles.record_blocks(time);
         let source = if value.is_none() {
             ValueSource::None
         } else if let Some((lower, upper)) = opinions
@@ -979,6 +1071,46 @@ impl ListChainer for ReportLists {
     }
 }
 
+/// `explained`, an explanation over `masked`, as one over `opinions`, the
+/// authored opinions `masked` copies position for position.
+fn rebind<'s, T>(
+    index: &'s PrimIndex,
+    opinions: &'s [Opinion],
+    masked: &[Opinion],
+    explained: ValueExplanation<'_, T>,
+) -> ValueExplanation<'s, T> {
+    let ValueExplanation {
+        value,
+        source,
+        clip,
+        seeded_by_fallback,
+        opinions: explained,
+    } = explained;
+    let opinions = explained
+        .into_iter()
+        .map(|entry| {
+            let position = masked
+                .iter()
+                .position(|opinion| core::ptr::eq(opinion, entry.opinion))
+                .expect("an explained opinion is one of the masked ones");
+            let opinion = &opinions[position];
+            ExplainedOpinion {
+                opinion,
+                node: index.graph.node(opinion.key.node),
+                role: entry.role,
+                samples: entry.samples,
+            }
+        })
+        .collect();
+    ValueExplanation {
+        value,
+        source,
+        clip,
+        seeded_by_fallback,
+        opinions,
+    }
+}
+
 /// Completes a fallback explanation from the authored one, if any.
 fn with_fallback<'s, T>(
     explained: Option<ValueExplanation<'s, T>>,
@@ -1106,6 +1238,38 @@ impl<'s> Roles<'s> {
         for event in &report.events {
             let (position, role) = chain_role(event);
             self.roles[position] = Some(role);
+        }
+    }
+
+    /// Records, for each block in effect that holds a sampled block at stage
+    /// time `time`, that sample, so the explanation says where the block is
+    /// held (OpenUSD's resolve info names its time samples and marks the
+    /// value blocked). A default block offers no sample.
+    ///
+    /// Spec: AOUSD Core §12.3.6 (individual time samples can be blocked).
+    fn record_blocks(&mut self, time: f64) {
+        for position in 0..self.opinions.len() {
+            if !matches!(self.roles[position], Some(OpinionRole::Block))
+                || !self.samples[position].is_empty()
+            {
+                continue;
+            }
+            let opinion = &self.opinions[position];
+            let Some(samples) = opinion.value.time_samples().filter(|s| !s.is_empty()) else {
+                continue;
+            };
+            let offset = opinion.layer_offset;
+            let Some((held, _)) =
+                sample_bracket(samples, offset.map_time(time), InterpolationType::Held)
+            else {
+                continue;
+            };
+            if matches!(samples[held].1, Value::Blocked) {
+                self.samples[position].push(SampleUse {
+                    time: samples[held].0 * offset.scale + offset.offset,
+                    role: OpinionRole::Block,
+                });
+            }
         }
     }
 
@@ -1309,6 +1473,19 @@ impl<'s> Roles<'s> {
     }
 
     /// Finishes a sparse-array explanation.
+    /// The earliest finite time of a sample a contributing opinion offered.
+    fn first_contributed_sample(&self) -> Option<f64> {
+        self.roles
+            .iter()
+            .zip(&self.samples)
+            .filter(|(role, _)| matches!(role, Some(OpinionRole::Contributed(_))))
+            .flat_map(|(_, samples)| samples)
+            .filter(|sample| matches!(sample.role, OpinionRole::Contributed(_)))
+            .map(|sample| sample.time)
+            .filter(|time| time.is_finite())
+            .min_by(f64::total_cmp)
+    }
+
     fn finish_sparse<T>(
         self,
         value: Option<T>,
@@ -1343,6 +1520,20 @@ impl<'s> Roles<'s> {
                         upper_seeded_by_fallback: seeded(only),
                     }
                 }
+                // Before the first composed sample, the samples that
+                // composed over a default hold it: its time is the first of
+                // theirs (AOUSD Core §12.5.1; OpenUSD's resolve info names
+                // the time samples).
+                (Some(interpolation), [only]) => match self.first_contributed_sample() {
+                    Some(first) => ValueSource::TimeSamples {
+                        lower: first,
+                        upper: first,
+                        interpolation,
+                        lower_seeded_by_fallback: seeded(only),
+                        upper_seeded_by_fallback: seeded(only),
+                    },
+                    None => ValueSource::Default,
+                },
                 _ => ValueSource::Default,
             },
         };

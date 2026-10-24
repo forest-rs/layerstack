@@ -801,6 +801,26 @@ impl<'a> Property<'a> {
         self.stage
             .resolve_property_metadata(self.path.prim_path(), self.path.property(), key)
     }
+    /// Why the property metadata field `key` has its value (see
+    /// [`ValueExplanation`]): the value [`Self::metadata`] reads, the
+    /// schema's fallback included, with each opinion's part. A
+    /// dictionary's entries name the opinion that supplied them
+    /// ([`Contribution::Dictionary`]), so
+    /// a host anchors an asset path among them at that opinion's layer, as
+    /// OpenUSD resolves each entry against the layer that authors it.
+    /// `None` when no opinion authors the field and the schema has no
+    /// fallback for it.
+    ///
+    /// Spec: AOUSD Core §12.2 (metadata resolution), §12.2.5, §9.4 (asset
+    /// paths anchor at their layer).
+    pub fn explain_metadata(
+        self,
+        key: impl NameArg,
+    ) -> Option<ValueExplanation<'a, ResolvedValue>> {
+        let key = key.token(self.store.tokens())?;
+        let stage: &'a Stage = self.stage;
+        stage.explain_property_metadata(self.path.prim_path(), self.path.property(), key)
+    }
     /// The property metadata field `key` as opinions author it, without the
     /// schema's fallback. A block reads as `None`, hiding weaker values.
     ///

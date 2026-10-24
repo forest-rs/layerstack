@@ -1383,8 +1383,8 @@ impl Stage {
 
     /// Sorted, unique stage-time samples of the effective property sources.
     ///
-    /// Dense defaults and blocks mask weaker animation. Sparse array edits retain
-    /// weaker grids. Clip times include activations and mapping discontinuities;
+    /// Dense defaults and blocks mask weaker animation. Sparse array edits and
+    /// path expressions retain weaker grids. Clip times include activations and mapping discontinuities;
     /// splines have no discrete sample times. Default-time reads ignore clips.
     #[must_use]
     pub(crate) fn property_sample_times(&self, prim: PathId, field: TokenId) -> Vec<f64> {
@@ -1451,7 +1451,7 @@ impl Stage {
                     .map(|(time, value)| {
                         (
                             op.layer_offset.offset + time * op.layer_offset.scale,
-                            value.array_edit_ref().is_some(),
+                            shows_weaker_samples(value),
                         )
                     })
                     .collect()
@@ -1463,7 +1463,7 @@ impl Stage {
                 if op
                     .value
                     .default_value()
-                    .is_some_and(|v| v.array_edit_ref().is_none())
+                    .is_some_and(|v| !shows_weaker_samples(v))
                 {
                     break;
                 }
@@ -4216,6 +4216,18 @@ pub(crate) fn materialize_selected(value: &mut Value) -> Result<(), crate::Array
     Ok(())
 }
 
+/// Whether a sample or default holding `value` lets weaker samples show
+/// through in the composed sample grid: a sparse array edit, or a path
+/// expression, whose type composes over a weaker one even without a `%_`
+/// (OpenUSD `VtValue::CanComposeOver`, `pxr/base/vt/value.cpp:450`, which
+/// asks the type; `_SamplesInIntervalResolver` in `pxr/usd/usd/stage.cpp`
+/// keeps weaker samples under a composing one).
+///
+/// Spec: AOUSD Core §12.3.2 (effective stage-time samples).
+fn shows_weaker_samples(value: &Value) -> bool {
+    value.array_edit_ref().is_some() || matches!(value, Value::PathExpression(_))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -4885,6 +4897,110 @@ mod tests {
         assert_eq!(explained.contributors().count(), 2);
     }
 
+    /// A stage over one prim `/A` whose attribute `x` has `specs`, strongest
+    /// first.
+    fn property_stack_fixture(specs: Vec<PropertySpec>) -> (Stage, PathId, TokenId) {
+        property_stack_fixture_in(&crate::doc::InMemoryStore::default(), specs)
+    }
+
+    /// [`property_stack_fixture`] over `store`'s interners.
+    fn property_stack_fixture_in(
+        store: &crate::doc::InMemoryStore,
+        specs: Vec<PropertySpec>,
+    ) -> (Stage, PathId, TokenId) {
+        let prim = store.path("/A");
+        let field = store.tokens.intern("x");
+        let mut index = PrimIndex::default();
+        let key = test_key(LayerId(1), prim);
+        index.add_source(key.clone());
+        for (strength, spec) in specs.into_iter().enumerate() {
+            index.add_opinion(Opinion {
+                key: OpinionKey {
+                    layer_strength: u16::try_from(strength).expect("small fixture"),
+                    ..key.clone()
+                },
+                field,
+                value: spec.into(),
+                layer_offset: LayerOffset::IDENTITY,
+            });
+        }
+        let stage = Stage::from_parts(HashMap::from([(prim, index)]), HashMap::new(), false, None);
+        (stage, prim, field)
+    }
+
+    /// A path expression's type composes over a weaker one, so the sample
+    /// grid keeps weaker samples under a stronger expression, with or
+    /// without `%_`, as OpenUSD's does (`VtValue::CanComposeOver`).
+    ///
+    /// Spec: AOUSD Core §12.3.2.
+    #[test]
+    fn path_expressions_keep_weaker_sample_grids() {
+        let ty = PropertyType::parse("pathExpression").unwrap();
+        let expression = |text: &str| Value::PathExpression(text.into());
+        let weak = PropertySpec::typed_attribute(ty.clone()).with_time_samples(vec![
+            (1.0, expression("/Weak1")),
+            (3.0, expression("/Weak3")),
+        ]);
+        let strong_samples = PropertySpec::typed_attribute(ty.clone())
+            .with_time_samples(vec![(2.0, expression("/Other"))]);
+        let (stage, prim, field) = property_stack_fixture(vec![strong_samples, weak.clone()]);
+        assert_eq!(
+            stage.property_sample_times(prim, field),
+            vec![1.0, 2.0, 3.0]
+        );
+
+        let strong_default =
+            PropertySpec::typed_attribute(ty.clone()).with_default(expression("%_ /Other"));
+        let (stage, prim, field) = property_stack_fixture(vec![strong_default, weak.clone()]);
+        assert_eq!(stage.property_sample_times(prim, field), vec![1.0, 3.0]);
+        assert!(stage.property_might_be_time_varying(prim, field));
+
+        // A block still hides them.
+        let blocked = PropertySpec::typed_attribute(ty).with_default(Value::Blocked);
+        let (stage, prim, field) = property_stack_fixture(vec![blocked, weak]);
+        assert!(stage.property_sample_times(prim, field).is_empty());
+        assert!(!stage.property_might_be_time_varying(prim, field));
+    }
+
+    /// An animation block hides weaker time samples and splines, not their
+    /// defaults, and the explanation says so (the value matrix's `absp_dbl`
+    /// covers splines): the weaker default answers
+    /// numeric times, as the read does (OpenUSD `UsdAttribute::BlockAnimation`;
+    /// `GetResolveInfo` names the default).
+    ///
+    /// Spec: AOUSD Core §12.3.
+    #[test]
+    fn explanations_follow_animation_blocks() {
+        let ty = PropertyType::parse("double").unwrap();
+        let block = PropertySpec::typed_attribute(ty.clone()).with_default(Value::AnimationBlock);
+        let sampled = PropertySpec::typed_attribute(ty.clone())
+            .with_default(Value::Double(1.5))
+            .with_time_samples(vec![(1.0, Value::Double(10.0)), (3.0, Value::Double(30.0))]);
+        let (stage, prim, field) = property_stack_fixture(vec![block, sampled]);
+        let property = PropertyPath::new(prim, field);
+        for time in [
+            Time::held(0.0),
+            Time::held(2.0),
+            Time::at(2.0),
+            Time::held(5.0),
+        ] {
+            let read = stage.resolve_property_path_at_time(property, time);
+            assert_eq!(read.map(|r| r.value), Some(Value::Double(1.5)));
+            let explained = stage.explain_property_value(property, time).unwrap();
+            assert_eq!(explained.value, Some(Value::Double(1.5)));
+            assert_eq!(explained.source, ValueSource::Default);
+            let contributors: Vec<_> = explained.contributors().collect();
+            assert_eq!(contributors.len(), 1);
+            assert_eq!(contributors[0].opinion.key.layer_strength, 1);
+            assert!(
+                contributors[0]
+                    .samples
+                    .iter()
+                    .all(|sample| !sample.time.is_finite())
+            );
+        }
+    }
+
     fn append_edit(value: i32) -> Value {
         Value::ArrayEdit(ArrayEdit {
             ops: vec![ArrayEditOp::Insert {
@@ -4892,6 +5008,132 @@ mod tests {
                 index: ArrayIndex::End,
             }],
         })
+    }
+
+    /// Before the first composed sample, edits that compose over a weaker
+    /// default hold their first sample, and the explanation names it as the
+    /// time samples the value comes from, as OpenUSD's resolve info does.
+    ///
+    /// Spec: AOUSD Core §12.5.1.
+    #[test]
+    fn edits_held_before_their_first_sample_explain_as_samples() {
+        let ty = PropertyType::parse("int[]").unwrap();
+        let strong = PropertySpec::typed_attribute(ty.clone())
+            .with_time_samples(vec![(2.0, append_edit(9)), (4.0, append_edit(8))]);
+        let weak = PropertySpec::typed_attribute(ty).with_default(array_value(&[1, 2]));
+        let (stage, prim, field) = property_stack_fixture(vec![strong, weak]);
+        let property = PropertyPath::new(prim, field);
+        for time in [Time::held(0.0), Time::at(1.0), Time::held(2.0)] {
+            let explained = stage.explain_property_value(property, time).unwrap();
+            assert_eq!(
+                explained.value,
+                stage
+                    .resolve_property_path_at_time(property, time)
+                    .map(|r| r.value)
+            );
+            assert!(
+                matches!(
+                    explained.source,
+                    ValueSource::TimeSamples {
+                        lower: 2.0,
+                        upper: 2.0,
+                        ..
+                    }
+                ),
+                "{time:?}: {:?}",
+                explained.source
+            );
+        }
+    }
+
+    /// A sampled block in effect says which of its samples blocks the value,
+    /// before the first sample too, while a default block offers none.
+    ///
+    /// Spec: AOUSD Core §12.3.6.
+    #[test]
+    fn explanations_name_the_held_sampled_block() {
+        let ty = PropertyType::parse("double").unwrap();
+        let strong = PropertySpec::typed_attribute(ty.clone())
+            .with_time_samples(vec![(2.0, Value::Blocked), (4.0, Value::Double(400.0))]);
+        let weak = PropertySpec::typed_attribute(ty.clone())
+            .with_time_samples(vec![(1.0, Value::Double(10.0)), (3.0, Value::Double(30.0))]);
+        let (stage, prim, field) = property_stack_fixture(vec![strong, weak.clone()]);
+        let property = PropertyPath::new(prim, field);
+        for time in [Time::held(0.0), Time::held(3.0), Time::at(3.0)] {
+            let explained = stage.explain_property_value(property, time).unwrap();
+            assert_eq!(explained.value, None);
+            assert_eq!(explained.source, ValueSource::None);
+            let block = &explained.opinions[0];
+            assert_eq!(block.role, OpinionRole::Block);
+            assert_eq!(
+                block.samples,
+                vec![SampleUse {
+                    time: 2.0,
+                    role: OpinionRole::Block
+                }]
+            );
+        }
+        let blocked = PropertySpec::typed_attribute(ty).with_default(Value::Blocked);
+        let (stage, prim, field) = property_stack_fixture(vec![blocked, weak]);
+        let explained = stage
+            .explain_property_value(PropertyPath::new(prim, field), Time::held(3.0))
+            .unwrap();
+        assert_eq!(explained.opinions[0].role, OpinionRole::Block);
+        assert!(explained.opinions[0].samples.is_empty());
+    }
+
+    /// A property's metadata explanation reads as `Property::metadata` does,
+    /// and names the opinion, and so the layer, that supplied each entry of
+    /// a composed dictionary.
+    ///
+    /// Spec: AOUSD Core §12.2.5, §13.3.2.3.
+    #[test]
+    fn property_metadata_explanations_name_each_entry_supplier() {
+        let store = crate::doc::InMemoryStore::default();
+        let custom = store.tokens.intern("customData");
+        let entry = |key: &str, value: Value| (Arc::<str>::from(key), value);
+        let strong = PropertySpec::attribute().with_metadata(
+            custom,
+            Value::Dictionary(vec![entry("a", Value::String("strong".into()))]),
+        );
+        let weak = PropertySpec::attribute().with_metadata(
+            custom,
+            Value::Dictionary(vec![
+                entry("a", Value::String("weak".into())),
+                entry("p", Value::Asset("./weak.usda".into())),
+            ]),
+        );
+        let (stage, prim, field) = property_stack_fixture_in(&store, vec![strong, weak]);
+        let explained = stage
+            .explain_property_metadata(prim, field, custom)
+            .expect("authored");
+        assert_eq!(
+            explained.value,
+            stage
+                .resolve_property_metadata(prim, field, custom)
+                .map(|resolved| resolved.value)
+        );
+        let supplied: Vec<(u16, Vec<KeyPath>)> = explained
+            .contributors()
+            .map(|opinion| match &opinion.role {
+                OpinionRole::Contributed(Contribution::Dictionary(merge)) => {
+                    (opinion.opinion.key.layer_strength, merge.supplied.clone())
+                }
+                other => panic!("{other:?}"),
+            })
+            .collect();
+        assert_eq!(
+            supplied,
+            vec![
+                (0, vec![vec![Arc::from("a")]]),
+                (1, vec![vec![Arc::from("p")]])
+            ]
+        );
+        assert!(
+            stage
+                .explain_property_metadata(prim, field, store.tokens.intern("assetInfo"))
+                .is_none()
+        );
     }
 
     /// A block discards weaker authored opinions (AOUSD Core §12.3.6), but

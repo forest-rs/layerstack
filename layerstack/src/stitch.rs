@@ -9,6 +9,7 @@
 //! stitch detached layers, then publish through the host's normal layer refresh.
 //! AOUSD Core §7.3–7.6, §12.2, §12.4; OpenUSD `UsdUtilsStitchLayers/StitchInfo`.
 
+use crate::listop::append_unique;
 use crate::{
     FieldEntry, FieldValue, HashMap, Layer, ListOp, PrimSpec, PropertyEntry, PropertySpec,
     Specifier, TokenId, TokenInterner, Value, VariantSets, VariantSpec,
@@ -146,13 +147,6 @@ fn fill<T: Clone>(strong: &mut Option<T>, weak: &Option<T>) {
         strong.clone_from(weak);
     }
 }
-fn append_unique<T: Clone + PartialEq>(strong: &mut Vec<T>, weak: &[T]) {
-    for value in weak {
-        if !strong.contains(value) {
-            strong.push(value.clone());
-        }
-    }
-}
 fn map_missing<T: Clone>(strong: &mut HashMap<TokenId, T>, weak: &HashMap<TokenId, T>) {
     for (&key, value) in weak {
         strong.entry(key).or_insert_with(|| value.clone());
@@ -212,7 +206,7 @@ fn arc<T: Clone + Eq + Hash>(
         listop(strong, weak, report)
     }
 }
-fn fixed<T: Clone + PartialEq>(op: &ListOp<T>) -> ListOp<T> {
+fn fixed<T: Clone + Eq + Hash>(op: &ListOp<T>) -> ListOp<T> {
     let mut result = op.clone();
     append_unique(&mut result.append, &op.add);
     result.add.clear();

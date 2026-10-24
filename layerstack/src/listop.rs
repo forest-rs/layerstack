@@ -40,8 +40,35 @@
 
 pub use opinionated::{ListOp, resolve_list_chain};
 
-use alloc::boxed::Box;
-use core::{fmt, ops};
+use crate::HashSet;
+use alloc::{boxed::Box, vec::Vec};
+use core::{fmt, hash::Hash, ops};
+
+/// Appends, in order, each item of `weak` that `strong` does not hold yet:
+/// the union that child names take across layers (native
+/// `PcpComposeSiteChildNames`) and that stitching takes of two orders.
+///
+/// Short lists compare each pair; longer ones hash, so a prim with many
+/// children unions them in linear time.
+pub(crate) fn append_unique<T: Clone + Eq + Hash>(strong: &mut Vec<T>, weak: &[T]) {
+    const PAIRWISE: usize = 256;
+    if strong.len().saturating_mul(weak.len()) <= PAIRWISE {
+        for value in weak {
+            if !strong.contains(value) {
+                strong.push(value.clone());
+            }
+        }
+        return;
+    }
+    let added: Vec<T> = {
+        let mut seen: HashSet<&T> = strong.iter().collect();
+        weak.iter()
+            .filter(|value| seen.insert(value))
+            .cloned()
+            .collect()
+    };
+    strong.extend(added);
+}
 
 /// A [`ListOp`] kept out of line, allocated only once it is authored: a
 /// spec's list ops are mostly empty, and an empty one is a null pointer
@@ -125,5 +152,33 @@ impl<T: PartialEq + 'static> PartialEq<ListOp<T>> for SparseListOp<T> {
 impl<T: fmt::Debug + 'static> fmt::Debug for SparseListOp<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         (**self).fmt(f)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::append_unique;
+    use alloc::vec::Vec;
+
+    #[test]
+    fn append_unique_keeps_strong_order_then_new_weak_items() {
+        let mut strong = alloc::vec![3, 1];
+        append_unique(&mut strong, &[1, 4, 3, 2, 4]);
+        assert_eq!(strong, [3, 1, 4, 2]);
+    }
+
+    #[test]
+    fn append_unique_hashes_long_lists_to_the_same_union() {
+        let strong: Vec<u32> = (0..400).step_by(2).collect();
+        let weak: Vec<u32> = (0..400).rev().chain(0..400).collect();
+        let mut pairwise = strong.clone();
+        for value in &weak {
+            if !pairwise.contains(value) {
+                pairwise.push(*value);
+            }
+        }
+        let mut hashed = strong;
+        append_unique(&mut hashed, &weak);
+        assert_eq!(hashed, pairwise);
     }
 }

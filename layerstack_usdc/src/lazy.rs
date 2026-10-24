@@ -127,7 +127,11 @@ impl RetainedValues {
 
 pub(crate) struct LazyPool {
     bytes: EncodedBytes,
-    sections: Arc<CrateSections>,
+    /// The tables decoding a retained value reads, kept when the read ends
+    /// ([`CrateSections::for_retained_values`]): the file's version, and
+    /// its token and string tables when it retains a `token[]` or
+    /// `string[]` value. The rest of the sections only serve assembly.
+    sections: OnceLock<CrateSections>,
     /// The token id of each token-table entry, interned when the read first
     /// retains a `token[]` value, so that deferred values decode without the
     /// store's interner.
@@ -188,6 +192,16 @@ impl<T> Registry<T> {
         source
     }
 
+    /// Whether no source was ever registered.
+    fn is_empty(&self) -> bool {
+        self.shards.iter().all(|shard| {
+            shard
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .is_empty()
+        })
+    }
+
     /// Every live source.
     fn live(&self) -> alloc::vec::Vec<Arc<T>> {
         let mut live = alloc::vec::Vec::new();
@@ -209,6 +223,17 @@ impl fmt::Debug for LazyPool {
     }
 }
 impl LazyPool {
+    /// The tables retained values decode with, set when the read ends; a
+    /// value cannot be read during the read that retains it, whose budget
+    /// is not yet the pool's either.
+    fn sections(&self) -> Result<&CrateSections, ArrayReadError> {
+        self.sections.get().ok_or_else(|| {
+            ArrayReadError::InvalidData(Arc::from(
+                "USDC value read before the read retaining it ended",
+            ))
+        })
+    }
+
     pub(crate) fn register(self: &Arc<Self>, rep: RawValueRep, kind: Value) -> TypedArray {
         let source = self.arrays.get_or_register(&rep.bytes, || {
             Arc::new(LazyArray {
@@ -280,6 +305,7 @@ impl DeferredValueSource for LazyValue {
             .get_or_init(|| {
                 self.pool.attempts.fetch_add(1, Ordering::Relaxed);
                 let pool = &self.pool;
+                let sections = pool.sections()?;
                 let mut budget = pool
                     .budget
                     .lock()
@@ -287,7 +313,7 @@ impl DeferredValueSource for LazyValue {
                 let indices = crate::value_rep::decode_text_indices(
                     &self.rep,
                     &pool.bytes,
-                    &pool.sections,
+                    sections,
                     &mut budget,
                 )
                 .map_err(|e| match e {
@@ -309,7 +335,7 @@ impl DeferredValueSource for LazyValue {
                     Ok(Value::TypedArray(TypedArray::Token(items.collect())))
                 } else {
                     Ok(Value::from(crate::value_rep::string_array(
-                        &pool.sections.tokens,
+                        &sections.tokens,
                         &indices,
                     )))
                 }
@@ -349,27 +375,23 @@ impl DeferredArraySource for LazyArray {
         self.cached
             .get_or_init(|| {
                 self.pool.attempts.fetch_add(1, Ordering::Relaxed);
+                let sections = self.pool.sections()?;
                 let mut budget = self
                     .pool
                     .budget
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
-                let field = decode_field_within(
-                    &self.rep,
-                    &self.pool.bytes,
-                    &self.pool.sections,
-                    &mut budget,
-                    None,
-                )
-                .map_err(|e| match e {
-                    UsdcError::DecodeBudgetExceeded { limit } => {
-                        ArrayReadError::BudgetExceeded { limit }
-                    }
-                    e => ArrayReadError::InvalidData(Arc::from(format!(
-                        "USDC array at {}: {e}",
-                        self.rep.payload_offset()
-                    ))),
-                })?;
+                let field =
+                    decode_field_within(&self.rep, &self.pool.bytes, sections, &mut budget, None)
+                        .map_err(|e| match e {
+                        UsdcError::DecodeBudgetExceeded { limit } => {
+                            ArrayReadError::BudgetExceeded { limit }
+                        }
+                        e => ArrayReadError::InvalidData(Arc::from(format!(
+                            "USDC array at {}: {e}",
+                            self.rep.payload_offset()
+                        ))),
+                    })?;
                 Ok(match field {
                     DecodedField::FloatArray(array) => crate::numeric_array::float_array(array),
                     DecodedField::MathArray(array) => crate::numeric_array::math_array(&array),
@@ -500,17 +522,17 @@ pub fn read_usdc_lazy_range_within(
 ) -> Result<LazyReadResult, UsdcError> {
     let header = crate::header::parse_header(&bytes)?;
     let toc = crate::toc::parse_toc(&bytes, header.toc_offset)?;
-    let sections = Arc::new(crate::section::parse_sections_on(
+    let sections = crate::section::parse_sections_on(
         &bytes,
         &toc,
         header.crate_version(),
         &mut budget,
         threads,
-    )?);
+    )?;
     let specs = sections.specs.len();
     let pool = Arc::new(LazyPool {
         bytes,
-        sections,
+        sections: OnceLock::new(),
         token_ids: OnceLock::new(),
         retains_tokens: core::sync::atomic::AtomicBool::new(false),
         budget: Mutex::new(DecodeBudget::with_limit(0)),
@@ -521,7 +543,7 @@ pub fn read_usdc_lazy_range_within(
     budget.lazy = Some(Arc::clone(&pool));
     let assembled = crate::assemble::assemble(
         &pool.bytes,
-        &pool.sections,
+        &sections,
         id,
         tokens,
         paths,
@@ -531,9 +553,12 @@ pub fn read_usdc_lazy_range_within(
     )?;
     budget.lazy = None;
     if pool.retains_tokens.load(Ordering::Relaxed) {
-        let ids = pool.sections.tokens.iter().map(|t| tokens.intern(t));
+        let ids = sections.tokens.iter().map(|t| tokens.intern(t));
         let _ = pool.token_ids.set(ids.collect());
     }
+    let _ = pool
+        .sections
+        .set(sections.for_retained_values(!pool.values.is_empty()));
     *pool
         .budget
         .lock()
@@ -576,4 +601,117 @@ pub(crate) fn numeric_kind(kind: ValueType) -> Option<Value> {
         ValueType::Matrix4d => Value::Matrix4d(alloc::boxed::Box::default()),
         _ => return None,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::writer::{Spec, SpecForm, Specifier, Value as W, write_crate};
+    use layerstack::{AssetResolveError, PropertyPath, ResolvedAsset};
+
+    struct NoAssets;
+    impl AssetResolver for NoAssets {
+        fn resolve(
+            &mut self,
+            _: &str,
+            _: Option<LayerId>,
+            _: &TokenInterner,
+            _: &PathInterner,
+        ) -> Result<ResolvedAsset, AssetResolveError> {
+            Err(AssetResolveError::NotFound)
+        }
+        fn resolved_path(&self, _: LayerId) -> Option<&str> {
+            None
+        }
+    }
+
+    /// A crate file with a `float[]` default, and with `labels`, a
+    /// `string[]` default long enough to be retained.
+    fn file(labels: bool) -> Arc<[u8]> {
+        let mut specs = alloc::vec![
+            Spec::new("/", SpecForm::PseudoRoot),
+            Spec::new("/Rock", SpecForm::Prim)
+                .with_field("specifier", W::Specifier(Specifier::Def)),
+            Spec::new("/Rock.sizes", SpecForm::Attribute)
+                .with_field("typeName", W::Token("float[]".into()))
+                .with_field("default", W::FloatArray(alloc::vec![1., 2., 3.])),
+        ];
+        if labels {
+            let labels = (0..MIN_RETAINED_TEXT_ARRAY)
+                .map(|i| format!("pebble{i}"))
+                .collect();
+            specs.push(
+                Spec::new("/Rock.labels", SpecForm::Attribute)
+                    .with_field("typeName", W::Token("string[]".into()))
+                    .with_field("default", W::StringArray(labels)),
+            );
+        }
+        write_crate(&specs).unwrap().into()
+    }
+
+    fn read(bytes: Arc<[u8]>) -> (LazyReadResult, TokenInterner, PathInterner) {
+        let tokens = TokenInterner::default();
+        let paths = PathInterner::default();
+        let read = read_usdc_lazy(bytes, LayerId(1), &tokens, &paths, &mut NoAssets).unwrap();
+        (read, tokens, paths)
+    }
+
+    fn default<'a>(
+        read: &'a LazyReadResult,
+        tokens: &TokenInterner,
+        paths: &PathInterner,
+        name: &str,
+    ) -> &'a Value {
+        let rock = layerstack::Path::parse_absolute("/Rock", tokens).unwrap();
+        let prim = paths.lookup(&rock).unwrap();
+        let path = PropertyPath::new(prim, tokens.lookup(name).unwrap());
+        let spec = read.assembled.layer.property(path).unwrap();
+        spec.default.as_ref().unwrap()
+    }
+
+    #[test]
+    fn retained_values_keep_only_the_tables_they_decode_with() {
+        // Numeric arrays decode from their payloads alone: the pool keeps
+        // no table of the file.
+        let (numeric, tokens, paths) = read(file(false));
+        let kept = numeric.values.pool.sections.get().unwrap();
+        assert!(kept.tokens.is_empty() && kept.strings.is_empty());
+        assert!(kept.fields.is_empty() && kept.fieldsets.is_empty() && kept.specs.is_empty());
+        let sizes = default(&numeric, &tokens, &paths, "sizes");
+        assert_eq!(
+            sizes
+                .array_ref()
+                .unwrap()
+                .typed()
+                .unwrap()
+                .as_float()
+                .unwrap(),
+            &[1., 2., 3.]
+        );
+
+        // A retained `string[]` keeps the token and string tables its
+        // elements index, and only those.
+        let (text, tokens, paths) = read(file(true));
+        let kept = text.values.pool.sections.get().unwrap();
+        assert!(!kept.tokens.is_empty() && !kept.strings.is_empty());
+        assert!(kept.fields.is_empty() && kept.fieldsets.is_empty() && kept.specs.is_empty());
+        let labels = default(&text, &tokens, &paths, "labels");
+        assert!(matches!(labels, Value::Deferred(_)));
+        let decoded = labels.try_materialize().unwrap();
+        let expected: layerstack::StringArray = (0..MIN_RETAINED_TEXT_ARRAY)
+            .map(|i| format!("pebble{i}"))
+            .collect();
+        assert_eq!(decoded, &Value::from(expected));
+        let sizes = default(&text, &tokens, &paths, "sizes");
+        assert_eq!(
+            sizes
+                .array_ref()
+                .unwrap()
+                .typed()
+                .unwrap()
+                .as_float()
+                .unwrap(),
+            &[1., 2., 3.]
+        );
+    }
 }

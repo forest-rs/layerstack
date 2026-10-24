@@ -404,6 +404,34 @@ pub struct CrateSections {
     pub version: CrateVersion,
 }
 
+impl CrateSections {
+    /// What decoding a retained value reads of these sections, once
+    /// assembly has read the rest: the version, which bounds the encodings
+    /// a value may use, and, when `text` (the read retained a `token[]` or
+    /// `string[]` value), the token and string tables its elements index.
+    /// A numeric array reads only its own payload.
+    ///
+    /// The fields, fieldsets, paths and specs only describe the layer's
+    /// structure, which assembly has already built.
+    #[cfg(feature = "std")]
+    pub(crate) fn for_retained_values(self, text: bool) -> Self {
+        let (tokens, strings) = if text {
+            (self.tokens, self.strings)
+        } else {
+            (TokenTable::default(), Vec::new())
+        };
+        Self {
+            tokens,
+            strings,
+            fields: Vec::new(),
+            fieldsets: Vec::new(),
+            paths: PathTable::default(),
+            specs: Vec::new(),
+            version: self.version,
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Top-level parse entry point
 // ---------------------------------------------------------------------------

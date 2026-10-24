@@ -9,7 +9,7 @@
 //! and from no payloads loaded (`scripts/load_rules_oracle.py`): the literal
 //! rules and `GetEffectiveRuleForPath` of every path after each edit, and
 //! the same after `Minimize`. `PayloadLoadRules` must hold the same rules
-//! and answer the same effective rules.
+//! and answer the same effective rules, minimized or not.
 //!
 //! Spec: AOUSD Core §10.3.2.7 (payloads), §11 (population); OpenUSD
 //! `pxr/usd/usd/stageLoadRules.cpp`.
@@ -40,6 +40,7 @@ struct Case {
 struct Step {
     op: Vec<String>,
     after: State,
+    minimized: State,
 }
 
 #[derive(Deserialize, Debug, PartialEq)]
@@ -108,6 +109,13 @@ fn load_rule_edits_and_minimizing_match_openusd() {
                 state(&rules, &oracle.paths, &store),
                 step.after,
                 "{context}"
+            );
+            let mut minimized = rules.clone();
+            minimized.minimize();
+            assert_eq!(
+                state(&minimized, &oracle.paths, &store),
+                step.minimized,
+                "{context}, minimized"
             );
         }
     }

@@ -145,3 +145,7 @@ harness = false
 [[bench]]
 name = "text_arrays"
 harness = false
+
+[[bench]]
+name = "point_instancer"
+harness = false

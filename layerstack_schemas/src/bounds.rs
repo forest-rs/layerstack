@@ -98,8 +98,14 @@ impl BoundingBox {
         result
     }
 
+    /// `GfBBox3d::Transform`. From the identity (the usual untransformed
+    /// bound) the product is `matrix` itself, signed zeros aside.
     pub(crate) fn transformed(mut self, matrix: &gf::Matrix4) -> Self {
-        self.matrix = gf::mul(&self.matrix, matrix);
+        self.matrix = if self.matrix == gf::IDENTITY {
+            *matrix
+        } else {
+            gf::mul(&self.matrix, matrix)
+        };
         self
     }
 }

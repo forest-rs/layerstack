@@ -16,7 +16,9 @@ use crate::{
 use alloc::{boxed::Box, collections::BTreeSet, sync::Arc, vec::Vec};
 use core::num::NonZeroUsize;
 use hashbrown::HashSet;
-use layerstack::{FieldValue, ListOp, PathId, TargetPath, TokenInterner, Value};
+use layerstack::{
+    FieldValue, ListOp, MetadataTarget, OpinionValue, PathId, TargetPath, TokenInterner, Value,
+};
 
 /// An ID edit encountered incompatible or unreadable authored data.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -115,6 +117,43 @@ fn unique_last(ids: &[i64]) -> Vec<i64> {
     kept
 }
 
+// `SdfListOp::ApplyOperations(vector*)`, linear in the list lengths with
+// hash sets: an explicit list keeps first occurrences; deletes, then legacy
+// added items the list lacks, then prepends (first occurrences, in front)
+// and appends (last occurrences, at the back), each moving items it names.
+// Reordered items fall back to `ListOp::apply_in_place`, which compares
+// item by item; neither this module nor OpenUSD's point instancer authors them.
+fn apply_linear(op: &ListOp<i64>, items: &mut Vec<i64>) {
+    if !op.reorder.is_empty() {
+        op.apply_in_place(items);
+        return;
+    }
+    if let Some(explicit) = &op.explicit {
+        *items = unique_first(explicit);
+        return;
+    }
+    if !op.delete.is_empty() {
+        let deleted: HashSet<i64> = op.delete.iter().copied().collect();
+        items.retain(|id| !deleted.contains(id));
+    }
+    if !op.add.is_empty() {
+        let mut present: HashSet<i64> = items.iter().copied().collect();
+        items.extend(op.add.iter().copied().filter(|id| present.insert(*id)));
+    }
+    if !op.prepend.is_empty() {
+        let prepend = unique_first(&op.prepend);
+        let moved: HashSet<i64> = prepend.iter().copied().collect();
+        items.retain(|id| !moved.contains(id));
+        items.splice(0..0, prepend);
+    }
+    if !op.append.is_empty() {
+        let append = unique_last(&op.append);
+        let moved: HashSet<i64> = append.iter().copied().collect();
+        items.retain(|id| !moved.contains(id));
+        items.extend(append);
+    }
+}
+
 // `_CanonicalizeListOp` in OpenUSD's `pointInstancer.cpp`: an explicit list
 // stays as it is; any other becomes its items over an empty list, sorted, as
 // prepends, keeping its deletes, so it has no legacy added or reordered items.
@@ -122,7 +161,8 @@ fn canonical(op: ListOp<i64>) -> ListOp<i64> {
     if op.explicit.is_some() {
         return op;
     }
-    let mut items = op.apply_to(&[]);
+    let mut items = Vec::new();
+    apply_linear(&op, &mut items);
     items.sort_unstable();
     ListOp::prepended(unique_first(&items)).with_deleted(unique_first(&op.delete))
 }
@@ -133,7 +173,7 @@ fn canonical(op: ListOp<i64>) -> ListOp<i64> {
 // linear in the list lengths, where OpenUSD erases item by item.
 fn compose_over(proposed: &ListOp<i64>, inner: ListOp<i64>) -> ListOp<i64> {
     if let Some(mut items) = inner.explicit {
-        proposed.apply_in_place(&mut items);
+        apply_linear(proposed, &mut items);
         return ListOp::explicit(unique_first(&items));
     }
     let (mut delete, mut prepend, mut append) = (inner.delete, inner.prepend, inner.append);
@@ -394,11 +434,11 @@ impl crate::usd_geom::PointInstancerEdit {
 }
 
 // `ComputeMaskAtTime`'s loop: one entry per ID, empty when none is masked.
-fn mask_from(hidden: &[i64], ids: impl ExactSizeIterator<Item = i64>) -> Vec<bool> {
+fn mask_from(hidden: &HashSet<i64>, ids: impl ExactSizeIterator<Item = i64>) -> Vec<bool> {
     let mut mask = Vec::with_capacity(ids.len());
     let mut pruned = false;
     for id in ids {
-        let keep = hidden.binary_search(&id).is_err();
+        let keep = !hidden.contains(&id);
         pruned |= !keep;
         mask.push(keep);
     }
@@ -428,6 +468,28 @@ mod list_op_tests {
     fn appended_ids_keep_their_last_occurrence_and_deletes_their_first() {
         assert_eq!(unique_last(&[40, 10, 40, 7, 10]), vec![40, 7, 10]);
         assert_eq!(unique_first(&[40, 10, 40, 7, 10]), vec![40, 10, 7]);
+    }
+
+    #[test]
+    fn linear_application_matches_list_op_application() {
+        let ops = [
+            ListOp::explicit(vec![3, 1, 3, 2]),
+            ListOp::deleted(vec![2, 9]),
+            ListOp::added(vec![7, 1, 7]),
+            ListOp::prepended(vec![5, 1, 5]).with_deleted(vec![4]),
+            ListOp::appended(vec![1, 6, 1]).with_prepended(vec![6, 8]),
+            ListOp::added(vec![2])
+                .with_appended(vec![3])
+                .with_prepended(vec![2]),
+            ListOp::reordered(vec![3, 1]),
+        ];
+        for base in [vec![], vec![1, 2, 3, 4]] {
+            for op in &ops {
+                let mut items = base.clone();
+                apply_linear(op, &mut items);
+                assert_eq!(items, op.apply_to(&base), "{op:?} over {base:?}");
+            }
+        }
     }
 
     #[test]
@@ -465,6 +527,38 @@ mod list_op_tests {
 mod retained_input_tests {
     use super::*;
     use alloc::vec;
+
+    #[test]
+    fn snapshots_are_shareable_and_index_original_positions() {
+        fn shareable<T: Send + Sync>() {}
+        shareable::<InstanceTransforms>();
+        let transforms = InstanceTransforms {
+            indices: Arc::new(vec![0, 0, 0]),
+            positions: Arc::new(vec![[1., 0., 0.], [2., 0., 0.], [3., 0., 0.]]),
+            rotations: Arc::new(Vec::new()),
+            scales: Arc::new(vec![[2., 2., 2.]; 3]),
+            velocities: Arc::new(Vec::new()),
+            accelerations: Arc::new(Vec::new()),
+            angular: Arc::new(Vec::new()),
+            ids: None,
+            mask: Arc::new(vec![true, false, true]),
+            prototypes: vec![gf::IDENTITY],
+            include_prototype_transform: true,
+            velocity_delta: 0.,
+            angular_delta: 0.,
+            survivors: 2,
+        };
+        assert!(transforms.get(1).is_none(), "masked");
+        assert!(transforms.get(3).is_none(), "past the end");
+        let third = transforms.get(2).unwrap();
+        assert_eq!((third.index, third.id), (2, 2));
+        assert_eq!(third.matrix[3], [3., 0., 0., 1.]);
+        assert_eq!(third.matrix[0][0], 2.);
+        assert_eq!(
+            transforms.iter().collect::<Vec<_>>(),
+            vec![transforms.get(0).unwrap(), third]
+        );
+    }
 
     #[test]
     fn independent_inputs_preserve_float_bits_and_detect_motion_or_identity_changes() {
@@ -649,10 +743,44 @@ impl PointInstancer<'_> {
         }
         Ok(mask_from(&hidden, ids.iter().copied()))
     }
-    /// The composed `inactiveIds` and `invisibleIds` at `time`, sorted and
-    /// without repeats.
-    fn masked_ids(&self, time: Time) -> Result<Vec<i64>, PointInstancerError> {
-        let mut hidden = if let Some(value) = self.metadata_value("inactiveIds") {
+    /// The composed `inactiveIds` when every opinion is an int64 list
+    /// operation: applied weakest first from the strongest explicit list, as
+    /// metadata resolution applies them (AOUSD Core §12.2.6), but linearly,
+    /// so a large inactive list costs no more than one pass per opinion.
+    /// `None` defers to the stage's resolution of other values.
+    fn composed_inactive_ids(&self) -> Option<Vec<i64>> {
+        let scene = self.scene();
+        let key = scene.store().tokens().lookup("inactiveIds")?;
+        if !scene
+            .stage()
+            .schemas()
+            .and_then(|schemas| schemas.metadata(key))
+            .is_some_and(|definition| definition.applies_to(MetadataTarget::Prim))
+        {
+            return None;
+        }
+        let mut chain = Vec::new();
+        for opinion in self.prim()?.metadata_opinions(key) {
+            let OpinionValue::Field(FieldValue::Int64ListOp(op)) = &opinion.value else {
+                return None;
+            };
+            chain.push(&**op);
+            if op.explicit.is_some() {
+                break;
+            }
+        }
+        let mut items = Vec::new();
+        for op in chain.into_iter().rev() {
+            apply_linear(op, &mut items);
+        }
+        Some(items)
+    }
+    /// The composed `inactiveIds` and `invisibleIds` at `time`, as a set: one
+    /// hash lookup per instance, where OpenUSD searches a `std::set`.
+    fn masked_ids(&self, time: Time) -> Result<HashSet<i64>, PointInstancerError> {
+        let mut hidden = if let Some(ids) = self.composed_inactive_ids() {
+            ids
+        } else if let Some(value) = self.metadata_value("inactiveIds") {
             crate::value::try_read_array(
                 &value,
                 self.scene().store().tokens(),
@@ -676,9 +804,7 @@ impl PointInstancer<'_> {
         )? {
             hidden.extend_from_slice(&invisible);
         }
-        hidden.sort_unstable();
-        hidden.dedup();
-        Ok(hidden)
+        Ok(hidden.into_iter().collect())
     }
     /// Computes ordered shutter samples against one fixed topology/mask base.
     /// Preserves duplicate times and interpolation policies. Any invalid sample
@@ -1246,6 +1372,15 @@ impl InstanceTransforms {
     pub fn source_len(&self) -> usize {
         self.indices.len()
     }
+    /// The transform of the instance at original array position `index`;
+    /// `None` when the captured mask omits it or `index` is past
+    /// [`Self::source_len`]. Snapshots are `Send` and `Sync`, so a host can
+    /// split `0..source_len()` across its own threads.
+    #[must_use]
+    pub fn get(&self, index: usize) -> Option<InstanceTransform> {
+        (index < self.indices.len() && (self.mask.is_empty() || self.mask[index]))
+            .then(|| self.transform(index))
+    }
     /// Computes each surviving transform in original array order.
     pub fn iter(&self) -> impl Iterator<Item = InstanceTransform> + '_ {
         (0..self.indices.len())
@@ -1286,14 +1421,24 @@ impl InstanceTransforms {
     )]
     fn transform(&self, i: usize) -> InstanceTransform {
         let prototype_index = usize::try_from(self.indices[i]).expect("validated prototype index");
-        let mut matrix = if self.scales.is_empty() {
-            gf::IDENTITY
-        } else {
-            gf::scale(self.scales[i].map(f64::from))
+        // `GfMatrix4d::SetScale`, then `*=` the orientation's rotation: a
+        // diagonal scale times a rotation scales the rotation's rows, which
+        // is the full product's value without its additions of zero (signed
+        // zeros aside).
+        let mut matrix = match (self.scales.is_empty(), self.rotations.is_empty()) {
+            (true, true) => gf::IDENTITY,
+            (false, true) => gf::scale(self.scales[i].map(f64::from)),
+            (true, false) => gf::quaternion(self.rotations[i].map(f64::from)),
+            (false, false) => {
+                let mut rotation = gf::quaternion(self.rotations[i].map(f64::from));
+                for (row, scale) in rotation.iter_mut().zip(self.scales[i]) {
+                    for value in &mut row[..3] {
+                        *value *= f64::from(scale);
+                    }
+                }
+                rotation
+            }
         };
-        if !self.rotations.is_empty() {
-            matrix = gf::mul(&matrix, &gf::quaternion(self.rotations[i].map(f64::from)));
-        }
         if !self.angular.is_empty() {
             let [x, y, z] = self.angular[i];
             // GfVec3f::GetLength rounds both the dot product and speed to
@@ -1318,7 +1463,9 @@ impl InstanceTransforms {
             }
         }
         matrix[3][..3].copy_from_slice(&position.map(f64::from));
-        if self.include_prototype_transform {
+        // An identity prototype transform leaves the product's value as it
+        // is (signed zeros aside); most prototypes have one.
+        if self.include_prototype_transform && self.prototypes[prototype_index] != gf::IDENTITY {
             matrix = gf::mul(&self.prototypes[prototype_index], &matrix);
         }
         InstanceTransform {

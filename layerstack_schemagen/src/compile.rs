@@ -103,7 +103,9 @@
 //!   [`CompileError::Rust`]: nothing is renamed silently;
 //! - `register(builder, tokens)` adds the schemas, their auto-applies and
 //!   the plugin's `SdfMetadata` declarations (from an existing
-//!   `plugInfo.json`) to a `SchemaRegistryBuilder` from static
+//!   `plugInfo.json`, read as OpenUSD's `SdfSchema` registers them,
+//!   [`metadata`](crate::metadata); a declaration OpenUSD refuses is a
+//!   [`CompileError::Metadata`]) to a `SchemaRegistryBuilder` from static
 //!   `layerstack_schemas::table` tables, as `layerstack_schemas::register`
 //!   adds OpenUSD's; nothing is parsed at run time. `DEPENDENCIES` lists
 //!   the OpenUSD domains the schemas build on, and `registry(tokens)`
@@ -388,8 +390,8 @@ impl CompiledSchema {
     ///
     /// [`CompileError::Rust`]: an accessor name is a Rust keyword or
     /// collides, or a schema builds on a library other than OpenUSD's
-    /// domains. [`CompileError::Kinds`]: `plugInfo.json` declares kinds
-    /// OpenUSD refuses.
+    /// domains. [`CompileError::Kinds`] and [`CompileError::Metadata`]:
+    /// `plugInfo.json` declares kinds or metadata fields OpenUSD refuses.
     pub fn rust_module(&self) -> Result<String, CompileError> {
         rust::module_text(
             &self.library.name,

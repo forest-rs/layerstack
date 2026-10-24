@@ -70,6 +70,14 @@ pub enum CompileError {
         /// Every refused declaration, with its plugin, kind and field.
         rejected: Vec<crate::kinds::KindDeclarationError>,
     },
+    /// `plugInfo.json` declares metadata fields (`SdfMetadata`) that
+    /// OpenUSD's `SdfSchema` refuses, so the Rust module, which registers
+    /// the library's fields, is not generated
+    /// ([`CompiledSchema::rust_module`](super::CompiledSchema::rust_module)).
+    Metadata {
+        /// Every refused declaration, with its plugin, field, key and value.
+        rejected: Vec<crate::metadata::MetadataDeclarationError>,
+    },
     /// The generated schema layer could not be written as USDA. This is a
     /// gap in layerstack, not in the schema.
     Write {
@@ -504,6 +512,17 @@ impl fmt::Display for CompileError {
             Self::Kinds { rejected } => {
                 f.write_str("plugInfo.json: ")?;
                 crate::kinds::write_rejected(f, rejected)
+            }
+            Self::Metadata { rejected } => {
+                write!(
+                    f,
+                    "plugInfo.json: {} metadata declarations OpenUSD refuses:",
+                    rejected.len()
+                )?;
+                for error in rejected {
+                    write!(f, "\n  {error}")?;
+                }
+                Ok(())
             }
             Self::Write { message } => write!(f, "writing generatedSchema.usda: {message}"),
             Self::Rust { message } => write!(f, "generating the Rust module: {message}"),

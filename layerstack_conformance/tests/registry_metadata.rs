@@ -31,6 +31,7 @@ use serde_json::{Value as Json, json};
 struct Oracle {
     openusd_version: String,
     builtins: BTreeMap<String, Builtin>,
+    registration_errors: Vec<String>,
     registration: BTreeMap<String, Registration>,
     reading: Vec<Reading>,
 }
@@ -42,6 +43,7 @@ struct Registration {
     specs: Vec<String>,
     #[serde(rename = "type")]
     type_name: Option<String>,
+    fallback: Option<Json>,
 }
 
 /// A metadata statement on a spec, in a layer of its own, and what
@@ -459,5 +461,94 @@ fn metadata_statements_read_and_save_as_openusd_reads_and_writes_them() {
             &registry,
         );
         assert_eq!(&again.emitted.layer, layer, "{what} reopens as it was");
+    }
+}
+
+/// The fixture plugins read with `layerstack_schemagen::metadata::read`,
+/// which needs the schema generator: like it, not for wasm.
+#[cfg(not(target_arch = "wasm32"))]
+mod registration {
+    use super::*;
+    use layerstack_schemagen::metadata::read;
+
+    #[test]
+    fn plugin_declarations_register_as_openusd_registers_them() {
+        let oracle = oracle();
+        let fixture = workspace_root().join("layerstack_conformance/fixtures/registry_metadata");
+        let good = std::fs::read_to_string(fixture.join("plugInfo.json")).unwrap();
+        let bad = std::fs::read_to_string(fixture.join("rejected/plugInfo.json")).unwrap();
+        let tokens = TokenInterner::default();
+        let declared = read(
+            [("good", good.as_str()), ("rejected", bad.as_str())],
+            &tokens,
+        )
+        .unwrap();
+
+        // The errors naming a declaration (OpenUSD raises a detail before
+        // some of them, which names none).
+        let mut expected: Vec<&str> = oracle
+            .registration_errors
+            .iter()
+            .map(String::as_str)
+            .filter(|m| m.contains("(at \"") || m.contains("is already a registered field"))
+            .collect();
+        expected.sort_unstable();
+        let mut messages: Vec<String> = declared
+            .rejected
+            .iter()
+            .filter_map(|error| error.openusd_message())
+            .collect();
+        messages.sort();
+        assert_eq!(messages, expected, "{:#?}", declared.rejected);
+
+        let mut accepted: Vec<&str> = Vec::new();
+        for declaration in &declared.accepted {
+            let definition = &declaration.definition;
+            let name = tokens.resolve(definition.name);
+            accepted.push(name);
+            let registration = &oracle.registration[name];
+            let specs: Vec<&str> = TARGETS
+                .into_iter()
+                .filter(|target| definition.applies_to(*target))
+                .map(spec_name)
+                .collect();
+            assert_eq!(specs, registration.specs, "{name}'s spec kinds");
+            if specs.is_empty() {
+                continue;
+            }
+            assert_eq!(
+                Some(definition.value_type.storage().name()),
+                registration.type_name.as_deref(),
+                "{name}'s type"
+            );
+            let fallback = definition.fallback().map(|value| encode(&value, &tokens));
+            // An `opaque` field holds no value: OpenUSD's fallback is the
+            // empty `SdfOpaqueValue`, which layerstack has no value for.
+            let opaque = Some(json!({ "opaque": true }));
+            if registration.fallback != opaque {
+                assert_eq!(fallback, registration.fallback, "{name}'s fallback");
+            } else {
+                assert_eq!(fallback, None, "{name}'s fallback");
+            }
+        }
+        let registered: Vec<&str> = oracle
+            .registration
+            .iter()
+            // Registered for some spec, or else for none and not refused
+            // (a field registered twice is refused only the second time).
+            .filter(|(name, registration)| {
+                !registration.specs.is_empty()
+                    || !expected.iter().any(|m| m.contains(&format!("\"{name}\"")))
+            })
+            .map(|(name, _)| name.as_str())
+            .collect();
+        accepted.sort_unstable();
+        assert_eq!(accepted, registered);
+        let layout = declared
+            .accepted
+            .iter()
+            .find(|d| tokens.resolve(d.definition.name) == "metaFloat")
+            .unwrap();
+        assert_eq!(&*layout.definition.display_group, "Shape");
     }
 }

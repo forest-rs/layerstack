@@ -147,6 +147,8 @@ pub struct Metadata {
     pub targets: &'static [layerstack::MetadataTarget],
     /// Its registered default.
     pub default: Option<Construct>,
+    /// Its `displayGroup`, empty when it has none.
+    pub display_group: &'static str,
     /// Its documentation.
     pub documentation: &'static str,
 }
@@ -167,6 +169,7 @@ impl Metadata {
             value_type,
             self.targets.iter().copied(),
         )
+        .with_display_group(self.display_group)
         .with_documentation(self.documentation);
         definition.default = self.default.map(|construct| construct(tokens));
         definition

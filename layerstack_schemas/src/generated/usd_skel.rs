@@ -377,6 +377,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
         type_name: "float",
         targets: &[layerstack::MetadataTarget::Attribute],
         default: fallback(|_| Value::Float(0.0)),
+        display_group: "BlendShape",
         documentation: "The weight value at which an inbeteen shape is applied.",
     }],
 };

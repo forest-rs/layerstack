@@ -67,7 +67,7 @@ pub mod compile;
 mod emit;
 pub mod kinds;
 mod library;
-mod metadata;
+pub mod metadata;
 mod model;
 mod output;
 mod shader_nodes;

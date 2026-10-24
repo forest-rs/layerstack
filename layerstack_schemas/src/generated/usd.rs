@@ -210,6 +210,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             type_name: "tokenlistop",
             targets: &[layerstack::MetadataTarget::Prim],
             default: None,
+            display_group: "",
             documentation: "",
         },
         Metadata {
@@ -217,6 +218,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             type_name: "dictionary",
             targets: &[layerstack::MetadataTarget::Layer],
             default: None,
+            display_group: "",
             documentation: "",
         },
     ],

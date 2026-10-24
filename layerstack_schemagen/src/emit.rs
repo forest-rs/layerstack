@@ -435,8 +435,9 @@ pub(crate) fn tables(
             .unwrap_or_else(|| "None".into());
         let _ = writeln!(
             out,
-            "        Metadata {{ name: {name:?}, type_name: {:?}, targets: &[{targets}], default: {default}, documentation: {:?} }},",
+            "        Metadata {{ name: {name:?}, type_name: {:?}, targets: &[{targets}], default: {default}, display_group: {:?}, documentation: {:?} }},",
             metadata.value_type.name(),
+            metadata.display_group,
             metadata.documentation
         );
     }

@@ -11,7 +11,7 @@
 
 use crate::{
     FieldEntry, FieldValue, HashMap, Layer, ListOp, PrimSpec, PropertyEntry, PropertySpec,
-    Specifier, TokenId, TokenInterner, Value, VariantSetSpec, VariantSpec,
+    Specifier, TokenId, TokenInterner, Value, VariantSets, VariantSpec,
 };
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
 
@@ -166,7 +166,7 @@ fn validate_property(property: &PropertySpec) -> Result<(), StitchError> {
     }
     Ok(())
 }
-fn validate_variants(sets: &HashMap<TokenId, VariantSetSpec>) -> Result<(), StitchError> {
+fn validate_variants(sets: &VariantSets) -> Result<(), StitchError> {
     for set in sets.values() {
         for variant in set.variants.values() {
             for property in &variant.properties {
@@ -392,13 +392,13 @@ fn properties(
     Ok(())
 }
 fn variant_sets(
-    strong: &mut HashMap<TokenId, VariantSetSpec>,
-    weak: &HashMap<TokenId, VariantSetSpec>,
+    strong: &mut VariantSets,
+    weak: &VariantSets,
     tokens: &TokenInterner,
     report: &mut StitchReport,
 ) -> Result<(), StitchError> {
     for (&set, source) in weak {
-        let target = strong.entry(set).or_default();
+        let target = strong.get_or_insert_default(set);
         for (&name, source) in &source.variants {
             variant(
                 target.variants.entry(name).or_default(),
@@ -644,8 +644,7 @@ mod tests {
         let mut prim = PrimSpec::def();
         prim.inherits = ListOp::prepended(vec![base]).into();
         prim.variant_sets
-            .entry(set)
-            .or_default()
+            .get_or_insert_default(set)
             .variants
             .entry(high)
             .or_default()
@@ -660,8 +659,7 @@ mod tests {
         let mut targets = PropertySpec::relationship();
         targets.targets = Some(Box::new(ListOp::added(vec![crate::TargetPath::Prim(base)])));
         prim.variant_sets
-            .entry(set)
-            .or_default()
+            .get_or_insert_default(set)
             .variants
             .entry(high)
             .or_default()
@@ -671,8 +669,7 @@ mod tests {
                 spec: Arc::new(targets.clone()),
             });
         prim.variant_sets
-            .entry(set)
-            .or_default()
+            .get_or_insert_default(set)
             .variants
             .entry(low)
             .or_default();

@@ -21,9 +21,7 @@ use super::{
     target::Address,
 };
 use crate::{
-    HashMap,
-    doc::{Layer, LayerId, LayerStore, PrimSpec, Reference, VariantSetSpec},
-    interner::TokenId,
+    doc::{Layer, LayerId, LayerStore, PrimSpec, Reference, VariantSets},
     listop::ListOp,
     path::{PathId, PropertyPath, TargetPath},
     property::get_property,
@@ -188,7 +186,7 @@ fn reanchor_internal_arcs(spec: &mut PrimSpec, from: LayerId, to: LayerId) {
             }
         }
     }
-    fn variants(sets: &mut HashMap<TokenId, VariantSetSpec>, from: LayerId, to: LayerId) {
+    fn variants(sets: &mut VariantSets, from: LayerId, to: LayerId) {
         for variant in sets.values_mut().flat_map(|set| set.variants.values_mut()) {
             if let Some(op) = variant.references.get_mut() {
                 arcs(op, from, to);

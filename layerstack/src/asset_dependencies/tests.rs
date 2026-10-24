@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use super::*;
-use crate::{ArrayIndex, InMemoryStore, PropertySpec, PropertyType, VariantSpec};
+use crate::{ArrayIndex, InMemoryStore, PropertySpec, PropertyType, VariantSetSpec, VariantSpec};
 use alloc::vec;
 
 fn custom_data_arcs(layer: LayerId, path: PathId, prefix: &str) -> ListOp<Reference> {

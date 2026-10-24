@@ -15,7 +15,7 @@ use alloc::vec::Vec;
 
 use crate::{
     HashMap,
-    doc::{FieldEntry, FieldValue, Layer, PrimSpec, Value, VariantSetSpec, VariantSpec, get_field},
+    doc::{FieldEntry, FieldValue, Layer, PrimSpec, Value, VariantSets, VariantSpec, get_field},
     interner::TokenId,
     path::{PathId, PathInterner},
     property::{PropertyEntry, PropertySpec, PropertyType, get_property},
@@ -169,7 +169,7 @@ impl<'a> SpecRef<'a> {
 
     /// The variant sets this spec holds: a prim spec's own, or those nested
     /// in a variant spec.
-    pub(crate) fn variant_sets(self) -> &'a HashMap<TokenId, VariantSetSpec> {
+    pub(crate) fn variant_sets(self) -> &'a VariantSets {
         match self {
             Self::Prim(spec) => &spec.variant_sets,
             Self::Variant(spec) => &spec.variant_sets,
@@ -214,7 +214,7 @@ impl<'a> SpecMut<'a> {
     }
 
     /// The variant sets this spec holds (see [`SpecRef::variant_sets`]).
-    pub(crate) fn into_variant_sets(self) -> &'a mut HashMap<TokenId, VariantSetSpec> {
+    pub(crate) fn into_variant_sets(self) -> &'a mut VariantSets {
         match self {
             Self::Prim(spec) => &mut spec.variant_sets,
             Self::Variant(spec) => &mut spec.variant_sets,

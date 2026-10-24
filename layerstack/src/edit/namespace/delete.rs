@@ -19,7 +19,7 @@
 use super::coordinated::Overlay;
 use super::*;
 use crate::{
-    HashMap, HashSet, Relocate,
+    HashMap, HashSet, Relocate, VariantSets,
     stage::preparation::{PreparationIndex, layer_links},
 };
 
@@ -504,7 +504,7 @@ fn repair_prim(
 
 fn repair_variant_sets(
     store: &mut dyn LayerStore,
-    sets: &mut HashMap<TokenId, VariantSetSpec>,
+    sets: &mut VariantSets,
     path: PathId,
     author: LayerId,
     object: TargetPath,

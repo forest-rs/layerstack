@@ -58,7 +58,7 @@ pub use udim::{UdimPattern, UdimTile};
 use hashbrown::{HashMap, HashSet};
 
 use crate::{
-    doc::{Layer, LayerId, LayerStore, Reference, VariantSetSpec},
+    doc::{Layer, LayerId, LayerStore, Reference, VariantSets},
     interner::{TokenId, TokenInterner},
     listop::ListOp,
     path::{PathId, PathInterner},
@@ -250,7 +250,7 @@ pub fn resolve_selected_deferred_arcs(
 /// the prim `host`, that `selected` selects (see
 /// [`resolve_selected_deferred_arcs`]), and of the sets nested in them.
 fn resolve_branch_arcs(
-    sets: &mut HashMap<TokenId, VariantSetSpec>,
+    sets: &mut VariantSets,
     host: PathId,
     selected: &HashSet<VariantSelectionSite>,
     resolve: &mut impl FnMut(&mut ListOp<Reference>, bool),

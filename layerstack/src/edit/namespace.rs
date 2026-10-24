@@ -27,7 +27,7 @@ use super::{
 use crate::{
     FieldEntry, FieldValue, Layer, LayerId, LayerStack, LayerStore, ListOp, Path, PathId, PrimSpec,
     PropertyEntry, PropertyPath, Reference, ReferenceTarget, SpecPath, Stage, TargetPath, TokenId,
-    Value, VariantSetSpec, VariantSpec,
+    Value, VariantSets, VariantSpec,
 };
 
 /// A validated namespace move or delete, including dependent authored path
@@ -745,11 +745,7 @@ fn reachable_layers(stage: &Stage, store: &dyn LayerStore, root: LayerId) -> Vec
 fn collect_ref_layers(store: &dyn LayerStore, refs: &ListOp<Reference>, layers: &mut Vec<LayerId>) {
     layers.extend(refs.items().filter_map(|r| r.stored_target_layer(store)));
 }
-fn collect_variant_layers(
-    store: &dyn LayerStore,
-    sets: &crate::HashMap<TokenId, VariantSetSpec>,
-    layers: &mut Vec<LayerId>,
-) {
+fn collect_variant_layers(store: &dyn LayerStore, sets: &VariantSets, layers: &mut Vec<LayerId>) {
     for set in sets.values() {
         for v in set.variants.values() {
             collect_ref_layers(store, &v.references, layers);
@@ -1115,7 +1111,7 @@ pub(super) fn repair_prim(
 }
 fn repair_variants(
     store: &mut dyn LayerStore,
-    sets: &mut crate::HashMap<TokenId, VariantSetSpec>,
+    sets: &mut VariantSets,
     author: LayerId,
     edited: LayerId,
     local: Option<&PathMove>,

@@ -1660,6 +1660,38 @@ fn variant_sets_compose_only_where_listed() {
     ));
 }
 
+/// Variant set specs keep the order they were created in, whatever order
+/// `variantSetNames` lists them in, and undoing a removal puts a set back
+/// in its place.
+///
+/// OpenUSD: `SdfVariantSetSpec::New` appends to `variantSetChildren`
+/// (`Sdf_ChildrenUtils::CreateSpec`). Spec: AOUSD Core §7.3.6.
+#[test]
+fn variant_sets_keep_creation_order_through_undo() {
+    let mut store = rocks();
+    let rock = store.path("/Rock");
+    let at = Address::spec(ROCK, SpecPath::from_prim_path(rock));
+    let [shape, look, age] = ["shape", "look", "age"].map(|name| store.tokens.intern(name));
+    let sets = |store: &InMemoryStore| -> Vec<TokenId> {
+        let prim = &store.layers[&ROCK].prims[&rock];
+        prim.variant_sets.keys().copied().collect()
+    };
+    let mut add = Transaction::new();
+    add.add_variant_set(at.clone(), look, ListPosition::FrontOfPrepend)
+        .add_variant_set(at.clone(), age, ListPosition::FrontOfPrepend);
+    add.apply(&mut store).expect("adds");
+    assert_eq!(sets(&store), [shape, look, age], "in creation order");
+    let original = layers(&store);
+
+    let mut remove = Transaction::new();
+    remove.remove_variant_set(at, shape);
+    let inverse = remove.apply(&mut store).expect("removes");
+    assert_eq!(sets(&store), [look, age]);
+    inverse.apply(&mut store).expect("undo applies");
+    assert_eq!(sets(&store), [shape, look, age], "back in its place");
+    assert_eq!(layers(&store), original);
+}
+
 /// Relationship targets and attribute connections are set, replaced and
 /// cleared on their spec, a missing relationship spec is created `custom`
 /// (nothing declares it), and each edit's inverse restores the layer

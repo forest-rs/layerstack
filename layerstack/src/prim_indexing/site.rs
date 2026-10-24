@@ -19,7 +19,7 @@ use hashbrown::{HashMap, HashSet};
 use crate::{
     doc::{
         FieldEntry, FieldValue, Layer, LayerId, LayerOffset, LayerStore, PrimSpec, Reference,
-        Value, VariantSpec, get_field,
+        Value, VariantSets, VariantSpec, get_field,
     },
     expression_variables::{ArcAnchor, ExpressionScope},
     interner::{TokenId, TokenInterner},
@@ -119,7 +119,7 @@ impl<'a> SpecRef<'a> {
         }
     }
 
-    pub(crate) fn variant_sets(self) -> &'a HashMap<TokenId, crate::doc::VariantSetSpec> {
+    pub(crate) fn variant_sets(self) -> &'a VariantSets {
         match self {
             Self::Prim(spec) => &spec.variant_sets,
             Self::Variant(spec) => &spec.variant_sets,

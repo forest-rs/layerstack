@@ -27,7 +27,7 @@ use crate::spec_path::VariantSelectionSite;
 use crate::{
     ArrayEdit, ArrayEditOp, ArrayEditOperand, FieldEntry, FieldValue, Layer, LayerId, LayerStore,
     ListOp, PathId, PathInterner, PrimSpec, PropertyEntry, Reference, SpecPath, TokenId,
-    TokenInterner, Value, VariantSetSpec,
+    TokenInterner, Value, VariantSets,
 };
 use alloc::{
     collections::{BTreeMap, BTreeSet},
@@ -766,7 +766,7 @@ fn rewrite_prim_field(
 }
 
 fn rewrite_sets(
-    sets: &mut crate::HashMap<TokenId, VariantSetSpec>,
+    sets: &mut VariantSets,
     sites: &[VariantSelectionSite],
     path: PathId,
     layer: LayerId,

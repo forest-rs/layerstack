@@ -1846,7 +1846,7 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
             };
             // The set spec alone: only `variantSetNames` lists a set
             // (AOUSD Core §7.6.2.3.5).
-            let set_spec = sets.entry(*set).or_default();
+            let set_spec = sets.get_or_insert_default(*set);
             if let Some(variant_spec) = variant_spec {
                 set_spec.variants.insert(*variant, variant_spec);
             }
@@ -3295,7 +3295,7 @@ fn copy_prim(spec: &PrimSpec) -> PrimSpec {
         outer_variant_sites: vec(&spec.outer_variant_sites),
         authored_children: vec(&spec.authored_children),
         variant_selections: map(&spec.variant_selections),
-        variant_sets: map(&spec.variant_sets),
+        variant_sets: spec.variant_sets.clone(),
         variant_set_names: list(&spec.variant_set_names).into(),
         references: list(&spec.references).into(),
         inherits: list(&spec.inherits).into(),

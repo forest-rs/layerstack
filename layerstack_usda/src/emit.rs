@@ -42,10 +42,9 @@ use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
-use hashbrown::HashMap;
 use layerstack::doc::{
     FieldEntry, FieldValue, Layer, LayerId, LayerOffset, PrimSpec, Reference, ReferenceSource,
-    Specifier, SublayerEntry, Value, VariantSetSpec, VariantSpec, get_field_mut, set_field_vec,
+    Specifier, SublayerEntry, Value, VariantSets, VariantSpec, get_field_mut, set_field_vec,
 };
 use layerstack::interner::{TokenId, TokenInterner};
 use layerstack::listop::ListOp;
@@ -981,14 +980,14 @@ impl EmitCtx<'_> {
         prim_path_id: PathId,
         prim_path: &str,
         enclosing: &[VariantSelectionSite],
-        sets: &mut HashMap<TokenId, VariantSetSpec>,
+        sets: &mut VariantSets,
         layer: &mut Layer,
     ) {
         // The set spec alone: `variantSetNames` lists the sets that compose
         // (AOUSD Core §7.6.2.3.5), and a `variantSet` block does not list
         // its set, as OpenUSD's text parser does not.
         let set_tok = self.tokens.intern(vs.name);
-        let set_spec = sets.entry(set_tok).or_default();
+        let set_spec = sets.get_or_insert_default(set_tok);
 
         for branch in &vs.branches {
             let branch_tok = self.tokens.intern(branch.name);
@@ -2054,9 +2053,9 @@ fn convert_array_edit_index(index: ast::ArrayEditIndex) -> ArrayIndex {
 /// Spec: AOUSD Core §7.6.2.3.5 (`variantSetNames`). OpenUSD: the
 /// `TextParserAction<NameList>` in
 /// `pxr/usd/sdf/textFileFormatParser.cpp`.
-fn declare_listed_sets(names: &ListOp<TokenId>, sets: &mut HashMap<TokenId, VariantSetSpec>) {
+fn declare_listed_sets(names: &ListOp<TokenId>, sets: &mut VariantSets) {
     for name in names.explicit.iter().flatten().chain(&names.add) {
-        sets.entry(*name).or_default();
+        sets.get_or_insert_default(*name);
     }
 }
 

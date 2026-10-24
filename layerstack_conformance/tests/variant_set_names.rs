@@ -43,7 +43,7 @@ use std::process::Command;
 use layerstack::{
     Address, ArcKind, EditTarget, InMemoryStore, Layer, LayerId, ListOp, ListPosition, LiveStage,
     Path, PrimSpec, SpecPath, Specifier, Stage, StageOptions, TokenId, TokenInterner, Transaction,
-    Value, VariantSetSpec, VariantSpec, flatten_layer_stack,
+    Value, VariantSets, VariantSpec, flatten_layer_stack,
 };
 use layerstack_conformance::{
     save_corpus::Imported,
@@ -92,11 +92,7 @@ fn list_op(op: &ListOp<TokenId>, tokens: &TokenInterner) -> Json {
 
 /// A prim or variant spec's `variantSetNames` (`null` when it authors
 /// none) and variant sets, as the oracle records them.
-fn spec_record(
-    names: &ListOp<TokenId>,
-    sets: &hashbrown::HashMap<TokenId, VariantSetSpec>,
-    tokens: &TokenInterner,
-) -> Json {
+fn spec_record(names: &ListOp<TokenId>, sets: &VariantSets, tokens: &TokenInterner) -> Json {
     let sets: BTreeMap<String, Vec<String>> = sets
         .iter()
         .map(|(name, set)| {

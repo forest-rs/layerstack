@@ -104,14 +104,16 @@ pub(crate) enum Raw {
         drop_set: bool,
     },
     /// Stores (`Some`) or removes (`None`) the whole variant set spec `set`
-    /// held by the spec at `host`, with the variant specs in it. The prim
-    /// specs authored in its branches are stored apart, in
-    /// [`Raw::PrimSlots`] steps.
+    /// held by the spec at `host`, with the variant specs in it; a new set
+    /// is inserted at `index` among the holder's sets, so that undoing a
+    /// removal restores the order. The prim specs authored in its branches
+    /// are stored apart, in [`Raw::PrimSlots`] steps.
     VariantSet {
         layer: LayerId,
         host: Loc,
         set: TokenId,
         spec: Option<VariantSetSpec>,
+        index: usize,
     },
     /// Stores (`Some`) or removes (`None`) the property `name` of the spec
     /// at `loc`; a new property is inserted at `index`.
@@ -347,12 +349,14 @@ impl Raw {
                     host,
                     set,
                     spec,
+                    ..
                 },
                 Self::VariantSet {
                     layer: l,
                     host: h,
                     set: s,
                     spec: sp,
+                    ..
                 },
             ) => (layer, host, set) == (l, h, s) && spec.same(sp),
             (
@@ -2383,8 +2387,7 @@ fn apply_raw(store: &mut dyn LayerStore, step: &Raw) -> Result<Raw, Rejection> {
                 Some(spec) => {
                     let created_set = !variant_sets.contains_key(set);
                     let old = variant_sets
-                        .entry(*set)
-                        .or_default()
+                        .get_or_insert_default(*set)
                         .variants
                         .insert(*variant, spec.clone());
                     Ok(Raw::Variant {
@@ -2418,24 +2421,32 @@ fn apply_raw(store: &mut dyn LayerStore, step: &Raw) -> Result<Raw, Rejection> {
             }
         }
         Raw::VariantSet {
-            host, set, spec, ..
+            host,
+            set,
+            spec,
+            index,
+            ..
         } => {
             let Some(holder) = store.layer_mut(id).and_then(|l| spec_at_mut(l, host)) else {
                 return Err(diverged_at(store, host));
             };
             let variant_sets = holder.into_variant_sets();
-            let old = match spec {
-                Some(spec) => variant_sets.insert(*set, spec.clone()),
-                None => match variant_sets.remove(set) {
-                    Some(old) => Some(old),
-                    None => return Err(diverged_at(store, host)),
-                },
+            let (old, old_index) = match (spec, variant_sets.index_of(set)) {
+                (Some(spec), Some(position)) => (variant_sets.insert(*set, spec.clone()), position),
+                (Some(spec), None) => {
+                    let index = (*index).min(variant_sets.len());
+                    variant_sets.insert_at(index, *set, spec.clone());
+                    (None, index)
+                }
+                (None, Some(position)) => (variant_sets.remove(set), position),
+                (None, None) => return Err(diverged_at(store, host)),
             };
             Ok(Raw::VariantSet {
                 layer: id,
                 host: host.clone(),
                 set: *set,
                 spec: old,
+                index: old_index,
             })
         }
         Raw::Property {

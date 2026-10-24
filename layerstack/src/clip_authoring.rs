@@ -13,8 +13,7 @@
 use crate::stitch::{self, StitchError, StitchReport};
 use crate::{
     FieldEntry, FieldValue, Layer, LayerId, LayerOffset, PathId, PathInterner, PrimSpec,
-    PropertyKind, PropertyPath, PropertySpec, SublayerEntry, TokenId, TokenInterner, Value,
-    VariantSetSpec,
+    PropertyKind, PropertyPath, PropertySpec, SublayerEntry, TokenInterner, Value, VariantSets,
 };
 use alloc::{boxed::Box, collections::BTreeMap, format, string::String, sync::Arc, vec::Vec};
 
@@ -252,7 +251,7 @@ fn collect_manifest_properties(
     Ok(())
 }
 fn collect_manifest_variants(
-    sets: &crate::HashMap<TokenId, VariantSetSpec>,
+    sets: &VariantSets,
     path: PathId,
     sites: &mut Vec<crate::spec_path::VariantSelectionSite>,
     paths: &PathInterner,
@@ -345,10 +344,7 @@ fn copy_property_defaults(manifest: &mut [crate::PropertyEntry], source: &[crate
         Arc::make_mut(&mut property.spec).default = default;
     }
 }
-fn copy_variant_defaults(
-    manifest: &mut crate::HashMap<TokenId, VariantSetSpec>,
-    source: &crate::HashMap<TokenId, VariantSetSpec>,
-) {
+fn copy_variant_defaults(manifest: &mut VariantSets, source: &VariantSets) {
     for (set, variants) in manifest {
         for (variant, spec) in &mut variants.variants {
             if let Some(source) = source.get(set).and_then(|set| set.variants.get(variant)) {
@@ -367,9 +363,7 @@ fn valid_samples(property: &PropertySpec) -> Result<(), ClipAuthoringError> {
     }
     Ok(())
 }
-fn strip_variants(
-    sets: &mut crate::HashMap<TokenId, VariantSetSpec>,
-) -> Result<(), ClipAuthoringError> {
+fn strip_variants(sets: &mut VariantSets) -> Result<(), ClipAuthoringError> {
     for set in sets.values_mut() {
         for variant in set.variants.values_mut() {
             for property in &mut variant.properties {
@@ -611,7 +605,7 @@ pub fn stitch_clip_sequence(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{InMemoryStore, PropertyType, TypedArray};
+    use crate::{InMemoryStore, PropertyType, TypedArray, VariantSetSpec};
     use alloc::vec;
     fn fixture() -> (InMemoryStore, PathId, Layer, Layer, ClipBundleOptions) {
         let store = InMemoryStore::default();

@@ -1,0 +1,14 @@
+#usda 1.0
+
+def "Clip"
+{
+    double dbl.timeSamples = { 0: 0, 1: 10, 2: 20 }
+    float[] arr.timeSamples = { 0: [0, 0], 2: [20, 20] }
+    token tok.timeSamples = { 0: "a0", 1: "a1" }
+    asset asset.timeSamples = { 0: @./clip_a.usda@ }
+    timecode tc.timeSamples = { 0: 0, 2: 2 }
+    double gap.timeSamples = { 0: 0, 2: 20 }
+    double radius.timeSamples = { 0: 3, 2: 5 }
+    double anchor_dbl.timeSamples = { 0: 100, 2: 120 }
+    double over_dbl.timeSamples = { 0: 1 }
+}

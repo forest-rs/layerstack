@@ -1,0 +1,299 @@
+#usda 1.0
+
+def "M"
+{
+    double def_dbl = 1.5
+    double dd_dbl = 1.5
+    double s_dbl.timeSamples = { 1: 10, 3: 30 }
+    double both_dbl = 1.5
+    double both_dbl.timeSamples = { 1: 10, 3: 30 }
+    double sd_dbl = 1.5
+    double ds_dbl.timeSamples = { 1: 10, 3: 30 }
+    double ss_dbl.timeSamples = { 1: 10, 3: 30 }
+    double blk_dbl = 1.5
+    double blk_dbl.timeSamples = { 1: 10, 3: 30 }
+    double sblk_dbl.timeSamples = { 1: 10, 2: None, 3: 30 }
+    double ssblk_dbl.timeSamples = { 1: 10, 3: 30 }
+    double ablk_dbl = 1.5
+    double ablk_dbl.timeSamples = { 1: 10, 3: 30 }
+    double sp_dbl.spline = { 1: 10; post linear, 3: 30; post linear }
+    double spd_dbl.spline = { 1: 10; post linear, 3: 30; post linear }
+    double ssp_dbl.timeSamples = { 1: 10, 3: 30 }
+    double absp_dbl = 1.5
+    double absp_dbl.spline = { 1: 10; post linear, 3: 30; post linear }
+    double cdw_dbl = 1.5 (
+        customData = {
+            string a = "weak"
+            int w = 1
+            timecode t = 3
+            asset p = @./weak.usda@
+            dictionary n = {
+                int x = 1
+                string y = "weak"
+            }
+        }
+    )
+    double cdd_dbl = 1.5 (
+        customData = {
+            string a = "weak"
+            int w = 1
+            timecode t = 3
+            asset p = @./weak.usda@
+            dictionary n = {
+                int x = 1
+                string y = "weak"
+            }
+        }
+    )
+    int def_int = 1
+    int dd_int = 1
+    int s_int.timeSamples = { 1: 10, 3: 30 }
+    int both_int = 1
+    int both_int.timeSamples = { 1: 10, 3: 30 }
+    int sd_int = 1
+    int ds_int.timeSamples = { 1: 10, 3: 30 }
+    int ss_int.timeSamples = { 1: 10, 3: 30 }
+    int blk_int = 1
+    int blk_int.timeSamples = { 1: 10, 3: 30 }
+    int sblk_int.timeSamples = { 1: 10, 2: None, 3: 30 }
+    int ssblk_int.timeSamples = { 1: 10, 3: 30 }
+    int ablk_int = 1
+    int ablk_int.timeSamples = { 1: 10, 3: 30 }
+    timecode def_tc = 1.5
+    timecode dd_tc = 1.5
+    timecode s_tc.timeSamples = { 1: 10, 3: 30 }
+    timecode both_tc = 1.5
+    timecode both_tc.timeSamples = { 1: 10, 3: 30 }
+    timecode sd_tc = 1.5
+    timecode ds_tc.timeSamples = { 1: 10, 3: 30 }
+    timecode ss_tc.timeSamples = { 1: 10, 3: 30 }
+    timecode blk_tc = 1.5
+    timecode blk_tc.timeSamples = { 1: 10, 3: 30 }
+    timecode sblk_tc.timeSamples = { 1: 10, 2: None, 3: 30 }
+    timecode ssblk_tc.timeSamples = { 1: 10, 3: 30 }
+    timecode ablk_tc = 1.5
+    timecode ablk_tc.timeSamples = { 1: 10, 3: 30 }
+    float[] def_arr = [1, 2]
+    float[] dd_arr = [1, 2]
+    float[] s_arr.timeSamples = { 1: [10, 20], 3: [30, 40] }
+    float[] both_arr = [1, 2]
+    float[] both_arr.timeSamples = { 1: [10, 20], 3: [30, 40] }
+    float[] sd_arr = [1, 2]
+    float[] ds_arr.timeSamples = { 1: [10, 20], 3: [30, 40] }
+    float[] ss_arr.timeSamples = { 1: [10, 20], 3: [30, 40] }
+    float[] blk_arr = [1, 2]
+    float[] blk_arr.timeSamples = { 1: [10, 20], 3: [30, 40] }
+    float[] sblk_arr.timeSamples = { 1: [10, 20], 2: None, 3: [30, 40] }
+    float[] ssblk_arr.timeSamples = { 1: [10, 20], 3: [30, 40] }
+    float[] ablk_arr = [1, 2]
+    float[] ablk_arr.timeSamples = { 1: [10, 20], 3: [30, 40] }
+    float[] ed_arr = [1, 2]
+    float[] es_arr.timeSamples = { 1: [10, 20], 3: [30, 40] }
+    float[] esd_arr = [1, 2]
+    float[] edb_arr = None
+    token def_tok = "wd"
+    token dd_tok = "wd"
+    token s_tok.timeSamples = { 1: "w1", 3: "w3" }
+    token both_tok = "wd"
+    token both_tok.timeSamples = { 1: "w1", 3: "w3" }
+    token sd_tok = "wd"
+    token ds_tok.timeSamples = { 1: "w1", 3: "w3" }
+    token ss_tok.timeSamples = { 1: "w1", 3: "w3" }
+    token blk_tok = "wd"
+    token blk_tok.timeSamples = { 1: "w1", 3: "w3" }
+    token sblk_tok.timeSamples = { 1: "w1", 2: None, 3: "w3" }
+    token ssblk_tok.timeSamples = { 1: "w1", 3: "w3" }
+    token ablk_tok = "wd"
+    token ablk_tok.timeSamples = { 1: "w1", 3: "w3" }
+    string def_str = "wd"
+    string dd_str = "wd"
+    string s_str.timeSamples = { 1: "w1", 3: "w3" }
+    string both_str = "wd"
+    string both_str.timeSamples = { 1: "w1", 3: "w3" }
+    string sd_str = "wd"
+    string ds_str.timeSamples = { 1: "w1", 3: "w3" }
+    string ss_str.timeSamples = { 1: "w1", 3: "w3" }
+    string blk_str = "wd"
+    string blk_str.timeSamples = { 1: "w1", 3: "w3" }
+    string sblk_str.timeSamples = { 1: "w1", 2: None, 3: "w3" }
+    string ssblk_str.timeSamples = { 1: "w1", 3: "w3" }
+    string ablk_str = "wd"
+    string ablk_str.timeSamples = { 1: "w1", 3: "w3" }
+    asset def_asset = @./weak.usda@
+    asset dd_asset = @./weak.usda@
+    asset s_asset.timeSamples = { 1: @./weak.usda@, 3: @./clips/clip_a.usda@ }
+    asset both_asset = @./weak.usda@
+    asset both_asset.timeSamples = { 1: @./weak.usda@, 3: @./clips/clip_a.usda@ }
+    asset sd_asset = @./weak.usda@
+    asset ds_asset.timeSamples = { 1: @./weak.usda@, 3: @./clips/clip_a.usda@ }
+    asset ss_asset.timeSamples = { 1: @./weak.usda@, 3: @./clips/clip_a.usda@ }
+    asset blk_asset = @./weak.usda@
+    asset blk_asset.timeSamples = { 1: @./weak.usda@, 3: @./clips/clip_a.usda@ }
+    asset sblk_asset.timeSamples = { 1: @./weak.usda@, 2: None, 3: @./clips/clip_a.usda@ }
+    asset ssblk_asset.timeSamples = { 1: @./weak.usda@, 3: @./clips/clip_a.usda@ }
+    asset ablk_asset = @./weak.usda@
+    asset ablk_asset.timeSamples = { 1: @./weak.usda@, 3: @./clips/clip_a.usda@ }
+    asset[] def_assets = [@./weak.usda@, @./clips/clip_b.usda@]
+    asset[] dd_assets = [@./weak.usda@, @./clips/clip_b.usda@]
+    asset[] s_assets.timeSamples = { 1: [@./weak.usda@], 3: [@./clips/clip_a.usda@] }
+    asset[] both_assets = [@./weak.usda@, @./clips/clip_b.usda@]
+    asset[] both_assets.timeSamples = { 1: [@./weak.usda@], 3: [@./clips/clip_a.usda@] }
+    asset[] sd_assets = [@./weak.usda@, @./clips/clip_b.usda@]
+    asset[] ds_assets.timeSamples = { 1: [@./weak.usda@], 3: [@./clips/clip_a.usda@] }
+    asset[] ss_assets.timeSamples = { 1: [@./weak.usda@], 3: [@./clips/clip_a.usda@] }
+    asset[] blk_assets = [@./weak.usda@, @./clips/clip_b.usda@]
+    asset[] blk_assets.timeSamples = { 1: [@./weak.usda@], 3: [@./clips/clip_a.usda@] }
+    asset[] sblk_assets.timeSamples = { 1: [@./weak.usda@], 2: None, 3: [@./clips/clip_a.usda@] }
+    asset[] ssblk_assets.timeSamples = { 1: [@./weak.usda@], 3: [@./clips/clip_a.usda@] }
+    asset[] ablk_assets = [@./weak.usda@, @./clips/clip_b.usda@]
+    asset[] ablk_assets.timeSamples = { 1: [@./weak.usda@], 3: [@./clips/clip_a.usda@] }
+    pathExpression def_expr = "Leaf ../Sib /Elsewhere"
+    pathExpression dd_expr = "Leaf ../Sib /Elsewhere"
+    pathExpression s_expr.timeSamples = { 1: "Leaf", 3: "/Elsewhere" }
+    pathExpression both_expr = "Leaf ../Sib /Elsewhere"
+    pathExpression both_expr.timeSamples = { 1: "Leaf", 3: "/Elsewhere" }
+    pathExpression sd_expr = "Leaf ../Sib /Elsewhere"
+    pathExpression ds_expr.timeSamples = { 1: "Leaf", 3: "/Elsewhere" }
+    pathExpression ss_expr.timeSamples = { 1: "Leaf", 3: "/Elsewhere" }
+    pathExpression blk_expr = "Leaf ../Sib /Elsewhere"
+    pathExpression blk_expr.timeSamples = { 1: "Leaf", 3: "/Elsewhere" }
+    pathExpression sblk_expr.timeSamples = { 1: "Leaf", 2: None, 3: "/Elsewhere" }
+    pathExpression ssblk_expr.timeSamples = { 1: "Leaf", 3: "/Elsewhere" }
+    pathExpression ablk_expr = "Leaf ../Sib /Elsewhere"
+    pathExpression ablk_expr.timeSamples = { 1: "Leaf", 3: "/Elsewhere" }
+}
+
+def "CE" (
+    clips = {
+        dictionary default = {
+            asset[] assetPaths = [@./clips/clip_a.usda@, @./clips/clip_b.usda@]
+            string primPath = "/Clip"
+            double2[] active = [(0, 0), (2, 1)]
+            double2[] times = [(0, 0), (2, 2), (2, 0), (4, 2)]
+            asset manifestAssetPath = @./clips/manifest.usda@
+        }
+    }
+)
+{
+    double dbl
+    float[] arr
+    token tok
+    asset asset
+    timecode tc
+    double gap
+    double over_dbl
+    double anchor_dbl = 5
+}
+
+def "CN" (
+    clips = {
+        dictionary default = {
+            asset[] assetPaths = [@./clips/clip_a.usda@, @./clips/clip_b.usda@]
+            string primPath = "/Clip"
+            double2[] active = [(0, 0), (2, 1)]
+            double2[] times = [(0, 0), (2, 2), (2, 0), (4, 2)]
+        }
+    }
+)
+{
+    double dbl
+    float[] arr
+    token tok
+    asset asset
+    timecode tc
+    double gap
+    double over_dbl
+    double anchor_dbl = 5
+}
+
+def "CT" (
+    clips = {
+        dictionary default = {
+            string templateAssetPath = "./clips/tmpl.#.usda"
+            double templateStartTime = 0
+            double templateEndTime = 4
+            double templateStride = 2
+            string primPath = "/Clip"
+            asset manifestAssetPath = @./clips/manifest.usda@
+        }
+    }
+)
+{
+    double dbl
+    float[] arr
+    token tok
+    asset asset
+    timecode tc
+    double gap
+    double over_dbl
+    double anchor_dbl = 5
+}
+
+def "CI" (
+    clips = {
+        dictionary default = {
+            asset[] assetPaths = [@./clips/clip_a.usda@, @./clips/clip_b.usda@]
+            string primPath = "/Clip"
+            double2[] active = [(0, 0), (2, 1)]
+            double2[] times = [(0, 0), (2, 2), (2, 0), (4, 2)]
+            asset manifestAssetPath = @./clips/manifest.usda@
+            bool interpolateMissingClipValues = true
+        }
+    }
+)
+{
+    double dbl
+    float[] arr
+    token tok
+    asset asset
+    timecode tc
+    double gap
+    double over_dbl
+    double anchor_dbl = 5
+}
+
+def "FS_none"
+{
+}
+
+def "FS_blk"
+{
+    double radius = None
+    float3[] extent = None
+    token visibility = None
+}
+
+def "FS_sblk"
+{
+    double radius.timeSamples = { 1: 5, 2: None, 3: 7 }
+    float3[] extent.timeSamples = { 1: [(0, 0, 0), (2, 2, 2)], 2: None, 3: [(1, 1, 1), (3, 3, 3)] }
+    token visibility.timeSamples = { 1: "invisible", 2: None, 3: "inherited" }
+}
+
+def "FS_over"
+{
+    double radius = None
+    float3[] extent = None
+    token visibility = None
+}
+
+def "FA_none"
+{
+}
+
+def "FA_blk"
+{
+    asset filePath = None
+    timecode startTime = None
+    double gain = None
+}
+
+def "FV_none"
+{
+}
+
+def "FV_blk"
+{
+    string sourceName = None
+    token dataType = None
+}

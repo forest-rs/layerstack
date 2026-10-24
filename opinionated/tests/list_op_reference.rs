@@ -8,6 +8,9 @@
 //! and long lists over small and large alphabets, so items repeat in the
 //! base list and in every authored list, and lookups run on both sides of
 //! the scan-or-hash threshold. Every run uses the same fixed seeds.
+//!
+//! Composition of two operations is checked the same way, against the
+//! quadratic implementation `layerstack` flattening used to have.
 
 use opinionated::{ListOp, apply_list_order, resolve_list_chain};
 
@@ -101,6 +104,44 @@ fn reference_order(items: &mut Vec<u32>, order: &[u32]) {
         }
     }
     items.extend(moved);
+}
+
+/// The quadratic composition, kept as the reference: OpenUSD
+/// `SdfListOp::ApplyOperations(const SdfListOp&)`.
+fn reference_compose(strong: &ListOp<u32>, weak: &ListOp<u32>) -> Option<ListOp<u32>> {
+    if strong.explicit.is_some() {
+        return Some(strong.clone());
+    }
+    if !strong.add.is_empty() || !strong.reorder.is_empty() {
+        return None;
+    }
+    if let Some(items) = &weak.explicit {
+        let mut applied = items.clone();
+        reference_apply(strong, &mut applied);
+        return Some(ListOp::explicit(applied));
+    }
+    if !weak.add.is_empty() || !weak.reorder.is_empty() {
+        return None;
+    }
+    let mut result = weak.clone();
+    for value in &strong.delete {
+        result.prepend.retain(|entry| entry != value);
+        result.append.retain(|entry| entry != value);
+        if !result.delete.contains(value) {
+            result.delete.push(*value);
+        }
+    }
+    for value in strong.prepend.iter().chain(&strong.append) {
+        result.delete.retain(|entry| entry != value);
+        result.prepend.retain(|entry| entry != value);
+        result.append.retain(|entry| entry != value);
+    }
+    let mut prepend = strong.prepend.clone();
+    prepend.extend(result.prepend);
+    prepend.retain(|entry| !strong.append.contains(entry));
+    result.prepend = prepend;
+    result.append.extend_from_slice(&strong.append);
+    Some(result)
 }
 
 /// The reference fold of a strongest-first chain over `fallback`.
@@ -202,4 +243,37 @@ fn long_repeated_authored_items_keep_their_counted_occurrence() {
     let mut appended = vec![99];
     appended.extend_from_slice(&interleaved[40..]);
     assert_eq!(ListOp::appended(interleaved).apply_to(&[7, 99]), appended);
+}
+
+#[test]
+fn compositions_match_the_reference_and_apply_as_both_operations() {
+    let mut rng = Rng(0x5eed_0005);
+    for (alphabet, max_len) in [(4, 6), (12, 24), (60, 80), (2_000, 600)] {
+        for case in 0..400 {
+            let mut ops = [rng.op(alphabet, max_len), rng.op(alphabet, max_len)];
+            // Most pairs only delete, prepend and append, so they compose.
+            for op in &mut ops {
+                if rng.below(4) != 0 {
+                    op.add.clear();
+                    op.reorder.clear();
+                }
+            }
+            let [strong, weak] = &ops;
+            let composed = strong.compose_over(weak);
+            assert_eq!(
+                composed,
+                reference_compose(strong, weak),
+                "case {case}: {strong:?} over {weak:?}"
+            );
+            let Some(composed) = composed else { continue };
+            let mut base = rng.list(alphabet, max_len);
+            base.sort_unstable();
+            base.dedup();
+            assert_eq!(
+                composed.apply_to(&base),
+                strong.apply_to(&weak.apply_to(&base)),
+                "case {case}: {strong:?} over {weak:?} over {base:?}"
+            );
+        }
+    }
 }

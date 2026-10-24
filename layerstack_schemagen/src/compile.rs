@@ -108,6 +108,12 @@
 //!   adds OpenUSD's; nothing is parsed at run time. `DEPENDENCIES` lists
 //!   the OpenUSD domains the schemas build on, and `registry(tokens)`
 //!   builds a registry of both. `LIBRARY` is the library's name.
+//! - `KINDS` holds the kinds the plugin's `plugInfo.json` declares
+//!   (`Info.Kinds`, from an existing file), read as OpenUSD's
+//!   `KindRegistry` reads them ([`kinds`](crate::kinds)), and
+//!   `register_kinds(registry)` adds them to a
+//!   `layerstack_schemas::kind::KindRegistry`, returning those registered
+//!   already; a declaration OpenUSD refuses is a [`CompileError::Kinds`].
 //!
 //! A library's schemas can build on each other and on OpenUSD's domains,
 //! which `layerstack_schemas` has views of; building on another library
@@ -382,7 +388,8 @@ impl CompiledSchema {
     ///
     /// [`CompileError::Rust`]: an accessor name is a Rust keyword or
     /// collides, or a schema builds on a library other than OpenUSD's
-    /// domains.
+    /// domains. [`CompileError::Kinds`]: `plugInfo.json` declares kinds
+    /// OpenUSD refuses.
     pub fn rust_module(&self) -> Result<String, CompileError> {
         rust::module_text(
             &self.library.name,

@@ -5,6 +5,17 @@
     "Plugins": [
         {
             "Info": {
+                "Kinds": {
+                    "lab_bench": {
+                        "baseKind": "component"
+                    }, 
+                    "lab_station": {
+                        "baseKind": "lab_wing"
+                    }, 
+                    "lab_wing": {
+                        "baseKind": "assembly"
+                    }
+                }, 
                 "Types": {
                     "LabInstrumentsCalibrationAPI": {
                         "alias": {

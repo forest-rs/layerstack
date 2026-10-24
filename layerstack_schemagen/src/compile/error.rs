@@ -62,6 +62,14 @@ pub enum CompileError {
         /// What is wrong with it.
         message: String,
     },
+    /// `plugInfo.json` declares kinds (`Kinds`) that OpenUSD's
+    /// `KindRegistry` refuses, so the Rust module, which registers the
+    /// library's kinds, is not generated
+    /// ([`CompiledSchema::rust_module`](super::CompiledSchema::rust_module)).
+    Kinds {
+        /// Every refused declaration, with its plugin, kind and field.
+        rejected: Vec<crate::kinds::KindDeclarationError>,
+    },
     /// The generated schema layer could not be written as USDA. This is a
     /// gap in layerstack, not in the schema.
     Write {
@@ -493,6 +501,10 @@ impl fmt::Display for CompileError {
                 f.write_str("Invalid fields specified in schema.")
             }
             Self::PlugInfo { message } => write!(f, "plugInfo.json: {message}"),
+            Self::Kinds { rejected } => {
+                f.write_str("plugInfo.json: ")?;
+                crate::kinds::write_rejected(f, rejected)
+            }
             Self::Write { message } => write!(f, "writing generatedSchema.usda: {message}"),
             Self::Rust { message } => write!(f, "generating the Rust module: {message}"),
         }

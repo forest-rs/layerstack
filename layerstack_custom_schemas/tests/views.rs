@@ -395,3 +395,51 @@ fn setters_author_through_a_schema_edit() {
     let mount = MountedOnApi::get(&scene, rack).expect("applied");
     assert_eq!(mount.mount_telescope(), [TargetPath::Prim(scope_path)]);
 }
+
+/// The kinds the lab plugin's `plugInfo.json` declares, registered from the
+/// generated module, drive the model hierarchy as OpenUSD's `KindRegistry`
+/// has them drive it once the plugin is registered.
+#[test]
+fn library_kinds_drive_model_queries() {
+    use layerstack_schemas::kind::{KindError, KindRegistry};
+
+    let mut kinds = KindRegistry::new();
+    assert!(lab::register_kinds(&mut kinds).is_empty());
+    assert!(kinds.is_assembly("lab_station") && kinds.is_component("lab_bench"));
+    assert!(kinds.issues().is_empty(), "{:?}", kinds.issues());
+    assert!(observatory::KINDS.is_empty());
+    // Registered twice, as two plugins declaring them would be: refused.
+    let again = lab::register_kinds(&mut kinds);
+    assert_eq!(again.len(), lab::KINDS.len());
+    assert!(again.contains(&KindError::AlreadyRegistered("lab_bench".into())));
+
+    let mut store = InMemoryStore::default();
+    let read = layerstack_usda::read_usda(
+        r#"#usda 1.0
+def Xform "Site" (kind = "lab_station")
+{
+    def Xform "Bench" (kind = "lab_bench")
+    {
+        def Xform "Probe" (kind = "lab_bench")
+        {
+        }
+    }
+}
+"#,
+        LayerId(1),
+        &store.tokens,
+        &store.paths,
+        &mut NoAssets,
+    );
+    store.insert_layer(read.emitted.layer);
+    let live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+    let scene = Scene::new(live.stage(), &store).with_kinds(&kinds);
+    let [site, bench, probe] = ["/Site", "/Site/Bench", "/Site/Bench/Probe"].map(|p| store.path(p));
+    assert!(scene.is_group(site) && scene.is_model(site));
+    assert!(scene.is_model(bench) && !scene.is_group(bench));
+    // A component's children are outside the model hierarchy.
+    assert!(!scene.is_model(probe));
+    // Without the plugin's kinds, they are no kinds.
+    let plain = Scene::new(live.stage(), &store);
+    assert!(!plain.is_model(site) && !plain.is_model(bench));
+}

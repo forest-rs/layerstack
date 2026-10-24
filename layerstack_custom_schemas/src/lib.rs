@@ -9,7 +9,8 @@
 //!   script (`CompiledSchema::rust_module`, included from `OUT_DIR`). It
 //!   builds on OpenUSD's `Typed` and `APISchemaBase`, with typed schemas,
 //!   a single-apply schema that is a built-in and auto-applied, and a
-//!   multiple-apply schema.
+//!   multiple-apply schema. Its `plugInfo.json` declares kinds
+//!   (`lab::KINDS`, registered with `lab::register_kinds`).
 //! - [`observatory`](mod@observatory), telescopes, is checked in (`compile --rust`), since it
 //!   builds on OpenUSD's `Xformable` and needs OpenUSD's schema sources to
 //!   compile; `tests/generated.rs` checks it is current when

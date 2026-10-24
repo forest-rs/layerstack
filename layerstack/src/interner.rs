@@ -36,6 +36,11 @@ impl TokenId {
     pub const fn get(self) -> u32 {
         self.0
     }
+
+    /// The token id whose numeric identifier is `id` ([`Self::get`]).
+    pub(crate) const fn from_raw(id: u32) -> Self {
+        Self(id)
+    }
 }
 
 /// Interns strings into [`TokenId`] values.

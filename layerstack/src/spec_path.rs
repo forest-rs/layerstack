@@ -67,7 +67,36 @@ pub struct SpecPath {
     /// namespace depth; `None` for none. Opinion keys clone source paths
     /// frequently, so they are shared.
     selections: Option<Arc<[(u32, VariantSelectionSite)]>>,
-    property: Option<TokenId>,
+    property: PropertySuffix,
+}
+
+/// A spec path's property suffix: a token id, or none, in four bytes
+/// rather than an `Option<TokenId>`'s eight, which every opinion key and
+/// graph node holds a spec path for.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+struct PropertySuffix(u32);
+
+impl PropertySuffix {
+    /// No property suffix: an id no interner hands out.
+    const NONE: Self = Self(u32::MAX);
+
+    const fn of(property: TokenId) -> Self {
+        Self(property.get())
+    }
+
+    const fn get(self) -> Option<TokenId> {
+        if self.0 == Self::NONE.0 {
+            None
+        } else {
+            Some(TokenId::from_raw(self.0))
+        }
+    }
+}
+
+impl core::fmt::Debug for PropertySuffix {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        self.get().fmt(f)
+    }
 }
 
 impl Ord for SpecPath {
@@ -75,7 +104,7 @@ impl Ord for SpecPath {
         self.prim_path
             .cmp(&other.prim_path)
             .then_with(|| cmp_selections(self.selections(), other.selections()))
-            .then_with(|| self.property.cmp(&other.property))
+            .then_with(|| self.property.get().cmp(&other.property.get()))
     }
 }
 
@@ -113,7 +142,7 @@ impl SpecPath {
         Self {
             prim_path,
             selections: None,
-            property: None,
+            property: PropertySuffix::NONE,
         }
     }
 
@@ -174,7 +203,7 @@ impl SpecPath {
         Self {
             prim_path,
             selections: (!selections.is_empty()).then(|| selections.into()),
-            property: None,
+            property: PropertySuffix::NONE,
         }
     }
 
@@ -257,7 +286,7 @@ impl SpecPath {
         Ok(Self {
             prim_path,
             selections: (!selections.is_empty()).then(|| selections.into()),
-            property,
+            property: property.map_or(PropertySuffix::NONE, PropertySuffix::of),
         })
     }
 
@@ -270,7 +299,7 @@ impl SpecPath {
     /// Returns the property suffix, if any.
     #[must_use]
     pub const fn property(&self) -> Option<TokenId> {
-        self.property
+        self.property.get()
     }
 
     fn selections(&self) -> &[(u32, VariantSelectionSite)] {
@@ -341,7 +370,7 @@ impl SpecPath {
     #[must_use]
     pub(crate) fn prim_spec(&self) -> Self {
         let mut out = self.clone();
-        out.property = None;
+        out.property = PropertySuffix::NONE;
         out
     }
 
@@ -352,7 +381,7 @@ impl SpecPath {
         Self {
             prim_path: child_prim_path,
             selections: self.selections.clone(),
-            property: None,
+            property: PropertySuffix::NONE,
         }
     }
 
@@ -379,7 +408,7 @@ impl SpecPath {
         Self {
             prim_path,
             selections,
-            property: None,
+            property: PropertySuffix::NONE,
         }
     }
 
@@ -392,7 +421,7 @@ impl SpecPath {
         Self {
             prim_path: self.prim_path,
             selections: Some(selections.into()),
-            property: None,
+            property: PropertySuffix::NONE,
         }
     }
 
@@ -404,7 +433,7 @@ impl SpecPath {
         Self {
             prim_path,
             selections: selections.selections.clone(),
-            property: None,
+            property: PropertySuffix::NONE,
         }
     }
 
@@ -424,7 +453,7 @@ impl SpecPath {
     #[must_use]
     pub fn with_property(&self, property: TokenId) -> Self {
         let mut out = self.clone();
-        out.property = Some(property);
+        out.property = PropertySuffix::of(property);
         out
     }
 
@@ -452,7 +481,7 @@ impl SpecPath {
                 }
             }
         }
-        if let Some(property) = self.property {
+        if let Some(property) = self.property() {
             out.push('.');
             out.push_str(tokens.resolve(property));
         }
@@ -750,6 +779,23 @@ mod tests {
                 assert_eq!(a == b, by_components.is_eq());
             }
         }
+    }
+
+    /// The packed property suffix reads back as the `Option` it holds,
+    /// the empty token included, and prints as one.
+    #[test]
+    fn property_suffixes_round_trip() {
+        let tokens = TokenInterner::default();
+        let paths = PathInterner::default();
+        let prim = SpecPath::parse("/Rock{shape=jagged}", &tokens, &paths).expect("spec");
+        assert_eq!(prim.property(), None);
+        for name in [tokens.intern("size"), TokenId::EMPTY] {
+            let property = prim.with_property(name);
+            assert_eq!(property.property(), Some(name));
+            assert_eq!(property.prim_spec(), prim);
+            assert!(alloc::format!("{property:?}").contains(&alloc::format!("Some({name:?})")));
+        }
+        assert!(alloc::format!("{prim:?}").contains("property: None"));
     }
 
     #[test]

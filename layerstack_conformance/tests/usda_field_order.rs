@@ -15,11 +15,13 @@
 //!
 //! `scrambled.usda`, a file written out of order, and `scrambled.usdc`,
 //! OpenUSD's crate file of it (which keeps the file's order), must both
-//! save as OpenUSD exports them, and so must `unregistered.usda`, whose
+//! save as OpenUSD exports them. So must `unregistered.usda`, whose
 //! unregistered metadata sorts in byte order on the layer and in
-//! dictionary order on a prim, and so must `variant_order.usda` and its
-//! crate file, whose variant sets are written in the order their specs
-//! were created (`variantSetChildren`), not as `variantSets` lists them.
+//! dictionary order on a prim, `unregistered_values.usda`, unregistered
+//! values of many kinds, and their crate files, which hold each value as
+//! its USDA text; and `variant_order.usda` and its crate file, whose
+//! variant sets are written in the order their specs were created
+//! (`variantSetChildren`), not as `variantSets` lists them.
 //!
 //! Numbers are spelled as OpenUSD spells them: the `numbers` case, and
 //! the hashes of OpenUSD's text of generated arrays (every half but the
@@ -387,24 +389,36 @@ fn generated_numbers_are_spelled_as_openusd_writes_them() {
 }
 
 /// A file written out of order, read as USDA or as OpenUSD's crate file of
-/// it, saves as OpenUSD's text of it; so do a file of unregistered
-/// metadata, and a file of variant sets out of `variantSets` order, read
-/// as USDA or as its crate file.
+/// it, saves as OpenUSD's text of it; so do files of unregistered metadata
+/// and of variant sets out of `variantSets` order, each read as USDA or as
+/// OpenUSD's crate file of it.
 #[test]
 fn scrambled_files_save_as_openusd_writes_them() {
     let oracle = oracle();
     let dir = workspace_root().join("layerstack_conformance/fixtures/usda_field_order");
-    let usda = std::fs::read_to_string(dir.join("scrambled.usda")).unwrap();
-    let usdc = std::fs::read(dir.join("scrambled.usdc")).unwrap();
-    let unregistered = std::fs::read_to_string(dir.join("unregistered.usda")).unwrap();
-    let variant_order = std::fs::read_to_string(dir.join("variant_order.usda")).unwrap();
-    let variant_order_usdc = std::fs::read(dir.join("variant_order.usdc")).unwrap();
+    let text = |name: &str| std::fs::read_to_string(dir.join(name)).unwrap();
+    let crate_file = |name: &str| std::fs::read(dir.join(name)).unwrap();
     for (format, imported) in [
-        ("usda", Imported::usda(&usda)),
-        ("usdc", Imported::usdc(&usdc)),
-        ("unregistered", Imported::usda(&unregistered)),
-        ("variant_order", Imported::usda(&variant_order)),
-        ("variant_order.usdc", Imported::usdc(&variant_order_usdc)),
+        ("usda", Imported::usda(&text("scrambled.usda"))),
+        ("usdc", Imported::usdc(&crate_file("scrambled.usdc"))),
+        ("unregistered", Imported::usda(&text("unregistered.usda"))),
+        (
+            "unregistered.usdc",
+            Imported::usdc(&crate_file("unregistered.usdc")),
+        ),
+        (
+            "unregistered_values",
+            Imported::usda(&text("unregistered_values.usda")),
+        ),
+        (
+            "unregistered_values.usdc",
+            Imported::usdc(&crate_file("unregistered_values.usdc")),
+        ),
+        ("variant_order", Imported::usda(&text("variant_order.usda"))),
+        (
+            "variant_order.usdc",
+            Imported::usdc(&crate_file("variant_order.usdc")),
+        ),
     ] {
         let text = imported.save_usda().expect("saves");
         let expected = oracle["round_trip"][format].as_str().unwrap();

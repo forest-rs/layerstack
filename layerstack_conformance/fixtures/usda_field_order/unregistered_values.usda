@@ -1,0 +1,28 @@
+#usda 1.0
+(
+    s = "1"
+    n = 1.50
+    i = -3
+    big = 18446744073709551615
+    tiny = 0.0000000342
+    ints = [1, 2]
+    words = ["a", "b"]
+    one = ["a"]
+    flag = true
+    dict = {
+        int a = 1
+        string b = "x"
+    }
+    prepend tags = ["a", "b"]
+    append ids = [1, 2]
+    delete ids = [3]
+)
+
+def "P" (
+    q = 'it"s'
+    note = "a \"quoted\" note"
+    explicit = ["x"]
+    prepend tags = ["c"]
+)
+{
+}

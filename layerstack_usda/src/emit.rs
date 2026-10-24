@@ -55,8 +55,8 @@ use layerstack::property::{
 use layerstack::spec_path::VariantSelectionSite;
 use layerstack::variable_expression::is_expression;
 use layerstack::{
-    ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex, AssetResolver, MetadataTarget,
-    PropertyType, ReferenceTarget, ResolvedAsset, SchemaRegistry, StringArray,
+    ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex, AssetResolveError, AssetResolver,
+    MetadataTarget, PropertyType, ReferenceTarget, ResolvedAsset, SchemaRegistry, StringArray,
 };
 
 use crate::Span;
@@ -137,6 +137,54 @@ pub fn emit_with_registry(
         crate::read::PreparedArrays::new(),
         Some(registry),
     )
+}
+
+/// The field `key` that reading `statements`, USDA metadata statements of
+/// that field (`key = 1.5`, `prepend key = ["a", "b"]`), gives a layer;
+/// `None` when they do not read cleanly.
+///
+/// OpenUSD keeps metadata no schema registers as an `SdfUnregisteredValue`
+/// holding the text of its value as its text parser read it
+/// (`textParserHelpers.cpp`), a list op as a list of such texts; a crate
+/// file stores that text (`crateFile.cpp`), and the text writer writes it
+/// back as it is. A crate reader reads the text with this, so that the
+/// layer holds what reading OpenUSD's USDA of the crate file would give,
+/// with the same conversions ([`emit`]).
+///
+/// Spec: AOUSD Core §7.4 (metadata fields), §16.2 (USDA).
+#[must_use]
+pub fn metadata_from_text(
+    key: &str,
+    statements: &str,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
+) -> Option<FieldValue> {
+    /// Metadata statements name no assets.
+    struct NoAssets;
+    impl AssetResolver for NoAssets {
+        fn resolve(
+            &mut self,
+            _: &str,
+            _: Option<LayerId>,
+            _: &TokenInterner,
+            _: &PathInterner,
+        ) -> Result<ResolvedAsset, AssetResolveError> {
+            Err(AssetResolveError::NotFound)
+        }
+        fn resolved_path(&self, _: LayerId) -> Option<&str> {
+            None
+        }
+    }
+    let source = format!("#usda 1.0\n(\n{statements}\n)\n");
+    let parsed = crate::parser::parse(&source);
+    if !parsed.diagnostics.is_empty() {
+        return None;
+    }
+    let emitted = emit(&parsed.layer, LayerId(0), tokens, paths, &mut NoAssets);
+    if !emitted.diagnostics.is_empty() || emitted.rejected {
+        return None;
+    }
+    emitted.layer.metadata(tokens.intern(key)).cloned()
 }
 
 pub(crate) fn emit_with_arrays(
@@ -2101,7 +2149,7 @@ mod tests {
             _anchor: Option<LayerId>,
             _tokens: &TokenInterner,
             _paths: &PathInterner,
-        ) -> Result<ResolvedAsset, layerstack::AssetResolveError> {
+        ) -> Result<ResolvedAsset, AssetResolveError> {
             let id = LayerId(self.next_id);
             self.next_id += 1;
             Ok(ResolvedAsset {
@@ -3894,7 +3942,7 @@ def \"A\" (
             _anchor: Option<LayerId>,
             _tokens: &TokenInterner,
             _paths: &PathInterner,
-        ) -> Result<ResolvedAsset, layerstack::AssetResolveError> {
+        ) -> Result<ResolvedAsset, AssetResolveError> {
             self.resolved.push(asset_path.into());
             let id = LayerId(100 + self.resolved.len() as u64);
             Ok(ResolvedAsset {

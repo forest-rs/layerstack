@@ -1297,7 +1297,23 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
                     DecodedField::Text(kind, index)
                 } else {
                     let tokens = self.token_ids();
-                    decode_field_within(&rep, self.data, self.sections, self.budget, Some(tokens))?
+                    let value = decode_field_within(
+                        &rep,
+                        self.data,
+                        self.sections,
+                        self.budget,
+                        Some(tokens),
+                    )?;
+                    match value {
+                        // Text, not a string value: read as USDA when the
+                        // field is converted (`Self::convert_metadata`).
+                        DecodedField::Value(CrateValue::String(text))
+                            if rep.value_type().ok() == Some(ValueType::UnregisteredValue) =>
+                        {
+                            DecodedField::UnregisteredText(text)
+                        }
+                        value => value,
+                    }
                 };
                 // This is the ownership boundary: assembly subsequently borrows
                 // fields, so retain decoded numeric allocations before that borrow.
@@ -2057,6 +2073,8 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
             DecodedField::MathArray(array) => convert_math_array(array),
             // List ops are not plain values.
             DecodedField::PathListOp(_) => Value::Null,
+            // Read as USDA only as metadata; elsewhere, as the text it is.
+            DecodedField::UnregisteredText(text) => Value::String(Arc::from(text.as_str())),
             DecodedField::Text(kind, index) => {
                 let text = self.lookup_token(*index);
                 match kind {
@@ -2281,6 +2299,10 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
                 self.target_list_op_at(parts),
             ))));
         }
+        if let DecodedField::UnregisteredText(text) = field_value {
+            let statement = alloc::format!("{field} = {text}");
+            return self.unregistered_metadata(spec_path, field, &statement);
+        }
         let Some(cv) = field_value.value() else {
             return Ok(Some(FieldValue::Value(
                 self.convert_field_value(field_value),
@@ -2324,9 +2346,19 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
                         _ => None,
                     })
                     .map(FieldValue::from),
+                    ValueType::UnregisteredValueListOp => {
+                        let Some(statements) = unregistered_list_op_text(field, listop) else {
+                            self.report(
+                                spec_path,
+                                Some(field),
+                                "unregistered list op holds a value that is not text",
+                            )?;
+                            return Ok(None);
+                        };
+                        return self.unregistered_metadata(spec_path, field, &statements);
+                    }
                     // Reference and payload list ops are arcs, read by their
-                    // dedicated fields; unregistered-value list ops have no
-                    // element type.
+                    // dedicated fields.
                     _ => None,
                 };
                 if converted.is_none() {
@@ -2362,6 +2394,30 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
             }
             _ => Some(FieldValue::Value(self.convert_crate_value(cv))),
         })
+    }
+
+    /// Reads the metadata `field` from `statements`, the USDA text a crate
+    /// holds for metadata no schema registers, as reading OpenUSD's text of
+    /// the crate file would ([`layerstack_usda::emit::metadata_from_text`]);
+    /// `None`, after a diagnostic, when the text does not read.
+    ///
+    /// Spec: AOUSD Core §7.4 (metadata fields).
+    fn unregistered_metadata(
+        &mut self,
+        spec_path: SpecName<'_>,
+        field: &str,
+        statements: &str,
+    ) -> Result<Option<FieldValue>, UsdcError> {
+        let read =
+            layerstack_usda::emit::metadata_from_text(field, statements, self.tokens, self.paths);
+        if read.is_none() {
+            self.report(
+                spec_path,
+                Some(field),
+                alloc::format!("unregistered metadata `{statements}` does not read as USDA"),
+            )?;
+        }
+        Ok(read)
     }
 
     /// Fills `spec`, a new attribute [`PropertySpec`], from its crate fields, keeping
@@ -3329,6 +3385,50 @@ fn declare_variant_sets(sets: &mut VariantSets, names: &[TokenId]) {
     }
 }
 
+/// The USDA statements OpenUSD writes for the unregistered list op `field`
+/// (`Sdf_FileIOUtility::WriteListOp`, `pxr/usd/sdf/fileIO_Common.cpp`):
+/// the explicit items, or one statement per edit, each list in brackets
+/// with its items' text as it is, `None` for no items. Its text parser kept
+/// a list's text, brackets stripped, as one item (`textParserHelpers.cpp`).
+/// `None` when an item is not text.
+fn unregistered_list_op_text(field: &str, listop: &CrateListOp) -> Option<String> {
+    use core::fmt::Write as _;
+    let list = |items: &[CrateValue]| -> Option<String> {
+        if items.is_empty() {
+            return Some(String::from("None"));
+        }
+        let mut list = String::from("[");
+        for (i, item) in items.iter().enumerate() {
+            let CrateValue::String(text) = item else {
+                return None;
+            };
+            if i > 0 {
+                list.push_str(", ");
+            }
+            list.push_str(text);
+        }
+        list.push(']');
+        Some(list)
+    };
+    let mut out = String::new();
+    if let Some(items) = &listop.explicit_items {
+        let _ = writeln!(out, "{field} = {}", list(items)?);
+        return Some(out);
+    }
+    for (op, items) in [
+        ("delete", &listop.deleted_items),
+        ("add", &listop.added_items),
+        ("prepend", &listop.prepended_items),
+        ("append", &listop.appended_items),
+        ("reorder", &listop.ordered_items),
+    ] {
+        if !items.is_empty() {
+            let _ = writeln!(out, "{op} {field} = {}", list(items)?);
+        }
+    }
+    Some(out)
+}
+
 /// Appends the `names` that `list` does not hold yet, in order.
 ///
 /// The names come from the file, so membership is tested in a set: testing
@@ -3727,6 +3827,63 @@ def "Other" {}
         assert!(tree.layer == text.layer, "the same layer");
         assert_eq!(tree.diagnostics, text.diagnostics);
         assert!(tree.layer == read.emitted.layer, "the layer written");
+    }
+
+    /// An `SdfUnregisteredValue` holding text is the USDA text of the
+    /// metadata value, as OpenUSD's text parser recorded it: it reads as
+    /// that USDA, not as a string of it, on the layer and on a prim; one
+    /// holding a dictionary is the dictionary.
+    ///
+    /// Spec: AOUSD Core §7.4 (metadata fields).
+    #[test]
+    fn unregistered_metadata_reads_as_its_usda_text() {
+        use crate::writer::{Spec, SpecForm as Form, Value as V, write_crate};
+        let text = |text: &str| V::UnregisteredValue(Box::new(V::String(text.into())));
+        let bytes = write_crate(&[
+            Spec::new("/", Form::PseudoRoot)
+                .with_field("primChildren", V::TokenVector(alloc::vec!["A".into()]))
+                .with_field("label", text("\"1\""))
+                .with_field("scale", text("1.5")),
+            Spec::new("/A", Form::Prim)
+                .with_field("specifier", V::Specifier(Specifier::Def))
+                .with_field("words", text("[\"a\", \"b\"]"))
+                .with_field(
+                    "info",
+                    V::UnregisteredValue(Box::new(V::Dictionary(alloc::vec![(
+                        "k".into(),
+                        V::Int(1)
+                    )]))),
+                ),
+        ])
+        .unwrap();
+        let (tokens, paths) = (TokenInterner::default(), PathInterner::default());
+        let read = crate::read_usdc(&bytes, LayerId(1), &tokens, &paths, &mut NoAssets).unwrap();
+        assert!(read.diagnostics.is_empty(), "{:?}", read.diagnostics);
+        let layer = &read.layer;
+        let value = |value: Value| Some(FieldValue::Value(value));
+        assert_eq!(
+            layer.metadata(tokens.intern("label")).cloned(),
+            value(Value::String("1".into()))
+        );
+        assert_eq!(
+            layer.metadata(tokens.intern("scale")).cloned(),
+            value(Value::Double(1.5))
+        );
+        let a = paths.intern(Path::parse_absolute("/A", &tokens).unwrap());
+        let prim = layer.prims().get(&a).unwrap();
+        let field = |name: &str| {
+            let name = tokens.intern(name);
+            prim.fields
+                .iter()
+                .find(|f| f.name == name)
+                .map(|f| f.value.clone())
+        };
+        let words = alloc::vec![Value::String("a".into()), Value::String("b".into())];
+        assert_eq!(field("words"), value(Value::array(words)));
+        assert_eq!(
+            field("info"),
+            value(Value::Dictionary(alloc::vec![("k".into(), Value::Int(1))]))
+        );
     }
 
     /// Text values convert from the token table's text: strings, tokens,

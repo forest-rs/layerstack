@@ -2026,11 +2026,19 @@ fn parse_type_name(type_name: &str) -> Option<Shape> {
 
 impl Value {
     /// The value as USDA writes it (`1.5`, `"text"`, `[1, 2]`), as OpenUSD's
-    /// text parser records an unregistered metadata value.
+    /// text parser records an unregistered metadata value: a `bool` as the
+    /// `true` or `false` it read (`Sdf_ParserValueContext::AppendValue`),
+    /// where an attribute value is written `1` or `0`.
     #[must_use]
     pub fn to_usda_text(&self) -> String {
+        let spelling = |v: bool| if v { "true" } else { "false" };
         let mut out = String::new();
-        Writer { out: &mut out }.value(self, 0);
+        let mut writer = Writer { out: &mut out };
+        match self {
+            Self::Bool(v) => writer.out.push_str(spelling(*v)),
+            Self::BoolArray(items) => writer.array(items, |w, v| w.out.push_str(spelling(*v))),
+            _ => writer.value(self, 0),
+        }
         out
     }
 

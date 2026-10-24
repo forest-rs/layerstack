@@ -16,6 +16,9 @@
 //! - Extension resolution (§9.6): probing `.usda` / `.usdc` / `.usd`
 //! - Package resolution (§9.7): locating assets within USDZ archives
 //!
+//! [`UdimPattern`] spells UDIM texture tile sets (`color.<UDIM>.png`), whose
+//! tiles resolve one by one as ordinary asset paths.
+//!
 //! # Usage pattern
 //!
 //! ```ignore
@@ -47,8 +50,10 @@ use alloc::{string::String, sync::Arc, vec::Vec};
 
 mod format_args;
 mod package_path;
+mod udim;
 pub use format_args::{FORMAT_ARGS_DELIMITER, FormatArgs, FormatArgsError};
 pub use package_path::PackagePath;
+pub use udim::{UdimPattern, UdimTile};
 
 use hashbrown::{HashMap, HashSet};
 

@@ -10,8 +10,9 @@ use alloc::{sync::Arc, vec::Vec};
 use core::fmt;
 
 use crate::{
-    LayerId, LayerStore, Opinion, OpinionKey, PathId, PropertyKind, PropertyPath, Stage, Time,
-    Value, edit::EditTarget, value_resolution::sample_bracket,
+    LayerId, LayerStore, NodeId, Opinion, OpinionKey, PathId, PathInterner, PrimIndexGraph,
+    PropertyKind, PropertyPath, SpecPath, Stage, Time, Value, edit::EditTarget,
+    prim_index::PrimIndex, value_resolution::sample_bracket,
 };
 
 /// The authored slot a stronger source supplies.
@@ -69,6 +70,14 @@ pub struct AuthoringInspection {
     /// whose layer has no prim or property spec yet. `None` means the target
     /// does not contribute: for example a muted layer or unselected variant.
     pub target: Option<OpinionKey>,
+    /// Whether composition culled the target's site from the prim's graph:
+    /// no layer of its stack has a spec there yet, so the prim's
+    /// [`composition_graph`](crate::Prim::composition_graph) has no node
+    /// for it, though a write there would add one. The target's
+    /// [`OpinionKey::node`] then names a node of
+    /// [`Stage::expanded_prim_graph`]; the stronger sources' keys name
+    /// nodes of the prim's graph either way.
+    pub target_culled: bool,
     /// Stronger value-bearing sources in composition order. Empty when the
     /// target does not contribute. Same-site slots are excluded: a write edits
     /// that site rather than competing with it.
@@ -124,6 +133,10 @@ impl Stage {
     /// Unlike a value explanation, the target need not author a spec. The graph
     /// and resident layer-stack ordering establish its prospective strength.
     /// Repeated occurrences of the same mapped site use its strongest position.
+    /// A site composition culled from the prim's graph, as no layer of its
+    /// stack has a spec there yet, is placed in the prim's graph composed
+    /// without culling ([`Self::expanded_prim_graph`],
+    /// [`AuthoringInspection::target_culled`]), where a write would put it.
     /// Default queries ignore samples, splines, animation blocks and clips;
     /// numeric queries inspect samples before splines before defaults.
     ///
@@ -194,69 +207,58 @@ impl Stage {
             .map_property_to_spec_path(property, store.paths_mut())
             .ok_or(AuthoringInspectionError::Unmappable(property))?;
         let mapped_prim = mapped.prim_spec();
-        let mut sites = Vec::new();
-        for (id, node) in index.graph.nodes() {
-            if node.site() != &mapped_prim
-                || node.arc_kind() == crate::ArcKind::Relocates
-                || index.graph.is_inert_specializes_site(id)
-            {
-                continue;
-            }
-            let Some(layer_strength) = node.layer_strength(target.layer()) else {
-                continue;
-            };
-            // Instance descendants cannot regain occurrence-local opinions by
-            // authoring a previously specless layer (AOUSD Core §11.3.3).
-            if self.instances.iter().any(|ancestor| {
-                *ancestor != prim
-                    && store
-                        .paths()
-                        .resolve(*ancestor)
-                        .is_prefix_of(store.paths().resolve(prim))
-                    && !index.graph.has_direct_dependency(
+        // A site composition culled, as it has no spec yet, is placed in
+        // the prim's index composed without culling, as OpenUSD's resolve
+        // targets are (`UsdPrim::_MakeResolveTargetFromEditTarget`).
+        let (site, expanded) =
+            match self.target_site(store.paths(), prim, index, &mapped_prim, target.layer()) {
+                Some(site) => (site, None),
+                None => {
+                    let expanded = self.expanded_prim_index(store, prim);
+                    let Some(site) = self.target_site(
                         store.paths(),
-                        id,
-                        u16::try_from(store.paths().resolve(*ancestor).depth()).unwrap_or(u16::MAX),
-                    )
-            }) {
-                continue;
-            }
-            sites.push(OpinionKey {
-                node: id,
-                layer_strength,
-                layer_id: target.layer(),
-                lookup_path: mapped_prim.prim_path(),
-                spec_path: mapped_prim.clone(),
-            });
-        }
-        // When composition selected a canonical occurrence of a duplicated
-        // site, use that occurrence rather than a graph-only duplicate. Scope
-        // this evidence to its stack: a different stack may legitimately have
-        // no specs at the same namespace path yet.
-        sites.retain(|site| {
-            let node = index.graph.node(site.node).expect("candidate graph node");
-            let matching_source = |source: &&OpinionKey| {
-                index.graph.node(source.node).is_some_and(|source_node| {
-                    source_node.site() == node.site()
-                        && source_node.layer_stack_identifier() == node.layer_stack_identifier()
-                })
+                        prim,
+                        &expanded,
+                        &mapped_prim,
+                        target.layer(),
+                    ) else {
+                        return Ok(AuthoringInspection {
+                            target: None,
+                            target_culled: false,
+                            stronger_sources: Vec::new(),
+                        });
+                    };
+                    (site, Some(expanded))
+                }
             };
-            let mut sources = index.sources.iter().filter(matching_source).peekable();
-            sources.peek().is_none() || sources.any(|source| source.node == site.node)
+        // Whether a key of the prim's index is stronger than the site, in
+        // the graph the site is placed in.
+        let placed = expanded.as_ref().map(|expanded| {
+            let nodes = node_map(&index.graph, &expanded.graph);
+            (&expanded.graph, nodes)
         });
-        index.graph.sort_keys(&mut sites);
-        let Some(site) = sites.into_iter().next() else {
-            return Ok(AuthoringInspection {
-                target: None,
-                stronger_sources: Vec::new(),
-            });
+        let stronger = |key: &OpinionKey| match &placed {
+            None => index.graph.cmp_keys(key, &site).is_lt(),
+            // A node the expanded graph does not hold is reported, as a
+            // write might not win over it.
+            Some((graph, nodes)) => {
+                nodes
+                    .get(key.node.index())
+                    .copied()
+                    .flatten()
+                    .is_none_or(|node| {
+                        let mut key = key.clone();
+                        key.node = node;
+                        graph.cmp_keys(&key, &site).is_lt()
+                    })
+            }
         };
         let mut stronger_sources = Vec::new();
         let ordinary = index
             .property_opinions(property.property())
             .unwrap_or_default();
         for opinion in ordinary {
-            if !index.graph.cmp_keys(&opinion.key, &site).is_lt() {
+            if !stronger(&opinion.key) {
                 continue;
             }
             if let Some((kind, composability)) = classify(opinion, time) {
@@ -271,7 +273,7 @@ impl Stage {
             for (key, set_name, composability) in
                 self.clips.authoring_sources(prim, property.property())
             {
-                if !index.graph.cmp_keys(&key, &site).is_lt() {
+                if !stronger(&key) {
                     continue;
                 }
                 // Ordinary authored values win over clips at their own site;
@@ -295,9 +297,153 @@ impl Stage {
         stronger_sources.sort_by(|a, b| index.graph.cmp_keys(&a.key, &b.key));
         Ok(AuthoringInspection {
             target: Some(site),
+            target_culled: expanded.is_some(),
             stronger_sources,
         })
     }
+
+    /// The composition graph of `prim` with no node culled, at the prim or
+    /// its ancestors: the nodes of [`Prim::composition_graph`] and those
+    /// composition culls because no layer of their stack has a spec at
+    /// their site yet, each where its arc places it. A write through an
+    /// [`EditTarget`] to such a site would add its node to the prim's
+    /// graph; [`AuthoringInspection::target`] names it here
+    /// ([`AuthoringInspection::target_culled`]). `None` when the stage has
+    /// no such prim or `store` is not its store.
+    ///
+    /// This composes the prim and its ancestors again, reading only
+    /// `store`; it does not change the stage.
+    ///
+    /// Spec: AOUSD Core §10.4 (strength ordering). OpenUSD:
+    /// `UsdPrim::ComputeExpandedPrimIndex`.
+    ///
+    /// [`Prim::composition_graph`]: crate::Prim::composition_graph
+    #[doc(alias = "UsdPrim::ComputeExpandedPrimIndex")]
+    #[doc(alias = "ComputeExpandedPrimIndex")]
+    pub fn expanded_prim_graph(
+        &self,
+        store: &mut dyn LayerStore,
+        prim: PathId,
+    ) -> Option<PrimIndexGraph> {
+        if !self.has_prim(prim)
+            || self
+                .store_identity
+                .as_ref()
+                .is_some_and(|identity| *identity != store.identity())
+        {
+            return None;
+        }
+        Some(self.expanded_prim_index(store, prim).graph)
+    }
+
+    /// The index of `prim` composed with no node culled
+    /// ([`crate::prim_indexing::expanded_prim_index`]), from the layers
+    /// this stage reads: muted layers stay hidden.
+    fn expanded_prim_index(&self, store: &mut dyn LayerStore, prim: PathId) -> PrimIndex {
+        let root = self.root_layer.unwrap_or(LayerId::UNRESOLVED);
+        let controlled = super::loading::ControlledStore {
+            inner: store,
+            root,
+            muted: &self.options.muted_layers,
+        };
+        crate::prim_indexing::expanded_prim_index(&controlled, root, &self.options, prim)
+    }
+
+    /// The strongest occurrence, in `index`, of the site `mapped_prim` of
+    /// `layer` that a write could author an opinion of `prim` at.
+    fn target_site(
+        &self,
+        paths: &PathInterner,
+        prim: PathId,
+        index: &PrimIndex,
+        mapped_prim: &SpecPath,
+        layer: LayerId,
+    ) -> Option<OpinionKey> {
+        let mut sites = Vec::new();
+        for (id, node) in index.graph.nodes() {
+            if node.site() != mapped_prim
+                || node.arc_kind() == crate::ArcKind::Relocates
+                || index.graph.is_inert_specializes_site(id)
+            {
+                continue;
+            }
+            let Some(layer_strength) = node.layer_strength(layer) else {
+                continue;
+            };
+            // Instance descendants cannot regain occurrence-local opinions by
+            // authoring a previously specless layer (AOUSD Core §11.3.3).
+            if self.instances.iter().any(|ancestor| {
+                *ancestor != prim
+                    && paths.resolve(*ancestor).is_prefix_of(paths.resolve(prim))
+                    && !index.graph.has_direct_dependency(
+                        paths,
+                        id,
+                        u16::try_from(paths.resolve(*ancestor).depth()).unwrap_or(u16::MAX),
+                    )
+            }) {
+                continue;
+            }
+            sites.push(OpinionKey {
+                node: id,
+                layer_strength,
+                layer_id: layer,
+                lookup_path: mapped_prim.prim_path(),
+                spec_path: mapped_prim.clone(),
+            });
+        }
+        // When composition selected a canonical occurrence of a duplicated
+        // site, use that occurrence rather than a graph-only duplicate. Scope
+        // this evidence to its stack: a different stack may legitimately have
+        // no specs at the same namespace path yet.
+        sites.retain(|site| {
+            let node = index.graph.node(site.node).expect("candidate graph node");
+            let matching_source = |source: &&OpinionKey| {
+                index.graph.node(source.node).is_some_and(|source_node| {
+                    source_node.site() == node.site()
+                        && source_node.layer_stack_identifier() == node.layer_stack_identifier()
+                })
+            };
+            let mut sources = index.sources.iter().filter(matching_source).peekable();
+            sources.peek().is_none() || sources.any(|source| source.node == site.node)
+        });
+        index.graph.sort_keys(&mut sites);
+        sites.into_iter().next()
+    }
+}
+
+/// The node of `expanded` that each node of `graph` is, by node index:
+/// `expanded` holds the nodes of `graph` and the ones composition culled,
+/// so a node is the child of its parent's node there with the same arc
+/// kind, layer stack, site and place among its siblings.
+fn node_map(graph: &PrimIndexGraph, expanded: &PrimIndexGraph) -> Vec<Option<NodeId>> {
+    let mut map = alloc::vec![None; graph.len()];
+    let (Some(root), Some(expanded_root)) = (graph.root(), expanded.root()) else {
+        return map;
+    };
+    let mut pending = alloc::vec![(root, expanded_root)];
+    while let Some((node, at)) = pending.pop() {
+        map[node.index()] = Some(at);
+        let (Some(node), Some(at)) = (graph.node(node), expanded.node(at)) else {
+            continue;
+        };
+        for &child in node.children() {
+            let Some(found) = graph.node(child) else {
+                continue;
+            };
+            let same = at.children().iter().copied().find(|&candidate| {
+                expanded.node(candidate).is_some_and(|candidate| {
+                    candidate.arc_kind() == found.arc_kind()
+                        && candidate.layer_stack_identifier() == found.layer_stack_identifier()
+                        && candidate.site() == found.site()
+                        && candidate.sibling_index() == found.sibling_index()
+                })
+            });
+            if let Some(same) = same {
+                pending.push((child, same));
+            }
+        }
+    }
+    map
 }
 
 fn shape(value: &Value) -> SourceComposability {

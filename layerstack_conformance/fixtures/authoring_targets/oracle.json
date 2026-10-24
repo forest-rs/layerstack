@@ -1,0 +1,78 @@
+{
+ "openusd_version": "26.8",
+ "root": "root.usda",
+ "cases": [
+  {
+   "holder": "/Model",
+   "source": "/Asset",
+   "layer": "asset.usda",
+   "property": "/Model/Child.x",
+   "site": "/Asset/Child",
+   "culled": false,
+   "stronger_value": null
+  },
+  {
+   "holder": "/Model",
+   "source": "/Asset",
+   "layer": "asset.usda",
+   "property": "/Model/Local.x",
+   "site": "/Asset/Local",
+   "culled": true,
+   "stronger_value": 1.0
+  },
+  {
+   "holder": "/Model",
+   "source": "/Asset",
+   "layer": "asset.usda",
+   "property": "/Model/Bare.x",
+   "site": "/Asset/Bare",
+   "culled": true,
+   "stronger_value": null
+  },
+  {
+   "holder": "/Model",
+   "source": "/Asset",
+   "layer": "asset.usda",
+   "property": "/Model/Deep.x",
+   "site": "/Asset/Deep",
+   "culled": true,
+   "stronger_value": null
+  },
+  {
+   "holder": "/Model",
+   "source": "/Asset",
+   "layer": "asset.usda",
+   "property": "/Model/Deep/Leaf.x",
+   "site": "/Asset/Deep/Leaf",
+   "culled": true,
+   "stronger_value": 2.0
+  },
+  {
+   "holder": "/Pair",
+   "source": "/Asset",
+   "layer": "asset.usda",
+   "property": "/Pair/Spot.x",
+   "site": "/Asset/Spot",
+   "culled": true,
+   "stronger_value": null
+  },
+  {
+   "holder": "/Pair",
+   "source": "/Other",
+   "layer": "other.usda",
+   "property": "/Pair/Spot2.x",
+   "site": "/Other/Spot2",
+   "culled": true,
+   "stronger_value": 3.0
+  },
+  {
+   "holder": "/Inst",
+   "source": "/Asset",
+   "layer": "asset.usda",
+   "property": "/Inst/Child.x",
+   "site": "/Asset/Child",
+   "culled": false,
+   "stronger_value": null
+  }
+ ]
+}

@@ -1623,19 +1623,17 @@ impl EmitCtx<'_> {
         type_hint: &str,
         span: Span,
     ) -> Vec<(f64, Value)> {
-        samples
-            .iter()
-            .enumerate()
-            .filter_map(|(index, s)| {
-                let value = match &s.value {
-                    Some(v) => self.checked(span, |ctx| {
-                        ctx.convert_attribute_value(v, type_hint, (span.start, Some(index)))
-                    })?,
-                    None => Value::Blocked,
-                };
-                Some((s.time, value))
-            })
-            .collect()
+        let mut converted = Vec::with_capacity(samples.len());
+        converted.extend(samples.iter().enumerate().filter_map(|(index, s)| {
+            let value = match &s.value {
+                Some(v) => self.checked(span, |ctx| {
+                    ctx.convert_attribute_value(v, type_hint, (span.start, Some(index)))
+                })?,
+                None => Value::Blocked,
+            };
+            Some((s.time, value))
+        }));
+        converted
     }
 
     /// Runs `convert`, returning its value only when every value it

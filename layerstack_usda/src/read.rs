@@ -102,8 +102,8 @@ fn read_with_registry(
     let stats = ReadStats {
         tokens: parsed.tokens,
         syntax_nodes: parsed.syntax_nodes,
-        numeric_arrays: parsed.arrays.len(),
-        numeric_elements: parsed.arrays.values().map(|array| array.count).sum(),
+        numeric_arrays: parsed.arrays.arrays(),
+        numeric_elements: parsed.arrays.elements(),
     };
     let emitted = crate::emit::emit_with_arrays(
         &parsed.lowered.layer,
@@ -122,12 +122,80 @@ fn read_with_registry(
     }
 }
 
-pub(crate) type PreparedArrays = BTreeMap<(u32, Option<usize>), PreparedArray>;
+/// Numeric values read as the parser met them, by attribute statement
+/// and time sample, for emission to take in place of the placeholders it
+/// lowers; the rare conversion errors are kept apart.
+#[derive(Default)]
+pub(crate) struct PreparedValues {
+    values: BTreeMap<PreparedKey, layerstack::Value>,
+    /// Why elements of the arrays at these keys did not convert.
+    errors: BTreeMap<PreparedKey, Vec<alloc::string::String>>,
+    /// The arrays read (tuples are not), and their elements.
+    arrays: usize,
+    elements: usize,
+}
 
-pub(crate) struct PreparedArray {
+/// Where a prepared value is: the offset of its attribute statement, and
+/// its time sample's ordinal (`None` for the default).
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct PreparedKey {
+    statement: u32,
+    /// 0 for the default, else the sample's ordinal plus one (a layer of
+    /// fewer than 4 GiB has fewer samples).
+    sample: u32,
+}
+
+impl PreparedKey {
+    pub(crate) fn new(statement: u32, sample: Option<usize>) -> Self {
+        Self {
+            statement,
+            sample: sample.map_or(0, |sample| {
+                u32::try_from(sample + 1).expect("a sample ordinal of a USDA layer")
+            }),
+        }
+    }
+}
+
+impl PreparedValues {
+    pub(crate) fn insert(&mut self, key: PreparedKey, prepared: PreparedValue) {
+        if let Some(elements) = prepared.elements {
+            self.arrays += 1;
+            self.elements += elements;
+        }
+        if !prepared.errors.is_empty() {
+            self.errors.insert(key, prepared.errors);
+        }
+        self.values.insert(key, prepared.value);
+    }
+
+    /// Takes the value read at `key` and why its elements did not convert.
+    pub(crate) fn take(
+        &mut self,
+        key: PreparedKey,
+    ) -> Option<(layerstack::Value, Vec<alloc::string::String>)> {
+        let value = self.values.remove(&key)?;
+        Some((value, self.errors.remove(&key).unwrap_or_default()))
+    }
+
+    /// Numeric arrays read.
+    pub(crate) fn arrays(&self) -> usize {
+        self.arrays
+    }
+
+    /// Elements of the numeric arrays read.
+    pub(crate) fn elements(&self) -> usize {
+        self.elements
+    }
+}
+
+/// A numeric array or tuple read straight into its value.
+pub(crate) struct PreparedValue {
+    /// The array's or tuple's source range.
     pub span: Span,
-    pub count: usize,
+    /// An array's elements; `None` for a tuple.
+    pub elements: Option<usize>,
     pub value: layerstack::Value,
+    /// Why elements did not convert, which emission reports.
     pub errors: Vec<alloc::string::String>,
 }
 
@@ -197,6 +265,7 @@ impl<'a> LexicalCursor<'a> {
         self.peek().filter(|token| token.kind == kind)?;
         self.lookahead.take()
     }
+    #[inline(always)]
     fn literal(&mut self) -> Option<Literal> {
         let negative = self.eat(TokenKind::Minus).is_some();
         let token = self.peek()?;
@@ -258,28 +327,30 @@ impl Elements<'_> {
         if let Some(end) = self.cursor.eat(TokenKind::RightBracket) {
             return Element::End(end.span.end);
         }
-        let mut components = [Literal::Bool(false); 4];
-        let valid = (|| {
-            if self.width != 0 {
-                self.cursor.eat(TokenKind::LeftParen)?;
-            }
-            for component in &mut components[..self.width.max(1)] {
-                *component = self.cursor.literal()?;
-                if self.width != 0 {
-                    self.cursor.eat(TokenKind::Comma);
-                }
-            }
-            if self.width != 0 {
-                self.cursor.eat(TokenKind::RightParen)?;
-            }
-            Some(())
-        })()
-        .is_some();
-        if !valid {
+        let Some((components, _)) = self.components() else {
             return Element::Malformed;
-        }
+        };
         self.cursor.eat(TokenKind::Comma);
         Element::Components(components)
+    }
+
+    /// One element's components, and where its tuple's `)` ends (0 for a
+    /// scalar); `None` when they are not there. Inlined into the element
+    /// loop, where it runs once per element of the largest arrays.
+    #[inline(always)]
+    fn components(&mut self) -> Option<([Literal; 4], u32)> {
+        let mut components = [Literal::Bool(false); 4];
+        if self.width == 0 {
+            components[0] = self.cursor.literal()?;
+            return Some((components, 0));
+        }
+        self.cursor.eat(TokenKind::LeftParen)?;
+        for component in &mut components[..self.width] {
+            *component = self.cursor.literal()?;
+            self.cursor.eat(TokenKind::Comma);
+        }
+        let close = self.cursor.eat(TokenKind::RightParen)?;
+        Some((components, close.span.end))
     }
 }
 
@@ -295,7 +366,7 @@ pub(crate) fn numeric_array<'a>(
     start: u32,
     type_hint: &str,
     width: usize,
-) -> Option<(PreparedArray, Lexer<'a>)> {
+) -> Option<(PreparedValue, Lexer<'a>)> {
     let mut cursor = LexicalCursor {
         source,
         lexer: Lexer::at_offset(source, start),
@@ -307,9 +378,9 @@ pub(crate) fn numeric_array<'a>(
         let mut native = elements.clone();
         if let Some(read) = native_array(&mut native, layout) {
             return Some((
-                PreparedArray {
+                PreparedValue {
                     span: Span::new(start, read.end),
-                    count: read.count,
+                    elements: Some(read.count),
                     value: layerstack::Value::TypedArray(read.array),
                     errors: Vec::new(),
                 },
@@ -334,9 +405,9 @@ pub(crate) fn numeric_array<'a>(
     // Only this sink owns the fresh buffer, so no copy-on-write clone occurs.
     compact_buffer(&mut value);
     Some((
-        PreparedArray {
+        PreparedValue {
             span: Span::new(start, end),
-            count: events.count,
+            elements: Some(events.count),
             value,
             errors: events.errors,
         },
@@ -456,6 +527,79 @@ impl Layout {
     }
 }
 
+/// Reads the tuple value of a `type_hint` attribute (a vector or
+/// quaternion of `width` components) at `start` into its value, converting
+/// it as [`crate::numeric::element`] does; `None` when it is not one whose
+/// components all convert, which the value path then reads and reports.
+pub(crate) fn numeric_tuple<'a>(
+    source: &'a str,
+    start: u32,
+    type_hint: &str,
+    width: usize,
+) -> Option<(PreparedValue, Lexer<'a>)> {
+    let layout = Layout::of(type_hint, width).filter(|_| width != 0)?;
+    let cursor = LexicalCursor {
+        source,
+        lexer: Lexer::at_offset(source, start),
+        lookahead: None,
+    };
+    let mut elements = Elements { cursor, width };
+    let (components, end) = elements.components()?;
+    let value = native_value(&components, layout)?;
+    Some((
+        PreparedValue {
+            span: Span::new(start, end),
+            elements: None,
+            value,
+            errors: Vec::new(),
+        },
+        elements.cursor.lexer,
+    ))
+}
+
+/// The value of one vector or quaternion element of `layout`, as
+/// [`native_array`] converts each element of an array.
+fn native_value(components: &[Literal; 4], layout: Layout) -> Option<layerstack::Value> {
+    use crate::numeric::component;
+    use layerstack::Value;
+    Some(match layout {
+        Layout::Vec2i => Value::Vec2i(tuple(components, component::int)?),
+        Layout::Vec3i => Value::Vec3i(tuple(components, component::int)?),
+        Layout::Vec4i => Value::Vec4i(tuple(components, component::int)?),
+        Layout::Vec2h => Value::Vec2h(tuple(components, component::half)?),
+        Layout::Vec3h => Value::Vec3h(tuple(components, component::half)?),
+        Layout::Vec4h => Value::Vec4h(tuple(components, component::half)?),
+        Layout::Vec2f => Value::Vec2f(tuple(components, component::float)?),
+        Layout::Vec3f => Value::Vec3f(tuple(components, component::float)?),
+        Layout::Vec4f => Value::Vec4f(tuple(components, component::float)?),
+        Layout::Vec2d => Value::Vec2d(tuple(components, component::double)?),
+        Layout::Vec3d => Value::Vec3d(tuple(components, component::double)?),
+        Layout::Vec4d => Value::Vec4d(tuple(components, component::double)?),
+        Layout::Quath => Value::Quath(quaternion(tuple(components, component::half)?)),
+        Layout::Quatf => Value::Quatf(quaternion(tuple(components, component::float)?)),
+        Layout::Quatd => Value::Quatd(quaternion(tuple(components, component::double)?)),
+        _ => return None,
+    })
+}
+
+/// The first `N` components, each converted by `convert`.
+fn tuple<C: Copy + Default, const N: usize>(
+    components: &[Literal; 4],
+    convert: impl Fn(Option<Number>) -> Option<C>,
+) -> Option<[C; N]> {
+    let mut out = [C::default(); N];
+    for (out, literal) in out.iter_mut().zip(components) {
+        *out = convert(literal.number())?;
+    }
+    Some(out)
+}
+
+/// Quaternions are stored as (i, j, k, r) but authored as (r, i, j, k) in
+/// USDA text per AOUSD Core §16.3.10.22.
+fn quaternion<C: Copy>([r, i, j, k]: [C; 4]) -> [C; 4] {
+    [i, j, k, r]
+}
+
 /// A numeric array read into its native buffer.
 struct NativeArray {
     array: layerstack::TypedArray,
@@ -485,22 +629,6 @@ fn native_array(elements: &mut Elements<'_>, layout: Layout) -> Option<NativeArr
                 Element::End(_) | Element::Malformed => return None,
             }
         }
-    }
-    /// The first `N` components, each converted by `convert`.
-    fn tuple<C: Copy + Default, const N: usize>(
-        components: &[Literal; 4],
-        convert: fn(Option<Number>) -> Option<C>,
-    ) -> Option<[C; N]> {
-        let mut out = [C::default(); N];
-        for (out, literal) in out.iter_mut().zip(components) {
-            *out = convert(literal.number())?;
-        }
-        Some(out)
-    }
-    /// Quaternions are stored as (i, j, k, r) but authored as (r, i, j, k)
-    /// in USDA text per AOUSD Core §16.3.10.22.
-    fn quaternion<C: Copy>([r, i, j, k]: [C; 4]) -> [C; 4] {
-        [i, j, k, r]
     }
     /// An integer element of type `ty`, `min..=max`.
     fn integer<T: Into<i128> + TryFrom<i128>>(
@@ -766,6 +894,39 @@ mod tests {
             // never finds equal.
             assert_eq!(format!("{expected:?}"), format!("{read:?}"), "{source}");
         }
+    }
+
+    #[test]
+    fn tuples_read_as_values_hold_what_value_conversion_holds() {
+        // Vector and quaternion attribute values (defaults and samples) are
+        // read straight into their values; ones that do not convert, or are
+        // not one tuple of the declared width, take the value path, which
+        // reports them as before.
+        let source = r#"#usda 1.0
+def "A" {
+    double3 xformOp:translate = (1, -2.5, 1e300)
+    double3 xformOp:translate.timeSamples = { 0: (1, 2, 3), 1: None, 2: (4, 5, 6) }
+    float3 xformOp:scale = (16777217, 0.1, -0)
+    color3f primvars:displayColor = (1, 0.5, 0) ( interpolation = "constant" )
+    point3d p = (1, 2, 3)
+    half3 h = (0.1, 65519, -0)
+    int2 i = (2.9, -2.9)
+    int4 j = (1, 2, 3, 4)
+    texCoord2f t = (0.25, 0.75)
+    quatf q = (1, 2, 3, 4)
+    quath qh = (1, 0.5, 0.25, 0)
+    quatd qd = (0.1, 0.2, 0.3, 0.4)
+    float3 short = (1, 2)
+    float3 long = (1, 2, 3, 4)
+    float3 flag = (1, true, 3)
+    int3 range = (2147483648, 0, 0)
+    int2 fraction = (1e10, 0)
+    double3 spaced = ( 1 , 2 /* two */ , 3 , )
+    float3 after = (1, 2, 3) junk
+}
+"#;
+        let stats = compare(source);
+        assert_eq!(stats.numeric_arrays, 0, "tuples are no arrays");
     }
 
     #[test]

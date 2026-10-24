@@ -7,7 +7,7 @@
 use crate::{
     Span,
     lexer::{Lexer, Token, TokenKind},
-    read::PreparedArray,
+    read::PreparedValue,
 };
 use alloc::vec::Vec;
 use core::cell::RefCell;
@@ -90,26 +90,55 @@ impl<'a> TokenSource<'a> {
         index: usize,
         type_hint: &str,
         width: usize,
-    ) -> Option<PreparedArray> {
+    ) -> Option<PreparedValue> {
+        self.numeric(
+            index,
+            TokenKind::LeftBracket,
+            TokenKind::RightBracket,
+            |source, start| crate::read::numeric_array(source, start, type_hint, width),
+        )
+    }
+    pub(crate) fn numeric_tuple(
+        &self,
+        index: usize,
+        type_hint: &str,
+        width: usize,
+    ) -> Option<PreparedValue> {
+        self.numeric(
+            index,
+            TokenKind::LeftParen,
+            TokenKind::RightParen,
+            |source, start| crate::read::numeric_tuple(source, start, type_hint, width),
+        )
+    }
+    /// Reads the numeric value opening with the `open` token at `index`
+    /// through `read`, then stands its last token in for the tokens it read
+    /// (a `close` at index `index + 1`).
+    fn numeric(
+        &self,
+        index: usize,
+        open: TokenKind,
+        close: TokenKind,
+        read: impl FnOnce(&'a str, u32) -> Option<(PreparedValue, Lexer<'a>)>,
+    ) -> Option<PreparedValue> {
         let token = self.get(index)?;
-        if token.kind != TokenKind::LeftBracket {
+        if token.kind != open {
             return None;
         }
         let Self::Streaming(cursor) = self else {
             return None;
         };
         let mut cursor = cursor.borrow_mut();
-        let (array, rest) =
-            crate::read::numeric_array(cursor.source, token.span.start, type_hint, width)?;
-        // Discard speculative lookahead past the opening bracket; the event
+        let (value, rest) = read(cursor.source, token.span.start)?;
+        // Discard speculative lookahead past the opening token; the event
         // cursor owns the continuation. Invalid shapes leave this state intact.
         let keep = index + 1 - cursor.base;
         cursor.tokens.truncate(keep);
         cursor.tokens.push(Token {
-            kind: TokenKind::RightBracket,
-            span: Span::new(array.span.end - 1, array.span.end),
+            kind: close,
+            span: Span::new(value.span.end - 1, value.span.end),
         });
         cursor.lexer = rest;
-        Some(array)
+        Some(value)
     }
 }

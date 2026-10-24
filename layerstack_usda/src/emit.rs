@@ -106,7 +106,7 @@ pub fn emit(
         tokens,
         paths,
         resolver,
-        crate::read::PreparedArrays::new(),
+        crate::read::PreparedValues::default(),
         None,
     )
 }
@@ -135,7 +135,7 @@ pub fn emit_with_registry(
         tokens,
         paths,
         resolver,
-        crate::read::PreparedArrays::new(),
+        crate::read::PreparedValues::default(),
         Some(registry),
     )
 }
@@ -194,7 +194,7 @@ pub(crate) fn emit_with_arrays(
     tokens: &TokenInterner,
     paths: &PathInterner,
     resolver: &mut dyn AssetResolver,
-    arrays: crate::read::PreparedArrays,
+    arrays: crate::read::PreparedValues,
     registry: Option<&SchemaRegistry>,
 ) -> EmitResult {
     let mut ctx = EmitCtx {
@@ -224,7 +224,7 @@ pub(crate) fn emit_with_arrays(
 
 struct EmitCtx<'a> {
     registry: Option<&'a SchemaRegistry>,
-    arrays: crate::read::PreparedArrays,
+    arrays: crate::read::PreparedValues,
     tokens: &'a TokenInterner,
     paths: &'a PathInterner,
     resolver: &'a mut dyn AssetResolver,
@@ -1644,11 +1644,14 @@ impl EmitCtx<'_> {
         type_hint: &str,
         key: (u32, Option<usize>),
     ) -> Value {
-        let Some(array) = self.arrays.remove(&key) else {
+        let Some((prepared, errors)) = self
+            .arrays
+            .take(crate::read::PreparedKey::new(key.0, key.1))
+        else {
             return self.convert_value(value, type_hint);
         };
-        self.rejections.extend(array.errors);
-        array.value
+        self.rejections.extend(errors);
+        prepared
     }
 
     fn convert_value(&mut self, val: &ast::Value<'_>, type_hint: &str) -> Value {

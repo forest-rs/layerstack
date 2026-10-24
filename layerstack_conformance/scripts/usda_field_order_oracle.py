@@ -7,8 +7,8 @@ Usage: usda_field_order_oracle.py [--check] [OUT_DIR]
 
 Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`.
 Writes, under `layerstack_conformance/fixtures/usda_field_order` by
-default, `scrambled.usda`, `scrambled.usdc`, `unregistered.usda` and
-`oracle.json`, which `tests/usda_field_order.rs` replays against
+default, the files of `FILES` (`scrambled.usda`, `scrambled.usdc`, ...)
+and `oracle.json`, which `tests/usda_field_order.rs` replays against
 layerstack's USDA save.
 
 OpenUSD's text writer does not keep authoring order
@@ -31,7 +31,9 @@ creates the variant), `attribute` (`Sdf.AttributeSpec`, with its default),
 list edit), `reference`, `payload`, `inherit` and `specialize` (appended
 to the prepended items, as `UsdReferences::AddReference` and its siblings
 do by default), `variant_set` (`UsdVariantSets::AddVariantSet`: the set
-spec, and the name appended to the prepended `variantSetNames`),
+spec, and the name appended to the prepended `variantSetNames`, or put
+first with `"position": "front"`), `remove_variant_set`
+(`SdfPrimSpec::RemoveVariantSet`, which leaves the list),
 `select`, `property_order` and `prim_order`. Values are
 `{"type": ..., "value": ...}`, a dictionary's entries keyed by name, and
 a number may be text (`"1e-7"`, `"-0"`, `"nan"`) read with `float`.
@@ -56,12 +58,18 @@ keys on the layer and on a prim, which shows the two orders apart:
 `Beta`, `_u`, `a10`, `a9` in the layer, `_u`, `a9`, `a10`, `Beta` on the
 prim.
 
+`variant_order` holds the export of `variant_order.usda`, whose
+`variantSet` blocks are out of `variantSets` order, nested ones included,
+and `variant_order.usdc` that of its crate file. OpenUSD writes variant
+sets in the order their specs were created (`variantSetChildren`): as the
+file introduces them, an explicit or added `variantSets` list first.
+
 `--check` rewrites everything into a temporary directory and fails unless
 it matches the checked-in fixtures. A crate file's bytes differ between
-OpenUSD builds, so `--check` takes `round_trip.usdc` from the checked-in
-`scrambled.usdc` and compares the fresh crate file with it by contents:
-every spec's fields, in the order OpenUSD reads them, and every prim's
-children and properties, in order.
+OpenUSD builds, so `--check` exports each crate file from the checked-in
+one and compares the fresh crate file with it by contents: every spec's
+fields, in the order OpenUSD reads them, and every prim's children,
+properties and variant sets, in order.
 """
 import argparse
 import filecmp
@@ -225,6 +233,28 @@ CASES = {
         {"op": "metadata", "path": "/", "key": "framesPerSecond", "value": v("double", 24.0)},
         {"op": "metadata", "path": "/", "key": "customLayerData",
          "value": dictionary(zz=v("int", 1), Ab=v("int", 2), aa=v("int", 3))},
+    ],
+    # Variant sets in the order their specs are created, which is not the
+    # order `variantSets` lists them in: one added at the front of the
+    # list, removed and created again there, and sets nested in a variant,
+    # the second listed first.
+    "variant_set_order": [
+        {"op": "prim", "path": "/V", "specifier": "def"},
+        {"op": "variant_set", "path": "/V", "name": "z"},
+        {"op": "variant_set", "path": "/V", "name": "m", "position": "front"},
+        {"op": "variant_set", "path": "/V", "name": "a"},
+        {"op": "variant_set", "path": "/V", "name": "k"},
+        {"op": "prim", "path": "/V{z=x}"},
+        {"op": "prim", "path": "/V{m=x}"},
+        {"op": "prim", "path": "/V{a=x}"},
+        {"op": "prim", "path": "/V{k=x}"},
+        {"op": "remove_variant_set", "path": "/V", "name": "m"},
+        {"op": "variant_set", "path": "/V", "name": "m", "position": "front"},
+        {"op": "prim", "path": "/V{m=y}"},
+        {"op": "variant_set", "path": "/V{a=x}", "name": "q"},
+        {"op": "variant_set", "path": "/V{a=x}", "name": "b", "position": "front"},
+        {"op": "prim", "path": "/V{a=x}{q=x}"},
+        {"op": "prim", "path": "/V{a=x}{b=x}"},
     ],
     # Numbers in every place a value is written: `double` and `float` as
     # `TfStringify` writes them (the fewest digits that read back, with an
@@ -486,6 +516,67 @@ def "P" (
 '''
 
 
+VARIANT_ORDER = '''#usda 1.0
+
+def "P" (
+    prepend variantSets = ["b", "a", "c"]
+)
+{
+    variantSet "c" = {
+        "x" {
+            float q = 1
+        }
+    }
+    variantSet "a" = {
+        "y" (
+            prepend variantSets = ["n2", "n1"]
+        ) {
+            variantSet "n1" = {
+                "k" {
+                }
+            }
+            variantSet "n2" = {
+                "k" {
+                }
+            }
+        }
+    }
+    variantSet "b" = {
+        "x" {
+        }
+    }
+}
+
+def "Q" (
+    variantSets = ["s", "r"]
+)
+{
+    variantSet "t" = {
+        "x" {
+        }
+    }
+    variantSet "r" = {
+        "x" {
+        }
+    }
+    variantSet "s" = {
+        "x" {
+        }
+    }
+}
+'''
+
+# Files written by hand, read back, and for those marked, exported as a
+# crate file and that read back: `round_trip` keys each export by the
+# file's stem, and a crate's by the stem and `.usdc`, but the first is
+# kept as `usda` and `usdc`.
+FILES = [
+    ("scrambled", SCRAMBLED, True),
+    ("unregistered", UNREGISTERED, False),
+    ("variant_order", VARIANT_ORDER, True),
+]
+
+
 def sdf_type(name):
     found = Sdf.ValueTypeNames.Find(name)
     assert found, name
@@ -593,7 +684,16 @@ def run(steps):
         elif op == "variant_set":
             prim = layer.GetPrimAtPath(path)
             Sdf.VariantSetSpec(prim, step["name"])
-            prim.variantSetNameList.prependedItems.append(step["name"])
+            names = prim.variantSetNameList.prependedItems
+            if step["name"] in names:
+                names.remove(step["name"])
+            if step.get("position") == "front":
+                names.insert(0, step["name"])
+            else:
+                names.append(step["name"])
+        elif op == "remove_variant_set":
+            # `SdfPrimSpec::RemoveVariantSet`: the spec goes, the list stays.
+            del layer.GetPrimAtPath(path).variantSets[step["name"]]
         elif op == "select":
             layer.GetPrimAtPath(path).variantSelections[step["set"]] = step["variant"]
         elif op == "property_order":
@@ -629,39 +729,40 @@ def crate_contents(layer):
         prim = spec.primSpec if isinstance(spec, Sdf.VariantSpec) else spec
         order = []
         if isinstance(prim, Sdf.PrimSpec):
-            order = [list(prim.nameChildren.keys()), list(prim.properties.keys())]
+            order = [list(prim.nameChildren.keys()), list(prim.properties.keys()),
+                     list(prim.variantSets.keys())]
         elif isinstance(spec, Sdf.VariantSetSpec):
             order = [[variant.name for variant in spec.variantList]]
         contents.append((str(path), fields, order))
     return contents
 
 
-def write(out, crate=None):
-    """Writes the fixtures into `out`; `round_trip.usdc` is the export of
-    `crate`, a crate file of `scrambled.usda`, when given, and of the
-    crate file written here otherwise."""
+def write(out, checked_in=None):
+    """Writes the fixtures into `out`. With `checked_in`, the fixtures
+    directory, each crate file is exported from the one there rather than
+    the one written here."""
     os.makedirs(out, exist_ok=True)
-    usda = os.path.join(out, "scrambled.usda")
-    with open(usda, "w") as f:
-        f.write(SCRAMBLED)
-    text = Sdf.Layer.FindOrOpen(usda)
-    usdc = os.path.join(out, "scrambled.usdc")
-    text.Export(usdc)
-    binary = Sdf.Layer.FindOrOpen(crate or usdc)
-    unregistered = os.path.join(out, "unregistered.usda")
-    with open(unregistered, "w") as f:
-        f.write(UNREGISTERED)
+    round_trip = {}
+    for stem, source, crate in FILES:
+        usda = os.path.join(out, f"{stem}.usda")
+        with open(usda, "w") as f:
+            f.write(source)
+        text = Sdf.Layer.FindOrOpen(usda)
+        round_trip["usda" if stem == "scrambled" else stem] = text.ExportToString()
+        if crate:
+            usdc = os.path.join(out, f"{stem}.usdc")
+            text.Export(usdc)
+            binary = Sdf.Layer.FindOrOpen(os.path.join(checked_in, f"{stem}.usdc")
+                                          if checked_in else usdc)
+            key = "usdc" if stem == "scrambled" else f"{stem}.usdc"
+            round_trip[key] = binary.ExportToString()
     _, minor, patch = Usd.GetVersion()
     oracle = {
         "openusd_version": f"{minor}.{patch}",
         "cases": [{"name": name, "steps": steps, "text": run(steps)}
                   for name, steps in CASES.items()],
         "generated": generated_texts(),
-        "round_trip": {
-            "usda": text.ExportToString(),
-            "usdc": binary.ExportToString(),
-            "unregistered": Sdf.Layer.FindOrOpen(unregistered).ExportToString(),
-        },
+        "round_trip": round_trip,
     }
     with open(os.path.join(out, "oracle.json"), "w") as f:
         json.dump(oracle, f, indent=1, sort_keys=True)
@@ -676,16 +777,20 @@ def main():
     if not args.check:
         write(args.out)
         return
-    checked_in = os.path.join(FIXTURES, "scrambled.usdc")
     with tempfile.TemporaryDirectory() as tmp:
-        write(tmp, crate=checked_in)
-        for name in ["scrambled.usda", "unregistered.usda", "oracle.json"]:
+        write(tmp, checked_in=FIXTURES)
+        names = [f"{stem}.usda" for stem, _, _ in FILES] + ["oracle.json"]
+        for name in names:
             if not filecmp.cmp(os.path.join(tmp, name), os.path.join(FIXTURES, name),
                                shallow=False):
                 raise SystemExit(f"{name} differs from {FIXTURES}")
-        fresh = Sdf.Layer.FindOrOpen(os.path.join(tmp, "scrambled.usdc"))
-        if crate_contents(fresh) != crate_contents(Sdf.Layer.FindOrOpen(checked_in)):
-            raise SystemExit(f"scrambled.usdc holds other contents than {FIXTURES}'s")
+        for stem, _, crate in FILES:
+            if not crate:
+                continue
+            fresh = Sdf.Layer.FindOrOpen(os.path.join(tmp, f"{stem}.usdc"))
+            kept = Sdf.Layer.FindOrOpen(os.path.join(FIXTURES, f"{stem}.usdc"))
+            if crate_contents(fresh) != crate_contents(kept):
+                raise SystemExit(f"{stem}.usdc holds other contents than {FIXTURES}'s")
 
 
 if __name__ == "__main__":

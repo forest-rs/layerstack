@@ -17,7 +17,9 @@
 //! OpenUSD's crate file of it (which keeps the file's order), must both
 //! save as OpenUSD exports them, and so must `unregistered.usda`, whose
 //! unregistered metadata sorts in byte order on the layer and in
-//! dictionary order on a prim.
+//! dictionary order on a prim, and so must `variant_order.usda` and its
+//! crate file, whose variant sets are written in the order their specs
+//! were created (`variantSetChildren`), not as `variantSets` lists them.
 //!
 //! Numbers are spelled as OpenUSD spells them: the `numbers` case, and
 //! the hashes of OpenUSD's text of generated arrays (every half but the
@@ -234,7 +236,14 @@ fn transaction(store: &InMemoryStore, step: &Json) -> Transaction {
             store.path(text("target")),
             ListPosition::BackOfPrepend,
         ),
-        "variant_set" => edit.add_variant_set(at(), token("name"), ListPosition::BackOfPrepend),
+        "variant_set" => {
+            let position = match step["position"].as_str() {
+                Some("front") => ListPosition::FrontOfPrepend,
+                _ => ListPosition::BackOfPrepend,
+            };
+            edit.add_variant_set(at(), token("name"), position)
+        }
+        "remove_variant_set" => edit.remove_variant_set(at(), token("name")),
         "select" => edit.set_variant_selection(at(), token("set"), Some(token("variant"))),
         "property_order" => edit.set_property_order(at(), names()),
         "prim_order" => edit.set_prim_order(at(), names()),
@@ -378,8 +387,9 @@ fn generated_numbers_are_spelled_as_openusd_writes_them() {
 }
 
 /// A file written out of order, read as USDA or as OpenUSD's crate file of
-/// it, saves as OpenUSD's text of it; so does a file of unregistered
-/// metadata.
+/// it, saves as OpenUSD's text of it; so do a file of unregistered
+/// metadata, and a file of variant sets out of `variantSets` order, read
+/// as USDA or as its crate file.
 #[test]
 fn scrambled_files_save_as_openusd_writes_them() {
     let oracle = oracle();
@@ -387,10 +397,14 @@ fn scrambled_files_save_as_openusd_writes_them() {
     let usda = std::fs::read_to_string(dir.join("scrambled.usda")).unwrap();
     let usdc = std::fs::read(dir.join("scrambled.usdc")).unwrap();
     let unregistered = std::fs::read_to_string(dir.join("unregistered.usda")).unwrap();
+    let variant_order = std::fs::read_to_string(dir.join("variant_order.usda")).unwrap();
+    let variant_order_usdc = std::fs::read(dir.join("variant_order.usdc")).unwrap();
     for (format, imported) in [
         ("usda", Imported::usda(&usda)),
         ("usdc", Imported::usdc(&usdc)),
         ("unregistered", Imported::usda(&unregistered)),
+        ("variant_order", Imported::usda(&variant_order)),
+        ("variant_order.usdc", Imported::usdc(&variant_order_usdc)),
     ] {
         let text = imported.save_usda().expect("saves");
         let expected = oracle["round_trip"][format].as_str().unwrap();

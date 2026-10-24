@@ -401,9 +401,10 @@ impl XformableEdit {
     ///
     /// This deliberately rejects any stronger value-bearing source, including
     /// sparse sources that could alter the proposed result. Raw op/order setters
-    /// remain available for deliberate masked authoring. OpenUSD's
-    /// `MakeMatrixXform` clears the order before discovering a stronger order;
-    /// this operation rejects before collecting any part of the replacement.
+    /// remain available for deliberate masked authoring. It accepts only
+    /// where [`Self::make_matrix_xform`] (OpenUSD's `MakeMatrixXform`) does,
+    /// and then authors what it and setting its op author; it also refuses
+    /// a stronger `xformOp:transform`, which would mask the matrix.
     ///
     /// AOUSD Core §12.3 (value strength), §13.3.1 (transformable prims).
     ///
@@ -509,6 +510,95 @@ impl XformableEdit {
         if edit.attribute_type(self.path(), &attribute).is_none() {
             edit.create_attribute(self.path(), &attribute, value_type(op_type, precision));
         }
+    }
+
+    /// Replaces the local transform stack with one `transform` op, as
+    /// OpenUSD's `UsdGeomXformable::MakeMatrixXform` does, and returns that
+    /// op to set the matrix through.
+    ///
+    /// `xformOpOrder` is cleared at the edit target, then the op is added
+    /// to the order that then composes: `[xformOp:transform]`, or a stronger
+    /// order with it appended when that order has no ops after its reset.
+    /// The op attribute is created as `matrix4d` unless the prim has it.
+    /// Existing op attributes are kept, out of the order. Unlike
+    /// [`Self::set_matrix_transform`], a stronger `xformOp:transform` value
+    /// is not refused, and the value is the caller's to set.
+    ///
+    /// # Errors
+    /// Nothing is authored, where OpenUSD refuses (it can leave the cleared
+    /// order behind): [`MatrixXformError::StrongerSource`] when a stronger
+    /// `xformOpOrder` still has ops after the clear (`MakeMatrixXform`'s
+    /// "Could not clear xformOpOrder"), [`MatrixXformError::IncompatibleType`]
+    /// when `xformOp:transform` exists with another type or the stronger
+    /// order already lists it, [`MatrixXformError::InactiveTarget`] and
+    /// [`MatrixXformError::Inspection`] when the target cannot be inspected
+    /// or does not contribute.
+    #[doc(alias = "UsdGeomXformable::MakeMatrixXform")]
+    #[doc(alias = "MakeMatrixXform")]
+    pub fn make_matrix_xform(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+    ) -> Result<XformOpEdit, MatrixXformError> {
+        const TRANSFORM: &str = "xformOp:transform";
+        let inspection = edit
+            .inspect_authoring(self.path(), Xformable::XFORM_OP_ORDER, Time::Default)
+            .map_err(MatrixXformError::Inspection)?;
+        if inspection.target.is_none() {
+            return Err(MatrixXformError::InactiveTarget);
+        }
+        // The order after clearing the target's: a stronger one, else none.
+        let mut order = if inspection.stronger_sources.is_empty() {
+            Vec::new()
+        } else {
+            let scene = edit.scene();
+            Xformable::new(&scene, self.path())
+                .and_then(|prim| prim.xform_op_order())
+                .unwrap_or_default()
+                .into_iter()
+                .map(String::from)
+                .collect()
+        };
+        let reset = order
+            .iter()
+            .rposition(|name| name == RESET_XFORM_STACK)
+            .map_or(0, |i| i + 1);
+        let has_attribute = |edit: &mut SchemaEdit<'_>, name: &str| {
+            let attribute = name.strip_prefix(INVERT_PREFIX).unwrap_or(name);
+            edit.property_kind(self.path(), attribute).is_some()
+        };
+        if let Some(source) = inspection.stronger_sources.into_iter().next()
+            && order[reset..].iter().any(|name| has_attribute(edit, name))
+        {
+            return Err(MatrixXformError::StrongerSource {
+                attribute: Xformable::XFORM_OP_ORDER,
+                source,
+            });
+        }
+        let existing = edit.attribute_type(self.path(), TRANSFORM);
+        if existing
+            .as_ref()
+            .is_some_and(|ty| ty.type_name() != "matrix4d")
+            || (existing.is_none() && edit.property_kind(self.path(), TRANSFORM).is_some())
+            || order.iter().any(|name| name == TRANSFORM)
+        {
+            return Err(MatrixXformError::IncompatibleType {
+                attribute: TRANSFORM,
+                type_name: existing.map_or_else(
+                    || String::from("untyped attribute, relationship or listed op"),
+                    |ty| ty.type_name().to_string(),
+                ),
+            });
+        }
+        self.ensure_op_attribute(edit, XformOpType::Transform, XformOpPrecision::Double, None);
+        order.push(TRANSFORM.into());
+        self.set_order(edit, &order);
+        Ok(XformOpEdit {
+            path: self.path(),
+            attribute: TRANSFORM.into(),
+            op_type: XformOpType::Transform,
+            precision: XformOpPrecision::Double,
+            inverse: false,
+        })
     }
 
     /// The prim's `xformOpOrder` as the edit leaves it.

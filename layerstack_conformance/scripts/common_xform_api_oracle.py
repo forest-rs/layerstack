@@ -1,6 +1,6 @@
 # Copyright 2026 the LayerStack Authors
 # SPDX-License-Identifier: Apache-2.0 OR MIT
-"""Records OpenUSD's common transform API, call by call.
+"""Records OpenUSD's common transform API and `MakeMatrixXform`, call by call.
 
 Usage: common_xform_api_oracle.py [--check]
 
@@ -14,11 +14,13 @@ sublayer and records:
   `GetXformVectorsByAccumulation` at the default time and at time 2;
 - `calls`: each call of `CALLS` made alone, on every prim, on a fresh copy
   of the two layers: `SetXformVectors`, `SetTranslate`, `SetRotate`,
-  `SetScale` and `SetPivot` of `UsdGeomXformCommonAPI`. For each: what
+  `SetScale` and `SetPivot` of `UsdGeomXformCommonAPI`, and
+  `UsdGeomXformable::MakeMatrixXform` (then `Set` of `MATRIX` on the op it
+  returns) with the root or the weak layer as edit target. For each: what
   the call returned (`null` when it raised a coding error, which the
-  bindings turn into `Tf.ErrorException`) and what the root layer then
-  authors for the prim: `xformOpOrder` and every `xformOp:*` attribute's
-  type, default and time samples;
+  bindings turn into `Tf.ErrorException`) and what the edit target layer
+  then authors for the prim: `xformOpOrder` and every `xformOp:*`
+  attribute's type, default and time samples;
 - `rotation_orders`: `ConvertRotationOrderToOpType` and
   `GetRotationTransform` for each order, and `CanConvertOpTypeToRotationOrder`
   for every op type.
@@ -39,6 +41,7 @@ FIXTURES = os.path.normpath(os.path.join(HERE, "..", "fixtures", "common_xform_a
 
 API = UsdGeom.XformCommonAPI
 ORDERS = ["XYZ", "XZY", "YXZ", "YZX", "ZXY", "ZYX"]
+MATRIX = Gf.Matrix4d(0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 1, 0, 4, 5, 6, 1)
 
 # Each call: a name and its arguments. Times are `None` for the default.
 CALLS = [
@@ -50,6 +53,8 @@ CALLS = [
     ["rotate", [1.0, 2.0, 3.0], "ZYX", 2.0],
     ["scale", [7.0, 8.0, 9.0], None],
     ["pivot", [0.25, 0.5, 0.75], None],
+    ["make_matrix", "root"],
+    ["make_matrix", "weak"],
 ]
 
 
@@ -125,11 +130,16 @@ def make(stage, path, entry):
         return api.SetScale(Gf.Vec3f(*entry[1]), code(entry[2]))
     if kind == "pivot":
         return api.SetPivot(Gf.Vec3f(*entry[1]), code(entry[2]))
+    if kind == "make_matrix":
+        op = UsdGeom.Xformable(prim).MakeMatrixXform()
+        return bool(op) and op.Set(MATRIX)
     raise SystemExit(f"unknown call {kind}")
 
 
 def call(fixtures, path, entry):
-    stage, layer, _ = open_stage(fixtures)
+    stage, root, weak = open_stage(fixtures)
+    layer = weak if entry[:2] == ["make_matrix", "weak"] else root
+    stage.SetEditTarget(Usd.EditTarget(layer))
     try:
         result = bool(make(stage, path, entry))
     except Tf.ErrorException:
@@ -189,6 +199,7 @@ def record(fixtures):
         "reads": reads(stage),
         "calls": [call(fixtures, path, entry) for path in paths for entry in CALLS],
         "rotation_orders": rotation_orders(),
+        "matrix": value(MATRIX),
     }
 
 

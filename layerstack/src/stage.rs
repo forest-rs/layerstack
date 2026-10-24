@@ -597,6 +597,7 @@ impl Stage {
         let crate::compose::Composed {
             mut stage,
             instance_keys,
+            dependencies,
         } = crate::compose::compose_stage_retained(
             store,
             root,
@@ -616,10 +617,49 @@ impl Stage {
                 .errors
                 .insert(0, CompositionError::ForeignSchemaRegistry);
         }
-        stage.prepare_type_info(store);
-        stage.prepare_clips(store);
-        stage.prepare_prototypes(store, instance_keys);
+        stage.prepare(store, instance_keys, dependencies);
         stage
+    }
+
+    /// Prepares the stage's type info, value clips and prototype inventory,
+    /// building its dependency maps from `dependencies` meanwhile, on a
+    /// thread the stage's budget spares ([`StageOptions::threads`]), when
+    /// they are many enough to build on threads at all
+    /// ([`DependencyRecords::builds_on_threads`]): the maps are built from
+    /// what composition recorded alone, and preparing reads none of them.
+    ///
+    /// [`DependencyRecords::builds_on_threads`]: crate::dependency_map::DependencyRecords::builds_on_threads
+    fn prepare(
+        &mut self,
+        store: &mut dyn LayerStore,
+        instance_keys: InstanceIndexKeys,
+        dependencies: Option<crate::dependency_map::DependencyRecords>,
+    ) {
+        let threaded = dependencies
+            .as_ref()
+            .is_some_and(crate::dependency_map::DependencyRecords::builds_on_threads);
+        let threads = crate::parallel::Threads::new(self.options.threads);
+        if threaded && threads.limit() > 1 {
+            let ((), deps) = crate::parallel::join(
+                &threads,
+                || {
+                    self.prepare_type_info(store);
+                    self.prepare_clips(store);
+                    self.prepare_prototypes(store, instance_keys);
+                },
+                || dependencies.map(|records| records.build(&threads)),
+            );
+            self.deps = deps;
+        } else {
+            // In turn, the maps first, as composition built them before:
+            // the first edit after a one-thread open reads them faster when
+            // they are allocated next to what composition built.
+            self.deps = dependencies.map(|records| records.build(&threads));
+            self.prepare_type_info(store);
+            self.prepare_clips(store);
+            self.prepare_prototypes(store, instance_keys);
+        }
+        self.record_clip_dependencies();
     }
 
     /// Removes a schema registry built on another token interner than the
@@ -656,6 +696,7 @@ impl Stage {
         let crate::compose::Composed {
             mut stage,
             instance_keys,
+            dependencies,
         } = crate::compose::compose_stage_with_paths(
             store,
             root,
@@ -668,9 +709,7 @@ impl Stage {
         stage.store_identity = Some(store.identity());
         stage.root_layer = Some(root);
         stage.schemas = schemas;
-        stage.prepare_type_info(store);
-        stage.prepare_clips(store);
-        stage.prepare_prototypes(store, instance_keys);
+        stage.prepare(store, instance_keys, dependencies);
         stage
     }
 
@@ -965,6 +1004,11 @@ impl Stage {
         };
         self.clips =
             crate::value_clips::Catalog::prepare(&mut controlled, &self.prims, &self.instances);
+    }
+
+    /// Records that each prim reading value clips depends on the layers of
+    /// its clip sites ([`Self::prepare_clips`]).
+    fn record_clip_dependencies(&mut self) {
         if let Some(deps) = &mut self.deps {
             for prim in self.prims.keys().copied() {
                 for (layer, _) in self.clips.source_sites(prim) {

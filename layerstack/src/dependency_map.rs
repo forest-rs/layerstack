@@ -105,67 +105,37 @@ impl PrimDependencies {
 }
 
 /// The fewest prims whose dependency maps are built on threads
-/// ([`DependencyBuilder::from_prims`]): about a millisecond of work.
+/// ([`DependencyRecords::builds_on_threads`]): about a millisecond of work.
 const THREADED_BUILD_PRIMS: usize = 1024;
 
-/// Builder for composition dependency data, used during composition.
+/// What composition recorded of a stage's dependencies, which
+/// [`Self::build`] makes [`CompositionDeps`] of.
 ///
-/// Builds the arc dependencies of every composed prim into an
-/// [`InvalidationGraph`], and records their metadata and the layer-opinion
-/// edges for queries.
-pub(crate) struct DependencyBuilder {
-    graph: InvalidationGraph<PathId>,
-    arc_set: HashSet<ArcDependency>,
-    layer_to_prims: HashMap<LayerId, HashSet<PathId>>,
-    prim_to_layers: LayerSets,
-    default_prim_dependents: HashMap<LayerId, HashSet<PathId>>,
+/// The arc dependencies of every composed prim become an
+/// [`InvalidationGraph`], with their metadata and the layer-opinion edges
+/// kept for queries.
+pub(crate) struct DependencyRecords {
+    /// What each composed prim the composition keeps depends on.
+    prims: HashMap<PathId, PrimDependencies>,
     relocation_layers: HashSet<LayerId>,
     expression_variables: VariableReads,
 }
 
-impl DependencyBuilder {
-    /// The dependencies `prims` record, each composed prim's under its
-    /// path.
-    ///
-    /// The graph, the arc metadata and the two layer maps are built from
-    /// them apart, each by one pass over `prims`, at once on as many of
-    /// `threads` as the budget spares: each is the same whichever thread
-    /// builds it, and the graph is built in the order `prims` iterates in,
-    /// as adding the arcs one by one would. For a few prims, as a live edit
-    /// recomposes, they are built in turn: starting a thread costs more.
-    pub(crate) fn from_prims(prims: &HashMap<PathId, PrimDependencies>, threads: &Threads) -> Self {
-        let one = Threads::new(1);
-        let threads = if prims.len() >= THREADED_BUILD_PRIMS {
-            threads
-        } else {
-            &one
-        };
-        let ((graph, arc_set), ((layer_to_prims, default_prim_dependents), prim_to_layers)) = join(
-            threads,
-            || join(threads, || arc_graph(prims), || arc_set(prims)),
-            || {
-                join(
-                    threads,
-                    || layer_prims(prims),
-                    || {
-                        let mut sets = LayerSets::with_capacity(prims.len());
-                        for (&prim, record) in prims {
-                            sets.insert(prim, &record.layers);
-                        }
-                        sets
-                    },
-                )
-            },
-        );
+impl DependencyRecords {
+    /// The records of `prims`, each composed prim's under its path.
+    pub(crate) fn new(prims: HashMap<PathId, PrimDependencies>) -> Self {
         Self {
-            graph,
-            arc_set,
-            layer_to_prims,
-            prim_to_layers,
-            default_prim_dependents,
+            prims,
             relocation_layers: HashSet::new(),
             expression_variables: VariableReads::default(),
         }
+    }
+
+    /// Whether the records are many enough for [`Self::build`] to build the
+    /// maps on threads: for a few prims, as a live edit recomposes,
+    /// starting a thread costs more than the maps.
+    pub(crate) fn builds_on_threads(&self) -> bool {
+        self.prims.len() >= THREADED_BUILD_PRIMS
     }
 
     /// Records the expression variables composition read.
@@ -185,14 +155,43 @@ impl DependencyBuilder {
         self.relocation_layers.extend(layers);
     }
 
-    /// Consumes the builder and produces [`CompositionDeps`].
-    pub(crate) fn finish(self) -> CompositionDeps {
+    /// The dependency maps the records make.
+    ///
+    /// The graph, the arc metadata and the two layer maps are built from
+    /// the prims' records apart, each by one pass over them, at once on as
+    /// many of `threads` as the budget spares: each is the same whichever
+    /// thread builds it, and the graph is built in the order the records
+    /// iterate in, as adding the arcs one by one would.
+    pub(crate) fn build(self, threads: &Threads) -> CompositionDeps {
+        let one = Threads::new(1);
+        let threads = if self.builds_on_threads() {
+            threads
+        } else {
+            &one
+        };
+        let ((graph, arc_set), ((layer_to_prims, default_prim_dependents), prim_to_layers)) = join(
+            threads,
+            || join(threads, || arc_graph(&self.prims), || arc_set(&self.prims)),
+            || {
+                join(
+                    threads,
+                    || layer_prims(&self.prims),
+                    || {
+                        let mut sets = LayerSets::with_capacity(self.prims.len());
+                        for (&prim, record) in &self.prims {
+                            sets.insert(prim, &record.layers);
+                        }
+                        sets
+                    },
+                )
+            },
+        );
         CompositionDeps {
-            graph: self.graph,
-            arcs: self.arc_set,
-            layer_to_prims: self.layer_to_prims,
-            prim_to_layers: self.prim_to_layers,
-            default_prim_dependents: self.default_prim_dependents,
+            graph,
+            arcs: arc_set,
+            layer_to_prims,
+            prim_to_layers,
+            default_prim_dependents,
             relocation_layers: self.relocation_layers,
             expression_variables: self.expression_variables,
         }
@@ -300,7 +299,7 @@ mod tests {
         };
         record.dedup_arcs();
         let prims = HashMap::from([(PathId::from_raw(2), record)]);
-        let deps = DependencyBuilder::from_prims(&prims, &Threads::new(1)).finish();
+        let deps = DependencyRecords::new(prims).build(&Threads::new(1));
         assert_eq!(deps.arcs.len(), 2, "each arc once");
     }
 
@@ -316,7 +315,7 @@ mod tests {
             (PathId::from_raw(6), record(&[1, 2], &[3])),
             (PathId::from_raw(7), record(&[2], &[])),
         ]);
-        let deps = DependencyBuilder::from_prims(&prims, &Threads::new(1)).finish();
+        let deps = DependencyRecords::new(prims).build(&Threads::new(1));
         let prims_of = |layer| {
             let mut prims: Vec<u32> = deps.layer_to_prims[&LayerId(layer)]
                 .iter()
@@ -369,9 +368,9 @@ mod tests {
             edges.sort_unstable();
             edges
         };
-        let one = DependencyBuilder::from_prims(&prims, &Threads::new(1)).finish();
+        let one = DependencyRecords::new(prims.clone()).build(&Threads::new(1));
         for threads in [2, 4] {
-            let many = DependencyBuilder::from_prims(&prims, &Threads::new(threads)).finish();
+            let many = DependencyRecords::new(prims.clone()).build(&Threads::new(threads));
             assert_eq!(edges(&many), edges(&one));
             assert_eq!(many.arcs, one.arcs);
             assert_eq!(many.layer_to_prims, one.layer_to_prims);
@@ -415,7 +414,7 @@ mod tests {
             ..PrimDependencies::default()
         };
         let prims = HashMap::from([(PathId::from_raw(2), record)]);
-        let deps = DependencyBuilder::from_prims(&prims, &Threads::new(1)).finish();
+        let deps = DependencyRecords::new(prims).build(&Threads::new(1));
 
         // target (2) depends on source (1).
         let graph_deps: Vec<_> = deps

@@ -30,7 +30,7 @@ use hashbrown::{HashMap, HashSet};
 use crate::{
     asset::AssetRequest,
     composition_error::CompositionError,
-    dependency_map::{DependencyBuilder, PrimDependencies},
+    dependency_map::{DependencyRecords, PrimDependencies},
     doc::{LayerId, LayerStore},
     expression_variables::VariableReads,
     interner::TokenId,
@@ -62,7 +62,8 @@ pub(crate) struct Composition {
     pub(crate) loadable: HashSet<PathId>,
     pub(crate) errors: Vec<CompositionError>,
     pub(crate) asset_requests: Vec<AssetRequest>,
-    pub(crate) deps: Option<DependencyBuilder>,
+    /// What the prims it keeps depend on, when it records that.
+    pub(crate) deps: Option<DependencyRecords>,
     pub(crate) used_layers: HashSet<LayerId>,
     pub(crate) used_layer_sites: HashMap<PathId, HashSet<LayerId>>,
     pub(crate) local_layers: Vec<LayerId>,
@@ -76,8 +77,7 @@ pub(crate) struct Composition {
     /// indexed rather than copied from another instance's descendants,
     /// found on the thread that indexed it.
     pub(crate) instance_keys: InstanceIndexKeys,
-    /// What each composed prim depends on, which `deps` is built from at
-    /// the end.
+    /// What each composed prim depends on, which `deps` holds at the end.
     records: HashMap<PathId, PrimDependencies>,
     /// The layer stacks whose errors a prim has reported.
     reported_stacks: HashSet<StackId>,
@@ -299,9 +299,9 @@ pub(crate) fn compose(
 
     if options.with_dependencies {
         // Only the prims the composition keeps depend on anything.
-        let Composition { records, prims, .. } = &mut out;
-        records.retain(|path, _| prims.contains_key(path));
-        out.deps = Some(DependencyBuilder::from_prims(&out.records, &threads));
+        let mut records = core::mem::take(&mut out.records);
+        records.retain(|path, _| out.prims.contains_key(path));
+        out.deps = Some(DependencyRecords::new(records));
     }
     // The stage's own layer stack, and any no arc reached, report last.
     for (at, stack) in (0..).zip(ctx.stacks.iter()) {
@@ -639,7 +639,7 @@ fn index_prim(
 }
 
 /// The dependencies the prim index `index`, over `graph`, records, its
-/// layers each once (see [`DependencyBuilder`]).
+/// layers and arcs each once (see [`DependencyRecords`]).
 fn prim_record(
     ctx: &Ctx<'_>,
     graph: &Graph,

@@ -58,13 +58,12 @@ pub(crate) fn read(
                 .map(|value| default_value(type_name, value, tokens))
                 .transpose()
                 .map_err(|why| format!("{name}: {why}"))?;
-            Ok(MetadataDefinition {
-                name: tokens.intern(name),
-                type_name: type_name.into(),
-                targets,
-                default,
-                documentation: entry["documentation"].as_str().unwrap_or_default().into(),
-            })
+            let value_type = layerstack::MetadataType::parse(type_name)
+                .ok_or_else(|| format!("{name}: `{type_name}` is not a metadata type"))?;
+            let mut definition = MetadataDefinition::new(tokens.intern(name), value_type, targets)
+                .with_documentation(entry["documentation"].as_str().unwrap_or_default());
+            definition.default = default;
+            Ok(definition)
         })
         .collect()
 }
@@ -235,7 +234,7 @@ pub(crate) fn files(model: &Model) -> Result<Vec<(String, String)>, String> {
         for field in &domain.metadata {
             let name = model.tokens.resolve(field.name);
             let method = crate::views::snake(name);
-            let (ty, read) = conversion(&field.type_name)?;
+            let (ty, read) = conversion(field.value_type.name())?;
             for (target, view) in [
                 (MetadataTarget::Prim, "PrimView"),
                 (MetadataTarget::Attribute, "PropertyMetadata"),

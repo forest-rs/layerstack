@@ -1,0 +1,33 @@
+{
+  "Plugins": [{
+    "Type": "resource",
+    "Name": "LayerstackRejectedMetadata",
+    "Root": ".",
+    "ResourcePath": ".",
+    "LibraryPath": "",
+    "Info": { "SdfMetadata": {
+      "rejectUnknownType": { "type": "hostOpaque", "appliesTo": "prims" },
+      "rejectPathType": { "type": "path", "appliesTo": "prims" },
+      "rejectTypeCase": { "type": "Float", "appliesTo": "prims" },
+      "rejectDictionaryArray": { "type": "dictionary[]", "appliesTo": "prims" },
+      "rejectMissingType": { "appliesTo": "prims" },
+      "rejectNumberType": { "type": 3, "appliesTo": "prims" },
+      "rejectNotObject": "token",
+      "rejectDictionaryDefault": { "type": "dictionary", "appliesTo": "prims", "default": {} },
+      "rejectListDefault": { "type": "tokenlistop", "appliesTo": "prims", "default": ["a"] },
+      "rejectBoolDefault": { "type": "bool", "appliesTo": "prims", "default": true },
+      "rejectFloatText": { "type": "float", "appliesTo": "prims", "default": "wide" },
+      "rejectIntFraction": { "type": "int", "appliesTo": "prims", "default": 1.5 },
+      "rejectUCharRange": { "type": "uchar", "appliesTo": "prims", "default": 300 },
+      "rejectShortVector": { "type": "float3", "appliesTo": "prims", "default": [1, 2] },
+      "rejectMixedArray": { "type": "float[]", "appliesTo": "prims", "default": [1, 2.5] },
+      "rejectTokenNumber": { "type": "token", "appliesTo": "prims", "default": 3 },
+      "rejectObjectDefault": { "type": "int", "appliesTo": "prims", "default": { "a": 1 } },
+      "acceptOpaque": { "type": "opaque", "appliesTo": "prims" },
+      "acceptScalarForArray": { "type": "int[]", "appliesTo": "prims", "default": 4 },
+      "documentation": { "type": "string", "appliesTo": "prims" },
+      "interpolation": { "type": "token", "appliesTo": "attributes", "default": "constant" },
+      "metaFloat": { "type": "float", "appliesTo": "prims", "default": 0.25 }
+    }}
+  }]
+}

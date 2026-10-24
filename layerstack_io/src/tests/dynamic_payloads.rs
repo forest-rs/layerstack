@@ -380,13 +380,18 @@ pub(super) fn registry(store: &mut InMemoryStore) -> Arc<SchemaRegistry> {
         (ARG_DICT, "dictionary", None),
     ] {
         builder
-            .register_metadata(MetadataDefinition {
-                name: store.tokens.intern(name),
-                type_name: type_name.into(),
-                targets: vec![MetadataTarget::Prim],
-                default,
-                documentation: "Used to set number of copies.".into(),
-            })
+            .register_metadata(
+                MetadataDefinition {
+                    default,
+                    ..MetadataDefinition::new(
+                        store.tokens.intern(name),
+                        layerstack::MetadataType::parse(type_name).unwrap(),
+                        [MetadataTarget::Prim],
+                    )
+                    .with_documentation("Used to set number of copies.")
+                },
+                &store.tokens,
+            )
             .unwrap();
     }
     Arc::new(builder.build(&store.tokens))

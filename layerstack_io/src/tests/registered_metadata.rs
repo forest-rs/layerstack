@@ -11,13 +11,14 @@ fn setup(files: &[(&str, &str)]) -> (Memory, InMemoryStore, StageOptions) {
     let mut builder = layerstack::SchemaRegistry::builder();
     for (name, ty) in [("hostScale", "float"), ("hostAsset", "asset")] {
         builder
-            .register_metadata(MetadataDefinition {
-                name: store.tokens.intern(name),
-                type_name: ty.into(),
-                targets: alloc::vec![MetadataTarget::Prim],
-                default: None,
-                documentation: "".into(),
-            })
+            .register_metadata(
+                MetadataDefinition::new(
+                    store.tokens.intern(name),
+                    layerstack::MetadataType::parse(ty).unwrap(),
+                    [MetadataTarget::Prim],
+                ),
+                &store.tokens,
+            )
             .unwrap();
     }
     let registry = Arc::new(builder.build(&store.tokens));

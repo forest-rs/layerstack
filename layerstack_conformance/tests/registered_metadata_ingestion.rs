@@ -6,7 +6,8 @@
 
 use layerstack::{
     AssetResolveError, AssetResolver, FieldValue, InMemoryStore, LayerId, MetadataDefinition,
-    MetadataTarget, PathInterner, ResolvedAsset, SchemaRegistry, TokenInterner, Value,
+    MetadataTarget, MetadataType, PathInterner, ResolvedAsset, SchemaRegistry, TokenInterner,
+    Value,
 };
 use layerstack_usda::{emit, parser, read_usda, read_usda_with_registry};
 
@@ -53,16 +54,15 @@ fn registry(store: &mut InMemoryStore) -> SchemaRegistry {
         ("hostUnsigned", "uintlistop", vec![MetadataTarget::Prim]),
         ("hostBig", "uint64listop", vec![MetadataTarget::Prim]),
         ("hostSigned", "int64listop", vec![MetadataTarget::Prim]),
-        ("unsupported", "hostOpaque", vec![MetadataTarget::Prim]),
     ] {
+        let mut definition = MetadataDefinition::new(
+            store.tokens.intern(name),
+            MetadataType::parse(ty).unwrap(),
+            targets,
+        );
+        definition.default = (name == "hostDefault").then_some(Value::Float(99.));
         builder
-            .register_metadata(MetadataDefinition {
-                name: store.tokens.intern(name),
-                type_name: ty.into(),
-                targets,
-                default: (name == "hostDefault").then_some(Value::Float(99.)),
-                documentation: "".into(),
-            })
+            .register_metadata(definition, &store.tokens)
             .unwrap();
     }
     builder.build(&store.tokens)
@@ -267,7 +267,6 @@ fn invalid_registered_literals_and_targets_reject_without_foreign_kind_fields() 
         "hostNames = { string bad = \"wrong\" }",
         "prepend hostFloat = [1]",
         "hostLayer = 3",
-        "unsupported = 1",
     ] {
         let mut store = InMemoryStore::default();
         let registry = registry(&mut store);
@@ -360,6 +359,8 @@ fn integer_list_literals_use_checked_cpp_numeric_coercion() {
 
 #[test]
 fn empty_arrays_cannot_validate_unsupported_registered_type_names() {
+    // OpenUSD registers no field of these types ("… is not a registered
+    // value type"), so no declaration of one can be made.
     for ty in [
         "color5f[]",
         "colornonsensef[]",
@@ -367,31 +368,8 @@ fn empty_arrays_cannot_validate_unsupported_registered_type_names() {
         "dictionary[]",
         "float[][]",
         "hostOpaque[]",
+        "hostOpaque",
     ] {
-        let store = InMemoryStore::default();
-        let name = store.tokens.intern("hostField");
-        let mut builder = SchemaRegistry::builder();
-        builder
-            .register_metadata(MetadataDefinition {
-                name,
-                type_name: ty.into(),
-                targets: vec![MetadataTarget::Prim],
-                default: None,
-                documentation: "".into(),
-            })
-            .unwrap();
-        let registry = builder.build(&store.tokens);
-        let result = read_usda_with_registry(
-            "#usda 1.0\ndef \"P\" (hostField = []) {}",
-            LayerId(1),
-            &store.tokens,
-            &store.paths,
-            &mut NoAssets,
-            &registry,
-        );
-        assert!(result.emitted.rejected, "{ty}");
-        assert!(result.emitted.diagnostics[0].message.contains(ty), "{ty}");
-        let path = store.path("/P");
-        assert!(result.emitted.layer.prims()[&path].fields.is_empty());
+        assert_eq!(MetadataType::parse(ty), None, "{ty}");
     }
 }

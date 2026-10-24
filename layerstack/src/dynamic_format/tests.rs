@@ -4,12 +4,12 @@
 //! Payloads to dynamic formats compose their arguments from the opinions
 //! stronger than them, and target the layer the arguments name.
 
-use alloc::{format, string::String, sync::Arc, vec, vec::Vec};
+use alloc::{format, string::String, sync::Arc, vec::Vec};
 
 use super::*;
 use crate::{
-    AssetRequest, InMemoryStore, Layer, LayerOffset, MetadataDefinition, MetadataTarget, PrimSpec,
-    Reference, ReferenceTarget, SchemaRegistry, Stage, StageOptions,
+    AssetRequest, InMemoryStore, Layer, LayerOffset, MetadataDefinition, MetadataTarget,
+    MetadataType, PrimSpec, Reference, ReferenceTarget, SchemaRegistry, Stage, StageOptions,
 };
 
 /// A terrain generator: `rows` from the `rows` field, `tiles` from the keys
@@ -60,13 +60,14 @@ fn registry(store: &mut InMemoryStore) -> Arc<SchemaRegistry> {
     let mut builder = SchemaRegistry::builder();
     for (name, type_name) in [("rows", "int"), ("tiles", "dictionary")] {
         builder
-            .register_metadata(MetadataDefinition {
-                name: store.tokens.intern(name),
-                type_name: Arc::from(type_name),
-                targets: vec![MetadataTarget::Prim],
-                default: None,
-                documentation: Arc::from(""),
-            })
+            .register_metadata(
+                MetadataDefinition::new(
+                    store.tokens.intern(name),
+                    MetadataType::parse(type_name).unwrap(),
+                    [MetadataTarget::Prim],
+                ),
+                &store.tokens,
+            )
             .unwrap();
     }
     Arc::new(builder.build(&store.tokens))

@@ -1219,7 +1219,7 @@ impl<'s> SchemaEdit<'s> {
         if !definition.applies_to(target) {
             return Err(PropertyMetadataError::NotValidForProperty(kind));
         }
-        Ok(definition.type_name.clone())
+        Ok(alloc::sync::Arc::from(definition.value_type.name()))
     }
 
     // AOUSD Core §12.2.5: update only the mapped target layer's dictionary;

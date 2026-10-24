@@ -40,7 +40,10 @@ mod definition;
 mod generated;
 mod metadata;
 
-pub use metadata::{MetadataConflict, MetadataDefinition, MetadataTarget};
+pub use metadata::{
+    ListOpItem, MetadataConflict, MetadataDefinition, MetadataField, MetadataOrigin,
+    MetadataTarget, MetadataType, is_spec_field,
+};
 
 pub use definition::{AppliedSchema, PrimDefinition};
 pub use generated::{GeneratedSchemaError, SchemaDeclaration, read_generated_schema};
@@ -576,19 +579,43 @@ pub struct SchemaRegistryBuilder {
 }
 
 impl SchemaRegistryBuilder {
-    /// Registers plugin metadata independently of prim schemas.
-    /// Identical declarations are accepted; a conflicting declaration returns
-    /// an error without replacing the original. Target order is immaterial.
+    /// Registers a plugin's metadata field, independently of prim schemas;
+    /// `tokens` is the interner of `definition`'s name.
+    ///
+    /// Identical declarations are accepted, target order immaterial. A
+    /// declaration that conflicts with one registered already is refused
+    /// and the original kept, as OpenUSD keeps the first registration of a
+    /// field: one of a field Sdf registers itself (`documentation`), one
+    /// of a field one of usd-core's own plugins registers unless it is
+    /// declared as that plugin declares it (the tables of OpenUSD's schema
+    /// domains declare them again), and one of a field this builder holds
+    /// a different declaration of.
+    ///
+    /// # Errors
+    ///
+    /// [`MetadataConflict`], naming who registers the field already.
+    ///
+    /// OpenUSD: `"…" is already a registered field`
+    /// (`SdfSchemaBase::_UpdateMetadataFromPlugins`).
     pub fn register_metadata(
         &mut self,
         mut definition: MetadataDefinition,
+        tokens: &TokenInterner,
     ) -> Result<&mut Self, MetadataConflict> {
         definition.targets.sort_unstable();
         definition.targets.dedup();
-        match self.metadata.entry(definition.name) {
+        let name = definition.name;
+        metadata::check_builtin(&definition, tokens.resolve(name)).map_err(|registered_by| {
+            MetadataConflict {
+                name,
+                registered_by,
+            }
+        })?;
+        match self.metadata.entry(name) {
             hashbrown::hash_map::Entry::Occupied(entry) if entry.get() != &definition => {
                 Err(MetadataConflict {
-                    name: definition.name,
+                    name,
+                    registered_by: MetadataOrigin::Registry,
                 })
             }
             hashbrown::hash_map::Entry::Occupied(_) => Ok(self),
@@ -686,10 +713,19 @@ pub struct SchemaRegistry {
 }
 
 impl SchemaRegistry {
-    /// The plugin metadata declaration named `name`.
+    /// The plugin metadata declaration named `name`. Built-in fields are
+    /// not declarations of the registry's; [`Self::metadata_field`] finds
+    /// those too.
     #[must_use]
     pub fn metadata(&self, name: TokenId) -> Option<&MetadataDefinition> {
         self.metadata.get(&name)
+    }
+
+    /// The metadata field `name`, built in or registered here, with its
+    /// name interned in `tokens` ([`MetadataField::lookup`]).
+    #[must_use]
+    pub fn metadata_field(&self, name: &str, tokens: &TokenInterner) -> Option<MetadataField<'_>> {
+        MetadataField::lookup(name, Some(self), tokens)
     }
 
     /// Every registered metadata declaration, in no particular order.

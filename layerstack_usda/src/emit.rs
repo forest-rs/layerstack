@@ -656,8 +656,8 @@ impl EmitCtx<'_> {
             );
             return;
         }
-        let declared = registered.map(|definition| definition.type_name.clone());
-        let field_type = if let Some(name) = declared.as_deref() {
+        let declared = registered.map(|definition| definition.value_type.name());
+        let field_type = if let Some(name) = declared {
             let Some(field_type) = registered_metadata_type(name) else {
                 self.reject(
                     entry.span,
@@ -728,9 +728,8 @@ impl EmitCtx<'_> {
             }
             return;
         }
-        let expected = declared
-            .as_deref()
-            .map(|name| default_scalar_for_type(name.strip_suffix("[]").unwrap_or(name)));
+        let expected =
+            declared.map(|name| default_scalar_for_type(name.strip_suffix("[]").unwrap_or(name)));
         if let Some(expected) = &expected
             && (matches!(expected, Value::Null)
                 || !metadata_literal_shape(&entry.value, field_type.type_hint(), expected))

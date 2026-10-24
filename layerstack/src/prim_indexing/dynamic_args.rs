@@ -28,7 +28,7 @@ use crate::{
     interner::TokenId,
     path::PathId,
     prim_index::ArcKind,
-    schema::{MetadataDefinition, SchemaRegistry},
+    schema::{MetadataField, MetadataOrigin, SchemaRegistry},
     spec_path::SpecPath,
 };
 
@@ -54,10 +54,11 @@ pub(crate) struct Walk<'a> {
 }
 
 impl Walk<'_> {
-    /// The plugin metadata declaration of `field`, if registered.
-    pub(crate) fn registered_metadata(&self, field: &str) -> Option<&MetadataDefinition> {
-        let name = self.store.tokens().lookup(field)?;
-        self.schemas?.metadata(name)
+    /// The plugin metadata field `field`: one a plugin registers, usd-core's
+    /// own or the registry's, not one of Sdf's.
+    pub(crate) fn registered_metadata(&self, field: &str) -> Option<MetadataField<'_>> {
+        MetadataField::lookup(field, self.schemas, self.store.tokens())
+            .filter(|field| field.origin() != MetadataOrigin::Sdf)
     }
 
     /// Passes the opinions of the field `field` (or, with `property`, of

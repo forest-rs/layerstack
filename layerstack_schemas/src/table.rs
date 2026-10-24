@@ -124,7 +124,7 @@ impl SchemaTables {
         tokens: &TokenInterner,
     ) -> Result<(), MetadataConflict> {
         for metadata in self.metadata {
-            builder.register_metadata(metadata.definition(tokens))?;
+            builder.register_metadata(metadata.definition(tokens), tokens)?;
         }
         for schema in self.schemas {
             builder.register(schema.definition(tokens));
@@ -152,14 +152,24 @@ pub struct Metadata {
 }
 
 impl Metadata {
-    fn definition(&self, tokens: &TokenInterner) -> layerstack::MetadataDefinition {
-        layerstack::MetadataDefinition {
-            name: tokens.intern(self.name),
-            type_name: self.type_name.into(),
-            targets: self.targets.into(),
-            default: self.default.map(|construct| construct(tokens)),
-            documentation: self.documentation.into(),
-        }
+    /// The declaration, with its names interned in `tokens`.
+    ///
+    /// # Panics
+    ///
+    /// If the type name is not a metadata type, which the generated tables
+    /// never hold.
+    #[must_use]
+    pub fn definition(&self, tokens: &TokenInterner) -> layerstack::MetadataDefinition {
+        let value_type = layerstack::MetadataType::parse(self.type_name)
+            .expect("generated tables name metadata types");
+        let mut definition = layerstack::MetadataDefinition::new(
+            tokens.intern(self.name),
+            value_type,
+            self.targets.iter().copied(),
+        )
+        .with_documentation(self.documentation);
+        definition.default = self.default.map(|construct| construct(tokens));
+        definition
     }
 }
 

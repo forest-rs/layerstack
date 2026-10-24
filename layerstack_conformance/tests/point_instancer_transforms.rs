@@ -19,7 +19,8 @@
 mod support;
 use layerstack_schemas::{
     Scene, Time,
-    point_instancer::{Extent, InstanceTransform, InstanceTransformOptions},
+    bounds::Extent,
+    point_instancer::{InstanceTransform, InstanceTransformOptions},
     usd_geom::PointInstancer,
 };
 use serde::Deserialize;

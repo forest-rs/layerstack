@@ -478,6 +478,10 @@ The `usd-geom` feature provides caller-owned transform and bounds caches:
   and visibility filtering. Relative bounds convert coordinate frames even
   across resets. Time changes retain static bounds and reevaluate temporal
   dependencies on demand, including sampled visibility of excluded children.
+  `compute_extents_hint` computes a model's per-purpose `extentsHint` as
+  `UsdGeomModelAPI::ComputeExtentsHint` does; `GeomModelApiEdit::set_extents_hint`
+  (and `_at`) authors it, refusing anything but one to four extents, and
+  `GeomModelApi::extents_hint` reads it back from any prim.
 - `Xformable::transform_time_samples` returns composed sample times in stage
   time. `transform_might_be_time_varying` reports numeric-time variability,
   including splines; a single sample can still differ from the default value.

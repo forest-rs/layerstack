@@ -237,7 +237,10 @@
 //!   visibility filtering. Relative bounds convert world coordinate frames,
 //!   including across transform resets. Time changes preserve static results;
 //!   built-in intrinsic extents and point-instancer prototype bounds are supported;
-//!   other procedural extent providers return explicit errors;
+//!   other procedural extent providers return explicit errors.
+//!   `compute_extents_hint` computes a model's per-purpose `extentsHint` as
+//!   `UsdGeomModelAPI::ComputeExtentsHint` does, for
+//!   `GeomModelApiEdit::set_extents_hint` to author ([`ExtentsHintError`]);
 //! - `Imageable::compute_visibility`, `compute_effective_visibility` for a
 //!   purpose (`VisibilityAPI`), and `compute_purpose_info`, which says
 //!   which prim authors the inherited purpose.
@@ -461,6 +464,8 @@ pub mod lod;
 #[cfg(feature = "usd-physics")]
 pub mod mass;
 #[cfg(feature = "usd-geom")]
+mod model_extents;
+#[cfg(feature = "usd-geom")]
 mod motion;
 #[cfg(feature = "usd-geom")]
 mod motion_sampling;
@@ -541,6 +546,8 @@ pub use labels::{LabelInterval, LabelQueryError, LabelsQuery};
 pub use layerstack::Time;
 #[cfg(all(feature = "usd-geom", feature = "usd-shade"))]
 pub use material_subsets::{MaterialBindingSubset, MaterialBindingSubsets, MaterialSubsetError};
+#[cfg(feature = "usd-geom")]
+pub use model_extents::ExtentsHintError;
 #[cfg(feature = "usd")]
 pub use predicate::{CollectionPredicate, CollectionPredicates};
 pub use view::{InstanceEdit, InstanceView, PrimEdit, PrimView, Scene};

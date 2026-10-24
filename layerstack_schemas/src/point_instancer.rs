@@ -8,7 +8,7 @@
 //! time offsets and interpolation follow AOUSD Core §12.3–12.5.
 use crate::{
     Time,
-    bounds::{BoundsCache, BoundsError, BoundsOptions, Range3d},
+    bounds::{BoundsCache, BoundsError, BoundsOptions, Extent, Range3d},
     gf,
     motion_sampling::{aligned, anchor, rate},
     usd_geom::{ImageablePurpose, PointInstancer},
@@ -1107,10 +1107,6 @@ impl PointInstancer<'_> {
     }
 }
 
-/// An `extent`: the minimum and maximum corners of an axis-aligned box, in
-/// single precision, as a boundable's `extent` attribute holds it.
-pub type Extent = [[f32; 3]; 2];
-
 impl PointInstancer<'_> {
     /// The instancer's extent at `time`: the aligned box, in its own space
     /// (or, with `transform`, in the space `transform` maps it to), around
@@ -1237,23 +1233,10 @@ impl PointInstancer<'_> {
                 }
                 range.union_with(bound.aligned_range());
             }
-            extents.push(single_precision(&range));
+            extents.push(range.to_extent());
         }
         Ok(extents)
     }
-}
-
-/// `range` as a `float3[]` extent, as `GfVec3f(GfRange3d::GetMin())` and
-/// `GetMax()` convert it; the empty range is `GfRange3d()`'s `FLT_MAX` pair.
-#[allow(
-    clippy::cast_possible_truncation,
-    reason = "an extent is float3[], as OpenUSD publishes it"
-)]
-fn single_precision(range: &Range3d) -> Extent {
-    if range.is_empty() {
-        return [[f32::MAX; 3], [-f32::MAX; 3]];
-    }
-    [range.min.map(|v| v as f32), range.max.map(|v| v as f32)]
 }
 
 /// The time code of `time`, `None` for the default time, when `time` and

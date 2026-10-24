@@ -8,12 +8,14 @@
 
 use crate::{
     AssetAvailability, Layer, LayerId, LayerStore, Path, PathId, PathInterner, TokenInterner,
+    interner::TokenId,
 };
 use alloc::{
     borrow::ToOwned,
     collections::{BTreeMap, BTreeSet},
     vec::Vec,
 };
+use core::ops::Bound;
 use hashbrown::HashSet;
 
 /// Whether loading a prim also selects payloads below it.
@@ -41,7 +43,7 @@ pub enum PayloadRule {
 /// Paths use the stage store's token interner. Default construction loads all.
 /// Rules do not imply that a host has loaded the referenced layer into its store.
 ///
-/// OpenUSD: `UsdStageLoadRules::GetEffectiveRuleForPath`.
+/// OpenUSD: `UsdStageLoadRules`.
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct PayloadLoadRules {
     rules: BTreeMap<Path, PayloadRule>,
@@ -83,39 +85,77 @@ impl PayloadLoadRules {
         self.replace_subtree(path, PayloadRule::None);
     }
 
+    /// Replaces the rules at and beneath `path` with `rule` at `path`.
+    /// Those rules are one range of the map, as a path's descendants
+    /// follow it in [`Path`]'s order: the cost is theirs, not the map's.
     fn replace_subtree(&mut self, path: Path, rule: PayloadRule) {
-        self.rules.retain(|p, _| p.strip_prefix(&path).is_none());
+        let doomed: Vec<Path> = self
+            .prefixed(path.segments())
+            .map(|(p, _)| p.clone())
+            .collect();
+        for doomed in doomed {
+            self.rules.remove(&doomed);
+        }
         self.rules.insert(path, rule);
+    }
+
+    /// The rules at and beneath `prefix`, in [`Path`]'s order: a path's
+    /// descendants follow it, so they are the range of the map that
+    /// starts at it.
+    fn prefixed<'a>(
+        &'a self,
+        prefix: &'a [TokenId],
+    ) -> impl Iterator<Item = (&'a Path, PayloadRule)> + 'a {
+        self.rules
+            .range::<[TokenId], _>((Bound::Included(prefix), Bound::Unbounded))
+            .take_while(move |(p, _)| p.segments().starts_with(prefix))
+            .map(|(p, r)| (p, *r))
+    }
+
+    /// The rule at `path` or its nearest ancestor with one, looked up
+    /// one ancestor at a time: the cost is the path's depth, not the
+    /// number of rules.
+    fn longest_prefix(&self, path: &Path) -> Option<(&Path, PayloadRule)> {
+        let segments = path.segments();
+        (0..=segments.len())
+            .rev()
+            .find_map(|depth| self.rules.get_key_value(&segments[..depth]))
+            .map(|(p, r)| (p, *r))
     }
 
     /// The effective rule, including ancestor payloads required by a selected
     /// descendant. Literal exclusions between a prim and a deeper selection
     /// block that selection from making this prim loaded, matching OpenUSD.
+    ///
+    /// The nearest rule at or above `path` is found by its ancestors, and
+    /// the rules beneath it are read only when that rule excludes it, and
+    /// then only the outermost ones.
+    ///
+    /// OpenUSD: `UsdStageLoadRules::GetEffectiveRuleForPath`.
     #[must_use]
     pub fn effective_rule(&self, path: &Path) -> PayloadRule {
-        let prefix = self
-            .rules
-            .iter()
-            .filter(|(p, _)| path.strip_prefix(p).is_some())
-            .max_by_key(|(p, _)| p.depth());
-        match prefix {
+        if self.rules.is_empty() {
+            return PayloadRule::All;
+        }
+        match self.longest_prefix(path) {
             None | Some((_, PayloadRule::All)) => return PayloadRule::All,
             Some((p, PayloadRule::Only)) if p == path => return PayloadRule::Only,
             _ => {}
         }
-        for (p, rule) in &self.rules {
-            if p == path || p.strip_prefix(path).is_none() || *rule == PayloadRule::None {
-                continue;
-            }
-            let blocked = self.rules.keys().any(|between| {
-                between != path
-                    && between != p
-                    && between.strip_prefix(path).is_some()
-                    && p.strip_prefix(between).is_some()
-            });
-            if !blocked {
+        // The outermost rules strictly beneath `path`: a selection there
+        // loads `path` as its ancestor; one beneath an exclusion does not.
+        let mut beneath = self
+            .prefixed(path.segments())
+            .filter(|(p, _)| *p != path)
+            .peekable();
+        while let Some((p, rule)) = beneath.next() {
+            if rule != PayloadRule::None {
                 return PayloadRule::Only;
             }
+            while beneath
+                .next_if(|(q, _)| q.segments().starts_with(p.segments()))
+                .is_some()
+            {}
         }
         PayloadRule::None
     }

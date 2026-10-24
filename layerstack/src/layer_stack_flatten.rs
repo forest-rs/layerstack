@@ -19,6 +19,7 @@ use crate::{
     Specifier, TokenId, TokenInterner, Value, VariantSets, VariantSpec,
 };
 use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
+use core::hash::Hash;
 
 /// Evidence about a successful, exact layer-stack consolidation.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -722,7 +723,7 @@ fn unique<T: Clone + PartialEq>(strong: &mut Vec<T>, weak: &[T]) {
 }
 /// Compose edits as functions on an arbitrary weaker list, without collapsing it.
 /// AOUSD Core §12.4; native `SdfListOp::ApplyOperations(listOp)`.
-fn list<T: Clone + Eq>(strong: &ListOp<T>, weak: &ListOp<T>) -> ListOp<T> {
+fn list<T: Clone + Eq + Hash>(strong: &ListOp<T>, weak: &ListOp<T>) -> ListOp<T> {
     if strong.explicit.is_some() {
         return strong.clone();
     }

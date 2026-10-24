@@ -300,6 +300,12 @@ impl PartialEq for Counted {
 
 impl Eq for Counted {}
 
+impl core::hash::Hash for Counted {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        self.value.hash(state);
+    }
+}
+
 #[test]
 fn borrowed_chain_clones_only_its_seed_and_inserted_items() {
     let clones = std::rc::Rc::new(std::cell::Cell::new(0));

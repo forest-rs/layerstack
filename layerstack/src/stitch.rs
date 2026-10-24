@@ -14,6 +14,7 @@ use crate::{
     Specifier, TokenId, TokenInterner, Value, VariantSets, VariantSpec,
 };
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
+use core::hash::Hash;
 
 /// Work requiring attention while combining authored descriptions.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -190,7 +191,7 @@ fn validate_layer(layer: &Layer) -> Result<(), StitchError> {
     }
     Ok(())
 }
-fn arc<T: Clone + Eq>(
+fn arc<T: Clone + Eq + Hash>(
     strong: &ListOp<T>,
     weak: &ListOp<T>,
     report: &mut StitchReport,
@@ -218,7 +219,7 @@ fn fixed<T: Clone + PartialEq>(op: &ListOp<T>) -> ListOp<T> {
     result.reorder.clear();
     result
 }
-fn listop<T: Clone + Eq>(
+fn listop<T: Clone + Eq + Hash>(
     strong: &ListOp<T>,
     weak: &ListOp<T>,
     report: &mut StitchReport,

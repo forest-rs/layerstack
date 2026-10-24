@@ -1,0 +1,250 @@
+{
+ "before": "#usda 1.0\n(\n    subLayers = [\n        @hierarchy.usda@\n    ]\n)\n\n",
+ "cases": [
+  {
+   "name": "nested_invisible_ancestors",
+   "steps": [
+    {
+     "calls": [
+      {
+       "call": "make_visible",
+       "path": "/World/A/Target",
+       "time": null,
+       "visibility": "inherited"
+      }
+     ],
+     "text": "#usda 1.0\n(\n    subLayers = [\n        @hierarchy.usda@\n    ]\n)\n\nover \"World\"\n{\n    token visibility = \"inherited\"\n\n    over \"A\"\n    {\n        token visibility = \"inherited\"\n\n        over \"Target\"\n        {\n            token visibility = \"inherited\"\n        }\n\n        over \"Sibling\"\n        {\n            token visibility = \"invisible\"\n        }\n\n        over \"Off\"\n        {\n            token visibility = \"invisible\"\n        }\n\n        over \"Undefined\"\n        {\n            token visibility = \"invisible\"\n        }\n    }\n\n    over \"B\"\n    {\n        token visibility = \"invisible\"\n    }\n}\n\n"
+    }
+   ]
+  },
+  {
+   "name": "visible_parent_below_hidden",
+   "steps": [
+    {
+     "calls": [
+      {
+       "call": "make_visible",
+       "path": "/World/B/Leaf",
+       "time": null,
+       "visibility": "inherited"
+      }
+     ],
+     "text": "#usda 1.0\n(\n    subLayers = [\n        @hierarchy.usda@\n    ]\n)\n\nover \"World\"\n{\n    token visibility = \"inherited\"\n\n    over \"A\"\n    {\n        token visibility = \"invisible\"\n    }\n\n    over \"B\"\n    {\n        over \"Sibling\"\n        {\n            token visibility = \"invisible\"\n        }\n    }\n}\n\n"
+    }
+   ]
+  },
+  {
+   "name": "non_imageable_ancestor",
+   "steps": [
+    {
+     "calls": [
+      {
+       "call": "make_visible",
+       "path": "/World/Group/Deep",
+       "time": null,
+       "visibility": "inherited"
+      }
+     ],
+     "text": "#usda 1.0\n(\n    subLayers = [\n        @hierarchy.usda@\n    ]\n)\n\nover \"World\"\n{\n    token visibility = \"inherited\"\n\n    over \"A\"\n    {\n        token visibility = \"invisible\"\n    }\n\n    over \"B\"\n    {\n        token visibility = \"invisible\"\n    }\n}\n\n"
+    }
+   ]
+  },
+  {
+   "name": "already_visible",
+   "steps": [
+    {
+     "calls": [
+      {
+       "call": "make_visible",
+       "path": "/Lit/Shown",
+       "time": null,
+       "visibility": "inherited"
+      }
+     ],
+     "text": "#usda 1.0\n(\n    subLayers = [\n        @hierarchy.usda@\n    ]\n)\n\n"
+    }
+   ]
+  },
+  {
+   "name": "invisible_then_visible",
+   "steps": [
+    {
+     "calls": [
+      {
+       "call": "make_invisible",
+       "path": "/Lit/Shown",
+       "time": null,
+       "visibility": "invisible"
+      }
+     ],
+     "text": "#usda 1.0\n(\n    subLayers = [\n        @hierarchy.usda@\n    ]\n)\n\nover \"Lit\"\n{\n    over \"Shown\"\n    {\n        token visibility = \"invisible\"\n    }\n}\n\n"
+    },
+    {
+     "calls": [
+      {
+       "call": "make_invisible",
+       "path": "/Lit/Shown",
+       "time": null,
+       "visibility": "invisible"
+      }
+     ],
+     "text": "#usda 1.0\n(\n    subLayers = [\n        @hierarchy.usda@\n    ]\n)\n\nover \"Lit\"\n{\n    over \"Shown\"\n    {\n        token visibility = \"invisible\"\n    }\n}\n\n"
+    },
+    {
+     "calls": [
+      {
+       "call": "make_visible",
+       "path": "/Lit/Shown",
+       "time": null,
+       "visibility": "inherited"
+      }
+     ],
+     "text": "#usda 1.0\n(\n    subLayers = [\n        @hierarchy.usda@\n    ]\n)\n\nover \"Lit\"\n{\n    over \"Shown\"\n    {\n        token visibility = \"inherited\"\n    }\n}\n\n"
+    }
+   ]
+  },
+  {
+   "name": "invisible_at_time",
+   "steps": [
+    {
+     "calls": [
+      {
+       "call": "make_invisible",
+       "path": "/Lit/Shown",
+       "time": 5,
+       "visibility": "invisible"
+      }
+     ],
+     "text": "#usda 1.0\n(\n    subLayers = [\n        @hierarchy.usda@\n    ]\n)\n\nover \"Lit\"\n{\n    over \"Shown\"\n    {\n        token visibility.timeSamples = {\n            5: \"invisible\",\n        }\n    }\n}\n\n"
+    },
+    {
+     "calls": [
+      {
+       "call": "make_invisible",
+       "path": "/Lit/Shown",
+       "time": 5,
+       "visibility": "invisible"
+      }
+     ],
+     "text": "#usda 1.0\n(\n    subLayers = [\n        @hierarchy.usda@\n    ]\n)\n\nover \"Lit\"\n{\n    over \"Shown\"\n    {\n        token visibility.timeSamples = {\n            5: \"invisible\",\n        }\n    }\n}\n\n"
+    }
+   ]
+  },
+  {
+   "name": "animated_ancestor",
+   "steps": [
+    {
+     "calls": [
+      {
+       "call": "make_visible",
+       "path": "/Anim/Kid",
+       "time": 5,
+       "visibility": "inherited"
+      }
+     ],
+     "text": "#usda 1.0\n(\n    subLayers = [\n        @hierarchy.usda@\n    ]\n)\n\n"
+    },
+    {
+     "calls": [
+      {
+       "call": "make_visible",
+       "path": "/Anim/Kid",
+       "time": 10,
+       "visibility": "inherited"
+      }
+     ],
+     "text": "#usda 1.0\n(\n    subLayers = [\n        @hierarchy.usda@\n    ]\n)\n\nover \"Anim\"\n{\n    token visibility.timeSamples = {\n        10: \"inherited\",\n    }\n\n    over \"Other\"\n    {\n        token visibility.timeSamples = {\n            10: \"invisible\",\n        }\n    }\n}\n\n"
+    },
+    {
+     "calls": [
+      {
+       "call": "make_visible",
+       "path": "/Anim/Kid",
+       "time": null,
+       "visibility": "inherited"
+      }
+     ],
+     "text": "#usda 1.0\n(\n    subLayers = [\n        @hierarchy.usda@\n    ]\n)\n\nover \"Anim\"\n{\n    token visibility.timeSamples = {\n        10: \"inherited\",\n    }\n\n    over \"Other\"\n    {\n        token visibility.timeSamples = {\n            10: \"invisible\",\n        }\n    }\n}\n\n"
+    }
+   ]
+  },
+  {
+   "name": "hidden_parent",
+   "steps": [
+    {
+     "calls": [
+      {
+       "call": "make_invisible",
+       "path": "/Lit",
+       "time": null,
+       "visibility": "invisible"
+      }
+     ],
+     "text": "#usda 1.0\n(\n    subLayers = [\n        @hierarchy.usda@\n    ]\n)\n\nover \"Lit\"\n{\n    token visibility = \"invisible\"\n}\n\n"
+    },
+    {
+     "calls": [
+      {
+       "call": "make_visible",
+       "path": "/Lit/Shown",
+       "time": null,
+       "visibility": "inherited"
+      }
+     ],
+     "text": "#usda 1.0\n(\n    subLayers = [\n        @hierarchy.usda@\n    ]\n)\n\nover \"Lit\"\n{\n    token visibility = \"inherited\"\n\n    over \"Other\"\n    {\n        token visibility = \"invisible\"\n    }\n}\n\n"
+    }
+   ]
+  },
+  {
+   "name": "one_edit",
+   "steps": [
+    {
+     "calls": [
+      {
+       "call": "make_invisible",
+       "path": "/Lit",
+       "time": null,
+       "visibility": "inherited"
+      },
+      {
+       "call": "make_visible",
+       "path": "/Lit/Shown",
+       "time": null,
+       "visibility": "inherited"
+      }
+     ],
+     "text": "#usda 1.0\n(\n    subLayers = [\n        @hierarchy.usda@\n    ]\n)\n\nover \"Lit\"\n{\n    token visibility = \"inherited\"\n\n    over \"Other\"\n    {\n        token visibility = \"invisible\"\n    }\n}\n\n"
+    }
+   ]
+  },
+  {
+   "name": "defined_in_the_edit",
+   "steps": [
+    {
+     "calls": [
+      {
+       "call": "define",
+       "path": "/Lit/Added",
+       "type": "Mesh",
+       "visibility": null
+      },
+      {
+       "call": "make_invisible",
+       "path": "/Lit",
+       "time": null,
+       "visibility": "inherited"
+      },
+      {
+       "call": "make_visible",
+       "path": "/Lit/Shown",
+       "time": null,
+       "visibility": "inherited"
+      }
+     ],
+     "text": "#usda 1.0\n(\n    subLayers = [\n        @hierarchy.usda@\n    ]\n)\n\nover \"Lit\"\n{\n    token visibility = \"inherited\"\n\n    def Mesh \"Added\"\n    {\n        token visibility = \"invisible\"\n    }\n\n    over \"Other\"\n    {\n        token visibility = \"invisible\"\n    }\n}\n\n"
+    }
+   ]
+  }
+ ],
+ "openusd_version": "26.8"
+}

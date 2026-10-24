@@ -17,9 +17,11 @@ use alloc::vec::Vec;
 
 use layerstack::{PathId, Value};
 
-use crate::usd_geom::{Imageable, ImageablePurpose, VisibilityApi};
+use crate::usd_geom::{
+    Imageable, ImageableEdit, ImageablePurpose, ImageableVisibility, VisibilityApi,
+};
 use crate::{
-    Time,
+    SchemaEdit, Time,
     view::{PrimView, Scene},
 };
 
@@ -406,5 +408,167 @@ impl<'a> Imageable<'a> {
     #[must_use]
     pub fn compute_purpose(&self) -> ImageablePurpose {
         self.compute_purpose_info().purpose
+    }
+}
+
+impl ImageableEdit {
+    /// Makes the prim visible at `time`, keeping what else is visible, as
+    /// OpenUSD's `UsdGeomImageable::MakeVisible` does.
+    ///
+    /// The prim's own `visibility`, if `invisible` at `time`, becomes
+    /// `inherited`. Then, from the root prim down to the prim's parent,
+    /// each `Imageable` ancestor that is `invisible` becomes `inherited`;
+    /// from the first one that was, every `Imageable` ancestor on the way
+    /// has its other children ([`SchemaEdit`]'s view of
+    /// `UsdPrim::GetAllChildren`: inactive and undefined ones included)
+    /// that are `Imageable` made `invisible`, so that only this prim is
+    /// revealed. A non-`Imageable` ancestor is passed over. Each value is
+    /// authored at `time`, as a default or a time sample, creating the
+    /// attribute as its schema defines it.
+    ///
+    /// Visibility is read as this edit leaves it at the default time, and
+    /// from the edit's stage, as it was before the edit, at a time code.
+    /// Prims are `Imageable` as this edit leaves them ([`SchemaEdit::is_a`]),
+    /// and children this edit defines are included. As in OpenUSD, make
+    /// ancestors visible before their descendants, and animated visibility
+    /// at increasing time codes.
+    ///
+    /// OpenUSD: `UsdGeomImageable::MakeVisible` (`imageable.cpp`).
+    ///
+    /// Spec: AOUSD Core §12.3 (value resolution), §13.3.1 (typed schemas).
+    #[doc(alias = "UsdGeomImageable::MakeVisible")]
+    #[doc(alias = "MakeVisible")]
+    pub fn make_visible(&self, edit: &mut SchemaEdit<'_>, time: Time) -> &Self {
+        reveal(edit, self.path(), time);
+        // The prim and its ancestors below the pseudo-root, which is not
+        // `Imageable`, root prim first: each ancestor with its child on the
+        // way to the prim.
+        let mut lineage: Vec<PathId> =
+            core::iter::successors(Some(self.path()), |at| edit.parent(*at)).collect();
+        lineage.pop();
+        lineage.reverse();
+        let mut hidden_above = false;
+        for pair in lineage.windows(2) {
+            let (ancestor, child) = (pair[0], pair[1]);
+            if !edit.is_a(ancestor, Imageable::SCHEMA) {
+                continue;
+            }
+            if reveal(edit, ancestor, time) || hidden_above {
+                hidden_above = true;
+                for sibling in edit.all_children(ancestor) {
+                    if sibling != child && edit.is_a(sibling, Imageable::SCHEMA) {
+                        write_visibility(edit, sibling, time, ImageableVisibility::Invisible);
+                    }
+                }
+            }
+        }
+        self
+    }
+
+    /// Makes the prim `invisible` at `time`, unless it already is, as
+    /// OpenUSD's `UsdGeomImageable::MakeInvisible` does. Visibility is
+    /// read as [`Self::make_visible`] reads it.
+    ///
+    /// OpenUSD: `UsdGeomImageable::MakeInvisible` (`imageable.cpp`).
+    #[doc(alias = "UsdGeomImageable::MakeInvisible")]
+    #[doc(alias = "MakeInvisible")]
+    pub fn make_invisible(&self, edit: &mut SchemaEdit<'_>, time: Time) -> &Self {
+        if !is_invisible(edit, self.path(), time) {
+            write_visibility(edit, self.path(), time, ImageableVisibility::Invisible);
+        }
+        self
+    }
+}
+
+/// Whether the prim's `visibility` is `invisible` at `time`, as
+/// [`ImageableEdit::make_visible`] reads it.
+fn is_invisible(edit: &mut SchemaEdit<'_>, path: PathId, time: Time) -> bool {
+    let value = match time {
+        Time::Default => edit.default_value(path, Imageable::VISIBILITY),
+        Time::At { .. } => PrimView::new(edit.scene(), path).raw_value(Imageable::VISIBILITY, time),
+    };
+    match value {
+        Some(Value::Token(token)) => edit.tokens().resolve(token) == Visibility::Invisible.as_str(),
+        _ => false,
+    }
+}
+
+/// Sets the prim's `visibility` to `inherited` if it is `invisible` at
+/// `time`; whether it was.
+///
+/// OpenUSD: `_SetInheritedIfInvisible` (`imageable.cpp`).
+fn reveal(edit: &mut SchemaEdit<'_>, path: PathId, time: Time) -> bool {
+    let invisible = is_invisible(edit, path, time);
+    if invisible {
+        write_visibility(edit, path, time, ImageableVisibility::Inherited);
+    }
+    invisible
+}
+
+/// `CreateVisibilityAttr().Set(visibility, time)`.
+fn write_visibility(
+    edit: &mut SchemaEdit<'_>,
+    path: PathId,
+    time: Time,
+    visibility: ImageableVisibility,
+) {
+    let handle = ImageableEdit::from_prim(crate::PrimEdit::from_path_unchecked(path));
+    match time {
+        Time::Default => handle.set_visibility(edit, visibility),
+        Time::At { code, .. } => handle.set_visibility_at(edit, code, visibility),
+    };
+}
+
+#[cfg(test)]
+mod tests {
+    use alloc::sync::Arc;
+
+    use layerstack::{EditTarget, InMemoryStore, Layer, LayerId, LiveStage, StageOptions};
+
+    use super::{Imageable, ImageableEdit, Visibility};
+    use crate::usd_geom::{ImageableVisibility, Mesh, Xform};
+    use crate::{Scene, SchemaEdit, Time};
+
+    #[test]
+    fn make_visible_reveals_only_the_prim() {
+        let mut store = InMemoryStore::default();
+        store.insert_layer(Layer::new(LayerId(1)));
+        let options = StageOptions {
+            schemas: Some(Arc::new(crate::openusd(&store.tokens))),
+            ..StageOptions::default()
+        };
+        let mut live = LiveStage::compose(&mut store, LayerId(1), options);
+        let target = EditTarget::for_layer(LayerId(1));
+        let [world, shown, other] =
+            ["/World", "/World/Shown", "/World/Other"].map(|p| store.path(p));
+        let mut edit = SchemaEdit::new(live.stage(), &mut store, target.clone());
+        Xform::define(&mut edit, world)
+            .expect("outside any instance")
+            .set_visibility(&mut edit, ImageableVisibility::Invisible);
+        Mesh::define(&mut edit, shown).expect("outside any instance");
+        Mesh::define(&mut edit, other).expect("outside any instance");
+        let transaction = edit.finish();
+        live.apply(&mut store, &transaction).expect("applies");
+
+        let mut edit = SchemaEdit::new(live.stage(), &mut store, target.clone());
+        let handle = ImageableEdit::new(&edit, shown).expect("a mesh");
+        handle.make_visible(&mut edit, Time::Default);
+        // `make_invisible` of a prim this edit just hid authors nothing more.
+        let other_handle = ImageableEdit::new(&edit, other).expect("a mesh");
+        let before = edit.transaction().len();
+        other_handle.make_invisible(&mut edit, Time::Default);
+        assert_eq!(edit.transaction().len(), before, "already invisible");
+        let transaction = edit.finish();
+        live.apply(&mut store, &transaction).expect("applies");
+
+        let scene = Scene::new(live.stage(), &store);
+        let visibility = |path| {
+            Imageable::new(&scene, path)
+                .expect("imageable")
+                .compute_visibility(Time::Default)
+        };
+        assert_eq!(visibility(world), Visibility::Inherited);
+        assert_eq!(visibility(shown), Visibility::Inherited);
+        assert_eq!(visibility(other), Visibility::Invisible);
     }
 }
